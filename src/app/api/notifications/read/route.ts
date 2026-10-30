@@ -1,3 +1,4 @@
+import { notificationScopeFor } from "@/lib/server/notify";
 import { db } from "@/lib/db";
 import { handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
@@ -8,7 +9,7 @@ export async function POST(req: Request) {
     const u = await requireUser(req);
     const b = await readJson(req);
     const ids = Array.isArray(b.ids) ? b.ids.filter((x): x is string => typeof x === "string").slice(0, 200) : [];
-    await db.notification.updateMany({ where: { userId: u.id, id: { in: ids }, readAt: null }, data: { readAt: new Date() } });
+    await db.notification.updateMany({ where: { userId: u.id, ...await notificationScopeFor(u.id), id: { in: ids }, readAt: null }, data: { readAt: new Date() } });
     return ok({ ok: true });
   });
 }

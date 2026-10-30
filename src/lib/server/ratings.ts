@@ -157,7 +157,7 @@ export async function maybePromptRating(contractId: string) {
   await maybeOpenDevRating(c.id);
   if (c.ratePromptedAt || (await rateBlocker(c.id, "tester"))) return;
   await db.contract.update({ where: { id: c.id }, data: { ratePromptedAt: new Date() } });
-  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], RATINGS_HREF, { ...RATINGS, testId: c.testId });
+  await notify(c.tester.email, `Rate ${displayName(c.test.developer)} on “${c.title}”`, [`You can now rate ${displayName(c.test.developer)} for “${c.title}”.`], RATINGS_HREF, { side: "tester", ...RATINGS, testId: c.testId });
 }
 
 /** (Batch 17 section 16) The developer's Rate for this tester just opened (they rated and everything they sent is settled): "<tester> finished <test>. You can rate them for 14 days.", once. */
@@ -167,7 +167,7 @@ export async function maybeOpenDevRating(contractId: string, now = new Date()) {
   const key = `rate-open:${contractId}`;
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: true } });
   if (await db.notification.findFirst({ where: { userId: c.test.developerId, reminderKey: key }, select: { id: true } })) return false;
-  await bell(c.test.developerId, `${displayName(c.tester)} finished ${c.title}. You can rate ${pronouns(c.tester.pronoun).obj} for ${WINDOW_DAYS} days.`, RATINGS_HREF, undefined, { ...RATINGS, testId: c.testId, reminder: key });
+  await bell(c.test.developerId, `${displayName(c.tester)} finished ${c.title}. You can rate ${pronouns(c.tester.pronoun).obj} for ${WINDOW_DAYS} days.`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: key });
   return true;
 }
 
@@ -331,7 +331,7 @@ export async function ratingReminders(now = new Date()) {
     if (now.getTime() > from.getTime() + REMINDER_WEEKS * 7 * DAY + (await testerSuspendedMs(c.testerId, from, now))) continue; // 2 weeks only
     if (now.getTime() - (await sinceLast(c.testerId, c.testId, c.ratePromptedAt!)).getTime() < every) continue;
     if ((await rateBlocker(c.id, "tester", now)) !== "") continue;
-    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, RATINGS_HREF, undefined, { ...RATINGS, testId: c.testId, reminder: `rate:${c.id}` });
+    await bell(c.testerId, `Reminder: rate ${displayName(c.test.developer)} on “${c.title}”`, RATINGS_HREF, undefined, { side: "tester", ...RATINGS, testId: c.testId, reminder: `rate:${c.id}` });
     n++;
   }
   // Developer: once their Rate opened (the tester rated and everything is settled, or (section 19) a never-rated tester at the close-out); every 3 days until they
@@ -348,7 +348,7 @@ export async function ratingReminders(now = new Date()) {
     const c = await db.contract.findUnique({ where: { id: r.contractId }, include: { tester: true, test: true } });
     if (!c) continue; // (batch 29 §21) on a running test too
     if (now.getTime() - (await sinceLast(c.test.developerId, c.testId, s.opensAt!)).getTime() < every) continue;
-    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}` });
+    await bell(c.test.developerId, `Reminder: rate ${displayName(c.tester)} for “${c.title}” (until ${T(s.endsAt!, "date")})`, RATINGS_HREF, undefined, { side: "developer", ...RATINGS, testId: c.testId, reminder: `rate-dev:${c.id}` });
     n++;
   }
   return n;

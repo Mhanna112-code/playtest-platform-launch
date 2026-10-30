@@ -293,7 +293,7 @@ export async function sendWaitingShares(testerId: string) {
   }
   if (cents > 0) {
     const line = payoutDoneLine(cents);
-    await (await import("./notify")).notify(tester.email, line, [line], "/app/payments", { payment: true });
+    await (await import("./notify")).notify(tester.email, line, [line], "/app/payments", { side: "tester", payment: true });
   }
   return cents;
 }
@@ -385,7 +385,7 @@ export async function cardExpiryReminders(now = new Date()) {
     const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
     const line = `Your card ending ${pm.card?.last4 ?? "????"} expires at the end of ${monthName}: update it in Payments.`;
     const { bell } = await import("./notify");
-    await bell(user.id, line, "/app/payments", undefined, { payment: true, reminder });
+    await bell(user.id, line, "/app/payments", undefined, { side: "developer", payment: true, reminder });
     sent++;
   }
   return sent;

@@ -11,7 +11,7 @@ const FREQUENCY: [string, string][] = [
 ];
 
 /** How you're notified (the full app's fold on the notifications page): the email setting. */
-export function AlertSettings({ emailPref }: { emailPref: string }) {
+export function AlertSettings({ emailPref, side = null }: { emailPref: string; side?: "developer" | "tester" | null }) {
   const [pref, setPref] = useState(emailPref === "off" ? "off" : ["weekly", "monthly"].includes(emailPref) ? emailPref : "daily");
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -48,7 +48,7 @@ export function AlertSettings({ emailPref }: { emailPref: string }) {
             </div>
           )}
           {/* (Owner, Oct 29, batch 28 §18) Payment lines are emailed the same evening whatever the setting, Off included. */}
-          <p className="text-xs text-slate-500" data-payment-emails="">Payment updates are always emailed the same evening. That includes receipts, payments, failures, holds, retries, delays, payouts and chargebacks, even with email Off, Weekly or Monthly. Some account emails always send.</p>
+          <p className="text-xs text-slate-500" data-payment-emails="">Payment updates are always emailed the same evening. {side === "developer" ? "That includes receipts, failures, holds, retries and chargebacks." : side === "tester" ? "That includes payments, delays and payouts." : "Your account updates are included."} Even with email Off, Weekly or Monthly. Some account emails always send.</p>
         </fieldset>
         <div className="flex flex-wrap items-center gap-3">
           <button className="btn" disabled={busy}>Save</button>

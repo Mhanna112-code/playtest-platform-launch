@@ -1,3 +1,5 @@
+import { notificationScopeFor } from "@/lib/server/notify";
+import { isAdmin } from "@/lib/server/session";
 import { Bell } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
@@ -16,7 +18,7 @@ export const dynamic = "force-dynamic";
 // it's clicked, a stack when it's expanded or one of its lines is clicked. No "mark all as read".
 export default async function Notifications() {
   const u = await requirePageUser();
-  const items = await db.notification.findMany({ where: { userId: u.id }, orderBy: { createdAt: "desc" }, take: 200 });
+  const items = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: { createdAt: "desc" }, take: 200 });
   // (Design doc 9) Same-day lines about the same test stack into one entry, except the lines that always arrive on their own (own); opening a stack marks its lines read, a single line is read when clicked (batch 29 §28).
   const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
   const groups = new Map<string, typeof items>();
@@ -36,12 +38,12 @@ export default async function Notifications() {
   }));
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <AlertSettings emailPref={u.emailPref} />
+      <AlertSettings emailPref={u.emailPref} side={isAdmin(u) ? null : sideFor(u, "/app/notifications")} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><Bell className="h-7 w-7 text-indigo-300" /> Notifications</h1>
       </div>
       {items.length === 0 ? (
-        <p className="card py-10 text-center text-slate-400">Nothing yet. You&apos;ll hear here when testers join, send feedback, or get reviewed.</p>
+        <p className="card py-10 text-center text-slate-400">Nothing yet. Your updates will appear here.</p>
       ) : (
         <BellList entries={entries} />
       )}

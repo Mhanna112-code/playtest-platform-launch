@@ -1,3 +1,4 @@
+import { owedForBox } from "@/lib/server/holds";
 import { DELETE_ENDS_SUBSCRIPTION, subscribed } from "@/lib/subscription";
 import Link from "next/link";
 import { Ban, Bell, Banknote, CheckCircle2, LifeBuoy, PlusCircle, ShieldCheck, UserRound, Building2 } from "lucide-react";
@@ -52,6 +53,8 @@ export default async function AccountPage() {
         {!u.emailVerifiedAt && !confirmSkipped() && <div className="flex flex-wrap items-center gap-2 pt-1 text-sm"><ResendConfirm /></div>}
       </div>
 
+      {dev && tester && side && <div className="px-1"><SideButton side={side === "developer" ? "tester" : "developer"} add={false} seenAt={seenAt}>Switch to your {side === "developer" ? "tester" : "developer"} side</SideButton></div>}
+
       {other && (
         <div className="flex flex-wrap items-center gap-2 px-1 text-sm text-slate-300" data-other-side="">
           <span>{other.line}</span>
@@ -66,7 +69,7 @@ export default async function AccountPage() {
           {side === "tester" && tester && !profileClosed && link("/app/profile", UserRound, "Tester profile", "Devices, languages and bio, as developers see them")}
           {side === "developer" && dev && !profileClosed && link("/app/profile", Building2, "Developer profile", "Your name, as testers see it on your tests")}
           {/* (Owner, Oct 29, batch 32 §5) A team account has no payments or blocks of its own (Payments sends an admin back to the console). */}
-          {side && link("/app/payments", Banknote, "Payments", "What you've paid or been paid, and how payments are set up")}
+          {side && link("/app/payments", Banknote, "Payments", side === "developer" ? "What you have paid and your saved card" : "What you have been paid and your payout setup")}
           {link("/app/notifications", Bell, "Notifications and alerts", "How you're notified by email")}
           {side && link("/app/account/blocked", Ban, "Blocked people", "Who you've blocked, and Unblock")}
           {link("/privacy", ShieldCheck, "Privacy", "What we keep and why")}
@@ -82,7 +85,7 @@ export default async function AccountPage() {
         <SignOutAll />
       </section>
       {/* (Owner, Oct 28) A tester's pop-up carries their real numbers; a developer's blockers (DEFAULT) are listed with links. */}
-      <DeleteAccount testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} devLines={dev ? await devDeleteLines(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />
+      <DeleteAccount both={dev && tester} owes={dev && (await owedForBox(u.id)).some((p) => p.amountCents > 0)} testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} devLines={dev ? await devDeleteLines(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />
     </div>
   );
 }

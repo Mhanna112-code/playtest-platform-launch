@@ -9,8 +9,7 @@ export const hasBoth = (u: Sided) => u.isDeveloper && u.isTester;
 
 /**
  * Which side a page belongs to, from its address: developer pages (their tests), tester pages (Find, their sessions),
- * or shared ones (dashboard, chat, calls, notifications, payments, profile: null). With both sides, each tab shows the
- * side of the page it is on, so a developer tab and a tester tab can sit side by side, each labelled correctly.
+ * or shared ones (dashboard, chat, calls, notifications, payments, profile: null). The saved side controls the header; an opposite-side page shows a switch notice.
  */
 export function sideForPath(path: string): Side | null {
   const p = path.split(/[?#]/)[0];
@@ -19,18 +18,18 @@ export function sideForPath(path: string): Side | null {
   return null;
 }
 
-/** The side a tab shows: the page's own side (with both sides), else the side used last, else the only side the account has. */
+/** The current saved side, or the only side the account has. Opening a page never changes it. */
 export function sideFor(u: Sided, path: string): Side | null {
   if (!u.isDeveloper && !u.isTester) return null;
   if (!hasBoth(u)) return u.isDeveloper ? "developer" : "tester";
-  return sideForPath(path) ?? (u.side === "developer" || u.side === "tester" ? u.side : "developer");
+  void path;
+  return u.side === "tester" ? "tester" : "developer";
 }
 
 /**
- * A link to a page for the other side (a notification about your own test while you're testing, say): through
- * /app/switch, which changes sides and then goes straight there. Other links stay as they are.
+ * Links go straight to the page. Its layout explains if an explicit side switch is needed.
  */
 export function sideLink(u: Sided, href: string) {
-  const to = sideForPath(href);
-  return hasBoth(u) && to && to !== u.side ? `/app/switch?to=${to}&next=${encodeURIComponent(href)}` : href;
+  void u;
+  return href;
 }

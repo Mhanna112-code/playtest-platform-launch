@@ -143,7 +143,7 @@ export async function bellPausedTests(devId: string, now = new Date(), onlyDue =
     const info = pauseClosesAt(dev, t);
     if (!info) continue;
     if (onlyDue && (await db.notification.count({ where: { userId: devId, reminderKey: `paused:${t.id}`, createdAt: { gt: since } } }))) continue;
-    await bell(devId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
+    await bell(devId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
     n++;
   }
   return n;
@@ -162,7 +162,7 @@ export async function pausedReminders(now = new Date()) {
   for (const t of tests) {
     const info = pauseClosesAt(t.developer, t);
     if (!info || had.has(`paused:${t.id}`)) continue;
-    await bell(t.developerId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
+    await bell(t.developerId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
     n++;
   }
   return n;

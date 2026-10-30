@@ -79,7 +79,7 @@ export async function declinedPayment(devId: string, paymentId: string, cents: n
   const started = await startHold(devId, "unpaid");
   if (!started) {
     const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
-    await bell(devId, `Another payment was declined: ${money(cents)} for ${what} was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+    await bell(devId, `Another payment was declined: ${money(cents)} for ${what} was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
   }
   return started;
 }
@@ -107,10 +107,10 @@ export async function startHold(devId: string, reason: string) {
   await (await import("./pauseClosure")).bellPausedTests(devId);
   // (Owner, Oct 27) "Your tests are paused" and the chargeback hold email ignore Off (they ride in the one end-of-day email); the lines stack with that day's other hold / payment lines.
   if (reason === "chargeback") {
-    await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { always: true, payment: true, group: "payhold" });
+    await notify(dev.email, "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, payment: true, group: "payhold" });
     return true;
   }
-  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { always: true, payment: true, group: "payhold" });
+  await notify(dev.email, "Your tests are paused", ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
   return true;
 }
 
@@ -271,8 +271,8 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   // (Owner, Oct 29, batch 10) "Your tests are running again" only when nothing pauses them any more: with an admin suspension still on, the payment line instead (both ignore Off).
   if (opts.quietDev) {
     // (Batch 24, a batch 23 leftover) The team's Approve tells the developer in its own single notice.
-  } else if (dev.devSuspendedAt) await notify(dev.email, STILL_SUSPENDED_LINE, [STILL_SUSPENDED_LINE], "/app", { always: true, payment: true, group: "payhold" });
-  else await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { always: true, payment: true, group: "payhold" });
+  } else if (dev.devSuspendedAt) await notify(dev.email, STILL_SUSPENDED_LINE, [STILL_SUSPENDED_LINE], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
+  else await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
   const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
   for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused" });
   return true;
@@ -315,8 +315,8 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
   if (claimed.count !== 1) throw await already();
   await accountEvent(devId, "hold-approved", adminId, note);
   const lifted = await liftHoldIfClear(devId);
-  if (!lifted) await notify(dev.email, "The team approved lifting your hold", ["The team approved lifting your hold. It lifts once you have paid what you owe." + (note ? ` Their note: “${note}”` : "")], "/app/payments", { payment: true, group: "admindecision" });
-  else if (note) await notify(dev.email, "A note from the team about your hold", [note], "/app/payments", { payment: true, group: "admindecision" });
+  if (!lifted) await notify(dev.email, "The team approved lifting your hold", ["The team approved lifting your hold. It lifts once you have paid what you owe." + (note ? ` Their note: “${note}”` : "")], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
+  else if (note) await notify(dev.email, "A note from the team about your hold", [note], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
   return { ok: true, lifted };
 }
 
@@ -478,7 +478,7 @@ export async function retryOwed(devId: string, now = new Date(), why: "daily" | 
       names.push(r.name);
     }
   }
-  if (cents > 0) await bell(devId, retriedLine(cents, names), "/app/payments", undefined, { payment: true, group: "payhold" });
+  if (cents > 0) await bell(devId, retriedLine(cents, names), "/app/payments", undefined, { side: "developer", payment: true, group: "payhold" });
   const lifted = cents > 0 ? await liftHoldIfClear(devId) : false;
   return { cents, lifted };
 }
@@ -535,7 +535,7 @@ export async function tellArrived(p: { contractId: string | null; submissionId: 
   const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
   const label = p.kind === "dispute" ? "dispute" : p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
   const line = `${devName} paid ${money(p.amountCents)} for your ${label}`;
-  await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? "part-live" : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { payment: true, group: "tarrived" });
+  await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? "part-live" : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { side: "tester", payment: true, group: "tarrived" });
 }
 
 /** One line per failed payment ("Ana Silva's written answers $8.00 · card declined Oct 20"), plus open chargebacks. */
@@ -583,8 +583,8 @@ export async function chargebackOpened(paymentIntentId: string) {
   if (!started) {
     const line = `Your bank reversed a ${money(p.amountCents)} payment${c ? ` for ${displayName(c.tester)}` : ""}: ${before.holdStartedAt && before.holdReason !== "chargeback" ? "your payment hold is now a chargeback hold" : "it was added to what you owe"}`;
     // A payment hold that becomes a chargeback hold is a chargeback hold starting (its email ignores Off); a further chargeback just adds to what is owed.
-    if (before.holdStartedAt && before.holdReason !== "chargeback") await notify(before.email, line, [line + ".", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval."], "/app/payments#chargeback-steps", { always: true, payment: true, group: "payhold" });
-    else await bell(p.developerId, line, "/app/payments#chargeback-steps", undefined, { payment: true, group: "payhold" });
+    if (before.holdStartedAt && before.holdReason !== "chargeback") await notify(before.email, line, [line + ".", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval."], "/app/payments#chargeback-steps", { side: "developer", always: true, payment: true, group: "payhold" });
+    else await bell(p.developerId, line, "/app/payments#chargeback-steps", undefined, { side: "developer", payment: true, group: "payhold" });
   }
   await db.user.update({ where: { id: p.developerId }, data: { chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
   return true;
@@ -609,14 +609,14 @@ export async function chargebackWon(paymentIntentId: string) {
     if ((await db.payment.updateMany({ where: { id: r.id, status: r.status }, data: { status: "refunded" } })).count !== 1) continue;
     refunded += r.amountCents;
     const line = chargebackRefundLine(p.amountCents);
-    await notify(dev.email, line, [`${line}: ${money(r.amountCents)} refunded.`, r.stripePaymentIntentId ? "Refunded to your saved card." : "Payments aren't set up yet, so this was recorded and nothing was refunded."], "/app/payments", { payment: true });
+    await notify(dev.email, line, [`${line}: ${money(r.amountCents)} refunded.`, r.stripePaymentIntentId ? "Refunded to your saved card." : "Payments aren't set up yet, so this was recorded and nothing was refunded."], "/app/payments", { side: "developer", payment: true });
   }
   const claimed = await db.payment.updateMany({ where: { id: p.id, chargeback: p.chargeback }, data: { chargeback: "won" } });
   if (claimed.count !== 1) return false;
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
   // (Batch 11) A payments-kind stop-once line on the developer's test page and Edit (Alerts can ignore it).
   if (c) await (await import("./live")).logEvent(c.testId, "payment", chargebackReversedLine(p.amountCents, refunded || p.amountCents + CHARGEBACK_FEE_CENTS, refunded > 0), c.id);
-  await notify(dev.email, chargebackWonLine(p.amountCents), [chargebackWonLine(p.amountCents)], "/app/payments", { payment: true, group: "payhold" });
+  await notify(dev.email, chargebackWonLine(p.amountCents), [chargebackWonLine(p.amountCents)], "/app/payments", { side: "developer", payment: true, group: "payhold" });
   // No chargeback left open: the hold is a payment hold again (it lifts once nothing is owed; the 4th hold on still needs the admin's Approve).
   if (dev.holdStartedAt && dev.holdReason === "chargeback" && !(await db.payment.count({ where: { developerId: dev.id, chargeback: "open" } }))) {
     await db.user.update({ where: { id: dev.id }, data: { holdReason: "unpaid", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
@@ -957,7 +957,7 @@ async function closeOutReminders(now: Date, co: CloseOuts) {
     const key = `closesoon:${now.toISOString().slice(0, 10)}`;
     const had = await db.notification.findFirst({ where: { userId: devId, reminderKey: key }, select: { id: true, summarizedAt: true } });
     if (had && !had.summarizedAt) await db.notification.update({ where: { id: had.id }, data: { text: await renderFor(devId, line), readAt: null } });
-    else await notify(e.email, line, [line + "."], "/app#needs-review", { always: true, payment: true, group: "closeout", reminder: key }); // (batch 30 §6) where the pieces are: Needs review, marked
+    else await notify(e.email, line, [line + "."], "/app#needs-review", { side: "developer", always: true, payment: true, group: "closeout", reminder: key }); // (batch 30 §6) where the pieces are: Needs review, marked
   }
 }
 
@@ -1024,7 +1024,7 @@ async function payNowLines(now: Date, co: CloseOuts) {
   for (const [devId, list] of byDev) {
     if (!(await lineDue(devId, "paynow", now))) continue;
     const line = payNowLine(list);
-    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-review", { always: true, payment: true, group: "unreviewed", reminder: "paynow" }); // (batch 30 §6) Needs review, marked
+    await notify(emails.get(devId)!, line, [line + "."], "/app#needs-review", { side: "developer", always: true, payment: true, group: "unreviewed", reminder: "paynow" }); // (batch 30 §6) Needs review, marked
   }
 }
 
@@ -1045,7 +1045,7 @@ async function testerChargeLines(now: Date, co: CloseOuts) {
   for (const [testerId, list] of byTester) {
     if (!(await lineDue(testerId, "chargeday", now))) continue;
     const line = chargeDayLine(list);
-    await notify(emails.get(testerId)!, line, [line + "."], "/app#charge-or-cancel", { always: true, payment: true, group: "charge", reminder: "chargeday" });
+    await notify(emails.get(testerId)!, line, [line + "."], "/app#charge-or-cancel", { side: "tester", always: true, payment: true, group: "charge", reminder: "chargeday" });
   }
 }
 
@@ -1100,7 +1100,7 @@ export async function autoChargeCalls(now: Date) {
     }
     const what = `${name}'s call on ${T(x.startsAt, "date")} (charged automatically after ${REVIEW_DAYS} days)`;
     // (Batch 29 §37) The tester's call reads "may be delayed" (never "failed" or "hold") while the money waits: the same line as for a declined charge.
-    const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+    const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     // (Batch 29 §37) The developer's event says what really happened (charged, waiting for the bank, declined, owed, waiting for the account).
     const logged = (text: string) => db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${text}`, false, {}, c.id));
     if (!gone && dev.devSuspendedAt && !dev.holdStartedAt) {
@@ -1114,7 +1114,7 @@ export async function autoChargeCalls(now: Date) {
     if (!gone && dev.holdStartedAt) {
       // During a hold: added to what's owed (as a tester's Charge is); the tester is paid when the developer pays it.
       await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
-      await bell(dev.id, `${name}'s call on “${c.title}” was charged automatically (${money(amount)}): it was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+      await bell(dev.id, `${name}'s call on “${c.title}” was charged automatically (${money(amount)}): it was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
       await tellDelayed();
       await logged(`${name}'s call was charged automatically: ${money(amount)}, added to what you owe`);
       n++;
@@ -1133,7 +1133,7 @@ export async function autoChargeCalls(now: Date) {
         await receipt(dev.email, what, amount, r.status, `/app/tests/${c.testId}#call-${x.id}`);
         const line = autoPaidTesterLine(displayName(dev), amount, x.startsAt);
         // (Batch 30 §20) In the day's "You were paid" stack with the other payments (it arrived on time: not "Delayed payments arrived").
-        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tpaid" });
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tpaid" });
       }
     } catch (e) {
       if (e instanceof HttpError && e.code === "payment_unknown") continue; // checked later by the stuck-payment check (recovery.ts)
@@ -1167,7 +1167,7 @@ async function payYourCalls(now: Date, co: CloseOuts) {
     await db.call.updateMany({ where: { id: { in: list.map((x) => x.id) } }, data: { remindedAt: now } });
     const tests = [...new Set(list.map((x) => x.contract.testId))];
     const line = list.length === 1 ? `Pay your calls: your call with ${displayName(list[0].contract.tester)} on “${list[0].contract.title}” isn't paid yet (any amount, $0 included).` : `Pay your calls: ${list.length} calls to pay on ${tests.length === 1 ? `“${list[0].contract.title}”` : `${tests.length} tests`}.`;
-    await bell(devId, line, tests.length === 1 ? `/app/tests/${tests[0]}#needs-you` : "/app#needs-review", undefined, { reminder: key });
+    await bell(devId, line, tests.length === 1 ? `/app/tests/${tests[0]}#needs-you` : "/app#needs-review", undefined, { side: "developer", reminder: key });
   }
 }
 
@@ -1217,7 +1217,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, holdReason: true } });
   if (devNow.holdStartedAt) {
     await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
-    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”: it was added to what you owe`, devNow.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”: it was added to what you owe`, devNow.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
     return { choice, amountCents: amount, status: "owed", message: chargedDelayedLine(amount) };
   }
@@ -1230,7 +1230,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     if (r.status === "requires_action") {
       // (Batch 11) The developer's bank wants them to confirm: it waits 3 days for their Confirm in Payments; the tester reads "Payment may be delayed".
       await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
-      await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { payment: true, group: "tdelayed" });
+      await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { side: "tester", payment: true, group: "tdelayed" });
       status = "needs_confirmation";
     } else {
       return finishChoicePay(row.id, r);
@@ -1246,7 +1246,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     status = "failed";
     // (Owner, Oct 27) A declined Charge starts the payment hold at once (the tester reads only "delayed").
     const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
-    await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { payment: true, group: "tdelayed" });
+    await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { side: "tester", payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, `${displayName(tester)}'s ${label} on “${c.title}”`);
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
@@ -1297,7 +1297,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, holdReason: true } });
   if (devNow.holdStartedAt) {
     await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
-    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their call on “${c.title}”: it was added to what you owe`, devNow.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their call on “${c.title}”: it was added to what you owe`, devNow.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
     return { choice, amountCents: amount, status: "owed", message: chargedDelayedLine(amount) };
   }
@@ -1308,7 +1308,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     status = r.status;
     if (r.status === "requires_action") {
       await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
-      await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+      await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
       status = "needs_confirmation";
     } else {
       return finishChoicePay(row.id, r);
@@ -1322,7 +1322,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     }
     status = "failed";
     const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
-    await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tdelayed" });
+    await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, `${displayName(tester)}'s call on “${c.title}”`);
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
@@ -1355,7 +1355,7 @@ async function dailyReminders(now: Date) {
   await db.notification.createMany({
     data: tests.filter((t) => !told.has(t.id)).map((t) => {
       const n = count.get(t.id)!;
-      return { userId: t.developerId, testId: t.id, reminderKey: `applications:${t.id}`, text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
+      return { userId: t.developerId, side: "developer", testId: t.id, reminderKey: `applications:${t.id}`, text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
     }),
   });
 }

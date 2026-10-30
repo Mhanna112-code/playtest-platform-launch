@@ -727,6 +727,8 @@ model Invite {
 
 /// The bell: every update for a user, whatever their email setting.
 model Notification {
+  /// The developer side, tester side, or null for the whole account.
+  side      String?
   id        String    @id @default(cuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)

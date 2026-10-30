@@ -1,3 +1,5 @@
+import { sideFor, sideForPath, type Side } from "@/lib/sides";
+import { isAdmin } from "./session";
 import { db } from "@/lib/db";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes } from "@/lib/tz";
@@ -35,7 +37,7 @@ export async function testIdOfLink(path: string) {
  * `own`: the line always arrives as its own entry in the bell (admin decisions, a test stopped, payment failures and holds starting, a hold or
  * pause lifted, a chargeback); every other line about the same test on the same day stacks. `testId` names the test when the link doesn't.
  */
-export type Opts = { always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string };
+export type Opts = { side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string };
 
 /**
  * `reminder`: (Owner, Oct 27) names a reminder ("paused:<test>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
@@ -61,14 +63,14 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   }
   // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the end-of-day payment email). `always` marks the few
   // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE end-of-day email, once.
-  await db.notification.create({ data: { userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  await db.notification.create({ data: { side: opts.side !== undefined ? opts.side : sideForPath(path), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** A bell notification only (no email unless the person's summary takes it, or `always`), e.g. the Open until heads-ups. */
-export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always"> = {}) {
+export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}) {
   if (about && !(await inReach(userId, about))) return;
   const text = await renderFor(userId, text0);
-  await db.notification.create({ data: { userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  await db.notification.create({ data: { side: opts.side !== undefined ? opts.side : sideForPath(link), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** (Batch 15 section 11) A line's time tokens, in this person's time zone. */
@@ -110,6 +112,25 @@ function emailLines<N extends { text: string; link: string; groupKey: string | n
   return out;
 }
 
+/** One digest per account, with each side's lines together. Account notices have their own heading. */
+function sidedEmailLines<N extends { side: string | null; text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string) {
+  const out: string[] = [];
+  for (const [side, heading] of [[null, "Your account"], ["developer", "As a developer"], ["tester", "As a tester"]] as const) {
+    const part = items.filter((n) => n.side === side);
+    if (part.length) out.push(heading, ...emailLines(part, line), "");
+  }
+  return out;
+}
+
+/** Account-wide notices accompany the current side. Admins have only account notices. */
+export function notificationScope(side: Side | null) {
+  return side ? { OR: [{ side }, { side: null }] } : { side: null };
+}
+export async function notificationScopeFor(userId: string) {
+  const u = await db.user.findUnique({ where: { id: userId } });
+  return notificationScope(u && !isAdmin(u) ? sideFor(u, "/app/notifications") : null);
+}
+
 export async function sendSummaries(now = new Date(), only?: string[]) {
   const users = await db.user.findMany({
     where: { ...(only ? { id: { in: only } } : {}), notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
@@ -125,12 +146,12 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     if (!all.length) continue;
     // (Owner, Oct 27) Reminders go in the summary email too, each line once. A Weekly or Monthly email shows only the newest copy of each reminder (the older copies are marked done).
     const newest = new Map<string, string>();
-    if (due && (u.emailPref === "weekly" || u.emailPref === "monthly")) for (const n of all) if (n.reminderKey) newest.set(n.reminderKey, n.id);
-    const items = all.filter((n) => !n.reminderKey || !newest.has(n.reminderKey) || newest.get(n.reminderKey) === n.id);
+    if (due && (u.emailPref === "weekly" || u.emailPref === "monthly")) for (const n of all) if (n.reminderKey) newest.set(`${n.side}:${n.reminderKey}`, n.id);
+    const items = all.filter((n) => !n.reminderKey || !newest.has(`${n.side}:${n.reminderKey}`) || newest.get(`${n.side}:${n.reminderKey}`) === n.id);
     const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
       const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
-      await sendEmail({ to: u.email, subject, text: [...emailLines(items, line), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` } });
+      await sendEmail({ to: u.email, subject, text: [...sidedEmailLines(items, line), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` } });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
     } catch (e) {
@@ -145,6 +166,6 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
  * grouping as the Notifications page (bellKey). Read only when opened: a single line when clicked, a stack when expanded or one of its lines clicked.
  */
 export async function unreadEntryCount(userId: string) {
-  const unread = await db.notification.findMany({ where: { userId, readAt: null }, orderBy: { createdAt: "desc" }, take: 500, select: { id: true, testId: true, own: true, groupKey: true, createdAt: true } });
+  const unread = await db.notification.findMany({ where: { userId, readAt: null, ...await notificationScopeFor(userId) }, orderBy: { createdAt: "desc" }, take: 500, select: { id: true, testId: true, own: true, groupKey: true, createdAt: true } });
   return new Set(unread.map(bellKey)).size;
 }

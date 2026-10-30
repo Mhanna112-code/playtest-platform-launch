@@ -69,7 +69,7 @@ export async function tellBankWaiting(devId: string, now = new Date()) {
     await db.notification.update({ where: { id: today.id }, data: { text: await renderFor(devId, line), readAt: null, createdAt: now } });
     return;
   }
-  await notify(dev.email, line, [line + "."], BANK_TO_CONFIRM_HREF, { always: true, payment: true, group: "payhold", reminder: key });
+  await notify(dev.email, line, [line + "."], BANK_TO_CONFIRM_HREF, { side: "developer", always: true, payment: true, group: "payhold", reminder: key });
 }
 
 /** (Batch 25 section 1) The developer's saved time zone, for the times these lists show them. */

@@ -172,7 +172,7 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
     await (await import("./subscription")).pauseBilling(userId);
   }
   if (side === "tester" && u.isTester) await removeTester(u, "suspended");
-  await notify(u.email, sidePausedLine(side), [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { always: true, group: "admindecision" });
+  await notify(u.email, sidePausedLine(side), [`${sidePausedLine(side)}. Contact us in Settings if you think this is a mistake.`], "/app/help", { side, always: true, group: "admindecision" });
   return { ok: true, side };
 }
 
@@ -220,7 +220,7 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
   // (Owner, Oct 28) No automatic re-invite: the tests they were removed from wait on their dashboard with "You were removed from this test" and Ask to rejoin
   // (while the test is open, has a spot and isn't paused) until they ask or dismiss; the developer can also invite them again as usual.
   const line = `Your ${side} account is active again`;
-  await notify(u.email, line, [`${line}.`], "/app", { always: true, group: "admindecision" });
+  await notify(u.email, line, [`${line}.`], "/app", { side, always: true, group: "admindecision" });
   return { ok: true, side };
 }
 
@@ -459,7 +459,7 @@ export async function payoutProblem(accountId: string, now = new Date()) {
   if (!u) return false;
   if (!u.payoutProblemAt) {
     await db.user.update({ where: { id: u.id }, data: { payoutProblemAt: now, payoutRemindedAt: now } });
-    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { payment: true, group: "payout" });
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout" });
   }
   return true;
 }
@@ -473,7 +473,7 @@ export async function payoutFixed(accountId: string) {
 export async function payoutReminders(now = new Date()) {
   const due = await db.user.findMany({ where: { payoutProblemAt: { not: null }, OR: [{ payoutRemindedAt: null }, { payoutRemindedAt: { lt: new Date(now.getTime() - REMIND_DAYS * DAY + 3_600_000) } }] } });
   for (const u of due) {
-    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { payment: true, group: "payout", reminder: "payout" });
+    await bell(u.id, PAYOUT_LINE, "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout", reminder: "payout" });
     await db.user.update({ where: { id: u.id }, data: { payoutRemindedAt: now } });
   }
   return due.length;
@@ -493,7 +493,7 @@ export async function payoutWaitReminders(now = new Date()) {
   for (const u of people) {
     if (recent.has(u.id)) continue;
     const cents = rows.find((r) => r.testerId === u.id)?._sum.testerCents ?? 0;
-    await bell(u.id, payoutWaitLine(money(cents)), "/app/payments#payout", undefined, { payment: true, group: "payout", reminder: "payoutwait" });
+    await bell(u.id, payoutWaitLine(money(cents)), "/app/payments#payout", undefined, { side: "tester", payment: true, group: "payout", reminder: "payoutwait" });
     n++;
   }
   return n;

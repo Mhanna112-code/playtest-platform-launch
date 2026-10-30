@@ -70,7 +70,7 @@ export async function canOpenAnother(devId: string, exceptId = "") {
 }
 
 async function tell(dev: Dev, line: string, always = false) {
-  await notify(dev.email, line, [line], "/app/payments#subscription", { always, payment: true, group: "payhold" });
+  await notify(dev.email, line, [line], "/app/payments#subscription", { side: "developer", always, payment: true, group: "payhold" });
 }
 
 /** Record one subscription charge as a payment row (the receipts list; a chargeback on it starts a chargeback hold like any other). */
@@ -383,7 +383,7 @@ export const FREE_ENDED_LINE = "Free during launch ended: the extras need a subs
 async function tellAllDevs(line: string) {
   const ids = (await db.user.findMany({ where: { isDeveloper: true, deletedAt: null }, select: { id: true } })).map((u) => u.id);
   const each = await linesFor(ids, line); // (batch 15 section 11) each developer's own time zone
-  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: each.get(userId)!, link: "/app/payments#subscription", mustEmail: true, own: false, groupKey: "payhold", payment: true })) });
+  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: each.get(userId)!, link: "/app/payments#subscription", mustEmail: true, own: false, groupKey: "payhold", side: "developer", payment: true })) });
   return ids.length;
 }
 const freeLine = (until: Date) => `Free during launch ends soon: the extras need a ${SUBSCRIPTION_PRICE} subscription from ${T(until, "dateYear")}.`;

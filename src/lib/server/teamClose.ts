@@ -105,7 +105,7 @@ async function tellEveryone(adminId: string, scope: TeamCloseScope, closed: Piec
   for (const p of closed) {
     const line = `“${p.title}”: the team closed your ${p.part} for $0`;
     const anchor = p.kind === "call" ? "part-live" : p.part === "recording" ? "part-recording" : "part-written";
-    await notify(p.testerEmail, line, [line + ".", `The team's reason: “${reason}”`], `/app/sessions/${p.contractId}#${anchor}`, { payment: true, group: "tpaid" });
+    await notify(p.testerEmail, line, [line + ".", `The team's reason: “${reason}”`], `/app/sessions/${p.contractId}#${anchor}`, { side: "developer", payment: true, group: "tpaid" });
   }
   const byTest = new Map<string, Piece[]>();
   for (const p of closed) byTest.set(p.testId, [...(byTest.get(p.testId) ?? []), p]);
@@ -117,7 +117,7 @@ async function tellEveryone(adminId: string, scope: TeamCloseScope, closed: Piec
   const developerId = "developerId" in scope ? scope.developerId : test!.developerId;
   const dev = await db.user.findUniqueOrThrow({ where: { id: developerId } });
   const devLine = `The team closed ${plural(closed.length, "open review")} on ${test ? `“${test.title}”` : "your tests"} for $0`;
-  await notify(dev.email, devLine, [devLine + ".", `The team's reason: “${reason}”`, "Nothing was charged."], test ? `/app/tests/${"testId" in scope ? scope.testId : ""}` : "/app", { payment: true, group: "payhold" });
+  await notify(dev.email, devLine, [devLine + ".", `The team's reason: “${reason}”`, "Nothing was charged."], test ? `/app/tests/${"testId" in scope ? scope.testId : ""}` : "/app", { side: "developer", payment: true, group: "payhold" });
   // The developer's account history (their admin box's "Holds and suspensions") and this admin's "Your actions": who, when, the count and the reason.
   await db.accountEvent.create({ data: { userId: developerId, kind: "team-closed", byId: adminId, createdAt: new Date(), note: `${plural(closed.length, "open review")} closed for $0${test ? ` on “${test.title}”` : ""}: ${reason}` } });
 }

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { AdminNav } from "@/app/admin/AdminNav";
 import { ArrowLeftRight, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, UserRound } from "lucide-react";
 import { headers } from "next/headers";
-import { after } from "next/server";
 import { hasBoth, sideFor, sideForPath } from "@/lib/sides";
 import { unreadCount } from "@/lib/server/messages";
 import { Brand } from "@/components/Brand";
@@ -38,9 +37,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = u.name.trim() || u.email;
   // (Owner, Oct 28) Restricted on this side: a suspended account (both sides), or a developer on a payment or chargeback hold on their developer side.
   const off = restrictedOn(u, side);
-  // Following a link to a page of the other side remembers it as the side used last (what shared pages then show).
-  const pageSide = hasBoth(u) ? sideForPath(path) : null;
-  if (pageSide && pageSide !== u.side) after(() => db.user.update({ where: { id: u.id }, data: { side: pageSide } }).catch(() => null));
+  const pageSide = !admin && hasBoth(u) ? sideForPath(path) : null;
+  const otherSide = pageSide && pageSide !== side ? pageSide : null;
   const contracts = await db.contract.findMany({ where: { OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { testId: true, testerId: true } });
   const unreadChats = (await Promise.all(contracts.map((c) => unreadCount(u.id, c.testId, c.testerId)))).reduce((a, b) => a + b, 0);
   // (Owner, Oct 28) A restricted account keeps only the links to pages it can open: Dashboard, Payments, the bell and the account (Settings). Post a test, Find tests,
@@ -111,8 +109,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
         </p>
       )}
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
-      <SessionWatch userId={u.id} name={name} restriction={restrictionKey(u, side)} />
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{otherSide ? <section className="card space-y-3" data-other-side-page=""><p>This page is on your {otherSide} side.</p><form method="post" action="/app/switch"><input type="hidden" name="to" value={otherSide} /><input type="hidden" name="next" value={path} /><button className="btn">Switch to your {otherSide} side</button></form></section> : children}</main>
+      <SessionWatch userId={u.id} name={name} side={side} restriction={restrictionKey(u, side)} />
       <TimeZoneSync stored={u.timeZone} />
       <HashJump />
     </>

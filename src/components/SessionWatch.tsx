@@ -57,11 +57,13 @@ export function landingOfNewSignIn() {
   return "/app";
 }
 
-export function SessionWatch({ userId, restriction }: { userId: string; name?: string; restriction: string }) {
+export function SessionWatch({ userId, restriction, side }: { userId: string; name?: string; restriction: string; side?: "developer" | "tester" | null }) {
   const path = usePathname();
   const pathRef = useRef(path);
   pathRef.current = path;
   const restrictionRef = useRef(restriction);
+  const sideRef = useRef(side);
+  sideRef.current = side;
   // Every press from this page names its account, so a press racing a switch of accounts is refused (see lib/client.ts).
   useEffect(() => setPageUser(userId), [userId]);
 
@@ -86,6 +88,7 @@ export function SessionWatch({ userId, restriction }: { userId: string; name?: s
       else if (s.state === "out") window.location.replace(`/login?next=${encodeURIComponent(pathRef.current)}`);
       else if (s.userId && s.userId !== userId) window.location.replace(landingOfNewSignIn()); // a different account signed in elsewhere: switch to it
       else {
+        if (sideRef.current && sideFor({ isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side }, pathRef.current) !== sideRef.current) { window.location.reload(); return; }
         // The restriction on THIS page's side (a payment hold only restricts the developer side).
         const who = { isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side, devSuspendedAt: s.suspended ? "x" : null, testerSuspendedAt: s.testerSuspended ? "x" : null, holdStartedAt: s.held ? "x" : null, holdReason: s.holdReason };
         const now = restrictionKey(who, sideFor(who, pathRef.current));

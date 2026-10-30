@@ -325,7 +325,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (extra > 0 && c.test.developer.holdStartedAt) {
     // (Owner, Oct 28 afternoon) During a payment or chargeback hold the raise is added to what the developer owes ("Pay what you owe"); the tester is paid when it is paid.
     await db.payment.create({ data: { ...owedRow, status: "owed" } });
-    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) was added to what you owe`, c.test.developer.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) was added to what you owe`, c.test.developer.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     delayed = true;
   } else if (extra > 0) {
     // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.
@@ -371,7 +371,7 @@ async function decidedByLine(byId: string | null, at: Date | null) {
 /** A payment receipt to the developer for every payment that goes through: bell + email, always sent. */
 export async function receipt(devEmail: string, what: string, cents: number, status: string, path: string) {
   const line = `Receipt: you paid ${money(cents)} for ${what}`;
-  await notify(devEmail, line, [line + ".", status === "not_set_up" ? "Payments aren't set up yet, so this was recorded and nothing was charged." : "Charged to your saved card."], path, { payment: true });
+  await notify(devEmail, line, [line + ".", status === "not_set_up" ? "Payments aren't set up yet, so this was recorded and nothing was charged." : "Charged to your saved card."], path, { side: "developer", payment: true });
 }
 
 /** The developer adds their side to a dispute once; it shows under that piece of work and the admin sees both. */

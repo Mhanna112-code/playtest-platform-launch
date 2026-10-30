@@ -121,7 +121,7 @@ export async function expireReservations(now = new Date(), devId?: string) {
   for (const r of await db.reservation.findMany({ where: { ...mine, status: "reserved", expiresAt: { lte: now } } })) {
     if ((await db.reservation.updateMany({ where: { id: r.id, status: "reserved" }, data: { status: "expired", endedAt: now } })).count !== 1) continue;
     await cancelPi(r.stripePaymentIntentId);
-    await bell(r.developerId, RESERVE_EXPIRED, "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+    await bell(r.developerId, RESERVE_EXPIRED, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
   }
 }
 
@@ -365,7 +365,7 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
         await db.user.update({ where: { id: devId }, data: { chargebackApprovedAt: null } });
         if ((await db.reservation.updateMany({ where: { id: r.id, status: "reserved" }, data: { status: "expired", endedAt: new Date() } })).count === 1) {
           await cancelPi(r.stripePaymentIntentId);
-          await bell(devId, RESERVE_EXPIRED, "/app/payments#owed", undefined, { payment: true, group: "payhold" });
+          await bell(devId, RESERVE_EXPIRED, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
         }
         throw new HttpError(409, "reserve_expired", "The reservation can't be taken any more (it expired): the developer needs to press Pay what you owe again.");
       }
@@ -391,8 +391,8 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   if (lifted) {
     // Lifted while an admin suspension is still on: the same one notice says the tests stay paused (ignores Off, like "running again").
     const line = still ? approvedStillSuspendedLine(taken) : approvedLiftedLine(taken);
-    await notify(dev.email, line, [line, ...(still ? [] : ["Every deadline moved on by the pause."])], "/app", { always: true, payment: true, group: "admindecision" });
-  } else await notify(dev.email, APPROVED_LINE, [`${APPROVED_LINE}.`, ...(taken ? [`The ${money(taken)} reserved on your card was taken.`] : [])], "/app/payments", { payment: true, group: "admindecision" });
+    await notify(dev.email, line, [line, ...(still ? [] : ["Every deadline moved on by the pause."])], "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
+  } else await notify(dev.email, APPROVED_LINE, [`${APPROVED_LINE}.`, ...(taken ? [`The ${money(taken)} reserved on your card was taken.`] : [])], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
   return { ok: true, lifted, takenCents: taken };
 }
 export const APPROVED_LINE = "The team approved lifting your hold";
@@ -416,7 +416,7 @@ export async function declineChargebackReserve(devId: string, note = "", adminId
     throw new HttpError(409, "nothing_reserved", released ? `Nothing is reserved on that account (${released}).` : "Nothing is reserved on that account.");
   }
   const line = notApprovedLine(cents);
-  await notify(u.email, line, [line, ...(note ? [`Their note: “${note}”`] : [])], "/app/payments#chargeback-steps", { payment: true, group: "admindecision" });
+  await notify(u.email, line, [line, ...(note ? [`Their note: “${note}”`] : [])], "/app/payments#chargeback-steps", { side: "developer", payment: true, group: "admindecision" });
   return { ok: true, releasedCents: cents };
 }
 /** "The team didn't approve lifting your hold: the $23.00 reserved on your card was released, and nothing was taken." */

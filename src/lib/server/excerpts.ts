@@ -102,7 +102,7 @@ export async function decideExcerpt(dev: { id: string; name: string; email: stri
   const done = await db.excerpt.updateMany({ where: { id: x.id, status: "pending" }, data: { status: allow ? "shown" : "denied", decidedAt: new Date() } });
   if (done.count !== 1) throw new HttpError(409, "decided", ALREADY_DECIDED);
   const hidden = allow && !!x.test.ndaText;
-  await bell(x.testerId, hidden ? allowedUnderNdaLine(x.test.title) : allow ? allowedLine(x.test.title) : deniedLine(displayName(dev), x.test.title), allow ? `/app/testers/${x.testerId}#excerpts` : "/app/account#excerpts", undefined, { testId: x.testId, group: "excerpts" }); // (batch 29 §26)
+  await bell(x.testerId, hidden ? allowedUnderNdaLine(x.test.title) : allow ? allowedLine(x.test.title) : deniedLine(displayName(dev), x.test.title), allow ? `/app/testers/${x.testerId}#excerpts` : "/app/account#excerpts", undefined, { side: "tester", testId: x.testId, group: "excerpts" }); // (batch 29 §26)
   return { status: allow ? "shown" : "denied", ...(hidden ? { hidden: true } : {}) };
 }
 
@@ -126,7 +126,7 @@ export async function excerptsOnDelete(userId: string) {
   for (const x of pending) {
     const line = devDeletedClosedLine(x.test.title);
     await db.excerpt.update({ where: { id: x.id }, data: { status: "closed", closedReason: line, decidedAt: new Date() } });
-    await bell(x.testerId, `${line}.`, "/app/account#excerpts", undefined, { testId: x.testId });
+    await bell(x.testerId, `${line}.`, "/app/account#excerpts", undefined, { side: "tester", testId: x.testId });
   }
 }
 
