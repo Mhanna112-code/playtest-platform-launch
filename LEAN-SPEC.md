@@ -78,14 +78,12 @@ and look, but this version deliberately drops most of its complexity.
   were sent (under Testers); the tester sees "Required" / "Not required" in Your parts; the rating warning marks unsent
   required parts "(required)". Rating availability is unchanged.
 
-## (Owner, Oct 23, NEWEST+9) Tester capacity per test (as in the full app)
-- A developer can take up to N testers per test: starts at 10; after every 10 new ratings it grows by 10% (at least
-  +1) when at least half of those 10 are 3 stars or more OR the developer reviewed at least 90% of the work testers
-  sent them themselves (paid / partly paid / rejected count; tester Charges and Let it go don't); max 50; never shrinks.
-- Post/Edit refuse spots above it: red at the spots field "You can take up to 10 testers per test right now."; the
-  limit is shown next to the field. Existing tests keep their spots.
-- The full app's card ("Can take up to 10 testers per test · Next: +10% after 4 more ratings…") shows ONLY to the
-  developer (their dashboard/profile), never on the profile testers see.
+## (Owner, Oct 23, NEWEST+9) Tester capacity per test (replaced Oct 29, batch 31: a flat 10)
+- Every test takes at most 10 testers: spots 1-10 on Post, Edit and Next round ("At most 10 testers per test."); the
+  server refuses more. There is no growing limit any more (no +10% per 10 ratings, no 50) and no tester-limit card.
+- Tests that already have more than 10 spots keep them: Edit can lower them, never raise them ("This test keeps its N
+  spots: you can lower them, not raise them.").
+- Unchanged: a tester can be in at most 10 tests at once.
 
 ## (Owner, Oct 23, NEWEST+8) Launch fixes
 1. EMAIL CONFIRMATION REQUIRED before posting a test, Edit Save, joining/applying/accepting an invite, sending work,

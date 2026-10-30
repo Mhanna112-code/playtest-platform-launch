@@ -110,7 +110,9 @@ describe("batch 23 sections 1 to 3: failed emails wait and retry; the owner is t
   });
 
   it("Resend's daily limit (429 / quota) waits until the next day's first sweep without burning tries; the red box says so plainly", async () => {
-    const t0 = new Date();
+    // (Batch 30 §13) A pinned clock: noon UTC, so "one hour later" is still the same UTC day whenever the suite runs (between 23:00 and 00:00 UTC it wasn't).
+    const today = new Date();
+    const t0 = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate(), 12));
     let capped = true;
     const posts = resend(() => (capped ? { ok: false, status: 429, body: JSON.stringify({ name: "daily_quota_exceeded", message: "You have reached your daily email sending quota." }) } : { ok: true }));
     const first = await sendEmail({ to: "ana@x.test", subject: "One", text: "x" }, t0);
