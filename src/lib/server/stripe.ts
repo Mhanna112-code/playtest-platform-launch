@@ -115,6 +115,8 @@ export function getStripe(): Stripe {
 
 type Party = { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean; testerSuspendedAt?: Date | null };
 
+/** (Batch 32 §15) A charge on a developer with no saved card: the failure recorded with it (the developer's Payments asks for a card and Pay what you owe). */
+export const NO_CARD_SAVED = "No card is saved on this account.";
 /** Before charging: the developer needs a saved card (only when Stripe is on). */
 export function cardRefusal(dev: Party) {
   if (!stripeOn()) return "";
@@ -156,6 +158,9 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
   if (amountCents === 0) return { status: "charged", ...split, transferStatus: "none", stripePaymentIntentId: null };
   // (Owner, Oct 29, batch 22 section 2) A suspended tester is paid like anyone: their share goes to their payout account (or waits for it to be set up).
   if (!stripeOn()) return { status: "not_set_up", ...split, transferStatus: "none", stripePaymentIntentId: null };
+  // (Owner's finding, Oct 30, batch 32 §15) No saved card (a tester's Charge, or an automatic charge, on a developer who never added one): handled as a declined
+  // card (the payment hold and Pay what you owe; the tester reads only "delayed"), never sent to Stripe with an empty card ("Payments are having a problem").
+  if (!dev.stripeCustomerId || !dev.stripePaymentMethodId) throw new HttpError(402, "card_failed", NO_CARD_SAVED);
   const stripe = getStripe();
   const destination = tester.stripeAccountId && tester.payoutsReady ? tester.stripeAccountId : null;
   try {

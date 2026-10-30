@@ -53,3 +53,7 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 14. Your agreed scope: every then-and-now scrolls (owner, Oct 30)
 - An "Updated" tag's Before / Now and each row of a listing save's "Before and after" sit in their own scroll box, about 8 lines (the tag's boxes were inline, so the scroll never applied; the history rows had none). The questions (a box about 3 questions tall) and the NDA (its own box) already scrolled.
+
+## 15. A Charge on a developer with no saved card (owner's finding, Oct 30)
+- A tester's Charge (or an automatic charge) on a developer who never saved a card was sent to Stripe with an empty card and shown as "Payments are having a problem right now". It is now handled as a declined card: the payment hold and Pay what you owe for the developer ("No card is saved on this account."), and the tester reads only "Payment for your work may be delayed" (never "failed").
+- When a press goes ahead after its stop box and is then refused for another reason, the stop box goes and only the refusal shows (they used to show together).
