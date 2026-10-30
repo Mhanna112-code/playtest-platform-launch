@@ -30,7 +30,7 @@ export function QuickIgnore({ alerts }: { alerts: string[] }) {
  * (Batch 15 sections 26 and 44) Under a tester's stop box: the quick "Turn off alerts" (new terms from the developer and a key marked as working still stop: CONTRACT_KINDS).
  * (Owner, Oct 28, batch 17 section 13) With Alerts already Off, neither line shows (only "Press <button> again to go ahead." / the terms tail remain).
  */
-export function TesterAlertsOff({ show }: { show: boolean }) {
+export function TesterAlertsOff({ show, where }: { show: boolean; /** (Batch 30 §10) "join": the join page (no test page yet) */ where?: "join" }) {
   // (Batch 20 section 8) Pressed in this box: "Alerts are off" while they stay off; turned back On (the Alerts button, another tab) it offers the press again.
   const [pressed, setPressed] = useState(false);
   const off = useTesterAlertsOff();
@@ -38,7 +38,8 @@ export function TesterAlertsOff({ show }: { show: boolean }) {
   if (!show || (off && !done)) return null;
   return (
     <div className="mt-1 space-y-1 text-xs text-sky-200/90" data-quick-alerts-off="">
-      <p>You can turn these stops off below, or with Alerts at the top of your test&apos;s page. New terms from the developer and a key marked as working still stop.</p>
+      {/* (Batch 30 §10) The join page has no test page yet: Alerts is on the dashboard. */}
+      <p>{where === "join" ? "You can turn these stops off below, or with Alerts on your dashboard." : "You can turn these stops off below, or with Alerts at the top of your test's page."} New terms from the developer and a key marked as working still stop.</p>
       <button type="button" className="btn-ghost !rounded-md !px-2 !py-0.5 text-xs" disabled={done} onClick={() => void api("/api/account/tester-alerts", { off: true }).then(() => { setPressed(true); setTesterAlertsOff(true); publishTesterAlertsOff(true); }).catch(() => null)}>{done ? "Alerts are off" : "Turn off alerts"}</button>
     </div>
   );

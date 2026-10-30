@@ -3,9 +3,13 @@ import { NdaBox } from "@/components/NdaBox";
 import { Err } from "@/components/Err";
 import { MistakeList, announcePress, focusFirstMistake } from "@/components/FieldChecks";
 import { useEffect, useState } from "react";
-import { ChangesBox } from "@/components/ChangesBox";
+import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, errOf, ApiError } from "@/lib/client";
-import { stopBox, useStopBox } from "@/lib/topStop";
+import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
+import { LIVE_EVENT, mergeChanges, useLiveAppend, wasShownInBox } from "@/lib/live";
+import { LongList } from "@/components/LongList";
+import { fmtTimeIn } from "@/lib/format";
+import { savedZone } from "@/components/TimeZoneSync";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { GapDialog, JustUpdated, type PopupAnswer } from "@/components/GapDialog";
@@ -44,12 +48,60 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [termsAsk, setTermsAsk] = useState(!!p.termsAgain);
   const [termsErr, setTermsErr] = useState("");
   const [agreeTerms, setAgreeTerms] = useState(false);
+  // (Batch 30 §12) The seen marker is the page's FIRST render in this tab (a redraw of the page never moves it; lib/client.ts adds what the top box showed).
+  const [seenAt] = useState(p.seenAt);
+  // (Batch 30 §11) "Changed since you opened this page", right above the button: the top box's lines as they come (newest first), until the tester presses.
+  const [since, setSince] = useState<Change[]>([]);
+  useEffect(() => {
+    const on = (e: Event) => {
+      const added = ((e as CustomEvent<Change[]>).detail ?? []).filter((c) => !c.quiet && !wasShownInBox(c));
+      if (!added.length) return;
+      setSince((old) => mergeChanges(old, added));
+      afterChanges(added);
+    };
+    window.addEventListener(LIVE_EVENT, on);
+    return () => window.removeEventListener(LIVE_EVENT, on);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  /**
+   * (Batch 30 §12) Listing changes the page learns of (live, or in a stop box): the page redraws to the current listing (the seen marker stays: only lines it
+   * showed count as seen), and an NDA change clears the NDA tick ("read and accept it again below").
+   */
+  function afterChanges(lines: Change[]) {
+    if (lines.some((c) => c.nda)) {
+      setNda(false);
+      setNdaErr("");
+    }
+    if (lines.some((c) => c.timed)) router.refresh();
+  }
+  /** A stop box under the button: it takes over from the "Changed since" list. */
+  function showBox(sb: StopBox) {
+    setBox(sb);
+    setBoxAt(sb.now);
+    setSince([]);
+    afterChanges(sb.changes);
+  }
+  useLiveAppend(!!box, (added) => {
+    const newest = added.map((a) => a.at).sort().pop();
+    if (newest) setBoxAt((b) => (b && b > newest ? b : newest));
+  });
+  /**
+   * (Batch 30 §12, owner's finding) The profile now covers the test's needs: "You now meet this test's needs" shows IN ADDITION to every change the page hadn't
+   * shown (the save that covered them included): those stop this press in the box under the button, and the next press goes ahead.
+   */
+  async function coveredNow(ask: GapAsk) {
+    setCovered({ at: new Date().toISOString(), ask });
+    const verb = p.rejoin && !p.invited ? "ask" : ask === "apply" ? "apply" : "join";
+    const r = await api<{ changes?: Change[]; now?: string; tail?: string }>(`/api/tests/${p.testId}/my-gaps`, { seenAt, verb, ...(boxAt ? { boxAt, confirmed: true } : {}) }).catch(() => null);
+    if (r?.changes?.length) showBox({ changes: r.changes, tail: r.tail ?? "Press again to go ahead.", top: false, now: r.now ?? new Date().toISOString() });
+    router.refresh();
+  }
 
   // The pop-up's press: "Join anyway" / "Apply anyway", checked on the server against what the pop-up showed.
   async function sendFromPopup(shown: Gaps): Promise<PopupAnswer> {
     const action = rejoining ? "rejoin-ask" : applying ? "apply" : "join";
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
       // (Batch 26 section 13) Join anyway opens the session page (the pop-up stays meanwhile); Apply anyway and Ask to rejoin anyway stay here: the pop-up closes and the
       // done line shows.
       if (r.sessionId) {
@@ -61,6 +113,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         setBoxAt(String(e.data.now ?? new Date().toISOString()));
+        setSince([]);
+        afterChanges((e.data.changes as Change[]) ?? []);
         return { stop: ((e.data.changes as { text: string }[]) ?? []).map((c) => c.text) };
       }
       if (e instanceof ApiError && e.code === "needs" && e.data.gaps) return { gaps: e.data.gaps as Gaps };
@@ -72,6 +126,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   // Join / Apply with something missing: the pop-up asks first (never a refusal). Covered by now: a notice, no pop-up.
   async function press(action: "join" | "apply" | "rejoin-ask") {
     setCovered(null);
+    setSince([]);
     if (p.nda && !nda) {
       setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : action === "rejoin-ask" ? "ask to rejoin." : "join."));
       // (Batch 16 section 10) The tick is red with its line, listed under the button, and gets the cursor.
@@ -83,8 +138,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     const now = await api<{ gaps: Gaps }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
     setBusy(false);
     if (now && noGaps(now.gaps)) {
-      setCovered({ at: new Date().toISOString(), ask: action === "apply" ? "apply" : "join" });
-      router.refresh();
+      await coveredNow(action === "apply" ? "apply" : "join");
       return;
     }
     setAsking({ ask: action === "apply" ? "apply" : "join", gaps: now?.gaps ?? p.missing });
@@ -94,17 +148,16 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     setBusy(true);
     setErr("");
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt: p.seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
+      setSince([]);
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else if (action === "withdraw-application") window.location.reload();
       else setDone(action === "rejoin-ask" ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
     } catch (e) {
       const sb = stopBox(e);
       if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) { setTermsAsk(true); setTermsErr(e.message); }
-      else if (sb) {
-        setBox(sb);
-        setBoxAt(sb.now);
-      } else if (e instanceof ApiError && e.code === "invite_replaced") {
+      else if (sb) showBox(sb);
+      else if (e instanceof ApiError && e.code === "invite_replaced") {
         // The new invite is shown right here; the next press joins on it.
         setErr(`${e.message}${e.data.terms ? ` ${String(e.data.terms)}. Press Join to join on it.` : ""}`);
         if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
@@ -128,7 +181,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           <button className="btn" disabled={busy} onClick={() => go("join")}>Join on the current listing</button>
           <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         </div>
-        <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
+        <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
         <Err text={err} />
       </div>
     );
@@ -137,7 +190,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       <div className="space-y-2">
         <p className="info">{p.application.kind === "rejoin" ? "You asked to rejoin. You'll hear back when the developer answers." : "You applied to join. You'll hear back when the developer answers."}</p>
         <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
-        <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
+        <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
         <Err text={err} />
       </div>
     );
@@ -168,6 +221,18 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
+      {/* (Batch 30 §11) Right above the button where the tester is about to act (only the updated-Terms tick, when shown, sits between): the changes the top box got
+          since the page opened, newest first (3, then "Show N more"). */}
+      {since.length > 0 && !box && (
+        <div className="info text-sm" role="status" data-changed-since="">
+          <p className="font-medium">Changed since you opened this page</p>
+          <LongList className="mt-0.5 list-disc space-y-0.5 pl-5" tall="max-h-52">
+            {[...since].sort((a, b) => (a.at < b.at ? 1 : -1)).map((c) => (
+              <li key={`${c.at}|${c.text}`}>{c.timed ? c.text : `${c.text} · ${fmtTimeIn(c.at, savedZone())}`}{c.timed && c.kind === "info" && <> · <a href="#listing">See it</a></>}</li>
+            ))}
+          </LongList>
+        </div>
+      )}
       {/* (Batch 20 section 21) Above the button, with the other ticks. */}
       {termsAsk && <TermsAgainBox agreed={agreeTerms} onAgree={setAgreeTerms} red={termsErr} />}
       <div className="flex flex-wrap items-center gap-3">
@@ -185,12 +250,12 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           needs={p.needs}
           devName={p.devName}
           send={sendFromPopup}
-          onCovered={(at) => { setCovered({ at, ask: asking.ask }); setAsking(null); router.refresh(); }}
+          onCovered={() => { const ask = asking.ask; setAsking(null); void coveredNow(ask); }}
           onClose={() => setAsking(null)}
         />
       )}
       <MistakeList press={rejoining ? "Ask to rejoin" : applying ? "Apply to join" : "Join this test"} />
-      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
       {done && <p className="ok">{done}</p>}
       <Err text={err} />
       {rejoining ? (

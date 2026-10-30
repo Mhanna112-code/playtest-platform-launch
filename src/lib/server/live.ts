@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, money } from "@/lib/format";
 import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
+import { LISTING_SAVE, parseSave, saveLine } from "@/lib/listingSave";
 
 type Tx = Prisma.TransactionClient;
 
@@ -99,15 +100,21 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You saved the listing in another tab: description, access keys"):
   // its listing-info event ("Nora Lane changed the description") is dropped, and a rename of their own reads "You renamed the test to ...".
   const me = displayName(await tx.user.findUniqueOrThrow({ where: { id: devId } }));
+  const mine = await ownChanges(devId, testId, since, tab, tx);
   const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e) => {
     if (e.kind === "info" && e.text.startsWith(`${me} `)) return [];
-    if (e.kind === "renamed" && e.text.startsWith(`${me} `)) return [{ ...e, text: e.text.replace(`${me} `, "You ") }];
+    if (e.kind === "renamed" && e.text.startsWith(`${me} `)) {
+      // (Batch 30, Oct 29 addition) One line per save: a rename saved in another tab with other fields is already in that save's line ("title (now “X”)").
+      const title = e.text.slice(`${me} renamed the test to `.length);
+      if (mine.some((o) => o.about?.a === "edit" && o.text.includes(`title (now “${title}”)`))) return [];
+      return [{ ...e, text: e.text.replace(`${me} `, "You ") }];
+    }
     return [e];
   });
   // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box and
   // stop every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines); any other action of theirs stops only a
   // press it touches. A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
-  const own = (await ownChanges(devId, testId, since, tab, tx)).flatMap((o): TestEventLike[] => {
+  const own = mine.flatMap((o): TestEventLike[] => {
     const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt };
     if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? [line] : [];
     if (!opts.press) return [];
@@ -219,4 +226,20 @@ export function withRenamed(changes: TestEventLike[], body: Record<string, unkno
   return [];
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+/**
+ * (Batch 30 §10) The tester's lines for the listing saves since `since`: ONE line per save, in the reader's own zone ("Marc Hanna edited the listing at 6:55 PM:
+ * product name, title (now “lllllq”), description · See it"). `join`: the join page (every field, the NDA to accept again); `session`: a working tester's page (the
+ * listing information only). A rename alone is info only (kind "renamed": it never stops a press by itself).
+ */
+export async function listingSaveLines(testId: string, since: Date, viewerId: string, side: "join" | "session", tx: Tx | typeof db = db): Promise<TestEventLike[]> {
+  const rows = await tx.testEvent.findMany({ where: { testId, kind: LISTING_SAVE, createdAt: { gt: since } }, orderBy: { createdAt: "asc" }, take: 100 });
+  if (!rows.length) return [];
+  const tz = (await tx.user.findUnique({ where: { id: viewerId }, select: { timeZone: true } }))?.timeZone;
+  return rows.flatMap((e) => {
+    const s = parseSave(e.text);
+    const l = s ? saveLine(s, e.createdAt, tz, side) : null;
+    return l ? [{ kind: l.titleOnly ? "renamed" : "info", text: l.text, createdAt: e.createdAt, timed: true, ...(l.nda ? { nda: true } : {}) }] : [];
+  });
+}
+
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}),...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

@@ -10,6 +10,7 @@ import { callsLeftWarning } from "@/lib/callMeasure";
 import { fmtTime } from "@/lib/format";
 import { ReasonQuote } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
+import { PageLoaded } from "@/components/PageLoaded";
 import { devRestricted } from "@/lib/restricted";
 import { PAUSED_ALERTS, STOPPED_ALERTS } from "@/lib/alerts";
 import { TestBanner, allowedLine, type BannerCause } from "./TestBanner";
@@ -295,6 +296,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           }))}
         />
         <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+        <PageLoaded at={seenAt} />
         <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} />
         {/* (Batch 17 §11) A charge made while away (e.g. a retry during the pause) that the bank wants confirmed: confirmed here, each line naming its piece. */}
         {bankRows.length > 0 && (
@@ -398,6 +400,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {banner}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+      {/* (Batch 30) The seen marker starts at this page's first load in the tab: a redraw never skips a change the page hasn't shown. */}
+      <PageLoaded at={seenAt} />
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (

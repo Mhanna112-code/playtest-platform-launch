@@ -31,3 +31,7 @@ export const params = <T extends Record<string, string>>(p: T) => ({ params: Pro
 export async function json(res: Response) {
   return { status: res.status, body: await res.json() };
 }
+
+const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** (Batch 30 §10) A tester's one line per listing save: "Nora Lane edited the listing at 3:04 PM: description" (any time). */
+export const saveRe = (who: string, rest: string, verb = "edited the listing") => new RegExp(`^${esc(who)} ${verb} at \\d{1,2}:\\d{2}\\s[AP]M${rest ? `: ${esc(rest)}` : ""}$`);

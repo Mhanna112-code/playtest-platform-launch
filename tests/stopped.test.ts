@@ -35,8 +35,8 @@ describe("after the test is stopped", () => {
     const first = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000, seenAt: opened });
     expect(first.status).toBe(409);
     expect(first.body.error.code).toBe("stop_once");
-    // (Batch 17 section 12) A page opened before the stop: Pay stops once with the stop as the change.
-    expect(texts(first)).toEqual([expect.stringMatching(/^You stopped this test at /)]);
+    // (Batch 17 section 12) A page opened before the stop: Pay stops once with the stop as a change; (batch 30, Oct 29 addition) the dispute since then with it, oldest first.
+    expect(texts(first)).toEqual([expect.stringMatching(/^You stopped this test at /), "Ana Silva disputed the pay for their written answers"]);
     // The second press goes ahead (nothing newer happened).
     const second = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: true, boxAt: first.body.error.now });
     expect(second.status).toBe(200);

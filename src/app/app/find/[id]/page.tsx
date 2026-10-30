@@ -14,6 +14,7 @@ import { JoinBox } from "./JoinBox";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
+import { PageLoaded } from "@/components/PageLoaded";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { applyDeclinedLine, invitesV, joinPageV, rejoinDeclinedLine } from "@/lib/server/pulseV";
 import { JoinWatch } from "./JoinWatch";
@@ -118,6 +119,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       <p><a href="/app/find">← All tests</a></p>
       {isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}
       {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
+      {/* (Batch 30 §12) The seen marker starts at this page's first load in the tab: a redraw (the needs covered, an invite re-sent) never skips a change. */}
+      <PageLoaded at={seenAt} />
       {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}
       {invite && <AutoRefresh query="invites=1" v={invitesFp} />}
       <section className="card space-y-4" id="listing">

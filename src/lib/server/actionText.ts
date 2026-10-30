@@ -104,6 +104,10 @@ export async function logTestAction(userId: string, testId: string, action: stri
       // info-only line.)
       const names = (r.changed ?? []).filter((n) => n !== "title");
       if (!names.length) return;
+      // (Batch 30 §10, Oct 29 addition) One line per save on the developer's pages too: a rename saved with other fields is named here ("title (now “X”)"), and its own
+      // "You renamed the test to X" line is dropped (live.ts devChanges).
+      const title = typeof body.fields === "object" && body.fields ? String((body.fields as Record<string, unknown>).title ?? "").trim() : "";
+      if ((r.changed ?? []).includes("title") && title) names.splice((r.changed ?? []).indexOf("title"), 0, `title (now “${title}”)`);
       text = `You saved the listing in another tab: ${names.join(", ")}`;
       break;
     }

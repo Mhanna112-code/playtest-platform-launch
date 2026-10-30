@@ -5,7 +5,7 @@ import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/form
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
+import { asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, ownTest, stampCounting } from "./tests";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
@@ -57,15 +57,13 @@ export async function listingChanges(testId: string, seenAt: unknown): Promise<T
   return db.testEvent.findMany({ where: { testId, kind: "edited", createdAt: { gt: d } }, orderBy: { createdAt: "asc" } });
 }
 
-const INFO_NAMES = ["title", "description", "devices", "languages", "build link", "categories", "who can join"];
-
 /** The join page's stop-once reasons: (D) the listing changed (spots excepted), (E) the tester's own actions in another tab. */
 export async function joinPageChanges(userId: string, testId: string, seenAt: unknown, tab: string): Promise<TestEventLike[]> {
   const d = seenOf(seenAt);
   if (!d) return [];
-  // An edit of only the listing's info shows once, as the (F) line ("Nora Lane changed the description").
-  const edits = (await listingChanges(testId, seenAt)).filter((e) => !e.text.replace(/^The listing was edited: /, "").split(", ").every((f) => INFO_NAMES.includes(f)));
-  const info = await db.testEvent.findMany({ where: { testId, kind: { in: ["info", "renamed"] }, createdAt: { gt: d } } });
+  // (Batch 30 §10, §12) ONE line per listing save, every save since the page last showed them (the NDA too: "Marc Hanna changed the NDA at 6:58 PM: read and accept it
+  // again below"); a rename alone is info only.
+  const edits = await listingSaveLines(testId, d, userId, "join");
   // (NEWEST+4, LIVE + GONE) Their application closed / their invite re-sent on the updated listing.
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   // (Batch 16 section 11) A test a block hides from this tester shows nothing (its page reads "This test isn't available right now.").
@@ -90,11 +88,11 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
   if (left && left.status === "left") {
     const { testerChanges } = await import("./testerGate");
     rejoin.push(...(await testerChanges(userId, left.id, testId, d, tab)).filter((e) => e.kind !== "terms"));
-    const termsEdit = edits.filter((e) => e.kind === "edited").pop();
+    const termsEdit = edits.filter((e) => e.kind !== "renamed").pop();
     const diff = termsDiff({ ...left, questions: (left.questions as string[]) ?? [] }, asListing(t));
     if (termsEdit && diff) rejoin.push({ kind: "terms_plain", text: `${displayName(t.developer)} changed the terms: ${diff}`, createdAt: termsEdit.createdAt });
   }
-  const all = [...edits, ...info, ...gone, ...(await ownChanges(userId, testId, d, tab)), ...rejoin];
+  const all = [...edits, ...gone, ...(await ownChanges(userId, testId, d, tab)), ...rejoin];
   const seen = new Set<string>();
   return all.filter((e) => {
     const k = `${e.createdAt.getTime()}|${e.text}`;
@@ -106,9 +104,19 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
 
 /** Join / Apply / Withdraw application / No thanks stop once (box under the button) for the join page's reasons. */
 export async function listingGate(userId: string, testId: string, body: Record<string, unknown>, verb: string) {
+  const r = await joinStopList(userId, testId, body, verb);
+  if (r) throw new HttpError(409, "stop_once", r.tail, r);
+}
+
+/**
+ * The join page's stop for a press (null: it goes ahead): every change since the page last showed them, oldest first, each with its time, the tester's own in
+ * another tab with the developer's (batch 30 §12 and the Oct 29 addition: one box, never one source hiding another). (Batch 30 §12) Also what the needs-covered
+ * notice ("You now meet this test's needs") shows with it, before the press.
+ */
+export async function joinStopList(userId: string, testId: string, body: Record<string, unknown>, verb: string) {
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt).
   const boxAt = seenOf(body.boxAt);
-  if (body.confirmed === true && !boxAt) return;
+  if (body.confirmed === true && !boxAt) return null;
   const raw0 = await joinPageChanges(userId, testId, body.confirmed === true ? boxAt!.toISOString() : body.seenAt, tabOf(body));
   // (Batch 17 section 13) The tester's box drops "Turn off alerts" when their Alerts are already Off.
   const alertsOff = !!(await db.user.findUnique({ where: { id: userId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
@@ -117,10 +125,10 @@ export async function listingGate(userId: string, testId: string, body: Record<s
   const raw = alertsOff ? raw0.filter((e) => e.kind !== "own") : raw0;
   // (Batch 17 section 4) A full test keeps the invite open: No thanks just declines it (the test filling or a spot opening doesn't stop it).
   const changes = withRenamed(verb === "decline" ? raw.filter((e) => e.kind !== "full" && e.kind !== "spot_open") : raw, body);
-  if (changes.length) {
-    const tail = verb === "withdraw" || verb === "decline" ? "Press again to go ahead." : `Press again to ${verb} on the current listing.`;
-    throw new HttpError(409, "stop_once", tail, { changes: changes.map((e) => ({ text: e.text, at: e.createdAt })), tail, alertsOff });
-  }
+  if (!changes.length) return null;
+  const tail = verb === "withdraw" || verb === "decline" ? "Press again to go ahead." : `Press again to ${verb} on the current listing.`;
+  // (Batch 30 §12) `now`: the box's newest line (the next press goes ahead unless something newer came); each line says whether it's an NDA change (its tick clears).
+  return { changes: asLines(changes), tail, alertsOff, now: new Date(Math.max(...changes.map((e) => e.createdAt.getTime()))).toISOString() };
 }
 
 /**

@@ -3,7 +3,7 @@ import { displayName, fmtDateTime, money } from "@/lib/format";
 import { TESTER_CHOICE_REASONS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
-import { asLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
+import { asLines, listingSaveLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
 // Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
@@ -73,8 +73,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
   // (Owner, Oct 30, batch 15 section 45) The developer marked this tester's key as working: a change to their contract (it stops even with Alerts Off; no bell).
   const fixed = await db.accessKey.findFirst({ where: { contractId, fixedAt: { gt: seenAt }, status: "inuse" } });
   if (fixed) out.push({ kind: "keyfixed", text: `The developer marked your key as working (${fixed.value})`, createdAt: fixed.fixedAt! });
-  // (F) the listing's info (title, description, devices, languages) changed.
-  out.push(...(await db.testEvent.findMany({ where: { testId, kind: { in: ["info", "renamed"] }, createdAt: { gt: seenAt } } })));
+  // (F) the listing's info (title, description, devices, languages) changed: (batch 30 §10) one line per save.
+  out.push(...(await listingSaveLines(testId, seenAt, testerId, "session")));
   out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));
   out.push(...(await ownChanges(testerId, testId, seenAt, tab)));
   return out.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());

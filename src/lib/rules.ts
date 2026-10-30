@@ -463,7 +463,7 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
  */
 export const STOP_ONCE_KINDS = ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed"] as const;
 export const CALL_KINDS = ["booked", "confirmed", "cancelled", "offered", "removed"] as const;
-export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string };
+export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean };
 
 /** Events since the page's "seen" marker that stop a press once, oldest first. */
 export function stopOnceChanges(events: TestEventLike[], seenAt: Date, kinds: readonly string[] = STOP_ONCE_KINDS) {
@@ -508,6 +508,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   spot_open: "follows a tester leaving / being ended or the developer's own spots edit: those lines show instead",
   edited: "the developer's own edit (reason E from another tab; F for listing info)",
   edited_spots: "the developer's own edit of spots (reason E from another tab)",
+  listing_save: "(batch 30 section 10) the testers' one line per listing save; the developer's own save is reason E from another tab (with its edited / info lines)",
   opened: "the developer's own Open (reason E from another tab)",
   stopped: "the developer's own Stop (reason E from another tab)",
   ended: "the developer's own End early (reason E from another tab)",
@@ -533,7 +534,7 @@ export const RENAMED = "renamed";
 // (Batch 15 section 24) renamedNote is gone: a rename never leaves a note under a press; it is recorded in the contract changes.
 
 /** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
-export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open"] as const;
+export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open", "listing_save"] as const;
 /** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */
 export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   payment: "the developer's own payments (batch 11: a chargeback reversed in their favour) are never shown to testers",

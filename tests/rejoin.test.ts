@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
-import { json, makeUser, req } from "./helpers";
+import { json, makeUser, req, saveRe } from "./helpers";
 import { act, joined, sact, seen, setup, atHours } from "./fixtures";
 
 // (Owner, Oct 22, NEWEST+4) Listing changes re-invite; applications; rejoining restores work.
@@ -157,7 +157,7 @@ describe("owner corrections 2 and 3", () => {
     const { GET: liveGET } = await import("@/app/api/live/route");
     await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
     const l = (await json(await liveGET(req(`/api/live?scope=session:${sessionId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: tester.cookie })))).body.changes.map((c: { text: string }) => c.text);
-    expect(l).toEqual(["Nora Lane renamed the test to Harbor Run 2"]);
+    expect(l).toEqual([expect.stringMatching(saveRe("Nora Lane", "title (now “Harbor Run 2”)"))]); // (batch 30 §10) one line per save
     const go = await sact(sessionId, "request-time", tester.cookie, { startsAt: new Date(Date.now() + 50 * 3_600_000).toISOString(), seenAt: pageLoaded });
     expect(go.body.error ?? null).toBeNull();
     expect(go.body.note).toBeUndefined(); // (batch 15 section 24) no note under the press
@@ -165,7 +165,7 @@ describe("owner corrections 2 and 3", () => {
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     const stop = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(370), seenAt: pageLoaded });
-    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane renamed the test to Harbor Run 2", "Nora Lane paid $10.00 for your written answers"]);
+    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(saveRe("Nora Lane", "title (now “Harbor Run 2”)")), "Nora Lane paid $10.00 for your written answers"]);
     // The developer's other tab: goes through with the note; the join page: Apply goes through with it too.
     // (The developer's other tab: Ben's application and Ana's sends stop it once; the rename is listed with them.)
     const dv = await act(testId, "request-time", dev.cookie, { seenAt: pageLoaded, tab: "tab-2", contractIds: [sessionId], startsAt: new Date(Date.now() + 60 * 3_600_000).toISOString() });
@@ -183,7 +183,7 @@ describe("owner corrections 2 and 3", () => {
     await new Promise((r) => setTimeout(r, 30));
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { description: "Other words" } });
     const r = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(377), seenAt: pageLoaded });
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane changed the description"]);
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description"))]);
   });
 
   it("switching to Invite only keeps invites open but closes pending applications (told; Accept refused; lines)", async () => {

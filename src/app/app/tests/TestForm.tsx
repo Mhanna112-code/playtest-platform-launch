@@ -26,6 +26,8 @@ import { FieldNote, GroupNote, NoteItems, TheirsNote, type NoteItem } from "@/co
 import { CHANGED_ELSEWHERE, SAVED_ELSEWHERE, UPDATED_AT, mergeElsewhere, takesTheirs } from "@/lib/editMerge";
 import { ShieldCheck } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
+import { jumpTo } from "@/lib/markJump";
+import { lockedChangeLine, lockedChangeParts, shortValue, type LockedItem } from "@/lib/lockedChange";
 
 // Post and Edit share this form. Prices are typed in dollars ("7.50"; "0" for free). Edit sends only the fields the
 // user touched plus the version it loaded; if the test changed since, Save stops once and lists what changed.
@@ -213,6 +215,25 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
   const left = (f: CriticalField) => (limited ? <span className="ml-2 text-xs font-normal text-slate-500" data-changes-left={f}>{changesLeftLine(critCounts[f])}</span> : null);
   /** The lock note under a field that used its 3 changes. */
   const lockNote = (f: CriticalField) => (fieldLocked(f) ? <p className="info mt-1" data-critical-locked={f}>{criticalLine(f)}</p> : null);
+  /**
+   * (Batch 30 §9) A locked field this tab still changes (another tab's Save locked it meanwhile): what each change is, for the line at Save ("Your change to the live
+   * call rate ($24.00/h → $30.00/h) can't be saved: …") with Put it back.
+   */
+  const lockedItems = (c: CriticalField): LockedItem[] =>
+    changedKeys.filter((k) => API_FIELDS[k].some((a) => counterOf(a) === c)).map((k) => {
+      const unit = k === "liveRate" ? "/h" : "";
+      const before = shortValue(valueText(k, base[k])), now = shortValue(valueText(k, f[k]));
+      const name = (NAMES[k] ?? String(k)).replace(/^./, (x) => x.toLowerCase());
+      return { key: String(k), name, ...(before != null && now != null ? { before: before + (before.startsWith("$") ? unit : ""), now: now + (now.startsWith("$") ? unit : "") } : {}) };
+    });
+  /** Put it back: the saved value returns to these fields (the other changes still save). */
+  const putBack = (keys: string[]) => {
+    setF((o) => ({ ...o, ...Object.fromEntries(keys.map((k) => [k, base[k as keyof F]])) }));
+    setTouched((t) => new Set([...t].filter((k) => !keys.includes(k))));
+    setOrphans([]);
+  };
+  /** The field's name in the line scrolls to it, marked. */
+  const jumpField = (k: string) => jumpTo(k === "writtenPrice" || k === "recordingPrice" || k === "liveRate" ? k : k === "languages" || k === "devices" ? `${k}-group` : k === "questions" || k === "requiredQs" ? "questions-group" : NOTE_AT[k as keyof F] ?? k);
 
   // (Owner, Oct 29, batch 12 section 6; batch 15 section 18) No "days after joining" field: Open until is required (3 to 30 days from today on Post) and is the last day
   // to join; every tester gets the same days (opened → Open until) from when they join.
@@ -246,8 +267,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
       // press has re-rendered the box red: shown once, under the Free box.
       return el && (el.dataset.redMsg === m || (k === "keys" && !!keyLine && keyLine.includes(m))) ? null : el;
     });
-    const shownLocked = new Set(lockedNow.map(criticalLine));
-    setOrphans(left.filter((m) => !(isCriticalLine(m) && shownLocked.has(m))));
+    // (Batch 30 §9) A locked field's line is the one at Save (naming the change, with Put it back), never a second copy in the list: the counts the server sends with
+    // it lock the field here.
+    setOrphans(left.filter((m) => !isCriticalLine(m)));
     focusFirstMistake(formRef.current);
   }
   const keysBad = (showOn("keys") || pressed) && !!keyLine;
@@ -514,12 +536,12 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
           {note("categories")}
         </fieldset>
         {/* (Owner, Oct 28 afternoon) Required languages and devices are limited fields: each locks after its own 3rd change since testers joined. */}
-        <fieldset disabled={fieldLocked("languages")} data-locked={fieldLocked("languages") ? "" : undefined} className={lockedKey("languages") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
+        <fieldset id="languages-group" disabled={fieldLocked("languages")} data-locked={fieldLocked("languages") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("languages") ? "p-2 ring-1 ring-rose-400" : ""}`}>
           <Choices label="Language requirements (any one)" aside={left("languages")} options={LANGUAGES} value={f.languages} onChange={(languages) => set({ languages })} />
           {lockNote("languages")}
           {note("languages")}
         </fieldset>
-        <fieldset disabled={fieldLocked("devices")} data-locked={fieldLocked("devices") ? "" : undefined} className={lockedKey("devices") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
+        <fieldset id="devices-group" disabled={fieldLocked("devices")} data-locked={fieldLocked("devices") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("devices") ? "p-2 ring-1 ring-rose-400" : ""}`}>
           <Choices label="Technology requirements: devices, platforms or skills (any one; none ticked = any)" aside={left("devices")} options={DEVICES} value={f.devices} onChange={(devices) => set({ devices })} />
           {lockNote("devices")}
           {note("devices")}
@@ -549,7 +571,8 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
         <p className="note">Every term is fixed in each tester&apos;s contract when they join. Edits change the listing for new testers only.</p>
         {/* The full app's Parts and prices: one card per part (tick, title, what it is, Required, price, Free). Required is
             a label only (NEWEST+10): part of the terms, it blocks nothing. */}
-        <fieldset id="parts" data-field-group="" className="space-y-2">
+        {/* (Batch 30 §9) Locked, EVERY input in the group is disabled (the ticks, Required, prices, Free and the over-$200 tick); a note's Use theirs still works. */}
+        <fieldset id="parts" data-field-group="" className="space-y-2 scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300" data-locked={fieldLocked("parts") ? "" : undefined}>
           {/* (Batch 14) Parts and prices: ONE limited counter for the part ticks, prices, Required and Free ticks, the live rate and call length. */}
           <legend className="label req">Parts and prices{left("parts")}</legend>
           {lockNote("parts")}
@@ -571,7 +594,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
                   <span className="flex flex-wrap items-center gap-2">
                     <label className={`flex items-center gap-1 ${free || !on ? "text-slate-600" : "text-slate-300"}`}>
                       $
-                      <input id={part.price} className={"input w-24 py-1" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" data-money="" disabled={!on || free || pl} placeholder={part.ph} value={free ? "" : price}
+                      <input id={part.price} className={"input w-24 py-1 scroll-mt-24 data-[marked]:ring-2 data-[marked]:ring-sky-300" + (bad(part.price) ? " field-bad" : "")} inputMode="decimal" data-money="" disabled={!on || free || pl} placeholder={part.ph} value={free ? "" : price}
                         onChange={(e) => set({ [part.price]: e.target.value } as Partial<F>)} aria-label={`Price for the ${part.title.toLowerCase()}`}
                         data-min={part.min} data-max={part.max} data-zero-ok="" data-min-msg={part.lowMsg} data-max-msg={part.highMsg} data-msg={part.lowMsg}
                         // (Owner, Oct 28, batch 20 section 22) Ticked: a price is required ($0 only through Free), red on leaving it and on press; the server says the same.
@@ -584,7 +607,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
                       const savedSame = !!edit && toCents(base[part.price] as string) === cents && base[part.on];
                       return cents != null && cents > HIGH_PART_CENTS && !savedSame ? (
                         <label className="flex items-center gap-1.5 text-xs text-amber-200" data-high-tick={part.key}>
-                          <input type="checkbox" id={`high-${part.key}`} checked={!!high[part.key]} onChange={(e) => setHigh({ ...high, [part.key]: e.target.checked })} /> {HIGH_PART_TICK}
+                          <input type="checkbox" id={`high-${part.key}`} disabled={pl} checked={!!high[part.key]} onChange={(e) => setHigh({ ...high, [part.key]: e.target.checked })} /> {HIGH_PART_TICK}
                         </label>
                       ) : null;
                     })()}
@@ -600,7 +623,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
           {note("parts")}
         </fieldset>
         {f.written && (
-          <div className={lockedKey("questions") ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}>
+          <div id="questions-group" data-locked={fieldLocked("questions") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("questions") ? "p-2 ring-1 ring-rose-400" : ""}`}>
             <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}</label>
             <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : undefined} value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
             {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
@@ -712,7 +735,18 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
           {keep.restored && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}
         </div>
         {saved && <p className="ok">{saved}</p>}
-        {locked && pressed && lockedNow.map((f) => <p key={f} className="err-field" role="alert" data-critical-limit={f}>{criticalLine(f)}</p>)}
+        {/* (Batch 30 §9) The line names the change (the field name scrolls to it, marked) with Put it back beside it; then the other changes save. */}
+        {locked && pressed && lockedNow.map((c) => {
+          const items = lockedItems(c);
+          if (!items.length) return <p key={c} className="err-field" role="alert" data-critical-limit={c}>{criticalLine(c)}</p>;
+          const p = lockedChangeParts(c, items);
+          return (
+            <p key={c} className="err-field flex flex-wrap items-center gap-x-2" role="alert" data-critical-limit={c} data-locked-change={lockedChangeLine(c, items)}>
+              <span>{p.head}{p.items.map((i) => <span key={i.key}>{i.sep}the <a href={`#${i.key}`} onClick={(e) => { e.preventDefault(); jumpField(i.key); }}>{i.name}</a>{i.value}</span>)}{p.tail}</span>
+              <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" data-put-back={c} onClick={() => putBack(items.map((i) => i.key))}>Put it back</button>
+            </p>
+          );
+        })}
         <Err text={refusal} />
         {draft && (
           <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title="Delete this draft?" confirmLabel="Delete the draft"

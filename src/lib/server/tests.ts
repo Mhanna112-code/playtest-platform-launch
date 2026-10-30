@@ -1,5 +1,6 @@
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
+import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
@@ -429,6 +430,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed ${andList(info.map((f) => (f === "joinMode" ? FIELD_NAMES[f] : `the ${FIELD_NAMES[f]}`)))}` } });
     // A title change is info only everywhere (never stops; a press notes it).
     if (fields.includes("title")) await tx.testEvent.create({ data: { testId, kind: "renamed", text: `${displayName(dev)} renamed the test to ${next.title}` } });
+    // (Batch 30 §10) Testers read ONE line per save, everywhere (join page, session page, stop boxes, top boxes): what this save changed, for each page to word.
+    if (listingFields.length) await tx.testEvent.create({ data: { testId, kind: "listing_save", text: saveText({ by: displayName(dev), fields: listingFields, title: next.title, nda: !!next.ndaText }) } });
     changedNames = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])];
     reinvite = fields.some((f) => CLOSING_FIELDS.includes(f));
     spotsChanged = fields.includes("spots");
@@ -465,17 +468,8 @@ async function keysState(tx: Tx, testId: string) {
 /** (Batch 15 sections 24 and 43) The fields a Contract changes entry records: the terms and the names. */
 export const DEAL_FIELDS: (keyof Listing)[] = ["productName", "title", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"];
 
-/** (F) The listing info a working tester sees change live: title, description, devices, languages. */
-export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode", "productName", "mature", "matureWhy"];
 /** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
 export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description", "buildUrl"]; // (batch 14) the build link too
-
-const FIELD_NAMES: Record<keyof Listing, string> = {
-  productName: "product name", mature: "Mature (18+) box", matureWhy: "Mature (18+) note", ndaText: "NDA",
-  title: "title", description: "description", buildUrl: "build link", categories: "categories", devices: "devices", languages: "languages",
-  openUntil: "Open until", joinMode: "who can join", spots: "spots", writtenCents: "written answers price", writtenRequired: "written answers required", recordingRequired: "recording required", liveRequired: "live call required", recordingCents: "recording price", liveRateCents: "live call rate",
-  liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
-};
 
 export async function openDraft(dev: U, testId: string, body: Record<string, unknown> = {}) {
   const t = await ownTest(dev.id, testId);
@@ -559,14 +553,15 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const seenAt = body.confirmed === true && boxAt ? boxAt : seenDate(body.seenAt);
   // (Owner, Oct 28, batch 17 section 12) Pay / Pay more on a page opened BEFORE the test stopped, closed or this tester's work ended early: it stops once with the stop as the
   // one change; the second press (its box shown after the stop) goes ahead, as on a page opened after it.
+  // (Batch 30, Oct 29 addition) The stop is listed WITH every other change since the page last showed them (it no longer replaces them), oldest first.
+  const moments: TestEventLike[] = [];
   if (press.stopCheck !== undefined) {
     const stop = (await devStopSince(testId, press.stopCheck || null, loadedOf(body))) ?? (await devPauseSince(testId, loadedOf(body)));
-    if (stop) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [devLine(stop)], ...extra });
+    if (stop) moments.push(stop);
   }
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25's "goes through on the first press") On a stopped, closed or paused test (any cause), and while the
   // developer is held or suspended, every press still allowed follows the SAME stop-once rules as on a running test. The stop, close or pause itself is a change like any
   // other: a page opened before it stops once naming it ("You stopped this test at 3:10 PM.", "The team paused this test at 3:10 PM.").
-  const moments: TestEventLike[] = [];
   if (press.stopCheck === undefined && !press.inState) {
     const stop = await devStopSince(testId, null, loadedOf(body));
     if (stop) moments.push(stop);

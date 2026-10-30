@@ -10,7 +10,7 @@ import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as blocksPOST } from "@/app/api/blocks/route";
 import { POST as invitePOST } from "@/app/api/invites/[id]/route";
 import { GET as liveGET } from "@/app/api/live/route";
-import { json, makeUser, req } from "./helpers";
+import { json, makeUser, req, saveRe } from "./helpers";
 import { act, atHours, joined, sact, seen, setup } from "./fixtures";
 
 // (Owner, Oct 22, NEWEST+3) Every button stops once, including for your own actions in another tab.
@@ -82,7 +82,8 @@ describe("reason E: your own actions in another tab", () => {
     expect(texts(old)[0]).toBe("Nora Lane updated “Harbor Run”: your invite was sent again on the new listing");
     const inv2 = await db.invite.findFirstOrThrow({ where: { testId, testerId: cara.user.id, status: "sent" } });
     const nt = await invitePOST(req(`/api/invites/${inv2.id}`, { cookie: cara.cookie, body: { seenAt: opened } }), { params: Promise.resolve({ id: inv2.id }) }).then(json);
-    expect(texts(nt)).toEqual(["Nora Lane changed the description", "Nora Lane changed the listing: here's a new invite on the updated listing"]);
+    // (Batch 30 §10) One line per save.
+    expect(texts(nt)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description")), "Nora Lane changed the listing: here's a new invite on the updated listing"]);
     expect((await invitePOST(req(`/api/invites/${inv2.id}`, { cookie: cara.cookie, body: { seenAt: opened, confirmed: true } }), { params: Promise.resolve({ id: inv2.id }) }).then(json)).status).toBe(200);
   });
 });
@@ -170,11 +171,12 @@ describe("(F) listing info", () => {
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { description: "New words" }, seenAt: seen() })).status).toBe(200);
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: pageLoaded });
-    expect(texts(r)).toEqual(["Nora Lane changed the description"]);
+    // (Batch 30 §10) One line per save, saying its own time.
+    expect(texts(r)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description"))]);
     const l = await live(tester.cookie, `session:${sessionId}`, pageLoaded);
-    expect(l.body.changes).toEqual([expect.objectContaining({ text: "Nora Lane changed the description", kind: "info" })]);
+    expect(l.body.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(saveRe("Nora Lane", "description")), kind: "info", timed: true })]);
     const j = await act(testId, "join", outsider.cookie, { seenAt: pageLoaded });
-    expect(texts(j)).toEqual(["Nora Lane changed the description"]);
+    expect(texts(j)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description"))]);
   });
 
   it("Edit's Save stops once for every developer reason: an edit saved in another tab, a tester joining", async () => {

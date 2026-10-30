@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { makeUser } from "./helpers";
+import { makeUser, saveRe } from "./helpers";
 import { act, joined, sact, seen, setup } from "./fixtures";
 
 const later = () => new Promise((r) => setTimeout(r, 30));
@@ -43,7 +43,7 @@ describe("joining: Anyone / Apply / Invite only", () => {
     await edit(testId, dev.cookie, { spots: 9 });
     await edit(testId, dev.cookie, { joinMode: "apply" });
     const r = await act(testId, "apply", ana.cookie, { seenAt: pageLoaded });
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane changed who can join"]);
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(saveRe("Nora Lane", "who can join"))]); // (batch 30 §10)
     expect((await act(testId, "apply", ana.cookie, { seenAt: pageLoaded, confirmed: true })).body).toEqual({ applied: true });
   });
 
@@ -90,7 +90,7 @@ describe("(NEWEST+12) which test changes alert testers", () => {
     await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10) });
     expect((await tryButton()).status).toBe(200);
     // Who can join, the build link, categories: alert.
-    for (const [field, value, line] of [["joinMode", "apply", "who can join"], ["buildUrl", "https://example.com/b2", "the build link"]] as const) {
+    for (const [field, value, line] of [["joinMode", "apply", "who can join"], ["buildUrl", "https://example.com/b2", "build link"]] as const) {
       await later();
       const before = seen();
       await later();

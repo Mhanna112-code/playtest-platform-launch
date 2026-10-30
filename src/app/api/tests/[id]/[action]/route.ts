@@ -5,7 +5,7 @@ import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow } from "@/lib/server/calls";
 import { cancelInvite, inviteGaps, invitePanel, inviteTesters } from "@/lib/server/invites";
 import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/requests";
-import { apply, askToRejoin, decideApplication, join, withdrawApplication } from "@/lib/server/joining";
+import { apply, askToRejoin, decideApplication, join, joinStopList, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
 import { startedCounting, asListing, deleteDraft, editTest, endEarly, goNextRound, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
@@ -126,7 +126,10 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "my-gaps": {
         // The join page's "What this test needs" pop-up checks the profile and the test again while it is open.
         const t = await db.test.findUniqueOrThrow({ where: { id } });
-        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })), needs: { devices: t.devices, languages: t.languages } });
+        // (Batch 30 §12) With the page's seen marker: what the needs-covered notice shows with it (every change the page hadn't shown), the box's time and its last line.
+        const verb = body.verb === "apply" || body.verb === "ask" ? body.verb : "join";
+        const stop = typeof body.seenAt === "string" ? await joinStopList(u.id, id, body, verb) : null;
+        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })), needs: { devices: t.devices, languages: t.languages }, ...(stop ?? {}) });
       }
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));
