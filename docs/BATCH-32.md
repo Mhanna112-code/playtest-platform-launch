@@ -14,7 +14,7 @@ This file wins over the earlier batches and the design doc where they differ.
 - The tester's Payments → Everything you sent shows a paid part's total, Pay more and extra pay included: "Paid $1,000.00 · you get $800.00" (it showed only the first payment).
 
 ## 4. "Answer at least one question" sits above the questions (owner, Oct 29)
-- With no question answered (and none Required), Send shows "Answer at least one question before sending (any one; none is required)." above the questions, with no box red (it used to sit under the first box, which read as if that one was required). It goes as soon as any answer has text.
+- With no question answered (and none Required), Send shows "Answer at least one question before sending (any one; none is required)." under Send (owner, Oct 30: it was above the questions, out of view), with no box red (it used to sit under the first box, which read as if that one was required). It goes as soon as any answer has text.
 
 ## 5. The team's Account page (owner, Oct 29)
 - An admin account's Account → Settings doesn't list Payments or Blocked people (a team account has neither; Payments sent an admin back to the console).
