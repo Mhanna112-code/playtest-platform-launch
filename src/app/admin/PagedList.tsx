@@ -10,14 +10,19 @@ import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, Rep
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
 import { AdminRich } from "./AdminRich";
+import { ChangesBox } from "@/components/ChangesBox";
+import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
 
 type AnyRow = ContactVM | DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
+/** (Owner, Oct 30, batch 34 §1) A row's page time (when the server read it): its buttons send it, so a press on a row older than another admin's change stops once. */
+const since = (r: AnyRow): Record<string, string> => { const s = (r as { seen?: string }).seen; return s ? { since: s } : {}; };
 
 /** A hold lift waiting for Approve: a note box and Approve (first press wins, like Decide). */
-function LiftApprove({ id }: { id: string }) {
+function LiftApprove({ id, seen }: { id: string; seen?: string }) {
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const stop = useAdminStop(); // (batch 34 §1) another admin suspended the developer since the row was read: stops once
   return (
     <div className="flex flex-wrap items-center gap-2">
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
@@ -29,11 +34,15 @@ function LiftApprove({ id }: { id: string }) {
           setBusy(true);
           setMsg(null);
           try {
-            await api("/api/admin/approve-hold", { id, note });
+            await api("/api/admin/approve-hold", { id, note, ...(seen ? { since: seen } : {}), ...stop.marks() });
+            stop.clear();
             setMsg({ ok: true, text: "Approved." });
             setTimeout(() => window.location.reload(), 600);
           } catch (e) {
-            setMsg({ ok: false, text: errOf(e) });
+            if (!stop.caught(e)) {
+              stop.clear();
+              setMsg({ ok: false, text: errOf(e) });
+            }
           } finally {
             setBusy(false);
           }
@@ -42,6 +51,7 @@ function LiftApprove({ id }: { id: string }) {
         Approve
       </button>
       {msg && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+      <ChangesBox changes={stop.changes} press="Approve" heading={ADMIN_STOP_HEADING} />
     </div>
   );
 }
@@ -61,7 +71,7 @@ function PauseToggle({ t }: { t: TestVM }) {
   // old one's leftovers.
   return (
     <>
-      {t.adminPaused ? <AdminButton key="lift" action="unpause-test" id={t.id} label="Lift the pause" onRefused={onRefused} /> : <AdminButton key="pause" action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} onRefused={onRefused} />}
+      {t.adminPaused ? <AdminButton key="lift" action="unpause-test" id={t.id} label="Lift the pause" extra={since(t)} onRefused={onRefused} /> : <AdminButton key="pause" action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} extra={since(t)} onRefused={onRefused} />}
       {refused && <span className="err" data-pause-refused="">{refused}</span>}
     </>
   );
@@ -103,7 +113,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
         <div id={`lift-${l.id}`} className="scroll-mt-24 space-y-1 rounded data-[marked]:ring-2 data-[marked]:ring-sky-300 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-lift-row={l.id}>
           <p><b>{l.headParts ? <AdminRich parts={l.headParts} /> : l.head}</b></p>
           <p>{l.owed} · {l.paid}</p>
-          <LiftApprove id={l.id} />
+          <LiftApprove id={l.id} seen={(l as { seen?: string }).seen} />
         </div>
       );
     }
@@ -150,8 +160,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           {!t.stopped && (
             <div className="flex flex-wrap items-center gap-2">
               <PauseToggle t={t} />
-              <AdminButton action="stop-test" id={t.id} label="Stop (close)" danger fields={[{ name: "note", label: "Why" }]} />
-              {t.critical > 0 && <AdminButton action="allow-critical-changes" id={t.id} label="Allow 3 more changes of the locked fields" />}
+              <AdminButton action="stop-test" id={t.id} label="Stop (close)" danger fields={[{ name: "note", label: "Why" }]} extra={since(t)} />
+              {t.critical > 0 && <AdminButton action="allow-critical-changes" id={t.id} label="Allow 3 more changes of the locked fields" extra={since(t)} />}
             </div>
           )}
         </li>
@@ -184,8 +194,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <p>{p.parts ? <AdminRich parts={p.parts} /> : p.text}</p>
           <p data-closure-date=""><b>{p.closure}</b>{p.extended ? " · extended by the team" : ""}</p>
           <div className="flex flex-wrap items-center gap-2">
-            <AdminButton action="extend-pause" id={p.id} label="Extend" fields={[{ name: "days", label: "Days to add", ph: "Days (7)" }]} />
-            <AdminButton action="close-paused" id={p.id} label="Close now" danger />
+            <AdminButton action="extend-pause" id={p.id} label="Extend" fields={[{ name: "days", label: "Days to add", ph: "Days (7)" }]} extra={since(p)} />
+            <AdminButton action="close-paused" id={p.id} label="Close now" danger extra={since(p)} />
           </div>
         </div>
       );
@@ -199,8 +209,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <div data-chargeback-steps="">
             Chargeback hold: card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, owed reserved <b>{c.owedPaid ? "✓" : "✗"}</b>{c.owedLine}{" "}
             {/* (Batch 23 section 6) Approve takes the reservation and lifts the hold in one step; Don't approve releases it (nothing taken; the hold stays). */}
-            <AdminButton action="approve-chargeback" id={c.id} label="Approve" disabled={!c.cardVerified || !c.owedPaid} />
-            {c.reservedCents > 0 && <AdminButton action="decline-chargeback" id={c.id} label="Don't approve: release the reservation" danger fields={[{ name: "note", label: "Why (optional)" }]} />}
+            <AdminButton action="approve-chargeback" id={c.id} label="Approve" disabled={!c.cardVerified || !c.owedPaid} extra={since(c)} />
+            {c.reservedCents > 0 && <AdminButton action="decline-chargeback" id={c.id} label="Don't approve: release the reservation" danger fields={[{ name: "note", label: "Why (optional)" }]} extra={since(c)} />}
           </div>
           {c.expired && <p className="text-amber-200" data-reserve-expired="">Reservation expired</p>}
         </div>
@@ -213,7 +223,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <p><b>{m.fromParts ? <AdminRich parts={m.fromParts} /> : m.from}</b> · {m.topic}</p>
           {/* (Batch 15 section 21) Up to 50,000 characters: a scroll box about 8 lines tall (the email to the team has it in full). */}
           <ScrollText text={m.message} lines={8} className="text-slate-300" />
-          {m.replied ? <p className="note" data-replied="">{m.replied}</p> : <AdminButton action="contact-replied" id={m.id} label="Mark replied" />}
+          {m.replied ? <p className="note" data-replied="">{m.replied}</p> : <AdminButton action="contact-replied" id={m.id} label="Mark replied" extra={since(m)} />}
         </div>
       );
     }

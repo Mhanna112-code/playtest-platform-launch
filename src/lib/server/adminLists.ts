@@ -39,7 +39,7 @@ export type MineVM = { id: string; at: string; title: string; dev: string; why: 
 export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean; acct: AccountState; /** (Batch 33 §1) "Nora Lane (nora@…) · developer + tester · …": the name opens the profile */ parts?: Rich };
 /** (Batch 17 §5) A search and ticks on the Accounts or Tests list (see lib/adminScroll.ts). */
 export type ListFilter = { q?: string; ticks?: string[] };
-export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string; /** (Batch 33 §1) the line with the test and its developer as links */ parts?: Rich };
+export type TestVM = { /** (Batch 34 §1) when this row was read */ seen?: string; href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string; /** (Batch 33 §1) the line with the test and its developer as links */ parts?: Rich };
 /** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "NDA 3, steps 1". */
 const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
 /** (Batch 22 section 4) `em`: a quoted reason shown in italics after the text (a dispute's). */
@@ -476,12 +476,16 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
  * first 25), so their state line and Pause / Lift the pause follow a pause set or lifted elsewhere. At most 100 at once.
  */
 export async function testRowsByIds(ids: string[]): Promise<TestVM[]> {
+  const seen = new Date().toISOString(); // (batch 34 §1) when these rows were read
   const list = await db.test.findMany({ where: { id: { in: ids.slice(0, 100) } }, include: { developer: true, _count: { select: { contracts: true } } } });
-  return Promise.all(list.map(testRow));
+  return (await Promise.all(list.map(testRow))).map((r) => ({ ...r, seen }));
 }
 
 /** One page of one list. `adminId` is the admin looking (for "mine"). */
 export async function adminPage(kind: Kind, adminId: string, cursor: string | null, arg = "", filter?: ListFilter): Promise<Page<unknown>> {
+  // (Owner, Oct 30, batch 34 §1) Each row carries when it was read (server time, taken BEFORE the reads): its buttons send it back as the page's time, so a press made
+  // on a row older than another admin's change stops once (or, when no longer possible, is refused naming who and when).
+  const seen = new Date().toISOString();
   const p: Page<unknown> = await (async () => {
     switch (kind) {
       case "contact": return contact(cursor);
@@ -503,7 +507,7 @@ export async function adminPage(kind: Kind, adminId: string, cursor: string | nu
       case "t-timeline": case "t-contracts": case "t-payments": return testBox(kind, arg, cursor);
     }
   })();
-  return { ...p, rows: p.rows.map((r) => { const { date, ...rest } = r as Record<string, unknown>; void date; return rest; }) };
+  return { ...p, rows: p.rows.map((r) => { const { date, ...rest } = r as Record<string, unknown>; void date; return { ...rest, seen }; }) };
 }
 
 // ---------- Lifts (owner, Oct 27) ----------

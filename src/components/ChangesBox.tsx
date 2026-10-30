@@ -26,7 +26,7 @@ const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ah
  * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
  * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail, seeIt, alertsWhere }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Batch 30 §10) the join page has no test page yet: its Alerts hint says "on your dashboard" */ alertsWhere?: "join" }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail, seeIt, alertsWhere, heading }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Batch 30 §10) the join page has no test page yet: its Alerts hint says "on your dashboard" */ alertsWhere?: "join"; /** (Batch 34 §1) the admin pages' heading: "Since this page loaded:" */ heading?: string }) {
   const ref = useRef<HTMLDivElement>(null);
   const shown = !!(changes || error);
   const [label, setLabel] = useState(press ?? "");
@@ -50,7 +50,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
         <>
           <p className="font-medium" data-didnt-go="">{named ? `Your ${named} didn't go through.` : "Your press didn't go through."}</p>
           {/* (Batch 16 section 27) Payments, the profile editor and Settings: what another tab or device changed on the account. */}
-          <p className="font-medium">{changes.length > 0 && changes.every((c) => c.kind === "account" || c.kind === "account-at") ? "Changed in another tab or device since you opened this page:" : "Since you opened this page:"}</p>
+          <p className="font-medium">{heading ?? (changes.length > 0 && changes.every((c) => c.kind === "account" || c.kind === "account-at") ? "Changed in another tab or device since you opened this page:" : "Since you opened this page:")}</p>
           {/* (Design doc 2) The newest 3 lines, then "Show N more" opening a scroll box about 8 lines tall. */}
           <LongList className="my-1 list-disc pl-5" tall="max-h-52">
             {[...changes].map((c, i) => (

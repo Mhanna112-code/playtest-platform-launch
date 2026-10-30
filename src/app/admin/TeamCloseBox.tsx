@@ -5,6 +5,8 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { LIMITS } from "@/lib/limits";
 import { counterText, reasonTooLong } from "@/lib/rules";
 import { TEAM_CLOSE_REASON } from "@/lib/moneyLines";
+import { ChangesBox } from "@/components/ChangesBox";
+import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
 
 type Preview = { line: string; lines: string[]; pieces: { kind: string; id: string }[]; at: string };
 
@@ -12,12 +14,14 @@ type Preview = { line: string; lines: string[]; pieces: { kind: string; id: stri
  * (Owner, Oct 29, batch 30 §5) The team closes a developer's open reviews at $0: on the developer's admin box ("Close all open reviews for $0") and on a test's
  * ("Close this test's open reviews for $0"). Top to bottom like Suspend's: Preview and its list, then the required reason (5 to 1,000 characters; testers read it),
  * then the button. Close sends the Preview's list: anything settled since is left alone, and the result says so.
+ * (Owner, Oct 30, batch 34 §1) Close also sends the Preview's time: another admin suspended or reinstated the developer since, it stops once (the box under it).
  */
 export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "test" }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const stop = useAdminStop();
   const label = scope === "developer" ? "Close all open reviews for $0" : "Close this test's open reviews for $0";
   const short = reason.trim().length < 5;
   const long = reason.length > LIMITS.reason;
@@ -47,12 +51,16 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
               setBusy(true);
               setMsg(null);
               try {
-                const r = await api<{ line: string }>("/api/admin/team-close", { id, scope, reason, pieces: preview.pieces, at: preview.at });
+                const r = await api<{ line: string }>("/api/admin/team-close", { id, scope, reason, pieces: preview.pieces, at: preview.at, since: preview.at, ...stop.marks() });
+                stop.clear();
                 setMsg({ ok: true, text: `${r.line}.` });
                 setPreview(null);
                 setReason("");
               } catch (e) {
-                setMsg({ ok: false, text: errOf(e) });
+                if (!stop.caught(e)) {
+                  stop.clear();
+                  setMsg({ ok: false, text: errOf(e) });
+                }
               } finally {
                 setBusy(false);
               }
@@ -60,6 +68,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
           >
             {label}
           </button>
+          <ChangesBox changes={stop.changes} press={label} heading={ADMIN_STOP_HEADING} />
         </>
       )}
       {msg && !msg.text.startsWith(FIELD) && <p className={msg.ok ? "ok" : "err"} data-team-close-result="">{msg.text}</p>}

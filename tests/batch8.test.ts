@@ -265,7 +265,7 @@ describe("batch 8 item 5: holds, suspensions, deletion", () => {
     expect(Math.round((u.subscriptionRenewsAt!.getTime() - before.getTime()) / DAY)).toBe(3);
   });
 
-  it("a suspension pauses billing too; with a hold left after the reinstatement it stays paused until both lift", async () => {
+  it("a suspension pauses billing too; with a hold on as well it stays paused until both lift (batch 34 §4: the hold clears before the reinstatement)", async () => {
     await freeOver();
     const dev = await subscriber();
     const a = await makeUser({ name: "Admin" });
@@ -273,9 +273,10 @@ describe("batch 8 item 5: holds, suspensions, deletion", () => {
     expect((await adm("suspend", a.cookie, { id: dev.user.id, note: "Check" })).status).toBe(200);
     expect((await userOf(dev.user.id)).subscriptionPausedAt).not.toBeNull();
     await startHold(dev.user.id, "unpaid");
-    await reinstateAccount(dev.user.id);
-    expect((await userOf(dev.user.id)).subscriptionPausedAt).not.toBeNull();
+    await expect(reinstateAccount(dev.user.id)).rejects.toMatchObject({ code: "on_hold" });
     expect(await liftHoldIfClear(dev.user.id)).toBe(true);
+    expect((await userOf(dev.user.id)).subscriptionPausedAt).not.toBeNull(); // the suspension still pauses it
+    await reinstateAccount(dev.user.id);
     expect((await userOf(dev.user.id)).subscriptionPausedAt).toBeNull();
   });
 

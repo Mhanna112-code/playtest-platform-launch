@@ -338,13 +338,15 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     const { tester, sessionId } = await joined(testId);
     const due0 = (await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt;
     const ou0 = (await db.test.findUniqueOrThrow({ where: { id: testId } })).openUntil!;
-    // Suspended 5 days ago, then a hold 3 days ago; reinstated now (the hold stays), then the hold is lifted.
+    // Suspended 5 days ago, then a hold 3 days ago. (Batch 34 §4) The developer side isn't reinstated during the hold: the hold lifts first (the suspension
+    // still pauses the tests, and covers the hold's days), then the reinstatement moves everything on by the whole pause.
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(Date.now() - 5 * DAY), holdStartedAt: new Date(Date.now() - 3 * DAY), holdReason: "unpaid", holdCount: 1 } });
-    await reinstateAccount(dev.user.id);
+    await expect(reinstateAccount(dev.user.id)).rejects.toMatchObject({ code: "on_hold" });
     const days = (a: Date, b: Date) => Math.round((a.getTime() - b.getTime()) / DAY);
-    expect(days((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt, due0)).toBe(2);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(0); // still paused
     expect(await liftHoldIfClear(dev.user.id)).toBe(true);
+    expect(days((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt, due0)).toBe(0);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(0); // still paused
+    await reinstateAccount(dev.user.id);
     expect(days((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt, due0)).toBe(5);
     expect(days((await db.test.findUniqueOrThrow({ where: { id: testId } })).openUntil!, ou0)).toBe(5);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);

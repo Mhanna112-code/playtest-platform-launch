@@ -5,6 +5,7 @@ import { PAUSE_CLOSE_DAYS, pauseClosedReason, pauseClosesAt } from "@/lib/pause"
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, tellCancelled } from "./tests";
+import { checkFrom, liftRefusal, stopIfChanged, stoppedRefusal, testChangesSince, type AdminSeen } from "./adminRace";
 
 // (Owner, Oct 26) PAUSED TESTS AUTO-CLOSE AFTER 7 DAYS, whatever the cause. The daily job closes them; closing works like Stop. Testers are
 // told neutrally that the test ended; the developer is told why. The admin can extend a test's closure date or close it sooner.
@@ -46,6 +47,22 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   return { closed: true, testers: cs.length };
 }
 
+/**
+ * (Owner, Oct 30, batch 34 §1) The admin's Close now: stopped or closed already, or no longer paused, refused naming who and when; another admin extended (or
+ * otherwise changed) the test since the page loaded: stops once, and the second press closes it.
+ */
+export async function adminClosePaused(adminId: string, testId: string, seen: AdminSeen | null = null) {
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
+  if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  if (t.status === "stopped") throw await stoppedRefusal(t);
+  if (!pauseClosesAt(t.developer, t)) throw seen ? await liftRefusal(testId) : new HttpError(409, "not_paused", "That test isn't paused.");
+  const from = checkFrom(seen);
+  if (from) stopIfChanged("Close now", await testChangesSince(testId, adminId, from));
+  const r = await closePausedTest(testId, "admin", new Date(), adminId);
+  if (!r.closed) throw await stoppedRefusal(await db.test.findUniqueOrThrow({ where: { id: testId } })); // stopped a moment ago
+  return r;
+}
+
 /** The daily job: close every paused test whose closure date has come. */
 export async function closePausedTests(now = new Date()) {
   const tests = await db.test.findMany({
@@ -66,13 +83,17 @@ export async function closePausedTests(now = new Date()) {
 }
 
 /** Admin: move a paused test's closure date later (default a week more). */
-export async function extendPauseClosure(testId: string, days: unknown, now = new Date()) {
+export async function extendPauseClosure(testId: string, days: unknown, now = new Date(), adminId: string | null = null, seen: AdminSeen | null = null) {
   const n = days === undefined || days === "" || days === null ? PAUSE_CLOSE_DAYS : Number(days);
   if (!Number.isFinite(n) || n < 1 || n > 90 || Math.floor(n) !== n) throw new HttpError(400, "bad_days", "Enter a whole number of days from 1 to 90.");
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  // (Batch 34 §1) Closed or stopped meanwhile, or no longer paused: refused naming who and when; another admin's change since the page loaded: stops once.
+  if (t.status === "stopped") throw await stoppedRefusal(t);
   const info = pauseClosesAt(t.developer, t);
-  if (!info) throw new HttpError(409, "not_paused", "That test isn't paused.");
+  if (!info) throw seen ? await liftRefusal(testId) : new HttpError(409, "not_paused", "That test isn't paused.");
+  const from = checkFrom(seen);
+  if (from && adminId) stopIfChanged("Extend", await testChangesSince(testId, adminId, from));
   const at = new Date(info.at.getTime() + n * DAY);
   await db.test.update({ where: { id: testId }, data: { pauseCloseAt: at, pauseCloseSetAt: now } });
   await notify(t.developer.email, `“${t.title}” will close later`, [`The team moved the date “${t.title}” closes to ${T(at, "date")} (it stays paused until your account is cleared).`], `/app/tests/${testId}`, { own: true });

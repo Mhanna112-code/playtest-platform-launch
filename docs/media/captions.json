@@ -16999,5 +16999,185 @@
     "group": "pG6",
     "order": 120002,
     "size": "desktop"
+  },
+  "adm-01-delete-after-reinstate.png": {
+    "caption": "Bo (right) reinstated Nora's tester side after Ada's page loaded; Ada's Delete account stops once under the button: “Your Delete account didn't go through. Since this page loaded: admin+media1793345161707dph1b@playtest.test reinstated the tester side at 2:26 AM.” and, in bold, “Press Delete account again to go ahead.” The suspension line is gone from Ada's box too.",
+    "kind": "image",
+    "title": "§1 Delete after a Reinstate",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "adm-02-delete-second-press.png": {
+    "caption": "Ada's second Delete account deletes the account: “Deleted Fri, Oct 30, 2:26 AM by admin+media1793345161707dph1a@playtest.test: Asked by email to close the account.”",
+    "kind": "image",
+    "title": "§1 The second press goes ahead",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "adm-03-pause-after-lift.png": {
+    "caption": "Bo (right) paused the test and lifted the pause after Ada's page loaded; Ada's Pause stops once: “Your Pause didn't go through. Since this page loaded: admin+media1793345201086dph2b@playtest.test paused the test at 2:26 AM. admin+media1793345201086dph2b@playtest.test lifted the pause at 2:26 AM.” then “Press Pause again to go ahead.”",
+    "kind": "image",
+    "title": "§1 Pause after Lift the pause",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH2",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "adm-04-pause-second-press.png": {
+    "caption": "Ada's second Pause pauses the test: the box now offers “Lift the pause”.",
+    "kind": "image",
+    "title": "§1 The second press goes ahead",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH2",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "adm-05-close-after-extend.png": {
+    "caption": "Bo (right) moved the closing date 7 days later; Ada's Close now, pressed on the older page, stops once: “Your Close now didn't go through. Since this page loaded: admin+media1793345201086dph3b@playtest.test extended the closing date at 2:27 AM.” then “Press Close now again to go ahead.” Bo's box shows the later date.",
+    "kind": "image",
+    "title": "§1 Close now after Extend",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH3",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "adm-06-close-second-press.png": {
+    "caption": "Ada's second Close now closes the test (it is closed): the test's admin box no longer offers Pause, Stop, Extend or Close now.",
+    "kind": "image",
+    "title": "§1 The second press goes ahead",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH3",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "adm-09-outage-already-dismissed.png": {
+    "caption": "Bo (right) dismissed the possible outage; Ada's Approve on the older page is refused (“That possible outage was already dismissed (by admin+media1793346823776dph5b@playtest.test at 2:54 AM).”), and Bo's Outages box no longer lists it.",
+    "kind": "image",
+    "title": "§1 An outage already dismissed",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH5",
+    "order": 119001,
+    "size": "desktop"
+  },
+  "adm-10-already-paused.png": {
+    "caption": "Bo (right) paused the test first; Ada's Pause on the older page is refused (“That test was already paused (by admin+media1793346193184dph6b@playtest.test at 2:46 AM).”).",
+    "kind": "image",
+    "title": "§1 Already paused",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH6",
+    "order": 120001,
+    "size": "desktop"
+  },
+  "adm-11-already-stopped.png": {
+    "caption": "Bo (right) stopped the test first; Ada's Pause on the older page is refused (“That test was already stopped (by admin+media1793346193184dph6b@playtest.test at 2:46 AM).”).",
+    "kind": "image",
+    "title": "§1 Already stopped",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH6",
+    "order": 120002,
+    "size": "desktop"
+  },
+  "adm-12-already-deleted.png": {
+    "caption": "Bo (right) deleted Dee's account first; Ada's Delete account on the older page is refused, and Ada's box turns into the deleted line: “That account was already deleted (by admin+media1793345201086dph7b@playtest.test at 2:29 AM).”",
+    "kind": "image",
+    "title": "§1 Already deleted",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH7",
+    "order": 121001,
+    "size": "desktop"
+  },
+  "adm-13-reinstate-stale.png": {
+    "caption": "Bo (right) reinstated the developer side first; Ada's Reinstate is refused (“Since this page loaded, admin+media1793346193184dph8b@playtest.test reinstated that account's developer side at Fri, Oct 30, 2:46 AM.”), and Ada's box updates.",
+    "kind": "image",
+    "title": "Reinstate on an older page (batch 17)",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH8",
+    "order": 122001,
+    "size": "desktop"
+  },
+  "adm-19-reinstate-waits-hold.png": {
+    "caption": "Nora went on a payment hold after Ada's page loaded: Ada's Reinstate of the developer side is refused: “That developer is on a payment hold: it has to clear before the developer side can be reinstated.”, and Ada's box redraws with the note. Bo's page (right), opened after, shows the note instead of the button: “Reinstate waits for the payment hold: they pay what they owe first.”; the tester side keeps its Reinstate.",
+    "kind": "image",
+    "title": "§4 No Reinstate during a hold",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH9",
+    "order": 123001,
+    "size": "desktop"
+  },
+  "adm-20-reinstate-waits-chargeback.png": {
+    "caption": "The developer side's Reinstate is replaced by: “Reinstate waits for the chargeback hold: the team approves it first.”",
+    "kind": "image",
+    "title": "§4 During a chargeback hold",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH9",
+    "order": 123002,
+    "size": "desktop"
+  },
+  "adm-14-dispute-decided.png": {
+    "caption": "Bo (right) decided Ana's dispute first; Ada's Decide is refused (“admin+media1793346193184dph8b@playtest.test already decided this dispute at 2:46 AM.”), and Bo's Open disputes no longer lists it.",
+    "kind": "image",
+    "title": "A dispute already decided",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH8",
+    "order": 122002,
+    "size": "desktop"
+  },
+  "adm-15-lift-approved.png": {
+    "caption": "Bo (right) approved Omar's hold lift first (it lifted at once: nothing was owed); Ada's Approve is refused (“This lift was already approved by Bo Admin at Fri, Oct 30, 2:47 AM.”), and Bo's Lifts no longer lists it.",
+    "kind": "image",
+    "title": "A lift already approved",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH8",
+    "order": 122003,
+    "size": "desktop"
+  },
+  "adm-16-pause-lifted.png": {
+    "caption": "Bo (right) lifted the pause first; Ada's Lift the pause is refused: “That test's pause was already lifted (by admin+media1793346193184dph8b@playtest.test at 2:47 AM).”",
+    "kind": "image",
+    "title": "A pause already lifted (batch 22)",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH8",
+    "order": 122004,
+    "size": "desktop"
+  },
+  "adm-17-close-out-settled.png": {
+    "caption": "Nora paid Cam's answers after Ada's Preview; Close all open reviews for $0 closes the rest and says so: “1 closed; 1 was settled meanwhile.”",
+    "kind": "image",
+    "title": "The $0 close-out, one settled meanwhile (batch 30)",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH8",
+    "order": 122005,
+    "size": "desktop"
+  },
+  "adm-18-live-redraw.png": {
+    "caption": "Bo (right) reinstated Lee's developer side; Ada's profile redraws on its own (the “Suspended (developer side)” line and its Reinstate go) the Delete account Why Ada typed stays (“Asked by email to close the account.”), and the Suspend box starts afresh (it now offers both sides, so its Why box is new).",
+    "kind": "image",
+    "title": "Live redraw (batch 33 §7)",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH8",
+    "order": 122006,
+    "size": "desktop"
+  },
+  "adm-07-approve-after-dont-approve.png": {
+    "caption": "Bo (right) pressed Don't approve and the developer reserved again (Bo's row shows the new reservation); Ada's Approve, pressed on the older row, stops once: “Your Approve didn't go through. Since this page loaded: admin+media1793346757741dph4b@playtest.test didn't approve lifting the hold (the reservation was released) at 2:52 AM.” then “Press Approve again to go ahead.”",
+    "kind": "image",
+    "title": "§1 Approve after Don't approve",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH4",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "adm-08-already-approved.png": {
+    "caption": "Ada's second Approve went through (“Done.”: the reservation was taken and the hold lifted); Bo's Don't approve on the row from before is refused (“That hold was already approved (by admin+media1793346757741dph4a@playtest.test at 2:53 AM).”).",
+    "kind": "image",
+    "title": "§1 Already approved",
+    "section": "Batch 34 (Oct 30)",
+    "group": "pH4",
+    "order": 118002,
+    "size": "desktop"
   }
 }
