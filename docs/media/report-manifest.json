@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-30T02:10:54.204Z",
+  "generated": "2026-10-30T02:14:29.184Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -739,6 +739,27 @@
           "kind": "image",
           "desktop": "stopped-dev-page.png",
           "phone": "stopped-dev-page-phone.png"
+        },
+        {
+          "title": "Payments On: a tester's Charge stops Pay once",
+          "explanation": "Pim charged for their recording just before Pay on Sol's answers: “Your Pay on Sol Varga's written answers didn't go through.” Since you opened this page: “Pim Achebe charged $15.00 for their recording · 9:13 PM”, “Don't stop me for: Payments (going through or failing)” and “Press Pay again to go ahead.”",
+          "kind": "image",
+          "desktop": "alerts-03-on-stop.png",
+          "phone": null
+        },
+        {
+          "title": "Payments Off",
+          "explanation": "After ticking “Payments (going through or failing)” in the Alerts menu (“Tick what should not stop your buttons. A payment hold or pause, a stopped test and final refusals always stop.”), the button reads “Alerts (1 off)”.",
+          "kind": "image",
+          "desktop": "alerts-03-menu-off.png",
+          "phone": null
+        },
+        {
+          "title": "Payments Off: Pay goes straight through",
+          "explanation": "Sol charged for their recording just before Pay on Uma's answers; with Payments off the first press paid: Uma's row reads “Sent Oct 29, 2026 · paid $10.00 of $10.00” with a Pay more box (“up to $990.00 more ($1,000.00 in all)”) and “Paid in all: $10.00”.",
+          "kind": "image",
+          "desktop": "alerts-03-off-through.png",
+          "phone": null
         }
       ]
     },

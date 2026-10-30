@@ -695,4 +695,74 @@
     add("pay-card-01-add.png", "Add a card | Nora's Payments page with no card yet: “No card yet. You're charged only when you press Pay, for exactly the amount you tick.”, the Add a card button and “Card details are entered on Stripe's page and never reach this site.”");
     add("pay-card-02-after.png", "Add a card on the media server | The press posts the form to the site and comes back to Payments with “We couldn't save the card. Try again.”: the fake Stripe used for these recordings has no Checkout page, so Stripe's own card form can only be shown on the Stripe test-mode server.");
   }, { section: "Payments" });
+
+  // ---------- q7: Alerts "Payments" On vs Off for the developer, and the tester's Alerts Off (screenshots only) ----------
+  const chargeableRec = (s, cents = 1500) => own(`insert into "Submission" (id, "contractId", kind, "agreedCents", "sentAt", "updatedAt", "payBy", "choiceOfferedAt", "choiceBy", "devMarks") select 'ms' || md5(random()::text), id, 'recording', ${cents}, ${utc} - interval '15 days', ${utc} - interval '15 days', ${utc} - interval '1 day', ${utc} - interval '1 day', ${utc} + interval '6 days', ARRAY[]::text[] from "Contract" where id = '${s}' returning id`).split(String.fromCharCode(10))[0].trim();
+  const chargeR = (tester, s, sub, dollars = "15.00") => post(tester, `/api/sessions/${s}/choose`, { ...go, submissionId: sub, choice: "charge", amount: dollars });
+  group("q7", async () => {
+    patient();
+    const dev = await acct(`dev+media${TS}q7@playtest.test`, "Odile Marsh", "developer", "they");
+    await subD(dev);
+    setCard(dev.email, "pm_card_visa");
+    own(`update "User" set "ignoredAlerts" = ARRAY[]::text[] where email = ${lit(dev.email)}`);
+    const pim = await acct(`tester+media${TS}q7p@playtest.test`, "Pim Achebe", "tester", "they");
+    const sol = await acct(`tester+media${TS}q7s@playtest.test`, "Sol Varga", "tester", "they");
+    const uma = await acct(`tester+media${TS}q7u@playtest.test`, "Uma Lindqvist", "tester", "they");
+    const t = await postT(dev, { productName: "Lantern Bay", title: "Lantern Bay: harbor tour", writtenCents: "10.00", recordingCents: "15.00", spots: "5" });
+    const sP = await joinR(pim, t), sS = await joinR(sol, t), sU = await joinR(uma, t);
+    for (const [x, s] of [[pim, sP], [sol, sS], [uma, sU]]) await sendW(x, s, [`${x.name.split(" ")[0]} liked the lighthouse view at the start of the harbor tour.`, "The market streets all look the same, so I lost my way twice after the bridge."]);
+    const wS = subOf(sS), wU = subOf(sU);
+    const rP = chargeableRec(sP), rS = chargeableRec(sS);
+    own(`update "Test" set "openUntil" = ${utc} + interval '10 days' where id = '${t}'`);
+    const D = await same(dev);
+    await openR(D, `/app/tests/${t}`, `#piece-${wS}`);
+    const payBtn = (sub) => D.locator(`#piece-${sub} button`, { hasText: /^Pay$/ }).first();
+    const toPiece = async (sub) => { await payBtn(sub).evaluate((el) => el.scrollIntoView({ block: "center" })); await D.locator(`#piece-${sub} [data-pay-tick] input`).first().check(); await pause(D, 500); };
+    await step("payments on", async () => {
+      await toPiece(wS);
+      await quiet(D);
+      ok(await chargeR(pim, sP, rP), "Pim's charge");
+      await press(D, payBtn(wS), /api\/review$/, "pay Sol (On)");
+      await D.locator(`#piece-${wS} [data-stop-box]`).first().waitFor({ timeout: 20000 }).catch(() => {});
+      await pause(D, 800);
+      const st = await say(D, `#piece-${wS} [data-stop-box]`);
+      console.log("   On stop:", st);
+      if (st) await shot(D, "alerts-03-on-stop", `Payments On: a tester's Charge stops Pay once | Pim charged for their recording just before Pay on Sol's answers: ${q(st)}`, `#piece-${wS} [data-stop-box]`);
+      if (st) await press(D, payBtn(wS), /api\/review$/, "pay Sol 2");
+      await pause(D, 2000);
+    });
+    await step("payments off", async () => {
+      await openR(D, `/app/tests/${t}`, "[data-alerts-menu]");
+      await D.click("[data-alerts-menu] > summary");
+      await pause(D, 600);
+      await D.locator("[data-alerts-menu] label", { hasText: "Payments" }).locator("input").check();
+      await D.waitForSelector("[data-alerts-menu] >> text=Saved.", { timeout: 20000 }).catch(() => {});
+      await pause(D, 800);
+      console.log("   menu:", await say(D, "[data-alerts-menu]"));
+      await shot(D, "alerts-03-menu-off", `Payments Off | The developer's Alerts menu with “Payments (going through or failing)” ticked: ${q((await say(D, "[data-alerts-menu]")).slice(0, 260))}`, "[data-alerts-menu]");
+      await D.click("[data-alerts-menu] > summary");
+      await toPiece(wU);
+      await quiet(D);
+      ok(await chargeR(sol, sS, rS), "Sol's charge");
+      const a = await press(D, payBtn(wU), /api\/review$/, "pay Uma (Off)");
+      await pause(D, 2500);
+      const st = await say(D, `#piece-${wU} [data-stop-box]`);
+      console.log("   Off: stop =", JSON.stringify(st), "answer", a && a.status);
+      if (st) await shot(D, "alerts-03-off-stopped", `Payments Off: Pay still stopped (App bug) | With Payments ticked off, Pay on Uma's answers still stops once: ${q(st)}`, `#piece-${wU} [data-stop-box]`);
+      else {
+        await openR(D, `/app/tests/${t}`, `#tester-${sU}`);
+        await shot(D, "alerts-03-off-through", `Payments Off: Pay goes straight through | Sol charged for their recording just before Pay on Uma's answers, and with Payments off the first press paid: Uma's row reads ${q((await say(D, `#tester-${sU} [data-parts-sent]`)) || (await say(D, `#tester-${sU}`)).slice(0, 160))}.`, `#tester-${sU}`);
+      }
+      const top = D.locator("[data-live-top]").first();
+      if (await top.isVisible().catch(() => false)) { console.log("   top:", await say(D, "[data-live-top]")); await shot(D, "alerts-03-off-top", `Payments Off: the line still arrives | The top box: ${q((await say(D, "[data-live-top]")).slice(0, 240))}`, "[data-live-top]"); }
+    });
+  }, { section: "Developer test page", fake: true });
+
+  // ---------- qc6: the Alerts captions (looked at the q7 pictures, 9:13 PM run) ----------
+  group("qc6", async () => {
+    const add = (file, caption) => { SEC = "Developer test page"; record(file, caption, "image"); };
+    add("alerts-03-on-stop.png", "Payments On: a tester's Charge stops Pay once | Pim charged for their recording just before Pay on Sol's answers: “Your Pay on Sol Varga's written answers didn't go through.” Since you opened this page: “Pim Achebe charged $15.00 for their recording · 9:13 PM”, “Don't stop me for: Payments (going through or failing)” and “Press Pay again to go ahead.”");
+    add("alerts-03-menu-off.png", "Payments Off | After ticking “Payments (going through or failing)” in the Alerts menu (“Tick what should not stop your buttons. A payment hold or pause, a stopped test and final refusals always stop.”), the button reads “Alerts (1 off)”.");
+    add("alerts-03-off-through.png", "Payments Off: Pay goes straight through | Sol charged for their recording just before Pay on Uma's answers; with Payments off the first press paid: Uma's row reads “Sent Oct 29, 2026 · paid $10.00 of $10.00” with a Pay more box (“up to $990.00 more ($1,000.00 in all)”) and “Paid in all: $10.00”.");
+  }, { section: "Developer test page" });
 }
