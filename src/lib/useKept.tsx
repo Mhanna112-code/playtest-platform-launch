@@ -52,6 +52,8 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
     if (!ready.current || cleared.current) return;
     if (pristine && !saved.current) return;
     const t = setTimeout(() => {
+      // (Batch 34 §9) Sent meanwhile (a Save went through within the moment): the cleared draft is never written back.
+      if (cleared.current) return;
       if (latest.current.pristine) {
         saved.current = false;
         setRestored(false);

@@ -25,7 +25,8 @@ type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; found
 /**
  * The invite panel (test page only), the full app's fold ("Invite testers" with its icon opens and closes it). Sections:
  * Invited (Cancel invite) · the filters (the devices / languages THIS test needs) · Search by name with Find testers right under it
- * (batch 16 section 29: hidden until you search) · People you've worked with · Suggested. The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
+ * (batch 16 section 29: hidden until you search) · People you've worked with · Suggested (batch 34 §11: neither lists a tester working in this test or already invited;
+ * someone who left shows again; the name search still finds them greyed with why). The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
  * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
  * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (from 1 character since batch 20 section 9, after a short pause in
  * typing) and the ticks ask it again; every match shows in a scroll box, and above 100 the first 100 with "Showing 100 of N: type more of the name".

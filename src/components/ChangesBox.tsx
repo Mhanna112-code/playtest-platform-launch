@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { markShownInBox } from "@/lib/live";
 import { bringInView, jumpTo } from "@/lib/markJump";
+import { KEY_BOX_ID } from "@/lib/keys";
 import { LongList } from "@/components/LongList";
 import { QuickIgnore, TesterAlertsOff } from "@/components/QuickIgnore";
 import { ContractLink } from "@/components/ContractLink";
@@ -61,6 +62,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
                 {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
                 {c.timed && c.kind === "info" && seeIt && <> · <a href={seeIt} data-see-it="">See it</a></>}
+                {/* (Batch 34 §12) The key the developer's Save gave this tester: See it jumps to the key box. */}
+                {c.kind === "keygiven" && <> · <a href={`#${KEY_BOX_ID}`} data-see-it="key" onClick={(e) => { e.preventDefault(); jumpTo(KEY_BOX_ID); }}>See it</a></>}
                 {(() => { const d = detail?.(c); return d ? <div className="mt-0.5 text-xs" data-stop-detail="">{d}</div> : null; })()}
               </li>
             ))}

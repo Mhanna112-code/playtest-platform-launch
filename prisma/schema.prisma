@@ -277,6 +277,8 @@ model TestEvent {
   version   Int?
   /// (Batch 15 section 35) The row on the page this line opens (an anchor id, e.g. "item-dispute-<id>"), when there is one
   link      String   @default("")
+  /// (Batch 34 §9) The browser tab (page load) that made this change, for a listing save: Edit never stops for its own tab's save
+  tab       String   @default("")
   createdAt DateTime @default(now())
 
   @@index([testId, createdAt])

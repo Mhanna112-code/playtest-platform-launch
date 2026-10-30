@@ -34,7 +34,7 @@ describe("a listing change re-sends open invites", () => {
     // Accept (Join) on the old invite: refused under the button, with the new invite.
     const old = await act(testId, "join", ana.cookie, { listingVersion: await listingVersion(testId), inviteId: oldAna.id });
     expect(old.body.error.code).toBe("invite_replaced");
-    expect(old.body.error.message).toMatch(/^Nora Lane changed the listing at .+ and sent you a new invite:$/);
+    expect(old.body.error.message).toMatch(/^Nora Lane changed the listing at .+ and sent you a new invite on it. Press Join to join on it.$/); // (batch 34 §10) no dangling colon
     expect(old.body.error.newInviteId).toBe(fresh.id);
     expect((await act(testId, "join", ana.cookie, { listingVersion: await listingVersion(testId), inviteId: fresh.id })).status).toBe(200);
   });
