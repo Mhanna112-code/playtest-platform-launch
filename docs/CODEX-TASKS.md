@@ -133,8 +133,8 @@ worktree C:/Users/march/Projects/pl-codex-8, made from the latest master).
 Build docs/BATCH-34.md §5 exactly as written. Where things are: sides in src/lib/sides.ts (sideFor, sideForPath, sideLink, hasBoth)
 and src/app/app/layout.tsx (the line that saves a page's side as the side used last: remove it; render the "This page is on your
 <side> side." notice with the switch button instead of the page when the path's side isn't the current one); /app/switch in
-src/app/app/switch/route.ts (the GET page always waits for the press; the POST stays the only thing that changes `side`, plus the
-existing src/app/api/account/side/route.ts button); the Stripe returns src/app/api/payments/card-saved/route.ts and payout-return
+src/app/app/switch/route.ts (remove the green in-between page: the GET redirects to `next` without switching; sideLink in
+src/lib/sides.ts links straight to the page; the POST and src/app/api/account/side/route.ts stay the only things that change `side`); the Stripe returns src/app/api/payments/card-saved/route.ts and payout-return
 (remove the side updates added in batch 32 §17); notifications: bell()/notify() in src/lib/server/notify.ts, the Notification model
 in prisma/schema.prisma (add a nullable `side` column: "developer" | "tester" | null = the account's; hand-written migration, checked
 with prisma migrate diff as AGENTS.md says), the bell count (unreadEntryCount), the Notifications page and the bell list, and the
