@@ -80,3 +80,44 @@ Don't touch the written-answers screens (another task is changing them). Tests (
 sees the four links and no "Back to the app"; the Developers and Testers lists return only that side and search by name/email;
 a non-admin gets the usual refusal on the new pages. npm run check green. Commit on the branch; don't push or merge.
 ```
+
+## Task 5: Accept / Decline, Invite and Cancel invite stop only for what matters
+
+```
+Read AGENTS.md first and follow it. Task number: 5 (schema codex5, build folder .next-codex5, branch codex/needs-stops,
+worktree C:/Users/march/Projects/pl-codex-5, made from the latest master).
+
+Build docs/BATCH-34.md §2 exactly as written. Where things are: Accept / Decline is decideApplication in
+src/lib/server/joining.ts (today it pushes "<name> changed their profile" for ANY profile save); Invite's needs lines are
+testerNeedsChangedLines / requirementsChangedLine in src/lib/server/invites.ts (reuse them, don't write new wording); Cancel invite
+is cancelInvite in the same file; the developer's panels are src/app/app/tests/[id]/InvitePanel.tsx and the Needs you applications
+rows. The pages must send what they showed (each tester's devices, languages and rating) with the press, the way Invite sends
+seenTesters. Ratings: find how a tester's rating is computed and shown on these rows and compare to what the row showed.
+Don't touch the admin pages or the written-answers screens (other tasks). Tests (tests/codex5-needs-stops.test.ts): a needed
+language removed stops Accept once with Invite's line; a bio-only save doesn't stop; a rating change of 1 star stops, 0.5 doesn't;
+Cancel invite gets both; one line per tester. npm run check green. Commit on the branch; don't push or merge.
+```
+
+## Task 6: the reserved Pay what you owe
+
+```
+Read AGENTS.md first and follow it. Task number: 6 (schema codex6, build folder .next-codex6, branch codex/reserved-button,
+worktree C:/Users/march/Projects/pl-codex-6, made from the latest master).
+
+Build docs/BATCH-34.md §3. The box is src/components/OwedBox.tsx (reservedOnce disables the button today but it keeps the bright
+style). Grey it like the app's other disabled buttons and relabel it "<amount> is charged after the team approves" while a
+reservation is in place. Test (tests/codex6-reserved.test.ts): the label and the disabled style. npm run check green. Commit on
+the branch; don't push or merge.
+```
+
+## Task 7: the design doc for batches 32–34
+
+```
+Read AGENTS.md first and follow it. Task number: 7 (branch codex/design-doc-32, worktree C:/Users/march/Projects/pl-codex-7, made
+from the latest master). Docs only: edit docs/DESIGN-DOC.md alone, no code, no tests to run.
+
+Update the design doc for docs/BATCH-32.md (§1–§16) and BATCH-33.md (§1–§7): replace the rules that changed in place, add new
+sections only where nothing fits, plain English, "they" for people. Confirm against the code (git log, the files each section
+names); where the spec and the code differ, describe the code and list the differences in your final message. Commit on the
+branch; don't push or merge.
+```
