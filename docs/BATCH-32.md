@@ -15,3 +15,6 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 4. "Answer at least one question" sits above the questions (owner, Oct 29)
 - With no question answered (and none Required), Send shows "Answer at least one question before sending (any one; none is required)." above the questions, with no box red (it used to sit under the first box, which read as if that one was required). It goes as soon as any answer has text.
+
+## 5. The team's Account page (owner, Oct 29)
+- An admin account's Account → Settings doesn't list Payments or Blocked people (a team account has neither; Payments sent an admin back to the console).

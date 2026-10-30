@@ -113,7 +113,7 @@ describe("batch 30 §8: a new invite shows on the tester dashboard live", () => 
     // (A minute back: Ana is new, so nothing else can be in it, and the database clock may differ from this one under load.)
     const since = new Date(Date.now() - 60_000).toISOString();
     expect((await act(testId, "invite", dev.cookie, { testerIds: [ana.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
-    const live = async (s: string) => ((await json(await liveGET(req(`/api/live?scope=invites:me&since=${encodeURIComponent(s)}`, { cookie: ana.cookie })))).body as { changes: { text: string }[] }).changes.map((c) => c.text);
+    const live = async (s: string) => ((await json(await liveGET(req(`/api/live?scope=invites:me&since=${encodeURIComponent(s)}`, { cookie: ana.cookie })))).body as { changes: { text: string }[] }).changes.map((c) => c.text).filter((t) => !t.startsWith("The site was down")); // another test's outage line reaches everyone
     // (The database clock can run ahead of this one under load, and the live route shows only lines up to its own now: ask again for up to 3 s, as the page's next poll would.)
     let first: string[] = [];
     for (let i = 0; i < 30 && !first.length; i++) {
