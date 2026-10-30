@@ -96,19 +96,17 @@ export async function logTestAction(userId: string, testId: string, action: stri
       ];
       // (Batch 29 section 12) Any Save is a change that stops the other tabs' presses once.
       about = { a: "edit", k: ["test"] };
-      if (closings.length) {
-        text = `You changed the listing in another tab: ${andList(closings)}`;
-        break;
-      }
-      // (Owner, Oct 28; batch 29 section 12) One Save, one line, one voice: "You saved the listing in another tab: spots, description". (A rename alone stays its own
-      // info-only line.)
-      const names = (r.changed ?? []).filter((n) => n !== "title");
-      if (!names.length) return;
-      // (Batch 30 §10, Oct 29 addition) One line per save on the developer's pages too: a rename saved with other fields is named here ("title (now “X”)"), and its own
-      // "You renamed the test to X" line is dropped (live.ts devChanges).
+      // (Owner, Oct 28; batch 29 section 12) One Save, one line, one voice: "You saved the listing in another tab: spots, description". (Batch 30 §10, Oct 29
+      // addition) A rename saved with other fields is named here ("title (now “X”)"), and its own "You renamed the test to X" line is dropped (live.ts devChanges).
+      // (Owner's finding, Oct 30, batch 34 §8) A save that also closed or re-sent invites names its fields too: "…: description, build link; this re-sent fbbb's invite".
       const title = typeof body.fields === "object" && body.fields ? String((body.fields as Record<string, unknown>).title ?? "").trim() : "";
-      if ((r.changed ?? []).includes("title") && title) names.splice((r.changed ?? []).indexOf("title"), 0, `title (now “${title}”)`);
-      text = `You saved the listing in another tab: ${names.join(", ")}`;
+      const names = (r.changed ?? []).filter((n) => n !== "title");
+      if ((r.changed ?? []).includes("title") && title) names.splice(Math.max(0, (r.changed ?? []).indexOf("title")), 0, `title (now “${title}”)`);
+      // A rename alone stays its own info-only line (it never stops a press).
+      if (!(r.changed ?? []).some((n) => n !== "title") && !closings.length) return;
+      text = names.length
+        ? `You saved the listing in another tab: ${names.join(", ")}${closings.length ? `; this ${andList(closings)}` : ""}`
+        : `You changed the listing in another tab: ${andList(closings)}`;
       break;
     }
     case "open": text = "opened the test"; about = { a: "open", k: ["test"] }; break;

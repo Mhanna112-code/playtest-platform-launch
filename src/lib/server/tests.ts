@@ -11,7 +11,7 @@ import { givenDeletedLine, keyGivenEventLine, keyGivenToYouLine, keyNeedLine, ke
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
-import { displayName, fmtDate, fmtDateTime, pronouns, stopTimeIn, toCents } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, pronouns, stopTimeIn, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
@@ -250,6 +250,23 @@ async function postPerks(devId: string, joinMode: string, exceptId = "") {
   if (joinMode === "apply") await subs.requirePerk(devId, "approved");
 }
 
+/**
+ * (Owner, Oct 30, batch 34 §7) A developer's open tests and drafts have different names (two tabs posted the same test twice, 10 seconds apart): the second Post,
+ * or a Save renaming to a name in use, is refused naming the other test, with its link. Other developers' tests, and stopped tests, don't count. Inside the
+ * Post's transaction a per-developer lock makes two Posts at the same moment take turns.
+ */
+async function requireUniqueTitle(tx: Tx, devId: string, title: string, exceptId?: string) {
+  const name = title.trim();
+  if (!name) return;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"title:" + devId}))`;
+  const same = await tx.test.findFirst({ where: { developerId: devId, status: { in: ["open", "draft"] }, title: { equals: name, mode: "insensitive" }, ...(exceptId ? { id: { not: exceptId } } : {}) }, orderBy: { createdAt: "asc" } });
+  if (!same) return;
+  const tz = (await tx.user.findUnique({ where: { id: devId }, select: { timeZone: true } }))?.timeZone;
+  throw new HttpError(409, "same_title", sameTitleLine(same.title, same.status === "draft" ? null : fmtDateTimeIn(same.createdAt, tz)), { link: `/app/tests/${same.id}` });
+}
+/** "You already have a test called “Harbor Run” (posted Fri, Oct 30, 11:00 AM): give this one a different name." */
+export const sameTitleLine = (title: string, postedAt: string | null) => `You already have a test called “${title}” (${postedAt ? `posted ${postedAt}` : "a draft"}): give this one a different name.`;
+
 async function requireCardToPost(devId: string) {
   const user = await db.user.findUnique({ where: { id: devId }, select: { stripePaymentMethodId: true } });
   if (!user?.stripePaymentMethodId) throw new HttpError(402, "card_required", "Add a card in Payments before posting: testers' pay is charged to it.", { link: "/app/payments" });
@@ -265,6 +282,7 @@ export async function postDraft(dev: U, testId: string, body: Record<string, unk
   return db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status !== "draft") throw new HttpError(409, "not_draft", "This test is already open.");
+    await requireUniqueTitle(tx, dev.id, l.title, testId);
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId, value })) });
     // It opens now: the deadline buffer and the dashboard order count from here; (batch 15 section 18) so do the tester days.
     await recordEvent(tx, testId, "opened", "The test opened for testers", true, { ...listingData(l), status: "open", createdAt: new Date(), testerDays: testerDaysFor(l.openUntil, dev) });
@@ -287,6 +305,7 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
   await requireCardToPost(dev.id);
   await postPerks(dev.id, l.joinMode);
   return db.$transaction(async (tx) => {
+    await requireUniqueTitle(tx, dev.id, l.title);
     const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open", testerDays: testerDaysFor(l.openUntil, dev) } });
     if (keys.length) await tx.accessKey.createMany({ data: keys.map((value) => ({ testId: t.id, value })) });
     return t;
@@ -322,6 +341,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
+    if (typeof touched.title === "string" && touched.title.trim().toLowerCase() !== t.title.trim().toLowerCase()) await requireUniqueTitle(tx, dev.id, touched.title, testId);
     const events = await tx.testEvent.findMany({ where: { testId, version: { gt: loaded } } });
     // (Owner) A second Save goes ahead only if nothing new happened since its box last updated (boxAt).
     const boxAt = confirmed ? seenOf(body.boxAt) : null;
