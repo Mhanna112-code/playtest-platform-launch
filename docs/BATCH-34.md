@@ -14,5 +14,5 @@ This file wins over the earlier batches and the design doc where they differ.
 - One line per tester (a newer change replaces their line), one time each.
 
 ## 3. The reserved Pay what you owe (Codex task 6)
-- With a reservation in place the button is clearly off (grey, not the bright style) and reads "$10.00 is charged after the team approves" instead of "Pay what you owe ($10.00)".
+- With a reservation in place the button (still switched off, its style unchanged: owner, Oct 30, no grey) reads "$10.00 is charged after the team approves" instead of "Pay what you owe ($10.00)".
 - (Owner, Oct 30) The developer's line no longer adds "$10.00 added since will be charged right after.": it reads only "Reserved $27.00: it's taken when the team approves lifting your hold." (the greyed button says the rest). The admin's chargeback row keeps its "added since (charged after the hold lifts)".
