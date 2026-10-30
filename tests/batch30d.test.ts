@@ -114,15 +114,26 @@ describe("batch 30 §8: a new invite shows on the tester dashboard live", () => 
     const since = new Date(Date.now() - 60_000).toISOString();
     expect((await act(testId, "invite", dev.cookie, { testerIds: [ana.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
     const live = async (s: string) => ((await json(await liveGET(req(`/api/live?scope=invites:me&since=${encodeURIComponent(s)}`, { cookie: ana.cookie })))).body as { changes: { text: string }[] }).changes.map((c) => c.text);
-    expect(await live(since)).toEqual([invitedYouLine("Marc Hanna", title)]);
+    // (The database clock can run ahead of this one under load, and the live route shows only lines up to its own now: ask again for up to 3 s, as the page's next poll would.)
+    let first: string[] = [];
+    for (let i = 0; i < 30 && !first.length; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 100));
+      first = await live(since);
+    }
+    expect(first).toEqual([invitedYouLine("Marc Hanna", title)]);
     expect(invitedYouLine("Marc Hanna", "ddddd")).toBe("Marc Hanna invited you to “ddddd”");
     // A listing change re-sends the invite: the new one reads as re-sent.
-    await settle();
-    const since2 = new Date().toISOString();
+    // (Since the first invite's own time, as the database wrote it: the two clocks can differ under load.)
+    const since2 = (await db.invite.findFirstOrThrow({ where: { testerId: ana.user.id } })).createdAt.toISOString();
     await settle();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect(await live(since2)).toEqual([reinvitedLine("Marc Hanna", title)]);
+    let second: string[] = [];
+    for (let i = 0; i < 30 && !second.length; i++) {
+      if (i) await new Promise((r) => setTimeout(r, 100));
+      second = await live(since2);
+    }
+    expect(second).toEqual([reinvitedLine("Marc Hanna", title)]);
   });
 });
 

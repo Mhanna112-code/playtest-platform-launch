@@ -151,7 +151,7 @@ describe("batch 30 §16: more than 4 payment lines under a paid part sit in a pl
     expect(four).not.toContain("data-scroll-list");
     // The session page: the Pay line and the extras inside; whether it can be paid more and the dispute after the box.
     const page = src("app/app/sessions/[id]/page.tsx");
-    const start = page.indexOf("<PayLinesBox count={1 + extras.length}>");
+    const start = page.indexOf("<PayLinesBox count={1 + extras.length");
     const end = page.indexOf("</PayLinesBox>");
     expect(start).toBeGreaterThan(0);
     expect(page.slice(start, end)).toContain("data-extra-line");
