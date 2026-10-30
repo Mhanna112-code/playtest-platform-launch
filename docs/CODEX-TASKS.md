@@ -156,11 +156,12 @@ worktree C:/Users/march/Projects/pl-codex-9, made from the latest master).
 Build docs/BATCH-34.md §6 exactly as written. Where things are: posting is the "post" / "post-draft" test actions (search
 src/lib/server/tests.ts and src/app/api/tests for the Post route) and the form src/app/app/tests/TestForm.tsx; cards are saved in
 saveCardFromCheckout (src/lib/server/stripe.ts; add the expiry month/year columns to User with a hand-written migration checked by
-prisma migrate diff, and read them from the PaymentMethod's card); the daily job is runDaily in src/lib/server/holds.ts; bell()/notify()
+prisma migrate diff, and read them from the PaymentMethod's card); the daily job is runDaily in src/lib/server/holds.ts; a Stripe "resource_missing" error on a charge (chargeError in stripe.ts) becomes the
+same card_failed path as a decline (see batch 32 §15's NO_CARD_SAVED); bell()/notify()
 in src/lib/server/notify.ts (payment: true lines); the dashboard is src/app/app/page.tsx; payout setup state is payoutsReady /
 stripeAccountId. With the fake Stripe (tests) a card counts as saved when stripePaymentMethodId is set; give it an expiry in tests.
 Don't touch the admin pages, the written-answers screens, joining.ts / invites.ts, the bell/notifications side split (other tasks).
-Tests (tests/codex9-card-to-post.test.ts): Post refused without a card (draft save allowed), posted with one; the expiry lines at
+Tests (tests/codex9-card-to-post.test.ts): a resource_missing error from the fake Stripe starts a payment hold; Post refused without a card (draft save allowed), posted with one; the expiry lines at
 30 days, 7 days and the day (once each); Get started steps per side, ✓ and gone when done; update older tests that post without a
 card (give their developer a card in the shared fixtures instead). npm run check green. Commit on the branch; don't push or merge.
 ```
