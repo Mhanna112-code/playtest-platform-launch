@@ -123,6 +123,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       if (e instanceof ApiError && e.code === TERMS_UPDATED_CODE) { setTermsAsk(true); setTermsErr(e.message); return { refused: true }; }
       // (Batch 32 §2; batch 34 §10, owner) Already applied in another tab: the page just redraws to the waiting view (no extra grey line under it).
       if (e instanceof ApiError && e.code === "already_waiting") { router.refresh(); return { refused: true }; }
+      if (e instanceof ApiError && e.code === "invited") { setErr(e.message); router.refresh(); return { refused: true }; } // (batch 34 §16)
       setErr(errOf(e));
       return { refused: true };
     }
@@ -173,13 +174,17 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       // (Batch 16 section 32) The invite closed meanwhile: refused with the reason (no stop box), and the page drops the invite.
       else if (e instanceof ApiError && e.code === "invite_closed") { setErr(e.message); router.refresh(); }
       else if (e instanceof ApiError && e.code === "already_waiting") router.refresh(); // (batch 34 §10) just the waiting view
+      // (Batch 34 §16) Apply / Ask to rejoin on a page that already showed an invite (another tab's page): the line, and the page redraws to Join.
+      else if (e instanceof ApiError && e.code === "invited") { setErr(e.message); router.refresh(); }
       else setErr(errOf(e));
     } finally {
       setBusy(false);
     }
   }
 
-  if (p.application?.status === "pending" && p.application.changed && p.mode !== "invite")
+  // (Batch 34 §16, owner's finding) An invite beats a waiting application or ask: with a sent invite the page shows the invited join box (Join), never the
+  // waiting view; joining closes the application as joined.
+  if (p.application?.status === "pending" && p.application.changed && p.mode !== "invite" && !p.invited)
     return (
       <div className="info space-y-2">
         <p>This test changed since you applied.</p>
@@ -192,7 +197,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         <Err text={err} />
       </div>
     );
-  if (p.application?.status === "pending")
+  if (p.application?.status === "pending" && !p.invited)
     return (
       <div className="space-y-2">
         <p className="info">{p.application.kind === "rejoin" ? "You asked to rejoin. You'll hear back when the developer answers." : "You applied to join. You'll hear back when the developer answers."}</p>

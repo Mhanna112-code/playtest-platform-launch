@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { displayName, fmtDate, pronouns } from "@/lib/format";
-import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, termsLine, type TestEventLike } from "@/lib/rules";
+import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asListing, devGate, devGateIfSeen, needsGap, ownTest, recordEvent, stampCounting } from "./tests";
@@ -302,7 +302,11 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const { lines: gaps, items: gapItems } = gapLines(t, people.filter((p) => !contracts.some((c) => c.testerId === p.id)));
     // (Owner's finding, Oct 29, batch 32 §9) The stop carries what's missing NOW, so the Invite anyway box redraws to it and the next Invite anyway goes through
     // (it used to keep the old list, so the same change stopped a second time: "What's missing changed since you looked").
-    await devGate(tx, testId, body, gaps.length ? { lines: gaps, items: gapItems } : {}, extra, undefined, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
+    // (Batch 34 §16, owner, Oct 30) A ticked tester's application or ask to rejoin made after the page loaded is no stop: the press joins them at once (below).
+    const tickedApps = await tx.application.findMany({ where: { testId, testerId: { in: ids }, status: "pending" } });
+    const askLines = new Set(people.flatMap((p) => [`${displayName(p)} applied to join`, `${displayName(p)} asks to rejoin`]));
+    const notTheirAsk = (e: TestEventLike) => !(e.kind === "applied" && askLines.has(e.text));
+    await devGate(tx, testId, body, gaps.length ? { lines: gaps, items: gapItems } : {}, extra, notTheirAsk, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
     const seenGaps = Array.isArray(body.seenGaps) ? (body.seenGaps as unknown[]).map(String) : null;
     if (body.anyway === true && !gaps.length) {
       // Everyone ticked now meets the needs: nothing is sent; the box closes and a notice shows under Invite.
@@ -313,12 +317,20 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       // What's missing changed since the box showed: stop once in the box with the updated list.
       throw new HttpError(409, "needs_confirm", "CONFIRM:" + ["What's missing changed since you looked. Press Invite anyway again to invite on this:", ...gaps].join("\n"), { lines: gaps, items: gapItems, changed: true });
     }
-    const invited: { id: string; name: string; email: string }[] = [];
+    const invited: { id: string; name: string; email: string; pronoun: string }[] = [];
+    const seen = (await import("./joining")).pressSeen(body);
     const others: string[] = [];
     for (const p of people) {
       const name = displayName(p);
       if (contracts.some((c) => c.testerId === p.id && c.status === "working")) continue; // joined: no longer in the list
       if (invites.some((i) => i.testerId === p.id && i.status === "sent")) continue; // already invited
+      // (Batch 34 §16, owner, Oct 30) The page already showed their application or ask (the greyed "applied: answer them in Needs you →"): answered there, not invited.
+      // One the page hadn't shown yet (made after its seen time) is invited, and the invite joins them at once like Accept (below).
+      const app = tickedApps.find((a) => a.testerId === p.id);
+      if (app && seen && app.createdAt <= seen) {
+        others.push(`${name} ${app.kind === "rejoin" ? "asked to rejoin" : "applied"}: answer ${pronouns(p.pronoun).obj} in Needs you.`);
+        continue;
+      }
       const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
       const blocked = (await tx.block.count({ where: { OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } })) > 0;
       const why = inviteTesterRefusal(name, { suspended: !!p.testerSuspendedAt, blocked, deleted: !p.isTester, activeTests: active });
@@ -329,18 +341,33 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
       await tx.invite.create({ data: { testId, testerId: p.id } });
       await stampCounting(testId, tx); // (batch 14) the 3-change count starts with the first invite
-      invited.push({ id: p.id, name, email: p.email });
+      invited.push({ id: p.id, name, email: p.email, pronoun: p.pronoun });
     }
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
     return { t, invited, others };
   });
-  // (Design doc 6) An invite plus a pending application or rejoin ask joins the tester at once.
+  // (Design doc 6) An invite plus a pending application or rejoin ask joins the tester at once. (Batch 34 §16, owner, Oct 30) The Invite press is then exactly Accept
+  // on that application (the tester's Accept lines, the Needs you row goes), and the result says so: "Ana Silva had applied: she joined." Refused for good (as Accept
+  // is: the 10-test limit, the test just filled…): the invite stays sent and the line says why; the join page then shows Join (§16 item 1).
+  const joining = await import("./joining");
   const matched: string[] = [];
-  for (const i of result.invited) if (await (await import("./joining")).matchInviteAndAsk(testId, i.id)) matched.push(i.id);
+  const joinedLines: string[] = [];
+  for (const i of result.invited) {
+    const app = await db.application.findFirst({ where: { testId, testerId: i.id, status: "pending" } });
+    if (!app) continue;
+    if (await joining.matchInviteAndAsk(testId, i.id, { byDeveloper: true })) {
+      matched.push(i.id);
+      joinedLines.push(joining.invitedJoinedLine(i.name, i.pronoun, app.kind));
+      continue;
+    }
+    const refusal = await joining.joinRefusal(i.id, testId, { rejoin: true });
+    if (refusal) joinedLines.push(refusal.replace("You've already joined", `${i.name} already joined`).replace(TEST_LIMIT_LINE, `${i.name} can't join more tests right now.`));
+  }
   for (const i of result.invited.filter((x) => !matched.includes(x.id))) {
     await notify(i.email, `${displayName(dev)} invited you to “${result.t.title}”`, [`${displayName(dev)} invited you to test “${result.t.title}”.`, `What you get: ${termsLine(asListing(result.t), true)}.`, "Open it and press Join to join on these terms."], `/app/find/${testId}`);
   }
-  const msg = [result.invited.length ? `Invited ${andList(result.invited.map((i) => i.name))}.` : "", ...result.others].filter(Boolean).join(" ") || "Everyone you ticked was already invited or joined.";
+  const stillInvited = result.invited.filter((x) => !matched.includes(x.id));
+  const msg = [stillInvited.length ? `Invited ${andList(stillInvited.map((i) => i.name))}.` : "", ...joinedLines, ...result.others].filter(Boolean).join(" ") || "Everyone you ticked was already invited or joined.";
   return { message: msg, invited: result.invited.map((i) => i.id), joined: matched };
 }
 

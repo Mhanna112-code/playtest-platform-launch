@@ -73,11 +73,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               {side && <span className="hidden shrink-0 text-ink-500 sm:inline">· {side === "developer" ? "Developer" : "Tester"}</span>}
             </Link>
             {!admin && hasBoth(u) && side && (
-              // Goes to the other side's dashboard (and remembers it as the side used last).
-              <Link href={`/app/switch?to=${side === "developer" ? "tester" : "developer"}&next=/app`} className="nav-link border border-white/10"
-                title={`Go to your ${side === "developer" ? "tester" : "developer"} side`} aria-label={`Switch to ${side === "developer" ? "tester" : "developer"}`}>
-                <ArrowLeftRight className="h-4 w-4" /> <span className="hidden 2xl:inline">{side === "developer" ? "Tester" : "Developer"}</span>
-              </Link>
+              // Goes to the other side's dashboard (and remembers it as the side used last). (Batch 34 §17, owner) A direct POST: no in-between "Switch to your … side
+              // and continue" page to flash or hang (the GET stays for old links).
+              <form method="post" action="/app/switch" className="flex" data-side-switch="">
+                <input type="hidden" name="to" value={side === "developer" ? "tester" : "developer"} />
+                <input type="hidden" name="next" value="/app" />
+                <button type="submit" className="nav-link border border-white/10"
+                  title={`Go to your ${side === "developer" ? "tester" : "developer"} side`} aria-label={`Switch to ${side === "developer" ? "tester" : "developer"}`}>
+                  <ArrowLeftRight className="h-4 w-4" /> <span className="hidden 2xl:inline">{side === "developer" ? "Tester" : "Developer"}</span>
+                </button>
+              </form>
             )}
             <SignOut />
           </div>

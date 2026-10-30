@@ -16,14 +16,16 @@ export async function invitesV(testerId: string) {
 
 /**
  * (Owner's repro, Oct 29, batch 30 §8) The join page follows the tester's own application or ask to rejoin (`join=<testId>`): accepted, declined, closed or withdrawn,
- * and their session there starting (an accepted ask, an invite meeting the ask).
+ * and their session there starting (an accepted ask, an invite meeting the ask); (batch 34 §16) and an invite to it arriving.
  */
 export async function joinPageV(testerId: string, testId: string) {
-  const [a, c] = await Promise.all([
+  const [a, c, i] = await Promise.all([
     db.application.findUnique({ where: { testId_testerId: { testId, testerId } }, select: { id: true, status: true, decidedAt: true, changedAt: true } }),
     db.contract.findUnique({ where: { testId_testerId: { testId, testerId } }, select: { id: true, status: true } }),
+    // (Batch 34 §16) An invite arriving while the page is open: the page redraws to the invite card and Join (Apply / Ask to rejoin go).
+    db.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" }, select: { id: true } }),
   ]);
-  return [a ? `${a.id}:${a.status}:${a.decidedAt?.getTime() ?? 0}:${a.changedAt?.getTime() ?? 0}` : "", c ? `${c.id}:${c.status}` : ""].join("|");
+  return [a ? `${a.id}:${a.status}:${a.decidedAt?.getTime() ?? 0}:${a.changedAt?.getTime() ?? 0}` : "", c ? `${c.id}:${c.status}` : "", i?.id ?? ""].join("|");
 }
 
 /** (Batch 30 §8) The line the join page shows once its tester is in the test (an accepted application or ask), with their session. */

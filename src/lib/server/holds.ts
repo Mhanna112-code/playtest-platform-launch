@@ -1345,7 +1345,9 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
  */
 async function dailyReminders(now: Date) {
   const since = new Date(now.getTime() - 20 * 3_600_000);
-  const waiting = await db.application.groupBy({ by: ["testId"], where: { status: "pending" }, _count: { _all: true } });
+  // (Batch 34 §16) Not an applicant who holds a sent invite (the invite stands for the answer).
+  const pendingApps = await (await import("./joining")).answerable(await db.application.findMany({ where: { status: "pending" }, select: { testId: true, testerId: true } }));
+  const waiting = [...pendingApps.reduce((m, a) => m.set(a.testId, (m.get(a.testId) ?? 0) + 1), new Map<string, number>())].map(([testId, n]) => ({ testId, _count: { _all: n } }));
   const tests = await db.test.findMany({ where: { id: { in: waiting.map((w) => w.testId) }, status: "open", ...PAUSE_FREE }, select: { id: true, title: true, developerId: true } });
   const told = new Set((await db.notification.findMany({ where: { userId: { in: tests.map((t) => t.developerId) }, testId: { in: tests.map((t) => t.id) }, text: { endsWith: "for your answer" }, createdAt: { gt: since } }, select: { testId: true }, distinct: ["testId"] })).map((n) => n.testId));
   const count = new Map(waiting.map((w) => [w.testId, w._count._all]));

@@ -38,7 +38,7 @@ import { ScrollList } from "@/components/ScrollList";
 import { DevSearch } from "./DevSearch";
 import { TestsVisited } from "./TestsVisited";
 import { devSearchRows } from "@/lib/server/testerSearch";
-import { rejoinAskLine } from "@/lib/server/joining";
+import { answerable, rejoinAskLine } from "@/lib/server/joining";
 import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
@@ -168,7 +168,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, "developer", now)] as const)));
   const payShut = (pieceId: string) => closedOut(payCloses.get(pieceId) ?? null, now);
   const [apps, reqs, spent, unreadList, invites, owedPays, freeKeys, nextCalls] = await Promise.all([
-    db.application.findMany({ where: { testId: { in: testIds }, status: "pending" }, orderBy: { createdAt: "desc" } }),
+    db.application.findMany({ where: { testId: { in: testIds }, status: "pending" }, orderBy: { createdAt: "desc" } }).then(answerable), // (batch 34 §16) not an invited applicant
     db.callRequest.findMany({ where: { testId: { in: testIds }, status: "pending", fromSide: "tester", startsAt: { gt: now } }, orderBy: { createdAt: "desc" } }),
     db.payment.aggregate({ where: { developerId: userId, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }),
     Promise.all(allTests.flatMap((t) => t.contracts.map(async (c) => [c.id, await unreadCount(userId, t.id, c.testerId)] as const))),
@@ -417,6 +417,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const resentIds = new Set(invites.filter((i) => replacedOn.has(i.testId)).map((i) => i.id));
   // (Owner, Oct 30, batch 15 section 38) A test the tester applied to that became invite only stays here, marked "Closed to new testers (invite only)" (an open invite of theirs still works).
   const inviteOnlyApps = (await db.application.findMany({ where: { testerId: userId, status: "closed", closedReason: "invite_only", decidedAt: { gt: new Date(now.getTime() - 30 * DAY) } }, orderBy: { decidedAt: "desc" }, take: 20 })).filter((a) => !apps.some((x) => x.testId === a.testId));
+  // (Batch 34 §16) An application next to a sent invite isn't waiting: the test is under Invitations (Join).
+  const waitingApps = apps.filter((a) => !invites.some((i) => i.testId === a.testId));
   const appTests = new Map((await db.test.findMany({ where: { id: { in: [...apps, ...inviteOnlyApps].map((a) => a.testId) } }, include: { developer: true } })).map((t) => [t.id, t]));
   const byId = new Map(contracts.map((c) => [c.id, c]));
   const working = contracts.filter((c) => c.status === "working");
@@ -571,11 +573,11 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         )}
       </section>
 
-      {(waiting.length > 0 || apps.length > 0 || inviteOnlyApps.length > 0) && (
+      {(waiting.length > 0 || waitingApps.length > 0 || inviteOnlyApps.length > 0) && (
         <section className="space-y-3">
           {sectionTitle(<Hourglass className="h-5 w-5 text-amber-300" />, "Waiting for the developer")}
           <ScrollList className="space-y-2">
-            {apps.map((a) => (
+            {waitingApps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
                   <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={appTests.get(a.testId)?.title ?? "A test"}>{appTests.get(a.testId)?.title ?? "A test"} {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>

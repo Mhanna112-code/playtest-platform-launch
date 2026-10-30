@@ -142,10 +142,14 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     // The removed tests wait on her dashboard with Ask to rejoin until she asks or dismisses them; asking takes the card away.
     expect((await db.contract.findUniqueOrThrow({ where: { id: sess2 } })).endKind).toBe("suspended");
     expect((await act(open.testId, "join", ana.tester.cookie, { listingVersion: 1 })).body.error.code).toBe("ask");
+    const devPageAt = seen(); // (batch 34 §16) the developer's page, loaded before her ask
+    await new Promise((r) => setTimeout(r, 25));
     expect((await act(open.testId, "rejoin-ask", ana.tester.cookie, { listingVersion: 1, seenAt: seen(), confirmed: true, anyway: true })).body).toEqual({ asked: true });
     expect((await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).removedDismissedAt).not.toBeNull();
-    // The developer can also invite her again as usual: with her ask waiting, the invite joins her at once.
-    expect((await act(open.testId, "invite", open.dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [ana.tester.user.id] })).status).toBe(200);
+    // The developer can also invite her again as usual: an invite from a page that hadn't shown her ask joins her at once (batch 34 §16; a page that showed it
+    // answers it in Needs you).
+    await new Promise((r) => setTimeout(r, 25));
+    expect((await act(open.testId, "invite", open.dev.cookie, { seenAt: devPageAt, confirmed: true, testerIds: [ana.tester.user.id] })).status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).status).toBe("working");
   });
 

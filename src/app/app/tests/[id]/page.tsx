@@ -23,7 +23,7 @@ import { InvitePanel } from "./InvitePanel";
 import { inviteExpired, invitePanel } from "@/lib/server/invites";
 import { owedForBox } from "@/lib/server/holds";
 import { termsRowLines } from "@/lib/server/terms";
-import { rejoinAskLine } from "@/lib/server/joining";
+import { answerable, rejoinAskLine } from "@/lib/server/joining";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, devRateStates, ratingSummary } from "@/lib/server/ratings";
 import { LiveTop } from "@/components/LiveTop";
@@ -120,7 +120,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const callSets = await db.callSet.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } } });
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
   // A developer batch sent to several testers shows once per tester; that's fine: each copy is that tester's.
-  const pendingApps = await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } });
+  // (Batch 34 §16) An applicant who holds a sent invite isn't answered here: they're in the Invited list, and joining closes the application.
+  const pendingApps = await answerable(await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } }));
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
   const appRatings = new Map(await Promise.all(appUsers.map(async (x) => [x.id, (await ratingSummary(x.id)).line] as const)));
   const apps = pendingApps.map((a) => {

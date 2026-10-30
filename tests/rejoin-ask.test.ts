@@ -60,17 +60,21 @@ describe("Ask to rejoin (design doc 7.3, 8)", () => {
     const b = await joined(testId, "Ben Cole");
     await leave(a.sessionId, a.tester.cookie);
     await leave(b.sessionId, b.tester.cookie);
-    // Ask first, then the developer invites.
+    // Ask first, then the developer invites from a page that didn't show the ask yet (batch 34 §16: a page that showed it answers in Needs you).
+    const devPageAt = seen();
+    await new Promise((r) => setTimeout(r, 25));
     await ask(testId, a.tester.cookie);
     expect((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).status).toBe("left");
-    const inv = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [a.tester.user.id], confirmed: true });
+    const inv = await act(testId, "invite", dev.cookie, { seenAt: devPageAt, testerIds: [a.tester.user.id], confirmed: true });
     expect(inv.body.joined).toEqual([a.tester.user.id]);
     expect((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).status).toBe("working");
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "Ana Silva rejoined" } } })).toBe(1);
-    // Invite first, then the ask.
+    // Invite first, then the ask from a page that didn't show the invite yet (batch 34 §16: a page that showed it offers Join).
+    const pageAt = seen();
+    await new Promise((r) => setTimeout(r, 25));
     await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [b.tester.user.id], confirmed: true });
     expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).status).toBe("left");
-    const r = await ask(testId, b.tester.cookie);
+    const r = await ask(testId, b.tester.cookie, { seenAt: pageAt });
     expect(r.body).toMatchObject({ joined: true, sessionId: b.sessionId });
     expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).status).toBe("working");
   });

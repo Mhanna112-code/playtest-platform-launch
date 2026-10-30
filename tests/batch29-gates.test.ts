@@ -238,9 +238,11 @@ describe("batch 29 section 13: the tester's own changes in another tab, the same
   it("Apply in A stops Join on B's join page once", async () => {
     const { dev, testId } = await setup({ joinMode: "apply" });
     const t = await makeUser({ tester: true, name: "Dee Moss" });
-    expect((await act(testId, "invite", dev.cookie, { seenAt: seen(), confirmed: true, testerIds: [t.user.id] })).status).toBe(200);
+    void dev;
     const loaded = await loadedNow();
     expect((await act(testId, "apply", t.cookie, { seenAt: seen(), tab: "A", note: "hi" })).status).toBe(200);
+    // (Batch 34 §16) An invite next to her waiting application (an invite and an Apply now join at once; this is the old-data fallback where B's page offers Join).
+    await db.invite.create({ data: { testId, testerId: t.user.id } });
     const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
     const j = await act(testId, "join", t.cookie, { listingVersion: test.listingVersion, seenAt: loaded, tab: "B" });
     expect(j.body.error?.code).toBe("stop_once");

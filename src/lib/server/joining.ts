@@ -181,6 +181,26 @@ async function alreadyWaiting(testerId: string, testId: string) {
   throw new HttpError(409, "already_waiting", a.kind === "rejoin" ? "You already asked to rejoin this test in another tab." : "You already applied to join this test in another tab.");
 }
 
+/**
+ * (Batch 34 §16, owner, Oct 30) Whether the pressing page had shown an application or an invite: the page's seen time (`seenAt`). Not a stop box's `boxAt`: neither
+ * one is a line in those boxes (a new application doesn't stop that tester's Invite; a new invite redraws the join page instead), so a box never showed it. Null
+ * when the press carries none (it counts as a page that hadn't shown it).
+ */
+export function pressSeen(body: Record<string, unknown>) {
+  return seenOf(body.seenAt);
+}
+/**
+ * (Batch 34 §16) Apply or Ask to rejoin while holding a sent invite: a page that hadn't shown the invite yet (sent after its seen time) joins at once; a page that
+ * already showed it (the invite card and Join) is refused with the line, and the page redraws to Join.
+ */
+async function inviteBeforePress(tester: { id: string }, testId: string, body: Record<string, unknown>, devName: string) {
+  const inv = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" }, orderBy: { createdAt: "desc" } });
+  if (!inv) return null;
+  const seen = pressSeen(body);
+  if (seen && inv.createdAt <= seen) throw new HttpError(409, "invited", `${devName} invited you: press Join to join.`);
+  return inv;
+}
+
 /** Join (Who can join = Anyone, or an invited tester on an invite-only test). */
 export async function join(tester: U, testId: string, body: Record<string, unknown>) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
@@ -213,6 +233,9 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   await closedInvite(tester.id, body); // (batch 16 section 32)
   const refusal = await joinRefusal(tester.id, testId);
   if (refusal) throw new HttpError(409, "refused", refusal);
+  // (Batch 34 §16, owner, Oct 30) Apply while holding a sent invite the page hadn't shown yet: it joins at once, as the invite's Join does (any waiting application
+  // of theirs closes as joined), instead of filing an application next to the invite. A page that showed the invite is refused ("… invited you: press Join").
+  if (await inviteBeforePress(tester, testId, body, displayName(t.developer))) return { joined: true, sessionId: (await join(tester, testId, body)).id };
   await alreadyWaiting(tester.id, testId);
   await listingGate(tester.id, testId, body, "apply");
   if (t.joinMode !== "anyone" && t.joinMode !== "invite") gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Apply");
@@ -225,7 +248,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   const ndaAcceptedAt = t.ndaText ? new Date() : null;
   await db.application.upsert({
     where: { testId_testerId: { testId, testerId: tester.id } },
-    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "apply", ndaAcceptedAt },
+    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "apply", ndaAcceptedAt, createdAt: new Date() }, // (batch 34 §16) applied now
     create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
   await stampCounting(testId); // (batch 14) the 3-change count starts with the first application
@@ -372,6 +395,8 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   if (!canAskToRejoin(old, rated)) throw new HttpError(409, "not_again", rated || old.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't ask to rejoin this test.");
   const refusal = await joinRefusal(tester.id, testId, { rejoin: true });
   if (refusal) throw new HttpError(409, "refused", refusal);
+  // (Batch 34 §16) An invite the page already showed: Join, not an ask. One it hadn't shown: the ask meets it below and they're back at once.
+  await inviteBeforePress(tester, testId, body, displayName(t.developer));
   await alreadyWaiting(tester.id, testId);
   await listingGate(tester.id, testId, body, "ask");
   if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to ask to rejoin.");
@@ -382,7 +407,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   const invited = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } });
   await db.application.upsert({
     where: { testId_testerId: { testId, testerId: tester.id } },
-    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "rejoin", ndaAcceptedAt },
+    update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "rejoin", ndaAcceptedAt, createdAt: new Date() }, // (batch 34 §16) asked now
     create: { testId, testerId: tester.id, note, listing: snap, kind: "rejoin", ndaAcceptedAt },
   });
   // (Owner, Oct 28) A test a suspension removed them from leaves the dashboard top once they ask (or dismiss it).
@@ -400,10 +425,25 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
 }
 
 /**
+ * (Batch 34 §16) The applications and rejoin asks the developer still answers (Needs you, Needs review, the daily reminder): the pending ones, minus those whose
+ * tester holds a sent invite for that test. The developer already chose them: the invite stands for the answer (they're in the Invited list), and the
+ * application closes as joined when they join. (Inviting a waiting applicant normally joins them at once, design doc 6; this covers the invite that couldn't.)
+ */
+export async function answerable<A extends { testId: string; testerId: string }>(apps: A[]): Promise<A[]> {
+  if (!apps.length) return apps;
+  const sent = await db.invite.findMany({ where: { status: "sent", OR: apps.map((a) => ({ testId: a.testId, testerId: a.testerId })) }, select: { testId: true, testerId: true } });
+  const invited = new Set(sent.map((i) => `${i.testId}|${i.testerId}`));
+  return apps.filter((a) => !invited.has(`${a.testId}|${a.testerId}`));
+}
+
+/**
  * (Design doc 6) A pending application or rejoin ask plus an invite from the developer, in either order, joins the tester at once
  * (the developer chose them; no Join anyway pop-up), unless a final refusal applies. Both are told.
+ * (Batch 34 §16, owner, Oct 30) When the developer's Invite is the second of the two (`byDeveloper`), it is exactly Accept on that application: joinTest as the
+ * developer's acceptance (no second "joined" line from joinTest), the application marked accepted, and the tester's usual Accept lines ("You're in: …" with their
+ * contract / "You're back in …"); the Invite result names it ("Ana Silva had applied: she joined.").
  */
-export async function matchInviteAndAsk(testId: string, testerId: string) {
+export async function matchInviteAndAsk(testId: string, testerId: string, opts: { byDeveloper?: boolean } = {}) {
   const app = await db.application.findFirst({ where: { testId, testerId, status: "pending" } });
   const inv = await db.invite.findFirst({ where: { testId, testerId, status: "sent" } });
   if (!app || !inv) return null;
@@ -411,10 +451,20 @@ export async function matchInviteAndAsk(testId: string, testerId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   if (await joinRefusal(testerId, testId, { rejoin: true })) return null;
   if (t.ndaText && !app.ndaAcceptedAt) return null; // they still have to accept the NDA themselves
-  const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: true, ndaAccepted: !!app.ndaAcceptedAt, ndaAcceptedAt: app.ndaAcceptedAt?.toISOString() });
-  await db.application.update({ where: { id: app.id }, data: { status: "joined", decidedAt: new Date() } });
   const back = app.kind === "rejoin";
-  await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
+  const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, rejoinAccepted: true, ndaAccepted: !!app.ndaAcceptedAt, ndaAcceptedAt: app.ndaAcceptedAt?.toISOString(), ...(opts.byDeveloper ? { acceptedByDeveloper: true } : {}) });
+  await db.application.update({ where: { id: app.id }, data: { status: opts.byDeveloper ? "accepted" : "joined", decidedAt: new Date() } });
+  if (opts.byDeveloper) {
+    // As Accept (decideApplication) tells them.
+    if (back) await notify(tester.email, `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, [`You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
+    else await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { group: "joined" });
+  } else await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
   await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}#tester-${c.id}`, { about: testerId });
   return c;
+}
+
+/** (Batch 34 §16) The Invite result's line for a tester the invite joined: "Ana Silva had applied: she joined." / "Ben Cole had asked to rejoin: he's back in." */
+export function invitedJoinedLine(name: string, pronoun: string, kind: string) {
+  const subj = pronouns(pronoun).subj;
+  return kind === "rejoin" ? `${name} had asked to rejoin: ${subj === "they" ? "they're" : `${subj}'s`} back in.` : `${name} had applied: ${subj} joined.`;
 }
