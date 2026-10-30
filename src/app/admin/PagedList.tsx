@@ -9,6 +9,7 @@ import type { ContactVM } from "@/lib/server/adminLists";
 import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, ReportVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
+import { AdminRich } from "./AdminRich";
 
 type AnyRow = ContactVM | DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
 
@@ -73,9 +74,11 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const d = row as DisputeVM;
       return (
         <div id={`dispute-${d.id}`} className="scroll-mt-24 space-y-1 rounded data-[marked]:ring-2 data-[marked]:ring-sky-300 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-dispute-row={d.id}>
-          <p><b>{d.head}</b></p>
+          {/* (Batch 33 §1, §2) The test and the part first, then the people (names open their profiles), then who wrote what. */}
+          <p data-dispute-top=""><b>{d.top ? <AdminRich parts={d.top} /> : d.head}</b></p>
+          {d.people && <p data-dispute-people=""><AdminRich parts={d.people} /></p>}
           <p>{d.money}</p>
-          <p>{d.said}</p>
+          <p data-dispute-said="">{d.saidParts ? <AdminRich parts={d.saidParts} /> : d.said}</p>
           <DisputeWork work={d.work ?? null} />
           {/* (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last, in a scroll box: the only place the team reads a chat. */}
           <details className="rounded-lg border border-white/10 p-2" data-dispute-chat={d.id}>
@@ -98,7 +101,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const l = row as LiftVM;
       return (
         <div id={`lift-${l.id}`} className="scroll-mt-24 space-y-1 rounded data-[marked]:ring-2 data-[marked]:ring-sky-300 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-lift-row={l.id}>
-          <p><b>{l.head}</b></p>
+          <p><b>{l.headParts ? <AdminRich parts={l.headParts} /> : l.head}</b></p>
           <p>{l.owed} · {l.paid}</p>
           <LiftApprove id={l.id} />
         </div>
@@ -108,7 +111,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const r = row as ReportVM;
       return (
         <div id={`report-${r.id}`} className="scroll-mt-24 space-y-0.5 rounded border-t border-white/[0.06] py-2 text-sm first:border-t-0 data-[marked]:ring-2 data-[marked]:ring-sky-300" data-report-row={r.id}>
-          <p><a href={r.reporterHref}>{r.reporter}</a> reported <a href={r.reportedHref}>{r.reported}</a> · {r.when}</p>
+          {/* (Batch 33 §1) Each name opens the profile, its email after it. */}
+          <p><a href={r.reporterHref}>{r.reporter}</a>{r.reporterEmail ? ` (${r.reporterEmail})` : ""} reported <a href={r.reportedHref}>{r.reported}</a>{r.reportedEmail ? ` (${r.reportedEmail})` : ""} · {r.when}</p>
           <p className="text-slate-300">“{r.note}”</p>
         </div>
       );
@@ -117,7 +121,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const m = row as MineVM;
       return (
         <p className="border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-mine-row={m.testId || m.id}>
-          {m.testId ? <a href={`/app/find/${m.testId}`}>“{m.title}”</a> : <span>{m.title}</span>} · {m.dev} · {m.why} · {m.when}
+          {m.parts ? <AdminRich parts={m.parts} /> : <>{m.testId ? <a href={`/app/find/${m.testId}`}>“{m.title}”</a> : <span>{m.title}</span>} · {m.dev} · {m.why} · {m.when}</>}
         </p>
       );
     }
@@ -127,7 +131,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       return (
         <li id={`user-${u.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-user-row={u.id}>
           <p>
-            <a href={u.href}>{email}</a> · {rest.join(" · ")}
+            {u.parts ? <AdminRich parts={u.parts} /> : <><a href={u.href}>{email}</a> · {rest.join(" · ")}</>}
             {u.reports > 3 && <span className="badge ml-2 border-amber-300/40 text-amber-200">Reported more than 3 times</span>}
             {u.reports > 0 && u.reports <= 3 && <span className="ml-2 text-xs text-slate-500">{u.reports} report{u.reports === 1 ? "" : "s"}</span>}
           </p>
@@ -141,15 +145,35 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const parts = t.line.split(" · ");
       return (
         <li id={`test-${t.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-test-row={t.id}>
-          <p>{parts[0]} · <a href={t.href}>{parts[1]}</a> · {parts.slice(2).join(" · ")}</p>
+          <p>{t.parts ? <AdminRich parts={t.parts} /> : <>{parts[0]} · <a href={t.href}>{parts[1]}</a> · {parts.slice(2).join(" · ")}</>}</p>
           {t.closedLine && <p className="text-xs text-rose-300">{t.closedLine}</p>}
           {!t.stopped && (
-            <p className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <PauseToggle t={t} />
               <AdminButton action="stop-test" id={t.id} label="Stop (close)" danger fields={[{ name: "note", label: "Why" }]} />
               {t.critical > 0 && <AdminButton action="allow-critical-changes" id={t.id} label="Allow 3 more changes of the locked fields" />}
-            </p>
+            </div>
           )}
+        </li>
+      );
+    }
+    case "mypaused": {
+      // (Owner, Oct 30, batch 33 §6) A test this admin paused, still paused: its line and Lift the pause.
+      const t = row as TestVM;
+      return (
+        <li id={`mypaused-${t.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-mypaused-row={t.id}>
+          <p>{t.parts ? <AdminRich parts={t.parts} /> : t.line}</p>
+          <div className="flex flex-wrap items-center gap-2"><PauseToggle t={t} /></div>
+        </li>
+      );
+    }
+    case "suspensions": {
+      // (Owner, Oct 30, batch 33 §6) An account suspended now: the person, then each suspended side with Reinstate (the same component as the profile's admin view).
+      const u = row as UserVM;
+      return (
+        <li id={`suspension-${u.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-suspension-row={u.id}>
+          <p>{u.parts ? <AdminRich parts={u.parts} /> : u.line}</p>
+          <AccountActions initial={u.acct} />
         </li>
       );
     }
@@ -157,12 +181,12 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const p = row as PausedVM;
       return (
         <div className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-paused-test={p.id}>
-          <p>{p.text}</p>
+          <p>{p.parts ? <AdminRich parts={p.parts} /> : p.text}</p>
           <p data-closure-date=""><b>{p.closure}</b>{p.extended ? " · extended by the team" : ""}</p>
-          <p className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <AdminButton action="extend-pause" id={p.id} label="Extend" fields={[{ name: "days", label: "Days to add", ph: "Days (7)" }]} />
             <AdminButton action="close-paused" id={p.id} label="Close now" danger />
-          </p>
+          </div>
         </div>
       );
     }
@@ -170,14 +194,14 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const c = row as ChargebackVM;
       return (
         <div className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-chargeback-hold={c.id}>
-          <p>{c.email} · on hold since {c.since}</p>
-          {c.chargebacks.map((x, i) => <p key={i} className="text-slate-400">{x}</p>)}
-          <p data-chargeback-steps="">
+          <p>{c.who ? <AdminRich parts={c.who} /> : c.email} · on hold since {c.since}</p>
+          {(c.chargebackParts ?? c.chargebacks).map((x, i) => <p key={i} className="text-slate-400">{typeof x === "string" ? x : <AdminRich parts={x} />}</p>)}
+          <div data-chargeback-steps="">
             Chargeback hold: card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, owed reserved <b>{c.owedPaid ? "✓" : "✗"}</b>{c.owedLine}{" "}
             {/* (Batch 23 section 6) Approve takes the reservation and lifts the hold in one step; Don't approve releases it (nothing taken; the hold stays). */}
             <AdminButton action="approve-chargeback" id={c.id} label="Approve" disabled={!c.cardVerified || !c.owedPaid} />
             {c.reservedCents > 0 && <AdminButton action="decline-chargeback" id={c.id} label="Don't approve: release the reservation" danger fields={[{ name: "note", label: "Why (optional)" }]} />}
-          </p>
+          </div>
           {c.expired && <p className="text-amber-200" data-reserve-expired="">Reservation expired</p>}
         </div>
       );
@@ -186,7 +210,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const m = row as ContactVM;
       return (
         <div id={`contact-${m.id}`} className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-contact-row={m.id}>
-          <p><b>{m.from}</b> · {m.topic}</p>
+          <p><b>{m.fromParts ? <AdminRich parts={m.fromParts} /> : m.from}</b> · {m.topic}</p>
           {/* (Batch 15 section 21) Up to 50,000 characters: a scroll box about 8 lines tall (the email to the team has it in full). */}
           <ScrollText text={m.message} lines={8} className="text-slate-300" />
           {m.replied ? <p className="note" data-replied="">{m.replied}</p> : <AdminButton action="contact-replied" id={m.id} label="Mark replied" />}
@@ -195,12 +219,12 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     }
     default: {
       const t = row as TextVM;
-      return <li className="py-2 text-sm text-slate-300">{t.href ? <a href={t.href}>{t.text}</a> : t.text}{t.em && <i className="text-slate-200"> “{t.em}”</i>}</li>;
+      return <li className="py-2 text-sm text-slate-300">{t.parts ? <AdminRich parts={t.parts} /> : t.href ? <a href={t.href}>{t.text}</a> : t.text}{t.em && <i className="text-slate-200"> “{t.em}”</i>}</li>;
     }
   }
 }
 
-const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "payouts", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"]);
+const LIST_KINDS = new Set<Kind>(["users", "tests", "payments", "payouts", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "u-failures", "mypaused", "suspensions", "t-timeline", "t-contracts", "t-payments"]);
 
 type Filter = { q: string; ticks: string[] };
 const NO_FILTER: Filter = { q: "", ticks: [] };
@@ -214,7 +238,7 @@ const sameFilter = (a: Filter, b: Filter) => a.q === b.q && a.ticks.join(",") ==
  * go straight in). Each row keeps its anchor (dispute-ID, user-ID, test-ID) so a bell line or a link can open the exact row. Phones: the same box, full width.
  * `fixed`: one pinned row (opened from a link): no live check and no end line.
  */
-export function PagedList({ kind, initial, empty = "None.", arg = "", title, level = 2, fixed = false }: { kind: Kind; initial: Page<AnyRow> | null; empty?: string; arg?: string; title?: string; level?: 2 | 3; fixed?: boolean }) {
+export function PagedList({ kind, initial, arg = "", title, level = 2, fixed = false }: { kind: Kind; initial: Page<AnyRow> | null; arg?: string; title?: string; level?: 2 | 3; fixed?: boolean }) {
   const search = isSearchKind(kind) ? SEARCHABLE[kind] : null;
   const [rows, setRows] = useState<AnyRow[]>(initial?.rows ?? []);
   const [total, setTotal] = useState(initial?.total ?? 0);
@@ -328,6 +352,23 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
     }, () => null);
   }, [url, updateShown, refreshBeyond]);
 
+  // (Owner, Oct 30, batch 33 §7) The page redrawn by its live poll (another admin changed something) brings fresh first rows: they replace the first rows shown (a
+  // row gone elsewhere goes, a new one comes), rows loaded further down by scrolling stay, and each row keeps its own state (what was typed in its boxes) by its id.
+  // A searched or ticked list keeps its own rows.
+  const firstIds = useRef<Set<string>>(new Set((initial?.rows ?? []).map((x) => x.id)));
+  useEffect(() => {
+    if (!initial || fixed) return;
+    const before = firstIds.current;
+    firstIds.current = new Set(initial.rows.map((x) => x.id));
+    if (appliedRef.current.q || appliedRef.current.ticks.length) return;
+    const fresh = new Set(initial.rows.map((x) => x.id));
+    const below = rowsRef.current.filter((x) => !before.has(x.id) && !fresh.has(x.id));
+    setRows([...initial.rows, ...below]);
+    setTotal(initial.total);
+    if (!below.length) setNext(initial.next);
+    setPending(null);
+  }, [initial, fixed]);
+
   // Opened without rows (a lazy list): fetch its first 25.
   useEffect(() => {
     if (!initial) void reload(NO_FILTER);
@@ -407,8 +448,9 @@ export function PagedList({ kind, initial, empty = "None.", arg = "", title, lev
           </span>
         </div>
       )}
+      {/* (Owner, Oct 30, batch 33 §4) An empty box shows only its heading with (0): no "None." line under it (a search with no match still says so). */}
       {rows.length === 0 && !loading ? (
-        <p className="note">{filtered && search ? search.none : empty}</p>
+        filtered && search ? <p className="note">{search.none}</p> : null
       ) : (
         <div className="relative w-full">
           {fresh > 0 && (

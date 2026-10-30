@@ -291,7 +291,7 @@ describe("R, W) the 4th payment hold needs an admin's Approve (in the Lifts box)
     expect(page).toContain('title="Open disputes"'); // (batch 17 §7) the scroll box's heading: "Open disputes (N)"
     expect(page).not.toContain("Open disputes and lifts");
     const at = (id: string) => page.indexOf(`id="${id}"`);
-    const order = ["disputes", "lifts", "chargebacks", "mine", "paused-tests"].map(at);
+    const order = ["chargebacks", "mine", "disputes", "holds", "lifts"].map(at); // (batch 33 §6)
     expect(order.every((i) => i > 0) && [...order].sort((x, y) => x - y).join() === order.join()).toBe(true);
     expect(src("components/OwedBox.tsx")).toContain("the team will review your account before your tests resume");
   });
@@ -403,9 +403,10 @@ describe("U) admin views on profiles and on a test's own page", () => {
     expect(await text("u-tests", tester.user.id)).toMatch(/Joined “Harbor Run”/);
     expect(await text("u-parts", tester.user.id)).toMatch(/written answers · paid \$10\.00/);
     expect(await text("u-reports", dev.user.id)).toMatch(/Reported by .+: “They were rude to me”/);
-    expect(await text("t-timeline", testId)).toMatch(/Ana Silva joined/);
-    expect(await text("t-contracts", testId)).toMatch(/Ana Silva joined on: /);
-    expect(await text("t-payments", testId)).toMatch(/review \$10\.00 to Ana Silva/);
+    // (Batch 33 §1) Each name is followed by the email: "Ana Silva (ana@…) joined".
+    expect(await text("t-timeline", testId)).toMatch(/Ana Silva \([^)]+\) joined/);
+    expect(await text("t-contracts", testId)).toMatch(/Ana Silva \([^)]+\) joined on: /);
+    expect(await text("t-payments", testId)).toMatch(/review \$10\.00 to Ana Silva \(/);
     // Newest first, paged by 25, admin only.
     const rows = ((await adminPage("t-timeline", a.user.id, null, testId)) as { rows: { at: string }[] }).rows;
     expect(rows.map((r) => r.at)).toEqual([...rows.map((r) => r.at)].sort().reverse());

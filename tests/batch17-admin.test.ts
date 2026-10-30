@@ -165,7 +165,8 @@ describe("§7 the scroll box: load past 25, the end line, filters reset, the new
     expect(list).toContain("SEARCH_PAUSE_MS"); // after a short pause
     const page = src("app/admin/page.tsx");
     expect(page).not.toMatch(/\.total\}\)<\/h2>/);
-    for (const t of ["Accounts", "Tests", "Open disputes", "Lifts", "Chargeback holds", "Your actions", "Paused tests", "Decided disputes", "Contact us", "Reports", "No-show reports", "Latest payments"]) expect(page, t).toContain(`title="${t}"`);
+    // (Batch 33 §6) The console's lists.
+    for (const t of ["Chargeback holds", "Your actions", "Tests you paused", "Suspensions", "Open disputes", "Reports", "Lifts", "No-show reports", "Contact us"]) expect(page, t).toContain(`title="${t}"`);
     const boxes = src("app/admin/AdminBoxes.tsx");
     expect(boxes).toContain("title={title} level={3}");
     expect(boxes).not.toMatch(/\(\{page\.total\}\)/);

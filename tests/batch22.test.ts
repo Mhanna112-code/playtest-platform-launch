@@ -158,8 +158,8 @@ describe("batch 22 section 3: waiting payouts go out when payout setup is done",
     expect(f.transfers).toHaveLength(1);
     const page = src("app/admin/page.tsx");
     expect(page).not.toContain('label="Send now"');
-    // (Batch 26 section 12) Now a scroll box (PagedList "payouts"): each row still says how long it has waited.
-    expect(page).toContain('<PagedList kind="payouts"');
+    // (Batch 26 section 12) A scroll box (PagedList "payouts"): each row still says how long it has waited. (Batch 33 §6) No longer on the console.
+    expect(page).not.toContain('<PagedList kind="payouts"');
     expect(src("lib/server/adminLists.ts")).toContain("waiting since ${fmtDateTime(p.createdAt)}");
     expect(src("app/api/admin/[action]/route.ts")).not.toContain('case "transfer"');
   });
@@ -178,12 +178,14 @@ describe("batch 22 section 4: the admin's test timeline speaks about people", ()
     const page = await adminPage("t-timeline", a.user.id, null, s.testId);
     const rows = page.rows as TextVM[];
     const texts = rows.map((r) => r.text.replace(/^[^·]+ · /, ""));
-    expect(texts).toContain("Nora Lane paid Ana Silva $5.00 for the written answers");
-    expect(texts).toContain(`Nora Lane's developer account was paused (by ${a.user.email})`);
-    expect(texts).toContain("Nora Lane's tests are running again");
-    expect(texts.filter((t) => /disputed/.test(t))).toEqual(["Ana Silva disputed the pay for their written answers:"]);
+    // (Batch 33 §1) Each name is followed by the email and opens the profile.
+    const nora = `Nora Lane (${s.dev.user.email})`, ana = `Ana Silva (${s.tester.user.email})`;
+    expect(texts).toContain(`${nora} paid ${ana} $5.00 for the written answers`);
+    expect(texts).toContain(`${nora}'s developer account was paused (by ${a.user.email})`);
+    expect(texts).toContain(`${nora}'s tests are running again`);
+    expect(texts.filter((t) => /disputed/.test(t))).toEqual([`${ana} disputed the pay for their written answers:`]);
     expect(rows.find((r) => /disputed/.test(r.text))?.em).toBe("I answered every question in full.");
-    expect(texts.filter((t) => /decided/.test(t))).toEqual([`${a.user.email} decided Ana Silva's dispute: kept the pay at $5.00`]);
+    expect(texts.filter((t) => /decided/.test(t))).toEqual([`${a.user.email} decided ${ana}'s dispute: kept the pay at $5.00`]);
     expect(texts.some((t) => /^You |^Your /.test(t))).toBe(false);
     expect(src("app/admin/PagedList.tsx")).toContain("{t.em && <i className=\"text-slate-200\"> “{t.em}”</i>}");
   });
@@ -191,7 +193,7 @@ describe("batch 22 section 4: the admin's test timeline speaks about people", ()
   it("the three lists are the scroll boxes of batch 17 §7", () => {
     const boxes = src("app/admin/AdminBoxes.tsx");
     for (const k of ["t-timeline", "t-contracts", "t-payments"]) expect(boxes).toContain(`"${k}"`);
-    expect(boxes).toContain("<PagedList kind={kind} arg={arg} initial={page} empty={empty} title={title} level={3} />");
+    expect(boxes).toContain("<PagedList kind={kind} arg={arg} initial={page} title={title} level={3} />"); // (batch 33 §4) no empty line
   });
 });
 

@@ -158,7 +158,7 @@ describe("every bell line opens the exact place", () => {
     const pay = [read("app/app/payments/page.tsx"), read("components/OwedBox.tsx"), read("components/ChargebackSteps.tsx")].join("\n");
     for (const re of [/id="payout"/, /id="owed"/, /id="chargeback-steps"/]) expect(pay, String(re)).toMatch(re);
     const adm = [read("app/admin/PagedList.tsx"), read("app/admin/page.tsx")].join("\n");
-    for (const re of [/`dispute-\$\{d\.id\}`/, /`user-\$\{u\.id\}`/, /`test-\$\{t\.id\}`/, /id="users"/]) expect(adm, String(re)).toMatch(re);
+    for (const re of [/`dispute-\$\{d\.id\}`/, /`user-\$\{u\.id\}`/, /`test-\$\{t\.id\}`/, /id="suspensions"/]) expect(adm, String(re)).toMatch(re); // (batch 33 §6)
     // And the keys (written / recording) the links name are the ones the session page builds.
     expect(read("app/app/sessions/[id]/page.tsx")).toMatch(/key: "written"|"written"/);
   });

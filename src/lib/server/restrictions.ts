@@ -275,7 +275,7 @@ export async function suspendedAccountsReminder(now = new Date()) {
   const people = await db.user.findMany({ where: { OR: [{ devSuspendedAt: { not: null } }, { testerSuspendedAt: { not: null } }], deletedAt: null }, select: { devSuspendedAt: true, testerSuspendedAt: true } });
   if (!people.length) return 0;
   const sides = people.reduce((n, p) => n + (p.devSuspendedAt ? 1 : 0) + (p.testerSuspendedAt ? 1 : 0), 0);
-  for (const a of await adminUsers()) await bell(a.id, `${sides} suspended account side${sides === 1 ? "" : "s"} to review`, "/admin#users", undefined, { group: "suspendedreview", reminder: "suspended-review" });
+  for (const a of await adminUsers()) await bell(a.id, `${sides} suspended account side${sides === 1 ? "" : "s"} to review`, "/admin#suspensions", undefined, { group: "suspendedreview", reminder: "suspended-review" });
   await db.appState.upsert({ where: { key: "suspended-reminder" }, update: { value: now.toISOString() }, create: { key: "suspended-reminder", value: now.toISOString() } });
   return sides;
 }
