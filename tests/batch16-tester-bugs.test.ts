@@ -107,7 +107,8 @@ describe("B. every call change stops every tester press once (Alerts On), never 
       // Without the page's load time (as before), the refreshed marker hides the request.
       const r = await sact(s.sessionId, action, s.tester.cookie, { ...body, seenAt: refreshed, loadedAt: loaded });
       // (Batch 27 section 1) The session's offer is still open: Send and the call presses are blocked until it's answered (no stop-once for them meanwhile).
-      if (["written", "cancel-call", "request-time"].includes(action)) {
+      // (Batch 32 §7) Charge, Let it go and Dispute are blocked too.
+      if (["written", "cancel-call", "request-time", "dispute", "choose"].includes(action)) {
         expect(r.body.error?.code, action).toBe("answer_terms");
         continue;
       }
@@ -115,12 +116,15 @@ describe("B. every call change stops every tester press once (Alerts On), never 
       expect(r.body.error.changes.map((c: { text: string }) => c.text).join(" "), action).toMatch(/requested a call/);
     }
     // Once a stop box in this tab listed it, it doesn't stop again.
-    const listed = await sact(s.sessionId, "dispute", s.tester.cookie, { kind: "submission", id: s.sub.id, reason: "I answered every question in full.", seenAt: refreshed, loadedAt: loaded, boxSeenAt: new Date().toISOString() });
+    const listed = await sact(s.sessionId, "terms", s.tester.cookie, { offerId: s.offer.id, choice: "keep", seenAt: refreshed, loadedAt: loaded, boxSeenAt: new Date().toISOString() });
     expect(listed.status, JSON.stringify(listed.body)).toBe(200);
   }, 60_000);
 
   it("a call the developer cancelled stops too; with Alerts Off nothing stops", async () => {
     const s = await everyPress();
+    // (Batch 32 §7) The open offer would block Dispute: answer it first.
+    expect((await sact(s.sessionId, "terms", s.tester.cookie, { offerId: s.offer.id, choice: "keep", seenAt: seen(), confirmed: true, boxAt: new Date().toISOString() })).status).toBe(200);
+    await settle();
     const loaded = seen();
     await settle();
     expect((await act(s.testId, "cancel-call", s.dev.cookie, { seenAt: seen(), confirmed: true, callId: s.call.id })).status).toBe(200);

@@ -91,7 +91,7 @@ describe("batch 29 section 20: leftovers", () => {
     expect(src("app/app/page.tsx")).toContain("<JoinCall callId={x.id} />");
   });
 
-  it("Charge after new terms: the stop box ends 'Press again to go ahead under your current terms, or switch first.'", async () => {
+  it("Charge after new terms: (batch 32 §7) blocked until Switch or Keep (it used to stop once with '…under your current terms, or switch first.')", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -103,8 +103,7 @@ describe("batch 29 section 20: leftovers", () => {
     expect((await edit(s.testId, s.dev.cookie, { recordingCents: "15.00" })).status).toBe(200);
     expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(1);
     const r = await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: loaded });
-    expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.tail).toBe("Press again to go ahead under your current terms, or switch first.");
+    expect(r.body.error.code).toBe("answer_terms");
     expect(src("lib/server/terms.ts")).not.toContain("Press again to send under your current terms");
   });
 

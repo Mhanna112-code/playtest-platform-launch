@@ -26,3 +26,6 @@ This file wins over the earlier batches and the design doc where they differ.
 ## 7. New terms block Charge, Let it go and Dispute too (owner, Oct 29)
 - An open new-terms offer now blocks the tester's Charge, Let it go and Dispute as it already blocks Send and every call press (batch 27 §1): every press is refused with "Answer the new terms first: Switch or Keep." under the button and the page goes up to the Switch / Keep box; Switch or Keep unlocks them. Replaces batch 27 §1's "not blocked: Let it go (Charge) and Dispute keep their stop-once".
 - It can only arise for a tester past their own deadline who is still working (Charge opens only after their deadline; they still get new terms until they rate, leave, or the test stops or closes). An offer whose work closed blocks nothing.
+
+## 8. One moment, one line in a stop box (owner's finding, Oct 29)
+- A stop box listed the same stop twice: the server's "This test was stopped at 3:22 PM." and the live update's "This test was stopped · 3:22 PM". A box now treats two lines that say the same thing in the same minute (one ending "at 3:22 PM.") as one, and keeps its own wording. Every press a stop or pause interrupts (Charge, Let it go, Pay, Pay more, Rate) is covered.

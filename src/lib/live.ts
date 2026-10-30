@@ -73,7 +73,15 @@ export function mergeChanges(old: Change[], added: Change[]) {
   const keys = new Set(added.map((c) => c.key).filter(Boolean));
   const kept = old.filter((c) => !c.key || !keys.has(c.key));
   const have = new Set(kept.map(ck));
-  return [...kept, ...added.filter((c) => !have.has(ck(c)))];
+  // (Owner's finding, Oct 29, batch 32 §8) The same moment from two places reads as one line: the server's "This test was stopped at 3:22 PM." and the live
+  // update's "This test was stopped" (shown "· 3:22 PM") within the same minute. The box keeps its own wording.
+  const same = new Set(kept.map(sameMoment));
+  return [...kept, ...added.filter((c) => !have.has(ck(c)) && !same.has(sameMoment(c)))];
+}
+/** A line's text without a closing " at 3:22 PM." (and its full stop), with its minute: two lines that say the same moment match. */
+export function sameMoment(c: Change) {
+  const base = c.text.replace(/ at \d{1,2}:\d{2}\s?[AP]M\.?$/, "").replace(/\.$/, "");
+  return `${Math.floor(new Date(c.at).getTime() / 60_000)}|${base}`;
 }
 
 /** While a stop box is open, new changes the page picks up are added to it. */

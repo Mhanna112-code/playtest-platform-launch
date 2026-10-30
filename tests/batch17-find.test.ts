@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { startHold } from "@/lib/server/holds";
+import { testerGate } from "@/lib/server/testerGate";
 import { findTests } from "@/lib/server/tests";
 import { adminFindTests } from "@/lib/server/findSearch";
 import { FIND_SEARCH_LABEL, noFindMatchLine, statesFrom, testState } from "@/lib/findSearch";
@@ -295,13 +296,14 @@ describe("small things (section 13)", () => {
     await later();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
-    // New terms still stop with Alerts Off; the box is told Alerts is Off.
-    const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: before });
-    expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.alertsOff).toBe(true);
+    // New terms still stop with Alerts Off; the box is told Alerts is Off. (Batch 32 §7: the session presses are blocked by the open offer now, so the stop itself is checked.)
+    const stopOf = (b: Record<string, unknown>) => testerGate(tester.user.id, sessionId, testId, b).then(() => null, (e: { code: string; data?: Record<string, unknown> }) => e);
+    const r = await stopOf({ seenAt: before });
+    expect(r?.code).toBe("stop_once");
+    expect(r?.data?.alertsOff).toBe(true);
     await db.user.update({ where: { id: tester.user.id }, data: { testerAlertsOff: false } });
-    const r2 = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: before });
-    expect(r2.body.error.alertsOff).toBe(false);
+    expect((await stopOf({ seenAt: before }))?.data?.alertsOff).toBe(false);
+    void sub;
     const q = src("components/QuickIgnore.tsx");
     expect(q).toContain("if (!show || (off && !done)) return null;");
     expect(src("lib/client.ts")).toContain('if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") setTesterAlertsOff(e.alertsOff);');
