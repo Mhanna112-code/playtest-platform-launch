@@ -69,6 +69,12 @@ Edit refused Save with only "You've changed the parts and prices 3 times since t
 - If a locked field still differs (another tab's save locked it meanwhile), the line at Save names the change and links to it: "Your change to the live call rate ($24.00/h → $30.00/h) can't be saved: you've changed the parts and prices 3 times since testers joined." with **Put it back** (restores the saved value) beside it; the field name scrolls to the field, marked.
 - Tests: locked price boxes disabled; another tab locking it meanwhile → the named line and Put it back; after Put it back the other changes save.
 
+## 10. One line per listing save, for testers (owner, Oct 29)
+A single Edit save shows testers two or three lines in the top box and the stop box ("The listing was edited: product name, title, …", "Marc Hanna changed the product name, the description and the build link · See it", "Marc Hanna renamed the test to …"). Make it ONE line per save, everywhere testers see listing changes (join page, session page, stop boxes, bell, email): "Marc Hanna edited the listing at 6:55 PM: product name, title (now “lllllq”), description, build link, recording price, live call rate · See it". The developer's own pages are unchanged. Also, on the join page the stop box's Alerts hint says "…or with Alerts at the top of your test's page" though there is no test page yet: there it says "…below, or with Alerts on your dashboard".
+
+## 11. The join page shows changes next to Join too (owner, Oct 29)
+On the join page the changes show only in the top box, far above the Join / Apply button where the tester is about to act. Add a small "Changed since you opened this page" list right above the Join / Apply / Ask to rejoin button, with the same one-line-per-save entries and times (newest first, at most 3, then "Show N more"), following the page live; it clears when the tester presses and the stop box takes over. "You now meet this test's needs" stays its own notice.
+
 ## Decided, no change (owner, Oct 29)
 - **Charge / Let it go stays** for listed written answers and recordings (the owner said no to charging listed work automatically at its review date; only listed calls are charged automatically).
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
