@@ -90,6 +90,15 @@ On the join page (test "lllllq" / "llllllq"), saves at 6:54 (questions), 6:55 (p
 - Post / Edit / the join page: the questions box's line adds "Each answer is at least 50 characters." so developers and testers know.
 - Tests: a 49-character answer refused at that answer; 50 accepted; an empty optional question fine; Anything else short is fine; a draft saves short.
 
+## 15. The session page shows the current listing information, inside the contract box (owner, Oct 29)
+Today the session page's header shows the listing as it was when the tester joined, and later information changes sit in a separate fold, "<dev> updated the listing since you joined: see it now" (title, description, devices, languages) with "Your contract's terms stay as they are." Replace the fold:
+- The tester's contract box ("Your agreed scope") holds both parts: **the contract** (parts and prices with Required / Free, the live rate and call length, the questions, the NDA, the deadline: fixed at joining, changed only through the Switch / Keep offer, as today) and **the listing information** (title, product name, what to do / the steps, build link, devices, languages, categories, Mature): always the CURRENT values, updated live like the rest of the page. The header's description and build link show the current ones too.
+- Each information line changed since the tester joined carries a small "Updated <date/time>" tag; tapping it shows before → now in place. The top-box line ("Updated · 7:21 PM: Marc Hanna changed the description, the build link and the categories · See it") scrolls to the contract box and marks the changed lines for a few seconds.
+- Older versions stay in "Terms history" with the contract changes.
+- The fold "… updated the listing since you joined" and its "Your contract's terms stay as they are." are removed.
+- Access keys aren't part of either: the tester's own key never changes (the key box and "This key doesn't work" stay as they are).
+- Tests: an information change shows the current value in the contract box and header with its Updated tag; a contract change still comes as Switch / Keep and the contract part doesn't change until Switch.
+
 ## Decided, no change (owner, Oct 29)
 - **Charge / Let it go stays** for listed written answers and recordings (the owner said no to charging listed work automatically at its review date; only listed calls are charged automatically).
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
