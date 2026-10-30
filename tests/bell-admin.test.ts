@@ -65,7 +65,7 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Only half answered" })).status).toBe(200);
     expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered everything properly", seenAt: seen(), confirmed: true })).status).toBe(200);
     const dispute = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
-    expect((await aact(a.cookie, "decide", { id: dispute.id, total: "8.00", note: "Fair" })).status).toBe(200);
+    expect((await aact(a.cookie, "decide", { id: dispute.id, total: "8.00", note: "Fair", tickCents: 400 })).status).toBe(200);
     expect((await aact(a.cookie, "pause-test", { id: testId, note: "Looking" })).status).toBe(200);
     expect((await aact(a.cookie, "extend-pause", { id: testId, days: 3 })).status).toBe(200);
     expect((await aact(a.cookie, "unpause-test", { id: testId })).status).toBe(200);
