@@ -102,3 +102,10 @@ describe("batch 32 §16: switching sides is instant from the site and from your 
     for (const site of ["cross-site", undefined]) expect(await get(site), String(site)).not.toContain("<script>");
   });
 });
+
+describe("batch 32 §17: back from Stripe on the right side", () => {
+  it("adding a card lands on the developer side; payout setup on the tester side", () => {
+    expect(src("app/api/payments/card-saved/route.ts")).toContain('if (hasSide(u, "developer") && u.side !== "developer") await db.user.update({ where: { id: u.id }, data: { side: "developer" } });');
+    expect(src("app/api/payments/payout-return/route.ts")).toContain('if (hasSide(u, "tester") && u.side !== "tester") await db.user.update({ where: { id: u.id }, data: { side: "tester" } });');
+  });
+});

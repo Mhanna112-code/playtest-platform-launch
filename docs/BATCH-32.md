@@ -60,3 +60,6 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 16. Switching sides is instant (owner's finding, Oct 30)
 - A link to a page for the other side switches at once from the site's own pages AND from the person's own direct visits (a reload, a typed or bookmarked address, a new tab); the "Switch to your … side and continue" button only shows for a link from another site or an email. The switch itself is still a POST from this site.
+
+## 17. Back from Stripe on the right side (owner's finding, Oct 30)
+- Coming back from adding a card always lands on the developer side's Payments; coming back from payout setup on the tester side's. (Payments, Account and Notifications show the side used last, which a page of the other side in another tab can change.)
