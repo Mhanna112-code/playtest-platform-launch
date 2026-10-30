@@ -106,7 +106,9 @@ worktree C:/Users/march/Projects/pl-codex-6, made from the latest master).
 
 Build docs/BATCH-34.md §3. The box is src/components/OwedBox.tsx (reservedOnce disables the button today but it keeps the bright
 style). Grey it like the app's other disabled buttons and relabel it "<amount> is charged after the team approves" while a
-reservation is in place. Test (tests/codex6-reserved.test.ts): the label and the disabled style. npm run check green. Commit on
+reservation is in place. Also drop the " $X added since will be charged right after." sentence from the developer's reserved line
+(reservedAddedLine in src/lib/rules.ts, used by OwedBox): it reads only "Reserved $27.00: it's taken when the team approves lifting your
+hold." Keep the admin's adminReservedLine as it is. Test (tests/codex6-reserved.test.ts): the label, the disabled style, and no "added since" sentence on the developer's line. npm run check green. Commit on
 the branch; don't push or merge.
 ```
 
