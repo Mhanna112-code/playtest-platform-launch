@@ -57,7 +57,7 @@ describe("Pay more closes with the test's last Pay / Charge (Batch 17 §19 repla
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain("const payMoreAt = await payMoreClosesAt(t.id, now);");
     expect(page.match(/payMore\.open && \(rooms\.get/g)).toHaveLength(2);
-    expect(page.match(/note=\{payMore\.line \|\| undefined\}/g)).toHaveLength(2);
+    expect(page.match(/note=\{payMore\.line \|\| undefined\}/g)).toHaveLength(3); // (batch 30 §2) and the update row's Pay more
   });
 });
 

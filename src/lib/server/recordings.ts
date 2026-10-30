@@ -8,6 +8,8 @@ import { notify } from "./notify";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
 import { ownContract, recordEvent, sessionRefusal } from "./tests";
 import { answerTermsFirst, testerSendGate } from "./terms";
+import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
+import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -30,7 +32,9 @@ export async function startRecording(tester: U, contractId: string, body: Record
   if (video && size > MAX_RECORDING_BYTES) throw new HttpError(413, "too_large", "Recordings can be at most 500 MB.");
   if (!video && size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, "too_large", "Files can be at most 500 MB.");
   const paid = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: part } }, include: { review: true } });
-  if (paid?.review) throw new HttpError(409, "paid", part === "written" ? "Your written answers were already paid for, so they can't be changed. Send anything new in the chat." : "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
+  // (Batch 30 §2) A paid part takes an updated version too (attachments included); only an old rejection or the team's $0 closure stays locked.
+  const locked = resendRefusal(paid?.review, part);
+  if (locked) throw new HttpError(409, "paid", locked);
   // (Owner, Oct 29, batch 13 section 7) The Recording part takes up to 5 recordings (a removed one frees its slot); videos attached to the written part count separately
   // (batch 11's limits: 5 videos and 5 files there).
   const mine = await db.recording.findMany({ where: { contractId, part: { in: ["recording", "written"] } }, select: { contentType: true, part: true } });
@@ -117,7 +121,8 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
   const rec = await db.recording.findUnique({ where: { id: String(body.recordingId ?? "") } });
   if (!rec || rec.contractId !== contractId || rec.part !== "recording") throw new HttpError(404, "not_found", "That recording was already removed.");
   const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
-  if (sub?.review) throw new HttpError(409, "paid", sub.review.rejected ? "Your recording was already reviewed, so it can't be changed." : "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
+  const locked = resendRefusal(sub?.review, "recording"); // (batch 30 §2) a paid recording can be updated
+  if (locked) throw new HttpError(409, "paid", locked);
   if (rec.submissionId) await db.recording.update({ where: { id: rec.id }, data: { part: "removed" } });
   else {
     await db.recording.delete({ where: { id: rec.id } });
@@ -136,7 +141,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   await testerSendGate(contractId, body);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  const { updated, late, subId, gone: goneFiles } = await db.$transaction(async (tx) => {
+  const { updated, late, subId, gone: goneFiles, afterPaid } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const t = await tx.test.findUniqueOrThrow({ where: { id: c.testId } });
@@ -147,11 +152,16 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     if (await tx.recording.count({ where: { contractId, part: "recording", uploadedAt: null, createdAt: { gt: new Date(Date.now() - UPLOADING_MS) } } })) throw new HttpError(409, "uploading", STILL_UPLOADING);
     if (recs.length === 0) throw new HttpError(400, "none", "Upload a recording first.");
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
-    if (existing?.review) throw new HttpError(409, "paid", "Your recording was already paid for, so it can't be changed. Send anything new in the chat.");
+    const locked = resendRefusal(existing?.review, "recording"); // (batch 30 §2) a paid recording can be sent again
+    if (locked) throw new HttpError(409, "paid", locked);
+    const paid = !!existing?.review;
     // (Owner, Oct 28, batch 20 section 26) Nothing added or removed since the last send: refused (no new piece, no bell).
     if (existing && recs.every((r) => r.submissionId === existing.id) && !(await tx.recording.count({ where: { contractId, part: "removed" } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
     const now = new Date();
-    const data = { late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now) };
+    // (Batch 30 §3) An update of a late piece stays late; one sent after the deadline is late (Charge, if it had opened, no longer applies).
+    const lateNow = !!existing?.late || isLate(c.dueAt, now);
+    // (Batch 30 §2) An update of a paid piece keeps its price and review; it only marks the update.
+    const data = { late: lateNow, updatedAt: now, ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(lateNow ? { choiceOfferedAt: null, choiceBy: null } : {}) }) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
@@ -159,12 +169,15 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     // Recordings removed since the last Send leave the piece now (and storage: batch 15 section 41, M6).
     const gone = await tx.recording.findMany({ where: { contractId, part: "removed" }, select: { storageKey: true } });
     await tx.recording.deleteMany({ where: { contractId, part: "removed" } });
-    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id);
-    return { updated: !!existing, late: data.late, subId: sub.id, gone };
+    const afterPaid = paid ? await paidUpdateRoom(tx, sub.id, c.testId) : null;
+    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "recording"), false, {}, c.id);
+    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id);
+    return { updated: !!existing, late: data.late, subId: sub.id, gone, afterPaid };
   });
   for (const g of goneFiles) await deleteStored(g.storageKey);
   await notify(tester.email, `Work sent: your recording for “${c0.title}”`, [`Your recording was ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-recording`);
-  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} a recording for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} screen recording${late ? " (late)" : ""}. Watch it and choose what to pay.`], `/app/tests/${c0.testId}#piece-${subId}`, { about: tester.id });
+  if (afterPaid) await notifyPaidUpdate(c0, tester, subId, "recording", afterPaid);
+  else await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} a recording for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} screen recording${late ? " (late)" : ""}. Watch it and choose what to pay.`], `/app/tests/${c0.testId}#piece-${subId}`, { about: tester.id });
   return { sent: true };
 }
 

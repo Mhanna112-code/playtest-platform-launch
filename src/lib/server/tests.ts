@@ -23,6 +23,8 @@ import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
 import { blockPartners } from "./blocks";
+import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
+import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
 import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
@@ -940,14 +942,17 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   await testerSendGate(contractId, body);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  const { sub, updated } = await db.$transaction(async (tx) => {
+  const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    if (existing?.review) throw new HttpError(409, "paid", "Your written answers were already paid for, so they can't be changed. Send anything new in the chat.");
+    // (Batch 30 §2) A paid part can be sent again (an updated version); only an old rejection or the team's $0 closure stays locked.
+    const locked = resendRefusal(existing?.review, "written");
+    if (locked) throw new HttpError(409, "paid", locked);
+    const paid = !!existing?.review;
     // (Owner, Oct 29, batch 13 section 8) The whole set is stored: each question with its answer. Sending replaces the sent version; an earlier set it replaces (sent
     // for questions the tester has since switched away from) moves to the developer's "Previous questions and answers", and (DEFAULT) the new set is priced at the
     // current contract's written price.
@@ -957,20 +962,28 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     // (Owner, Oct 28, batch 20 section 26) A resend identical to the last send (the same answers and notes, no new attachment) is refused: no new piece, no bell.
     if (existing && !replacesEarlier && items.every((x, i) => x.answer === before[i]?.answer) && notes === existing.notes
       && !(await tx.recording.count({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
+    // (Batch 30 §3) An update of a late piece stays late; one sent after the deadline is late (and Charge, if it had opened, no longer applies).
+    const late = !!existing?.late || isLate(c.dueAt, now);
     const data = {
-      answers: items as unknown as Prisma.InputJsonValue, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now),
-      ...(replacesEarlier ? { setUntil: null, agreedCents: c.writtenCents, prevSets: pushPrev(prevSetsOf(existing!.prevSets), { until: (existing!.setUntil ?? now).toISOString(), items: before }) as unknown as Prisma.InputJsonValue } : {}),
+      answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now,
+      // (Batch 30 §2) An update of a paid piece keeps its price and review; it only marks the update (the developer's Pay more answers it).
+      ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+      ...(replacesEarlier ? { setUntil: null, ...(paid ? {} : { agreedCents: c.writtenCents }), prevSets: pushPrev(prevSetsOf(existing!.prevSets), { until: (existing!.setUntil ?? now).toISOString(), items: before }) as unknown as Prisma.InputJsonValue } : {}),
     };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });
     // (Batch 11) Files and recordings attached to the written part go with it.
     await tx.recording.updateMany({ where: { contractId, part: "written", uploadedAt: { not: null } }, data: { submissionId: sub.id } });
-    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
-    return { sub, updated: !!existing };
+    // (Batch 30 §2) An update after it was paid: below the cap it waits in Needs you (a "sent" line); at the cap a quiet line only.
+    const afterPaid = paid ? await paidUpdateRoom(tx, sub.id, c.testId) : null;
+    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "written answers"), false, {}, c.id);
+    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
+    return { sub, updated: !!existing, afterPaid };
   });
   await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-written`);
-  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
+  if (afterPaid) await notifyPaidUpdate(c0, tester, sub.id, "written answers", afterPaid);
+  else await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
   return sub;
 }
 

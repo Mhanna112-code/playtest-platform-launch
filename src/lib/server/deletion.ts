@@ -20,9 +20,9 @@ export async function devDeleteLines(userId: string, now = new Date()) {
   if (!u?.isDeveloper) return [];
   const mine = { contract: { test: { developerId: userId }, tester: PAYABLE_TESTER } };
   const [review, calls, charge, disputes] = await Promise.all([
-    db.submission.count({ where: { review: null, choiceOfferedAt: null, ...mine } }),
+    db.submission.count({ where: { review: null, OR: [{ choiceOfferedAt: null }, { late: true }], ...mine } }), // (batch 30 §3) late work: no Charge
     db.call.count({ where: { review: null, status: "booked", startsAt: { lte: now }, ...mine } }),
-    db.submission.count({ where: { review: null, choiceOfferedAt: { not: null }, ...mine } }),
+    db.submission.count({ where: { review: null, choiceOfferedAt: { not: null }, late: false, ...mine } }),
     db.contract.findMany({ where: { test: { developerId: userId } }, select: { id: true } }).then((cs) => db.dispute.count({ where: { status: "open", contractId: { in: cs.map((c) => c.id) } } })),
   ]);
   const lines: { key: string; text: string }[] = [];

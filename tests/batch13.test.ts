@@ -234,10 +234,10 @@ describe("batch 13 section 7: the Recording part, up to 5 recordings sent togeth
     await settle();
     expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(await db.recording.count({ where: { submissionId: subs[0].id } })).toBe(4);
-    // Paid: nothing changes.
+    // Paid: (batch 30 §2) an updated version can still be sent, so a recording can still be removed (it leaves at the next Send).
     await settle();
     await pay(s.dev.cookie, { kind: "submission", id: subs[0].id, amount: "12.00", tickedCents: 1200 });
-    expect((await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[2] })).status).toBe(409);
+    expect((await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[2] })).status).toBe(200);
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain('title="Remove this recording?"');
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("onLoadedMetadata");
   });

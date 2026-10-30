@@ -4,6 +4,7 @@ import { ApiError } from "@/lib/client";
 import type { AccountState } from "@/lib/server/accountState";
 import { AdminButton } from "./AdminButton";
 import { PreviewButton } from "./PreviewButton";
+import { TeamCloseBox } from "./TeamCloseBox";
 
 /**
  * (Batch 15 section 16; batch 17 §6) An account's Suspend (per side, a reason up to 1,000 characters, with Preview), Reinstate per suspended side and Delete: the same
@@ -56,6 +57,8 @@ export function AccountActions({ initial }: { initial: AccountState }) {
           {roles === 0 && <AdminButton action="suspend" id={acct.id} label="Suspend" danger stacked extra={seen} onRefused={refused} fields={[{ name: "note", label: "Why" }]} />}
         </div>
       )}
+      {/* (Batch 30 §5) A developer's open reviews, closed at $0 by the team (Preview first, then the reason). */}
+      {acct.isDeveloper && <TeamCloseBox id={acct.id} scope="developer" />}
       <p className="flex flex-wrap items-center gap-2">
         <AdminButton action="delete-account" id={acct.id} label="Delete account" danger onRefused={refused} fields={[{ name: "note", label: "Why" }]} />
       </p>

@@ -32,6 +32,8 @@ export type PayRoom = { roomCents: number; aboveRoomCents: number; ceilingBinds:
 export function PayBox(p: {
   kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; note?: string; owes?: boolean;
   minutes?: number; rateCents?: number | null; room?: PayRoom; more?: { testId: string; contractId: string }; warning?: string;
+  /** (Batch 30 §2) This Pay more answers an updated version sent after the piece was paid: $0 closes it (an optional note). */
+  update?: boolean;
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
@@ -104,7 +106,7 @@ export function PayBox(p: {
       try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); setPayKey(newPressId()); return; }
     }
     await keep.clear();
-    setDone(res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : `Paid ${money(res.amountCents)}.`);
+    setDone(res.status === "closed" ? "Closed at $0." : res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : `Paid ${money(res.amountCents)}.`);
     setTimeout(() => window.location.reload(), 900);
   }
 
@@ -150,7 +152,7 @@ export function PayBox(p: {
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        <button className="btn-green" disabled={busy || bank.open || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
+        <button className="btn-green" disabled={busy || bank.open || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
         {p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
         <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>
       </div>
@@ -159,6 +161,7 @@ export function PayBox(p: {
       <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={more ? "Pay more" : "Pay"} />
       {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}
       {!more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
+      {more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this update (a note is optional).</p>}
       {p.note && <p className="note">{p.note}</p>}
       {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
       {done && <p className="ok">{done}</p>}

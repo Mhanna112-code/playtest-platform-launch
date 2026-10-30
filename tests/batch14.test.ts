@@ -96,7 +96,7 @@ describe("batch 14 section 3: applicants and invited testers are told, stacked",
 describe("batch 14 section 4: a quieter Switch / Keep", () => {
   it("Keep tells the developer nothing; Switch is one quiet live-box line (stacked per day) and never stops a press", async () => {
     expect(R.DEV_STOP_KINDS).not.toContain("terms");
-    expect(R.DEV_QUIET_KINDS).toEqual(["terms", "key", "rated"]); // (batch 20 section 24) a rating by a tester whose part had ended
+    expect(R.DEV_QUIET_KINDS).toEqual(["terms", "key", "rated", "sentpaid"]); // (batch 20 section 24) a rating by a tester whose part had ended; (batch 30 §2) an update at the cap
     const { dev, testId } = await setup();
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Ward", "he");

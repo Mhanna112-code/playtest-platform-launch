@@ -28,7 +28,8 @@ export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
  * after it links to the Terms' payments section (a new tab). An unticked press is refused with PAY_RULES_TICK_MISSING, red at the tick.
  */
 // (Owner, Oct 29, batch 28 §21) It covers the automatic charge of listed calls too.
-export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed, and listed calls 7 days after they take place.";
+// (Batch 30 §3) Charge applies to listed work sent by the tester's deadline.
+export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work they sent by their own deadline that I haven't paid once 7 days have passed since they sent it and that deadline has passed, and listed calls 7 days after they take place.";
 export const PAY_RULES_LINK = "How payments work";
 export const PAY_RULES_TICK_MISSING = "Tick to confirm you understand how payments work.";
 /** The Terms' payments section (section 4, How payments work). */
@@ -495,7 +496,8 @@ export const DEV_STOP_KINDS = [
 
 /** (Owner, Oct 29, batch 14) Kinds the developer's live box shows quietly (never a stop-once reason, never in the under-button notice, no bell). */
 // (Owner, Oct 28, batch 20 section 24) "rated": a tester whose part had ended rated you: a live-box line only, never a stop.
-export const DEV_QUIET_KINDS = ["terms", "key", "rated"] as const;
+// (Batch 30 §2) "sentpaid": a tester sent an updated version of a piece already paid the most it can be: a quiet line only (nothing more can be paid).
+export const DEV_QUIET_KINDS = ["terms", "key", "rated", "sentpaid"] as const;
 /** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
 export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 
@@ -520,6 +522,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
   lowered: "(batch 15 section 40) the developer's own Lower the length (reason E from another tab)",
+  sentpaid: "(batch 30 §2) a tester updated a piece already paid the most it can be: one quiet line in the live box (DEV_QUIET_KINDS), never a stop; nothing more can be paid",
 };
 
 /** (Owner, NEWEST+3) A declined manual Pay, as the tester reads it (never "failed", "declined" or "card"). */
@@ -568,6 +571,7 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   paused: "a hold shows as the paused banner and refusals",
   resumed: "the paused banner goes away",
   subscription: "the developer's own subscription: testers never see it",
+  sentpaid: "(batch 30 §2) the tester's own update of a paid piece (reason E from another tab)",
 };
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);

@@ -44,6 +44,7 @@ import { qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
+import { TEAM_CLOSED_NO_DISPUTE, canSendAgain, lateBeforeSendLine, lateSentLine, teamClosedLine, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { WrittenAttachments } from "./WrittenAttachments";
@@ -215,7 +216,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   });
   // (Owner, Oct 29, batch 10) A paused test hides what doesn't work right now (Send, the call-request tools, Join call, chat's message box) and says at the top what still
   // works, built from what is actually on the page (the server refusals stay as a backstop).
-  const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
+  // (Batch 30 §3) Never for late work (also a piece that went late before this rule).
+  const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && !sub.late && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
   // (Batch 20 section 15) What a team decision could still add to each reviewed piece without a dispute (the admin form's max): at 0, Dispute is disabled with its line.
   const room = await disputeRoom([...[written, recording].filter((x) => x?.review && !x.dispute).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.dispute).map((x) => ({ callId: x.id }))]);
   // (Batch 28 §14) Each paid piece: what it was paid and what Pay more can still bring it to in all; and when Pay more closed (close-out).
@@ -223,8 +225,17 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const payMoreAt = await payMoreClosesAt(c.testId, now);
   const payMoreShut = closedOut(payMoreAt, now) ? fmtDate(payMoreAt!) : null;
   const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, closedOn: payMoreShut } : null);
-  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string } | null | undefined, d: unknown, id = "") => !!r && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null).ok;
-  const unpaidPart = !written?.review || !recording?.review;
+  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string; teamClosedById?: string | null } | null | undefined, d: unknown, id = "") => !!r && !r.teamClosedById && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null).ok;
+  // (Batch 30 §2) A part can be sent again after it's paid (not an old rejection or the team's $0 closure).
+  const unpaidPart = canSendAgain(written) || canSendAgain(recording);
+  // (Batch 30 §2, §3) The grey line above a part's Send: a paid part's update (what it can still be paid), or the deadline passed (no Charge for late work).
+  const sendLines = (sub: typeof written, cents: number | null) => {
+    if (sub?.review) {
+      const m = canSendAgain(sub) ? moreOf(sub.id) : null;
+      return m ? [updateAboveSendLine(dev, m.paidCents, m.allCents, m.closedOn)] : [];
+    }
+    return cents != null && cents > 0 && now > c.dueAt ? [lateBeforeSendLine(fmtDate(c.dueAt), dev)] : [];
+  };
   const pausedBanner = rulesPaused ? pausedForTesters({
     drafts: draftsShown && !refusal && !meOff && unpaidPart,
     charge: choiceOpen(written) || choiceOpen(recording),
@@ -239,7 +250,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   }) : "";
   // (Batch 16 section 24) What still works once the work is over, built from what is actually on the page (as the paused banner does).
   const stillWorks = {
-    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && !chargeShut(x.id) && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0)),
+    charge: !meOff && !devGone && ([written, recording].some((x) => !!x && !x.review && !x.late && !chargeShut(x.id) && (x.agreedCents ?? 0) > 0 && chargeAmount(x.agreedCents, partPaid.get(x.id) ?? 0) > 0)),
     dispute: [written, recording].some((x) => x && !chargedOwed.has(x.id) && !delayedSubs.has(x.id) && disputable(x.review, x.dispute, x.id)) || c.calls.some((x) => !owedCalls.has(x.id) && disputable(x.review, x.dispute, x.id)),
     rate: rateBlock === "" && !meOff,
     excerpt: excerptPicks.length > 0,
@@ -445,19 +456,21 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               </p>
               <p className="text-slate-400">{cents == null ? NOT_LISTED : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
               {/* (Batch 28 §5) A sent, listed part waiting for the developer: when Charge opens (like the dashboard rows and listed call rows). */}
-              {sub && !sub.review && sub.agreedCents != null && sub.agreedCents > 0 && !devGone && !chargeShut(sub.id) && !sub.choiceOfferedAt && (() => {
+              {/* (Batch 30 §3) Sent after the deadline: no Charge; the developer decides what to pay. */}
+              {sub && !sub.review && sub.late && sub.agreedCents != null && sub.agreedCents > 0 && !devGone && !chargeShut(sub.id) && <p className="text-xs text-slate-400" data-sent-late="">{lateSentLine(fmtDate(c.dueAt), dev)}</p>}
+              {sub && !sub.review && !sub.late && sub.agreedCents != null && sub.agreedCents > 0 && !devGone && !chargeShut(sub.id) && !sub.choiceOfferedAt && (() => {
                 const opens = chargeOpensAt(sub, c.test, c, now);
                 return opens && opens > now ? <p className="text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(dev, renderTimes(T(opens, "date"), u.timeZone))}</p> : null;
               })()}
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
-              {sub && !sub.review && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
+              {sub && !sub.review && !sub.late && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
                 <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
               )}
               {/* (Batch 17 §19) Its last 7 days before close-out. */}
               {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}
               {/* (Batch 12 section 1) The developer deleted their account before Charge opened: this part can't be paid. */}
               {sub && !sub.review && !sub.choiceOfferedAt && devGone && <p className="info" data-dev-deleted="">{devDeletedLine(devRealName)}</p>}
-              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
+              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview update={sub.paidUpdateZeroAt ? { at: sub.paidUpdateZeroAt, note: sub.paidUpdateNote } : null} dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
             </li>
           ))}
           <li id="part-live" data-part="live" className="scroll-mt-24 space-y-1.5 rounded-xl border border-white/[0.08] p-3 text-sm">
@@ -565,7 +578,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <RecordingUpload
           seenAt={seenAt}
           sessionId={c.id}
-          canSend={!refusal && !recording?.review && !meOff && draftsShown}
+          canSend={!refusal && canSendAgain(recording) && !meOff && draftsShown}
+          lines={sendLines(recording, c.recordingCents)}
           sendable={!rulesPaused}
           sentBefore={!!recording}
           removedSince={c.recordings.some((r) => r.part === "removed")}
@@ -577,7 +591,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <h2 className="font-semibold text-white">The written part</h2>
         {termLine("Written answers", c.writtenCents, c.writtenRequired, false, written ? partPaid.get(written.id) ?? 0 : 0)}
         {/* (Owner, Oct 28 evening) Paid, or the test stopped / their work ended: the answers they sent stay readable (no Send). */}
-        {written && (written.review || refusal || meOff) ? (
+        {written && ((written.review && !canSendAgain(written)) || refusal || meOff) ? (
           <div className="space-y-2" data-sent-answers="">
             {written.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(written.setUntil)}</p>}
             <SetView items={sentItems} />
@@ -589,7 +603,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         ) : (
           <>
             {written?.setUntil && <p className="note" data-set-until="">What you sent is for the questions until {fmtDate(written.setUntil)}: {dev} reviews it at the price it was sent at. Send again to send these questions instead.</p>}
-            <WrittenForm canSend={!rulesPaused} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={!!written}
+            <WrittenForm canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={!!written}
               sentSame={!!written && !written.setUntil && sameQuestions(sentItems, itemsFor(writtenQuestions(c)))} newFiles={c.recordings.some((r) => r.part === "written" && r.uploadedAt && !r.submissionId)} />
             {/* (Batch 11) Files and recordings attached to the written part (drafts: they can be added while the test is paused). */}
             <WrittenAttachments sessionId={c.id} canAdd items={c.recordings.filter((r) => r.part === "written").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, video: r.contentType.startsWith("video/"), sent: !!r.submissionId }))} />
@@ -615,16 +629,16 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   );
 }
 
-type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date; rateCents?: number | null };
+type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date; rateCents?: number | null; /** (batch 30 §5) */ teamClosedById?: string | null };
 /** (Batch 16 section 40) A reviewed call's word on its grey line: "paid $X", "charged", "let go" (an older rejection: "rejected"). */
-const callOutcome = (r: Rev) => (r.rejected ? "rejected" : r.reason === LET_GO_BY_TESTER ? "let go" : chargedByTester(r.reason) ? "charged" : `paid ${money(r.amountCents)}`);
+const callOutcome = (r: Rev) => (r.teamClosedById ? "closed by the team for $0" : r.rejected ? "rejected" : r.reason === LET_GO_BY_TESTER ? "let go" : chargedByTester(r.reason) ? "charged" : `paid ${money(r.amountCents)}`);
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, off = false, dev = "The developer", extras = [], room = null, more = null }: { /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, off = false, dev = "The developer", extras = [], room = null, more = null, update = null }: { /** (Batch 30 §2) an update closed at $0 */ update?: { at: Date; note: string } | null; /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   // (Batch 10) Every part the developer reviewed can be disputed once, listed or not (not the tester's own Charge or Let it go).
   const check = canDispute(review.amountCents, review.agreedCents, !!dispute, byTesterChoice(review.reason), room);
-  const may = check.ok;
+  const may = check.ok && !review.teamClosedById;
   // (Batch 20 section 15) Nothing left to award: the button stays, greyed, with the line (the page's poll brings a Pay more).
   const full = !check.ok && check.message === NOTHING_TO_DISPUTE;
   // (Owner, Oct 29, batch 30 §16) More than 4 payment lines: a plain scroll box about 4 lines tall (PayLinesBox); the lines under them stay outside it.
@@ -634,6 +648,9 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
       {review.rejected ? (
         // (Batch 15 section 30) Old rejections stay, and read "Rejected".
         <p><b>Rejected</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
+      ) : review.teamClosedById ? (
+        // (Batch 30 §5) The team closed it for $0, with the team's reason.
+        <p data-team-closed="">{teamClosedLine(review.reason)} ({fmtDateTime(review.createdAt)})</p>
       ) : review.amountCents === 0 && review.reason && !byTesterChoice(review.reason) ? (
         <p data-paid-zero="">{paidZeroLine(review.reason)} ({fmtDateTime(review.createdAt)})</p>
       ) : review.amountCents === 0 ? (
@@ -644,16 +661,25 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
           {review.reason && <> · “{review.reason}”</>}
         </p>
       )}
+      {/* (Batch 30 §2) The developer closed an update at $0 (with their note, if any). */}
+      {update && <p data-update-closed="">{updateClosedZeroLine(dev)} ({fmtDateTime(update.at)}){update.note && <> · “{update.note}”</>}</p>}
       {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
       </PayLinesBox>
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {delayed && <p className="info" data-dispute-delayed="">Payment may be delayed until the test resumes.</p>}
       {/* (Owner, Oct 29, batch 28 §14) Whether this part can still be paid more (grey; not a stop). */}
-      {more && !review.rejected && (
+      {more && !review.rejected && !review.teamClosedById && (
         <p className="note" data-pay-more-state="">{more.allCents <= more.paidCents ? testerPaidMostLine(more.paidCents) : more.closedOn ? payClosedLine(more.closedOn, true) : testerPayMoreLine(dev, more.paidCents, more.allCents)}</p>
       )}
       {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
       {may && !off && <DisputeForm sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} limit={disputeLimitText(room ?? 0)} />}
+      {/* (Batch 30 §5) Final: no dispute on a team closure. */}
+      {review.teamClosedById && !dispute && !off && (
+        <div className="space-y-1" data-dispute-team-closed="">
+          <button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>
+          <p className="note">{TEAM_CLOSED_NO_DISPUTE}</p>
+        </div>
+      )}
       {full && !off && (
         <div className="space-y-1" data-dispute-none="">
           <button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>

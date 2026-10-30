@@ -369,6 +369,13 @@ model Submission {
   devMarks        String[]
   devRemindedAt   DateTime?
   choiceBy        DateTime?
+  /// (Batch 30 §2) The tester sent an updated version after the piece was paid (the latest such send)
+  paidUpdateAt     DateTime?
+  /// (Batch 30 §2) The developer's Pay more (any amount, $0 included) answered that update: its Needs you row is gone until the next update
+  paidUpdateDoneAt DateTime?
+  /// (Batch 30 §2) When the developer last closed an update at $0, and their optional note (the tester reads both)
+  paidUpdateZeroAt DateTime?
+  paidUpdateNote   String    @default("")
 
   recordings Recording[]
   review     Review?
@@ -411,6 +418,8 @@ model Review {
   rejected     Boolean     @default(false)
   /// Paid automatically after 14 days without a review
   auto         Boolean     @default(false)
+  /// (Batch 30 §5) The team closed this piece for $0 (this admin); `reason` holds the team's reason. Final: no dispute, no Pay more
+  teamClosedById String?
   /// (Batch 9) A call's Pay: the rate typed in the box ($/h, cents), when one was typed; the tester sees it with the amount
   rateCents    Int?
   /// Idempotency: one charge per press, never twice

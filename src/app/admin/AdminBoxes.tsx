@@ -2,6 +2,7 @@ import { adminPage, userTotals, type Kind, type Page } from "@/lib/server/adminL
 import { accountState } from "@/lib/server/accountState";
 import { AccountActions } from "./AccountActions";
 import { PagedList } from "./PagedList";
+import { TeamCloseBox } from "./TeamCloseBox";
 
 // (Owner, Oct 27) Admin-only boxes on a person's profile and on a test's own page, newest first. Never shown to anyone else. (Batch 17 §7) Each is a scroll box
 // that loads the next 25 as it nears its end, its heading keeping the total.
@@ -54,6 +55,8 @@ export async function AdminTestBoxes({ testId, adminId }: { testId: string; admi
   return (
     <section className="card space-y-4 border-amber-300/30" id="admin-boxes" data-admin-only="">
       <h2 className="text-lg font-semibold text-white">For the team (only admins see this)</h2>
+      {/* (Batch 30 §5) This test's open reviews, closed at $0 by the team (Preview first, then the reason). */}
+      <TeamCloseBox id={testId} scope="test" />
       <Box title="Timeline" kind="t-timeline" arg={testId} page={timeline} empty="Nothing recorded yet." />
       <Box title="Contract changes" kind="t-contracts" arg={testId} page={contracts} empty="No testers yet." />
       <Box title="Payments" kind="t-payments" arg={testId} page={payments} empty="None." />
