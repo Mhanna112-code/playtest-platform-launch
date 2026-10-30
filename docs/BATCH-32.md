@@ -18,3 +18,7 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 5. The team's Account page (owner, Oct 29)
 - An admin account's Account → Settings doesn't list Payments or Blocked people (a team account has neither; Payments sent an admin back to the console).
+
+## 6. The team's navigation (owner, Oct 29)
+- An admin account's top bar, styled like the app's own bar (white text with icons; no green text links): **Dashboard** (today's admin console), **Developers** (every developer account, with a search box), **Testers** (every tester account, with a search box), **Tests** (every test, searchable, with its state: today's "Find tests" for admins), and the usual account menu (password, sign out).
+- "Back to the app" goes (an admin has no developer or tester side; it only bounced back to the console). The console's own "Accounts" list can stay lower on the Dashboard.

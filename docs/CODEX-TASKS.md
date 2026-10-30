@@ -62,3 +62,21 @@ Build docs/BATCH-27.md §3 ("Files placed at the cursor in written answers") exa
 Tests (vitest, tests/codex3-paperclip.test.ts) for the list at the end of §3. npm run check green with the schema and build
 folder above. Commit on the branch; don't push or merge. In your final message, list every file and screen you changed.
 ```
+
+## Task 4: the team's navigation (admin top bar)
+
+```
+Read AGENTS.md first and follow it. Task number: 4 (schema codex4, build folder .next-codex4, branch codex/admin-nav,
+worktree C:/Users/march/Projects/pl-codex-4, made from the latest master).
+
+Build docs/BATCH-32.md §6 exactly as written. Where things are: the app's top bar is in src/app/app/layout.tsx; the admin
+console is src/app/admin/page.tsx (its header row has the green "Back to the app" and "Find tests" links; its "Accounts" list is
+<PagedList kind="users">, backed by src/lib/server/adminLists.ts); admins are sent away from developer/tester pages by
+adminAway() in src/lib/server/page-auth.ts. Developers and Testers can be new admin pages (e.g. /admin/developers,
+/admin/testers) reusing the same PagedList / adminLists search with a filter for the side; Tests reuses what /app/find shows an
+admin. Only admins reach these pages (same check as /admin). Phones: the bar wraps or collapses like the app's.
+
+Don't touch the written-answers screens (another task is changing them). Tests (tests/codex4-admin-nav.test.ts): the admin
+sees the four links and no "Back to the app"; the Developers and Testers lists return only that side and search by name/email;
+a non-admin gets the usual refusal on the new pages. npm run check green. Commit on the branch; don't push or merge.
+```
