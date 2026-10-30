@@ -1,18 +1,20 @@
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
-import { CALL_ACTS, PAY_ACTS, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
-import { NOT_REQUIRED, answersMissing } from "@/lib/questions";
+import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
+import { CALL_ACTS, PAY_ACTS, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
-import { applyKeyChange, assignKeyAtJoin, checkTypedKeys, planKeyChange } from "./accessKeys";
-import { givenDeletedLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
+import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
+import { givenDeletedLine, keyGivenEventLine, keyGivenToYouLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
 import { displayName, fmtDate, fmtDateTime, pronouns, stopTimeIn, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
+import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import {
   andList, testClosedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
@@ -21,6 +23,8 @@ import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
 import { blockPartners } from "./blocks";
+import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
+import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
 import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
@@ -307,6 +311,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let spotsChanged = false;
   let switchedToInvite = false;
   let changeId: string | null = null;
+  let keysGiven: Awaited<ReturnType<typeof giveKeysToWorking>> = [];
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -388,7 +393,10 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       });
     }
     if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: lockedNow.length ? lockedNow : undefined, criticalCounts: counts });
-    if (!fields.length && !keysChanged) return t;
+    if (!fields.length && !keysChanged) {
+      keysGiven = await giveKeysToWorking(tx, testId); // (Batch 30 §17)
+      return t;
+    }
     const terms = changedTerms(current, next);
     const what = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])].join(", ");
     termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"].includes(f));
@@ -403,11 +411,21 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable, plan.toReuse);
     }
+    // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
+    keysGiven = await giveKeysToWorking(tx, testId);
     // (Owner, Oct 30, batch 15 section 43) A Save that changed the terms or the names: one entry in the developer's Contract changes.
     const dealFields = fields.filter((f) => DEAL_FIELDS.includes(f));
     if (dealFields.length) {
       const pick = (l: Listing) => Object.fromEntries(dealFields.map((f) => [f, l[f] ?? null]));
       changeId = (await tx.testChange.create({ data: { testId, fields: dealFields, before: pick(current) as Prisma.InputJsonValue, after: pick(next) as Prisma.InputJsonValue } })).id;
+    }
+    // (Batch 30 §15) A Save that changed the listing information: kept before and after, for the testers' session pages ("Updated <time>", before → now, Terms
+    // history). The Mature box and its note are kept together.
+    const infoShown = fields.filter((f) => (LISTING_INFO_FIELDS as readonly string[]).includes(f));
+    if (infoShown.length) {
+      const keep = [...new Set(infoShown.flatMap((f) => (f === "mature" || f === "matureWhy" ? ["mature", "matureWhy"] as const : [f])))];
+      const pick = (l: Listing) => Object.fromEntries(keep.map((f) => [f, l[f] ?? null]));
+      await tx.testEvent.create({ data: { testId, kind: LISTING_VALUES, text: valuesText({ fields: infoShown, before: pick(current), after: pick(next) }) } });
     }
     // (Batch 15 section 24) A rename is recorded in every working tester's contract changes (never a note under a press).
     if (fields.includes("title") || fields.includes("productName")) {
@@ -429,6 +447,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (info.length) await tx.testEvent.create({ data: { testId, kind: "info", text: `${displayName(dev)} changed ${andList(info.map((f) => (f === "joinMode" ? FIELD_NAMES[f] : `the ${FIELD_NAMES[f]}`)))}` } });
     // A title change is info only everywhere (never stops; a press notes it).
     if (fields.includes("title")) await tx.testEvent.create({ data: { testId, kind: "renamed", text: `${displayName(dev)} renamed the test to ${next.title}` } });
+    // (Batch 30 §10) Testers read ONE line per save, everywhere (join page, session page, stop boxes, top boxes): what this save changed, for each page to word.
+    if (listingFields.length) await tx.testEvent.create({ data: { testId, kind: "listing_save", text: saveText({ by: displayName(dev), fields: listingFields, title: next.title, nda: !!next.ndaText }) } });
     changedNames = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])];
     reinvite = fields.some((f) => CLOSING_FIELDS.includes(f));
     spotsChanged = fields.includes("spots");
@@ -453,7 +473,13 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
   const effects = [closedApps.length ? `${closedApps.length} application${closedApps.length === 1 ? "" : "s"} closed` : "", resent.length ? `${resent.length} invite${resent.length === 1 ? "" : "s"} re-sent` : ""].filter(Boolean).join(" · ");
   if (changeId && effects) await db.testChange.update({ where: { id: changeId }, data: { effects } });
-  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps });
+  // (Batch 30 §17) Each tester given a key: a line in their session page's top box and a bell line (the key itself only on their page, never in the bell or email).
+  for (const g of keysGiven) {
+    await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
+    const line = keyGivenToYouLine(displayName(dev), result.title);
+    await notify(g.email, line, [`${line}.`, "Your key is on your session page."], `/app/sessions/${g.contractId}`, { testId });
+  }
+  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps, keysGiven: keysGiven.length });
 }
 
 /** The access keys as an Edit tab needs them to tell what changed elsewhere (the free keys and how many are in use). */
@@ -465,17 +491,8 @@ async function keysState(tx: Tx, testId: string) {
 /** (Batch 15 sections 24 and 43) The fields a Contract changes entry records: the terms and the names. */
 export const DEAL_FIELDS: (keyof Listing)[] = ["productName", "title", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"];
 
-/** (F) The listing info a working tester sees change live: title, description, devices, languages. */
-export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode", "productName", "mature", "matureWhy"];
 /** (Correction 2) The changes that close applications and re-send invites: prices / parts / questions, deadline, devices, languages, description. */
 export const CLOSING_FIELDS: (keyof Listing)[] = ["ndaText", "writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "questions", "deadlineDays", "devices", "languages", "description", "buildUrl"]; // (batch 14) the build link too
-
-const FIELD_NAMES: Record<keyof Listing, string> = {
-  productName: "product name", mature: "Mature (18+) box", matureWhy: "Mature (18+) note", ndaText: "NDA",
-  title: "title", description: "description", buildUrl: "build link", categories: "categories", devices: "devices", languages: "languages",
-  openUntil: "Open until", joinMode: "who can join", spots: "spots", writtenCents: "written answers price", writtenRequired: "written answers required", recordingRequired: "recording required", liveRequired: "live call required", recordingCents: "recording price", liveRateCents: "live call rate",
-  liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
-};
 
 export async function openDraft(dev: U, testId: string, body: Record<string, unknown> = {}) {
   const t = await ownTest(dev.id, testId);
@@ -559,14 +576,15 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const seenAt = body.confirmed === true && boxAt ? boxAt : seenDate(body.seenAt);
   // (Owner, Oct 28, batch 17 section 12) Pay / Pay more on a page opened BEFORE the test stopped, closed or this tester's work ended early: it stops once with the stop as the
   // one change; the second press (its box shown after the stop) goes ahead, as on a page opened after it.
+  // (Batch 30, Oct 29 addition) The stop is listed WITH every other change since the page last showed them (it no longer replaces them), oldest first.
+  const moments: TestEventLike[] = [];
   if (press.stopCheck !== undefined) {
     const stop = (await devStopSince(testId, press.stopCheck || null, loadedOf(body))) ?? (await devPauseSince(testId, loadedOf(body)));
-    if (stop) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [devLine(stop)], ...extra });
+    if (stop) moments.push(stop);
   }
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25's "goes through on the first press") On a stopped, closed or paused test (any cause), and while the
   // developer is held or suspended, every press still allowed follows the SAME stop-once rules as on a running test. The stop, close or pause itself is a change like any
   // other: a page opened before it stops once naming it ("You stopped this test at 3:10 PM.", "The team paused this test at 3:10 PM.").
-  const moments: TestEventLike[] = [];
   if (press.stopCheck === undefined && !press.inState) {
     const stop = await devStopSince(testId, null, loadedOf(body));
     if (stop) moments.push(stop);
@@ -916,8 +934,9 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
   // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
   const answers = qs.map((_, i) => sentAnswers[i] ?? "");
-  const missing = answersMissing(qs, answers);
-  if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at });
+  // (Batch 30 §14) Each answer given is at least 50 characters (answerMin): "Each answer needs at least 50 characters." with which question (and how long it is).
+  const missing = answersMissing(qs, answers, answerMin());
+  if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
   const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "";
   // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
   const long = checkWrittenLength([...answers, notes]);
@@ -926,14 +945,17 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   await testerSendGate(contractId, body);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  const { sub, updated } = await db.$transaction(async (tx) => {
+  const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    if (existing?.review) throw new HttpError(409, "paid", "Your written answers were already paid for, so they can't be changed. Send anything new in the chat.");
+    // (Batch 30 §2) A paid part can be sent again (an updated version); only an old rejection or the team's $0 closure stays locked.
+    const locked = resendRefusal(existing?.review, "written");
+    if (locked) throw new HttpError(409, "paid", locked);
+    const paid = !!existing?.review;
     // (Owner, Oct 29, batch 13 section 8) The whole set is stored: each question with its answer. Sending replaces the sent version; an earlier set it replaces (sent
     // for questions the tester has since switched away from) moves to the developer's "Previous questions and answers", and (DEFAULT) the new set is priced at the
     // current contract's written price.
@@ -943,20 +965,28 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     // (Owner, Oct 28, batch 20 section 26) A resend identical to the last send (the same answers and notes, no new attachment) is refused: no new piece, no bell.
     if (existing && !replacesEarlier && items.every((x, i) => x.answer === before[i]?.answer) && notes === existing.notes
       && !(await tx.recording.count({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
+    // (Batch 30 §3) An update of a late piece stays late; one sent after the deadline is late (and Charge, if it had opened, no longer applies).
+    const late = !!existing?.late || isLate(c.dueAt, now);
     const data = {
-      answers: items as unknown as Prisma.InputJsonValue, notes, late: isLate(c.dueAt, now), updatedAt: now, payBy: payByFrom(now),
-      ...(replacesEarlier ? { setUntil: null, agreedCents: c.writtenCents, prevSets: pushPrev(prevSetsOf(existing!.prevSets), { until: (existing!.setUntil ?? now).toISOString(), items: before }) as unknown as Prisma.InputJsonValue } : {}),
+      answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now,
+      // (Batch 30 §2) An update of a paid piece keeps its price and review; it only marks the update (the developer's Pay more answers it).
+      ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+      ...(replacesEarlier ? { setUntil: null, ...(paid ? {} : { agreedCents: c.writtenCents }), prevSets: pushPrev(prevSetsOf(existing!.prevSets), { until: (existing!.setUntil ?? now).toISOString(), items: before }) as unknown as Prisma.InputJsonValue } : {}),
     };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });
     // (Batch 11) Files and recordings attached to the written part go with it.
     await tx.recording.updateMany({ where: { contractId, part: "written", uploadedAt: { not: null } }, data: { submissionId: sub.id } });
-    await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
-    return { sub, updated: !!existing };
+    // (Batch 30 §2) An update after it was paid: below the cap it waits in Needs you (a "sent" line); at the cap a quiet line only.
+    const afterPaid = paid ? await paidUpdateRoom(tx, sub.id, c.testId) : null;
+    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "written answers"), false, {}, c.id);
+    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
+    return { sub, updated: !!existing, afterPaid };
   });
   await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-written`);
-  await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
+  if (afterPaid) await notifyPaidUpdate(c0, tester, sub.id, "written answers", afterPaid);
+  else await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
   return sub;
 }
 

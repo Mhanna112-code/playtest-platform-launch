@@ -52,7 +52,8 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   if (!user) {
     // Not an account (nowhere for a bell or a summary to go): the one email goes at once.
     try {
-      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`, "", "Playtest"].join("\n") });
+      // (Batch 30 §19) Not an account: no notification settings to link to.
+      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`, "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}${path}` }, settings: false });
     } catch (e) {
       console.error("[email] failed:", subject, (e as Error).message);
     }
@@ -129,7 +130,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
       const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
-      await sendEmail({ to: u.email, subject, text: [...emailLines(items, line), "", "Playtest"].join("\n") });
+      await sendEmail({ to: u.email, subject, text: [...emailLines(items, line), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` } });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
     } catch (e) {

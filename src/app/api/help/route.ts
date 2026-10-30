@@ -5,6 +5,7 @@ import { TOPICS } from "@/lib/helpTopics";
 import { db } from "@/lib/db";
 import { CONTACT_LIMIT_PER_DAY, LIMITS, contactLimitLine } from "@/lib/limits";
 import { readText } from "@/lib/server/http";
+import { appUrl } from "@/lib/server/auth";
 
 // "Contact us": the message goes to the team (every ADMIN_EMAILS address, or the outbox when none is set) with the sender's name and email.
 // (Owner, Oct 27) It is the appeal path, so a suspended or held account of either role can always send: requireUser, never requireActive.
@@ -23,7 +24,7 @@ export async function POST(req: Request) {
     await db.contactMessage.create({ data: { userId: u.id, topic, message } });
     const team = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
     const text = `From ${u.name || "(no name)"} <${u.email}>\nAbout: ${topic}\n\n${message}`;
-    for (const to of team.length ? team : ["team@playtest.local"]) await sendEmail({ to, subject: `Contact us: ${topic}`, text });
+    for (const to of team.length ? team : ["team@playtest.local"]) await sendEmail({ to, subject: `Contact us: ${topic}`, text, button: { label: "Open the admin console", url: `${appUrl()}/admin#contact` } });
     return ok({ sent: true });
   });
 }

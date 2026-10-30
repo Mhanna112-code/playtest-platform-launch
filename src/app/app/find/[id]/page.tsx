@@ -14,8 +14,11 @@ import { JoinBox } from "./JoinBox";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
+import { PageLoaded } from "@/components/PageLoaded";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { qRequired, qText } from "@/lib/questions";
+import { applyDeclinedLine, invitesV, joinPageV, rejoinDeclinedLine } from "@/lib/server/pulseV";
+import { JoinWatch } from "./JoinWatch";
+import { ANSWER_MIN_LINE, qRequired, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
 import { ClampText } from "@/components/ClampText";
@@ -44,6 +47,10 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const from = (await searchParams)?.from;
   const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  // (Batch 30 §8) The invitations fingerprint as of BEFORE the page reads the test and the invite: AutoRefresh starts from it.
+  const invitesFp = await invitesV(u.id);
+  // (Owner's repro, Oct 29, batch 30 §8) The same for their application or ask to rejoin (JoinWatch).
+  const joinFp = await joinPageV(u.id, id);
   const t = await db.test.findUnique({ where: { id }, include: { developer: true } });
   // (Batch 17 section 8) The team opens any test from their Find tests, drafts too.
   if (!t || (t.status === "draft" && !isAdmin(u))) notFound();
@@ -72,6 +79,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const ratedHere = mine ? (await db.rating.count({ where: { contractId: mine.id } })) > 0 : false;
   const invite = await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } });
   const canRejoin = !!mine && canAskToRejoin(mine, ratedHere);
+  const myApp = await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } });
   const seenAt = new Date().toISOString();
   // (Owner, Oct 27) A paused test (a hold, a suspension or the team's pause) is not listed and not joinable. Someone who joined, was invited or applied still sees it (with a Paused tag);
   // anyone else opening the link reads "This test isn't available right now."
@@ -111,8 +119,10 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       <p><a href="/app/find">← All tests</a></p>
       {isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}
       {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
+      {/* (Batch 30 §12) The seen marker starts at this page's first load in the tab: a redraw (the needs covered, an invite re-sent) never skips a change. */}
+      <PageLoaded at={seenAt} />
       {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}
-      {invite && <AutoRefresh query="invites=1" />}
+      {invite && <AutoRefresh query="invites=1" v={invitesFp} />}
       <section className="card space-y-4" id="listing">
         <div className="flex items-start gap-4">
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />
@@ -185,6 +195,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           ) : (
             <p className="text-sm text-slate-400">Where you got stuck, any bugs, and what you liked.</p>
           )}
+          {/* (Batch 30 §14) The answers' minimum, as on Post and Edit. */}
+          {l.questions.length > 0 && <p className="text-xs text-slate-400" data-questions-rule="">{ANSWER_MIN_LINE}</p>}
         </div>
       </section>
 
@@ -236,6 +248,9 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
       {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && !blocked && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
       {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && !blocked && <p className="info">You can&apos;t ask to rejoin this test.</p>}
+      {/* (Owner's repro, Oct 29, batch 30 §8) Their application or ask, followed live: accepted (the line and Go to your session →), declined (the line below). */}
+      {t.developerId !== u.id && !isAdmin(u) && <JoinWatch testId={t.id} v={joinFp} />}
+      {t.developerId !== u.id && !isAdmin(u) && myApp?.status === "declined" && <p className="info" data-app-declined="">{myApp.kind === "rejoin" ? rejoinDeclinedLine : applyDeclinedLine(t.title)}</p>}
       {/* (Batch 17 section 8) The team never gets Join / Apply. */}
       {isAdmin(u) && t.developerId !== u.id ? null : t.developerId === u.id ? (
         <div className="card flex flex-wrap items-center gap-3">
@@ -273,7 +288,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             devName={dev}
             spotsLeft={t.spots - testersIn}
             dueIfNow={dueIfNow}
-            application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt, kind: a.kind } : null))}
+            application={myApp ? { status: myApp.status, changed: !!myApp.changedAt, kind: myApp.kind } : null}
           />
         </div>
       )}

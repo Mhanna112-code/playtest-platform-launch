@@ -10,6 +10,7 @@ import { callsLeftWarning } from "@/lib/callMeasure";
 import { fmtTime } from "@/lib/format";
 import { ReasonQuote } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
+import { PageLoaded } from "@/components/PageLoaded";
 import { devRestricted } from "@/lib/restricted";
 import { PAUSED_ALERTS, STOPPED_ALERTS } from "@/lib/alerts";
 import { TestBanner, allowedLine, type BannerCause } from "./TestBanner";
@@ -39,7 +40,6 @@ import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
 import { autoChargeLine, paidMostLine } from "@/lib/rules";
-import { T, renderTimes } from "@/lib/tz";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
@@ -67,7 +67,9 @@ import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision } from "@/components/Excerpts";
+import { UPDATED_AT_CAP, pieceDay, teamClosedLine, updateRowLine, updateWaiting } from "@/lib/moneyLines";
 
+import { testV } from "@/lib/server/pulseV";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
@@ -79,6 +81,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
   const { saved, offered, skipped, closed, resent, failed } = await searchParams;
   const seenAt = new Date().toISOString();
+  // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
+  const pageV = await testV(u.id, id);
   const t = await db.test.findUnique({
     where: { id },
     include: {
@@ -273,7 +277,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (restricted) {
     return (
       <>
-        <AutoRefresh query={`test=${t.id}`} />
+        <AutoRefresh query={`test=${t.id}`} v={pageV} />
         {banner}
         <TopPanel
           id={t.id} title={t.title} productName={t.productName} ignoredAlerts={u.ignoredAlerts} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={null}
@@ -292,6 +296,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           }))}
         />
         <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+        <PageLoaded at={seenAt} />
         <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} />
         {/* (Batch 17 §11) A charge made while away (e.g. a retry during the pause) that the bank wants confirmed: confirmed here, each line naming its piece. */}
         {bankRows.length > 0 && (
@@ -350,10 +355,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const st = rateStates.get(c.id);
     return st?.kind === "open" && st.endsAt ? [{ id: c.id, line: rateNeedsLine(displayName(c.tester), st.endsAt, now) }] : [];
   });
-  const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
+  // (Batch 30 §2) Updated versions sent after a piece was paid, below its cap while Pay more is open: each its own Needs you row with the piece's Pay more box.
+  const updates = restricted || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
+    .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
+  const needsCount = updates.length + pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
   return (
     <>
-      <AutoRefresh query={`test=${t.id}`} />
+      <AutoRefresh query={`test=${t.id}`} v={pageV} />
       <TopPanel
         id={t.id}
         title={t.title}
@@ -395,6 +403,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {banner}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
       <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+      {/* (Batch 30) The seen marker starts at this page's first load in the tab: a redraw never skips a change the page hasn't shown. */}
+      <PageLoaded at={seenAt} />
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
@@ -445,7 +455,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} />
                   </AnswersBox>
                   <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box}
-                    note={x.s!.agreedCents != null && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(fmtDate(chargeOpensAt(x.s!, t, x.c, now)!).replace(/, \d{4}$/, ""), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
+                    /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
+                    note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
                 </>
               ) : (
@@ -455,7 +466,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
                   <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box}
                     /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
-                    note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(renderTimes(T(x.x!.payBy, "date"), u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
+                    note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
                     minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
                     listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
@@ -467,6 +478,19 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </details>
             );
           })}
+          {updates.map(({ c, s: x }) => (
+            <div key={`update-${x.id}`} id={`update-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
+              <p className="text-sm font-medium"><a href={`/app/testers/${c.testerId}`}>{displayName(c.tester)}</a> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</p>
+              <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
+              <AnswersBox>
+                {x.kind === "written" && <SetView items={itemsOf(x.answers, writtenQuestions(c))} />}
+                {x.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><Formatted text={x.notes} /></div>}
+                <AttachmentList items={x.recordings.filter((r) => r.uploadedAt)} />
+              </AnswersBox>
+              <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
+            </div>
+          ))}
         </NeedsYou>
       )}
 
@@ -528,15 +552,19 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
                       {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
-                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
+                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                       )}
                       {/* (Owner, Oct 29, batch 28 §14) At its cap, where Pay more was (grey). */}
-                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && payMore.open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && (
+                      {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && (
                         <span className="w-full text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(r.sub.id)!.paid)}</span>
                       )}
-                      {r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <span className="w-full text-sm text-slate-300" data-paid-zero="">{paidZeroLine(r.sub.review.reason)}</span>}
+                      {/* (Batch 30 §2) An update the tester sent at the cap: nothing more can be paid, so it isn't in Needs you. */}
+                      {r.sub?.paidUpdateAt && r.sub.review && !r.sub.review.rejected && !r.sub.review.teamClosedById && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && <span className="badge" data-updated-at-cap="">{UPDATED_AT_CAP}</span>}
+                      {/* (Batch 30 §5) The team closed it for $0, with its reason. */}
+                      {r.sub?.review?.teamClosedById ? <span className="w-full text-sm text-slate-300" data-team-closed="">{teamClosedLine(r.sub.review.reason)}</span>
+                        : r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <span className="w-full text-sm text-slate-300" data-paid-zero="">{paidZeroLine(r.sub.review.reason)}</span>}
                       {r.sub?.review?.rejected && <span className="badge border-rose-400/40 text-rose-200">Rejected</span>}
                       {/* (Batch 17 §11) A charge on this part made while you were away, waiting for your bank. */}
                       {r.sub && bankAt(r.sub.id)}
@@ -579,13 +607,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
                             {tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>}
                             {bankAt(x.id)}
-                            {x.review && !x.review.rejected && !restricted && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                            {x.review?.teamClosedById && <p className="text-sm text-slate-300" data-team-closed="">{teamClosedLine(x.review.reason)}</p>}
+                            {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                               <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                             )}
-                            {x.review && !x.review.rejected && !restricted && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
+                            {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
                               <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
                             )}
                           </li>

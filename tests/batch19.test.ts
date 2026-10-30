@@ -396,7 +396,8 @@ describe("batch 19 section 5: the smaller bugs", () => {
 
 describe("batch 19 section 7: a required tick about Charge on Post and Edit", () => {
   // (Batch 28 §21) It covers the automatic charge of listed calls too.
-  const TICK = "I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed, and listed calls 7 days after they take place.";
+  // (Batch 30 §3) Only work sent by the tester's deadline can be charged.
+  const TICK = "I understand that a tester can charge my card, up to the listing price, for work they sent by their own deadline that I haven't paid once 7 days have passed since they sent it and that deadline has passed, and listed calls 7 days after they take place.";
   const refusedTick = (r: { status: number; body: { error?: { code: string; errors?: string[] } } }) => {
     expect(r.status).toBe(400);
     expect(r.body.error?.code).toBe("bad_listing");

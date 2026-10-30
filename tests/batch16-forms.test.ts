@@ -79,7 +79,7 @@ describe("section 10: one rule for every form with field mistakes", () => {
     expect(src("app/signup/page.tsx")).toContain('data-match="terms of use"');
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('data-match="^Tick “I understand"');
     expect(src("components/RateBox.tsx")).toContain('data-match="stars"');
-    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("find={(m) => (m === ANSWER_ONE ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED");
+    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED");
   });
   it("boxes that aren't forms are their own root; a component's own red line is data-red-msg", () => {
     for (const f of ["app/app/tests/[id]/PayBox.tsx", "app/app/sessions/[id]/ChoiceBox.tsx", "components/RateBox.tsx", "components/CancelMenu.tsx", "app/admin/DisputeDecision.tsx", "app/app/tests/[id]/InvitePanel.tsx"])

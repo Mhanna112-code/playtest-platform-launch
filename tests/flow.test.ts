@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as testsPOST } from "@/app/api/tests/route";
-import { json, makeUser, req } from "./helpers";
+import { json, makeUser, req, saveRe } from "./helpers";
 import { act, joined, listingBody, sact, seen, setup } from "./fixtures";
 
 const later = () => new Promise((r) => setTimeout(r, 30));
@@ -68,7 +68,7 @@ describe("join and contract snapshots", () => {
     const first = await act(testId, "join", ana.cookie, { seenAt: new Date(Date.now() - 60_000).toISOString() });
     expect(first.status).toBe(409);
     expect(first.body.error).toMatchObject({ code: "stop_once" });
-    expect(first.body.error.changes[0].text).toBe("The listing was edited: written answers price");
+    expect(first.body.error.changes[0].text).toMatch(saveRe("Nora Lane", "written answers price")); // (batch 30 §10) one line per save
     const second = await act(testId, "join", ana.cookie, { seenAt: new Date(Date.now() - 60_000).toISOString(), confirmed: true });
     expect(second.status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: second.body.sessionId } })).writtenCents).toBe(800);

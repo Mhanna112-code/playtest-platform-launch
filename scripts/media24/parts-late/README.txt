@@ -1,0 +1,1 @@
+Oct 29 late screenshots-only run: assemble with scripts/media24/assemble-style insertion of nv.js, q.js (and the evening parts pA/pB/pC/pE from the m30 scratch) before the report manifest marker; nv.js turns off video and cuts pictures from the screen.

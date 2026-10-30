@@ -53,7 +53,8 @@ export async function testerRateState(contractId: string, now = new Date()): Pro
   const closeOut = await closeOutOf(c.testId, now);
   if (closedOut(closeOut, now)) return { kind: "closed", line: ratingClosedLine(fmtDate(closeOut!)) };
   // A part or listed call they can still Charge or Let it go (Charge never happens on its own: they settle it first).
-  if ([...c.submissions, ...done].some((x) => !x.review && x.choiceOfferedAt)) return { kind: "disabled", line: RATE_CHARGE_FIRST };
+  // (Batch 30 §3) Late work never has a Charge to settle.
+  if ([...c.submissions, ...done].some((x) => !x.review && x.choiceOfferedAt && !("late" in x && x.late))) return { kind: "disabled", line: RATE_CHARGE_FIRST };
   if (await db.dispute.count({ where: { contractId, status: "open" } })) return { kind: "disabled", line: RATE_MY_DISPUTE };
   // Work still inside its review window (sent, not reviewed, Charge not open yet); an unlisted part stops blocking at its review date (as before).
   const waitSubs = c.submissions.filter((s) => !s.review && !chargeIsOpen(s, c.test, c, now));

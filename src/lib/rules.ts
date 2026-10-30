@@ -28,7 +28,8 @@ export const HIGH_PART_TICK = "I confirm this part pays more than $200.";
  * after it links to the Terms' payments section (a new tab). An unticked press is refused with PAY_RULES_TICK_MISSING, red at the tick.
  */
 // (Owner, Oct 29, batch 28 §21) It covers the automatic charge of listed calls too.
-export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work I haven't paid once 7 days have passed since they sent it and their own deadline has passed, and listed calls 7 days after they take place.";
+// (Batch 30 §3) Charge applies to listed work sent by the tester's deadline.
+export const PAY_RULES_TICK = "I understand that a tester can charge my card, up to the listing price, for work they sent by their own deadline that I haven't paid once 7 days have passed since they sent it and that deadline has passed, and listed calls 7 days after they take place.";
 export const PAY_RULES_LINK = "How payments work";
 export const PAY_RULES_TICK_MISSING = "Tick to confirm you understand how payments work.";
 /** The Terms' payments section (section 4, How payments work). */
@@ -341,6 +342,22 @@ export const partHighLine = (name: string) => `The ${name} price can be at most 
 export const rateLowLine = () => `The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`;
 export const rateHighLine = () => `The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`;
 export const DESCRIPTION_REQUIRED = "Say what testers should do (What to do).";
+/** (Owner, Oct 29, batch 30 §18) "Name of this test" and "What should testers do?" are at least 10 characters (trimmed) on Post, Edit and posting a draft. */
+export const LISTING_MIN_CHARS = 10;
+/**
+ * The minimum the server checks: LISTING_MIN_CHARS, except where the LISTING_MIN_CHARS setting says otherwise. Only the test suite sets it (to 1, since the tests written
+ * before batch 30 post short titles such as "Run"; the batch 30 tests set it back to 10). Production never sets it.
+ */
+export function listingMin() {
+  const v = typeof process !== "undefined" ? Number(process.env?.LISTING_MIN_CHARS) : NaN;
+  return Number.isInteger(v) && v >= 1 ? v : LISTING_MIN_CHARS;
+}
+/** "Name of this test: at least 10 characters (6 so far)." / "What should testers do: at least 10 characters (6 so far)." (the field's red line, the server's refusal) */
+export const minCharsLine = (field: string, n: number) => `${field}: at least ${LISTING_MIN_CHARS} characters (${n} so far).`;
+export const TITLE_FIELD = "Name of this test";
+export const STEPS_FIELD = "What should testers do";
+/** The counter while a field is under its minimum: "6 / 10 minimum". */
+export const minCounter = (n: number) => `${n} / ${LISTING_MIN_CHARS} minimum`;
 
 export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: ListingCtx = {}): string[] {
   const errs: string[] = [];
@@ -365,8 +382,11 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   else if (l.productName.length > LIMITS.productName && isNew("productName")) errs.push(`Keep the product name to ${LIMITS.productName} characters.`);
   if (!l.title.trim()) errs.push("Give the test a title.");
   else if (l.title.length > LIMITS.testName && isNew("title")) errs.push(`Keep the title to ${LIMITS.testName} characters.`);
+  // (Batch 30 §18) At least 10 characters; an older test's shorter title or steps stay until that field is edited.
+  else if (l.title.trim().length < listingMin() && isNew("title")) errs.push(minCharsLine(TITLE_FIELD, l.title.trim().length));
   if (!l.description?.trim()) { if (isNew("description")) errs.push(DESCRIPTION_REQUIRED); }
   else if (l.description.length > LIMITS.whatToDo && isNew("description")) errs.push(`Keep What to do to ${LIMITS.whatToDo.toLocaleString("en-US")} characters.`);
+  else if (l.description.trim().length < listingMin() && isNew("description")) errs.push(minCharsLine(STEPS_FIELD, l.description.trim().length));
   if (l.mature && (l.matureWhy ?? "").trim().length < MATURE_WHY_MIN && (isNew("mature") || isNew("matureWhy"))) errs.push((l.matureWhy ?? "").trim() ? MATURE_WHY_SHORT : MATURE_WHY_REQUIRED);
   if ((l.ndaText ?? "").length > LIMITS.nda && isNew("ndaText")) errs.push(NDA_TOO_LONG);
   if (!l.categories?.length) errs.push("Tick at least one category.");
@@ -446,7 +466,7 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
  */
 export const STOP_ONCE_KINDS = ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed"] as const;
 export const CALL_KINDS = ["booked", "confirmed", "cancelled", "offered", "removed"] as const;
-export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string };
+export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean };
 
 /** Events since the page's "seen" marker that stop a press once, oldest first. */
 export function stopOnceChanges(events: TestEventLike[], seenAt: Date, kinds: readonly string[] = STOP_ONCE_KINDS) {
@@ -478,7 +498,8 @@ export const DEV_STOP_KINDS = [
 
 /** (Owner, Oct 29, batch 14) Kinds the developer's live box shows quietly (never a stop-once reason, never in the under-button notice, no bell). */
 // (Owner, Oct 28, batch 20 section 24) "rated": a tester whose part had ended rated you: a live-box line only, never a stop.
-export const DEV_QUIET_KINDS = ["terms", "key", "rated"] as const;
+// (Batch 30 §2) "sentpaid": a tester sent an updated version of a piece already paid the most it can be: a quiet line only (nothing more can be paid).
+export const DEV_QUIET_KINDS = ["terms", "key", "rated", "sentpaid"] as const;
 /** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
 export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 
@@ -491,6 +512,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   spot_open: "follows a tester leaving / being ended or the developer's own spots edit: those lines show instead",
   edited: "the developer's own edit (reason E from another tab; F for listing info)",
   edited_spots: "the developer's own edit of spots (reason E from another tab)",
+  listing_save: "(batch 30 section 10) the testers' one line per listing save; the developer's own save is reason E from another tab (with its edited / info lines)",
   opened: "the developer's own Open (reason E from another tab)",
   stopped: "the developer's own Stop (reason E from another tab)",
   ended: "the developer's own End early (reason E from another tab)",
@@ -502,6 +524,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
   lowered: "(batch 15 section 40) the developer's own Lower the length (reason E from another tab)",
+  sentpaid: "(batch 30 §2) a tester updated a piece already paid the most it can be: one quiet line in the live box (DEV_QUIET_KINDS), never a stop; nothing more can be paid",
 };
 
 /** (Owner, NEWEST+3) A declined manual Pay, as the tester reads it (never "failed", "declined" or "card"). */
@@ -516,7 +539,7 @@ export const RENAMED = "renamed";
 // (Batch 15 section 24) renamedNote is gone: a rename never leaves a note under a press; it is recorded in the contract changes.
 
 /** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
-export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open"] as const;
+export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open", "listing_save"] as const;
 /** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */
 export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   payment: "the developer's own payments (batch 11: a chargeback reversed in their favour) are never shown to testers",
@@ -550,6 +573,7 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   paused: "a hold shows as the paused banner and refusals",
   resumed: "the paused banner goes away",
   subscription: "the developer's own subscription: testers never see it",
+  sentpaid: "(batch 30 §2) the tester's own update of a paid piece (reason E from another tab)",
 };
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);

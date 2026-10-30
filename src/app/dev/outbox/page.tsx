@@ -9,7 +9,7 @@ export const dynamic = "force-dynamic";
 export const metadata = { title: "Dev outbox · Playtest" };
 
 // Emails written instead of sent (no RESEND_API_KEY). Only outside production, or with ALLOW_DEV_OUTBOX=1, and (batch 15 section 41, M3) only for an admin: it shows
-// reset links.
+// reset links. (Batch 30 §19) Each email shows as it arrives (its branded HTML, in a sandboxed frame: no scripts, links open in a new tab), with the plain text under it.
 export default async function Outbox() {
   if (!outboxEnabled()) notFound();
   const u = await getPageUser();
@@ -27,15 +27,28 @@ export default async function Outbox() {
             To {m.to} · {m.createdAt.toISOString().replace("T", " ").slice(0, 19)} UTC
           </p>
           <b>{m.subject}</b>
-          {m.text.split("\n").map((line, i) =>
-            /^https?:\/\//.test(line) ? (
-              <a key={i} href={line} className="block break-all">
-                {line}
-              </a>
-            ) : (
-              <p key={i} className="text-sm">{line || " "}</p>
-            ),
-          )}
+          {m.html ? (
+            <iframe
+              title={m.subject}
+              sandbox="allow-popups allow-popups-to-escape-sandbox"
+              srcDoc={m.html.replace("<head>", '<head><base target="_blank">')}
+              className="block w-full rounded-lg border border-white/10 bg-white"
+              style={{ height: 520 }}
+              data-email-html=""
+            />
+          ) : null}
+          <details open={!m.html}>
+            <summary className="note cursor-pointer">Plain text</summary>
+            {m.text.split("\n").map((line, i) =>
+              /^https?:\/\//.test(line) ? (
+                <a key={i} href={line} className="block break-all">
+                  {line}
+                </a>
+              ) : (
+                <p key={i} className="text-sm">{line || " "}</p>
+              ),
+            )}
+          </details>
         </div>
       ))}
     </main>

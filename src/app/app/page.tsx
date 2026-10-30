@@ -3,6 +3,7 @@ import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSig
 import { db } from "@/lib/db";
 import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { invitesV } from "@/lib/server/pulseV";
 import { RatingsToGive } from "./RatingsToGive";
 import { BankToConfirm } from "./BankToConfirm";
 import { LiveTop } from "@/components/LiveTop";
@@ -16,7 +17,6 @@ import { StatTile } from "@/components/StatTile";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
 import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
-import { T as tzToken, renderTimes as tzRender } from "@/lib/tz";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests } from "@/lib/server/tests";
@@ -45,6 +45,8 @@ import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } from "@/lib/rules";
 import { closeOutSoon, payClosesLine } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
+import { updateRoomLeft } from "@/lib/server/paidUpdates";
+import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
 
 export const metadata = { title: "Home · Playtest" };
 import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
@@ -188,6 +190,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work still waits for review when their payout account was connected.
       if (!testerPayable(c.tester)) continue;
       for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b></>, cta: "Review" });
+      // (Batch 30 §2) An updated version sent after a piece was paid, while it can still be paid more: in Needs review too (it opens the update's row).
+      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, text: <>sent an updated version of their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b> after you paid</>, cta: "Review" });
       // (Batch 15 section 40) A call that took place, once its measured length is final: pay it.
       for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>had a live call for <b className="text-white">{t.title}</b>: pay it</>, cta: "Review" });
       for (const s of c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide)) items.push({ key: `d-${s.id}`, at: s.dispute!.createdAt, href: `/app/tests/${t.id}#item-dispute-${s.dispute!.id}`, who, text: <>disputed what you paid on <b className="text-white">{t.title}</b>: add your side</>, cta: "Answer" });
@@ -381,6 +385,8 @@ const PausedTag = () => <span className="badge border-amber-300/40 text-amber-20
 async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const userId = user.id;
   const suspended = !!user.testerSuspendedAt;
+  // (Batch 30 §8) The invitations fingerprint as of BEFORE the lists below are read: AutoRefresh starts from it, so an invite created after this render is caught.
+  const invitesFp = suspended ? "" : await invitesV(userId);
   const contracts = await db.contract.findMany({
     where: { testerId: userId },
     orderBy: { joinedAt: "desc" },
@@ -439,7 +445,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   // "Charge or cancel": unreviewed parts where Charge has opened (7 days and the test's Open until), by test, newest first; hidden while suspended.
   const paidFor = (sid: string) => payments.filter((p) => p.submissionId === sid && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const chargeable = suspended ? [] : contracts
-    .map((c) => ({ c, parts: c.submissions.filter((s) => !s.review && s.choiceOfferedAt && !chargeShut(s.id) && chargeAmount(s.agreedCents, paidFor(s.id)) > 0) }))
+    .map((c) => ({ c, parts: c.submissions.filter((s) => !s.review && !s.late && s.choiceOfferedAt && !chargeShut(s.id) && chargeAmount(s.agreedCents, paidFor(s.id)) > 0) }))
     .filter((x) => x.parts.length > 0)
     .sort((a, b) => Math.max(...b.parts.map((s) => s.sentAt.getTime())) - Math.max(...a.parts.map((s) => s.sentAt.getTime())));
   // (Owner, Oct 28) A suspended tester's session pages are closed: nothing here links to them.
@@ -584,12 +590,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {waiting.map(({ c, s }) => {
               // (Batch 26 section 6) A listed part: when Charge opens (its review date, moved by pauses like the date itself). Not for an unlisted part.
               const listed = (s.kind === "recording" ? c.recordingCents : c.writtenCents) != null;
-              const opens = listed ? chargeOpensAt(s, c.test, c, now) : null;
+              // (Batch 30 §3) Late listed work never opens Charge: it says so instead.
+              const opens = listed && !s.late ? chargeOpensAt(s, c.test, c, now) : null;
               const inner = (
                 <>
                   <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
-                  {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), tzRender(tzToken(opens, "date"), user.timeZone))}</p>}
+                  {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), pieceDay(opens, user.timeZone))}</p>}
+                  {listed && s.late && <p className="basis-full text-xs text-slate-400" data-sent-late="">{lateSentLine(fmtDate(c.dueAt), displayName(c.test.developer))}</p>}
                 </>
               );
               return (
@@ -625,7 +633,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {/* (Owner, Oct 28, batch 16 section 32) Invitations follow every close live: the page refreshes on its poll, and the live box says which invite closed. */}
       {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
       {!suspended && <RatingsToGive user={user} side="tester" />}
-      {!suspended && <AutoRefresh query="invites=1" />}
+      {!suspended && <AutoRefresh query="invites=1" v={invitesFp} />}
       {!suspended && <LiveTop scope="invites:me" seenAt={now.toISOString()} />}
       {!suspended && invites.length > 0 && (
         <section className="space-y-3" id="invitations">

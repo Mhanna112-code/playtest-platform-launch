@@ -11,6 +11,13 @@ import { clearFailedEmails } from "@/lib/server/email";
 import { closePausedTest, extendPauseClosure } from "@/lib/server/pauseClosure";
 import { adminStopTest, deleteAccount, pauseTest, previewSuspension, reinstateAccount, seenFromBody, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
 import { withAccountState } from "@/lib/server/accountState";
+import { previewTeamClose, teamClose, type TeamCloseScope } from "@/lib/server/teamClose";
+
+/** (Batch 30 §5) The scope of a team closure: every test of a developer, or one test. */
+function teamCloseScope(id: string, body: Record<string, unknown>): TeamCloseScope {
+  if (!id) throw new HttpError(404, "not_found", "That account or test doesn't exist.");
+  return body.scope === "test" ? { testId: id } : { developerId: id };
+}
 
 type Ctx = { params: Promise<{ action: string }> };
 
@@ -25,7 +32,7 @@ export async function POST(req: Request, { params }: Ctx) {
     const res = await run(u, action, id, body);
     // (Batch 15 section 21) Every admin action is kept with the admin who did it (a preview changes nothing). (Batch 22 section 5) Lift the pause keeps its own, with
     // the lift itself, so a second admin's press names the first.
-    if (action !== "preview-suspension" && action !== "unpause-test") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id } });
+    if (action !== "preview-suspension" && action !== "unpause-test" && action !== "preview-team-close") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id } });
     return res;
   });
 }
@@ -99,6 +106,11 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         return ok(await (await import("@/lib/server/outages")).approveGap(u.id, id));
       case "dismiss-gap":
         return ok(await (await import("@/lib/server/outages")).dismissGap(id));
+      // (Batch 30 §5) Close a developer's open reviews at $0 (id = the developer, scope "developer"; or id = a test, scope "test"): Preview first, then the reason.
+      case "preview-team-close":
+        return ok(await previewTeamClose(teamCloseScope(id, body)));
+      case "team-close":
+        return ok(await teamClose(u.id, teamCloseScope(id, body), body));
       case "extend-pause":
         return ok(await extendPauseClosure(id, body.days));
       case "close-paused":

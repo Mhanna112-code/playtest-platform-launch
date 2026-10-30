@@ -80,7 +80,7 @@ export async function adminDailyEmails(now = new Date()) {
     if (items.length) {
       try {
         const tz = (await db.user.findUnique({ where: { id: a.id }, select: { timeZone: true } }))?.timeZone;
-        await sendEmail({ to: a.email, subject: `Playtest admin: ${items.length} item${items.length === 1 ? "" : "s"} for the team`, text: renderTimes([...items.map((i) => (i.startsWith("   ") ? i : `• ${i}`)), "", "Playtest"].join("\n"), tz) });
+        await sendEmail({ to: a.email, subject: `Playtest admin: ${items.length} item${items.length === 1 ? "" : "s"} for the team`, text: renderTimes([...items.map((i) => (i.startsWith("   ") ? i : `• ${i}`)), "", "Playtest"].join("\n"), tz), button: { label: "Open the admin console", url: url("/admin") } });
         sent++;
       } catch (e) {
         console.error("[email] admin daily:", (e as Error).message);

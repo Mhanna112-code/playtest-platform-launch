@@ -12,6 +12,7 @@ import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
 import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
 import { loadedOf, stopBox, testerPauseSince, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
+import { testerGate } from "@/lib/server/testerGate";
 import { leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
@@ -74,7 +75,24 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
   if (!MOMENT_ACTIONS.has(action)) return;
   const loaded = loadedOf(body);
   const stop = (await testerStopSince(contractId, loaded)) ?? (await testerPauseSince(contractId, loaded));
-  if (stop) stopBox([stop]);
+  if (!stop) return;
+  // (Batch 30, Oct 29 addition) ONE box: the stop with every other change the page hadn't shown (the press's own reasons), oldest first; the second press goes ahead.
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, testId: true } });
+  let more: { text: string; at: Date | string }[] = [];
+  let extra: Record<string, unknown> = {};
+  if (c) {
+    try {
+      await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: action === "terms" });
+    } catch (e) {
+      if (e instanceof HttpError && e.code === "stop_once" && Array.isArray(e.data?.changes)) {
+        more = e.data.changes as typeof more;
+        extra = { top: e.data.top === true, alertsOff: e.data.alertsOff === true };
+      } else throw e;
+    }
+  }
+  if (!more.length) stopBox([stop]);
+  const lines = [{ text: stop.text, at: stop.createdAt, kind: "stop" }, ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines, tail: "Press again to go ahead.", ...extra });
 }
 
 /**

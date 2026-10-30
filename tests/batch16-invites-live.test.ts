@@ -137,9 +137,9 @@ describe("tester invitations follow every close (section 32)", () => {
     const page = src("app/app/page.tsx");
     expect(page).toContain("Sent again on the new listing · {fmtDate(i.createdAt)}");
     expect(page).toContain("Full right now: your invite stays open");
-    expect(page).toContain('<AutoRefresh query="invites=1" />');
+    expect(page).toContain('<AutoRefresh query="invites=1" v={invitesFp} />'); // (batch 30 §8: seeded from the render)
     expect(page).toContain('<LiveTop scope="invites:me" seenAt={now.toISOString()} />');
-    expect(src("app/app/find/[id]/page.tsx")).toContain('{invite && <AutoRefresh query="invites=1" />}');
+    expect(src("app/app/find/[id]/page.tsx")).toContain('{invite && <AutoRefresh query="invites=1" v={invitesFp} />}');
     expect(randomUUID()).toBeTruthy();
   });
 });

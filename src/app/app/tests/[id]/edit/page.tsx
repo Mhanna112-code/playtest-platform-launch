@@ -7,6 +7,7 @@ import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { asListing, startedCounting } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { LiveTop } from "@/components/LiveTop";
+import { PageLoaded } from "@/components/PageLoaded";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { AlertsMenu } from "@/components/AlertsMenu";
 import { keyBoxes } from "@/lib/server/accessKeys";
@@ -43,6 +44,8 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
           />
           {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}
           <LiveTop scope={`test:${id}`} seenAt={seenAt} contractLink={{ testId: id }} />
+          {/* (Batch 30) The seen marker starts at this page's first load in the tab. */}
+          <PageLoaded at={seenAt} />
         </>
       )}
     </>

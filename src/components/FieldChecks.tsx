@@ -55,7 +55,8 @@ function clientMessage(el: Field): string {
   }
   if (el.dataset.minChars != null) {
     const min = Number(el.dataset.minChars);
-    if (v.length > 0 && v.length < min) return msg ?? `Write at least ${min} characters (${v.length} so far).`;
+    // (Batch 30 §18) data-min-label names the field in the line: "Name of this test: at least 10 characters (6 so far)."
+    if (v.length > 0 && v.length < min) return el.dataset.minLabel ? `${el.dataset.minLabel}: at least ${min} characters (${v.length} so far).` : msg ?? `Write at least ${min} characters (${v.length} so far).`;
   }
   return "";
 }
@@ -170,11 +171,16 @@ export function checkFields(root: Element | null) {
  * The server's field mistakes: each message goes to its field (the box in `root` whose data-match pattern fits it, or `find`), red with that text,
  * until that field's value changes. Returns the messages that belong to no field (they stay in the list without a link).
  */
+/** (Batch 30 §20) The server's lines the form doesn't already show red itself (same words, ignoring the spaces around them). */
+export const notShownYet = (messages: string[], shown: string[]) => messages.filter((m) => !shown.some((x) => x.trim() && x.trim() === m.trim()));
+
 export function markServerMistakes(root: Element | null, messages: string[], find?: (msg: string) => Element | null | undefined) {
   if (!root) return messages;
   const fields = Array.from(root.querySelectorAll<HTMLElement>("[data-match]"));
   const orphans: string[] = [];
-  for (const msg of messages) {
+  // (Batch 30 §20) A line the form already shows red on its own (data-red-msg, e.g. the calls cap under Request a time) isn't shown, or counted, a second time.
+  const shown = Array.from(root.querySelectorAll<HTMLElement>("[data-red-msg]")).map((el) => el.dataset.redMsg ?? "");
+  for (const msg of notShownYet(messages, shown)) {
     const el = find?.(msg) ?? fields.find((f) => new RegExp(f.dataset.match!, "i").test(msg)) ?? null;
     if (!el || !root.contains(el)) {
       orphans.push(msg);

@@ -8,6 +8,7 @@ import { chatMessages, chatRestriction, markChatRead } from "@/lib/server/messag
 import { Chat } from "@/components/Chat";
 import { CHAT_PAUSED_NOTE } from "@/lib/rules";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { testV } from "@/lib/server/pulseV";
 
 export const metadata = { title: "Chat · Playtest" };
 export const dynamic = "force-dynamic";
@@ -24,6 +25,8 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   if (!c || (c.testerId !== u.id && c.test.developerId !== u.id)) notFound();
   const dev = c.test.developerId === u.id;
   leaveIfClosed(u, "/app/chat", dev ? "developer" : "tester");
+  // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads the chat: AutoRefresh starts from it.
+  const pageV = await testV(u.id, c.testId, dev ? "" : c.id);
   const other = dev ? displayName(c.tester) : displayName(c.test.developer);
   const deleted = c.tester.deletedAt != null || c.test.developer.deletedAt != null;
   const blocked = deleted || (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0;
@@ -35,7 +38,7 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   await markChatRead(u.id, c.testId, c.testerId);
   return (
     <div className="mx-auto max-w-3xl space-y-4">
-      <AutoRefresh query={dev ? `test=${c.testId}` : `session=${c.id}`} />
+      <AutoRefresh query={dev ? `test=${c.testId}` : `session=${c.id}`} v={pageV} />
       <Link href={dev ? `/app/tests/${c.testId}#tester-${c.id}` : `/app/sessions/${c.id}`} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white no-underline hover:no-underline"><ArrowLeft className="h-4 w-4" /> Back to {dev ? "the test" : "your session"}</Link>
       <Chat
         closed={blocked || paused}

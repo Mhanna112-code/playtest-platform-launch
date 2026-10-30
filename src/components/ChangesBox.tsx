@@ -14,7 +14,7 @@ import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { fmtTimeIn } from "@/lib/format";
 import { savedZone } from "@/components/TimeZoneSync";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean };
 
 /** (Batch 28 §4) Every time in the box is in the reader's saved zone (the browser's only when none is saved), like the stop lines. */
 const time = (iso: string) => fmtTimeIn(iso, savedZone());
@@ -26,7 +26,7 @@ const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ah
  * toggle wording on the tester side); and last, in bold, "Press <button> again to go ahead.". A refusal names the press first: "Your Pay didn't go through: <reason>".
  * `press` is the button's label; without one, the label of the press that was just stopped or refused (from its API path).
  */
-export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode }) {
+export function ChangesBox({ changes, error, tail = "Press again to go ahead.", link, didntGo = false, press, side = "developer", detail, seeIt, alertsWhere }: { changes: Change[] | null; error?: string; tail?: string; link?: string; didntGo?: boolean; press?: string; side?: "developer" | "tester"; /** (Batch 16 section 19) more under a line (Edit: Before / What you typed) */ detail?: (c: Change) => React.ReactNode; /** (Batch 30 §10) a listing save's line ends "· See it" (where the listing is on this page) */ seeIt?: string; /** (Batch 30 §10) the join page has no test page yet: its Alerts hint says "on your dashboard" */ alertsWhere?: "join" }) {
   const ref = useRef<HTMLDivElement>(null);
   const shown = !!(changes || error);
   const [label, setLabel] = useState(press ?? "");
@@ -57,14 +57,15 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
               <li key={`${c.at}|${c.text}|${i}`}>
                 {/* (Batch 16 section 21) A line can open what it's about (e.g. the next round's draft another tab made). */}
                 {/* (Batch 26 section 4) A stop line ("This test was stopped at 3:10 PM.") already says its time: shown once. */}
-                {c.link?.startsWith("/") ? <><a href={c.link} data-stop-link="">{c.text}</a> · {time(c.at)}</> : c.kind === "account-at" ? `${c.text} at ${time(c.at)}` : c.kind === "yours" ? `${c.text} at ${time(c.at)}.` /* (batch 23 section 5) Edit: "Instructions: your version will replace the one saved in another tab at 3:54 PM." */ : c.kind === "account" || c.kind === "stop" ? c.text : `${c.text} · ${time(c.at)}`}
+                {c.link?.startsWith("/") ? <><a href={c.link} data-stop-link="">{c.text}</a> · {time(c.at)}</> : c.kind === "account-at" ? `${c.text} at ${time(c.at)}` : c.kind === "yours" ? `${c.text} at ${time(c.at)}.` /* (batch 23 section 5) Edit: "Instructions: your version will replace the one saved in another tab at 3:54 PM." */ : c.kind === "account" || c.kind === "stop" || c.timed ? c.text /* (batch 30 §10) "… edited the listing at 6:55 PM: …" says its own time */ : `${c.text} · ${time(c.at)}`}
                 {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
+                {c.timed && c.kind === "info" && seeIt && <> · <a href={seeIt} data-see-it="">See it</a></>}
                 {(() => { const d = detail?.(c); return d ? <div className="mt-0.5 text-xs" data-stop-detail="">{d}</div> : null; })()}
               </li>
             ))}
           </LongList>
-          {side === "tester" ? <TesterAlertsOff show={changes.some((c) => c.kind !== "terms" && c.kind !== "keyfixed")} /> : <QuickIgnore alerts={alerts} />}
+          {side === "tester" ? <TesterAlertsOff show={changes.some((c) => c.kind !== "terms" && c.kind !== "keyfixed")} where={alertsWhere} /> : <QuickIgnore alerts={alerts} />}
           <p className="mt-1 font-semibold" data-press-again="">{action}</p>
         </>
       )}

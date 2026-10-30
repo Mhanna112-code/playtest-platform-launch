@@ -8,6 +8,8 @@ export type KeysData = {
   open: number;
   /** The working testers now (the open spots follow them live). */
   testersIn?: number;
+  /** (Batch 30 §17) Working testers without a key: each gets a free key at Save. */
+  keyless?: number;
   uses: boolean;
   broken?: { id: string; value: string; tester: string }[];
 };

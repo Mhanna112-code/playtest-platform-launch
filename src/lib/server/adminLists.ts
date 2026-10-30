@@ -10,6 +10,7 @@ import { pausedTestsForAdmin } from "./pauseClosure";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
 import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine, disputeRangeLine } from "@/lib/rules";
 import { callMinutesOf } from "@/lib/callMeasure";
+import { LISTING_VALUES } from "@/lib/listingInfo";
 import { itemsOf } from "@/lib/answerSets";
 import { writtenQuestions as writtenQuestionsOf } from "./tests";
 import type { DisputedWork } from "@/app/admin/DisputeWork";
@@ -171,7 +172,8 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
     all.push({ id: t.id, testId: t.id, date: reasons[0].date, at: reasons[0].date.toISOString(), title: t.title, dev: displayName(t.developer), why: reasons.map((r) => r.why).join(" · "), when: fmtDateTime(reasons[0].date) });
   }
   // (Batch 15 section 35) The accounts themselves: each side this admin suspended (still suspended), and each account this admin deleted.
-  const events = await db.accountEvent.findMany({ where: { byId: adminId, kind: { in: ["suspended", "deleted"] } }, orderBy: { createdAt: "desc" }, take: 500 });
+  // (Batch 30 §5) and each time this admin closed a developer's open reviews at $0 (the count and the reason).
+  const events = await db.accountEvent.findMany({ where: { byId: adminId, kind: { in: ["suspended", "deleted", "team-closed"] } }, orderBy: { createdAt: "desc" }, take: 500 });
   const people = new Map((await db.user.findMany({ where: { id: { in: events.map((e) => e.userId) } } })).map((u) => [u.id, u]));
   for (const e of events) {
     const p = people.get(e.userId);
@@ -180,7 +182,7 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
       const at = e.side === "tester" ? p.testerSuspendedAt : p.devSuspendedAt;
       if (!at || at.getTime() > e.createdAt.getTime() + 5_000 || at.getTime() < e.createdAt.getTime() - 5_000) continue; // reinstated since (or suspended again by someone else)
     }
-    const why = e.kind === "deleted" ? "account deleted by you" : `suspended by you (${e.side || "developer"} side)`;
+    const why = e.kind === "team-closed" ? `${e.note.replace(/^(\d+ open reviews?) closed/, "$1 closed by you")}` : e.kind === "deleted" ? "account deleted by you" : `suspended by you (${e.side || "developer"} side)`;
     all.push({ id: `acct-${e.id}`, testId: "", date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt) });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
@@ -553,7 +555,7 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
   } else if (kind === "u-chargebacks") {
     for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, `Chargeback ${money(p.amountCents)} (${p.chargeback})`));
   } else if (kind === "u-holds") {
-    const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated" };
+    const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated", "team-closed": "Team closure" }; // (batch 30 §5)
     for (const e of await db.accountEvent.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("acct", e.id, e.createdAt, `${labels[e.kind] ?? e.kind}${e.byId ? ` by ${await name(e.byId)}` : ""}${e.note ? `: ${e.note}` : ""}`));
   } else if (kind === "u-tests") {
     for (const t of await db.test.findMany({ where: { developerId: userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("posted", t.id, t.createdAt, `Posted “${t.title}” (${t.status})`, `/app/find/${t.id}`));
@@ -587,13 +589,20 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     // (Owner, Oct 29, batch 22 section 4) For admins every line names who did it, in the third person ("Nora Lane paid Ana Silva $10.00 …", "Nora Lane's tests are
     // running again", "Nora Lane's developer account was paused (by ana@…)"), and each dispute and each decision shows once.
     const dev = displayName(t.developer);
-    const [events, suspensions, actions, disputes] = await Promise.all([
-      db.testEvent.findMany({ where: { testId }, orderBy: { createdAt: "desc" }, take: 3000 }),
+    const [events, suspensions, actions, disputes, closures] = await Promise.all([
+      // (Batch 30 §15, §10) Not the session pages' stored listing values nor the testers' per-save records (both JSON; never a line).
+      db.testEvent.findMany({ where: { testId, kind: { notIn: [LISTING_VALUES, "listing_save"] } }, orderBy: { createdAt: "desc" }, take: 3000 }),
       db.accountEvent.findMany({ where: { userId: t.developerId, kind: "suspended" }, orderBy: { createdAt: "asc" } }),
       db.adminAction.findMany({ where: { targetId: testId, action: { in: ["pause-test", "unpause-test", "stop-test", "close-paused"] } }, orderBy: { createdAt: "asc" } }),
       db.dispute.findMany({ where: { contractId: { in: ids } }, include: { submission: { select: { kind: true } } } }),
+      db.accountEvent.findMany({ where: { userId: t.developerId, kind: "team-closed" }, orderBy: { createdAt: "asc" } }), // (batch 30 §5)
     ]);
-    const emails = await adminEmails([...suspensions.map((s) => s.byId), ...actions.map((a) => a.adminId), ...disputes.map((d) => d.decidedById)]);
+    const emails = await adminEmails([...suspensions.map((s) => s.byId), ...actions.map((a) => a.adminId), ...disputes.map((d) => d.decidedById), ...closures.map((x) => x.byId)]);
+    /** (Batch 30 §5) The admin who closed open reviews at $0 at that moment (the account history records it right after the pieces). */
+    const closedBy = (at: Date) => {
+      const near = closures.filter((x) => Math.abs(x.createdAt.getTime() - at.getTime()) < 60_000).sort((a, b) => Math.abs(a.createdAt.getTime() - at.getTime()) - Math.abs(b.createdAt.getTime() - at.getTime()))[0];
+      return (near && emails(near.byId)) || "The team";
+    };
     /** The admin action of that kind closest to the moment (the route records it right after the change). */
     const by = (action: string, at: Date) => {
       const near = actions.filter((a) => a.action === action && Math.abs(a.createdAt.getTime() - at.getTime()) < 60_000).sort((a, b) => Math.abs(a.createdAt.getTime() - at.getTime()) - Math.abs(b.createdAt.getTime() - at.getTime()))[0];
@@ -612,6 +621,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       if (x.startsWith("Your bank reversed your ")) return `${dev}'s bank reversed their ${x.slice("Your bank reversed your ".length)}`;
       if (x.startsWith("You ")) return `${dev} ${x.slice(4)}`;
       if (x === "The team paused this test") return `${by("pause-test", e.createdAt)} paused this test${t.adminPausedAt && Math.abs(t.adminPausedAt.getTime() - e.createdAt.getTime()) < 5_000 && t.adminNote ? `: ${t.adminNote}` : ""}`;
+      if (x.startsWith("The team closed ")) return `${closedBy(e.createdAt)} closed ${x.slice("The team closed ".length)}`;
       if (x === "The team lifted the pause on this test") return `${by("unpause-test", e.createdAt)} lifted the pause on this test`;
       if (x === "The team stopped this test") return `${by("stop-test", e.createdAt)} stopped this test${t.adminStoppedAt && t.adminNote ? `: ${t.adminNote}` : ""}`;
       return x.replace(/ rated you$/, ` rated ${dev}`).replace(/\(rated you\)$/, `(rated ${dev})`);

@@ -150,11 +150,34 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
   const notInvited = lean.filter((x) => !x.inv);
   const passes = (x: (typeof lean)[number]) =>
     (!devices.length || (x.t.profile?.devices ?? []).some((d) => devices.includes(d))) && (!languages.length || (x.t.profile?.languages ?? []).some((l) => languages.includes(l)));
+  // (Batch 30 §7) A tester who applied or asked to rejoin is answered in Needs you, not invited: greyed in every list here (and never suggested).
+  const apps = await db.application.findMany({ where: { testId, status: "pending" }, select: { id: true, testerId: true, kind: true } });
+  const appOf = new Map(apps.map((a) => [a.testerId, a]));
+  for (const x of lean) {
+    const a = appOf.get(x.t.id);
+    if (a && !x.grey) x.grey = a.kind === "rejoin" ? "Asked to rejoin: answer them in Needs you" : "Applied: answer them in Needs you";
+  }
   const worked = notInvited.filter((x) => x.section === "worked");
   const suggested = notInvited.filter((x) => x.section === "other" && !x.grey && passes(x)).slice(0, 5);
-  const matches = q.length >= 1 ? exactFirst(notInvited.filter((x) => passes(x) && nameMatches(x.name, q)), q, (x) => [x.name]) : [];
+  // (Batch 30 §7) The name search finds everyone who matches, invitable or not (blocked and deleted accounts are never in `lean`): a match who can't be invited shows
+  // greyed with why (already invited, already in this test, applied, or "Can't join this test"), after the invitable ones, so "No testers match" means nobody matches.
+  const named = q.length >= 1 ? lean.filter((x) => passes(x) && nameMatches(x.name, q)) : [];
+  const matches = exactFirst([...named.filter((x) => !x.inv && !x.grey), ...named.filter((x) => x.inv || x.grey)], q, (x) => [x.name]);
   const [w, s, f] = await Promise.all([full(worked), full(suggested), full(matches.slice(0, SEARCH_LIMIT))]);
-  return { worked: w, suggested: s, found: f, foundTotal: matches.length, capLine: matches.length > SEARCH_LIMIT ? searchCapLine(matches.length) : "", searched: q.length >= 1 };
+  const found = f.map((r) => ({ ...r, ...whyNotInvitable(r, appOf.get(r.id)) }));
+  return { worked: w, suggested: s, found, foundTotal: matches.length, capLine: matches.length > SEARCH_LIMIT ? searchCapLine(matches.length) : "", searched: q.length >= 1 };
+}
+
+/** (Batch 30 §7) Why a search match can't be invited, in the row's words ("fbbb · already invited, waiting for them to join"), or nothing when they can be. */
+export const WHY_INVITED = "already invited, waiting for them to join";
+export const WHY_IN_TEST = "already in this test";
+export const whyApplied = (kind: string) => `${kind === "rejoin" ? "asked to rejoin" : "applied"}: answer them in Needs you →`;
+function whyNotInvitable(r: { invited: boolean; inviteId: string | null; grey: string | null }, app?: { id: string; kind: string }): { why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string } {
+  if (r.invited) return { why: WHY_INVITED, whyKind: "invited" };
+  if (r.grey === "Already in this test") return { why: WHY_IN_TEST, whyKind: "in" };
+  if (app) return { why: whyApplied(app.kind), whyKind: "applied", appId: app.id };
+  if (r.grey) return { why: r.grey, whyKind: "cant" };
+  return {};
 }
 export type InvitePanelData = Awaited<ReturnType<typeof invitePanel>>;
 
@@ -346,6 +369,23 @@ export async function inviteGaps(devId: string, testId: string, testerIds: strin
  * a NEW invite on the new listing to the same testers (bell + email; the 3-day reminder clock restarts). Testers who
  * can't be invited any more are not re-invited and are named for the Save result.
  */
+/** (Batch 30 §8) "Marc Hanna invited you to “ddddd”" (the tester dashboard's top box). */
+export const invitedYouLine = (dev: string, test: string) => `${dev} invited you to “${test}”`;
+
+/**
+ * (Batch 30 §8) Each invite sent to them since `since`, for the dashboard's top box: "Marc Hanna invited you to “ddddd”", or, re-sent on a new listing (an earlier invite
+ * to the same test was replaced), the bell's "Marc Hanna updated “ddddd”: your invite was sent again on the new listing."
+ */
+export async function invitesSentSince(userId: string, since: Date) {
+  const sent = await db.invite.findMany({ where: { testerId: userId, createdAt: { gt: since } }, include: { test: { select: { title: true, developer: { select: { name: true, email: true, deletedAt: true } } } } }, orderBy: { createdAt: "asc" }, take: 20 });
+  const replaced = sent.length ? await db.invite.findMany({ where: { testerId: userId, status: "replaced", testId: { in: sent.map((i) => i.testId) } }, select: { testId: true, createdAt: true } }) : [];
+  return sent.map((i) => {
+    const dev = displayName(i.test.developer);
+    const resent = replaced.some((r) => r.testId === i.testId && r.createdAt < i.createdAt);
+    return { kind: "invite", text: resent ? reinvitedLine(dev, i.test.title) : invitedYouLine(dev, i.test.title), createdAt: i.createdAt };
+  });
+}
+
 /** (Batch 14 section 3) "<dev> updated <test>: your invite was sent again on the new listing." */
 export const reinvitedLine = (dev: string, test: string) => `${dev} updated “${test}”: your invite was sent again on the new listing.`; // (batch 15 section 32) quoted
 

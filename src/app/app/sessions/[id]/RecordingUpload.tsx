@@ -41,7 +41,7 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
  * Upload up to 5 screen recordings (500 MB each), then send them. (Owner, Oct 29, batch 13 section 7) Send sends them all together as ONE piece of work; until it's paid
  * (or rejected) recordings can be removed or added and sent again.
  */
-export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true, removedSince = false }: { sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean; /** (Batch 20 section 26) a sent recording removed since */ removedSince?: boolean }) {
+export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true, removedSince = false, lines = [] }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean; /** (Batch 20 section 26) a sent recording removed since */ removedSince?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -86,6 +86,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
         </>
       )}
       {progress != null && <p className="note">Uploading… {progress}%</p>}
+      {canSend && sendable && uploaded.length > 0 && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
       {canSend && sendable && uploaded.length > 0 && (
         <button
           className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`}

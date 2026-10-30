@@ -7,6 +7,7 @@ import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
 import { jumpTo } from "@/lib/markJump";
 import { pillLabel, pillSide, type PillSide } from "@/lib/livePill";
+import { SEE_IT_EVENT } from "@/components/ListingInfo";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -123,7 +124,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
         {show.map((l) => (
           <li key={key(l)} className={`${l.ignored ? "text-sky-100/50" : ""} ${flash === key(l) ? "rounded bg-sky-300/20 transition-colors" : ""}`} data-flash={flash === key(l) ? "" : undefined} title={l.ignored ? "You turned these stops off in Alerts" : undefined}>
             {/* (Batch 15 section 35) A line about a row on this page opens it (a new dispute: its Needs you row). */}
-            <b>Updated · {time(l.at)}:</b> {l.link ? <a href={`#${l.link}`} onClick={(e) => { e.preventDefault(); jumpTo(l.link!); }}>{l.text}</a> : l.text}
+            {/* (Batch 30 §10) A listing save's line says its own time ("Marc Hanna edited the listing at 6:55 PM: …"): not twice. */}
+            <b>{l.timed ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {l.link ? <a href={`#${l.link}`} onClick={(e) => { e.preventDefault(); jumpTo(l.link!); }}>{l.text}</a> : l.text}
             {/* (Owner, Oct 27) A tester switched to or kept after new terms: "See their contract" scrolls to their row on the test page; on Edit it opens the test page at that row in a new tab. */}
             {l.kind === "terms" && l.contract && contractLink && (
               <>
@@ -133,8 +135,9 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
             )}
             {l.kind === "info" && seeIt && (
               <>
-                {" "}
-                <a href={seeIt} onClick={() => setTimeout(() => (document.querySelector(seeIt) as HTMLDetailsElement | null)?.setAttribute("open", ""), 0)}>See it</a>
+                {l.timed ? " · " : " "}
+                {/* (Batch 30 §15) The page can mark the lines that save changed (the session page's contract box). */}
+                <a href={seeIt} onClick={() => setTimeout(() => { (document.querySelector(seeIt) as HTMLDetailsElement | null)?.setAttribute("open", ""); window.dispatchEvent(new CustomEvent(SEE_IT_EVENT, { detail: { at: l.at } })); }, 0)}>See it</a>
               </>
             )}
           </li>

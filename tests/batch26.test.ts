@@ -232,7 +232,7 @@ describe("batch 26 sections 5 to 8", () => {
     expect(chargeOpensNote("Nora Lane", "Nov 5")).toBe("If Nora Lane hasn't paid by Nov 5, you can charge or let it go then.");
     const dash = src("app/app/page.tsx");
     expect(dash).toContain("const listed = (s.kind === \"recording\" ? c.recordingCents : c.writtenCents) != null;");
-    expect(dash).toContain("const opens = listed ? chargeOpensAt(s, c.test, c, now) : null;");
+    expect(dash).toContain("const opens = listed && !s.late ? chargeOpensAt(s, c.test, c, now) : null;"); // (batch 30 §3) never for late work
     // (Batch 28 §21) A listed call is charged automatically instead; (batch 28 §5) the sent part's line is on the session page too.
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("{x.rateCents != null && x.payBy && x.payBy > now && <p className=\"text-xs text-slate-400\" data-auto-charge=\"\">");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("data-charge-opens=\"\">{chargeOpensNote(dev,");
@@ -387,7 +387,7 @@ describe("batch 26 section 14: questions are not required by default; sending ne
     expect(qText(NOT_REQUIRED + "Q?")).toBe("Q?");
     expect(answersMissing(["A?", "B?"], ["", ""])).toEqual({ message: ANSWER_ONE, at: 0 });
     expect(answersMissing(["A?", "B?"], ["", "  "])).toEqual({ message: ANSWER_ONE, at: 0 });
-    expect(answersMissing(["A?", "B?"], ["", "b"])).toBeNull();
+    expect(answersMissing(["A?", "B?"], ["", "b"], 1)).toBeNull(); // (batch 30 §14: 1 here; the real minimum is 50, tests/batch30d-answers.test.ts)
     expect(answersMissing(["A?", REQUIRED + "B?"], ["a", ""])).toEqual({ message: ANSWER_REQUIRED, at: 1 });
     expect(answersMissing([], [])).toBeNull();
     expect(ANSWER_ONE).toBe("Answer at least one question before sending.");
@@ -410,7 +410,7 @@ describe("batch 26 section 14: questions are not required by default; sending ne
     expect(form).toContain("checked={f.requiredQs.includes(q)}");
     expect(form).toContain("/> Required");
     expect(form).not.toContain("Not required");
-    expect(src("lib/questions.ts")).toContain('"Testers answer at least one question. Tick Required on any they must answer."');
+    expect(src("lib/questions.ts")).toContain("`Testers answer at least one question. Tick Required on any they must answer. ${ANSWER_MIN_LINE}`"); // (batch 30 §14)
     expect(form).toContain("{QUESTIONS_RULE_LINE}");
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("{qRequired(q) && <span className=\"req shrink-0\" data-required-star=\"\"");
   });

@@ -22,6 +22,7 @@ import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
+import { LATE_REMINDER_TAIL, NO_CHARGE_LATE } from "@/lib/moneyLines";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
 // (a chargeback during a payment hold turns it into a chargeback hold). There is no owed window and no daily retry. While on hold all the developer's
@@ -561,7 +562,7 @@ export async function chargebackOpened(paymentIntentId: string) {
   const started = await startHold(p.developerId, "chargeback");
   // (Owner, Oct 26) A chargeback email goes to every admin at once, whatever their email setting.
   const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
-  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(p.amountCents)}`, text: [`A developer's bank reversed a ${money(p.amountCents)} payment (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n") }).catch((e) => console.error("[email] chargeback:", e.message));
+  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(p.amountCents)}`, text: [`A developer's bank reversed a ${money(p.amountCents)} payment (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback:", e.message));
   if (!started) {
     const line = `Your bank reversed a ${money(p.amountCents)} payment${c ? ` for ${displayName(c.tester)}` : ""}: ${before.holdStartedAt && before.holdReason !== "chargeback" ? "your payment hold is now a chargeback hold" : "it was added to what you owe"}`;
     // A payment hold that becomes a chargeback hold is a chargeback hold starting (its email ignores Off); a further chargeback just adds to what is owed.
@@ -772,6 +773,9 @@ async function openCharges(now: Date, co: CloseOuts) {
     const c = s.contract;
     const auto = autoPayFor(s.agreedCents);
     if (auto == null) continue; // outside the contract: its own reminder every 3 days (below)
+    // (Batch 30 §3) Sent after the tester's own deadline: never Charge or Let it go, no daily line (the review reminders stopped at its review date). Only the
+    // developer's own Pay settles it, or it closes unpaid at its closing date.
+    if (s.late) continue;
     // (Owner, Oct 26; batch 15 section 18) Charge / Let it go opens only when REVIEW_DAYS (7) have passed since it was sent AND the tester's own deadline has passed.
     if (!chargeIsOpen(s, c.test, c, now)) continue;
     // (Batch 17 §19) Once the piece's Pay closed there's no "pay it" line; once its Charge closed (the tester's side) Charge is never offered or reminded.
@@ -816,7 +820,8 @@ async function reviewReminders(now: Date, co: CloseOuts) {
     const name = displayName(s.contract.tester);
     const part = s.kind === "recording" ? "recording" : "written answers";
     const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
-    const after = s.agreedCents == null ? " (it isn't listed: any amount, $0 included)" : s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`;
+    // (Batch 30 §3) Late listed work counts down the same way, but the tester can't charge for it.
+    const after = s.agreedCents == null ? " (it isn't listed: any amount, $0 included)" : s.late ? LATE_REMINDER_TAIL : s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`;
     await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${part} ${when}${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
     // The mark is recorded with every earlier one, so a missed mark is never sent late.
     const earlier = reviewMarksFor(s.updatedAt, reviewDate!).filter((x) => x.at.getTime() <= m.at.getTime()).map((x) => x.mark).filter((x) => !s.devMarks.includes(x));
@@ -963,7 +968,7 @@ export function chargeDayLine(list: OpenPiece[]) {
 /** Listed parts past their review date, still unpaid and open to the tester's Charge (Charge opened, something left to charge, the tester's Charge not closed). */
 async function chargeablePieces(co: CloseOuts, where: Prisma.SubmissionWhereInput) {
   const subs = await db.submission.findMany({
-    where: { review: null, choiceOfferedAt: { not: null }, agreedCents: { not: null }, ...where },
+    where: { review: null, choiceOfferedAt: { not: null }, agreedCents: { not: null }, late: false, ...where }, // (batch 30 §3) never late work
     include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
     orderBy: { choiceOfferedAt: "asc" },
     take: 5000,
@@ -1107,7 +1112,8 @@ export async function autoChargeCalls(now: Date) {
         await db.payment.update({ where: { id: row.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
         await receipt(dev.email, what, amount, r.status, `/app/tests/${c.testId}#call-${x.id}`);
         const line = autoPaidTesterLine(displayName(dev), amount, x.startsAt);
-        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tarrived" });
+        // (Batch 30 §20) In the day's "You were paid" stack with the other payments (it arrived on time: not "Delayed payments arrived").
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tpaid" });
       }
     } catch (e) {
       if (e instanceof HttpError && e.code === "payment_unknown") continue; // checked later by the stuck-payment check (recovery.ts)
@@ -1159,6 +1165,8 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   }
   // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
   await chargeCloseOutGate({ submissionId: s.id });
+  // (Batch 30 §3) Work sent after the tester's own deadline never opens Charge or Let it go.
+  if (s.late) throw new HttpError(409, "late", NO_CHARGE_LATE);
   if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since you sent it and your deadline has passed.`);
   await testerTermsGate(contractId, displayName(dev), body);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;

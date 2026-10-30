@@ -518,7 +518,7 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).not.toContain("callId={x.id} devName={dev}");
     expect(session).toContain("testerAutoChargeLine(dev,");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("autoChargeLine(renderTimes(T(x.x!.payBy, \"date\"), u.timeZone)");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("autoChargeLine(pieceDay(x.x!.payBy, u.timeZone)"); // (batch 30 §20) one shared date helper
     expect(R.PAY_RULES_TICK).toContain("and listed calls 7 days after they take place.");
     expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/termsOfUse.ts"), "utf8")).toContain("their card is charged automatically for its measured length at the call's rate");
   });
@@ -650,7 +650,7 @@ describe("batch 28 §3-§7 and §9", () => {
     expect(src("components/ChangesBox.tsx")).toContain("const time = (iso: string) => fmtTimeIn(iso, savedZone());");
     expect(src("components/TimeZoneSync.tsx")).toContain("__savedTz = stored");
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain("chargeOpensNote(dev, renderTimes(T(opens, \"date\"), u.timeZone))");
+    expect(page).toContain("chargeOpensNote(dev, pieceDay(opens, u.timeZone))"); // (batch 30 §20)
   });
 
   it("§6: a question the set can't find isn't required; By question has no notRequired", async () => {

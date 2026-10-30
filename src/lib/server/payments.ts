@@ -10,7 +10,7 @@ import { blockedEitherWay } from "./blocks";
 import { labelled, reportedOver3 } from "./reports";
 import { partAnchor } from "@/lib/links";
 import { isAdmin } from "./session";
-import { cardRefusal, charge, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, cardRefusal, charge, type NeedsAction } from "./stripe";
 import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
@@ -20,6 +20,7 @@ import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "
 import { callsLeftCents } from "./callMoney";
 import { payPressOf } from "./live";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
+import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, updateWaiting } from "@/lib/moneyLines";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -77,7 +78,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
   if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? "Your account is suspended: Pay waits until it is lifted." : PAY_WAITS);
 
-  const reserved = await db.$transaction(async (tx) => {
+  const reserved = await reserving(() => db.$transaction(async (tx) => {
     const piece = await loadPiece(tx, kind, id);
     if (!piece || piece.contract.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That work doesn't exist or isn't on your test.");
     const c = piece.contract;
@@ -93,6 +94,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       await devGate(tx, c.testId, body, {}, [], undefined, payPress);
       if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
       if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let this go: nothing was charged.`);
+      if (already.teamClosedById) throw new HttpError(409, "reviewed", TEAM_CLOSED_NO_PAY); // (batch 30 §5)
       const owedNow = !already.rejected && (await tx.payment.findFirst({ where: { ...piece.where, status: "failed", owedUntil: { not: null }, settledAt: null } }));
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
       throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
@@ -135,7 +137,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
           data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: payKey },
         });
     return { rev, payment, c, piece, name };
-  });
+  }));
 
   const { rev, payment, c, piece, name } = reserved;
   let result;
@@ -169,6 +171,21 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   // (Batch 11) The bank wants the developer to confirm: the piece stays locked while its pop-up is open (batch 12 section 5), nothing is charged yet.
   if (result.status === "requires_action") return (await import("./confirm")).pressAction(payment!.id, result as NeedsAction & Record<string, unknown>);
   return finishReviewPay(payment!.id, result);
+}
+
+/** (Batch 30 §20) Prisma's "transaction timed out / already closed" (P2028). */
+export const isTxTimeout = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2028";
+/**
+ * (Batch 30 §20) A Pay / Pay more reservation that timed out under load: Prisma rolled it back (no review, no payment row) and nothing reached Stripe, so the
+ * press gets the plain line instead of a 500.
+ */
+export async function reserving<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (isTxTimeout(e)) throw new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
+    throw e;
+  }
 }
 
 /** (Batch 11) A Pay went through (at once, or once the bank confirmed it): the payment is recorded, the tester told, the receipt sent. */
@@ -213,6 +230,8 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const where = kind === "call" ? { callId: id } : { submissionId: id };
   // (Owner, Oct 28 afternoon) Disputes work while the test is paused (and while the developer owes a declined payment): a decision for the tester during a hold is added to what is owed.
   const review = await db.review.findFirst({ where: { ...where, contractId } });
+  // (Batch 30 §5, owner Oct 29) The team's $0 closure is final: no dispute.
+  if (review?.teamClosedById) throw new HttpError(409, "no_dispute", TEAM_CLOSED_NO_DISPUTE);
   if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body);
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
   const existing = await db.dispute.findFirst({ where });
@@ -448,6 +467,8 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   // (Batch 11 section 6) "Pay more" is the same Pay box after a piece is paid: it needs that first payment (a rejected piece has none).
   const paidReview = await db.review.findFirst({ where: piece.where });
   if (!paidReview || paidReview.rejected) throw new HttpError(409, "not_paid", "Pay this part first: Pay more is for a part you've already paid.");
+  // (Batch 30 §5) A piece the team closed at $0 is final.
+  if (paidReview.teamClosedById) throw new HttpError(409, "team_closed", TEAM_CLOSED_NO_PAY);
   // (Batch 17 §19, replacing batch 16 section 22) Pay more closes together with the last Pay / Charge on the test (payMoreClosesAt).
   {
     const at = await payMoreClosesAt(testId);
@@ -459,9 +480,11 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   await (await import("./holds")).devHoldRefusal(dev.id, "pay");
   if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
+  const note = readText(body.note, LIMITS.reason, "bad_note");
+  // (Batch 30 §2) $0 answers an updated version the tester sent after it was paid: it closes that Needs you row (an optional note), charging nothing.
+  if (amount === 0 && piece.kind === "submission") return closeUpdateAtZero(dev, c, piece.where.submissionId!, note, body);
   const check = checkExtraPay(amount, typeof body.tickedCents === "number" ? body.tickedCents : null, body.over200 === true || body.understood === true);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
-  const note = readText(body.note, LIMITS.reason, "bad_note");
   const card = cardRefusal(dev);
   if (card) throw new HttpError(409, "no_card", card);
   // (Batch 15 section 41, C1) The page's press id (a UUID) wrapped for this developer; "extra:" makes it the Pay more's own.
@@ -470,7 +493,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const at = piece.kind === "call" ? { callId: piece.where.callId! } : { submissionId: piece.where.submissionId! };
   // (Batch 15 section 41, M2) The repeat check, the room check and the reservation happen together under the test's row lock (as Pay does), and (kind, payKey) and
   // (kind, pressKey) are unique, so two presses at once can never both pass the cap or charge twice.
-  const reserved = await db.$transaction(async (tx) => {
+  const reserved = await reserving(() => db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     // (Batch 15 section 13) The same press again (its answer was lost): never twice. A press that failed without a charge can be pressed again.
     const again = await tx.payment.findFirst({ where: { kind: "extra", pressKey: extraKey } });
@@ -490,7 +513,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     // (Batch 11) The row exists before the charge (pending), so a payment the bank wants confirmed counts toward the piece's cap while it waits.
     const row = await tx.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: extraKey } });
     return { row, stripeKey };
-  });
+  }));
   if ("again" in reserved && reserved.again) return { paid: true, amountCents: reserved.again.amountCents, status: reserved.again.status, repeated: true };
   const { row, stripeKey } = reserved as { row: NonNullable<(typeof reserved)["row"]>; stripeKey: string };
   let result;
@@ -512,11 +535,44 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     }
     // (Owner, Oct 27) A declined extra pay starts the payment hold at once, like any declined payment.
     await db.payment.update({ where: { id: row.id }, data: { failure: (e as Error).message } });
+    if (row.submissionId) await answerUpdate(db, row.submissionId, row.createdAt); // (batch 30 §2) it was pressed: the update's row goes (the amount is owed)
     await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${name}`);
     throw new HttpError(402, "card_failed", `Your card was declined, so ${name} wasn't paid ${money(amount)} extra yet. Your tests are paused until you pay what you owe: open Payments.`, { held: true, failed: `Your extra pay on ${c.test.title} was declined` });
   }
   if (result.status === "requires_action") return (await import("./confirm")).pressAction(row.id, result as NeedsAction & Record<string, unknown>);
   return finishExtraPay(row.id, result);
+}
+
+/** (Batch 30 §2) A Pay more pressed at `at` answers the piece's latest update sent before that press. */
+async function answerUpdate(tx: Prisma.TransactionClient, submissionId: string, at: Date) {
+  await tx.submission.updateMany({ where: { id: submissionId, paidUpdateAt: { not: null, lte: at }, OR: [{ paidUpdateDoneAt: null }, { paidUpdateDoneAt: { lt: at } }] }, data: { paidUpdateDoneAt: at } });
+}
+
+/**
+ * (Batch 30 §2) Pay more at $0 on an updated version the tester sent after the piece was paid: closes its Needs you row with an optional note the tester reads.
+ * Nothing is charged. Only while that update waits (else "Enter an amount like 7.50.", as before). The developers' stop-once applies like any Pay more.
+ */
+async function closeUpdateAtZero(dev: U, c: { id: string; testId: string; testerId: string; tester: Parameters<typeof displayName>[0] & { email: string }; test: { title: string } }, submissionId: string, note: string, body: Record<string, unknown>) {
+  const label = (await db.submission.findUnique({ where: { id: submissionId } }))?.kind === "recording" ? "recording" : "written answers";
+  const name = displayName(c.tester);
+  const done = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
+    const s = await tx.submission.findUnique({ where: { id: submissionId }, include: { review: true } });
+    if (!s || !updateWaiting(s)) {
+      await devGate(tx, c.testId, body, {}, [], undefined, payPressOf(c.id, { submissionId }));
+      throw new HttpError(400, "bad_amount", "Enter an amount like 7.50.");
+    }
+    await devGate(tx, c.testId, body, {}, [], undefined, payPressOf(c.id, { submissionId }));
+    const now = new Date();
+    await tx.submission.update({ where: { id: s.id }, data: { paidUpdateDoneAt: now, paidUpdateZeroAt: now, paidUpdateNote: note } });
+    await recordEvent(tx, c.testId, "paid", `You paid ${name} $0 more for the updated ${label}`, false, {}, c.id);
+    return true;
+  });
+  if (done) {
+    const line = `${displayName(dev)} paid $0 more for your updated ${label} on “${c.test.title}”`;
+    await notify(c.tester.email, line, [line + ".", ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#part-${label === "recording" ? "recording" : "written"}`, { payment: true, group: "tpaid", about: dev.id });
+  }
+  return { paid: true, amountCents: 0, status: "closed" };
 }
 
 /** (Batch 11) A Pay more went through (at once, or once the bank confirmed it). */
@@ -528,6 +584,8 @@ export async function finishExtraPay(paymentId: string, result: { status: string
   await db.$transaction(async (tx) => {
     await tx.payment.update({ where: { id: p.id }, data: { status: result.status, stripePaymentIntentId: result.stripePaymentIntentId, ...(result.feeCents != null ? { feeCents: result.feeCents, testerCents: result.testerCents, transferStatus: result.transferStatus } : {}), actionPi: null, actionBy: null } });
     await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(amount)} extra for the ${label}`, false, {}, c.id);
+    // (Batch 30 §2) A Pay more (any amount) answers an update the tester sent after it was paid: its Needs you row goes.
+    if (p.submissionId) await answerUpdate(tx, p.submissionId, p.createdAt);
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”`;
   await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`Their note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"

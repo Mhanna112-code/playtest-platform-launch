@@ -6,6 +6,7 @@ import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { owedV } from "@/lib/server/pulseV";
 import { HOLD_APPROVAL_AFTER, reservedLine, retryStatusLine } from "@/lib/rules";
 import { confirmItems } from "@/lib/server/confirm";
 import { ConfirmList } from "./ConfirmList";
@@ -42,6 +43,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // (NEXT-UI 6 / 15) Each side has its own payments page, as in the full app (Billing / Payments): the side in use.
   const side = sideFor(u, "/app/payments");
   const dev = side === "developer", tester = side === "tester";
+  // (Batch 30 §8) The owed fingerprint as of before the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
+  const owedFp = dev ? await owedV(u.id) : "";
   const cbSteps = dev ? await chargebackSteps(u.id) : null;
   // The tester's "Everything you sent": each part by test, newest first, with where its money is.
   const sent = tester
@@ -74,7 +77,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
       {/* (Owner, Oct 27) "Pay what you owe" shows only during a hold (a declined payment starts one at once). Pay and Reject left this page: the dashboard has the Needs review box. */}
       {/* (Owner, Oct 29, batch 10) The box updates live (about every 20 s) and disappears when nothing is owed. */}
-      {dev && <AutoRefresh query="owed=1" />}
+      {dev && <AutoRefresh query="owed=1" v={owedFp} />}
       {dev && (await owedForBox(u.id).then((o) => {
         const review = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER);
         if (!u.holdStartedAt) return null;

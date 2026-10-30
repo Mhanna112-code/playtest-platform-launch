@@ -126,7 +126,7 @@ describe("the session page after the work is over (source)", () => {
     expect(page).toContain('const key = c.status === "working" ? await keyOf(c.id) : null;'); // no key box, so no "This key doesn't work"
     expect(page).toContain('{c.status === "working" && !meOff && ('); // Leave
     expect(page).toContain("offer={offer && !refusal ?");
-    expect(page).toContain("canSend={!refusal && !recording?.review && !meOff && draftsShown}");
+    expect(page).toContain("canSend={!refusal && canSendAgain(recording) && !meOff && draftsShown}"); // (batch 30 §2) a paid recording can be sent again
     expect(page).toContain("joinable: !paused && !refusal && callJoinable(x, now)");
     expect(page).toContain("(pendingReqs.length > 0 && !paused && !refusal)");
     expect(page).toContain("over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal"); // (batch 26 section 3) a team Stop never names who

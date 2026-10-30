@@ -60,7 +60,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {
-    LAST_PRESS = pressLabelOf(path);
+    LAST_PRESS = pressLabelOf(path, body);
     throw new ApiError(0, "offline", "You seem to be offline. Check your connection and try again.");
   }
   const data = await res.json().catch(() => null);
@@ -92,7 +92,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
       window.location.href = `/app?failed=${encodeURIComponent(data.error.failed)}`;
     }
     const e = data?.error;
-    LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path);
+    LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path, body);
     // (Batch 27 section 1) The server refused for an open offer (an old page that hasn't shown it too): up to the Switch / Keep box (it loads if the page lacks it).
     if (e?.code === ANSWER_TERMS_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));
     // (Batch 17 section 13) A tester's stop box says whether their Alerts is Off (the box then drops "Turn off alerts").
