@@ -216,16 +216,15 @@ describe("batch 20 section 4: Invite stops only for required items, one net line
     await later();
     await db.testerProfile.update({ where: { userId: f.user.id }, data: { languages: ["French", "Portuguese"] } });
     const r2 = await act(testId, "invite", dev.cookie, body);
-    expect(texts(r2)).toEqual(["fbbb now lists Portuguese but no longer lists Chinese (this test needs Chinese or Portuguese)."]);
-    expect(r2.body.error.changes[0].key).toBe(`needs:${f.user.id}`);
+    expect(texts(r2)).toEqual([]); // still lists a needed language: no kind flipped
     // Added then removed again (back to what the page showed): no line, no stop.
     await db.testerProfile.update({ where: { userId: f.user.id }, data: { devices: ["Windows PC"], languages: ["Chinese"] } });
     const r3 = await act(testId, "invite", dev.cookie, body);
     expect(r3.body.error?.code).not.toBe("stop_once");
     // The test's own requirement changes keep their line.
     expect(src("lib/server/invites.ts")).toContain('const line = requirementsChangedLine(seenNeeds, t);');
-    // The panel sends what it showed when the page loaded (first time each tester was shown), and a box keeps one line per tester.
-    expect(src("app/app/tests/[id]/InvitePanel.tsx")).toContain("if (!shown.current.has(t.id)) shown.current.set(t.id,");
+    // The panel sends what its rows currently show, and a box keeps one line per tester.
+    expect(src("app/app/tests/[id]/InvitePanel.tsx")).toContain("shown.current.set(t.id,");
     const { mergeChanges } = await import("@/lib/live");
     expect(mergeChanges([{ text: "fbbb now lists Chinese, which this test needs.", at: "1", key: "needs:x" }], [{ text: "fbbb now lists Chinese and Windows PC, which this test needs.", at: "2", key: "needs:x" }])).toEqual([{ text: "fbbb now lists Chinese and Windows PC, which this test needs.", at: "2", key: "needs:x" }]);
   });

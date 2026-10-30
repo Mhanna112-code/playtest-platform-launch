@@ -85,7 +85,7 @@ describe("the tester rates the developer", () => {
     }
     expect((await ratingSummary(dev.user.id)).line).toBe(""); // hidden until the developer rates (or 14 days)
     for (const id of ids) expect((await act(testId, "rate", dev.cookie, { contractId: id, stars: 5, seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect(await ratingSummary(dev.user.id)).toEqual({ line: "4.5 ★ (2 ratings)", comments: ["Great"], n: 2, avg: 4.5 });
+    expect(await ratingSummary(dev.user.id)).toEqual({ line: "4.5 ★ (2 ratings)", comments: ["Great"], n: 2, avg: 4.5, at: expect.any(Date) });
   });
 });
 

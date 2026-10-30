@@ -45,10 +45,10 @@ describe("invites", () => {
     await later(); // the clock can lag a few ms: let the join settle before the other tab's page time
     await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [dee.user.id], tab: "tab-2" });
     await db.testerProfile.update({ where: { userId: ben.user.id }, data: { languages: ["Spanish"] } });
-    const r = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [cara.user.id, dee.user.id, ben.user.id], tab: "tab-1" });
+    const r = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [cara.user.id, dee.user.id, ben.user.id], seenTesters: { [ben.user.id]: { devices: ["Windows PC"], languages: ["English"], rating: null } }, tab: "tab-1" });
     expect(r.body.error.code).toBe("stop_once");
     const texts = r.body.error.changes.map((c: { text: string }) => c.text);
-    expect(texts).toEqual(expect.arrayContaining(["Cara Diaz joined this test, so she's no longer in your invite list", "You invited Dee Moss in another tab", "Ben Carter no longer lists a language this test needs (English)."]));
+    expect(texts).toEqual(expect.arrayContaining(["Cara Diaz joined this test, so she's no longer in your invite list", "You invited Dee Moss in another tab", "Ben Carter no longer lists English, which this test needs."]));
     await joined(testId, "Eve Ray");
     const full = await act(testId, "invite", dev.cookie, { seenAt: pageLoaded, testerIds: [ben.user.id], confirmed: true });
     expect(full.body.error.message).toBe("Harbor Run is full. Add spots to invite more people.");
