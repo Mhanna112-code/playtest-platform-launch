@@ -72,14 +72,14 @@ describe("batch 5 item 1: 'See their contract' under a pressed button", () => {
   });
 });
 
-describe("batch 5 item 2: the 3-change limit covers the steps, NDA, questions, languages and devices", () => {
+describe("batch 5 item 2: the 3-change limit covers the steps, questions, languages and devices (batch 34 §15: not the NDA)", () => {
   it("the fields, the words and the refusal line", () => {
     // (Batch 14) Plus the build link and ONE counter for the parts and prices.
-    expect(Object.keys(CRITICAL_FIELDS).sort()).toEqual(["buildUrl", "description", "devices", "languages", "ndaText", "parts", "questions"]);
+    expect(Object.keys(CRITICAL_FIELDS).sort()).toEqual(["buildUrl", "description", "devices", "languages", "parts", "questions"]);
     for (const f of ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired"]) expect(isCritical(f), f).toBe(false);
-    expect(CRITICAL_WORDS).toBe("steps, NDA, questions, languages, devices, build link or parts and prices");
+    expect(CRITICAL_WORDS).toBe("steps, questions, languages, devices, build link or parts and prices");
     // (Batch 6 item 3) Per field: the line names the one field.
-    expect(criticalLine("ndaText")).toBe("You've changed the NDA 3 times since testers joined. Contact us in Settings to change it again.");
+    expect(criticalLine("questions")).toMatch(/^You've changed the questions 3 times since testers joined\./);
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("{criticalLine(f)}");
     expect(fs.readFileSync(path.resolve(__dirname, "../prisma/schema.prisma"), "utf8")).toContain("criticalCounts Json");

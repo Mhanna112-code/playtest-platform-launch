@@ -200,7 +200,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   useEffect(() => {
     if (nothingChanged) setPayTick(false);
   }, [nothingChanged]);
-  // (Owner, Oct 28 afternoon) Once a tester has joined, each limited field (the steps, the NDA, questions, required languages, required devices) has its OWN 3 changes (one Save that
+  // (Owner, Oct 28 afternoon) Once a tester has joined, each limited field (the steps, questions, required languages, required devices; batch 34 §15: never the NDA) has its OWN 3 changes (one Save that
   // changes two of them uses one change of each; prices, parts, the build link and access keys are not limited). "Changes left: N of 3" sits next to each field's label; a field
   // at 0 locks with its note, and the other fields stay editable.
   const limited = !!edit && everJoined;
@@ -745,18 +745,17 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
 
       <div className="panel">
         <h2>Optional</h2>
-        {/* (Owner, Oct 29, batch 13 section 5) The NDA in its own card, as in the full app; the 3-change limit and the Switch / Keep offer stay. */}
+        {/* (Owner, Oct 29, batch 13 section 5) The NDA in its own card, as in the full app; the Switch / Keep offer stays; (batch 34 §15) no change limit on the NDA. */}
         <section className="space-y-3 rounded-xl border border-white/10 p-3" data-nda-card="">
-          <h3 className="flex items-center gap-2 font-semibold text-white"><ShieldCheck className="h-5 w-5 text-emerald-300" /> <label htmlFor="ndaText">Keep it confidential? (NDA, optional)</label>{left("ndaText")}</h3>
+          <h3 className="flex items-center gap-2 font-semibold text-white"><ShieldCheck className="h-5 w-5 text-emerald-300" /> <label htmlFor="ndaText">Keep it confidential? (NDA, optional)</label></h3>
           <ul className="list-disc space-y-0.5 pl-5 text-sm text-slate-400">
             <li>An NDA stops testers sharing your build or what they saw. They must accept it before joining.</li>
             <li>With or without one, <strong className="text-slate-200">you can always use the feedback you receive</strong> to improve your product.</li>
             <li>Testers can never show work from a test under an NDA as excerpts on their profile; without one, they can only with your permission.</li>
           </ul>
           {/* (Batch 13 section 9) 1,000 characters; an older, longer NDA stays as it is until a Save changes it. */}
-          <textarea id="ndaText" rows={4} disabled={fieldLocked("ndaText")} className={"input" + (f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? " field-bad" : "")} data-red-msg={f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? NDA_TOO_LONG : undefined} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave blank for no NDA. If filled, testers must accept it before joining." />
+          <textarea id="ndaText" rows={4} className={"input" + (f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? " field-bad" : "")} data-red-msg={f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? NDA_TOO_LONG : undefined} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave blank for no NDA. If filled, testers must accept it before joining." />
           <p className={`text-right text-xs ${f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? "text-rose-300" : "text-slate-500"}`} data-nda-count="">{f.ndaText.length.toLocaleString("en-US")} / {LIMITS.nda.toLocaleString("en-US")}</p>
-          {lockNote("ndaText")}
           {note("ndaText")}
         </section>
         {edit ? (

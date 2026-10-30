@@ -3,7 +3,7 @@ import { CRITICAL_FIELDS, LIMITS, type CriticalField } from "@/lib/limits";
 /**
  * (Batch 30 §9) A limited field (group) that used its 3 changes while this Edit tab still holds a change to it (another tab's Save locked it meanwhile): the line at
  * Save names the change, with Put it back beside it. "Your change to the live call rate ($24.00/h → $30.00/h) can't be saved: you've changed the parts and prices 3
- * times since testers joined." Long values (the steps, questions, the NDA) are named without their text.
+ * times since testers joined." Long values (the steps, questions) are named without their text.
  */
 export type LockedItem = { key: string; name: string; before?: string; now?: string };
 

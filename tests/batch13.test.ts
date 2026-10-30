@@ -171,7 +171,7 @@ describe("batch 13 sections 5 and 6: the NDA card, and an NDA added later", () =
     expect(f).toContain("you can always use the feedback you receive</strong> to improve your product.");
     expect(f).toContain("Testers can never show work from a test under an NDA as excerpts on their profile; without one, they can only with your permission.");
     expect(f).toContain('placeholder="Leave blank for no NDA. If filled, testers must accept it before joining."');
-    expect(f).toContain('{left("ndaText")}');
+    expect(f).not.toContain('{left("ndaText")}'); // (batch 34 §15) the NDA has no change limit
   });
 
   it("while the test has an NDA: requests refused, shown ones hidden; all back when it's removed (batch 18 section 7: a pending one can still be Allowed, straight into hidden)", async () => {

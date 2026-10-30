@@ -40,7 +40,7 @@ export type UserVM = { href: string; id: string; at: string; line: string; repor
 /** (Batch 17 §5) A search and ticks on the Accounts or Tests list (see lib/adminScroll.ts). */
 export type ListFilter = { q?: string; ticks?: string[] };
 export type TestVM = { /** (Batch 34 §1) when this row was read */ seen?: string; href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string; /** (Batch 33 §1) the line with the test and its developer as links */ parts?: Rich };
-/** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "NDA 3, steps 1". */
+/** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "steps 3, questions 1". */
 const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
 /** (Batch 22 section 4) `em`: a quoted reason shown in italics after the text (a dispute's). */
 export type TextVM = { id: string; at: string; text: string; href?: string; em?: string; /** (Batch 33 §1) the same line with its links (people, tests, Stripe ids) */ parts?: Rich };

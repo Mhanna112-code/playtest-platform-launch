@@ -30,7 +30,7 @@ export const LISTING_MISTAKES: [ListingField, RegExp][] = [
   ["questions", /\bquestions?\b/i],
 ];
 
-/** A changed-field-limit line ("You've changed the NDA 3 times since testers joined…"): it belongs to no field. */
+/** A changed-field-limit line ("You've changed the steps 3 times since testers joined…"): it belongs to no field. */
 export const isCriticalLine = (msg: string) => CRITICAL_KEYS.some((k) => criticalLine(k) === msg);
 
 /** The field a server mistake belongs to, or null (a changed-field-limit line, or something no field can fix). */

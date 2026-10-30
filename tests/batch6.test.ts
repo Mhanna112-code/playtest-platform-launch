@@ -134,45 +134,49 @@ describe("batch 6 item 2: 'Accepting testers' only when open with a spot", () =>
 
 describe("batch 6 item 3: the 3-change limit is per field", () => {
   it("the helpers: counts read from Json, one Save uses one change of each field it touches, the per-field line", () => {
-    expect(countsOf(null)).toEqual({ description: 0, ndaText: 0, questions: 0, languages: 0, devices: 0, buildUrl: 0, parts: 0 });
-    expect(countsOf({ ndaText: 2, devices: "x", bogus: 9 })).toEqual({ description: 0, ndaText: 2, questions: 0, languages: 0, devices: 0, buildUrl: 0, parts: 0 });
-    expect(countsAfter(countsOf({ ndaText: 2 }), ["ndaText", "questions"])).toMatchObject({ ndaText: 3, questions: 1, devices: 0, buildUrl: 0, parts: 0 });
-    expect(lockedFields(countsOf({ ndaText: 3, devices: 2, buildUrl: 0, parts: 0 }))).toEqual(["ndaText"]);
+    expect(countsOf(null)).toEqual({ description: 0, questions: 0, languages: 0, devices: 0, buildUrl: 0, parts: 0 }); // (batch 34 §15) never the NDA
+    expect(countsOf({ description: 2, ndaText: 5, devices: "x", bogus: 9 })).toEqual({ description: 2, questions: 0, languages: 0, devices: 0, buildUrl: 0, parts: 0 });
+    expect(countsAfter(countsOf({ description: 2 }), ["description", "questions"])).toMatchObject({ description: 3, questions: 1, devices: 0, buildUrl: 0, parts: 0 });
+    expect(lockedFields(countsOf({ description: 3, devices: 2, buildUrl: 0, parts: 0 }))).toEqual(["description"]);
     expect(criticalLine("questions")).toBe("You've changed the questions 3 times since testers joined. Contact us in Settings to change it again.");
     expect(criticalLine("description")).toBe("You've changed the steps 3 times since testers joined. Contact us in Settings to change it again.");
-    expect(CRITICAL_KEYS).toEqual(["description", "ndaText", "questions", "languages", "devices", "buildUrl", "parts"]);
+    expect(CRITICAL_KEYS).toEqual(["description", "questions", "languages", "devices", "buildUrl", "parts"]); // (batch 34 §15) never the NDA
   });
 
-  it("each field has its own 3 changes; one that reaches 0 locks alone and the others stay editable; the listing poll carries the counts", async () => {
+  it("each field has its own 3 changes; one that reaches 0 locks alone and the others stay editable; the NDA never counts; the listing poll carries the counts", async () => {
     const { dev, testId } = await setup();
     await joined(testId);
-    expect((await edit(testId, dev.cookie, { ndaText: "One", languages: ["English"] })).status).toBe(200); // one change of each
-    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toEqual({ description: 0, ndaText: 1, questions: 0, languages: 1, devices: 0, buildUrl: 0, parts: 0 });
-    for (const t of ["Two", "Three"]) expect((await edit(testId, dev.cookie, { ndaText: t })).status).toBe(200);
-    const fourth = await edit(testId, dev.cookie, { ndaText: "Four", languages: ["German"] });
+    expect((await edit(testId, dev.cookie, { description: "One", languages: ["English"], ndaText: "Secret one" })).status).toBe(200); // one change of each limited field
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toEqual({ description: 1, questions: 0, languages: 1, devices: 0, buildUrl: 0, parts: 0 });
+    for (const t of ["Two", "Three"]) expect((await edit(testId, dev.cookie, { description: t })).status).toBe(200);
+    const fourth = await edit(testId, dev.cookie, { description: "Four", languages: ["German"] });
     expect(fourth.status).toBe(400);
-    expect(fourth.body.error.message).toBe("You've changed the NDA 3 times since testers joined. Contact us in Settings to change it again.");
-    expect(fourth.body.error.critical).toEqual(["ndaText"]);
+    expect(fourth.body.error.message).toBe("You've changed the steps 3 times since testers joined. Contact us in Settings to change it again.");
+    expect(fourth.body.error.critical).toEqual(["description"]);
     // Nothing saved from that press; the other fields still save on their own.
     expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).languages).toEqual(["English"]);
-    expect((await edit(testId, dev.cookie, { languages: ["German"], description: "Sail on" })).status).toBe(200);
-    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toEqual({ description: 1, ndaText: 3, questions: 0, languages: 2, devices: 0, buildUrl: 0, parts: 0 });
+    expect((await edit(testId, dev.cookie, { languages: ["German"], questions: ["Sail on?"] })).status).toBe(200);
+    // (Batch 34 §15) The NDA has no limit: any number of NDA saves go through and use no change.
+    for (const t of ["Secret two", "Secret three", "Secret four", "Secret five"]) expect((await edit(testId, dev.cookie, { ndaText: t })).status).toBe(200);
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).ndaText).toBe("Secret five");
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toEqual({ description: 3, questions: 1, languages: 2, devices: 0, buildUrl: 0, parts: 0 });
     const r = await json(await testGET(req(`/api/tests/${testId}/listing`, { cookie: dev.cookie }), { params: Promise.resolve({ id: testId, action: "listing" }) }));
-    expect(r.body.criticalCounts).toEqual({ description: 1, ndaText: 3, questions: 0, languages: 2, devices: 0, buildUrl: 0, parts: 0 });
-    // Edit: "Changes left: N of 3" next to each limited label, the lock note under a locked field, only that field disabled.
+    expect(r.body.criticalCounts).toEqual({ description: 3, questions: 1, languages: 2, devices: 0, buildUrl: 0, parts: 0 });
+    // Edit: "Changes left: N of 3" next to each limited label, the lock note under a locked field, only that field disabled; nothing of the kind on the NDA.
     const form = src("app/app/tests/TestForm.tsx");
-    for (const f of ["description", "ndaText", "questions", "languages", "devices"]) expect(form).toContain(`left("${f}")`);
-    for (const f of ["description", "ndaText", "questions", "languages", "devices"]) expect(form).toContain(`lockNote("${f}")`);
-    expect(form).toContain('disabled={fieldLocked("ndaText")}');
+    for (const f of ["description", "questions", "languages", "devices"]) expect(form).toContain(`left("${f}")`);
+    for (const f of ["description", "questions", "languages", "devices"]) expect(form).toContain(`lockNote("${f}")`);
+    expect(form).toContain('disabled={fieldLocked("description")}');
+    for (const t of ['left("ndaText")', 'lockNote("ndaText")', 'fieldLocked("ndaText")']) expect(form).not.toContain(t);
     expect(form).not.toContain("limitReached");
   });
 
   it("the admin's 'Allow 3 more' gives 3 more changes to every field at 0 and leaves the others", async () => {
     const { testId } = await setup();
-    await db.test.update({ where: { id: testId }, data: { criticalCounts: { ndaText: 3, devices: 3, questions: 2 } } });
+    await db.test.update({ where: { id: testId }, data: { criticalCounts: { description: 3, devices: 3, questions: 2 } } });
     const a = await admin();
     expect((await adm("allow-critical-changes", a.cookie, { id: testId })).status).toBe(200);
-    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toEqual({ description: 0, ndaText: 0, questions: 2, languages: 0, devices: 0, buildUrl: 0, parts: 0 });
+    expect(countsOf((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toEqual({ description: 0, questions: 2, languages: 0, devices: 0, buildUrl: 0, parts: 0 });
   });
 
   it("the migration copies the old total into every field's count, then drops the old column", () => {
