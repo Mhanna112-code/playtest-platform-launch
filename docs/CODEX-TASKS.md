@@ -176,7 +176,8 @@ Build docs/BATCH-34.md §14 exactly as written. Where things are: the developer'
 top overview panel is the first card); the tester's listing view with "Updated" tags is in src/app/app/sessions/[id]/page.tsx
 ("Your agreed scope") and src/components/ListingInfo.tsx (UpdatedTag) — reuse them; the listing-save lines and their "See it" are
 listingSaveLines in src/lib/server/live.ts and the seeIt prop of src/components/ChangesBox.tsx / LiveTop (ListingSeeIt). Don't touch
-the admin pages, the written-answers screens, or the bell/notifications. Tests (tests/codex10-test-listing.test.ts): the panel
+the admin pages, the written-answers screens, or the bell/notifications. The join page part: src/app/app/find/[id]/page.tsx (listing section, id "listing") and JoinBox.tsx (the needs pop-up: its ChangesBox gets seeIt="#listing", See it closes the pop-up first, and press names Join / Apply / Ask to rejoin).
+Tests (tests/codex10-test-listing.test.ts): the pop-up's listing line has See it and names the press; the panel
 shows every field and an Updated tag after a save; a listing line in the top box and in a stop box carries See it to the panel.
 npm run check green. Commit on the branch; don't push or merge.
 ```
