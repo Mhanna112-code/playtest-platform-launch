@@ -123,3 +123,26 @@ sections only where nothing fits, plain English, "they" for people. Confirm agai
 names); where the spec and the code differ, describe the code and list the differences in your final message. Commit on the
 branch; don't push or merge.
 ```
+
+## Task 8: the two sides as two separate accounts
+
+```
+Read AGENTS.md first and follow it. Task number: 8 (schema codex8, build folder .next-codex8, branch codex/separate-sides,
+worktree C:/Users/march/Projects/pl-codex-8, made from the latest master).
+
+Build docs/BATCH-34.md §5 exactly as written. Where things are: sides in src/lib/sides.ts (sideFor, sideForPath, sideLink, hasBoth)
+and src/app/app/layout.tsx (the line that saves a page's side as the side used last: remove it; render the "This page is on your
+<side> side." notice with the switch button instead of the page when the path's side isn't the current one); /app/switch in
+src/app/app/switch/route.ts (the GET page always waits for the press; the POST stays the only thing that changes `side`, plus the
+existing src/app/api/account/side/route.ts button); the Stripe returns src/app/api/payments/card-saved/route.ts and payout-return
+(remove the side updates added in batch 32 §17); notifications: bell()/notify() in src/lib/server/notify.ts, the Notification model
+in prisma/schema.prisma (add a nullable `side` column: "developer" | "tester" | null = the account's; hand-written migration, checked
+with prisma migrate diff as AGENTS.md says), the bell count (unreadEntryCount), the Notifications page and the bell list, and the
+email digest. Decide each line's side from what it's about (the caller knows: pass it explicitly where the link doesn't say; the
+link's path decides otherwise: sideForPath; payments links by kind). Backfill existing rows the same way in the migration.
+Don't touch the admin pages, the written-answers screens, or src/lib/server/joining.ts / invites.ts (other tasks).
+Tests (tests/codex8-separate-sides.test.ts): an account with both sides: a developer page opened on the tester side shows the
+notice and doesn't change `side`; only the switch POST changes it; the bell count and list per side; an email with both headings;
+Payments/Account/Notifications per side (the delete warning and the settings help); update older tests that expected the old
+automatic switching. npm run check green. Commit on the branch; don't push or merge.
+```
