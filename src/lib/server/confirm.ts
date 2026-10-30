@@ -289,7 +289,8 @@ async function finish(paymentId: string) {
   if (p.kind === "subscription") return { done: true, ...(await (await import("./subscription")).subscriptionConfirmed(p.id)) };
   // An owed payment ("paying" from a press, or failed / owed with a retry waiting), a tester's Charge or a dispute decision made while away.
   const wasOwed = p.status === "failed" || p.status === "owed" || p.status === "paying";
-  await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date(), failure: "", actionPi: null, actionBy: null, warnedAt: null } });
+  // (Batch 33 §3) A failed charge paid later keeps why it failed (the Payment failures box).
+  await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date(), ...(p.owedUntil ? {} : { failure: "" }), actionPi: null, actionBy: null, warnedAt: null } });
   await holds.settledOwed(p.id, wasOwed);
   return { done: true, lifted: await holds.liftHoldIfClear(p.developerId) };
 }

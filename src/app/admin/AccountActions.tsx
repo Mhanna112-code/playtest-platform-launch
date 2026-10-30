@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/client";
 import type { AccountState } from "@/lib/server/accountState";
 import { AdminButton } from "./AdminButton";
@@ -13,6 +13,11 @@ import { TeamCloseBox } from "./TeamCloseBox";
  */
 export function AccountActions({ initial }: { initial: AccountState }) {
   const [acct, setAcct] = useState(initial);
+  // (Owner, Oct 30, batch 33 §7) A redraw after another admin's change (the page's live poll) brings a fresher state: it is shown at once. What this admin typed
+  // stays: the boxes are keyed by the state they belong to, not the whole block, so only a button whose side changed starts afresh.
+  useEffect(() => {
+    setAcct((now) => (initial.at > now.at ? initial : now));
+  }, [initial]);
   const [previewAt, setPreviewAt] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const seen = { since: previewAt ?? acct.at, from: previewAt ? "preview" : "page" };
@@ -36,17 +41,17 @@ export function AccountActions({ initial }: { initial: AccountState }) {
   const open = (["developer", "tester"] as const).filter((s) => (s === "developer" ? acct.isDeveloper : acct.isTester) && !acct.suspended[s]);
   const roles = (acct.isDeveloper ? 1 : 0) + (acct.isTester ? 1 : 0);
   return (
-    <div className="space-y-1" key={acct.at} data-account-actions={acct.id} data-account-state={acct.suspended.developer || acct.suspended.tester ? "suspended" : "normal"}>
-      {/* (Owner, Oct 30, batch 15 section 16) Each suspended side has its own line and Reinstate. */}
+    <div className="space-y-1" data-account-actions={acct.id} data-account-state={acct.suspended.developer || acct.suspended.tester ? "suspended" : "normal"}>
+      {/* (Owner, Oct 30, batch 15 section 16) Each suspended side has its own line and Reinstate. (Batch 33) A <div>, never a <p>: the button's mistake list is a <div>. */}
       {(["developer", "tester"] as const).filter((s) => acct.suspended[s]).map((s) => (
-        <p key={s} className="flex flex-wrap items-center gap-2" data-suspended-side={s}>
+        <div key={s} className="flex flex-wrap items-center gap-2" data-suspended-side={s}>
           <b>Suspended ({s} side)</b> <span className="line-clamp-2 max-w-full break-words" title={acct.suspended[s]}>{acct.suspended[s]}</span>
           <AdminButton action="unsuspend" id={acct.id} label="Reinstate" extra={{ side: s, ...seen }} onRefused={refused} />
-        </p>
+        </div>
       ))}
       {/* (Owner, Oct 29, batch 23 section 7) Top to bottom, full width (phones too): Preview and its effects, then the side choice and the reason box, then Suspend. */}
       {(open.length > 0 || roles === 0) && (
-        <div className="flex w-full max-w-xl flex-col items-start gap-2" data-suspend-block="">
+        <div key={`suspend:${open.join(",")}`} className="flex w-full max-w-xl flex-col items-start gap-2" data-suspend-block="">
           <PreviewButton id={acct.id} onLoaded={setPreviewAt} />
           {/* A one-role account just shows Suspend; an account with both roles chooses the side. */}
           {open.length > 0 && (roles === 2 && open.length === 2 ? (
@@ -59,9 +64,9 @@ export function AccountActions({ initial }: { initial: AccountState }) {
       )}
       {/* (Batch 30 §5) A developer's open reviews, closed at $0 by the team (Preview first, then the reason). */}
       {acct.isDeveloper && <TeamCloseBox id={acct.id} scope="developer" />}
-      <p className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <AdminButton action="delete-account" id={acct.id} label="Delete account" danger onRefused={refused} fields={[{ name: "note", label: "Why" }]} />
-      </p>
+      </div>
       {line}
     </div>
   );

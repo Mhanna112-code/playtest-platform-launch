@@ -357,7 +357,7 @@ describe("batch 8 item 7: admin", () => {
     expect((await adm("set-free-until", a.cookie, { id: "free-until", date: new Date(Date.now() + 45 * DAY).toISOString().slice(0, 10) })).status).not.toBe(200);
     expect((await launchState()).until).toBeNull();
     expect(src("app/admin/page.tsx")).not.toContain('action="set-free-until"');
-    expect(src("app/admin/page.tsx")).toContain("Set by FREE_UNTIL in the server configuration");
+    expect(src("app/admin/page.tsx")).not.toContain("Set by FREE_UNTIL in the server configuration"); // (batch 33 §6) not on the console any more
   });
 
   it("testers never see any of it: a subscription payment is not the tester side's income", async () => {
