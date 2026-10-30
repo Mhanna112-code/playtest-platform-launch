@@ -83,6 +83,13 @@ On the join page (test "lllllq" / "llllllq"), saves at 6:54 (questions), 6:55 (p
 - LEAN-SPEC.md (~line 80, "NEWEST+9") still describes the growing tester limit: update it to the flat 10.
 - scripts/media.cjs group b18b comments still say a developer could earn up to 50 spots.
 
+## 14. Each written answer is at least 50 characters (owner, Oct 29)
+- Every answer the tester sends to a question (Required ones, and any optional one they fill in) must be at least 50 characters long (trimmed; formatting marks such as ** and ``` don't count; spaces inside count). An optional question left completely empty is still fine, and the "at least one question" rule now means at least one answer of 50+ characters. "Anything else (bugs, ideas)" has no minimum.
+- Under each answer box a small counter while typing below the minimum: "12 / 50 characters minimum" (grey), red on Send and in the mistakes list: "Write at least 50 characters (12 so far)." at that answer. Send and Send my updated answers both check it; Save draft doesn't. The server refuses the same way ("Each answer needs at least 50 characters.", with which question).
+- Answers already sent stay as they are; the rule applies to new sends.
+- Post / Edit / the join page: the questions box's line adds "Each answer is at least 50 characters." so developers and testers know.
+- Tests: a 49-character answer refused at that answer; 50 accepted; an empty optional question fine; Anything else short is fine; a draft saves short.
+
 ## Decided, no change (owner, Oct 29)
 - **Charge / Let it go stays** for listed written answers and recordings (the owner said no to charging listed work automatically at its review date; only listed calls are charged automatically).
 - **The tester's Rate still closes at the test's close-out**, not at their own pieces' closing date (a last tester who waits past the close-out to Charge can't rate any more). Don't change it.
