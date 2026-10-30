@@ -59,6 +59,8 @@ model User {
   /// Stripe: developer's customer + saved card; tester's Connect account
   stripeCustomerId      String? @unique
   stripePaymentMethodId String?
+  cardExpMonth          Int?
+  cardExpYear           Int?
   stripeAccountId       String? @unique
   payoutsReady          Boolean @default(false)
   /// (Owner, Oct 28, batch 8) The developer subscription ($7/month): "none" | "active" | "past_due" (a renewal was declined; Stripe retries for about a week, the perks

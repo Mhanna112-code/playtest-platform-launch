@@ -47,6 +47,7 @@ import { closeOutSoon, payClosesLine } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
 import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
+import { GetStarted } from "./GetStarted";
 
 export const metadata = { title: "Home · Playtest" };
 import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
@@ -133,6 +134,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         <div>
           <p className="text-sm text-slate-400">Welcome back,</p>
           <h1 className="text-3xl font-bold tracking-tight text-white">{u.name || u.email}</h1>
+          {side === "developer" && u.isDeveloper && <GetStarted steps={[{ label: "Add a card (needed to post a test)", done: !!u.stripePaymentMethodId }]} />}
+          {side === "tester" && u.isTester && <GetStarted steps={[{ label: "Set up payouts (to receive your pay)", done: !!(u.payoutsReady && u.stripeAccountId) }]} />}
         </div>
         <div className="flex flex-wrap gap-2">
           {side === "developer" && !devOff && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
@@ -145,6 +148,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
     </div>
   );
 }
+
 
 type Viewer = Awaited<ReturnType<typeof requirePageUser>>;
 

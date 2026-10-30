@@ -26,6 +26,7 @@ const holdOf = (id: string) => db.user.findUniqueOrThrow({ where: { id } });
 /** A developer with a paid piece and an open chargeback on it (so on a chargeback hold), and a working tester. */
 async function chargedBack() {
   const { dev, testId } = await setup();
+  await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: null, stripePaymentMethodId: null, cardExpMonth: null, cardExpYear: null } });
   const { tester, sessionId } = await joined(testId);
   await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
   const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });

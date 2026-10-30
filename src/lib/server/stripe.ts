@@ -36,6 +36,7 @@ const refuseRemoved = (p: object, names: string[]) => {
 /** (Batch 28 §17) The fake's charge behind each PaymentIntent (Stripe's latest_charge), for transfers made later from it. */
 const chargeOfPi = (id: string) => id.replace(/^pi_/, "ch_");
 const fakeStripe = {
+  paymentMethods: { retrieve: async (id: string) => ({ id, card: { brand: "visa", last4: "4242", exp_month: 12, exp_year: 2030 } }) },
   paymentIntents: {
     create: async (p: { payment_method?: string; amount: number; off_session?: boolean; capture_method?: string; metadata?: { payKey?: string } }) => {
       refuseRemoved(p, ["payment_method_types"]);
@@ -210,6 +211,9 @@ function chargeError(e: unknown, declined: string): HttpError {
     return x as HttpError;
   }
   if (isCardError(e)) return new HttpError(402, "card_failed", declined);
+  const stripeError = e as { type?: string; code?: string; raw?: { code?: string; message?: string } };
+  if (stripeError.type === "StripeInvalidRequestError" && (stripeError.code === "resource_missing" || stripeError.raw?.code === "resource_missing"))
+    return new HttpError(402, "card_failed", NO_CARD_SAVED);
   return new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
 }
 
@@ -347,7 +351,8 @@ export async function saveCardFromCheckout(userId: string, sessionId: string) {
   const pm = typeof si?.payment_method === "string" ? si.payment_method : si?.payment_method?.id;
   if (!pm) throw new HttpError(400, "no_card", "The card wasn't saved. Try again.");
   await stripe.customers.update(user.stripeCustomerId!, { invoice_settings: { default_payment_method: pm } });
-  await db.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm } });
+  const paymentMethod = await stripe.paymentMethods.retrieve(pm);
+  await db.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm, cardExpMonth: paymentMethod.card?.exp_month ?? null, cardExpYear: paymentMethod.card?.exp_year ?? null } });
   // (Owner, Oct 28, batch 16 section 27) "Card: Visa ending 1111 → Visa ending 4242" for a Payments page open in another tab or device.
   if (user.stripePaymentMethodId !== pm) {
     const label = async (id: string | null) => (id ? cardLabel(await stripe.paymentMethods.retrieve(id).then((x) => x.card ?? {}, () => ({}))) : "no card");
@@ -355,6 +360,35 @@ export async function saveCardFromCheckout(userId: string, sessionId: string) {
   }
   // (Owner, Oct 29, batch 11 section 4) A new card during a hold: what is owed is retried on it at once.
   await (await import("./holds")).retryOwed(userId, new Date(), "card").catch((e) => console.error("[retry] card saved:", (e as Error).message));
+}
+
+/** (Batch 34 §6) Refresh saved-card expiry from Stripe and send each threshold once. Missing cards are handled only when a charge fails. */
+export async function cardExpiryReminders(now = new Date()) {
+  const stripe = getStripe();
+  const users = await db.user.findMany({ where: { isDeveloper: true, deletedAt: null, stripePaymentMethodId: { not: null } }, select: { id: true, email: true, stripePaymentMethodId: true, cardExpMonth: true, cardExpYear: true } });
+  let sent = 0;
+  for (const user of users) {
+    let pm: Stripe.PaymentMethod;
+    try { pm = await stripe.paymentMethods.retrieve(user.stripePaymentMethodId!); }
+    catch (e) { console.error("[card expiry] refresh failed:", (e as Error).message); continue; }
+    const month = pm.card?.exp_month, year = pm.card?.exp_year;
+    if (!month || !year) continue;
+    if (month !== user.cardExpMonth || year !== user.cardExpYear) await db.user.update({ where: { id: user.id }, data: { cardExpMonth: month, cardExpYear: year } });
+    const end = new Date(Date.UTC(year, month, 0, 23, 59, 59, 999));
+    const today = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const expiryDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+    const days = Math.round((expiryDay - today) / 86_400_000);
+    if (![30, 7, 0].includes(days)) continue;
+    const mark = days === 30 ? "month" : days === 7 ? "week" : "day";
+    const reminder = `card-expiry:${year}-${month}:${mark}`;
+    if (await db.notification.findFirst({ where: { userId: user.id, reminderKey: reminder }, select: { id: true } })) continue;
+    const monthName = new Intl.DateTimeFormat("en", { month: "long", timeZone: "UTC" }).format(new Date(Date.UTC(year, month - 1, 1)));
+    const line = `Your card ending ${pm.card?.last4 ?? "????"} expires at the end of ${monthName}: update it in Payments.`;
+    const { bell } = await import("./notify");
+    await bell(user.id, line, "/app/payments", undefined, { payment: true, reminder });
+    sent++;
+  }
+  return sent;
 }
 
 /** Tester: Stripe Connect Express onboarding link. */

@@ -250,11 +250,17 @@ async function postPerks(devId: string, joinMode: string, exceptId = "") {
   if (joinMode === "apply") await subs.requirePerk(devId, "approved");
 }
 
+async function requireCardToPost(devId: string) {
+  const user = await db.user.findUnique({ where: { id: devId }, select: { stripePaymentMethodId: true } });
+  if (!user?.stripePaymentMethodId) throw new HttpError(402, "card_required", "Add a card in Payments before posting: testers' pay is charged to it.", { link: "/app/payments" });
+}
+
 /** (Owner, Oct 28 evening) A draft (a next round not opened yet) opens in Post a test: "Post the test" saves the typed details and opens it for testers. */
 export async function postDraft(dev: U, testId: string, body: Record<string, unknown>) {
   const t0 = await ownTest(dev.id, testId);
   if (t0.status !== "draft") throw new HttpError(409, "not_draft", t0.status === "stopped" ? "This test was stopped." : "This test is already open.");
   const { l, keys } = await checkPost(dev, body);
+  await requireCardToPost(dev.id);
   await postPerks(dev.id, l.joinMode, testId);
   return db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
@@ -278,6 +284,7 @@ export async function deleteDraft(dev: U, testId: string) {
 export async function createTest(dev: U, body: Record<string, unknown>) {
   // (Batch 31) At most 10 spots; (design doc 4) with access keys, at least as many keys as open spots.
   const { l, keys } = await checkPost(dev, body);
+  await requireCardToPost(dev.id);
   await postPerks(dev.id, l.joinMode);
   return db.$transaction(async (tx) => {
     const t = await tx.test.create({ data: { ...listingData(l), developerId: dev.id, status: "open", testerDays: testerDaysFor(l.openUntil, dev) } });

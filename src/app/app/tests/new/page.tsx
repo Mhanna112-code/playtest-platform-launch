@@ -24,6 +24,7 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
       {draft && <p className="note" data-draft-note="">A draft: {draft.title}. Check the details, then press Post the test to open it for testers.</p>}
       <TestForm
         draft={draft ? { id: draft.id } : undefined}
+        hasCard={!!u.stripePaymentMethodId}
         perks={await hasPerks(u)}
         termsAgain={needsTermsAgain(u)}
         init={draft ? asListing(draft) : { productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: ["Productivity"], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}
