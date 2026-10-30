@@ -63,3 +63,8 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 17. Back from Stripe on the right side (owner's finding, Oct 30)
 - Coming back from adding a card always lands on the developer side's Payments; coming back from payout setup on the tester side's. (Payments, Account and Notifications show the side used last, which a page of the other side in another tab can change.)
+
+## 18. Each paid line says what it was for (owner, Oct 30)
+- Payments → What you've paid (developer): "Ana Silva's written answers on “Harbor Run”, charged by Ana Silva after 7 days without a review · Fri, Oct 30, 1:43 AM · $10.00 · your bank reversed this (chargeback)". How it was paid: nothing added for the developer's own Pay; "charged by <tester> after 7 days without a review"; "charged automatically after 7 days"; "paid through Pay what you owe". Pay more, dispute decisions and a chargeback's repayment ("Paid again after your bank reversed a payment: …") name the part too. The test name links to the test page.
+- Your earnings (tester): "You get $8.00 from Nora Lane for your written answers on “Harbor Run”" (with "(extra pay)" / "(dispute decision)", and "charged by you after 7 days without a review").
+- A chargeback on a chargeback's repayment is a new chargeback: the repayment is owed again with another fee, the first stays repaid, and the team's approval is needed again (now tested).

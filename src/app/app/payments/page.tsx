@@ -15,6 +15,7 @@ import { chargebackSteps } from "@/lib/server/chargeback";
 import { sideFor } from "@/lib/sides";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { LongList } from "@/components/LongList";
+import { paidRows } from "@/lib/server/paymentRows";
 import { testerShare } from "@/lib/rules";
 import { SubscriptionBox } from "./SubscriptionBox";
 import { launchState } from "@/lib/server/subscription";
@@ -63,6 +64,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     dev ? db.payment.findMany({ where: { developerId: u.id, OR: [{ status: { in: ["charged", "not_set_up"] } }, { status: "refunded", kind: "chargeback" }] }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
     tester ? db.payment.findMany({ where: { testerId: u.id, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
   ]);
+  // (Batch 32 §18) What each paid line was for (who, which part, which test, how it was paid; a reversed payment says so).
+  const rows = new Map([...(dev ? await paidRows(paidOut, "developer") : []), ...(tester ? await paidRows(paidIn, "tester") : [])]);
   // (Owner, Oct 28, batch 16 section 27) Change card / payout setup stopped once (the account changed in another tab or device): the box under that button.
   const seenAt = new Date().toISOString();
   const since = q.since ? new Date(q.since) : null;
@@ -124,8 +127,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="text-slate-200">{p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
-                  <span className="text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : ""}</span>
+                  <span className="text-slate-200" data-paid-what="">{rows.get(p.id) ? <><a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`}>{rows.get(p.id)!.what}</a>{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
+                  <span className="text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? " · your bank reversed this (chargeback)" : ""}</span>
                 </li>
               ))}
               {paidOut.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}
@@ -184,7 +187,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidIn.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="text-slate-200">You get {money(p.testerCents)}{p.kind === "extra" ? " · extra pay" : ""}</span>
+                  <span className="text-slate-200" data-earned-what="">You get {money(p.testerCents)}{rows.get(p.id) ? ` ${rows.get(p.id)!.what}${rows.get(p.id)!.how ? `, ${rows.get(p.id)!.how}` : ""}` : p.kind === "extra" ? " · extra pay" : ""}</span>
                   <span className="text-slate-400">{fmtDateTime(p.createdAt)}{p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
                 </li>
               ))}

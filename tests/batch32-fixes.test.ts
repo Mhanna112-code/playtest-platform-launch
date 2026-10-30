@@ -109,3 +109,46 @@ describe("batch 32 §17: back from Stripe on the right side", () => {
     expect(src("app/api/payments/payout-return/route.ts")).toContain('if (hasSide(u, "tester") && u.side !== "tester") await db.user.update({ where: { id: u.id }, data: { side: "tester" } });');
   });
 });
+
+describe("batch 32 §18: each paid line says what it was for", () => {
+  it("names the tester, part and test, how it was paid, and a reversed payment", async () => {
+    const { paidRows } = await import("@/lib/server/paymentRows");
+    const { CHARGED_BY_TESTER } = await import("@/lib/rules");
+    const { dev, testId } = await setup({ title: "Harbor Run" } as never);
+    const { tester, sessionId } = await joined(testId, "Ana Silva");
+    const { sact, seen } = await import("./fixtures");
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    await db.review.create({ data: { submissionId: sub.id, contractId: sessionId, amountCents: 1000, agreedCents: 1000, reason: CHARGED_BY_TESTER, payKey: "k-" + sub.id } });
+    const p = await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 200, testerCents: 800, status: "charged", chargebackAt: new Date() } });
+    const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;
+    const devRow = (await paidRows([p], "developer")).get(p.id)!;
+    expect(devRow.what).toBe(`Ana Silva's written answers on “${title}”`);
+    expect(devRow.how).toBe("charged by Ana Silva after 7 days without a review");
+    expect(devRow.reversed).toBe(true);
+    expect((await paidRows([p], "tester")).get(p.id)!.how).toBe("charged by you after 7 days without a review");
+  });
+});
+
+describe("a chargeback on a chargeback's repayment", () => {
+  it("is a new chargeback: the repayment is owed again with a second fee; the first stays repaid", async () => {
+    const { chargebackOpened, owed } = await import("@/lib/server/holds");
+    const { CHARGEBACK_FEE_CENTS } = await import("@/lib/rules");
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    const first = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 200, testerCents: 800, status: "charged", stripePaymentIntentId: "pi_cb1_" + sessionId } });
+    expect(await chargebackOpened(first.stripePaymentIntentId!)).toBe(true);
+    expect((await owed(dev.user.id)).reduce((a, p) => a + p.amountCents, 0)).toBe(1000 + CHARGEBACK_FEE_CENTS);
+    // Pay what you owe repaid it…
+    const repay = await db.payment.create({ data: { kind: "chargeback", repaysId: first.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000 + CHARGEBACK_FEE_CENTS, feeCents: 1000 + CHARGEBACK_FEE_CENTS, testerCents: 0, status: "charged", stripePaymentIntentId: "pi_cb2_" + sessionId } });
+    expect(await owed(dev.user.id)).toHaveLength(0);
+    // …and that repayment is charged back too.
+    expect(await chargebackOpened(repay.stripePaymentIntentId!)).toBe(true);
+    const now = await owed(dev.user.id);
+    expect(now.map((p) => p.id)).toEqual([repay.id]);
+    expect(now[0].amountCents).toBe(1000 + CHARGEBACK_FEE_CENTS + CHARGEBACK_FEE_CENTS);
+    const u = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
+    expect(u.holdReason).toBe("chargeback");
+    expect(u.chargebackApprovedAt).toBeNull();
+  });
+});
