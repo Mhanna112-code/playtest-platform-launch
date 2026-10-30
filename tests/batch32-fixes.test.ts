@@ -91,3 +91,14 @@ describe("batch 32 §15: a tester's Charge on a developer with no saved card", (
     expect(src("app/app/sessions/[id]/ChoiceBox.tsx")).toContain("setBox(null);\n          setErr(errOf(e));");
   });
 });
+
+describe("batch 32 §16: switching sides is instant from the site and from your own visits", () => {
+  it("same-origin and direct visits (none) send the form at once; a link from elsewhere waits for the press", async () => {
+    const { GET } = await import("@/app/app/switch/route");
+    const { makeUser } = await import("./helpers");
+    const both = await makeUser({ tester: true, developer: true, name: "Bo Both" } as never);
+    const get = async (site?: string) => (await GET(new Request("http://localhost:3400/app/switch?to=tester&next=/app/find", { headers: { cookie: both.cookie, ...(site ? { "sec-fetch-site": site } : {}) } }))).text();
+    for (const site of ["same-origin", "same-site", "none"]) expect(await get(site), site).toContain("<script>");
+    for (const site of ["cross-site", undefined]) expect(await get(site), String(site)).not.toContain("<script>");
+  });
+});

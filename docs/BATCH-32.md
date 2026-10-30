@@ -57,3 +57,6 @@ This file wins over the earlier batches and the design doc where they differ.
 ## 15. A Charge on a developer with no saved card (owner's finding, Oct 30)
 - A tester's Charge (or an automatic charge) on a developer who never saved a card was sent to Stripe with an empty card and shown as "Payments are having a problem right now". It is now handled as a declined card: the payment hold and Pay what you owe for the developer ("No card is saved on this account."), and the tester reads only "Payment for your work may be delayed" (never "failed").
 - When a press goes ahead after its stop box and is then refused for another reason, the stop box goes and only the refusal shows (they used to show together).
+
+## 16. Switching sides is instant (owner's finding, Oct 30)
+- A link to a page for the other side switches at once from the site's own pages AND from the person's own direct visits (a reload, a typed or bookmarked address, a new tab); the "Switch to your … side and continue" button only shows for a link from another site or an email. The switch itself is still a POST from this site.
