@@ -3,6 +3,7 @@ import { displayName, fmtDate } from "@/lib/format";
 import { DEV_QUIET_KINDS, ratedYouLiveLine } from "@/lib/rules";
 import { handle, HttpError, ok } from "@/lib/server/http";
 import { joinPageChanges } from "@/lib/server/joining";
+import { invitesSentSince } from "@/lib/server/invites";
 import { asLines, devChanges } from "@/lib/server/live";
 import { requireUser } from "@/lib/server/session";
 import { outageLines } from "@/lib/server/outages";
@@ -66,8 +67,8 @@ export async function GET(req: Request) {
       // (Batch 16 section 32) Their invite to this test closed: a neutral line (the page refreshes without it).
       changes.push(...(await invitesClosedSince(u.id, since, id)));
     } else if (kind === "invites") {
-      // (Batch 16 section 32) The tester's dashboard: each of their invites that closed since the page loaded.
-      changes = await invitesClosedSince(u.id, since);
+      // (Batch 16 section 32) The tester's dashboard: each of their invites that closed since the page loaded; (batch 30 §8) and each new or re-sent one.
+      changes = [...(await invitesSentSince(u.id, since)), ...(await invitesClosedSince(u.id, since))];
     } else throw new HttpError(404, "not_found", "Nothing to watch here.");
     // (NEWEST+6) "The site was down from … Deadlines and payment dates moved … later." on every affected page.
     // (Batch 15 section 11) Their times in the viewer's own zone.

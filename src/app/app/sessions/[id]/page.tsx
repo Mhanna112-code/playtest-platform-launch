@@ -21,6 +21,7 @@ import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { testV } from "@/lib/server/pulseV";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
@@ -69,6 +70,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const u = await requirePageUser();
   adminAway(u, "/app/sessions"); // (batch 20 section 16) admin only
   await (await import("@/lib/server/recovery")).checkStuck({ contractId: id }); // (batch 15 section 9) payments stuck "in progress"
+  // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
+  const head = await db.contract.findUnique({ where: { id }, select: { testId: true, testerId: true } });
+  const pageV = head && head.testerId === u.id ? await testV(u.id, head.testId, id) : "";
   const c = await db.contract.findUnique({
     where: { id },
     include: {
@@ -234,7 +238,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // card per part.
   return (
     <div className="mx-auto max-w-3xl space-y-6">
-      <AutoRefresh query={`session=${c.id}`} />
+      <AutoRefresh query={`session=${c.id}`} v={pageV} />
       {/* (Batch 16 section 38B) Call changes stop a press once even after a refresh showed them: counted from when the page first loaded here. */}
       <PageLoaded at={seenAt} />
       {/* (Design doc 8, owner Oct 26) The top, in this order: the test name, the access-key box, the live updates box (every change except the

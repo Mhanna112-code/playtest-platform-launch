@@ -3,6 +3,7 @@ import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSig
 import { db } from "@/lib/db";
 import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { invitesV } from "@/lib/server/pulseV";
 import { RatingsToGive } from "./RatingsToGive";
 import { BankToConfirm } from "./BankToConfirm";
 import { LiveTop } from "@/components/LiveTop";
@@ -381,6 +382,8 @@ const PausedTag = () => <span className="badge border-amber-300/40 text-amber-20
 async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const userId = user.id;
   const suspended = !!user.testerSuspendedAt;
+  // (Batch 30 §8) The invitations fingerprint as of BEFORE the lists below are read: AutoRefresh starts from it, so an invite created after this render is caught.
+  const invitesFp = suspended ? "" : await invitesV(userId);
   const contracts = await db.contract.findMany({
     where: { testerId: userId },
     orderBy: { joinedAt: "desc" },
@@ -625,7 +628,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {/* (Owner, Oct 28, batch 16 section 32) Invitations follow every close live: the page refreshes on its poll, and the live box says which invite closed. */}
       {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
       {!suspended && <RatingsToGive user={user} side="tester" />}
-      {!suspended && <AutoRefresh query="invites=1" />}
+      {!suspended && <AutoRefresh query="invites=1" v={invitesFp} />}
       {!suspended && <LiveTop scope="invites:me" seenAt={now.toISOString()} />}
       {!suspended && invites.length > 0 && (
         <section className="space-y-3" id="invitations">

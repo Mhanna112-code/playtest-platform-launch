@@ -10,13 +10,13 @@ import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { PressButton } from "@/components/PressButton";
 import { UserPlus } from "lucide-react";
-import { bringInView } from "@/lib/markJump";
+import { bringInView, jumpTo, MARKABLE } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
 import { MissingNeedWords } from "@/components/MissingNeeds";
 import { isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
 import { LiveNotices } from "@/components/LiveNotices";
 
-type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[] };
+type Tester = { id: string; name: string; rating?: string; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
 type Sent = { id: string; name: string; status: string };
 /** (Batch 16 section 12) What the server works out over every tester: worked with, Suggested after the ticks, and the name search. */
 type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; foundTotal: number; capLine: string; searched: boolean };
@@ -221,8 +221,28 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       )}
     </li>
   );
+  // (Batch 30 §7) A search match who can't be invited: a greyed row with why, no tick box. Already invited: the reason brings their row in the Invited list above into
+  // view, marked (its Cancel invite is there); applied or asked to rejoin: "answer them in Needs you →" jumps to their application.
+  const [allSent, setAllSent] = useState(false);
+  const toInvited = (inviteId: string | null) => {
+    setAllSent(true);
+    setTimeout(() => (inviteId ? jumpTo(`invited-${inviteId}`) : document.getElementById("invited-list")?.scrollIntoView({ block: "center", behavior: "smooth" })), 50);
+  };
+  const whyRow = (t: Tester) => {
+    const name = <a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a>;
+    const [lead, link] = t.whyKind === "applied" ? (t.why ?? "").split(": ") : [t.why ?? "", ""];
+    return (
+      <li key={"f" + t.id} data-invite-row={t.id} data-invite-why={t.whyKind} className="text-slate-500">
+        {name} · {t.whyKind === "invited" ? (
+          <button type="button" className="text-inherit underline underline-offset-2" onClick={() => toInvited(t.inviteId)}>{t.why}</button>
+        ) : t.whyKind === "applied" && t.appId ? (
+          <>{lead}: <a href={`#item-app-${t.appId}`} onClick={(e) => { e.preventDefault(); jumpTo(`item-app-${t.appId}`); }}>{link}</a></>
+        ) : t.why}
+      </li>
+    );
+  };
   const [none, setNone] = useState(false);
-  const ticks = (k: keyof typeof f, label: string, opts: string[]) => opts.length > 0 && (
+  const ticks =(k: keyof typeof f, label: string, opts: string[]) => opts.length > 0 && (
     <fieldset className="space-y-1">
       <legend className="label">{label}</legend>
       <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
@@ -241,11 +261,11 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       <div className="mt-3 space-y-3 text-sm" data-mistakes-root="">
       {p.sent.length > 0 && (
         <>
-          <h3>Invited</h3>
-          {/* Only invites still waiting (joined ones are in Testers joined): 3 lines, then Show N more in a scroll box. */}
-          <LongList shown={3} tall="max-h-48" className="space-y-1 text-sm">
+          <h3 id="invited-list">Invited</h3>
+          {/* Only invites still waiting (joined ones are in Testers joined): 3 lines, then Show N more in a scroll box (all of them after a search row pointed here). */}
+          <LongList shown={allSent ? p.sent.length : 3} tall="max-h-48" className="space-y-1 text-sm">
             {p.sent.map((s) => (
-              <li key={s.id} className="flex items-center gap-2">
+              <li key={s.id} id={`invited-${s.id}`} className={`flex items-center gap-2 ${MARKABLE}`}>
                 <span className="mr-auto">{s.name} · {s.status}</span>
                 {s.status === "waiting for them to join" && (
                   <PressButton seenAt={p.seenAt} path={`/api/tests/${p.testId}/cancel-invite`} body={{ inviteId: s.id }}>Cancel invite</PressButton>
@@ -269,7 +289,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         <div className="space-y-1.5" data-invite-find="">
           <h3>Find testers</h3>
           {data.capLine && <p className="note" data-invite-cap="">{data.capLine}</p>}
-          {found.length > 0 && <ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">{found.map((t) => row(t, "f"))}</ul>}
+          {found.length > 0 && <ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">{found.map((t) => (t.why ? whyRow(t) : row(t, "f")))}</ul>}
           {data.searched && !searching && found.length === 0 && <p className="note" data-invite-none="">No testers match “{term}”.</p>}
         </div>
       )}

@@ -8,7 +8,7 @@ import { stopBox, useStopBox } from "@/lib/topStop";
 import { NotSentTag, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { ANSWER_ONE, ANSWER_REQUIRED, answersMissing, qRequired, qText } from "@/lib/questions";
+import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerCounter, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ScrollText } from "@/components/ScrollText";
 import { NOTHING_CHANGED_LINE } from "@/lib/rules";
@@ -34,15 +34,21 @@ function FormatBar({ target, onChange }: { target: React.RefObject<HTMLTextAreaE
   );
 }
 
+/** (Batch 30 §14) The form's "Write at least 50 characters (12 so far)." or the server's "Each answer needs at least 50 characters." (with or without FIELD's mark). */
+const isShortLine = (m: string) => /^\W?Write at least \d+ characters \(\d+ so far\)\.$/.test(m) || m.replace(/^\W/, "") === ANSWER_SHORT;
+
 /** One answer box with its formatting toolbar. */
 /** (Batch 16 section 10) A required answer left empty is red at its box, with the server's own line. */
 export { ANSWER_REQUIRED };
-function AnswerBox({ id, value, onChange, rows = 3, required }: { id: string; value: string; onChange: (v: string) => void; rows?: number; required?: boolean }) {
+function AnswerBox({ id, value, onChange, rows = 3, required, min, short }: { id: string; value: string; onChange: (v: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  const chars = min ? answerChars(value) : 0;
   return (
     <div className="space-y-1">
       <FormatBar target={ref} onChange={onChange} />
       <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
+      {/* (Batch 30 §14) While an answer is below the minimum: "12 / 50 characters minimum" (grey; red once Send found it short). An empty optional answer shows nothing. */}
+      {min && chars < ANSWER_MIN_CHARS && (!!value.trim() || required || short) && <p className={`text-xs ${short ? "text-rose-300" : "text-slate-500"}`} data-answer-count={chars}>{answerCounter(chars)}</p>}
     </div>
   );
 }
@@ -86,7 +92,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     const missing = terms ? null : answersMissing(questions, answers);
     if (missing) {
       setMissingAt(missing.at);
-      return setMsg({ ok: false, text: FIELD + missing.message });
+      // (Batch 30 §14) Too short: "Write at least 50 characters (12 so far)." at that answer.
+      return setMsg({ ok: false, text: FIELD + (missing.message === ANSWER_SHORT ? answerShortLine(missing.chars ?? 0) : missing.message) });
     }
     setBusy(true);
     setMsg(null);
@@ -100,7 +107,9 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       else {
         // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
         if (err instanceof ApiError && typeof err.data.missing === "number") setMissingAt(err.data.missing);
-        setMsg({ ok: false, text: errOf(err) });
+        // (Batch 30 §14) The server found an answer too short: the same red line at it as the page's own check.
+        if (err instanceof ApiError && err.message === ANSWER_SHORT && typeof err.data.chars === "number") setMsg({ ok: false, text: FIELD + answerShortLine(err.data.chars) });
+        else setMsg({ ok: false, text: errOf(err) });
       }
       setBusy(false);
     }
@@ -116,7 +125,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
           <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
-          <AnswerBox id={`a${i}`} required={qRequired(q)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
+          <AnswerBox id={`a${i}`} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
         </div>
       ))}
       </QuestionBox>
@@ -132,7 +141,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {msg?.ok && <p className="ok">{msg.text}</p>}
       {/* (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
       <FormMistakes text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my updated answers" : "Send my answers"}
-        find={(m) => (m === ANSWER_ONE ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
+        find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
     </form>
   );
 }

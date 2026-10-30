@@ -15,7 +15,8 @@ import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { qRequired, qText } from "@/lib/questions";
+import { invitesV } from "@/lib/server/pulseV";
+import { ANSWER_MIN_LINE, qRequired, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
 import { ClampText } from "@/components/ClampText";
@@ -44,6 +45,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const from = (await searchParams)?.from;
   const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  // (Batch 30 §8) The invitations fingerprint as of BEFORE the page reads the test and the invite: AutoRefresh starts from it.
+  const invitesFp = await invitesV(u.id);
   const t = await db.test.findUnique({ where: { id }, include: { developer: true } });
   // (Batch 17 section 8) The team opens any test from their Find tests, drafts too.
   if (!t || (t.status === "draft" && !isAdmin(u))) notFound();
@@ -112,7 +115,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}
       {t.developerId !== u.id && <LiveTop scope={`listing:${t.id}`} seenAt={seenAt} seeIt="#listing" />}
       {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}
-      {invite && <AutoRefresh query="invites=1" />}
+      {invite && <AutoRefresh query="invites=1" v={invitesFp} />}
       <section className="card space-y-4" id="listing">
         <div className="flex items-start gap-4">
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />
@@ -185,6 +188,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           ) : (
             <p className="text-sm text-slate-400">Where you got stuck, any bugs, and what you liked.</p>
           )}
+          {/* (Batch 30 §14) The answers' minimum, as on Post and Edit. */}
+          {l.questions.length > 0 && <p className="text-xs text-slate-400" data-questions-rule="">{ANSWER_MIN_LINE}</p>}
         </div>
       </section>
 

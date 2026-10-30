@@ -249,7 +249,7 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     const b = await pulse(dev.cookie, "owed=1");
     expect(b.body.v).not.toBe(a.body.v);
     const page = src("app/app/payments/page.tsx");
-    expect(page).toContain('{dev && <AutoRefresh query="owed=1" />}');
+    expect(page).toContain('{dev && <AutoRefresh query="owed=1" v={owedFp} />}'); // (batch 30 §8: seeded from the render)
     expect(page).toContain("if (!o.length) return cbSteps ?"); // (batch 16 section 41) "Paid. Your tests stay paused until the team approves." on a chargeback hold
     expect(src("components/OwedBox.tsx")).toContain('e.code === "nothing_owed"');
   });

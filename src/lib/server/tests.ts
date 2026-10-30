@@ -1,7 +1,7 @@
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { CALL_ACTS, PAY_ACTS, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
-import { NOT_REQUIRED, answersMissing } from "@/lib/questions";
+import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
@@ -913,8 +913,9 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
   // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
   const answers = qs.map((_, i) => sentAnswers[i] ?? "");
-  const missing = answersMissing(qs, answers);
-  if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at });
+  // (Batch 30 §14) Each answer given is at least 50 characters (answerMin): "Each answer needs at least 50 characters." with which question (and how long it is).
+  const missing = answersMissing(qs, answers, answerMin());
+  if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
   const notes = typeof body.notes === "string" ? body.notes.trim().slice(0, WRITTEN_MAX_CHARS + 1) : "";
   // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
   const long = checkWrittenLength([...answers, notes]);

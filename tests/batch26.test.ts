@@ -387,7 +387,7 @@ describe("batch 26 section 14: questions are not required by default; sending ne
     expect(qText(NOT_REQUIRED + "Q?")).toBe("Q?");
     expect(answersMissing(["A?", "B?"], ["", ""])).toEqual({ message: ANSWER_ONE, at: 0 });
     expect(answersMissing(["A?", "B?"], ["", "  "])).toEqual({ message: ANSWER_ONE, at: 0 });
-    expect(answersMissing(["A?", "B?"], ["", "b"])).toBeNull();
+    expect(answersMissing(["A?", "B?"], ["", "b"], 1)).toBeNull(); // (batch 30 §14: 1 here; the real minimum is 50, tests/batch30d-answers.test.ts)
     expect(answersMissing(["A?", REQUIRED + "B?"], ["a", ""])).toEqual({ message: ANSWER_REQUIRED, at: 1 });
     expect(answersMissing([], [])).toBeNull();
     expect(ANSWER_ONE).toBe("Answer at least one question before sending.");
@@ -410,7 +410,7 @@ describe("batch 26 section 14: questions are not required by default; sending ne
     expect(form).toContain("checked={f.requiredQs.includes(q)}");
     expect(form).toContain("/> Required");
     expect(form).not.toContain("Not required");
-    expect(src("lib/questions.ts")).toContain('"Testers answer at least one question. Tick Required on any they must answer."');
+    expect(src("lib/questions.ts")).toContain("`Testers answer at least one question. Tick Required on any they must answer. ${ANSWER_MIN_LINE}`"); // (batch 30 §14)
     expect(form).toContain("{QUESTIONS_RULE_LINE}");
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("{qRequired(q) && <span className=\"req shrink-0\" data-required-star=\"\"");
   });

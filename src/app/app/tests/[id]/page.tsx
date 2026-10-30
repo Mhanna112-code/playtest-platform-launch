@@ -68,6 +68,7 @@ import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision } from "@/components/Excerpts";
 
+import { testV } from "@/lib/server/pulseV";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
   const { saved, offered, skipped, closed, resent, failed } = await searchParams;
   const seenAt = new Date().toISOString();
+  // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
+  const pageV = await testV(u.id, id);
   const t = await db.test.findUnique({
     where: { id },
     include: {
@@ -273,7 +276,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (restricted) {
     return (
       <>
-        <AutoRefresh query={`test=${t.id}`} />
+        <AutoRefresh query={`test=${t.id}`} v={pageV} />
         {banner}
         <TopPanel
           id={t.id} title={t.title} productName={t.productName} ignoredAlerts={u.ignoredAlerts} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={null}
@@ -353,7 +356,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const needsCount = pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
   return (
     <>
-      <AutoRefresh query={`test=${t.id}`} />
+      <AutoRefresh query={`test=${t.id}`} v={pageV} />
       <TopPanel
         id={t.id}
         title={t.title}
