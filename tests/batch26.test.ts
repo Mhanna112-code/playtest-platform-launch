@@ -390,7 +390,7 @@ describe("batch 26 section 14: questions are not required by default; sending ne
     expect(answersMissing(["A?", "B?"], ["", "b"], 1)).toBeNull(); // (batch 30 §14: 1 here; the real minimum is 50, tests/batch30d-answers.test.ts)
     expect(answersMissing(["A?", REQUIRED + "B?"], ["a", ""])).toEqual({ message: ANSWER_REQUIRED, at: 1 });
     expect(answersMissing([], [])).toBeNull();
-    expect(ANSWER_ONE).toBe("Answer at least one question before sending.");
+    expect(ANSWER_ONE).toBe("Answer at least one question before sending (any one; none is required).");
   });
 
   it("no Required ticks: one answer is enough, none is refused (the notes box alone doesn't count); a Required one empty is refused at it", async () => {

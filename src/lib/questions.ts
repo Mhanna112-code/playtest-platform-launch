@@ -15,7 +15,8 @@ export const qText = (q: string) => (q.startsWith(REQUIRED) ? q.slice(REQUIRED.l
 export const qStored = (text: string, required: boolean) => (required ? REQUIRED + text : text);
 
 /** (Batch 26 section 14) The two refusals of Send my answers, at the field and in the mistakes list. */
-export const ANSWER_ONE = "Answer at least one question before sending.";
+// (Owner, Oct 29, batch 32 §4) Shown above the questions, no box red: any one answer will do.
+export const ANSWER_ONE = "Answer at least one question before sending (any one; none is required).";
 export const ANSWER_REQUIRED = "Answer every required question before sending.";
 /** (Batch 26 section 14) The Post / Edit line under the questions box; (batch 30 §14) with the answers' minimum (Post, Edit and the join page). */
 export const ANSWER_MIN_LINE = "Each answer is at least 50 characters.";

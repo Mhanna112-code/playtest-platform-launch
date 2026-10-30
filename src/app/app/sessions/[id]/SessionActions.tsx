@@ -67,6 +67,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   // showed but never reached the press), so the server got fewer answers than questions and refused "Answer every required question" with nothing red on the page.
   const answers = questions.map((_, i) => answers0[i] ?? "");
   const [missingAt, setMissingAt] = useState<number | null>(null);
+  // (Batch 32 §4) "Answer at least one question…": a line above the questions (no box red), gone once any answer has text.
+  const [needOne, setNeedOne] = useState(false);
   const [notes, setNotes] = useState(initialNotes);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -90,6 +92,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     if (!terms && length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
     // (Batch 26 section 14) The server's rule, at once: at least one question answered, plus every Required one; red at the question.
     const missing = terms ? null : answersMissing(questions, answers);
+    if (missing?.message === ANSWER_ONE) return setNeedOne(true);
     if (missing) {
       setMissingAt(missing.at);
       // (Batch 30 §14) Too short: "Write at least 50 characters (12 so far)." at that answer.
@@ -106,6 +109,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
       else {
         // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
+        if (err instanceof ApiError && err.message === ANSWER_ONE) { setNeedOne(true); setBusy(false); return; }
         if (err instanceof ApiError && typeof err.data.missing === "number") setMissingAt(err.data.missing);
         // (Batch 30 §14) The server found an answer too short: the same red line at it as the page's own check.
         if (err instanceof ApiError && err.message === ANSWER_SHORT && typeof err.data.chars === "number") setMsg({ ok: false, text: FIELD + answerShortLine(err.data.chars) });
@@ -119,6 +123,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     <form className="space-y-3" onSubmit={send}>
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
+      {needOne && !answers.some((a) => a.trim()) && <p className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
       <QuestionBox count={questions.length} size="form" className="space-y-3" >
       {questions.map((q, i) => (
         <div key={i} data-question="">
