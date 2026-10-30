@@ -6,14 +6,13 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { useState } from "react";
 import { api, errOf, FIELD } from "@/lib/client";
 import { money, toCents } from "@/lib/format";
-import { CHARGE_TICK_CENTS, chargeTickLabel } from "@/lib/rules";
+import { CHARGE_TICK_CENTS, chargeTickLabel, letGoTickLabel } from "@/lib/rules";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
-import { ConfirmButton } from "@/components/ConfirmButton";
 
 /**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
- * part) or let it go. (Batch 16 section 39) Charge goes through on its own; above $200 it needs its tick. Let it go asks once in place. (Never shown when the part is paid in full.) (Batch 16 section 10) A mistake
+ * part) or let it go. (Batch 16 section 39) Charge goes through on its own; above $200 it needs its tick. (Batch 32 §13) Let it go has its own tick instead of a pop-up. (Never shown when the part is paid in full.) (Batch 16 section 10) A mistake
  * is red at its box with the server's own line, and listed under the buttons.
  */
 export function ChoiceBox({ paused = false, sessionId, submissionId, callId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId?: string; callId?: string; line: string; devName: string; cents: number; seenAt: string }) {
@@ -24,6 +23,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [ticked, setTicked] = useState(false);
+  const [letGo, setLetGo] = useState(false);
   // (Batch 19 section 5) The stop box names the press that was made: "Your Let it go didn't go through." / "Your Charge didn't go through."
   const [pressed, setPressed] = useState<"Charge" | "Let it go">("Charge");
   const [amount, setAmount] = useState((cents / 100).toFixed(2));
@@ -61,10 +61,11 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
             </label>
           )}
           <button className="btn" disabled={busy || typed == null || (over && !ticked)} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
-          <ConfirmButton live className="btn-secondary" disabled={busy} title="Let it go?" confirmLabel="Let it go" onConfirm={() => go("letgo")}
-            body={<p>This closes with nothing more paid.</p>}>
-            Let it go
-          </ConfirmButton>
+          {/* (Owner, Oct 30, batch 32 §13) No pop-up: a tick next to Let it go, which stays disabled until it's ticked. */}
+          <label className="inline-flex items-center gap-1" data-letgo-tick="">
+            <input type="checkbox" checked={letGo} onChange={(e) => setLetGo(e.target.checked)} /> {letGoTickLabel(devName)}
+          </label>
+          <button className="btn-secondary" disabled={busy || !letGo} onClick={() => go("letgo")}>Let it go</button>
         </div>
       )}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo press={pressed} />

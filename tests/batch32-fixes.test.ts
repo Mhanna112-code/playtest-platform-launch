@@ -44,3 +44,13 @@ describe("batch 32 §12: fixes from the screenshot run", () => {
     expect(k).toContain("if (hostRef.current.parentElement !== anchor) anchor.appendChild(hostRef.current);");
   });
 });
+
+describe("batch 32 §13: Let it go has a tick, not a pop-up", () => {
+  it("the button stays disabled until the tick; the tick says what it means", async () => {
+    const { letGoTickLabel } = await import("@/lib/rules");
+    expect(letGoTickLabel("Nora Lane")).toBe("Let it go won't charge Nora Lane, and you won't be paid for this");
+    const box = src("app/app/sessions/[id]/ChoiceBox.tsx");
+    expect(box).toContain('disabled={busy || !letGo} onClick={() => go("letgo")}>Let it go</button>');
+    expect(box).not.toContain('title="Let it go?"');
+  });
+});

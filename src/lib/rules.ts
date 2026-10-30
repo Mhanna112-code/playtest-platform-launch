@@ -49,6 +49,8 @@ export const PAY_TICK_CENTS = 20_000;
 export const CHARGE_TICK_CENTS = PAY_TICK_CENTS;
 export const chargeTickLabel = (devName: string, cents: number) => `Charge ${devName} ${money(cents)} now (over $200)`;
 export const chargeTickLine = (devName: string, cents: number) => `Tick “${chargeTickLabel(devName, cents)}” to charge.`;
+/** (Owner, Oct 30, batch 32 §13) The tick next to Let it go (no pop-up): the button stays disabled until it's ticked. */
+export const letGoTickLabel = (devName: string) => `Let it go won't charge ${devName}, and you won't be paid for this`;
 export const PAY_TICK_LINE = (cents: number) => `I understand this payment of ${money(cents)} can't be refunded and is charged now.`;
 export const OVER_PAY_TICK_LINE = "I confirm this payment is over $200.";
 

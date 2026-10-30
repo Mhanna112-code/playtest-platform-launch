@@ -342,7 +342,7 @@ describe("L, M) live notices in pop-ups, and the design doc's Pop-ups list", () 
     const top = src("app/app/tests/[id]/TopPanel.tsx");
     expect((top.match(/<ConfirmButton live /g) ?? []).length).toBe(2);
     expect(src("app/app/tests/[id]/InvitePanel.tsx")).toContain("<LiveNotices open={!!confirm} />");
-    for (const f of ["app/app/sessions/[id]/SessionActions.tsx", "app/app/sessions/[id]/ChoiceBox.tsx", "components/RateBox.tsx"]) expect(src(f), f).toMatch(/<ConfirmButton live/);
+    for (const f of ["app/app/sessions/[id]/SessionActions.tsx", "components/RateBox.tsx"]) /* (batch 32 §13) Let it go has a tick now, no pop-up */ expect(src(f), f).toMatch(/<ConfirmButton live/);
     for (const f of ["components/BlockButton.tsx", "app/app/account/DeleteAccount.tsx"]) expect(src(f), f).not.toMatch(/<ConfirmButton live/);
     const live = src("components/LiveNotices.tsx");
     expect(live).toMatch(/JustUpdated/);

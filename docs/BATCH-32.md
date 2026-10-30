@@ -47,3 +47,6 @@ This file wins over the earlier batches and the design doc where they differ.
 - "$X is waiting for you: finish your payout setup to receive it." goes out with the 5-minute sweep (it only went out with the daily job).
 - Refusals name the press: Charge / Let it go ("Your Charge didn't go through: …"; "Answer the new terms first: Switch or Keep." reads exactly so), Leave, and the Invite anyway box ("Your Invite anyway didn't go through.", "Press Invite anyway again to go ahead.").
 - The in-page refusal notice no longer blinks: one notice element, put back at once when a live redraw replaces its section.
+
+## 13. Let it go: a tick, not a pop-up (owner, Oct 30)
+- Charge / Let it go: no "Let it go?" pop-up. Next to Let it go, a tick "Let it go won't charge <developer>, and you won't be paid for this"; the Let it go button stays disabled until it's ticked.
