@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { ArrowLeftRight, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, ShieldCheck, UserRound } from "lucide-react";
+import { AdminNav } from "@/app/admin/AdminNav";
+import { ArrowLeftRight, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, UserRound } from "lucide-react";
 import { headers } from "next/headers";
 import { after } from "next/server";
 import { hasBoth, sideFor, sideForPath } from "@/lib/sides";
@@ -55,10 +56,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3">
           <Brand />
           <div className="ml-4 flex flex-wrap items-center gap-1">
-            {isAdmin(u) && <Link href="/admin" className="nav-link text-punch-200"><ShieldCheck className="h-4 w-4" /> Admin</Link>}
+            {admin && <AdminNav />}
             {/* Each side has its own links: developer: Dashboard, Post a test, Profile, Payments, Messages; tester: Dashboard, Find tests, Profile, Payments, Messages. */}
             {!admin && <Link className="nav-link" href="/app"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>}
-            {admin && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
             {side === "developer" && !off && <Link className="nav-link" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}
             {side === "tester" && !off && <Link className="nav-link" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
             {!off && !admin && <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>}

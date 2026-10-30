@@ -1,4 +1,3 @@
-import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
@@ -60,12 +59,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       {/* (Batch 29 §29) A bell line opens its own row (a dispute, a report, a hold lift), marked. */}
       <HashJump />
       <AutoRefresh query="adminConsole=1" v={liveV} />
-      <div className="flex items-center gap-4">
-        <Brand />
-        <Link href="/app">Back to the app</Link>
-        {/* (Batch 17 section 8) Every test, searchable, with its state. */}
-        <Link href="/app/find" data-admin-find="">Find tests</Link>
-      </div>
       <h1 className="text-3xl font-bold tracking-tight text-white">Admin</h1>
 
       {(focusDispute || focusUser) && (

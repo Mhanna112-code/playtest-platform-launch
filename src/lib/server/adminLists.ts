@@ -481,14 +481,14 @@ export async function testRowsByIds(ids: string[]): Promise<TestVM[]> {
 }
 
 /** One page of one list. `adminId` is the admin looking (for "mine"). */
-export async function adminPage(kind: Kind, adminId: string, cursor: string | null, arg = "", filter?: ListFilter): Promise<Page<unknown>> {
+export async function adminPage(kind: Kind, adminId: string, cursor: string | null, arg = "", filter?: ListFilter, userSide?: "developer" | "tester"): Promise<Page<unknown>> {
   const p: Page<unknown> = await (async () => {
     switch (kind) {
       case "contact": return contact(cursor);
       case "disputes": return disputes("open", cursor);
       case "decided": return disputes("decided", cursor);
       case "mine": return mine(adminId, cursor);
-      case "users": return users(cursor, filter);
+      case "users": return users(cursor, filter, userSide ? { [userSide === "developer" ? "isDeveloper" : "isTester"]: true } : undefined);
       case "tests": return tests(cursor, filter);
       case "mypaused": return tests(cursor, undefined, pausedByWhere(adminId));
       case "suspensions": return users(cursor, undefined, SUSPENDED_NOW);

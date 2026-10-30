@@ -177,7 +177,7 @@ describe("Find tests: the search box, for testers and admins (section 8)", () =>
   });
 
   it("admins reach it from the admin header; a card opens the test's page with the team's boxes; never Join / Apply", () => {
-    expect(src("app/admin/page.tsx")).toContain('<Link href="/app/find" data-admin-find="">Find tests</Link>');
+    expect(src("app/admin/AdminNav.tsx")).toContain('href="/app/find" data-admin-find=""');
     const page = src("app/app/find/page.tsx");
     expect(page).toContain("if (!u.isTester && !admin) redirect(\"/app/profile\");");
     expect(page).toContain("<StateTicks params={params} ticked={ticked} />");

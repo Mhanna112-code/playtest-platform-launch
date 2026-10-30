@@ -19,6 +19,7 @@ export async function GET(req: Request) {
       const rows = await testRowsByIds(ids.split(",").map((x) => x.trim()).filter(Boolean));
       return ok({ rows, next: null, total: rows.length });
     }
-    return ok(await adminPage(kind, u.id, q.get("after"), q.get("arg") ?? "", { q: searchOf(q.get("q")), ticks: ticksOf(kind, q.get("f")) }));
+    const side = q.get("side");
+    return ok(await adminPage(kind, u.id, q.get("after"), q.get("arg") ?? "", { q: searchOf(q.get("q")), ticks: ticksOf(kind, q.get("f")) }, side === "developer" || side === "tester" ? side : undefined));
   });
 }
