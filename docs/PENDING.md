@@ -6,6 +6,7 @@ Claude brings this list up when a batch lands and in summaries. Newest first.
 - **Join page: show what changed, not just which fields.** The blue "Changed since you opened this page" box (and the stop box under Join) lists Before → Now for each changed field (short values inline; description, questions and NDA in small scroll boxes of about 8 lines), instead of "questions · See it". About 30–45 min.
 
 ## Decided, not doing (owner, Oct 30)
+- Back/Forward and paying-twice recordings (Pay on a restored page, Pay what you owe from an older tab): the owner tests these by hand; no recordings.
 - Local "Testing" buttons for Charge: no (the owner tests by hand; Claude moves a session's dates on request).
 - Listing changes have no tester bell/email line; an on-time part updated after the deadline becomes late: both stay as they are.
 - A read-only session view for admins: not now.
