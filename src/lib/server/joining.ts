@@ -19,6 +19,16 @@ const listingSnapshot = (t: Parameters<typeof asListing>[0]) => {
   const l = asListing(t);
   return { ...l, joinMode: undefined } as Record<string, unknown>;
 };
+/** Application validity ignores the join mode and spot count, which may change as part of the switch. */
+const sameListingIgnoringMode = (saved: unknown, current: Parameters<typeof listingSnapshot>[0]) => {
+  const clean = (value: unknown) => {
+    const o = { ...((value ?? {}) as Record<string, unknown>) };
+    delete o.joinMode;
+    delete o.spots;
+    return JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b))));
+  };
+  return clean(saved) === clean(listingSnapshot(current));
+};
 /** Shared final refusals for Join, Apply to join and Accept. */
 export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
@@ -267,13 +277,20 @@ export async function onSwitchToAnyone(testId: string) {
   for (const a of pending) {
     if (await db.contract.count({ where: { testId, status: "working" } }) >= t.spots) break;
     const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId } });
+    if (!sameListingIgnoringMode(a.listing, t)) {
+      const changedAt = new Date();
+      const line = `“${t.title}” changed since you applied: join on the current listing, or withdraw your application.`;
+      const updated = await db.application.updateMany({ where: { id: a.id, status: "pending" }, data: { changedAt } });
+      if (updated.count) await notify(tester.email, line, [line], `/app/find/${testId}`, { group: "apps", testId });
+      continue;
+    }
     const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
     if (needsGap(asListing(t), profile)) continue;
     if (await joinRefusal(tester.id, testId)) continue;
     try {
       const c = await joinTest({ ...tester, isTester: true }, testId, {
         listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true,
-      }, { applicationId: a.id, preserveApplicationsWhenFull: true, quietJoinEvent: true });
+      }, { applicationId: a.id, quietJoinEvent: true });
       await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}.`], `/app/sessions/${c.id}`, { group: "joined" });
       accepted++;
     } catch (error) {

@@ -829,7 +829,7 @@ export const needsGap = (t: { devices: string[]; languages: string[] }, p: { dev
  * Join: the tester sends the listing version they saw. A changed listing stops once and returns the new terms;
  * the second press joins on them. Closed, stopped or full tests refuse for good. The contract is a snapshot.
  */
-export async function joinTest(tester: U, testId: string, body: Record<string, unknown>, options: { applicationId?: string; preserveApplicationsWhenFull?: boolean; quietJoinEvent?: boolean } = {}) {
+export async function joinTest(tester: U, testId: string, body: Record<string, unknown>, options: { applicationId?: string; quietJoinEvent?: boolean } = {}) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   const seen = Number(body.listingVersion);
@@ -879,7 +879,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
     // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.
     const filled = (await tx.contract.count({ where: working(testId) })) >= t.spots
-      ? options.preserveApplicationsWhenFull === true ? null : await closeOnFull(tx, testId, tester.id)
+      ? await closeOnFull(tx, testId, tester.id)
       : null;
     return { contract, dev, filled };
   });
