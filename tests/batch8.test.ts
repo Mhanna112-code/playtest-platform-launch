@@ -32,7 +32,8 @@ afterEach(async () => {
 const freeOver = async () => { process.env.FREE_UNTIL = new Date(Date.now() - DAY).toISOString(); };
 const setFreeUntil = (iso: string) => { process.env.FREE_UNTIL = iso; };
 const sub = (cookie: string, action: string) => subPOST(req("/api/payments/subscription", { cookie, body: { action } })).then(json);
-const post = (cookie: string, over: Record<string, unknown> = {}) => testsPOST(req("/api/tests", { cookie, body: listingBody(over) })).then(json);
+let posted = 0; // (batch 34 §7) a developer's open tests have different names
+const post = (cookie: string, over: Record<string, unknown> = {}) => testsPOST(req("/api/tests", { cookie, body: listingBody({ title: `Harbor Run ${++posted}`, ...over }) })).then(json);
 const adm = (action: string, cookie: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
 const ok = () => setStripeForTests({ paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }) } } as unknown as Stripe);
 const decline = () => setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("declined"), { type: "StripeCardError" }); } } } as unknown as Stripe);

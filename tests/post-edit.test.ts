@@ -11,7 +11,8 @@ const edit = async (testId: string, cookie: string, fields: Record<string, unkno
   const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
   return act(testId, "edit", cookie, { version: v, fields, ...extra });
 };
-const post = async (cookie: string, over: Record<string, unknown>) => json(await testsPOST(req("/api/tests", { cookie, body: listingBody(over) })));
+let posted = 0; // (batch 34 §7) a developer's open tests have different names
+const post = async (cookie: string, over: Record<string, unknown>) => json(await testsPOST(req("/api/tests", { cookie, body: listingBody({ title: `Harbor Run ${++posted}`, ...over }) })));
 
 describe("Post a test (design doc 4)", () => {
   it("needs the product name, a title and What to do, within their limits; the errors name the field", async () => {

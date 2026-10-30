@@ -825,7 +825,7 @@ describe("batch 20 section 21: the updated-Terms tick sits above the button, wit
     const r = await json(await POST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })));
     expect(r.status).toBe(400);
     expect(r.body.error).toMatchObject({ code: TERMS_UPDATED_CODE, message: TERMS_TICK_MISSING, errors: [TERMS_TICK_MISSING] });
-    expect((await json(await POST(req("/api/tests", { cookie: dev.cookie, body: listingBody({ agreeTerms: true }) })))).status).toBe(200);
+    expect((await json(await POST(req("/api/tests", { cookie: dev.cookie, body: listingBody({ agreeTerms: true, title: "Harbor Run again" }) })))).status).toBe(200);
     const { testId } = await setup();
     const t = await makeUser({ tester: true, name: "Ana Silva", termsVersion: TERMS_VERSION - 1 });
     const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
@@ -849,7 +849,8 @@ describe("batch 20 section 22: a ticked part needs a price; Save looks disabled;
     const { listingBody } = await import("./fixtures");
     const { POST } = await import("@/app/api/tests/route");
     const dev = await makeUser({ dev: true, name: "Nora Lane" });
-    const post = async (over: Record<string, unknown>) => json(await POST(req("/api/tests", { cookie: dev.cookie, body: listingBody(over) })));
+    let n = 0; // (batch 34 §7) different names
+    const post = async (over: Record<string, unknown>) => json(await POST(req("/api/tests", { cookie: dev.cookie, body: listingBody({ title: `Harbor Run ${++n}`, ...over }) })));
     expect((await post({ writtenCents: "" })).body.error.message).toBe(PART_PRICE_MISSING.written);
     expect(PART_PRICE_MISSING.written).toBe("Enter a price for the written answers, or tick Free.");
     expect((await post({ recordingCents: " " })).body.error.message).toBe("Enter a price for the recording, or tick Free.");

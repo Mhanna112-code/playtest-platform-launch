@@ -65,7 +65,7 @@ describe("applications close on a listing change", () => {
       const { GET: devLive } = await import("@/app/api/live/route");
       await new Promise((r) => setTimeout(r, 30));
       const dl = (await json(await devLive(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dev.cookie, headers: { "x-tab": "tab-2" } })))).body.changes.map((c: { text: string }) => c.text);
-      expect(dl.filter((t: string) => /changed the listing in another tab/.test(t))).toHaveLength(1);
+      expect(dl.filter((t: string) => /(changed|saved) the listing in another tab/.test(t))).toHaveLength(1);
     }
     // Ana's join page: the line, and she can apply again on the current listing.
     const { GET: liveGET } = await import("@/app/api/live/route");
@@ -207,7 +207,7 @@ describe("owner corrections 2 and 3", () => {
       const { GET: devLive } = await import("@/app/api/live/route");
       await new Promise((r) => setTimeout(r, 30));
       const dl = (await json(await devLive(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: dev.cookie, headers: { "x-tab": "tab-2" } })))).body.changes.map((c: { text: string }) => c.text);
-      expect(dl.filter((t: string) => /changed the listing in another tab/.test(t))).toHaveLength(1);
+      expect(dl.filter((t: string) => /(changed|saved) the listing in another tab/.test(t))).toHaveLength(1);
     }
     const { GET: liveGET } = await import("@/app/api/live/route");
     await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
