@@ -14686,5 +14686,941 @@
     "group": "lcb",
     "order": 125001.5,
     "size": "desktop"
+  },
+  "b26-06-dashboard-row.png": {
+    "caption": "Ines's sent written answers wait under “Waiting for the developer” (“Written answers sent: waiting for review”) with the new grey line “If Wren Castell hasn't paid by Nov 9, you can charge or let it go then.”: the later of their own deadline and 7 days after sending.",
+    "kind": "image",
+    "title": "§6 The tester's charge-opens line: dashboard",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pC1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "b26-06-session-part.png": {
+    "caption": "Under the sent, listed written answers (“Under review”): “If Wren Castell hasn't paid by Nov 9, you can charge or let it go then.”.",
+    "kind": "image",
+    "title": "§6 The same line on the session page (batch 28 §5)",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pC1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "b26-06-call-row.png": {
+    "caption": "Ines's listed call ($60/h, 29 minutes measured) waiting for Wren: “If Wren Castell doesn't pay by Nov 5, it's charged automatically.” (listed calls have no Charge or Let it go since batch 28 §21).",
+    "kind": "image",
+    "title": "§6 A listed call reads the automatic-charge line instead",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pC1",
+    "order": 115003,
+    "size": "desktop"
+  },
+  "b27-06-01-filled.png": {
+    "caption": "Quinn requests a call with Tavi Ross at 3:23 PM, the next whole minute at least 1 minute from now (the form's earliest time was 15:22 when the page loaded).",
+    "kind": "image",
+    "title": "§6 A minute ahead",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA9",
+    "order": 123001,
+    "size": "desktop"
+  },
+  "b27-06-02-shown.png": {
+    "caption": "Quinn requests 3:26 PM, 120 seconds ahead when pressed: it's accepted and shows in Call requests (“Tavi Ross · …, 3:26 PM · 30 min · Contract $30/h · asked by you” with Withdraw).",
+    "kind": "image",
+    "title": "§6 A minute ahead goes through",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA9",
+    "order": 123002,
+    "size": "desktop"
+  },
+  "od-01-pill-first.png": {
+    "caption": "On device B (scrolled down) the pill “1 new update ↑” rises at the bottom and the bell's number goes from 3 to 4 (the receipt for the Pay made on device A).",
+    "kind": "image",
+    "title": "Device B: the first update",
+    "section": "Other devices",
+    "group": "pB1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "od-01-pill-count.png": {
+    "caption": "After device A's Pay, Edit save, call request and End early, device B (still scrolled down) shows “4 new updates ↑”; the bell reads 4.",
+    "kind": "image",
+    "title": "Device B: the pill counts up",
+    "section": "Other devices",
+    "group": "pB1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "od-01-top-box.png": {
+    "caption": "Each change made on device A arrives as its own line, newest first: “You ended Sol Varga's work early in another tab”, “You requested a call with Pim Achebe for …”, “You saved the listing in another tab: spots” and “You paid Pim Achebe $10.00 for the written answers in another tab”.",
+    "kind": "image",
+    "title": "Device B: the top box",
+    "section": "Other devices",
+    "group": "pB1",
+    "order": 115003,
+    "size": "desktop"
+  },
+  "od-01-pay-stop.png": {
+    "caption": "“Your Pay on Sol Varga's written answers didn't go through.” Since you opened this page: each change made on device A, as “You … in another tab” lines, and “Press Pay again to go ahead.”",
+    "kind": "image",
+    "title": "Device B: Pay stops once",
+    "section": "Other devices",
+    "group": "pB1",
+    "order": 115004,
+    "size": "desktop"
+  },
+  "b28-03-stop-box.png": {
+    "caption": "Ines presses Rate on a page opened before the team stopped the test: “Your Rate didn't go through. Since you opened this page: This test was stopped at 3:22 PM. This test was stopped · 3:22 PM Press Rate again to go ahead.”: the stop time once, never the developer's name.",
+    "kind": "image",
+    "title": "§3 The team's Stop in a stop box",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pC2",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "b28-03-refusal.png": {
+    "caption": "Ben presses Send my updated answers on a page opened before the stop: the page redraws at once and the line at the top reads “This test was stopped at 3:22 PM, so your Send didn't go through. You can still charge or let go of unreviewed work and chat. Work you sent is still reviewed.”.",
+    "kind": "image",
+    "title": "§3 A refusal",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pC2",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "b28-03-video.webm": {
+    "caption": "Both pages were opened before the team stopped the test. Left: Ines's Rate stops once with the stop time. Right: Ben's Send my updated answers is refused and the page redraws with the time form at the top; neither names Wren.",
+    "kind": "video",
+    "title": "§3 The team's Stop, as testers read it",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pC2",
+    "order": 116003,
+    "size": "desktop"
+  },
+  "b28-03-banner.png": {
+    "caption": "Ines's session page after the stop: “This test was stopped at 3:22 PM. You can still dispute, rate, ask to show an excerpt and chat. Work you sent is still reviewed.”.",
+    "kind": "image",
+    "title": "§3 The tester's banner",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pC2",
+    "order": 116004,
+    "size": "desktop"
+  },
+  "b28-03-bell.png": {
+    "caption": "The stop line in the bell (see the picture for its words).",
+    "kind": "image",
+    "title": "§3 The tester's bell",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pC2",
+    "order": 116005,
+    "size": "desktop"
+  },
+  "b27-06-01-min-refused.png": {
+    "caption": "The time box's earliest time is 3:24 PM (the page loaded at 3:23 PM:53: 1 minute ahead, cut to the minute); Quinn picks it and presses Request a time 5 seconds before it, and the server refuses it (“Pick a time in the future.”): it needs a full minute.",
+    "kind": "image",
+    "title": "§6 App bug: the form's earliest time is refused",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA9",
+    "order": 123001,
+    "size": "desktop"
+  },
+  "bell-number-01-three-lines.png": {
+    "caption": "Three testers joined “Harbor Run: first 3 levels”: the stack “Harbor Run: first 3 levels · 3 updates today” has 3 unread lines, and the bell's red number is 1 (it counts entries with anything unread, not lines).",
+    "kind": "image",
+    "title": "One entry, three lines",
+    "section": "Bell and emails",
+    "group": "pE2",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "bell-number-02-expanded.png": {
+    "caption": "After a reload of the Notifications page the number was still 1; expanding the stack marks its 3 lines read and the number drops to 0 at once.",
+    "kind": "image",
+    "title": "Expanding reads it",
+    "section": "Bell and emails",
+    "group": "pE2",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "bell-number-03-live.png": {
+    "caption": "Pia Lund joined meanwhile: a new line in the read stack, and the bell's number went back to 1 by itself 7 seconds later, with the page untouched.",
+    "kind": "image",
+    "title": "Live, without navigation",
+    "section": "Bell and emails",
+    "group": "pE2",
+    "order": 116003,
+    "size": "desktop"
+  },
+  "bell-number-04-unread-again.png": {
+    "caption": "After a reload the stack (“Harbor Run: first 3 levels · 4 updates today”) is bold again with 1 unread line: a stack that gets a new line after being read counts again.",
+    "kind": "image",
+    "title": "Unread again",
+    "section": "Bell and emails",
+    "group": "pE2",
+    "order": 116004,
+    "size": "desktop"
+  },
+  "bell-number-video.webm": {
+    "caption": "Vera's Notifications page: the bell reads 1 for one stack of 3 unread lines; a reload leaves it at 1; expanding the stack takes it to 0; another tester joins and about 7 seconds later the number is back to 1 on its own; a reload shows the stack unread again.",
+    "kind": "video",
+    "title": "The bell's number",
+    "section": "Bell and emails",
+    "group": "pE2",
+    "order": 116005,
+    "size": "desktop"
+  },
+  "bell-number-05-nine-plus.png": {
+    "caption": "Ten entries with something unread (Kit Moreau joined nine more tests, plus the Harbor Run stack): the bell reads “9+” (its label: “Notifications, 9+ unread”); 12 entries in the list.",
+    "kind": "image",
+    "title": "Above 9",
+    "section": "Bell and emails",
+    "group": "pE2",
+    "order": 116006,
+    "size": "desktop"
+  },
+  "b28-18-01-setting.png": {
+    "caption": "Vera's email setting is Off; the Notifications page says: “Payment updates are always emailed the same evening.”",
+    "kind": "image",
+    "title": "§18 Email Off",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pE5",
+    "order": 119001,
+    "size": "desktop"
+  },
+  "b28-18-02-payment-email.png": {
+    "caption": "“Your Playtest payment updates: 3” went to Vera that evening although their email is Off, with the receipt for Kit's answers; no other summary email (the outbox for Vera: “Confirm your email”, “Your Playtest payment updates: 3”).",
+    "kind": "image",
+    "title": "§18 The evening payment email with email Off",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pE5",
+    "order": 119002,
+    "size": "desktop"
+  },
+  "blk-05-01-after-block.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Charge after a block: sent, then blocked",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "blk-05-02-dev-unpaid.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Charge after a block: the developer's row",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "blk-05-03-charge-open.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Charge after a block: Charge opens",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116003,
+    "size": "desktop"
+  },
+  "blk-05-04-charged-tester.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Charge after a block: charged",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116004,
+    "size": "desktop"
+  },
+  "blk-05-05-video.webm": {
+    "caption": "PROVISIONAL",
+    "kind": "video",
+    "title": "Charge after a block",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116005,
+    "size": "desktop"
+  },
+  "blk-05-06-dev-row.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Charge after a block: the developer's row",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116006,
+    "size": "desktop"
+  },
+  "blk-05-07-dev-bell.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Charge after a block: the developer's bell",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116007,
+    "size": "desktop"
+  },
+  "blk-05-08-tester-bell.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Charge after a block: the tester's bell",
+    "section": "Blocks",
+    "group": "pD2",
+    "order": 116008,
+    "size": "desktop"
+  },
+  "blk-06-01-after-block.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "The developer blocks: sent, then blocked",
+    "section": "Blocks",
+    "group": "pD3",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "blk-06-02-dev-unpaid.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "The developer blocks: the developer's row",
+    "section": "Blocks",
+    "group": "pD3",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "blk-06-03-charge-open.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "The developer blocks: Charge opens",
+    "section": "Blocks",
+    "group": "pD3",
+    "order": 117003,
+    "size": "desktop"
+  },
+  "blk-06-04-charged-tester.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "The developer blocks: charged",
+    "section": "Blocks",
+    "group": "pD3",
+    "order": 117004,
+    "size": "desktop"
+  },
+  "blk-06-06-dev-row.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "The developer blocks: the developer's row",
+    "section": "Blocks",
+    "group": "pD3",
+    "order": 117005,
+    "size": "desktop"
+  },
+  "blk-06-07-dev-bell.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "The developer blocks: the developer's bell",
+    "section": "Blocks",
+    "group": "pD3",
+    "order": 117006,
+    "size": "desktop"
+  },
+  "blk-06-08-tester-bell.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "The developer blocks: the tester's bell",
+    "section": "Blocks",
+    "group": "pD3",
+    "order": 117007,
+    "size": "desktop"
+  },
+  "blk-07-01-before.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Join call vs the block: before",
+    "section": "Blocks",
+    "group": "pD4",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "b26-13-01-apply-popup.png": {
+    "caption": "Tavi presses Apply to join on an iPhone test: the pop-up “A device this test runs on” reads “Your profile doesn't list a device this test needs (iPhone). Apply anyway?” with Apply anyway, Edit my profile and Cancel.",
+    "kind": "image",
+    "title": "§13 Apply anyway",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "b26-13-02-apply-sent.png": {
+    "caption": "After Apply anyway the pop-up is gone and the join card reads “Application sent. You'll hear back when the developer answers.”",
+    "kind": "image",
+    "title": "§13 The pop-up closes",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "b26-13-03-rejoin-popup.png": {
+    "caption": "Tavi left “Lantern Bay: tide pools” and presses Ask to rejoin: the same pop-up asks “Your profile doesn't list a device this test needs (iPhone). Join anyway?”; its button reads “Join anyway”.",
+    "kind": "image",
+    "title": "§13 Ask to rejoin anyway",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115003,
+    "size": "desktop"
+  },
+  "b26-13-04-rejoin-sent.png": {
+    "caption": "After the press the pop-up is gone and the join card reads “Sent. You'll hear back when the developer answers.”",
+    "kind": "image",
+    "title": "§13 The pop-up closes",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115004,
+    "size": "desktop"
+  },
+  "b26-13-05-tester-video.webm": {
+    "caption": "Tavi applies to an iPhone test from a Windows PC: the device pop-up opens, Apply anyway sends it and the pop-up closes with “Application sent. You'll hear back when the developer answers.”; then Ask to rejoin on a test they left: the pop-up's button sends it and the pop-up closes with “Sent. You'll hear back when the developer answers.”",
+    "kind": "video",
+    "title": "§13 Apply anyway and Ask to rejoin",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115005,
+    "size": "desktop"
+  },
+  "b26-13-06-invite-box.png": {
+    "caption": "Quinn ticks Uma Pell on an invite-only iPhone test and presses Invite: the box under it reads “Uma Pell doesn't list a device this test needs (iPhone).” with Invite anyway and Cancel.",
+    "kind": "image",
+    "title": "§13 Invite anyway",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115006,
+    "size": "desktop"
+  },
+  "b26-13-07-invite-sent.png": {
+    "caption": "After Invite anyway the box is gone and the line under Invite reads “Invited Uma Pell.” (the panel then reloads).",
+    "kind": "image",
+    "title": "§13 The box closes",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115007,
+    "size": "desktop"
+  },
+  "b26-13-08-invite-video.webm": {
+    "caption": "Quinn searches for Uma Pell, ticks them and presses Invite: the Invite anyway box names the missing iPhone; Invite anyway closes it with “Invited Uma Pell.” and the panel reloads with the invite waiting.",
+    "kind": "video",
+    "title": "§13 Invite anyway",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA1",
+    "order": 115008,
+    "size": "desktop"
+  },
+  "b26-14-01-post-default.png": {
+    "caption": "Each question typed on Post gets its own Required tick, all unticked; under them: “Testers answer at least one question. Tick Required on any they must answer.”",
+    "kind": "image",
+    "title": "§14 Post: not required by default",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "b26-14-02-post-required.png": {
+    "caption": "Quinn ticks Required on “Where did you get stuck?” only; the other two stay not required.",
+    "kind": "image",
+    "title": "§14 Post: Required ticked",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "b26-14-03-edit-required.png": {
+    "caption": "On Edit of “Lantern Bay: night dive” the same list shows Required ticked on “Where did you get stuck?” only.",
+    "kind": "image",
+    "title": "§14 Edit keeps the tick",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116003,
+    "size": "desktop"
+  },
+  "b26-14-04-no-star.png": {
+    "caption": "Tavi's answer form on “Lantern Bay: first dive”: the three questions carry no “*”.",
+    "kind": "image",
+    "title": "§14 No “*” when nothing is Required",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116004,
+    "size": "desktop"
+  },
+  "bell-01-dev-list.png": {
+    "caption": "Vera's list, lines from several tests stacked by kind: “Ratings to give · 2 updates today”, the one-a-day “Pay now: 4 pieces on 2 tests: their testers can charge or let them go (the first closes Nov 1)” and “Closing soon: 4 pieces close by Nov 5 (Kit's written answers on “Sky Lab: tutorial”, Jun's written answers on “Sky Lab: tutorial”, Kit's written answers on “Harbor Run: first 3 levels”, Jun's written answers on “Harbor Run: first 3 levels”)”, and in Payments and holds the one bank line “”.",
+    "kind": "image",
+    "title": "The developer's bell",
+    "section": "Bell and emails",
+    "group": "pE1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "bell-02-dev-ratings.png": {
+    "caption": "One entry across two tests: “Kit Moreau finished Pocket Chef: recipe search. You can rate them for 14 days.”, “Kit Moreau finished Tide Tracker: widgets. You can rate them for 14 days.”, each opening the dashboard's Ratings to give box.",
+    "kind": "image",
+    "title": "Ratings to give (§21)",
+    "section": "Bell and emails",
+    "group": "pE1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "bell-03-lines-open-video.webm": {
+    "caption": "Vera expands “Payments and holds” and opens the bank line (the dashboard's “Your bank wants you to confirm” box), then a “Ratings to give” line (the dashboard's Ratings to give box), then the “Pay now” line (Needs you).",
+    "kind": "video",
+    "title": "Each line opens its place",
+    "section": "Bell and emails",
+    "group": "pE1",
+    "order": 115003,
+    "size": "desktop"
+  },
+  "bell-05-tester-list.png": {
+    "caption": "Kit's list: “Applications and invites · 3 updates today”, “Joined · 2 updates today”, “Ratings to give · 4 updates today” and the one-a-day “Charge or let go: 2 pieces on 2 tests (the first closes Nov 1)” (one line for both tests).",
+    "kind": "image",
+    "title": "The tester's bell",
+    "section": "Bell and emails",
+    "group": "pE1",
+    "order": 115004,
+    "size": "desktop"
+  },
+  "bell-06-tester-stacks.png": {
+    "caption": "Expanded: “Vera Holt updated “Lumen Notes private beta”: your invite was sent again on the new listing.”, ““Budget Buddy: sign-up flow”'s listing changed, so your application was closed. You can apply again on the current listing.”, ““Coral Quest: boss fight”'s listing changed, so your application was closed. You can apply again on the current listing.”; and “Your application to “Glow Garden: night levels” wasn't accepted”, “You're in: Night Market demo”, each line opening its own join or session page.",
+    "kind": "image",
+    "title": "Applications and invites, Joined (§23, §24)",
+    "section": "Bell and emails",
+    "group": "pE1",
+    "order": 115005,
+    "size": "desktop"
+  },
+  "bell-07-admin.png": {
+    "caption": "One entry per kind across tests: “Disputes · 2 new today” (“Dispute on “Pocket Chef: recipe search”: Jun Abara says the pay should be higher (Vera Holt)”, “Dispute on “Tide Tracker: widgets”: Jun Abara says the pay should be higher (Vera Holt)”) and “New report: Jun Abara reported Vera Holt”; every admin gets them, so the counts include other runs' cases on this shared server.",
+    "kind": "image",
+    "title": "The admin's bell (§29)",
+    "section": "Bell and emails",
+    "group": "pE1",
+    "order": 115006,
+    "size": "desktop"
+  },
+  "bell-04-dev-payments-holds.png": {
+    "caption": "“Payments and holds · 4 updates today”, expanded: “Your tests are paused”, “The team paused “Lumen Notes private beta””, “Your bank wants you to confirm 2 payments ($22.00 in all): the first by Nov 1”, “You're subscribed ($7/month), renewing Nov 29, 2026”: the team's pause and the hold lines stack with the one bank line.",
+    "kind": "image",
+    "title": "Payments and holds, across tests (§32, §33)",
+    "section": "Bell and emails",
+    "group": "pE1",
+    "order": 115007,
+    "size": "desktop"
+  },
+  "blk-07-02-after.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Join call vs the block: after",
+    "section": "Blocks",
+    "group": "pD4",
+    "order": 118002,
+    "size": "desktop"
+  },
+  "blk-07-03-later.png": {
+    "caption": "PROVISIONAL",
+    "kind": "image",
+    "title": "Join call vs the block: a moment later",
+    "section": "Blocks",
+    "group": "pD4",
+    "order": 118003,
+    "size": "desktop"
+  },
+  "blk-07-04-video.webm": {
+    "caption": "PROVISIONAL",
+    "kind": "video",
+    "title": "Join call vs the block",
+    "section": "Blocks",
+    "group": "pD4",
+    "order": 118004,
+    "size": "desktop"
+  },
+  "b25-01-box.png": {
+    "caption": "Vera's saved zone is Pacific/Auckland (it's Fri, Oct 30, 10:12 AM there; the server's clock says Thu, Oct 29, 4:12 PM): “$10.00 on “Harbor Run: first 3 levels” · Kit Moreau's written answers · confirm by today, 11:50 PM”, “$10.00 on “Harbor Run: first 3 levels” · Jun Abara's written answers · confirm by tomorrow, 12:10 AM”, “$7.00 for your plan · confirm by Nov 2, 11:55 PM”; the 2 under 24 hours are red. On the server's clock the first would be Fri, Oct 30, 5:50 AM.",
+    "kind": "image",
+    "title": "§1 Confirm-by in the developer's own time zone",
+    "section": "Batch 25 (Oct 29)",
+    "group": "pE3",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "b25-01-box-video.webm": {
+    "caption": "Vera's dashboard near midnight in Auckland: “today, 11:50 PM” and “tomorrow, 12:10 AM” in red (under 24 hours), the renewal in 3 days in grey.",
+    "kind": "video",
+    "title": "§1 The dashboard box in Auckland",
+    "section": "Batch 25 (Oct 29)",
+    "group": "pE3",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "b25-01-payments.png": {
+    "caption": "“A payment $10.00 on “Harbor Run: first 3 levels” · confirm by Fri, Oct 30, 11:50 PM”, “A payment $10.00 on “Harbor Run: first 3 levels” · confirm by Sat, Oct 31, 12:10 AM”, “Your subscription $7.00 · confirm by Mon, Nov 2, 11:55 PM”.",
+    "kind": "image",
+    "title": "§1 Payments' list, the same zone",
+    "section": "Batch 25 (Oct 29)",
+    "group": "pE3",
+    "order": 117003,
+    "size": "desktop"
+  },
+  "b25-01-test-page.png": {
+    "caption": "“Your bank wants you to confirm a $10.00 payment for Kit Moreau's written answers, made while you were away. Confirm it by Fri, Oct 30, 11:50 PM.”",
+    "kind": "image",
+    "title": "§1 The test page's “Confirm it by”",
+    "section": "Batch 25 (Oct 29)",
+    "group": "pE3",
+    "order": 117004,
+    "size": "desktop"
+  },
+  "b25-03-renewal-row.png": {
+    "caption": "From the bell line “Your bank wants you to confirm 3 payments ($27.00 in all): the first by Nov 2” (batch 29 §32: one line for every waiting charge, opening the dashboard's box), the renewal's “Confirm with your bank →” opens Payments at its own row, highlighted: “Your subscription $7.00 · confirm by Mon, Nov 2, 11:55 PM”.",
+    "kind": "image",
+    "title": "§3 The renewal opens its own row",
+    "section": "Batch 25 (Oct 29)",
+    "group": "pE3",
+    "order": 117005,
+    "size": "desktop"
+  },
+  "b25-03-renewal-video.webm": {
+    "caption": "The bank line in the bell opens the dashboard's “Your bank wants you to confirm” box; the plan's row opens Payments at the renewal, highlighted.",
+    "kind": "video",
+    "title": "§3 Bell line → dashboard box → the renewal's row",
+    "section": "Batch 25 (Oct 29)",
+    "group": "pE3",
+    "order": 117006,
+    "size": "desktop"
+  },
+  "ct-06-video.webm": {
+    "caption": "Ben (left) and Cleo (right), both pages open as the 5-minute sweep runs: Ben's Charge opens; Cleo's page keeps its date.",
+    "kind": "video",
+    "title": "Each tester counts to their own deadline",
+    "section": "Charge timing",
+    "group": "pC4",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "ct-06-early-open.png": {
+    "caption": "Ben's own deadline passed 2 days ago, so Charge and Let it go are open.",
+    "kind": "image",
+    "title": "The early joiner: Charge is open",
+    "section": "Charge timing",
+    "group": "pC4",
+    "order": 118002,
+    "size": "desktop"
+  },
+  "ct-06-late-waits.png": {
+    "caption": "“If Wren Castell hasn't paid by Nov 6, you can charge or let it go then.”",
+    "kind": "image",
+    "title": "The late joiner still waits",
+    "section": "Charge timing",
+    "group": "pC4",
+    "order": 118003,
+    "size": "desktop"
+  },
+  "ct-06-dev-both.png": {
+    "caption": "Both rows.",
+    "kind": "image",
+    "title": "The developer's Needs you",
+    "section": "Charge timing",
+    "group": "pC4",
+    "order": 118004,
+    "size": "desktop"
+  },
+  "ct-07-tester-parts.png": {
+    "caption": "See the picture: the written answers (sent on time, Charge open), the listed recording sent after the deadline, and the call that isn't listed.",
+    "kind": "image",
+    "title": "The tester's three parts",
+    "section": "Charge timing",
+    "group": "pC5",
+    "order": 119001,
+    "size": "desktop"
+  },
+  "ct-07-dev-needs.png": {
+    "caption": "See the picture.",
+    "kind": "image",
+    "title": "The developer's Needs you",
+    "section": "Charge timing",
+    "group": "pC5",
+    "order": 119002,
+    "size": "desktop"
+  },
+  "ct-07-tester-later.png": {
+    "caption": "See the picture.",
+    "kind": "image",
+    "title": "8 days later: the tester",
+    "section": "Charge timing",
+    "group": "pC5",
+    "order": 119003,
+    "size": "desktop"
+  },
+  "ct-07-dev-later.png": {
+    "caption": "See the picture.",
+    "kind": "image",
+    "title": "8 days later: the developer",
+    "section": "Charge timing",
+    "group": "pC5",
+    "order": 119004,
+    "size": "desktop"
+  },
+  "b26-15-01-tester-video.webm": {
+    "caption": "Quinn changed the questions after Tavi sent: Tavi presses Switch to the new terms, answers the three questions and sends them; the earlier set becomes a previous set.",
+    "kind": "video",
+    "title": "§15 Switch and send again",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA3",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "b26-15-02-previous-set.png": {
+    "caption": "In Tavi's row on Quinn's test page, “Previous questions and answers (until <date>)” opens to the set sent before the change: each question as a small grey label (the Required one with “*”) above its answer, indented; the empty one reads “(no answer)”.",
+    "kind": "image",
+    "title": "§15 Previous questions and answers",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA3",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "b26-15-03-current-set.png": {
+    "caption": "Tavi's current answers in Needs you: each question's label above its indented answer.",
+    "kind": "image",
+    "title": "§15 The current set, the same way",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA3",
+    "order": 117003,
+    "size": "desktop"
+  },
+  "ct-05-dev-before.png": {
+    "caption": "Ines sent 5 days ago and their own deadline is tomorrow, so the review date is 7 days after sending (see the line under the Pay box).",
+    "kind": "image",
+    "title": "Before the update: the developer",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "ct-05-tester-before.png": {
+    "caption": "“If Wren Castell hasn't paid by Oct 31, you can charge or let it go then.”",
+    "kind": "image",
+    "title": "Before the update: the tester",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "ct-05-video.webm": {
+    "caption": "Wren's test page (left) and Ines's session page (right): Ines sends an updated version of their answers; the review date on both sides moves to 7 days after the update.",
+    "kind": "video",
+    "title": "An update before it's paid restarts the review date",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117003,
+    "size": "desktop"
+  },
+  "ct-05-dev-after.png": {
+    "caption": "Ines's row now reads “sent” today and the review date is 7 days after the update (see the line under the Pay box).",
+    "kind": "image",
+    "title": "After the update: the developer",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117004,
+    "size": "desktop"
+  },
+  "ct-05-tester-after.png": {
+    "caption": "“If Wren Castell hasn't paid by Nov 5, you can charge or let it go then.”: 7 days after the update.",
+    "kind": "image",
+    "title": "After the update: the tester",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117005,
+    "size": "desktop"
+  },
+  "ct-05-dev-cleo.png": {
+    "caption": "Cleo also updated today, but their own deadline is later than 7 days after the update, so the review date stays at the deadline.",
+    "kind": "image",
+    "title": "Their own deadline is later: the developer",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117006,
+    "size": "desktop"
+  },
+  "ct-05-tester-cleo.png": {
+    "caption": "“If Wren Castell hasn't paid by Nov 10, you can charge or let it go then.”",
+    "kind": "image",
+    "title": "Their own deadline is later: the tester",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117007,
+    "size": "desktop"
+  },
+  "ct-05-paid-refused.png": {
+    "caption": "See the picture for the exact line.",
+    "kind": "image",
+    "title": "Once paid: an update is refused",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117008,
+    "size": "desktop"
+  },
+  "ct-05-paid-video.webm": {
+    "caption": "Ines's page was opened before Wren paid; Send my updated answers is pressed after the payment.",
+    "kind": "video",
+    "title": "Once paid, an update can't be sent",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117009,
+    "size": "desktop"
+  },
+  "ct-05-paid-view.png": {
+    "caption": "The paid part and the line about Pay more; the written part shows the sent answers read-only (no Send).",
+    "kind": "image",
+    "title": "Once paid: the tester's page",
+    "section": "Charge timing",
+    "group": "pC3",
+    "order": 117010,
+    "size": "desktop"
+  },
+  "b28-15-tester-dispute.png": {
+    "caption": "See the picture.",
+    "kind": "image",
+    "title": "§15 A listed part paid above its listing can be disputed",
+    "section": "Batch 28 (Oct 29)",
+    "group": "pC7",
+    "order": 121001,
+    "size": "desktop"
+  },
+  "alerts-01-on-charge-stop.png": {
+    "caption": "Pim charged for their recording just before Pay on Sol's answers: “Your Pay on Sol Varga's written answers didn't go through.” Since you opened this page: “Pim Achebe charged $15.00 for their recording”; “Don't stop me for: Payments (going through or failing)”; “Press Pay again to go ahead.”",
+    "kind": "image",
+    "title": "Payments On: a tester's Charge stops Pay once",
+    "section": "Developer test page",
+    "group": "pB4",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "alerts-02-on-toggle.png": {
+    "caption": "Top right of the session page: “Alerts: On”, and under it “Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.”",
+    "kind": "image",
+    "title": "Tester Alerts On",
+    "section": "Tester session page",
+    "group": "pB5",
+    "order": 119001,
+    "size": "desktop"
+  },
+  "b27-04-01-test-pill-up.png": {
+    "caption": "Quinn's test page is scrolled down when Tavi Ross sends their answers: the page stays where it is and the pill “1 new update ↑” shows at the bottom (the updates are above).",
+    "kind": "image",
+    "title": "§4 The pill, pointing up",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121001,
+    "size": "desktop"
+  },
+  "b27-04-02-test-pill-two.png": {
+    "caption": "Uma Pell joins: the pill reads “2 new updates ↑”; still nothing scrolled.",
+    "kind": "image",
+    "title": "§4 Counting up",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121002,
+    "size": "desktop"
+  },
+  "b27-04-03-test-pressed.png": {
+    "caption": "The page scrolls up to the blue box with both updates, and the pill goes.",
+    "kind": "image",
+    "title": "§4 Pressing the pill",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121003,
+    "size": "desktop"
+  },
+  "b27-04-04-test-video.webm": {
+    "caption": "Scrolled down: Tavi Ross sends their answers and the pill “1 new update ↑” shows; Uma Pell joins and it counts up to 2; nothing scrolls by itself; pressing the pill scrolls to the box and it goes.",
+    "kind": "video",
+    "title": "§4 The pill on the test page",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121004,
+    "size": "desktop"
+  },
+  "b27-04-05-edit-pill-down.png": {
+    "caption": "Quinn is at the top of Edit when Wren Adair joins: the updates show under Save (below the screen), so the pill reads “1 new update ↓”.",
+    "kind": "image",
+    "title": "§4 On Edit, pointing down",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121005,
+    "size": "desktop"
+  },
+  "b27-04-06-edit-pill-two.png": {
+    "caption": "Tavi Ross sends updated answers: “2 new updates ↓”; the form stays where it was.",
+    "kind": "image",
+    "title": "§4 Counting up",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121006,
+    "size": "desktop"
+  },
+  "b27-04-07-edit-pressed.png": {
+    "caption": "The page scrolls down to the blue box under Save with both updates; the pill goes.",
+    "kind": "image",
+    "title": "§4 Pressing it scrolls down",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121007,
+    "size": "desktop"
+  },
+  "b27-04-08-edit-video.webm": {
+    "caption": "At the top of Edit: Wren Adair joins and the pill “1 new update ↓” shows; Tavi Ross's updated answers count it up to 2; nothing scrolls by itself; pressing it scrolls down to the updates under Save.",
+    "kind": "video",
+    "title": "§4 The pill on Edit",
+    "section": "Batch 27 (Oct 29)",
+    "group": "pA7",
+    "order": 121008,
+    "size": "desktop"
+  },
+  "cap-01-tester-below.png": {
+    "caption": "“Wren Castell has paid $10.00 for this. It can be paid more, up to $1,000.00 in all.”",
+    "kind": "image",
+    "title": "Below the cap: the tester",
+    "section": "Caps",
+    "group": "pC6",
+    "order": 120001,
+    "size": "desktop"
+  },
+  "b26-14-05-one-answer-sent.png": {
+    "caption": "With no Required question, Tavi answered only “Where did you get stuck?” and Send my answers went through: the form now offers “Send my updated answers”.",
+    "kind": "image",
+    "title": "§14 One answer is enough",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116005,
+    "size": "desktop"
+  },
+  "b26-14-06-star.png": {
+    "caption": "On “Lantern Bay: night dive” only “Where did you get stuck?” has the “*”, right after its words.",
+    "kind": "image",
+    "title": "§14 The “*” only on Required",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116006,
+    "size": "desktop"
+  },
+  "b26-14-07-required-refused.png": {
+    "caption": "Tavi answered only the first question and pressed Send my answers: “Answer every required question before sending.”, red at “Where did you get stuck?”; nothing was sent.",
+    "kind": "image",
+    "title": "§14 A Required question must be answered",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116007,
+    "size": "desktop"
+  },
+  "b26-14-08-video.webm": {
+    "caption": "On a test with no Required question Tavi answers one question and Send my answers goes through; on a test with one Required question, one answer elsewhere is refused (“Answer every required question before sending.”, red at the Required one), and once it's answered Send goes through.",
+    "kind": "video",
+    "title": "§14 Sending with one answer",
+    "section": "Batch 26 (Oct 29)",
+    "group": "pA2",
+    "order": 116008,
+    "size": "desktop"
   }
 }
