@@ -82,7 +82,7 @@ describe("batch 12 item 1: a developer can always delete their account", () => {
     const a = await makeUser({ name: "Admin" });
     const admin = await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
     const row = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
-    expect(await decideDispute(admin, row.id, { total: "10.00" })).toEqual({ extraCents: 600 });
+    expect(await decideDispute(admin, row.id, { total: "10.00", tickCents: 600 })).toEqual({ extraCents: 600 });
     expect(made).toHaveLength(1);
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 600 });
   });

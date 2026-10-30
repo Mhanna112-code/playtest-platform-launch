@@ -403,7 +403,7 @@ describe("batch 28 §20, §15, §14: a listed piece's cap is its listing plus th
     expect(src("app/admin/PagedList.tsx")).toContain("Their chat on this test");
     const a = await db.user.update({ where: { id: (await makeUser({ name: "Admin" })).user.id }, data: { isAdmin: true } });
     await expect(decideDispute(a, row.id, { total: "1000.01" })).rejects.toThrow("At most $1,000.00: the most this piece can be paid.");
-    expect(await decideDispute(a, row.id, { total: "1000.00" })).toEqual({ extraCents: 98_000 });
+    expect(await decideDispute(a, row.id, { total: "1000.00", tickCents: 98_000 })).toEqual({ extraCents: 98_000 });
     // At the cap: nothing is left for Pay more or a dispute.
     expect(await disputeBounds(row)).toMatchObject({ min: 100_000, max: 100_000 });
     expect(R.canDispute(0, 1000, false, false, 0)).toEqual({ ok: false, message: "Already paid the most this piece can be paid, so there's nothing to dispute." });

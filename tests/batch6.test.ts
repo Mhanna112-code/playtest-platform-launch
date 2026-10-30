@@ -298,7 +298,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
   it("a dispute decided for the tester during a hold is owed (paid when it is paid); during a suspension with no hold it charges at once, and a decline starts a hold", async () => {
     const held = await disputed();
     await startHold(held.dev.user.id, "unpaid");
-    await decideDispute(held.a, held.d.id, { total: "10.00" });
+    await decideDispute(held.a, held.d.id, { total: "10.00", tickCents: 600 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: held.d.id } })).toMatchObject({ status: "owed", amountCents: 600 });
     expect(await db.notification.count({ where: { userId: held.tester.user.id, text: { contains: "was decided" } } })).toBe(1);
     expect((await payOwed(held.dev.user)).lifted).toBe(true);
@@ -306,14 +306,14 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
 
     const susp = await disputed();
     await db.user.update({ where: { id: susp.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
-    await decideDispute(susp.a, susp.d.id, { total: "10.00" });
+    await decideDispute(susp.a, susp.d.id, { total: "10.00", tickCents: 600 });
     expect(["charged", "not_set_up"]).toContain((await db.payment.findFirstOrThrow({ where: { disputeId: susp.d.id } })).status);
 
     const declined = await disputed();
     await db.user.update({ where: { id: declined.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await withCard(declined.dev.user.id);
     decline();
-    await decideDispute(declined.a, declined.d.id, { total: "10.00" });
+    await decideDispute(declined.a, declined.d.id, { total: "10.00", tickCents: 600 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: declined.d.id } })).toMatchObject({ status: "failed", amountCents: 600 });
     expect((await db.dispute.findUniqueOrThrow({ where: { id: declined.d.id } })).status).toBe("decided");
     expect((await db.user.findUniqueOrThrow({ where: { id: declined.dev.user.id } })).holdStartedAt).not.toBeNull();

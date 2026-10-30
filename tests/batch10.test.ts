@@ -74,7 +74,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect((await dispute(sessionId, tester.cookie, { kind: "submission", id: sub.id })).body.error.message).toBe("You already disputed this payment. A part can be disputed once.");
     const a = await admin();
     await expect(decideDispute(a, row.id, { total: "1000.01" })).rejects.toThrow("At most $1,000.00: the most this piece can be paid.");
-    expect(await decideDispute(a, row.id, { total: "800.00" })).toEqual({ extraCents: 60_000 });
+    expect(await decideDispute(a, row.id, { total: "800.00", tickCents: 60_000 })).toEqual({ extraCents: 60_000 });
     // No Stripe in tests: the raise is recorded ("payments not set up") at once, as any decision outside a hold.
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 60_000, status: "not_set_up" });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your dispute on “Harbor Run” was decided" } })).toBe(1);
@@ -92,7 +92,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     await startHold(s.dev.user.id, "unpaid");
     const a = await admin();
     await expect(decideDispute(a, row.id, { total: "100.01" })).rejects.toThrow("At most $100.00");
-    expect(await decideDispute(a, row.id, { total: "100.00" })).toEqual({ extraCents: 9000 });
+    expect(await decideDispute(a, row.id, { total: "100.00", tickCents: 9000 })).toEqual({ extraCents: 9000 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ status: "owed", amountCents: 9000 });
     expect((await owed(s.dev.user.id)).map((p) => p.amountCents)).toEqual([9000]);
   });

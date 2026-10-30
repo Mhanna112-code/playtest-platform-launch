@@ -79,7 +79,7 @@ describe("calls / hold / block refinements", () => {
     await startHold(dev.user.id, "unpaid");
     const admin = await makeUser();
     await db.user.update({ where: { id: admin.user.id }, data: { isAdmin: true } });
-    await decideDispute({ ...admin.user, isAdmin: true }, d.id, { total: "10.00" });
+    await decideDispute({ ...admin.user, isAdmin: true }, d.id, { total: "10.00", tickCents: 600 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ status: "owed", amountCents: 600 });
     expect(await liftHoldIfClear(dev.user.id)).toBe(false); // owed first
     expect((await payOwed(dev.user)).lifted).toBe(true);

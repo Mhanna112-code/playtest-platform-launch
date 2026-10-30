@@ -4,7 +4,7 @@ import { ApiError, FIELD, api, errOf } from "@/lib/client";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { LIMITS } from "@/lib/limits";
-import { counterText, reasonTooLong } from "@/lib/rules";
+import { counterText, decideTickLabel, reasonTooLong } from "@/lib/rules";
 
 const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
 
@@ -32,6 +32,11 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  // (Owner, Oct 30, batch 35 §1) A raise names what it charges in a tick next to Decide, for any amount; changing the amount unticks it.
+  const typed = /^\s*\$?\d+(\.\d{1,2})?\s*$/.test(total) ? Math.round(parseFloat(total.replace("$", "")) * 100) : null;
+  const extra = typed != null && typed > minCents && typed <= Math.max(minCents, maxCents) ? typed - minCents : 0;
+  const [tickedFor, setTickedFor] = useState<number | null>(null);
+  const ticked = extra > 0 && tickedFor === typed;
   return (
     <div ref={root} className="space-y-2" data-mistakes-root="">
       {side.text && <p data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}: “{side.text}”</p>}
@@ -50,13 +55,13 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
         <button
           className="btn-ghost"
-          disabled={busy}
+          disabled={busy || (extra > 0 && !ticked)}
           onClick={async () => {
             if (!checkFields(root.current)) return;
             setBusy(true);
             setMsg(null);
             try {
-              await api("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped });
+              await api("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
               setMsg({ ok: true, text: "Done." });
               setTimeout(() => window.location.reload(), 600);
             } catch (e) {
@@ -74,6 +79,12 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         </button>
         {msg && !msg.text.startsWith(FIELD) && <span className={msg.ok ? "ok" : stopped && msg.text.startsWith("Your Decide") ? "info" : "err"} data-decide-msg="">{msg.text}</span>}
       </div>
+      {extra > 0 && (
+        <label className="flex items-start gap-2 text-sm" data-decide-tick="">
+          <input type="checkbox" className="mt-1" checked={ticked} onChange={(e) => setTickedFor(e.target.checked ? typed : null)} />
+          <span>{decideTickLabel(dev, extra, typed!)}</span>
+        </label>
+      )}
       {/* (Batch 16 section 10) A mistake is red at its box and listed here. */}
       <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press="Decide" />
     </div>
