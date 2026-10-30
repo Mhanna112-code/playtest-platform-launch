@@ -254,6 +254,28 @@ describe("batch 30 (Oct 29 addition): one stop box for several sources at once",
     expect((await act(testId, "withdraw-application", ana.cookie, { seenAt: pageLoaded, tab: "tab-b", confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
   });
 
+  it("(wave 2, §17) a key given by the developer's Save, the tester's own call request in another tab and the listing save stop a press together, oldest first", async () => {
+    const { dev, testId } = await setup();
+    const { tester, sessionId } = await joined(testId);
+    await later();
+    const pageLoaded = seen();
+    await later();
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), startsAt: new Date(Date.now() + 90 * 3_600_000).toISOString(), tab: "tab-a" })).status).toBe(200);
+    await later();
+    expect((await edit(testId, dev.cookie, { description: "Sail on and on" }, { keysAdd: ["K1", "K2", "K3"] })).status).toBe(200);
+    const first = await sact(sessionId, "request-time", tester.cookie, { seenAt: pageLoaded, startsAt: new Date(Date.now() + 100 * 3_600_000).toISOString(), tab: "tab-b" });
+    expect(first.body.error.code).toBe("stop_once");
+    const t = texts(first);
+    expect(t[0]).toMatch(/^You requested a call for .* in another tab$/);
+    expect(t.slice(1)).toEqual(expect.arrayContaining(["Nora Lane gave you an access key for “Harbor Run”", expect.stringMatching(saveRe("Nora Lane", "description"))]));
+    expect(t).toHaveLength(3);
+    expect(ats(first)).toEqual([...ats(first)].sort((a, b) => a - b));
+    // The top box has the same lines.
+    const l = await live(tester.cookie, `session:${sessionId}`, pageLoaded);
+    expect(l.body.changes.map((c: { text: string }) => c.text)).toEqual(expect.arrayContaining(t.slice(1)));
+    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: pageLoaded, startsAt: new Date(Date.now() + 100 * 3_600_000).toISOString(), tab: "tab-b", confirmed: true, boxAt: seen() })).status).toBe(200);
+  });
+
   it("a stop never swallows the other changes: Pay on a page opened before the Stop lists the stop AND a tester's work sent", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);

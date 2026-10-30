@@ -589,8 +589,8 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     // running again", "Nora Lane's developer account was paused (by ana@…)"), and each dispute and each decision shows once.
     const dev = displayName(t.developer);
     const [events, suspensions, actions, disputes] = await Promise.all([
-      // (Batch 30 §15) Not the session pages' stored listing values (they're never a line).
-      db.testEvent.findMany({ where: { testId, kind: { not: LISTING_VALUES } }, orderBy: { createdAt: "desc" }, take: 3000 }),
+      // (Batch 30 §15, §10) Not the session pages' stored listing values nor the testers' per-save records (both JSON; never a line).
+      db.testEvent.findMany({ where: { testId, kind: { notIn: [LISTING_VALUES, "listing_save"] } }, orderBy: { createdAt: "desc" }, take: 3000 }),
       db.accountEvent.findMany({ where: { userId: t.developerId, kind: "suspended" }, orderBy: { createdAt: "asc" } }),
       db.adminAction.findMany({ where: { targetId: testId, action: { in: ["pause-test", "unpause-test", "stop-test", "close-paused"] } }, orderBy: { createdAt: "asc" } }),
       db.dispute.findMany({ where: { contractId: { in: ids } }, include: { submission: { select: { kind: true } } } }),

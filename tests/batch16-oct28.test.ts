@@ -134,9 +134,9 @@ describe("the tester's Alerts line (section 4)", () => {
     // The kinds the tester gate stops for, and the words in the line that cover them.
     const gate = src("lib/server/testerGate.ts");
     const kinds = JSON.parse(gate.match(/const KINDS = (\[[^\]]*\]);/)![1]) as string[];
-    const words: Record<string, string> = { terms: "new terms", keyfixed: "your key", paid: "pay", rejected: "pay", cancelled: "calls", booked: "calls", requested: "calls", payment: "delayed pay", admin: "your dispute", dispute: "your dispute", info: "listing changes", own: "other tabs" };
-    expect(gate).toContain('[...KINDS, "renamed", "keyfixed"]'); // renames never stop (withRenamed)
-    for (const k of [...kinds, "keyfixed"]) expect(words[k], k).toBeDefined();
+    const words: Record<string, string> = { terms: "new terms", keyfixed: "your key", keygiven: "your key", paid: "pay", rejected: "pay", cancelled: "calls", booked: "calls", requested: "calls", payment: "delayed pay", admin: "your dispute", dispute: "your dispute", info: "listing changes", own: "other tabs" };
+    expect(gate).toContain('[...KINDS, "renamed", "keyfixed", "keygiven"]'); // renames never stop (withRenamed); (batch 30 §17) a key given by the developer's Save
+    for (const k of [...kinds, "keyfixed", "keygiven"]) expect(words[k], k).toBeDefined();
     expect(gate).toContain('export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);'); // what Off still stops for
   });
 });

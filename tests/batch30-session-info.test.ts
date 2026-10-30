@@ -88,7 +88,7 @@ describe("batch 30 §15: an Edit save and the tester's session", () => {
     expect(lines.find((l) => l.key === "description")).toMatchObject({ now: "Sail to the second island", before: "Sail", updatedAt: rows[0].createdAt });
     expect(lines.find((l) => l.key === "buildUrl")).toMatchObject({ now: "https://example.com/v2", before: "https://example.com/b" });
     // The stored values are never a line: not in the admin timeline, and not a kind any live box or bell lists.
-    expect(src("lib/server/adminLists.ts")).toContain("kind: { not: LISTING_VALUES }");
+    expect(src("lib/server/adminLists.ts")).toContain('kind: { notIn: [LISTING_VALUES, "listing_save"] }');
     expect(parseValues({ text: "not json", createdAt: new Date() })).toBeNull();
     // No new terms for an information change: nothing to Switch or Keep.
     expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(0);
