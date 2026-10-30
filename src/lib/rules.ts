@@ -50,6 +50,12 @@ export const PAY_TICK_CENTS = 20_000;
 export const CHARGE_TICK_CENTS = PAY_TICK_CENTS;
 export const chargeTickLabel = (devName: string, cents: number) => `Charge ${devName} ${money(cents)} now (over $200)`;
 export const chargeTickLine = (devName: string, cents: number) => `Tick “${chargeTickLabel(devName, cents)}” to charge.`;
+/**
+ * (Owner, Oct 30, batch 35 §1) An admin's Decide that raises a dispute's pay needs a tick naming what it charges, for any amount (not only over $200):
+ * "Charge Dana Reyes $6.00 more ($10.00 in all for this piece)". A changed amount unticks it; keeping the pay needs no tick.
+ */
+export const decideTickLabel = (devName: string, extraCents: number, totalCents: number) => `Charge ${devName} ${money(extraCents)} more (${money(totalCents)} in all for this piece)`;
+export const decideTickLine = (devName: string, extraCents: number, totalCents: number) => `Tick “${decideTickLabel(devName, extraCents, totalCents)}” to decide.`;
 /** (Owner, Oct 30, batch 32 §13) The tick next to Let it go (no pop-up): the button stays disabled until it's ticked. */
 export const letGoTickLabel = (devName: string) => `Let it go won't charge ${devName}, and you won't be paid for this`;
 export const PAY_TICK_LINE = (cents: number) => `I understand this payment of ${money(cents)} can't be refunded and is charged now.`;
@@ -873,11 +879,11 @@ export const chargebackReversedLine = (cents: number, backCents: number, refunde
 export const RESERVE_DAYS = 7;
 export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's taken when the team approves lifting your hold.`;
 export const RESERVE_EXPIRED = "Your reservation expired: press Pay what you owe again so the team can approve it.";
-/**
- * (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: what is added after the reservation is charged right after the team's Approve lifts the hold.
- * "Reserved $23.00: it's taken when the team approves lifting your hold. $5.00 added since will be charged right after."
- */
-export const reservedAddedLine = (reservedCents: number, addedCents: number) => `${reservedLine(reservedCents)}${addedCents > 0 ? ` ${money(addedCents)} added since will be charged right after.` : ""}`;
+/** (Batch 34 §3) The developer's reservation line; added charges are explained by the disabled button. */
+export const reservedAddedLine = (reservedCents: number, addedCents: number) => {
+  void addedCents;
+  return reservedLine(reservedCents);
+};
 /** (Batch 28 §8) The admin's chargeback row: "$23.00 reserved · $5.00 added since (charged after the hold lifts)". */
 export const adminReservedLine = (reservedCents: number, addedCents: number) => `${money(reservedCents)} reserved${addedCents > 0 ? ` · ${money(addedCents)} added since (charged after the hold lifts)` : ""}`;
 export const STILL_SUSPENDED_LINE = "Your payment went through. Your tests stay paused while your account is suspended.";

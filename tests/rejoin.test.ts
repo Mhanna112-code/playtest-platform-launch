@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { json, makeUser, req, saveRe } from "./helpers";
-import { act, joined, sact, seen, setup, atHours } from "./fixtures";
+import { act, joined, sact, seen, settle, setup, atHours } from "./fixtures";
 
 // (Owner, Oct 22, NEWEST+4) Listing changes re-invite; applications; rejoining restores work.
 
@@ -47,6 +47,7 @@ describe("applications close on a listing change", () => {
     await act(testId, "apply", ana.cookie, { note: "Hi" });
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { spots: 4 } });
     expect((await db.application.findFirstOrThrow({ where: { testId, testerId: ana.user.id } })).status).toBe("pending");
+    await settle(); // the spots Save's action line is written just after its response: the page loads after it
     const pageLoaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     const saved = await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { description: "New words" }, tab: "tab-1" });

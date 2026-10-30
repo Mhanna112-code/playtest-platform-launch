@@ -219,7 +219,7 @@ describe("disputes are unchanged after close-out", () => {
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: w.sub.id } });
     const a = await makeUser({ name: "Admin" });
     const admin = await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
-    expect(await decideDispute(admin, d.id, { total: "10.00" })).toEqual({ extraCents: 500 });
+    expect(await decideDispute(admin, d.id, { total: "10.00", tickCents: 500 })).toEqual({ extraCents: 500 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id, kind: "dispute" } })).toMatchObject({ amountCents: 500 });
   });
 });

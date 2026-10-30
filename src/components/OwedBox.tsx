@@ -97,7 +97,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
           }
         }}
       >
-        Pay what you owe ({money(changes ? total : seenTotal)})
+        {reservedOnce ? `${money(changes ? total : seenTotal)} is charged after the team approves` : `Pay what you owe (${money(changes ? total : seenTotal)})`}
       </button>}
       {bank.view}
       {/* (Owner, Oct 28, batch 16 section 41) The chargeback steps in order: the card first. */}

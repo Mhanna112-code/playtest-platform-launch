@@ -178,7 +178,7 @@ describe("admin decides disputes", () => {
     expect((await admin("decide", tester.cookie, { id: d.id, total: "10.00" })).status).toBe(403);
     expect((await admin("decide", owner.cookie, { id: d.id, total: "3.00" })).body.error.message).toContain("can only raise pay");
     expect((await admin("decide", owner.cookie, { id: d.id, total: "1010.01" })).body.error.message).toContain("At most");
-    const r = await admin("decide", owner.cookie, { id: d.id, total: "10.00", note: "Answers were complete" });
+    const r = await admin("decide", owner.cookie, { id: d.id, total: "10.00", note: "Answers were complete", tickCents: 600 });
     expect(r.body).toEqual({ extraCents: 600 });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ kind: "dispute", amountCents: 600, testerCents: 480 });
     expect((await admin("decide", owner.cookie, { id: d.id, total: "10.00" })).body.error.message).toMatch(/^.+ already decided this dispute at .+.$/); // (batch 15 section 21) named by email

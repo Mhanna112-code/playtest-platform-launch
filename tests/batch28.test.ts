@@ -289,7 +289,7 @@ describe("batch 28 §8: Pay what you owe reserves once; what's added after is ch
     const again = await x.press(500, [added.id]);
     expect(again.status).toBe(409);
     expect(again.body.error.message).toBe(reservedAddedLine(800, 500));
-    expect(reservedAddedLine(800, 500)).toBe("Reserved $8.00: it's taken when the team approves lifting your hold. $5.00 added since will be charged right after.");
+    expect(reservedAddedLine(800, 500)).toBe("Reserved $8.00: it's taken when the team approves lifting your hold.");
     const rows = (await adminPage("chargebacks", x.dev.user.id, null)).rows as ChargebackVM[];
     expect(rows.find((c) => c.id === x.dev.user.id)?.owedLine).toBe(" ($8.00 reserved · $5.00 added since (charged after the hold lifts))");
     expect(src("components/OwedBox.tsx")).toContain("disabled={busy || verifyFirst || reservedOnce}");
@@ -403,7 +403,7 @@ describe("batch 28 §20, §15, §14: a listed piece's cap is its listing plus th
     expect(src("app/admin/PagedList.tsx")).toContain("Their chat on this test");
     const a = await db.user.update({ where: { id: (await makeUser({ name: "Admin" })).user.id }, data: { isAdmin: true } });
     await expect(decideDispute(a, row.id, { total: "1000.01" })).rejects.toThrow("At most $1,000.00: the most this piece can be paid.");
-    expect(await decideDispute(a, row.id, { total: "1000.00" })).toEqual({ extraCents: 98_000 });
+    expect(await decideDispute(a, row.id, { total: "1000.00", tickCents: 98_000 })).toEqual({ extraCents: 98_000 });
     // At the cap: nothing is left for Pay more or a dispute.
     expect(await disputeBounds(row)).toMatchObject({ min: 100_000, max: 100_000 });
     expect(R.canDispute(0, 1000, false, false, 0)).toEqual({ ok: false, message: "Already paid the most this piece can be paid, so there's nothing to dispute." });
