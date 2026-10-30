@@ -165,3 +165,18 @@ Tests (tests/codex9-card-to-post.test.ts): a resource_missing charge starts the 
 30 days, 7 days and the day (once each); Get started steps per side, ✓ and gone when done; update older tests that post without a
 card (give their developer a card in the shared fixtures instead). npm run check green. Commit on the branch; don't push or merge.
 ```
+
+## Task 10: the developer's test page Listing panel (start after task 5 is merged: both change the test page)
+
+```
+Read AGENTS.md first and follow it. Task number: 10 (schema codex10, build folder .next-codex10, branch codex/test-listing,
+worktree C:/Users/march/Projects/pl-codex-10, made from the latest master; `npm ci` in it, never link node_modules).
+
+Build docs/BATCH-34.md §14 exactly as written. Where things are: the developer's test page is src/app/app/tests/[id]/page.tsx (its
+top overview panel is the first card); the tester's listing view with "Updated" tags is in src/app/app/sessions/[id]/page.tsx
+("Your agreed scope") and src/components/ListingInfo.tsx (UpdatedTag) — reuse them; the listing-save lines and their "See it" are
+listingSaveLines in src/lib/server/live.ts and the seeIt prop of src/components/ChangesBox.tsx / LiveTop (ListingSeeIt). Don't touch
+the admin pages, the written-answers screens, or the bell/notifications. Tests (tests/codex10-test-listing.test.ts): the panel
+shows every field and an Updated tag after a save; a listing line in the top box and in a stop box carries See it to the panel.
+npm run check green. Commit on the branch; don't push or merge.
+```

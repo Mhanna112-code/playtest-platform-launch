@@ -42,3 +42,8 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 8. A save in another tab is one line naming its fields (owner's finding, Oct 30)
 - The developer's own save in another tab reads "You saved the listing in another tab: title (now “X”), description; this re-sent fbbb's invite" (it used to say only "You changed the listing in another tab: re-sent fbbb's invite", with the rename on its own line). A rename alone stays its own info-only line.
+
+## 14. The developer's test page shows the current listing; listing lines link to it (owner, Oct 30) (Codex task 10)
+- A **Listing** panel right below the test page's top overview panel shows all the test's current listing information the way testers see it (product, name, description, questions, build link, NDA, devices, languages, categories, parts and prices, call rate, deadline days, Open until, Who can join, spots). A field changed recently carries an "Updated <time>" tag opening Before / Now (each in a scroll box of about 8 lines), like the tester's "Your agreed scope".
+- Every blue box on the test page (the top box and the stop boxes under any button) shows a listing change as ONE short line with a green **See it** link that jumps to the Listing panel ("You saved the listing in another tab at 11:16 AM: description, build link · See it"); the details live in the panel.
+- Edit stays as it is ("You saved the listing in another tab…" in the stop box, the blue "Saved in another tab or device at …" note with Use theirs under each changed field).
