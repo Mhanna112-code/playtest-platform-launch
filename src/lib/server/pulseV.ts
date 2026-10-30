@@ -95,3 +95,46 @@ export async function owedV(developerId: string) {
   const reserves = (await db.reservation.findMany({ where: { developerId }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, status: true } })).map((r) => `${r.id}:${r.status}`).join(",");
   return [lines.map((l) => `${l.id}:${l.amountCents}`).join(","), me.holdStartedAt?.getTime() ?? 0, me.holdReason, me.chargebackCardVerifiedAt?.getTime() ?? 0, me.chargebackApprovedAt?.getTime() ?? 0, me.holdApprovedAt?.getTime() ?? 0, paid, reserves].join("|");
 }
+
+/**
+ * (Owner, Oct 30, batch 33 §7) A profile's admin box (`adminPerson=<id>`): that account's suspension, deletion and hold state and its account history (a suspend,
+ * reinstate, delete or $0 close-out by another admin), so a second admin's open profile redraws without a reload.
+ */
+export async function adminPersonV(userId: string) {
+  const [u, ev, acted] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { devSuspendedAt: true, testerSuspendedAt: true, deletedAt: true, holdStartedAt: true, holdApprovedAt: true } }),
+    db.accountEvent.aggregate({ where: { userId }, _count: { _all: true }, _max: { createdAt: true } }),
+    db.adminAction.aggregate({ where: { targetId: userId }, _count: { _all: true }, _max: { createdAt: true } }),
+  ]);
+  const t = (d: Date | null | undefined) => d?.getTime() ?? 0;
+  return u ? [t(u.devSuspendedAt), t(u.testerSuspendedAt), t(u.deletedAt), t(u.holdStartedAt), t(u.holdApprovedAt), ev._count._all, t(ev._max.createdAt), acted._count._all, t(acted._max.createdAt)].join(":") : "";
+}
+
+/**
+ * (Owner, Oct 30, batch 33 §7) The admin console (`adminConsole=1`): the newest rows of its lists and every admin's latest action (a pause lifted, a dispute decided,
+ * a hold approved, an account suspended or reinstated elsewhere), so the console redraws when another admin changed something.
+ */
+export async function adminConsoleV() {
+  const t = (d: Date | null | undefined) => d?.getTime() ?? 0;
+  const [acts, events, disputes, reports, contact, replied, noShows, holds, cbs, outages, gaps, suspended] = await Promise.all([
+    db.adminAction.aggregate({ _count: { _all: true }, _max: { createdAt: true } }),
+    db.accountEvent.aggregate({ _count: { _all: true }, _max: { createdAt: true } }),
+    db.dispute.aggregate({ _count: { _all: true }, _max: { createdAt: true, decidedAt: true, devSideAt: true } }),
+    db.report.aggregate({ _count: { _all: true }, _max: { createdAt: true } }),
+    db.contactMessage.aggregate({ _count: { _all: true }, _max: { createdAt: true, repliedAt: true } }),
+    db.contactMessage.count({ where: { repliedById: { not: null } } }),
+    db.call.aggregate({ where: { noShowBy: { not: null } }, _count: { _all: true }, _max: { noShowAt: true } }),
+    db.user.aggregate({ where: { holdStartedAt: { not: null } }, _count: { _all: true }, _max: { holdStartedAt: true } }),
+    db.payment.aggregate({ where: { chargeback: "open" }, _count: { _all: true }, _max: { chargebackAt: true, settledAt: true } }),
+    db.outage.aggregate({ _count: { _all: true }, _max: { recordedAt: true, approvedAt: true } }),
+    db.appState.count({ where: { key: { startsWith: "gap:" } } }), // heartbeat gaps waiting (outages.ts GAP_PREFIX)
+    db.user.count({ where: { OR: [{ devSuspendedAt: { not: null } }, { testerSuspendedAt: { not: null } }] } }),
+  ]);
+  return [
+    acts._count._all, t(acts._max.createdAt), events._count._all, t(events._max.createdAt),
+    disputes._count._all, t(disputes._max.createdAt), t(disputes._max.decidedAt), t(disputes._max.devSideAt),
+    reports._count._all, t(reports._max.createdAt), contact._count._all, t(contact._max.createdAt), t(contact._max.repliedAt), replied,
+    noShows._count._all, t(noShows._max.noShowAt), holds._count._all, t(holds._max.holdStartedAt), cbs._count._all, t(cbs._max.chargebackAt), t(cbs._max.settledAt),
+    outages._count._all, t(outages._max.recordedAt), t(outages._max.approvedAt), gaps, suspended,
+  ].join(":");
+}

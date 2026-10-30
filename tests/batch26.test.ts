@@ -358,7 +358,7 @@ describe("batch 26 section 12: Payouts waiting shows everything, in the scroll b
     expect(second.next).toBeNull();
     expect(endLine(first.total)).toBe("That's all (30)");
     const page = src("app/admin/page.tsx");
-    expect(page).toContain('<PagedList kind="payouts" title="Payouts waiting for a payout account" initial={rows(payoutsP)} empty="None." />');
+    expect(page).not.toContain('<PagedList kind="payouts"'); // (batch 33 §6) no longer on the console
   });
 });
 

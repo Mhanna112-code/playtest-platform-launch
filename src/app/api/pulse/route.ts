@@ -15,6 +15,14 @@ export async function GET(req: Request) {
       // Payments stays open during a hold or suspension, so it always refreshes.
       return ok({ v: await (await import("@/lib/server/pulseV")).owedV(u.id), restricted: false });
     }
+    // (Owner, Oct 30, batch 33 §7) Admin pages follow other admins' changes: a profile's admin box (that account's state) and the console (its lists' newest rows).
+    const adminPerson = q.get("adminPerson");
+    if (adminPerson || q.get("adminConsole")) {
+      const { isAdmin } = await import("@/lib/server/session");
+      if (!isAdmin(u)) throw new HttpError(403, "not_admin", "Only admins can do that.");
+      const pv = await import("@/lib/server/pulseV");
+      return ok({ v: adminPerson ? await pv.adminPersonV(adminPerson) : await pv.adminConsoleV(), restricted: false });
+    }
     // (Owner, Oct 28, batch 16 section 32) The tester's invitations (dashboard and join page): any invite of theirs created (batch 30 §8), closing, re-sent or its
     // test filling refreshes the page.
     if (q.get("invites")) {

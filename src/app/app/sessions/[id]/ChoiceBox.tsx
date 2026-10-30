@@ -39,7 +39,11 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
       .then(() => window.location.reload())
       .catch((e) => {
         const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
-        else setErr(errOf(e));
+        else {
+          // (Batch 32 §15) The second press went ahead and failed for another reason: the earlier stop box goes (only the refusal shows).
+          setBox(null);
+          setErr(errOf(e));
+        }
         setBusy(false);
       });
   };

@@ -266,10 +266,11 @@ describe("D) emails", () => {
 });
 
 describe("E, F) the admin dashboard order and pages of 25", () => {
-  it("sections run: open disputes, chargeback holds, your actions, paused tests, then the rest", () => {
+  // (Batch 33 §6) The console's order is now: chargeback holds, your actions, tests you paused, suspensions, outages, open disputes, payment holds, reports, lifts...
+  it("sections run: chargeback holds, your actions, tests you paused, suspensions, outages, open disputes, then the rest (batch 33 §6)", () => {
     const page = src("app/admin/page.tsx");
     const at = (id: string) => page.indexOf(`id="${id}"`);
-    const order = ["disputes", "chargebacks", "mine", "paused-tests", "decided"].map(at);
+    const order = ["chargebacks", "mine", "tests-you-paused", "suspensions", "outages", "disputes", "holds", "reports", "lifts", "no-shows", "contact", "settings"].map(at);
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((x, y) => x - y)).toEqual(order);
   });

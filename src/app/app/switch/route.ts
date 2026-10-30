@@ -17,7 +17,10 @@ export async function GET(req: Request) {
   if (!user) return NextResponse.redirect(new URL("/login", url));
   const to = url.searchParams.get("to") === "tester" ? "tester" : "developer";
   const next = safeNext(url.searchParams.get("next"));
-  const auto = req.headers.get("sec-fetch-site") === "same-origin";
+  // (Owner's finding, Oct 30, batch 32 §16) It switches at once for the site's own pages AND the person's own direct visits (a reload, a typed or bookmarked
+  // address, a new tab: "none"); only a link from another site or an email ("cross-site", or no header) waits for the press.
+  const site = req.headers.get("sec-fetch-site");
+  const auto = site === "same-origin" || site === "same-site" || site === "none";
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Switching sides · Playtest</title>
 <style>body{background:#0b0f1a;color:#e2e8f0;font-family:system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;margin:0}button{background:#c4f542;color:#0b0f1a;border:0;border-radius:10px;padding:10px 16px;font-weight:600;cursor:pointer}</style></head>
 <body><form method="post" action="/app/switch" id="f"><input type="hidden" name="to" value="${esc(to)}"><input type="hidden" name="next" value="${esc(next)}"><button>Switch to your ${to} side and continue</button></form>${auto ? `<script>document.getElementById("f").submit()</script>` : ""}</body></html>`;

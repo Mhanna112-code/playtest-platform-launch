@@ -61,3 +61,44 @@ describe("batch 32 §14: the agreed scope's then-and-now boxes scroll", () => {
     expect(src("app/app/sessions/[id]/page.tsx").match(/block max-h-32 overflow-y-auto/g)?.length).toBe(2);
   });
 });
+
+describe("batch 32 §15: a tester's Charge on a developer with no saved card", () => {
+  it("is handled as a declined card (payment hold, owed, the tester reads 'delayed'), never sent to Stripe empty", async () => {
+    const { setStripeForTests, NO_CARD_SAVED } = await import("@/lib/server/stripe");
+    const { sact, seen, settle } = await import("./fixtures");
+    let calls = 0;
+    setStripeForTests({ paymentIntents: { create: async () => { calls++; return { id: "pi_x", status: "succeeded" }; } } } as never);
+    try {
+      const { dev, testId } = await setup();
+      const { tester, sessionId } = await joined(testId);
+      expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
+      const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+      await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * 86_400_000) } });
+      await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: null, stripePaymentMethodId: null } });
+      await settle();
+      const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", seenAt: seen(), confirmed: true });
+      expect(r.status).toBe(200);
+      expect(r.body.status).toBe("failed");
+      expect(calls).toBe(0);
+      expect(await db.payment.findFirst({ where: { submissionId: sub.id } })).toMatchObject({ status: "failed", failure: NO_CARD_SAVED });
+      expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+      expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "may be delayed" } } })).toBeGreaterThan(0);
+    } finally {
+      setStripeForTests(null);
+    }
+  });
+  it("a refusal after the stop box's second press clears the stop box", () => {
+    expect(src("app/app/sessions/[id]/ChoiceBox.tsx")).toContain("setBox(null);\n          setErr(errOf(e));");
+  });
+});
+
+describe("batch 32 §16: switching sides is instant from the site and from your own visits", () => {
+  it("same-origin and direct visits (none) send the form at once; a link from elsewhere waits for the press", async () => {
+    const { GET } = await import("@/app/app/switch/route");
+    const { makeUser } = await import("./helpers");
+    const both = await makeUser({ tester: true, developer: true, name: "Bo Both" } as never);
+    const get = async (site?: string) => (await GET(new Request("http://localhost:3400/app/switch?to=tester&next=/app/find", { headers: { cookie: both.cookie, ...(site ? { "sec-fetch-site": site } : {}) } }))).text();
+    for (const site of ["same-origin", "same-site", "none"]) expect(await get(site), site).toContain("<script>");
+    for (const site of ["cross-site", undefined]) expect(await get(site), String(site)).not.toContain("<script>");
+  });
+});

@@ -286,7 +286,8 @@ async function settleOwedRow(dev: { id: string; name: string; email: string }, p
   const ready = !!(pi && tester?.stripeAccountId && tester.payoutsReady && split.testerCents > 0);
   const claimed = await db.payment.updateMany({
     where: { id: p.id, settledAt: null, status: p.status },
-    data: { status, settledAt: new Date(), failure: "", actionPi: null, actionBy: null, warnedAt: null, stripePaymentIntentId: pi, ...split, transferStatus: pi ? (ready ? "sending" : "waiting") : "none" },
+    // (Batch 33 §3) A failed charge settled from the reservation keeps why it failed (the Payment failures box: "settled by the team").
+    data: { status, settledAt: new Date(), ...(p.owedUntil ? {} : { failure: "" }), actionPi: null, actionBy: null, warnedAt: null, stripePaymentIntentId: pi, ...split, transferStatus: pi ? (ready ? "sending" : "waiting") : "none" },
   });
   if (claimed.count !== 1) return;
   if (ready) {

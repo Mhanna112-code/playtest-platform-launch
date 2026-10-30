@@ -423,7 +423,8 @@ async function chargeOwedOne(u: Parameters<typeof charge>[0] & { email: string; 
       await (await confirmMod()).awayAction(p.id, r as NeedsAction, true);
       return { result: "waiting" };
     }
-    await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), failure: "", warnedAt: null, actionPi: null, actionBy: null } });
+    // (Batch 33 §3) A failed charge paid later keeps why it failed (the developer's Payment failures box on their admin profile reads it).
+    await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), ...(p.owedUntil ? {} : { failure: "" }), warnedAt: null, actionPi: null, actionBy: null } });
     await tellArrived(p, tester.email, displayName(u));
     return { result: "paid", cents: p.amountCents, status: r.status, name: await owedItemName(p) };
   } catch (e) {

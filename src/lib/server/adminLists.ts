@@ -17,6 +17,8 @@ import type { DisputedWork } from "@/app/admin/DisputeWork";
 import type { Prisma } from "@prisma/client";
 import { accountStates, type AccountState } from "./accountState";
 import { textFilters } from "@/lib/nameSearch";
+import { plainOf, type Rich } from "@/lib/rich";
+import { linkNames, person, personName, profileHref, stripeIds, testLink, whoById } from "./adminLinks";
 
 // (Owner, Oct 26) The admin dashboard's lists, 25 rows at a time (keyset by date: newest first; the lists ordered by closure date go soonest first). Rows are
 // plain, already-formatted view models so the same loaders serve the page and /api/admin/more. (Batch 17 §7) Each list is a scroll box that loads the next 25
@@ -29,24 +31,27 @@ export type DisputeVM = {
   work?: DisputedWork | null; type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string;
   /** (Batch 28 §15) "$20.00 paid · can raise up to $20.00 more" */ range?: string;
   /** (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last: the only place an admin can read a chat. */ chat?: { id: string; who: string; at: string; text: string }[];
+  /** (Batch 33 §2) The test and the part, above the rest: "“Harbor Run” · Ana Silva's written answers · paid $10.00" (the test and the name are links). */ top?: Rich;
+  /** (Batch 33 §1) "Ana Silva (ana@…) vs Nora Lane (nora@…)": the names open their profiles. */ people?: Rich;
+  /** (Batch 33 §2) "Ana Silva's reason: “…” · Nora Lane's note when paying: “…”" (the names are links). */ saidParts?: Rich;
 };
-export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string };
-export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean; acct: AccountState };
+export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string; /** (Batch 33 §1) the test and the person as links */ parts?: Rich };
+export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean; acct: AccountState; /** (Batch 33 §1) "Nora Lane (nora@…) · developer + tester · …": the name opens the profile */ parts?: Rich };
 /** (Batch 17 §5) A search and ticks on the Accounts or Tests list (see lib/adminScroll.ts). */
 export type ListFilter = { q?: string; ticks?: string[] };
-export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string };
+export type TestVM = { href: string; id: string; at: string; line: string; status: string; adminPaused: boolean; stopped: boolean; critical: number; closedLine: string; /** (Batch 33 §1) the line with the test and its developer as links */ parts?: Rich };
 /** (Owner, Oct 28 afternoon) The per-field change counts on an admin test row: "NDA 3, steps 1". */
 const countsText = (v: unknown) => { const c = countsOf(v); return CRITICAL_KEYS.filter((k) => c[k] > 0).map((k) => `${CRITICAL_FIELDS[k]} ${c[k]}`).join(", "); };
 /** (Batch 22 section 4) `em`: a quoted reason shown in italics after the text (a dispute's). */
-export type TextVM = { id: string; at: string; text: string; href?: string; em?: string };
+export type TextVM = { id: string; at: string; text: string; href?: string; em?: string; /** (Batch 33 §1) the same line with its links (people, tests, Stripe ids) */ parts?: Rich };
 /** A hold lift waiting for an admin's Approve (the 4th hold onward), in its own box: styled like a dispute row. */
-export type LiftVM = { id: string; at: string; head: string; owed: string; paid: string };
+export type LiftVM = { id: string; at: string; head: string; owed: string; paid: string; /** (Batch 33 §1) the developer as a link */ headParts?: Rich };
 /** A profile report: who reported whom, when, why, with links to both profiles. */
-export type ReportVM = { id: string; at: string; reporter: string; reporterHref: string; reported: string; reportedHref: string; when: string; note: string };
-export type PausedVM = { id: string; at: string; text: string; closure: string; extended: boolean };
-export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string; /** (Batch 23 section 6) money reserved on the card; the last reservation lapsed */ reservedCents: number; expired: boolean };
+export type ReportVM = { id: string; at: string; reporter: string; reporterHref: string; reported: string; reportedHref: string; when: string; note: string; /** (Batch 33 §1) the email after each name */ reporterEmail?: string; reportedEmail?: string };
+export type PausedVM = { id: string; at: string; text: string; closure: string; extended: boolean; /** (Batch 33 §1) the test and the developer as links */ parts?: Rich };
+export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string; /** (Batch 23 section 6) money reserved on the card; the last reservation lapsed */ reservedCents: number; expired: boolean; /** (Batch 33 §1) the developer as a link, and each chargeback with its Stripe id as a Dashboard link */ who?: Rich; chargebackParts?: Rich[] };
 
-export type Kind = "contact" | "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "payouts" | "paused" | "chargebacks" | "lifts" | "reports" | "u-payments" | "u-payouts" | "u-disputes" | "u-chargebacks" | "u-holds" | "u-tests" | "u-reports" | "u-parts" | "t-timeline" | "t-contracts" | "t-payments";
+export type Kind = "contact" | "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "payouts" | "paused" | "chargebacks" | "lifts" | "reports" | "u-payments" | "u-payouts" | "u-disputes" | "u-chargebacks" | "u-holds" | "u-tests" | "u-reports" | "u-parts" | "u-failures" | "mypaused" | "suspensions" | "t-timeline" | "t-contracts" | "t-payments";
 /** (Batch 15 section 21) An admin by email, as admin views name them ("an admin (deleted)" once the account is gone). */
 export async function adminEmails(ids: (string | null | undefined)[]) {
   const list = [...new Set(ids.filter((x): x is string => !!x))];
@@ -67,10 +72,9 @@ const ACTION_WORDS: Record<string, string> = {
   suspend: "suspended", unsuspend: "reinstated", decide: "decided", "contact-replied": "marked replied", "approve-outage": "outage approved",
 };
 
-export const KINDS: Kind[] = ["contact", "disputes", "decided", "mine", "users", "tests", "noshows", "payments", "payouts", "paused", "chargebacks", "lifts", "reports", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "t-timeline", "t-contracts", "t-payments"];
+export const KINDS: Kind[] = ["contact", "disputes", "decided", "mine", "users", "tests", "noshows", "payments", "payouts", "paused", "chargebacks", "lifts", "reports", "u-payments", "u-payouts", "u-disputes", "u-chargebacks", "u-holds", "u-tests", "u-reports", "u-parts", "u-failures", "mypaused", "suspensions", "t-timeline", "t-contracts", "t-payments"];
 
-/** The profile page an admin can open for an account: the developer's, or else the tester's. */
-const profileHref = (u: { id: string; isDeveloper: boolean }) => (u.isDeveloper ? `/app/developers/${u.id}` : `/app/testers/${u.id}`);
+export { profileHref };
 
 const cur = (at: Date, id: string) => `${at.toISOString()}|${id}`;
 function parse(cursor: string | null) {
@@ -113,7 +117,6 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   const sub = d.submissionId ? await db.submission.findUnique({ where: { id: d.submissionId } }) : null;
   const call = d.callId ? await db.call.findUnique({ where: { id: d.callId } }) : null;
   const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId ?? "none" } });
-  const what = call ? `Live call (${fmtDateTime(call.startsAt)})` : `${sub?.kind === "recording" ? "Recording" : "Written answers"} (sent ${sub ? fmtDateTime(sub.sentAt) : ""})`;
   const flagged = await reportedOver3([d.testerId, c?.test.developerId ?? ""]);
   let min = 0, max = 0, range = "";
   const base = r?.agreedCents == null ? NOT_LISTED : `Listing ${money(r.agreedCents)}`;
@@ -131,17 +134,26 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   }
   // (Owner, Oct 29, batch 28 §15) Their chat on this test, so an agreement made in chat can be checked (read-only; no read log).
   const chat = c ? await db.message.findMany({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 500 }) : [];
+  // (Owner, Oct 30, batch 33 §1 and §2) The test and the part above the rest, the people with their emails, and who wrote what: every name and the test are links.
+  const tester = c?.tester ?? null, devU = c?.test.developer ?? null;
+  const piece = call ? `live call (${fmtDateTime(call.startsAt)})` : sub?.kind === "recording" ? "recording" : "written answers";
+  const top: Rich = [testLink(c ? { id: c.testId, title: c.title } : null), " · ", personName(tester), `'s ${piece} · ${r?.rejected ? "rejected" : `paid ${money(paidForPiece)}`}`];
+  const people: Rich = [...person(tester, !!c && flagged.has(c.testerId)), " vs ", ...person(devU, !!c && flagged.has(c.test.developerId))];
+  const saidParts: Rich = [personName(tester), `'s reason: “${d.reason}”`, ...(r?.reason ? [" · ", personName(devU), `'s note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”`] : [])];
   return {
     id: d.id,
     at: d.createdAt.toISOString(),
     type: "dispute" as const,
-    head: `${c ? labelled(displayName(c.tester), flagged.has(c.testerId)) : "?"} vs ${c ? labelled(displayName(c.test.developer), flagged.has(c.test.developerId)) : "?"} · ${c?.title ?? ""} · ${what}`,
+    head: plainOf(top),
+    top,
+    people,
+    saidParts,
     money: `${base} · Paid for this piece ${money(paidForPiece)}${r?.rejected ? " (rejected)" : ""}`,
     range,
     chat: chat.map((m) => ({ id: m.id, who: displayName(m.sender), at: fmtDateTime(m.createdAt), text: m.body })),
     work: await disputedWork(d),
     // (Batch 15 section 27) The developer's side shows on its own line ("added <time>"), live.
-    said: `Tester: “${d.reason}”${r?.reason ? ` · Developer's note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”` : ""}`,
+    said: plainOf(saidParts),
     devSide: d.devSide,
     devSideAt: d.devSideAt ? d.devSideAt.toISOString() : null,
     dev: c ? displayName(c.test.developer) : "",
@@ -169,7 +181,8 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
     if (t.developer.devSuspendedById === adminId && t.developer.devSuspendedAt) reasons.push({ why: "developer suspended by you", date: t.developer.devSuspendedAt });
     if (!reasons.length) continue;
     reasons.sort((a, b) => b.date.getTime() - a.date.getTime());
-    all.push({ id: t.id, testId: t.id, date: reasons[0].date, at: reasons[0].date.toISOString(), title: t.title, dev: displayName(t.developer), why: reasons.map((r) => r.why).join(" · "), when: fmtDateTime(reasons[0].date) });
+    const why = reasons.map((r) => r.why).join(" · ");
+    all.push({ id: t.id, testId: t.id, date: reasons[0].date, at: reasons[0].date.toISOString(), title: t.title, dev: displayName(t.developer), why, when: fmtDateTime(reasons[0].date), parts: [testLink(t), " · ", ...person(t.developer), ` · ${why} · ${fmtDateTime(reasons[0].date)}`] });
   }
   // (Batch 15 section 35) The accounts themselves: each side this admin suspended (still suspended), and each account this admin deleted.
   // (Batch 30 §5) and each time this admin closed a developer's open reviews at $0 (the count and the reason).
@@ -183,7 +196,8 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
       if (!at || at.getTime() > e.createdAt.getTime() + 5_000 || at.getTime() < e.createdAt.getTime() - 5_000) continue; // reinstated since (or suspended again by someone else)
     }
     const why = e.kind === "team-closed" ? `${e.note.replace(/^(\d+ open reviews?) closed/, "$1 closed by you")}` : e.kind === "deleted" ? "account deleted by you" : `suspended by you (${e.side || "developer"} side)`;
-    all.push({ id: `acct-${e.id}`, testId: "", date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt) });
+    // (Batch 33 §1) The person suspended (or deleted, or whose reviews were closed) opens their profile.
+    all.push({ id: `acct-${e.id}`, testId: "", date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt), parts: [{ t: displayName({ ...p, deletedAt: null }), href: profileHref(p) }, ` (${p.email}) · ${why} · ${fmtDateTime(e.createdAt)}`] });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
   return slice(all, (r) => r.date, cursor);
@@ -207,9 +221,12 @@ export function userWhere(f?: ListFilter): Prisma.UserWhereInput {
   return and.length ? { AND: and } : {};
 }
 
-async function users(cursor: string | null, f?: ListFilter): Promise<Page<UserVM>> {
+/** (Owner, Oct 30, batch 33 §6) The console's Suspensions: accounts suspended now (either side), not deleted, newest first, each with Reinstate as on a profile. */
+export const SUSPENDED_NOW: Prisma.UserWhereInput = { deletedAt: null, OR: [{ devSuspendedAt: { not: null } }, { testerSuspendedAt: { not: null } }] };
+
+async function users(cursor: string | null, f?: ListFilter, only?: Prisma.UserWhereInput): Promise<Page<UserVM>> {
   const c = parse(cursor);
-  const where = userWhere(f);
+  const where: Prisma.UserWhereInput = only ? { AND: [userWhere(f), only] } : userWhere(f);
   // (Batch 20 section 9) An exact name or email match comes first (on the first page; the pages after it leave them out).
   const q = f?.q?.trim() ?? "";
   const exactWhere: Prisma.UserWhereInput | null = q ? { AND: [where, { OR: [{ name: { equals: q, mode: "insensitive" } }, { email: { equals: q, mode: "insensitive" } }] }] } : null;
@@ -225,11 +242,14 @@ async function users(cursor: string | null, f?: ListFilter): Promise<Page<UserVM
   const reports = await reportCounts(page.map((u) => u.id));
   const rows: UserVM[] = page.map((x) => {
     const acct = states.get(x.id)!;
+    const roles = `${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`;
     return {
       id: x.id,
       at: x.createdAt.toISOString(),
       line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`,
       href: profileHref(x),
+      // (Batch 33 §1) "Nora Lane (nora@…) · developer + tester": the name opens the profile.
+      parts: [...person(x), ` · ${roles}`],
       reports: reports.get(x.id) ?? 0,
       state: x.deletedAt ? "deleted" : x.devSuspendedAt || x.testerSuspendedAt ? "suspended" : "normal",
       devSuspended: !!x.devSuspendedAt,
@@ -260,10 +280,13 @@ export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ in
   // (Batch 29 section 20) A team-paused test closed after 7 days keeps its adminPausedAt (pauseClosure.ts): it reads as closed, never as paused (no Lift the pause).
   const closed = !!t.pauseClosedAt;
   const state = t.adminStoppedAt ? `stopped by ${who(t.adminStoppedById)}` : closed ? "closed" : t.adminPausedAt ? `paused by ${who(t.adminPausedById)}` : lifted || (lastPause ? `${t.status} · paused by ${who(lastPause.adminId)} at ${fmtDateTime(lastPause.createdAt)}` : t.status);
+  const tail = `${t._count.contracts} joined${countsText(t.criticalCounts) ? ` · changes since testers joined: ${countsText(t.criticalCounts)}` : ""}${acted.length ? ` · ${acted.slice(0, 3).join(" · ")}` : ""}`;
   return {
     id: t.id,
     at: t.createdAt.toISOString(),
-    line: `${fmtDateTime(t.createdAt)} · “${t.title}” · ${state} · ${displayName(t.developer)} · ${t._count.contracts} joined${countsText(t.criticalCounts) ? ` · changes since testers joined: ${countsText(t.criticalCounts)}` : ""}${acted.length ? ` · ${acted.slice(0, 3).join(" · ")}` : ""}`,
+    line: `${fmtDateTime(t.createdAt)} · “${t.title}” · ${state} · ${displayName(t.developer)} · ${tail}`,
+    // (Batch 33 §1) The test and its developer as links.
+    parts: [`${fmtDateTime(t.createdAt)} · `, testLink(t), ` · ${state} · `, ...person(t.developer), ` · ${tail}`],
     href: `/app/find/${t.id}`,
     status: t.status,
     adminPaused: !!t.adminPausedAt && !closed && t.status !== "stopped",
@@ -297,9 +320,12 @@ export function testWhere(f?: ListFilter, now = new Date()): Prisma.TestWhereInp
   return and.length ? { AND: and } : {};
 }
 
-async function tests(cursor: string | null, f?: ListFilter): Promise<Page<TestVM>> {
+/** (Owner, Oct 30, batch 33 §6) The console's "Tests you paused": the tests THIS admin paused that are still paused (not closed, not stopped), each with Lift the pause. */
+export const pausedByWhere = (adminId: string): Prisma.TestWhereInput => ({ adminPausedById: adminId, adminPausedAt: { not: null }, pauseClosedAt: null, status: { not: "stopped" } });
+
+async function tests(cursor: string | null, f?: ListFilter, only?: Prisma.TestWhereInput): Promise<Page<TestVM>> {
   const c = parse(cursor);
-  const where = testWhere(f);
+  const where: Prisma.TestWhereInput = only ? { AND: [testWhere(f), only] } : testWhere(f);
   const [list, total] = await Promise.all([
     db.test.findMany({ where: { AND: [where, olderThan("createdAt", c)] }, orderBy: [{ createdAt: "desc" }, { id: "desc" }], take: PAGE + 1, include: { developer: true, _count: { select: { contracts: true } } } }),
     db.test.count({ where }),
@@ -320,14 +346,20 @@ async function noShows(cursor: string | null): Promise<Page<TextVM>> {
   const flagged = await reportedOver3(page.flatMap((x) => [x.contract.testerId, x.contract.test.developerId]));
   const last = page[page.length - 1];
   return {
-    rows: page.map((x) => ({ id: x.id, at: (x.noShowAt ?? x.startsAt).toISOString(), text: `${fmtDateTime(x.startsAt)} · “${x.contract.title}” · reported by the ${x.noShowBy} (${x.noShowBy === "tester" ? labelled(displayName(x.contract.tester), flagged.has(x.contract.testerId)) : labelled(displayName(x.contract.test.developer), flagged.has(x.contract.test.developerId))}) against ${x.noShowBy === "tester" ? labelled(displayName(x.contract.test.developer), flagged.has(x.contract.test.developerId)) : labelled(displayName(x.contract.tester), flagged.has(x.contract.testerId))}: “${x.noShowNote}”` })),
+    rows: page.map((x) => {
+      // (Batch 33 §1) Both people and the test as links.
+      const tester = person(x.contract.tester, flagged.has(x.contract.testerId)), dev = person(x.contract.test.developer, flagged.has(x.contract.test.developerId));
+      const [by, against] = x.noShowBy === "tester" ? [tester, dev] : [dev, tester];
+      const parts: Rich = [`${fmtDateTime(x.startsAt)} · `, testLink({ id: x.contract.testId, title: x.contract.title }), ` · reported by the ${x.noShowBy} (`, ...by, ") against ", ...against, `: “${x.noShowNote}”`];
+      return { id: x.id, at: (x.noShowAt ?? x.startsAt).toISOString(), text: plainOf(parts), parts };
+    }),
     next: list.length > PAGE && last ? cur(last.noShowAt ?? last.startsAt, last.id) : null,
     total,
   };
 }
 
 /** (Batch 15 section 21) Contact us messages, newest first: each in a scroll box about 8 lines tall; who marked it replied and when. */
-export type ContactVM = { id: string; at: string; from: string; topic: string; message: string; replied: string };
+export type ContactVM = { id: string; at: string; from: string; topic: string; message: string; replied: string; /** (Batch 33 §1) the sender as a link */ fromParts?: Rich };
 async function contact(cursor: string | null): Promise<Page<ContactVM>> {
   const c = parse(cursor);
   const [list, total] = await Promise.all([
@@ -335,11 +367,12 @@ async function contact(cursor: string | null): Promise<Page<ContactVM>> {
     db.contactMessage.count(),
   ]);
   const page = list.slice(0, PAGE);
-  const users = new Map((await db.user.findMany({ where: { id: { in: page.map((m) => m.userId) } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
+  const users = await whoById(page.map((m) => m.userId));
   const name = await adminEmails(page.map((m) => m.repliedById));
   const last = page[page.length - 1];
   return {
-    rows: page.map((m) => ({ id: m.id, at: m.createdAt.toISOString(), from: `${fmtDateTime(m.createdAt)} · ${users.get(m.userId) ?? "a deleted account"}`, topic: m.topic, message: m.message, replied: m.repliedById ? `Replied by ${name(m.repliedById)}${m.repliedAt ? ` · ${fmtDateTime(m.repliedAt)}` : ""}` : "" })),
+    // (Batch 33 §1) The sender (always signed in: a message has its account) opens their profile.
+    rows: page.map((m) => ({ id: m.id, at: m.createdAt.toISOString(), from: `${fmtDateTime(m.createdAt)} · ${users.get(m.userId)?.email ?? "a deleted account"}`, fromParts: [`${fmtDateTime(m.createdAt)} · `, ...person(users.get(m.userId))], topic: m.topic, message: m.message, replied: m.repliedById ? `Replied by ${name(m.repliedById)}${m.repliedAt ? ` · ${fmtDateTime(m.repliedAt)}` : ""}` : "" })),
     next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null,
     total,
   };
@@ -374,7 +407,7 @@ async function payments(cursor: string | null): Promise<Page<TextVM>> {
   const acted = await lastActions(page.map((p) => p.id), ["release-share", "refund-share", "transfer"]);
   const last = page[page.length - 1];
   return {
-    rows: page.map((p) => ({ id: p.id, at: p.createdAt.toISOString(), text: `${fmtDateTime(p.createdAt)} · ${p.kind} · ${money(p.amountCents)} (fee ${money(p.feeCents)}) · ${p.status}${p.failure ? ` · ${p.failure}` : ""} · ${emails.get(p.developerId)} → ${emails.get(p.testerId)}${acted.get(p.id)?.length ? ` · ${acted.get(p.id)![0]}` : ""}` })),
+    rows: page.map((p) => ({ id: p.id, at: p.createdAt.toISOString(), text: `${fmtDateTime(p.createdAt)} · ${p.kind} · ${money(p.amountCents)} (fee ${money(p.feeCents)}) · ${p.status}${p.failure && p.status === "failed" ? ` · ${p.failure}` : ""} · ${emails.get(p.developerId)} → ${emails.get(p.testerId)}${acted.get(p.id)?.length ? ` · ${acted.get(p.id)![0]}` : ""}` })),
     next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null,
     total,
   };
@@ -422,8 +455,11 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     date: dev.holdStartedAt!,
     at: dev.holdStartedAt!.toISOString(),
     email: dev.email,
+    // (Batch 33 §1) The developer opens their profile; each chargeback's payment opens in the Stripe Dashboard.
+    who: person(dev),
     since: fmtDateTime(dev.holdStartedAt!),
     chargebacks: cbs.map((p) => `Chargeback open: ${money(p.amountCents)} · ${p.stripePaymentIntentId}`),
+    chargebackParts: cbs.map((p): Rich => [`Chargeback open: ${money(p.amountCents)}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })]),
     cardVerified: steps.cardVerified,
     owedPaid: steps.owedPaid,
     // (Batch 23 section 6) Pay what you owe reserves: the row says how much is reserved against what is owed.
@@ -454,6 +490,8 @@ export async function adminPage(kind: Kind, adminId: string, cursor: string | nu
       case "mine": return mine(adminId, cursor);
       case "users": return users(cursor, filter);
       case "tests": return tests(cursor, filter);
+      case "mypaused": return tests(cursor, undefined, pausedByWhere(adminId));
+      case "suspensions": return users(cursor, undefined, SUSPENDED_NOW);
       case "noshows": return noShows(cursor);
       case "payments": return payments(cursor);
       case "payouts": return payouts(cursor);
@@ -461,7 +499,7 @@ export async function adminPage(kind: Kind, adminId: string, cursor: string | nu
       case "chargebacks": return chargebacks(cursor);
       case "lifts": return lifts(cursor);
       case "reports": return reports(cursor);
-      case "u-payments": case "u-payouts": case "u-disputes": case "u-chargebacks": case "u-holds": case "u-tests": case "u-reports": case "u-parts": return userBox(kind, arg, cursor);
+      case "u-payments": case "u-payouts": case "u-disputes": case "u-chargebacks": case "u-holds": case "u-tests": case "u-reports": case "u-parts": case "u-failures": return userBox(kind, arg, cursor);
       case "t-timeline": case "t-contracts": case "t-payments": return testBox(kind, arg, cursor);
     }
   })();
@@ -480,7 +518,7 @@ async function lifts(cursor: string | null): Promise<Page<LiftVM & { date: Date 
     const settled = await db.payment.findMany({ where: { developerId: d.id, owedUntil: { not: null }, settledAt: { gte: d.holdStartedAt! } }, orderBy: { settledAt: "desc" } });
     const total = settled.reduce((a, p) => a + p.amountCents, 0);
     const paidAt = settled[0]?.settledAt ?? d.holdStartedAt!;
-    all.push({ id: d.id, date: paidAt, at: paidAt.toISOString(), head: `${labelled(displayName(d), flagged.has(d.id))} (${d.email}) · ${MANY_HOLDS_LABEL}`, owed: settled.length ? `Owed ${money(total)}` : "Nothing was owed", paid: settled.length ? `paid ${fmtDateTime(paidAt)}` : `on hold since ${fmtDateTime(d.holdStartedAt!)}` });
+    all.push({ id: d.id, date: paidAt, at: paidAt.toISOString(), head: `${labelled(displayName(d), flagged.has(d.id))} (${d.email}) · ${MANY_HOLDS_LABEL}`, headParts: [...person(d, flagged.has(d.id)), ` · ${MANY_HOLDS_LABEL}`], owed: settled.length ? `Owed ${money(total)}` : "Nothing was owed", paid: settled.length ? `paid ${fmtDateTime(paidAt)}` : `on hold since ${fmtDateTime(d.holdStartedAt!)}` });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
   return slice(all, (r) => r.date, cursor);
@@ -501,7 +539,7 @@ async function reports(cursor: string | null): Promise<Page<ReportVM>> {
   return {
     rows: page.map((r) => {
       const a = users.get(r.reporterId), b = users.get(r.reportedId);
-      return { id: r.id, at: r.createdAt.toISOString(), reporter: a ? labelled(displayName(a), flagged.has(a.id)) : "?", reporterHref: a ? profileHref(a) : "", reported: b ? labelled(displayName(b), flagged.has(b.id)) : "?", reportedHref: b ? profileHref(b) : "", when: fmtDateTime(r.createdAt), note: r.note };
+      return { id: r.id, at: r.createdAt.toISOString(), reporter: a ? labelled(displayName(a), flagged.has(a.id)) : "?", reporterHref: a ? profileHref(a) : "", reported: b ? labelled(displayName(b), flagged.has(b.id)) : "?", reportedHref: b ? profileHref(b) : "", reporterEmail: a?.email ?? "", reportedEmail: b?.email ?? "", when: fmtDateTime(r.createdAt), note: r.note };
     }),
     next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null,
     total,
@@ -511,7 +549,12 @@ async function reports(cursor: string | null): Promise<Page<ReportVM>> {
 // ---------- A person's admin boxes (owner, Oct 27) ----------
 
 type Row = TextVM & { date: Date };
-const mk = (src: string, id: string, date: Date, text: string, href?: string): Row => ({ id: `${src}-${id}`, date, at: date.toISOString(), text: `${fmtDateTime(date)} · ${text}`, ...(href ? { href } : {}) });
+/** One admin box line: "<time> · <text>". (Batch 33 §1) `body` may carry links (people, tests, Stripe ids): `parts` keeps them, `text` the same words. */
+const mk = (src: string, id: string, date: Date, body: string | Rich, href?: string): Row => {
+  const head = `${fmtDateTime(date)} · `;
+  const rich = typeof body === "string" ? null : body;
+  return { id: `${src}-${id}`, date, at: date.toISOString(), text: `${head}${rich ? plainOf(rich) : body}`, ...(rich ? { parts: [head, ...rich] } : {}), ...(href ? { href } : {}) };
+};
 const sortDesc = (rows: Row[]) => rows.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
 
 /** The totals line at the top of a person's boxes: spent / paid out, and how many reports, disputes, chargebacks, holds and suspensions. */
@@ -537,36 +580,87 @@ export async function userTotals(userId: string) {
   return { line: parts.join(" · "), partsLine: `${partsSent} part${partsSent === 1 ? "" : "s"} sent · ${money(partsPaid._sum.testerCents ?? 0)} paid out for them`, reportedOver3: n > REPORTED_OVER };
 }
 
+/** (Batch 33 §3) "written answers", "recording", "live call": the part a payment is for. */
+async function partNames(pays: { submissionId: string | null; callId: string | null }[]) {
+  const subs = new Map((await db.submission.findMany({ where: { id: { in: pays.map((p) => p.submissionId).filter((x): x is string => !!x) } }, select: { id: true, kind: true } })).map((x) => [x.id, x.kind]));
+  return (p: { submissionId: string | null; callId: string | null }) => (p.callId ? "live call" : p.submissionId ? (subs.get(p.submissionId) === "recording" ? "recording" : "written answers") : "");
+}
+/** The tests behind these contracts, for the links. */
+async function testsOfContracts(ids: (string | null | undefined)[]) {
+  const list = [...new Set(ids.filter((x): x is string => !!x))];
+  return new Map((await db.contract.findMany({ where: { id: { in: list } }, select: { id: true, testId: true, title: true } })).map((c) => [c.id, { id: c.testId, title: c.title }]));
+}
+const dayOnly = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+
+/**
+ * (Owner, Oct 30, batch 33 §3) A developer's payment failures, newest first: every charge that failed and was owed (owedUntil marks when), with what became of it:
+ * "$27.50 to Ana Silva for their written answers on “Harbor Run” · failed Thu, Oct 23, 1:16 PM: Your card was declined · paid later on Oct 24" (or "still owed", or
+ * "settled by the team" when the team's Approve of a chargeback hold took the money from the reservation).
+ */
+async function failureRows(userId: string): Promise<Row[]> {
+  const pays = await db.payment.findMany({ where: { developerId: userId, owedUntil: { not: null }, kind: { notIn: ["subscription", "chargeback"] } }, orderBy: { owedUntil: "desc" }, take: 2000 });
+  const who = await whoById(pays.map((p) => p.testerId));
+  const part = await partNames(pays);
+  const tests = await testsOfContracts(pays.map((p) => p.contractId));
+  const approvals = await db.adminAction.findMany({ where: { targetId: userId, action: "approve-chargeback" }, select: { createdAt: true } });
+  const byTeam = (at: Date) => approvals.some((a) => Math.abs(a.createdAt.getTime() - at.getTime()) < 60_000);
+  return pays.map((p) => {
+    const failedAt = p.owedUntil!;
+    const t = p.contractId ? tests.get(p.contractId) : undefined;
+    const what = part(p);
+    const why = p.failure.trim().replace(/\.$/, "");
+    const after = !p.settledAt ? "still owed" : byTeam(p.settledAt) ? "settled by the team" : `paid later on ${dayOnly(p.settledAt)}`;
+    const body: Rich = [`${money(p.amountCents)} to `, ...person(who.get(p.testerId)), ...(what ? [` for their ${what}`] : p.kind === "extra" ? [" as extra pay"] : []), ...(t ? [" on ", testLink(t)] : []), ` · failed ${fmtDateTime(failedAt)}${why ? `: ${why}` : ""} · ${after}`, ...stripeIds(p)];
+    return mk("failure", p.id, failedAt, body);
+  });
+}
+
 async function userBox(kind: Kind, userId: string, cursor: string | null): Promise<Page<Row>> {
   const rows: Row[] = [];
   const name = async (id: string | null) => (id ? (await db.user.findUnique({ where: { id }, select: { email: true } }))?.email ?? "an admin" : "the system");
   if (kind === "u-payments" || kind === "u-payouts") {
     const dev = kind === "u-payments";
     const pays = await db.payment.findMany({ where: dev ? { developerId: userId } : { testerId: userId, kind: { not: "subscription" } }, orderBy: { createdAt: "desc" }, take: 2000 });
-    const people = new Map((await db.user.findMany({ where: { id: { in: pays.map((p) => (dev ? p.testerId : p.developerId)) } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
-    for (const p of pays) rows.push(mk("pay", p.id, p.createdAt, dev ? `${p.kind} ${money(p.amountCents)} to ${people.get(p.testerId)} · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}` : `${money(p.testerCents)} from ${people.get(p.developerId)} (${p.kind}) · payout ${p.transferStatus}`));
+    // (Batch 33 §1) The other person and the test as links, and each payment's Stripe ids opening the Stripe Dashboard.
+    const people = await whoById(pays.map((p) => (dev ? p.testerId : p.developerId)));
+    const tests = await testsOfContracts(pays.map((p) => p.contractId));
+    for (const p of pays) {
+      const t = p.contractId ? tests.get(p.contractId) : undefined;
+      const on: Rich = t ? [" on ", testLink(t)] : [];
+      rows.push(mk("pay", p.id, p.createdAt, dev
+        ? [`${p.kind} ${money(p.amountCents)} to `, ...(p.kind === "subscription" ? ["the platform"] : person(people.get(p.testerId))), ...on, ` · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}`, ...stripeIds(p)]
+        : [`${money(p.testerCents)} from `, ...person(people.get(p.developerId)), ` (${p.kind})`, ...on, ` · payout ${p.transferStatus}`, ...stripeIds(p)]));
+    }
+  } else if (kind === "u-failures") {
+    rows.push(...(await failureRows(userId)));
   } else if (kind === "u-disputes") {
     const cids = (await db.contract.findMany({ where: { test: { developerId: userId } }, select: { id: true } })).map((c) => c.id);
     const ds = await db.dispute.findMany({ where: { OR: [{ testerId: userId }, { contractId: { in: cids } }] }, orderBy: { createdAt: "desc" }, take: 2000 });
+    const cs = new Map((await db.contract.findMany({ where: { id: { in: ds.map((d) => d.contractId) } }, include: { tester: true, test: { include: { developer: true } } } })).map((c) => [c.id, c]));
     for (const d of ds) {
-      const c = await db.contract.findUnique({ where: { id: d.contractId } });
-      rows.push(mk("dispute", d.id, d.createdAt, `“${c?.title ?? "?"}”: “${d.reason}” · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}`, c ? `/app/find/${c.testId}` : undefined));
+      const c = cs.get(d.contractId);
+      // (Batch 33 §1) The test and the other person as links.
+      const other = c ? (c.testerId === userId ? c.test.developer : c.tester) : null;
+      rows.push(mk("dispute", d.id, d.createdAt, [testLink(c ? { id: c.testId, title: c.title } : null), ...(other ? [" with ", ...person(other)] : []), `: “${d.reason}” · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}`]));
     }
   } else if (kind === "u-chargebacks") {
-    for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, `Chargeback ${money(p.amountCents)} (${p.chargeback})`));
+    for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${money(p.amountCents)} (${p.chargeback})`, ...stripeIds(p)]));
   } else if (kind === "u-holds") {
     const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated", "team-closed": "Team closure" }; // (batch 30 §5)
     for (const e of await db.accountEvent.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("acct", e.id, e.createdAt, `${labels[e.kind] ?? e.kind}${e.byId ? ` by ${await name(e.byId)}` : ""}${e.note ? `: ${e.note}` : ""}`));
   } else if (kind === "u-tests") {
-    for (const t of await db.test.findMany({ where: { developerId: userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("posted", t.id, t.createdAt, `Posted “${t.title}” (${t.status})`, `/app/find/${t.id}`));
-    for (const c of await db.contract.findMany({ where: { testerId: userId }, orderBy: { joinedAt: "desc" }, take: 2000 })) rows.push(mk("joined", c.id, c.joinedAt, `Joined “${c.title}” (${c.status})`, `/app/find/${c.testId}`));
+    // (Batch 33 §1) The test as the link (and, for a joined test, its developer).
+    for (const t of await db.test.findMany({ where: { developerId: userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("posted", t.id, t.createdAt, ["Posted ", testLink(t), ` (${t.status})`]));
+    for (const c of await db.contract.findMany({ where: { testerId: userId }, orderBy: { joinedAt: "desc" }, take: 2000, include: { test: { include: { developer: true } } } })) rows.push(mk("joined", c.id, c.joinedAt, ["Joined ", testLink({ id: c.testId, title: c.title }), " by ", ...person(c.test.developer), ` (${c.status})`]));
   } else if (kind === "u-reports") {
-    for (const r of await db.report.findMany({ where: { reportedId: userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("report", r.id, r.createdAt, `Reported by ${await name(r.reporterId)}: “${r.note}”`));
-    const calls = await db.call.findMany({ where: { noShowBy: { not: null }, OR: [{ noShowBy: "tester", contract: { test: { developerId: userId } } }, { noShowBy: "developer", contract: { testerId: userId } }] }, orderBy: { noShowAt: "desc" }, take: 2000, include: { contract: true } });
-    for (const c of calls) rows.push(mk("noshow", c.id, c.noShowAt ?? c.startsAt, `Call report on “${c.contract.title}” by the ${c.noShowBy}: “${c.noShowNote}”`));
+    const reports = await db.report.findMany({ where: { reportedId: userId }, orderBy: { createdAt: "desc" }, take: 2000 });
+    const reporters = await whoById(reports.map((r) => r.reporterId));
+    for (const r of reports) rows.push(mk("report", r.id, r.createdAt, ["Reported by ", ...person(reporters.get(r.reporterId)), `: “${r.note}”`]));
+    const calls = await db.call.findMany({ where: { noShowBy: { not: null }, OR: [{ noShowBy: "tester", contract: { test: { developerId: userId } } }, { noShowBy: "developer", contract: { testerId: userId } }] }, orderBy: { noShowAt: "desc" }, take: 2000, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
+    for (const c of calls) rows.push(mk("noshow", c.id, c.noShowAt ?? c.startsAt, ["Call report on ", testLink({ id: c.contract.testId, title: c.contract.title }), ` by the ${c.noShowBy} (`, ...person(c.noShowBy === "tester" ? c.contract.tester : c.contract.test.developer), `): “${c.noShowNote}”`]));
   } else if (kind === "u-parts") {
-    const subs = await db.submission.findMany({ where: { contract: { testerId: userId } }, include: { contract: true, review: true }, orderBy: { sentAt: "desc" }, take: 2000 });
-    for (const s of subs) rows.push(mk("part", s.id, s.sentAt, `“${s.contract.title}”: ${s.kind === "recording" ? "recording" : "written answers"} · ${s.review ? (s.review.rejected ? "rejected" : `paid ${money(s.review.amountCents)}`) : "waiting for review"}`, `/app/find/${s.contract.testId}`));
+    const subs = await db.submission.findMany({ where: { contract: { testerId: userId } }, include: { contract: { include: { test: { include: { developer: true } } } }, review: true }, orderBy: { sentAt: "desc" }, take: 2000 });
+    for (const s of subs) rows.push(mk("part", s.id, s.sentAt, [testLink({ id: s.contract.testId, title: s.contract.title }), " by ", ...person(s.contract.test.developer), `: ${s.kind === "recording" ? "recording" : "written answers"} · ${s.review ? (s.review.rejected ? "rejected" : `paid ${money(s.review.amountCents)}`) : "waiting for review"}`]));
   }
   sortDesc(rows);
   return slice(rows, (r) => r.date, cursor);
@@ -581,6 +675,11 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
   const ids = contracts.map((c) => c.id);
   const byContract = new Map(contracts.map((c) => [c.id, displayName(c.tester)]));
   const of = (cid: string | null) => (cid ? byContract.get(cid) ?? "a tester" : "");
+  // (Batch 33 §1) A tester as their profile link with the email after it ("a tester" when the contract is gone).
+  const testerOf = new Map(contracts.map((c) => [c.id, c.tester]));
+  const ofP = (cid: string | null): Rich => (cid && testerOf.get(cid) ? person(testerOf.get(cid)) : [of(cid)]);
+  /** The line's names (this contract's tester first, the developer, every other tester) as profile links. */
+  const L = (text: string, cid?: string | null): Rich => linkNames(text, [...(cid ? [testerOf.get(cid)] : []), t.developer, ...contracts.map((c) => c.tester)]);
   const adminIds = [t.adminPausedById, t.adminStoppedById, t.developer.devSuspendedById].filter((x): x is string => !!x);
   const admins = new Map((await db.user.findMany({ where: { id: { in: adminIds } }, select: { id: true, email: true } })).map((u) => [u.id, u.email]));
   const who = (id: string | null | undefined) => (id ? admins.get(id) ?? "an admin" : "an admin");
@@ -634,31 +733,31 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       if (t.pauseClosedAt && e.text === "The test was closed") continue;
       const text = thirdPerson(e);
       const name = of(e.contractId);
-      rows.push(mk("event", e.id, e.createdAt, `${text}${name && !text.includes(name) ? ` (${name})` : ""}`));
+      rows.push(mk("event", e.id, e.createdAt, L(`${text}${name && !text.includes(name) ? ` (${name})` : ""}`, e.contractId)));
     }
     for (const i of await db.invite.findMany({ where: { testId } })) rows.push(mk("invite", i.id, i.createdAt, `Invited a tester (${i.status})`));
     for (const k of await db.call.findMany({ where: { contractId: { in: ids } } })) {
-      rows.push(mk("call", k.id, k.createdAt, `Call booked with ${of(k.contractId)} for ${fmtDateTime(k.startsAt)}`));
-      if (k.status === "cancelled" && k.cancelledAt) rows.push(mk("call-cancelled", k.id, k.cancelledAt, `Call with ${of(k.contractId)} cancelled by ${k.cancelledBy === "developer" ? dev : k.cancelledBy === "tester" ? of(k.contractId) : "the app"}`));
+      rows.push(mk("call", k.id, k.createdAt, L(`Call booked with ${of(k.contractId)} for ${fmtDateTime(k.startsAt)}`, k.contractId)));
+      if (k.status === "cancelled" && k.cancelledAt) rows.push(mk("call-cancelled", k.id, k.cancelledAt, L(`Call with ${of(k.contractId)} cancelled by ${k.cancelledBy === "developer" ? dev : k.cancelledBy === "tester" ? of(k.contractId) : "the app"}`, k.contractId)));
     }
     for (const d of disputes) {
       const part = d.callId ? "live call" : d.submission?.kind === "recording" ? "recording" : "written answers";
-      rows.push({ ...mk("dispute", d.id, d.createdAt, `${of(d.contractId)} disputed the pay for their ${part}:`), em: d.reason });
+      rows.push({ ...mk("dispute", d.id, d.createdAt, [...ofP(d.contractId), ` disputed the pay for their ${part}:`]), em: d.reason });
       if (d.decidedAt) {
         const ev = decisions.filter((e) => e.contractId === d.contractId && Math.abs(e.createdAt.getTime() - d.decidedAt!.getTime()) < 60_000)[0];
         const what = ev ? ev.text.replace(/^The team decided [^:]*: /, "") : `${money(d.decidedCents ?? 0)} in all`;
-        rows.push(mk("dispute-decided", d.id, d.decidedAt, `${emails(d.decidedById) || "The team"} decided ${of(d.contractId)}'s dispute: ${what}`));
+        rows.push(mk("dispute-decided", d.id, d.decidedAt, [`${emails(d.decidedById) || "The team"} decided `, ...ofP(d.contractId), `'s dispute: ${what}`]));
       }
     }
     if (t.pauseClosedAt) rows.push(mk("pause-closed", t.id, t.pauseClosedAt, `Closed after being paused${t.adminStoppedById ? ` (by ${who(t.adminStoppedById)})` : " (by the daily job)"}: ${t.pauseClosedReason}`));
   } else if (kind === "t-contracts") {
-    for (const c of contracts) rows.push(mk("contract", c.id, c.joinedAt, `${displayName(c.tester)} joined on: ${termsLine(c)}`));
+    for (const c of contracts) rows.push(mk("contract", c.id, c.joinedAt, [...person(c.tester), ` joined on: ${termsLine(c)}`]));
     for (const o of await db.termsOffer.findMany({ where: { testId } })) {
-      rows.push(mk("offer", o.id, o.createdAt, `New terms offered to ${of(o.contractId)}: ${o.diff}`));
-      if (o.decidedAt) rows.push(mk("offer-decided", o.id, o.decidedAt, `${of(o.contractId)} ${o.status === "switched" ? "switched to" : o.status === "kept" ? "kept their terms instead of" : "did not take"} the new terms`));
+      rows.push(mk("offer", o.id, o.createdAt, ["New terms offered to ", ...ofP(o.contractId), `: ${o.diff}`]));
+      if (o.decidedAt) rows.push(mk("offer-decided", o.id, o.decidedAt, [...ofP(o.contractId), ` ${o.status === "switched" ? "switched to" : o.status === "kept" ? "kept their terms instead of" : "did not take"} the new terms`]));
     }
   } else {
-    for (const p of await db.payment.findMany({ where: { contractId: { in: ids } } })) rows.push(mk("payment", p.id, p.createdAt, `${p.kind} ${money(p.amountCents)} to ${of(p.contractId)} · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}`));
+    for (const p of await db.payment.findMany({ where: { contractId: { in: ids } } })) rows.push(mk("payment", p.id, p.createdAt, [`${p.kind} ${money(p.amountCents)} to `, ...ofP(p.contractId), ` · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}`, ...stripeIds(p)]));
   }
   sortDesc(rows);
   return slice(rows, (r) => r.date, cursor);
