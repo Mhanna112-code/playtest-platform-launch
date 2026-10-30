@@ -262,7 +262,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         />
       )}
       <MistakeList press={rejoining ? "Ask to rejoin" : applying ? "Apply to join" : "Join this test"} />
-      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" press={rejoining ? "Ask to rejoin" : applying ? "Apply" : "Join"} />{/* (Batch 32 §9) the box names the press, the needs-covered path too */}
       {done && <p className="ok">{done}</p>}
       <Err text={err} />
       {rejoining ? (

@@ -297,8 +297,10 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       }
     }
     // (Batch 16 section 21) An invite (or a cancelled invite) for the same tester from another tab stops it once.
-    await devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
     const { lines: gaps, items: gapItems } = gapLines(t, people.filter((p) => !contracts.some((c) => c.testerId === p.id)));
+    // (Owner's finding, Oct 29, batch 32 §9) The stop carries what's missing NOW, so the Invite anyway box redraws to it and the next Invite anyway goes through
+    // (it used to keep the old list, so the same change stopped a second time: "What's missing changed since you looked").
+    await devGate(tx, testId, body, gaps.length ? { lines: gaps, items: gapItems } : {}, extra, undefined, { acts: INVITE_ACTS, keys: ids.map((id) => `t:${id}`) });
     const seenGaps = Array.isArray(body.seenGaps) ? (body.seenGaps as unknown[]).map(String) : null;
     if (body.anyway === true && !gaps.length) {
       // Everyone ticked now meets the needs: nothing is sent; the box closes and a notice shows under Invite.

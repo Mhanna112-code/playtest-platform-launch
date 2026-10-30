@@ -8,7 +8,6 @@ import { requirePageUser } from "@/lib/server/page-auth";
 import { ADMIN_PAUSED, adminAccount, isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
 import { PagedList } from "./PagedList";
-import { adminCases } from "@/lib/server/holds";
 import { configProblems, seesConfigBox } from "@/lib/server/config";
 import { adminOutages, gapLine, lengthText, outageLine } from "@/lib/server/outages";
 import { T, renderTimes } from "@/lib/tz";
@@ -44,7 +43,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   // A link or a bell line can open one exact row: ?dispute=ID or ?user=ID shows it first.
   const focusDispute: DisputeVM | null = q.dispute ? await db.dispute.findUnique({ where: { id: q.dispute } }).then((d) => (d ? disputeRow(d) : null)) : null;
   const focusUser = q.user ? await db.user.findUnique({ where: { id: q.user } }) : null;
-  const cases = await adminCases();
   const outages = await adminOutages();
   const mail = await emailHealth();
   const storage = await storageAlerts();
@@ -177,16 +175,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       <section className="card scroll-mt-24 space-y-3" id="paused-tests">
         <p className="note">A paused test closes by itself after 7 days, whatever the cause (a payment hold, a chargeback hold, a suspension or a team pause). Soonest first. Extend moves its date later; Close now closes it like a Stop. Testers read only that the test ended; the developer is told why.</p>
         <PagedList kind="paused" title="Paused tests" initial={rows(paused)} />
-      </section>
-
-      <section className="card space-y-3">
-        <h2 className="text-lg font-semibold text-white">Needs the team today ({cases.length})</h2>
-        <p className="note">The same list goes out once a day in the admin digest email.</p>
-        {cases.length === 0 ? <p className="note">Nothing waiting.</p> : (
-          <ul className="list-disc pl-5 text-sm">
-            {cases.map((c, i) => <li key={i}><a href={c.link}>{c.text}</a></li>)}
-          </ul>
-        )}
       </section>
 
       <section className="card space-y-3">

@@ -29,3 +29,15 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 8. One moment, one line in a stop box (owner's finding, Oct 29)
 - A stop box listed the same stop twice: the server's "This test was stopped at 3:22 PM." and the live update's "This test was stopped · 3:22 PM". A box now treats two lines that say the same thing in the same minute (one ending "at 3:22 PM.") as one, and keeps its own wording. Every press a stop or pause interrupts (Charge, Let it go, Pay, Pay more, Rate) is covered.
+
+## 9. One change, one stop; every box names its press (owner's findings, Oct 29)
+- Invite / Invite anyway: a stop now carries what each ticked tester misses NOW, and the Invite anyway box redraws to it, so after one stop the next Invite anyway goes through (one change used to stop twice: the box kept its old list, so "What's missing changed since you looked" followed).
+- "Everyone you ticked now meets this test's needs. Press Invite to send." is information only (no "didn't go through"); another Invite anyway failure reads "Your Invite anyway didn't go through. …". The join page's stop box names Join / Apply / Ask to rejoin on every path (it said "Your press").
+
+## 10. A refused press's line sits in the page (owner, Oct 29)
+- When a refused press's button disappears in the redraw (Join call after a block, Pay after another tab paid, Charge after the developer paid, Withdraw on a closed request, Send after the test stopped…), its line ("Your Charge didn't go through: Yara Quint paid $10.00 for this meanwhile.") is a blue notice INSIDE the part or row the button was in, pushing what's below down (it used to float over the text). With none of those sections left, at the top of the screen.
+- It stays until the next press anywhere on the page (it used to go after 10 seconds).
+- Never twice: it stays hidden while the button is there or the page already says the same thing anywhere, in any style.
+
+## 11. The admin console drops "Needs the team today" (owner, Oct 29)
+- The list stays in the daily admin email.

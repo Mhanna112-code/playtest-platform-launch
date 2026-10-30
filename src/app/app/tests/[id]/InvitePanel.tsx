@@ -35,7 +35,15 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   /** Open until, while it's ahead: at that moment Invite disables with this line. */ closes?: { at: string; line: string } }) {
   const router = useRouter();
   // (Batch 16 section 21) An invite from another tab for a ticked tester stops Invite once; the panel shows it at once (the row greys, "Invited <date>").
-  const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt, () => router.refresh());
+  // (Batch 32 §9) A stop carries what each ticked tester misses NOW: the Invite anyway box redraws to it, so the next Invite anyway goes through.
+  const { press, changes, error, busy, setError, at, errData } = usePress(p.seenAt, (d) => {
+    if (Array.isArray(d.lines) && d.lines.length) {
+      setConfirm(d.lines.map(String));
+      if (Array.isArray(d.items)) setGapItems(d.items as GapItem[]);
+      if (typeof d.now === "string") setGapAt(d.now);
+    }
+    router.refresh();
+  });
   // (NEXT-UI 12b) When the Invite anyway box last updated (its first showing, a changed list, a live update): Invite anyway
   // goes ahead only if nothing new happened since; anything newer stops it again inside the box.
   const [gapAt, setGapAt] = useState("");
@@ -154,10 +162,10 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       if (Array.isArray(errData.items)) setGapItems(errData.items as GapItem[]);
       if (typeof errData.now === "string") setGapAt(errData.now);
       setError("");
-    } else if (at === "anyway" && error && !changes) {
-      // (Owner, Oct 27) Any other failure of Invite anyway closes the box and shows the blue notice under the original Invite button.
+    } else if (at === "anyway" && error && !changes && !error.startsWith("Everyone you ticked now meets")) {
+      // (Owner, Oct 27) Any other failure of Invite anyway closes the box and shows the blue notice under the original Invite button. (Batch 32 §9) It names the press.
       setConfirm(null);
-      setMsg(`Your press didn't go through. ${error}`);
+      setMsg(`Your Invite anyway didn't go through. ${error}`);
       setError("");
     } else if (error.startsWith("Everyone you ticked now meets")) {
       // Nothing sent: the box closes; the notice goes under the original Invite button.

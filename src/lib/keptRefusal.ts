@@ -1,18 +1,19 @@
 // (Owner, Oct 29, batch 29 §36) A refused press redraws the page at once (batch 28 §9), and the redraw can take the pressed button away (Join call after a
 // block, Pay after another tab paid, Charge after the developer paid, Withdraw on a closed request…). The refusal line then went with it, so the person
-// never saw why. This keeps it: a small blue line in the spot where the button was ("Your Join call didn't go through: this call isn't available."),
-// until the next press anywhere on the page or KEEP_MS, whichever comes first. It lives outside the page (the root layout's KeptRefusal), so it survives
-// the redraw. When the button is still there after the redraw, its own line under it says it and this one stays hidden.
+// never saw why. This keeps it: a blue notice ("Your Join call didn't go through: this call isn't available.") until the next press anywhere on the page.
+// (Owner, Oct 29, batch 32 §10) It sits IN the page, inside the part or row the pressed button was in (the nearest one with an id that survived the
+// redraw), not floating over the text; with none left, at the top of the page. It lives outside the page (the root layout's KeptRefusal), so it survives
+// the redraw. When the button is still there, or the page already says the same thing anywhere, it stays hidden (never twice).
 import { refusalLine } from "./pressLabels";
 
-/** How long the kept line stays at most. */
-export const KEEP_MS = 10_000;
+/** How long the kept line stays at most: (batch 32 §10) until the next press. */
+export const KEEP_MS = Number.POSITIVE_INFINITY;
 
 /** Where the pressed button was, in page coordinates (scroll included). */
 export type Spot = { top: number; left: number; width: number };
-export type Kept = { id: number; text: string; /** the server's own words (a line under the button may show just these) */ message: string; spot: Spot | null; at: number; el: Element | null };
+export type Kept = { id: number; text: string; /** the server's own words (a line under the button may show just these) */ message: string; spot: Spot | null; at: number; el: Element | null; /** (batch 32 §10) ids of the button's sections, nearest first */ anchors: string[] };
 
-let lastPress: { el: Element | null; spot: Spot | null; at: number } | null = null;
+let lastPress: { el: Element | null; spot: Spot | null; at: number; anchors: string[] } | null = null;
 let kept: Kept | null = null;
 let seq = 0;
 const subs = new Set<(k: Kept | null) => void>();
@@ -36,8 +37,8 @@ export function keptRefusalLine(label: string, message: string) {
 }
 
 /** A press anywhere on the page: remembered (where its button is), and any kept line goes. */
-export function notePress(el: Element | null, spot: Spot | null, now = Date.now()) {
-  lastPress = { el, spot, at: now };
+export function notePress(el: Element | null, spot: Spot | null, now = Date.now(), anchors: string[] = []) {
+  lastPress = { el, spot, at: now, anchors };
   if (kept) {
     kept = null;
     publish();
@@ -47,7 +48,7 @@ export function notePress(el: Element | null, spot: Spot | null, now = Date.now(
 /** A press refused because the state changed (the page redraws now): keep its line where the button was. Returns the kept line (for tests). */
 export function keepRefusal(label: string, message: string, now = Date.now()): Kept | null {
   if (!message.trim()) return null;
-  kept = { id: ++seq, text: keptRefusalLine(label, message), message: message.trim(), spot: lastPress?.spot ?? null, at: now, el: lastPress?.el ?? null };
+  kept = { id: ++seq, text: keptRefusalLine(label, message), message: message.trim(), spot: lastPress?.spot ?? null, at: now, el: lastPress?.el ?? null, anchors: lastPress?.anchors ?? [] };
   publish();
   return kept;
 }

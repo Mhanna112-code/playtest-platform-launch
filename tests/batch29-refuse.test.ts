@@ -23,16 +23,15 @@ describe("batch 29 §36: a refused press's line survives the redraw that takes i
     expect(keptRefusalLine("press", "This request is closed.")).toBe("This request is closed.");
   });
 
-  it("kept where the pressed button was; shown only once the button is gone; gone after about 10 seconds", () => {
+  it("kept with the pressed button's sections; shown only once the button is gone; (batch 32 §10) it stays until the next press", () => {
     const spot = { top: 400, left: 120, width: 260 };
-    notePress(null, spot, 1_000);
+    notePress(null, spot, 1_000, ["call-c1", "part-live"]);
     const k = keepRefusal("Join call", "This call isn't available.", 2_000)!;
-    expect(k).toMatchObject({ text: "Your Join call didn't go through: this call isn't available.", message: "This call isn't available.", spot, at: 2_000 });
+    expect(k).toMatchObject({ text: "Your Join call didn't go through: this call isn't available.", message: "This call isn't available.", spot, at: 2_000, anchors: ["call-c1", "part-live"] });
     expect(keptShows(k, 2_100, true)).toBe(false); // before the redraw: the button (and its own line) still there
     expect(keptShows(k, 2_300, false)).toBe(true); // the redraw took the button away
-    expect(keptShows(k, 2_000 + KEEP_MS - 1, false)).toBe(true);
-    expect(keptShows(k, 2_000 + KEEP_MS, false)).toBe(false);
-    expect(KEEP_MS).toBe(10_000);
+    expect(keptShows(k, 2_000 + 10 * 60_000, false)).toBe(true); // no timer: the next press clears it
+    expect(KEEP_MS).toBe(Number.POSITIVE_INFINITY);
   });
 
   it("the next press anywhere on the page clears it; an old timer never clears a newer line", () => {
@@ -58,6 +57,11 @@ describe("batch 29 §36: a refused press's line survives the redraw that takes i
     expect(comp).toContain("createPortal(");
     expect(comp).toContain('document.addEventListener("click", onPress, true);');
     expect(comp).toContain("data-kept-refusal");
+    // (Batch 32 §10) A blue notice in the page (inside the button's nearest section still there), never floating over the text; never twice.
+    expect(comp).toContain('<p className="info mt-2" role="status" data-kept-refusal="">');
+    expect(comp).toContain("anchor.appendChild(h);");
+    expect(comp).not.toContain('position: "absolute"');
+    expect(comp).toContain("flat(p.textContent).includes(msg)");
   });
 });
 
