@@ -250,7 +250,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
   const openN = edit ? Math.max(0, spotsN - testersIn) : spotsN;
   const usesKeys = edit ? (keysData?.uses ?? false) || parseKeys(keysText).length > 0 : parseKeys(keysText).length > 0;
   // (Batch 15 sections 19 and 44) Red, one line each: a typed key in use by a working tester, a duplicate, a deleted line whose key a tester was given meanwhile, too few keys.
-  const keyLine = [...(edit ? fb.errors : []), usesKeys && Number.isInteger(spotsN) && spotsN > 0 ? keyNeedLine(openN, freeAfter) : ""].filter(Boolean).join(" ");
+  const keyLine = [...(edit ? fb.errors : []), usesKeys && Number.isInteger(spotsN) && spotsN > 0 ? keyNeedLine(openN, freeAfter, edit ? keysData?.keyless ?? 0 : 0) : ""].filter(Boolean).join(" ");
   const showOn = (k: string) => pressed || blurred.has(k);
 
   // (Batch 16 section 10) A server mistake is red AT its field (FieldChecks marks it, with the same text, until that field's value changes); here only a

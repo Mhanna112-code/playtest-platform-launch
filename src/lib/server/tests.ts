@@ -1,19 +1,20 @@
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
-import { CALL_ACTS, PAY_ACTS, devChanges, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
-import { applyKeyChange, assignKeyAtJoin, checkTypedKeys, planKeyChange } from "./accessKeys";
-import { givenDeletedLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
+import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
+import { givenDeletedLine, keyGivenEventLine, keyGivenToYouLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
 import { displayName, fmtDate, fmtDateTime, pronouns, stopTimeIn, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
+import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import {
   andList, closedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
@@ -308,6 +309,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let spotsChanged = false;
   let switchedToInvite = false;
   let changeId: string | null = null;
+  let keysGiven: Awaited<ReturnType<typeof giveKeysToWorking>> = [];
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -389,7 +391,10 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       });
     }
     if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: lockedNow.length ? lockedNow : undefined, criticalCounts: counts });
-    if (!fields.length && !keysChanged) return t;
+    if (!fields.length && !keysChanged) {
+      keysGiven = await giveKeysToWorking(tx, testId); // (Batch 30 §17)
+      return t;
+    }
     const terms = changedTerms(current, next);
     const what = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])].join(", ");
     termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"].includes(f));
@@ -404,11 +409,21 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable, plan.toReuse);
     }
+    // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
+    keysGiven = await giveKeysToWorking(tx, testId);
     // (Owner, Oct 30, batch 15 section 43) A Save that changed the terms or the names: one entry in the developer's Contract changes.
     const dealFields = fields.filter((f) => DEAL_FIELDS.includes(f));
     if (dealFields.length) {
       const pick = (l: Listing) => Object.fromEntries(dealFields.map((f) => [f, l[f] ?? null]));
       changeId = (await tx.testChange.create({ data: { testId, fields: dealFields, before: pick(current) as Prisma.InputJsonValue, after: pick(next) as Prisma.InputJsonValue } })).id;
+    }
+    // (Batch 30 §15) A Save that changed the listing information: kept before and after, for the testers' session pages ("Updated <time>", before → now, Terms
+    // history). The Mature box and its note are kept together.
+    const infoShown = fields.filter((f) => (LISTING_INFO_FIELDS as readonly string[]).includes(f));
+    if (infoShown.length) {
+      const keep = [...new Set(infoShown.flatMap((f) => (f === "mature" || f === "matureWhy" ? ["mature", "matureWhy"] as const : [f])))];
+      const pick = (l: Listing) => Object.fromEntries(keep.map((f) => [f, l[f] ?? null]));
+      await tx.testEvent.create({ data: { testId, kind: LISTING_VALUES, text: valuesText({ fields: infoShown, before: pick(current), after: pick(next) }) } });
     }
     // (Batch 15 section 24) A rename is recorded in every working tester's contract changes (never a note under a press).
     if (fields.includes("title") || fields.includes("productName")) {
@@ -456,7 +471,13 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
   const effects = [closedApps.length ? `${closedApps.length} application${closedApps.length === 1 ? "" : "s"} closed` : "", resent.length ? `${resent.length} invite${resent.length === 1 ? "" : "s"} re-sent` : ""].filter(Boolean).join(" · ");
   if (changeId && effects) await db.testChange.update({ where: { id: changeId }, data: { effects } });
-  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps });
+  // (Batch 30 §17) Each tester given a key: a line in their session page's top box and a bell line (the key itself only on their page, never in the bell or email).
+  for (const g of keysGiven) {
+    await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
+    const line = keyGivenToYouLine(displayName(dev), result.title);
+    await notify(g.email, line, [`${line}.`, "Your key is on your session page."], `/app/sessions/${g.contractId}`, { testId });
+  }
+  return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps, keysGiven: keysGiven.length });
 }
 
 /** The access keys as an Edit tab needs them to tell what changed elsewhere (the free keys and how many are in use). */

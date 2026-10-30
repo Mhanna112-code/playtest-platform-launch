@@ -7,6 +7,7 @@ import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
 import { jumpTo } from "@/lib/markJump";
 import { pillLabel, pillSide, type PillSide } from "@/lib/livePill";
+import { SEE_IT_EVENT } from "@/components/ListingInfo";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -135,7 +136,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
             {l.kind === "info" && seeIt && (
               <>
                 {l.timed ? " · " : " "}
-                <a href={seeIt} onClick={() => setTimeout(() => (document.querySelector(seeIt) as HTMLDetailsElement | null)?.setAttribute("open", ""), 0)}>See it</a>
+                {/* (Batch 30 §15) The page can mark the lines that save changed (the session page's contract box). */}
+                <a href={seeIt} onClick={() => setTimeout(() => { (document.querySelector(seeIt) as HTMLDetailsElement | null)?.setAttribute("open", ""); window.dispatchEvent(new CustomEvent(SEE_IT_EVENT, { detail: { at: l.at } })); }, 0)}>See it</a>
               </>
             )}
           </li>

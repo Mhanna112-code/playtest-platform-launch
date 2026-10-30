@@ -21,11 +21,23 @@ export function repeatedKeys(v: unknown): string[] {
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
-/** "Add 1 more key: 3 open spots, 2 free keys": every open spot needs a free key. "" when there are enough. */
-export function keyNeedLine(openSpots: number, freeKeys: number) {
-  const short = openSpots - freeKeys;
-  return short > 0 ? `Add ${short} more key${short === 1 ? "" : "s"}: ${plural(openSpots, "open spot")}, ${plural(freeKeys, "free key")}.` : "";
+/**
+ * "Add 1 more key: 3 open spots, 2 free keys": every open spot needs a free key. "" when there are enough. (Batch 30 §17) Working testers without a key get one of the
+ * free keys at Save, so they count too: "Add 2 more keys: 3 working testers and 4 open spots need 7, you have 5."
+ */
+export function keyNeedLine(openSpots: number, freeKeys: number, keyless = 0) {
+  const need = openSpots + keyless;
+  const short = need - freeKeys;
+  if (short <= 0) return "";
+  const add = `Add ${short} more key${short === 1 ? "" : "s"}`;
+  if (keyless <= 0) return `${add}: ${plural(openSpots, "open spot")}, ${plural(freeKeys, "free key")}.`;
+  const who = openSpots > 0 ? `${plural(keyless, "working tester")} and ${plural(openSpots, "open spot")}` : plural(keyless, "working tester");
+  return `${add}: ${who} need${keyless + openSpots === 1 ? "s" : ""} ${need}, you have ${freeKeys}.`;
 }
+/** (Batch 30 §17) The tester's top-box and bell line when the developer's Save gave them a key (the key itself is only on their page). */
+export const keyGivenToYouLine = (dev: string, title: string) => `${dev} gave you an access key for “${title}”`;
+/** (Batch 30 §17) The event a Save's key leaves (third person: the admin timeline reads it as it is). */
+export const keyGivenEventLine = (dev: string, tester: string) => `${dev} gave ${tester} an access key`;
 
 /**
  * (Owner, Oct 28, batch 16 section 18) Keys another tab or device changed: one line per kind, the keys comma-separated, the same under Edit's key boxes and

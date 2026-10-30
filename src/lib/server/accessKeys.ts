@@ -43,7 +43,9 @@ export async function keyBoxes(testId: string) {
   const open = await openSpotsOf(db, testId, spots);
   // testersIn: the working testers now, so Edit counts the open spots live as testers join.
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
-  return { free, inUse, open, testersIn, uses: keys.length > 0, now: new Date().toISOString(), broken };
+  // (Batch 30 §17) Working testers without a key (the test had none when they joined): each gets one of the free keys at the next Save.
+  const keyless = await keylessWorking(db, testId).then((x) => x.length);
+  return { free, inUse, open, testersIn, keyless, uses: keys.length > 0, now: new Date().toISOString(), broken };
 }
 
 /**
@@ -79,10 +81,35 @@ export async function assignKeyAtJoin(tx: Tx, testId: string, contractId: string
     return held.value;
   }
   if (held) await tx.accessKey.update({ where: { id: held.id }, data: { status: "retired" } });
-  const free = await tx.accessKey.findFirst({ where: { testId, status: "free" }, orderBy: { createdAt: "asc" } });
+  const free = await tx.accessKey.findFirst({ where: { testId, status: "free" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   if (!free) throw new HttpError(409, "no_key", "No access key is free right now, so this test can't take another tester until the developer adds one.");
   await tx.accessKey.update({ where: { id: free.id }, data: { status: "inuse", contractId, assignedAt: new Date() } });
   return free.value;
+}
+
+/** (Batch 30 §17) The TestEvent a Save's key leaves for each tester given one (contractId: theirs). */
+export const KEY_GIVEN = "key_given";
+
+/** (Batch 30 §17) The working testers who have no key (in order of joining). */
+export async function keylessWorking(tx: Tx, testId: string) {
+  return tx.contract.findMany({ where: { testId, status: "working", accessKeys: { none: { status: { in: ["inuse", "broken"] } } } }, orderBy: { joinedAt: "asc" }, include: { tester: true } });
+}
+
+/**
+ * (Owner, Oct 29, batch 30 §17) After a Save: each working tester without a key gets one of the free keys (the oldest first), in order of joining. No accept step;
+ * testers whose work ended get none. Returns who got one (for their top-box line and bell).
+ */
+export async function giveKeysToWorking(tx: Tx, testId: string) {
+  const waiting = await keylessWorking(tx, testId);
+  if (!waiting.length) return [];
+  const free = await tx.accessKey.findMany({ where: { testId, status: "free" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }], take: waiting.length }); // in the order typed (one Save adds them at the same moment)
+  const now = new Date();
+  const given: { contractId: string; testerId: string; email: string; name: string }[] = [];
+  for (let i = 0; i < Math.min(free.length, waiting.length); i++) {
+    await tx.accessKey.update({ where: { id: free[i].id }, data: { status: "inuse", contractId: waiting[i].id, assignedAt: now } });
+    given.push({ contractId: waiting[i].id, testerId: waiting[i].testerId, email: waiting[i].tester.email, name: displayName(waiting[i].tester) });
+  }
+  return given;
 }
 
 /** The tester's current key (while they work on the test), for their session page. */
@@ -159,9 +186,11 @@ export async function planKeyChange(tx: Tx, testId: string, add: string[], remov
   const free = existing.filter((k) => k.status === "free").length - removable.length + toAdd.length + toReuse.length;
   const open = await openSpotsOf(tx, testId, spots);
   const used = existing.length > 0 || toAdd.length > 0;
+  // (Batch 30 §17) Working testers without a key get one of the free keys at this Save: they need one each too.
+  const keyless = used ? (await keylessWorking(tx, testId)).length : 0;
   // Every open spot needs a free key (only when the test uses keys at all).
-  const need = used && (toAdd.length > 0 || removable.length > 0 || existing.length > 0) ? keyNeedLine(open, free) : "";
-  return { errors, warnings, toAdd, toReuse, removable: removable.map((k) => k.id), alreadyGone, need, free, open };
+  const need = used && (toAdd.length > 0 || removable.length > 0 || existing.length > 0) ? keyNeedLine(open, free, keyless) : "";
+  return { errors, warnings, toAdd, toReuse, removable: removable.map((k) => k.id), alreadyGone, need, free, open, keyless };
 }
 
 export async function applyKeyChange(tx: Tx, testId: string, toAdd: string[], removeIds: string[], toReuse: { id: string; from: string; broken: boolean }[] = []) {

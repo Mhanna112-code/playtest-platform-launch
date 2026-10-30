@@ -3,6 +3,8 @@ import { displayName, fmtDateTime, money } from "@/lib/format";
 import { TESTER_CHOICE_REASONS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
+import { keyGivenToYouLine } from "@/lib/keys";
+import { KEY_GIVEN } from "./accessKeys";
 import { asLines, listingSaveLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
@@ -73,6 +75,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
   // (Owner, Oct 30, batch 15 section 45) The developer marked this tester's key as working: a change to their contract (it stops even with Alerts Off; no bell).
   const fixed = await db.accessKey.findFirst({ where: { contractId, fixedAt: { gt: seenAt }, status: "inuse" } });
   if (fixed) out.push({ kind: "keyfixed", text: `The developer marked your key as working (${fixed.value})`, createdAt: fixed.fixedAt! });
+  // (Batch 30 §17) The developer's Save gave this tester a key (the test had none when they joined): "<dev> gave you an access key for “<test>”" (the key is in its box).
+  for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: seenAt } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, c.test.title), createdAt: e.createdAt });
   // (F) the listing's info (title, description, devices, languages) changed: (batch 30 §10) one line per save.
   out.push(...(await listingSaveLines(testId, seenAt, testerId, "session")));
   out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));
@@ -117,7 +121,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const all = withRenamed(opts.keep ? raw.filter((e) => e.kind === "renamed" || opts.keep!(e)) : raw, body);
   const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
   const terms = changes.filter((e) => e.kind === "terms");
-  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keyfixed"]);
+  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keyfixed", "keygiven"]);
   // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer, their key marked working).
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   const rest = r.go ? [] : off ? r.changes.filter((e) => CONTRACT_KINDS.has(e.kind)) : r.changes;
