@@ -22,6 +22,7 @@ import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
+import { PayLinesBox } from "@/components/ScrollList";
 import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
@@ -590,8 +591,10 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
   const may = check.ok;
   // (Batch 20 section 15) Nothing left to award: the button stays, greyed, with the line (the page's poll brings a Pay more).
   const full = !check.ok && check.message === NOTHING_TO_DISPUTE;
+  // (Owner, Oct 29, batch 30 §16) More than 4 payment lines: a plain scroll box about 4 lines tall (PayLinesBox); the lines under them stay outside it.
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
+      <PayLinesBox count={1 + extras.length}>
       {review.rejected ? (
         // (Batch 15 section 30) Old rejections stay, and read "Rejected".
         <p><b>Rejected</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
@@ -606,6 +609,7 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
         </p>
       )}
       {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
+      </PayLinesBox>
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
       {delayed && <p className="info" data-dispute-delayed="">Payment may be delayed until the test resumes.</p>}
       {/* (Owner, Oct 29, batch 28 §14) Whether this part can still be paid more (grey; not a stop). */}
