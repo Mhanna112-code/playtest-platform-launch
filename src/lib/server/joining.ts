@@ -6,7 +6,7 @@ import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
-import { asListing, devGate, gapStop, joinTest, ownTest, stampCounting } from "./tests";
+import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, stampCounting } from "./tests";
 
 // Joining (owner rule): Who can join = Anyone (Join) / Apply (Apply to join → the developer Accepts or Declines) /
 // Invite only. No offers or counter-offers on the join page. Join and Apply stop once if ANYTHING about the listing
@@ -19,17 +19,16 @@ const listingSnapshot = (t: Parameters<typeof asListing>[0]) => {
   const l = asListing(t);
   return { ...l, joinMode: undefined } as Record<string, unknown>;
 };
-const sameListingIgnoringMode = (a: unknown, b: unknown) => {
-  // Key order differs once stored (jsonb), so compare with sorted keys.
-  const strip = (x: unknown) => {
-    const o = { ...(x as Record<string, unknown>) };
+/** Application validity ignores the join mode and spot count, which may change as part of the switch. */
+const sameListingIgnoringMode = (saved: unknown, current: Parameters<typeof listingSnapshot>[0]) => {
+  const clean = (value: unknown) => {
+    const o = { ...((value ?? {}) as Record<string, unknown>) };
     delete o.joinMode;
     delete o.spots;
-    return JSON.stringify(Object.keys(o).sort().map((k) => [k, o[k]]));
+    return JSON.stringify(Object.fromEntries(Object.entries(o).sort(([a], [b]) => a.localeCompare(b))));
   };
-  return strip(a) === strip(b);
+  return clean(saved) === clean(listingSnapshot(current));
 };
-
 /** Shared final refusals for Join, Apply to join and Accept. */
 export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
@@ -284,18 +283,34 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
  */
 export async function onSwitchToAnyone(testId: string) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  const pending = await db.application.findMany({ where: { testId, status: "pending" } });
+  const pending = await db.application.findMany({ where: { testId, status: "pending" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  let accepted = 0;
   for (const a of pending) {
+    if (await db.contract.count({ where: { testId, status: "working" } }) >= t.spots) break;
     const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId } });
-    if (sameListingIgnoringMode(a.listing, listingSnapshot(t)) && !(await joinRefusal(tester.id, testId))) {
-      const c = await joinTest(tester, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true });
-      await db.application.update({ where: { id: a.id }, data: { status: "joined", decidedAt: new Date() } });
+    if (!sameListingIgnoringMode(a.listing, t)) {
+      const changedAt = new Date();
+      const line = `“${t.title}” changed since you applied: join on the current listing, or withdraw your application.`;
+      const updated = await db.application.updateMany({ where: { id: a.id, status: "pending" }, data: { changedAt } });
+      if (updated.count) await notify(tester.email, line, [line], `/app/find/${testId}`, { group: "apps", testId });
+      continue;
+    }
+    const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
+    if (needsGap(asListing(t), profile)) continue;
+    if (await joinRefusal(tester.id, testId)) continue;
+    try {
+      const c = await joinTest({ ...tester, isTester: true }, testId, {
+        listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true,
+      }, { applicationId: a.id, quietJoinEvent: true });
       await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}.`], `/app/sessions/${c.id}`, { group: "joined" });
-    } else {
-      await db.application.update({ where: { id: a.id }, data: { changedAt: new Date() } });
-      await notify(tester.email, `${t.title} changed since you applied`, [`${t.title} changed since you applied: join on the current listing, or withdraw your application.`], `/app/find/${testId}`, { group: "apps", testId });
+      accepted++;
+    } catch (error) {
+      if (error instanceof HttpError && error.code === "application_gone") continue;
+      if (error instanceof HttpError && error.code === "refused" && /full/i.test(error.message)) break;
+      throw error;
     }
   }
+  if (accepted) await logEvent(testId, "applied", `${accepted} waiting application${accepted === 1 ? " was" : "s were"} accepted when you switched to joins instantly`);
 }
 
 /**
