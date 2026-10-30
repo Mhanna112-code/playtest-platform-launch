@@ -15,7 +15,7 @@ import { NotSentTag, useKept } from "@/lib/useKept";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -432,15 +432,18 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
     }
   }
 
+  // (Owner, Oct 29, batch 30 §18) Title and steps: at least 10 characters, red on leaving the field and on the press ("Name of this test: at least 10 characters (6 so
+  // far)."). On Edit only once that field is changed: an older test's short value never blocks saving another field.
+  const minAttrs = (k: "title" | "description", label: string): Record<string, string> => (!edit || f[k] !== base[k] ? { "data-min-chars": String(LISTING_MIN_CHARS), "data-min-label": label } : {});
   // (Owner) Every box with a range says it next to it and is checked as soon as it's left (FieldChecks).
-  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number; disabled?: boolean; after?: React.ReactNode } = {}) => (
+  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number; disabled?: boolean; after?: React.ReactNode; /** (Batch 30 §18) the field's minimum: its counter shows it while under */ min?: number } = {}) => (
     <div>
       <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}{opts.after}</label>
       <div className="flex flex-wrap items-center gap-2">
         <input id={k} type={opts.type ?? "text"} disabled={opts.disabled} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} maxLength={opts.max}
           onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} onBlur={() => leave(k)} {...(opts.req ? { "data-required": "" } : {})} {...opts.attrs} />
         {opts.hint && <span className="text-xs text-slate-500">{opts.hint}</span>}
-        {opts.max && <span className="ml-auto text-xs text-slate-500" aria-hidden>{(f[k] as string).length}/{opts.max}</span>}
+        {opts.max && <span className="ml-auto text-xs text-slate-500" aria-hidden data-count={k}>{opts.min && (f[k] as string).trim().length < opts.min ? minCounter((f[k] as string).trim().length) : `${(f[k] as string).length}/${opts.max}`}</span>}
       </div>
       {note(k)}
     </div>
@@ -487,11 +490,11 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false }
       <div className="panel">
         <h2>What are testers trying?</h2>
         {text("productName", "Product", { req: true, ph: "Harbor Run", max: LIMITS.productName, attrs: { "data-required-msg": "Enter the product name." } })}
-        {text("title", "Name of this test", { req: true, ph: "First 3 levels", max: LIMITS.testName, attrs: { "data-required-msg": "Give the test a title." } })}
+        {text("title", "Name of this test", { req: true, ph: "First 3 levels", max: LIMITS.testName, min: LISTING_MIN_CHARS, attrs: { "data-required-msg": "Give the test a title.", "data-match": `^${TITLE_FIELD}: at least`, ...minAttrs("title", TITLE_FIELD) } })}
         <div>
           <label className="label req" htmlFor="description">What should testers do?{left("description")}</label>
-          <textarea id="description" rows={4} disabled={fieldLocked("description")} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg={DESCRIPTION_REQUIRED} onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
-          <p className="mt-1 text-right text-xs text-slate-500" data-steps-count="">{f.description.length.toLocaleString("en-US")} / {LIMITS.whatToDo.toLocaleString("en-US")}</p>
+          <textarea id="description" rows={4} disabled={fieldLocked("description")} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg={DESCRIPTION_REQUIRED} data-match={`^${STEPS_FIELD}: at least`} {...minAttrs("description", STEPS_FIELD)} onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
+          <p className="mt-1 text-right text-xs text-slate-500" data-steps-count="">{f.description.trim().length < LISTING_MIN_CHARS ? minCounter(f.description.trim().length) : `${f.description.length.toLocaleString("en-US")} / ${LIMITS.whatToDo.toLocaleString("en-US")}`}</p>
           {lockNote("description")}
           {note("description")}
         </div>

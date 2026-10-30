@@ -55,7 +55,8 @@ function clientMessage(el: Field): string {
   }
   if (el.dataset.minChars != null) {
     const min = Number(el.dataset.minChars);
-    if (v.length > 0 && v.length < min) return msg ?? `Write at least ${min} characters (${v.length} so far).`;
+    // (Batch 30 §18) data-min-label names the field in the line: "Name of this test: at least 10 characters (6 so far)."
+    if (v.length > 0 && v.length < min) return el.dataset.minLabel ? `${el.dataset.minLabel}: at least ${min} characters (${v.length} so far).` : msg ?? `Write at least ${min} characters (${v.length} so far).`;
   }
   return "";
 }
