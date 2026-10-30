@@ -2,7 +2,7 @@ import { hasPerks } from "@/lib/server/subscription";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, money, pronouns } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, money, pronouns } from "@/lib/format";
 import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine, paidZeroLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
@@ -43,7 +43,10 @@ import { autoChargeLine, paidMostLine } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
-import { ContractChanges, type ChangeEntry } from "./ContractChanges";
+import { ListingPanel } from "./ListingPanel";
+import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
+import { panelRows } from "@/lib/listingPanel";
+import { lastListingSave } from "@/lib/server/listingPanel";
 import { AnswersBox } from "@/components/AnswersBox";
 import { Formatted } from "@/components/Formatted";
 import { AttachmentList } from "@/components/AttachmentList";
@@ -110,7 +113,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const teamPaused = !!t.adminPausedAt && t.status !== "stopped";
   const restricted = accountPaused || teamPaused;
   const bannerCause: BannerCause | null = t.adminStoppedAt ? "team-stopped" : teamPaused ? "team-paused" : u.devSuspendedAt ? "suspended" : u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "hold") : t.status === "stopped" ? "stopped" : null;
-  const bannerReason = bannerCause === "team-paused" || bannerCause === "team-stopped" ? t.adminNote : bannerCause === "suspended" ? u.devSuspendNote : "";
+  const bannerCauseReason = bannerCause === "team-paused" || bannerCause === "team-stopped" ? t.adminNote : bannerCause === "suspended" ? u.devSuspendNote : "";
   const keysEver = await db.accessKey.count({ where: { testId: id } });
   const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
@@ -256,19 +259,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (shown in the row; batch 29 section 30: only the tester removes one).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
   const shownEx = await db.excerpt.findMany({ where: { testId: t.id, status: "shown" }, orderBy: { decidedAt: "desc" } });
-  // (Batch 15 section 43) The developer's Contract changes: one entry per Save that changed the terms or the names, with who switched or kept.
+  // (Batch 15 section 43) Each tester's contract changes (their row): renames, and a Stop with the reason they read.
   const notesByContract = await db.contractNote.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
-  const dealChanges = await db.testChange.findMany({ where: { testId: id }, orderBy: { createdAt: "desc" }, take: 200 });
-  const dealOffers = dealChanges.length ? await db.termsOffer.findMany({ where: { changeId: { in: dealChanges.map((x) => x.id) } } }) : [];
-  const personOf = (cid: string) => { const c = t.contracts.find((x) => x.id === cid); return c ? { name: displayName(c.tester), contractId: c.id, left: c.status !== "working" } : null; };
-  const changeEntries: ChangeEntry[] = dealChanges.map((x) => {
-    const mine = dealOffers.filter((o) => o.changeId === x.id);
-    const who = (st: string[]) => mine.filter((o) => st.includes(o.status)).map((o) => personOf(o.contractId)).filter((p): p is NonNullable<typeof p> => !!p);
-    return { id: x.id, at: x.createdAt.toISOString(), fields: x.fields, before: x.before as Record<string, unknown>, after: x.after as Record<string, unknown>, effects: x.effects, chose: { switched: who(["switched"]), kept: who(["kept"]), undecided: who(["open"]) } };
-  });
-  // (Batch 17 §15) The developer's own Stop and its reason, at the top of Contract changes (the team's Stop has its own banner).
+  // (Owner, Oct 30, batch 34 §14) The Listing panel (it replaces the Contract changes fold): the current listing, the fields the most recent save changed tagged.
+  const listingNow = asListing(t);
+  const listingRows = panelRows(listingNow, await lastListingSave(t.id));
+  // (Batch 17 §15) The developer's own Stop and its reason (the team's Stop has its own): (batch 34 §14, the Contract changes fold gone) in the red banner.
   const stopEvent = t.status === "stopped" && !t.adminStoppedAt ? await db.testEvent.findFirst({ where: { testId: id, kind: "stopped" }, orderBy: { createdAt: "desc" } }) : null;
   const stopEntry = stopEvent && stopReasonOf(stopEvent.text) ? { at: stopEvent.createdAt.toISOString(), reason: stopReasonOf(stopEvent.text) } : null;
+  const bannerReason = bannerCause === "stopped" && stopEntry ? stopEntry.reason : bannerCauseReason;
   // (Batch 15 section 29) The restricted view: Booked calls (ahead) with Cancel, and the open disputes waiting for the developer's side.
   const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
   const banner = bannerCause ? (
@@ -361,7 +360,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
   const needsCount = updates.length + pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
   return (
-    <>
+    // (Batch 34 §14) Every stop box under any button on this page: a listing line's See it goes to the Listing panel.
+    <SeeItTarget target="#listing">
       <AutoRefresh query={`test=${t.id}`} v={pageV} />
       <TopPanel
         id={t.id}
@@ -403,10 +403,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (Batch 15 section 37) A stopped test (the developer's or the team's): the one red banner, with what still works at the bottom. */}
       {banner}
       {/* (Design doc 6) The order: overview, the live updates box, the yellow keys notice, then the panels. */}
-      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
+      {/* (Batch 34 §14) A listing line's See it jumps to the Listing panel and marks what that save changed. */}
+      <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" seeIt="#listing" />
+      <ListingSeeIt box="listing" />
       {/* (Batch 30) The seen marker starts at this page's first load in the tab: a redraw never skips a change the page hasn't shown. */}
       <PageLoaded at={seenAt} />
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />
+      {/* (Owner, Oct 30, batch 34 §14) The first panel under the overview (and its notices): the current listing, as testers see it. */}
+      <ListingPanel rows={listingRows} listing={listingNow} when={(d) => fmtDateTimeIn(d, u.timeZone)} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
@@ -661,7 +665,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         </RowsBox>
       )}
       </TestersJoined>
-      {!restricted && <ContractChanges entries={changeEntries} stop={stopEntry} fmt={(iso) => fmtDateTime(new Date(iso))} />}
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
       {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} chargeback={!!cbSteps} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}
@@ -720,6 +723,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           )}
         />
       </section>
-    </>
+    </SeeItTarget>
   );
 }

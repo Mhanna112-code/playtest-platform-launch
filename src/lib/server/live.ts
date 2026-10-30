@@ -107,7 +107,7 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
       // (Batch 30, Oct 29 addition) One line per save: a rename saved in another tab with other fields is already in that save's line ("title (now “X”)").
       const title = e.text.slice(`${me} renamed the test to `.length);
       if (mine.some((o) => o.about?.a === "edit" && o.text.includes(`title (now “${title}”)`))) return [];
-      return [{ ...e, text: e.text.replace(`${me} `, "You ") }];
+      return [{ ...e, text: e.text.replace(`${me} `, "You "), listing: true }];
     }
     return [e];
   });
@@ -115,7 +115,8 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // stop every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines); any other action of theirs stops only a
   // press it touches. A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
   const own = mine.flatMap((o): TestEventLike[] => {
-    const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt };
+    // (Batch 34 §14) A listing Save in another tab: its line carries See it to the test page's Listing panel.
+    const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt, ...(o.about?.a === "edit" ? { listing: true } : {}) };
     if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? [line] : [];
     if (!opts.press) return [];
     return has(BIG_OWN_ACTS, o.about?.a) || touches(o, opts.press) ? [line] : [];
@@ -242,4 +243,4 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
   });
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}),...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

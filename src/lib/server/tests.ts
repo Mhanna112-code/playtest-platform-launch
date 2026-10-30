@@ -15,6 +15,7 @@ import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, pronouns, stopTimeIn,
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
+import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
   andList, testClosedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
@@ -461,6 +462,12 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       const pick = (l: Listing) => Object.fromEntries(keep.map((f) => [f, l[f] ?? null]));
       await tx.testEvent.create({ data: { testId, kind: LISTING_VALUES, text: valuesText({ fields: infoShown, before: pick(current), after: pick(next) }) } });
     }
+    // (Batch 34 §14) Every Save, kept whole (every changed field, before and after) for the developer's Listing panel: the fields its most recent Save changed carry
+    // "Updated <time>" (Before / Now). A Save of only the access keys keeps one with no fields (nothing in the panel is tagged).
+    {
+      const pick = (l: Listing) => Object.fromEntries(fields.map((f) => [f, l[f] ?? null]));
+      await tx.testEvent.create({ data: { testId, kind: LISTING_SAVED, text: savedText({ fields, before: pick(current), after: pick(next) }) } });
+    }
     // (Batch 15 section 24) A rename is recorded in every working tester's contract changes (never a note under a press).
     if (fields.includes("title") || fields.includes("productName")) {
       const nameOf = (l: Listing) => (l.productName ? `${l.productName} · ${l.title}` : l.title);
@@ -602,6 +609,8 @@ export const devLine = (c: TestEventLike & { contractId?: string | null }, withA
   ...(c.kind === "stop" ? { kind: "stop" } : {}),
   // (Batch 20 section 4) A line that stands for one thing (a ticked tester's needs): a later stop's line with the same key replaces it in the box.
   ...(c.key ? { key: c.key } : {}),
+  // (Batch 34 §14) A listing change: See it jumps to the test page's Listing panel.
+  ...(c.listing ? { listing: true } : {}),
 });
 
 /**

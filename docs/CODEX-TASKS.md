@@ -166,7 +166,9 @@ Tests (tests/codex9-card-to-post.test.ts): a resource_missing charge starts the 
 card (give their developer a card in the shared fixtures instead). npm run check green. Commit on the branch; don't push or merge.
 ```
 
-## Task 10: the developer's test page Listing panel (start after task 5 is merged: both change the test page)
+## Task 10: the developer's test page Listing panel: done by Claude (Oct 30)
+
+Built on master (batch 34 §14, with the owner's refinement: the panel replaces the Contract changes fold and only the fields the most recent save changed carry "Updated"). Don't give this prompt to Codex.
 
 ```
 Read AGENTS.md first and follow it. Task number: 10 (schema codex10, build folder .next-codex10, branch codex/test-listing,

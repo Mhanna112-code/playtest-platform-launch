@@ -11,6 +11,7 @@ import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports"
 import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine, disputeRangeLine } from "@/lib/rules";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { LISTING_VALUES } from "@/lib/listingInfo";
+import { LISTING_SAVED } from "@/lib/listingPanel";
 import { itemsOf } from "@/lib/answerSets";
 import { writtenQuestions as writtenQuestionsOf } from "./tests";
 import type { DisputedWork } from "@/app/admin/DisputeWork";
@@ -694,7 +695,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     const dev = displayName(t.developer);
     const [events, suspensions, actions, disputes, closures] = await Promise.all([
       // (Batch 30 §15, §10) Not the session pages' stored listing values nor the testers' per-save records (both JSON; never a line).
-      db.testEvent.findMany({ where: { testId, kind: { notIn: [LISTING_VALUES, "listing_save"] } }, orderBy: { createdAt: "desc" }, take: 3000 }),
+      db.testEvent.findMany({ where: { testId, kind: { notIn: [LISTING_VALUES, LISTING_SAVED, "listing_save"] } }, orderBy: { createdAt: "desc" }, take: 3000 }),
       db.accountEvent.findMany({ where: { userId: t.developerId, kind: "suspended" }, orderBy: { createdAt: "asc" } }),
       db.adminAction.findMany({ where: { targetId: testId, action: { in: ["pause-test", "unpause-test", "stop-test", "close-paused"] } }, orderBy: { createdAt: "asc" } }),
       db.dispute.findMany({ where: { contractId: { in: ids } }, include: { submission: { select: { kind: true } } } }),

@@ -99,7 +99,9 @@ describe("renames and the deal history (sections 24 and 43)", () => {
     expect(changes[1].after).toEqual({ writtenCents: 1200 });
     const offers = await db.termsOffer.findMany({ where: { changeId: changes[1].id } });
     expect(offers.map((o) => o.status).sort()).toEqual(["kept", "switched"]);
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<ContractChanges entries={changeEntries}");
+    // (Batch 34 §14) The Contract changes fold gave way to the Listing panel (the current listing; the most recent save's fields tagged).
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("<ListingPanel rows={listingRows}");
+    expect(src("app/app/tests/[id]/page.tsx")).not.toContain("ContractChanges");
   });
 });
 

@@ -123,7 +123,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       <PageLoaded at={seenAt} />
       {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}
       {invite && <AutoRefresh query="invites=1" v={invitesFp} />}
-      <section className="card space-y-4" id="listing">
+      <section className="card scroll-mt-24 space-y-4" id="listing">
         <div className="flex items-start gap-4">
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />
           <div className="min-w-0 flex-1">
