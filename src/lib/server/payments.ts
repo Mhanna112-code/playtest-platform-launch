@@ -227,6 +227,8 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+  // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Dispute until the tester answers it (Switch or Keep).
+  await (await import("./terms")).answerTermsFirst(contractId);
   const where = kind === "call" ? { callId: id } : { submissionId: id };
   // (Owner, Oct 28 afternoon) Disputes work while the test is paused (and while the developer owes a declined payment): a decision for the tester during a hold is added to what is owed.
   const review = await db.review.findFirst({ where: { ...where, contractId } });

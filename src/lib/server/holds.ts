@@ -1154,6 +1154,8 @@ async function payYourCalls(now: Date, co: CloseOuts) {
 
 /** The tester's choice on a contract part (or, batch 15 section 15, a listed call) unreviewed for the review window: "charge" (the listing minus what is paid) or "letgo". */
 export async function chooseOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
+  // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Charge and Let it go until the tester answers it (Switch or Keep).
+  if ((await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true } }))?.testerId === tester.id) await (await import("./terms")).answerTermsFirst(contractId);
   if (body.callId) return chooseCallOutcome(tester, contractId, body);
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");

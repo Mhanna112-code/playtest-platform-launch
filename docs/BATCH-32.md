@@ -22,3 +22,7 @@ This file wins over the earlier batches and the design doc where they differ.
 ## 6. The team's navigation (owner, Oct 29)
 - An admin account's top bar, styled like the app's own bar (white text with icons; no green text links): **Dashboard** (today's admin console), **Developers** (every developer account, with a search box), **Testers** (every tester account, with a search box), **Tests** (every test, searchable, with its state: today's "Find tests" for admins), and the usual account menu (password, sign out).
 - "Back to the app" goes (an admin has no developer or tester side; it only bounced back to the console). The console's own "Accounts" list can stay lower on the Dashboard.
+
+## 7. New terms block Charge, Let it go and Dispute too (owner, Oct 29)
+- An open new-terms offer now blocks the tester's Charge, Let it go and Dispute as it already blocks Send and every call press (batch 27 §1): every press is refused with "Answer the new terms first: Switch or Keep." under the button and the page goes up to the Switch / Keep box; Switch or Keep unlocks them. Replaces batch 27 §1's "not blocked: Let it go (Charge) and Dispute keep their stop-once".
+- It can only arise for a tester past their own deadline who is still working (Charge opens only after their deadline; they still get new terms until they rate, leave, or the test stops or closes). An offer whose work closed blocks nothing.

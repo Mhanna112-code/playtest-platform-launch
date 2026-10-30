@@ -124,19 +124,24 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
     expect(r.body.error.code).not.toBe(ANSWER_TERMS_CODE);
   });
 
-  it("not blocked: Let it go (Charge) and Dispute keep their stop-once; Leave goes through", async () => {
+  it("(batch 32 §7) Charge, Let it go and Dispute are blocked too until Switch or Keep; Leave goes through", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
     await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * 86_400_000) } });
-    const loaded = seen();
     await later();
     await edit(s.testId, s.dev.cookie, { writtenCents: "12.00" });
-    const first = await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: loaded });
-    expect(first.body.error.code).toBe("stop_once"); // today's stop-once, not the block
-    expect((await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: loaded, confirmed: true })).status).toBe(200);
-    const d = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: sub.id, reason: "The pay was not what we agreed.", seenAt: loaded });
+    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: j.sessionId, status: "open" } });
+    // Every press, from a fresh page too (no second press gets through).
+    expectBlocked(await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen() }));
+    expectBlocked(await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "charge", seenAt: seen(), ...again() }));
+    expectBlocked(await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: sub.id, reason: "The pay was not what we agreed.", seenAt: seen() }));
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
+    // Keep unlocks.
+    expect((await sact(j.sessionId, "terms", j.tester.cookie, { offerId: offer.id, choice: "keep", seenAt: seen() })).status).toBe(200);
+    expect((await sact(j.sessionId, "choose", j.tester.cookie, { submissionId: sub.id, choice: "letgo", seenAt: seen() })).status).toBe(200);
+    const d = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: sub.id, reason: "The pay was not what we agreed.", seenAt: seen() });
     expect(d.body.error?.code).not.toBe(ANSWER_TERMS_CODE);
     const k = await joined(s.testId, "Ben Carter", "he");
     await later();
@@ -146,9 +151,9 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
   });
 
   it("the page: the blocked presses, the line exactly under the button (no 'didn't go through' prefix), the move up to Switch / Keep", () => {
-    for (const a of ["written", "recording-send", "request-time", "answer-request", "cancel-call", "cancel-set"]) expect(termsBlockedPath(`/api/sessions/s1/${a}`), a).toBe(true);
+    for (const a of ["written", "recording-send", "request-time", "answer-request", "cancel-call", "cancel-set", "choose", "dispute"]) expect(termsBlockedPath(`/api/sessions/s1/${a}`), a).toBe(true);
     expect(termsBlockedPath("/api/calls/c1/join")).toBe(true);
-    for (const a of ["choose", "dispute", "rate", "leave", "message", "terms", "recording-start", "recording-done", "no-show"]) expect(termsBlockedPath(`/api/sessions/s1/${a}`), a).toBe(false);
+    for (const a of ["rate", "leave", "message", "terms", "recording-start", "recording-done", "no-show"]) expect(termsBlockedPath(`/api/sessions/s1/${a}`), a).toBe(false);
     expect(termsBlockedPath("/api/tests/t1/request-time")).toBe(false); // the developer's
     expect(refusalLine("Send", ANSWER_TERMS_FIRST)).toBe("Answer the new terms first: Switch or Keep.");
     const client = src("lib/client.ts");
