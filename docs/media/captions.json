@@ -16774,5 +16774,230 @@
     "group": "pF10",
     "order": 124005,
     "size": "desktop"
+  },
+  "ct2-01-pay-two-causes.png": {
+    "caption": "Nora paid Ben in another tab and Ana requested a call meanwhile: Pay on Ana's piece stops once with one box, oldest first: “Your Pay on Ana Silva's written answers didn't go through.” then “Since you opened this page:” with “You paid Ben Okafor $10.00 for the written answers in another tab · 12:14 AM”, “Ana Silva requested a call for Sun, Nov 1, 3:00 PM · 12:14 AM”.",
+    "kind": "image",
+    "title": "§12 Combined race: Pay",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG1",
+    "order": 115001,
+    "size": "desktop"
+  },
+  "ct2-02-pay-second-goes.png": {
+    "caption": "The second Pay goes ahead: Ana's piece is paid $10.00 and Ana's row now reads “Written answers … paid $10.00 of $10.00” with the Pay more box.",
+    "kind": "image",
+    "title": "§12 Combined race: Pay",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG1",
+    "order": 115002,
+    "size": "desktop"
+  },
+  "ct2-03-save-two-causes.png": {
+    "caption": "Nora saved a new description in another tab while typing one here, and Cam joined meanwhile: Save stops once with one box: “Your Save didn't go through.” then “Since you opened this page:” with “Instructions: your version will replace the one saved in another tab at 12:09 AM.”, “Cam Rivera joined · 12:09 AM”.",
+    "kind": "image",
+    "title": "§12 Combined race: Edit's Save",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG2",
+    "order": 116001,
+    "size": "desktop"
+  },
+  "ct2-04-save-second-goes.png": {
+    "caption": "The second Save goes ahead: “Saved. New testers join on the new listing; testers already in keep their contract.”, the new description saved.",
+    "kind": "image",
+    "title": "§12 Combined race: Edit's Save",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG2",
+    "order": 116002,
+    "size": "desktop"
+  },
+  "ct2-05-send-two-causes.png": {
+    "caption": "Ana requested a call in another tab and Nora paid meanwhile: Send my updated answers stops once with one box, oldest first: “Your Send didn't go through.” then “Since you opened this page:” with “You requested a call for Sun, Nov 1, 3:00 PM in another tab · 12:15 AM”, “Nora Lane paid $10.00 for your written answers · 12:15 AM”.",
+    "kind": "image",
+    "title": "§12 Combined race: the tester's Send",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG3",
+    "order": 117001,
+    "size": "desktop"
+  },
+  "ct2-06-send-second-goes.png": {
+    "caption": "The second press goes ahead: the updated answers are sent (“Written answers: Sent <date, time>” with “Paid $10.00: you get $8.00” and “Nora Lane has paid $10.00 for this. It can be paid more, up to $1,000.00 in all.”).",
+    "kind": "image",
+    "title": "§12 Combined race: the tester's Send",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG3",
+    "order": 117002,
+    "size": "desktop"
+  },
+  "ct2-07-device-pill.png": {
+    "caption": "Device B was scrolled down when device A requested a call and sent the answers: the pill “2 new updates ↑” appears at the bottom.",
+    "kind": "image",
+    "title": "§12 Combined race: two devices",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG4",
+    "order": 118001,
+    "size": "desktop"
+  },
+  "ct2-08-device-top-box.png": {
+    "caption": "Another of Ana's open pages (at the top) shows the same lines in its top box, newest first: “Updated · 12:19 AM: You sent your written answers in another tab”, “Updated · 12:19 AM: You requested a call for Sun, Nov 1, 3:00 PM in another tab”.",
+    "kind": "image",
+    "title": "§12 Combined race: two devices",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG4",
+    "order": 118002,
+    "size": "desktop"
+  },
+  "ct2-09-device-press-stops.png": {
+    "caption": "Device B's “Send my updated answers”, pressed while the pill was still up (nothing scrolled into view), went straight through with no stop box, replacing device A's answers with device B's. (Device B's answer boxes still showed empty after device A sent, the button reading “Send my updated answers”.)",
+    "kind": "image",
+    "title": "§12 Combined race: two devices (App bug: no stop)",
+    "section": "Batch 30 (Oct 29)",
+    "group": "pG4",
+    "order": 118003,
+    "size": "desktop"
+  },
+  "b32-01-payout-hint-join.png": {
+    "caption": "Ana hasn't set up payouts: the join page's grey line “You can join and work now; payments wait until you finish your payout setup. Finish setup”.",
+    "kind": "image",
+    "title": "§1 Money waiting for payout setup",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG5",
+    "order": 119001,
+    "size": "desktop"
+  },
+  "b32-02-payout-hint-session.png": {
+    "caption": "On the session page, under the header card and above Your agreed scope: “You can join and work now; payments wait until you finish your payout setup. Finish setup”.",
+    "kind": "image",
+    "title": "§1 Money waiting for payout setup",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG5",
+    "order": 119002,
+    "size": "desktop"
+  },
+  "b32-03-payout-wait-bell.png": {
+    "caption": "Ana's bell: “$12.00 is waiting for you: finish your payout setup to receive it. just now”, linking to Payments. It came only with the daily job: not when the shares started waiting, nor with the 5-minute sweep.",
+    "kind": "image",
+    "title": "§1 Money waiting for payout setup (App bug: not at once)",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG5",
+    "order": 119003,
+    "size": "desktop"
+  },
+  "b32-04-everything-sent-total.png": {
+    "caption": "Paid $10.00 and Pay more $5.00: Payments → Everything you sent reads “Paid $15.00 · you get $12.00”.",
+    "kind": "image",
+    "title": "§3 Everything you sent counts every payment",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG5",
+    "order": 119004,
+    "size": "desktop"
+  },
+  "b32-07-charge-terms-first.png": {
+    "caption": "Charge is refused with “Your press didn't go through. Answer the new terms first: Switch or Keep.” under the button (App bug: “Your press” instead of naming Charge) while Nora's new terms wait.",
+    "kind": "image",
+    "title": "§7 New terms block Charge",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG7",
+    "order": 121001,
+    "size": "desktop"
+  },
+  "b32-08-charge-terms-box.png": {
+    "caption": "The page went up to the Switch / Keep box (“Switch to the new terms” / “Keep my current terms”).",
+    "kind": "image",
+    "title": "§7 New terms block Charge",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG7",
+    "order": 121002,
+    "size": "desktop"
+  },
+  "b32-09-charge-after-keep.png": {
+    "caption": "After Keep my current terms, Charge goes through: “Paid $10.00: you get $8.00 (<date, time>) · “Charged by the tester after 7 days without a review.””.",
+    "kind": "image",
+    "title": "§7 New terms block Charge",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG7",
+    "order": 121003,
+    "size": "desktop"
+  },
+  "b32-10-team-stop-one-line.png": {
+    "caption": "The team stopped the test while Nora's page was open and Nora pressed Pay on Ana's piece: Pay stops once with ONE stop line: “Your Pay on Ana Silva's written answers didn't go through.” then “Since you opened this page:” with “The team stopped this test at 12:15 AM.”.",
+    "kind": "image",
+    "title": "§8 One moment, one line",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG8",
+    "order": 122001,
+    "size": "desktop"
+  },
+  "b32-11-admin-account.png": {
+    "caption": "An admin's Account page lists neither Payments nor Blocked people.",
+    "kind": "image",
+    "title": "§5 The team's Account page",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG8",
+    "order": 122002,
+    "size": "desktop"
+  },
+  "b32-12-console-no-needs-team.png": {
+    "caption": "The admin console has no “Needs the team today” panel: it opens on the counts, then Outages and Open disputes (the list stays in the daily admin email).",
+    "kind": "image",
+    "title": "§11 The console drops “Needs the team today”",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG8",
+    "order": 122003,
+    "size": "desktop"
+  },
+  "b32-13-invite-anyway-box.png": {
+    "caption": "Invite with Ivy ticked opens the Invite anyway box: “Ivy Zmknhd doesn't list a language this test needs (French) or a device it needs (Mac).”.",
+    "kind": "image",
+    "title": "§9 One change, one stop",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG9",
+    "order": 123001,
+    "size": "desktop"
+  },
+  "b32-14-invite-anyway-stop.png": {
+    "caption": "Ivy added Mac meanwhile: Invite anyway stops once and the box redraws to the up-to-date list: “Ivy Zmknhd doesn't list a language this test needs (French). Your Invite didn't go through. Since you opened this page: Ivy Zmknhd now lists Mac, which this test needs. · 12:11 AM”.",
+    "kind": "image",
+    "title": "§9 One change, one stop (App bug: the box says “Your Invite”)",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG9",
+    "order": 123002,
+    "size": "desktop"
+  },
+  "b32-15-invite-anyway-goes.png": {
+    "caption": "The next Invite anyway sends: “Invited Ivy Zmknhd.”, and Ivy is in the Invited list, “… · waiting for them to join” with Cancel invite.",
+    "kind": "image",
+    "title": "§9 One change, one stop",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG9",
+    "order": 123003,
+    "size": "desktop"
+  },
+  "b32-16-refusal-in-part.png": {
+    "caption": "Nora paid while Ana's stop box was up: the second Charge is refused and its button goes; the blue notice “Your Charge didn't go through: Nora Lane paid $10.00 for this meanwhile.” sits INSIDE the written part, under the payment line. It doesn't stay: it showed and went 13 times in 10 seconds (about every half second).",
+    "kind": "image",
+    "title": "§10 A refused press's line sits in the page (App bug: it blinks)",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG10",
+    "order": 124001,
+    "size": "desktop"
+  },
+  "b32-05-apply-twice.png": {
+    "caption": "Ben applied in another tab, then pressed Apply here: refused with “You already applied to join this test in another tab.”, the page in its waiting state (“You applied to join. You'll hear back when the developer answers.”, Withdraw application); the first note stays.",
+    "kind": "image",
+    "title": "§2 Apply twice",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG6",
+    "order": 120001,
+    "size": "desktop"
+  },
+  "b32-06-answer-one.png": {
+    "caption": "Send with nothing answered: “Answer at least one question before sending (any one; none is required).” above the questions, no box red.",
+    "kind": "image",
+    "title": "§4 Answer at least one question",
+    "section": "Batch 32 (Oct 29)",
+    "group": "pG6",
+    "order": 120002,
+    "size": "desktop"
   }
 }

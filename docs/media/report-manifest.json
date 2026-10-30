@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-30T03:27:19.089Z",
+  "generated": "2026-10-30T05:20:23.358Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -7697,6 +7697,69 @@
           "phone": null
         },
         {
+          "title": "§12 Combined race: Pay",
+          "explanation": "Nora paid Ben in another tab and Ana requested a call meanwhile: Pay on Ana's piece stops once with one box, oldest first: “Your Pay on Ana Silva's written answers didn't go through.” then “Since you opened this page:” with “You paid Ben Okafor $10.00 for the written answers in another tab · 12:14 AM”, “Ana Silva requested a call for Sun, Nov 1, 3:00 PM · 12:14 AM”.",
+          "kind": "image",
+          "desktop": "ct2-01-pay-two-causes.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: Pay",
+          "explanation": "The second Pay goes ahead: Ana's piece is paid $10.00 and Ana's row now reads “Written answers … paid $10.00 of $10.00” with the Pay more box.",
+          "kind": "image",
+          "desktop": "ct2-02-pay-second-goes.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: Edit's Save",
+          "explanation": "Nora saved a new description in another tab while typing one here, and Cam joined meanwhile: Save stops once with one box: “Your Save didn't go through.” then “Since you opened this page:” with “Instructions: your version will replace the one saved in another tab at 12:09 AM.”, “Cam Rivera joined · 12:09 AM”.",
+          "kind": "image",
+          "desktop": "ct2-03-save-two-causes.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: Edit's Save",
+          "explanation": "The second Save goes ahead: “Saved. New testers join on the new listing; testers already in keep their contract.”, the new description saved.",
+          "kind": "image",
+          "desktop": "ct2-04-save-second-goes.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: the tester's Send",
+          "explanation": "Ana requested a call in another tab and Nora paid meanwhile: Send my updated answers stops once with one box, oldest first: “Your Send didn't go through.” then “Since you opened this page:” with “You requested a call for Sun, Nov 1, 3:00 PM in another tab · 12:15 AM”, “Nora Lane paid $10.00 for your written answers · 12:15 AM”.",
+          "kind": "image",
+          "desktop": "ct2-05-send-two-causes.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: the tester's Send",
+          "explanation": "The second press goes ahead: the updated answers are sent (“Written answers: Sent <date, time>” with “Paid $10.00: you get $8.00” and “Nora Lane has paid $10.00 for this. It can be paid more, up to $1,000.00 in all.”).",
+          "kind": "image",
+          "desktop": "ct2-06-send-second-goes.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: two devices",
+          "explanation": "Device B was scrolled down when device A requested a call and sent the answers: the pill “2 new updates ↑” appears at the bottom.",
+          "kind": "image",
+          "desktop": "ct2-07-device-pill.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: two devices",
+          "explanation": "Another of Ana's open pages (at the top) shows the same lines in its top box, newest first: “Updated · 12:19 AM: You sent your written answers in another tab”, “Updated · 12:19 AM: You requested a call for Sun, Nov 1, 3:00 PM in another tab”.",
+          "kind": "image",
+          "desktop": "ct2-08-device-top-box.png",
+          "phone": null
+        },
+        {
+          "title": "§12 Combined race: two devices (App bug: no stop)",
+          "explanation": "Device B's “Send my updated answers”, pressed while the pill was still up (nothing scrolled into view), went straight through with no stop box, replacing device A's answers with device B's. (Device B's answer boxes still showed empty after device A sent, the button reading “Send my updated answers”.)",
+          "kind": "image",
+          "desktop": "ct2-09-device-press-stops.png",
+          "phone": null
+        },
+        {
           "title": "§12 The join page's stop box",
           "explanation": "Ben applied in another tab, then Nora saved twice: Apply stops once with one box, oldest first: “You applied to join in another tab”, “Nora Lane edited the listing at <time>: product name, description · See it”, “Nora Lane changed the listing: your application was closed” and “Nora Lane changed the NDA at 10:23 PM: read and accept it again below”; the NDA tick is cleared.",
           "kind": "image",
@@ -7833,6 +7896,124 @@
           "explanation": "The written part's file box: “Attach a file (images, PDF, text or zip; 500 MB each, 5 at most) or a video”.",
           "kind": "image",
           "desktop": "b31-02-file-limit-line.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Batch 32 (Oct 29)",
+      "explanation": "Batch 32 (docs/BATCH-32.md): money waiting for payout setup, Apply twice refused, every payment counted in Everything you sent, the answer-one-question line above the questions, the team's Account page, new terms blocking Charge and Dispute, one line per moment in a stop box, one change one stop on Invite anyway, refusal lines inside the part, and the console without Needs the team today.",
+      "cases": [
+        {
+          "title": "§1 Money waiting for payout setup",
+          "explanation": "Ana hasn't set up payouts: the join page's grey line “You can join and work now; payments wait until you finish your payout setup. Finish setup”.",
+          "kind": "image",
+          "desktop": "b32-01-payout-hint-join.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Money waiting for payout setup",
+          "explanation": "On the session page, under the header card and above Your agreed scope: “You can join and work now; payments wait until you finish your payout setup. Finish setup”.",
+          "kind": "image",
+          "desktop": "b32-02-payout-hint-session.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Money waiting for payout setup (App bug: not at once)",
+          "explanation": "Ana's bell: “$12.00 is waiting for you: finish your payout setup to receive it. just now”, linking to Payments. It came only with the daily job: not when the shares started waiting, nor with the 5-minute sweep.",
+          "kind": "image",
+          "desktop": "b32-03-payout-wait-bell.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Apply twice",
+          "explanation": "Ben applied in another tab, then pressed Apply here: refused with “You already applied to join this test in another tab.”, the page in its waiting state (“You applied to join. You'll hear back when the developer answers.”, Withdraw application); the first note stays.",
+          "kind": "image",
+          "desktop": "b32-05-apply-twice.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Everything you sent counts every payment",
+          "explanation": "Paid $10.00 and Pay more $5.00: Payments → Everything you sent reads “Paid $15.00 · you get $12.00”.",
+          "kind": "image",
+          "desktop": "b32-04-everything-sent-total.png",
+          "phone": null
+        },
+        {
+          "title": "§4 Answer at least one question",
+          "explanation": "Send with nothing answered: “Answer at least one question before sending (any one; none is required).” above the questions, no box red.",
+          "kind": "image",
+          "desktop": "b32-06-answer-one.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The team's Account page",
+          "explanation": "An admin's Account page lists neither Payments nor Blocked people.",
+          "kind": "image",
+          "desktop": "b32-11-admin-account.png",
+          "phone": null
+        },
+        {
+          "title": "§7 New terms block Charge",
+          "explanation": "Charge is refused with “Your press didn't go through. Answer the new terms first: Switch or Keep.” under the button (App bug: “Your press” instead of naming Charge) while Nora's new terms wait.",
+          "kind": "image",
+          "desktop": "b32-07-charge-terms-first.png",
+          "phone": null
+        },
+        {
+          "title": "§7 New terms block Charge",
+          "explanation": "The page went up to the Switch / Keep box (“Switch to the new terms” / “Keep my current terms”).",
+          "kind": "image",
+          "desktop": "b32-08-charge-terms-box.png",
+          "phone": null
+        },
+        {
+          "title": "§7 New terms block Charge",
+          "explanation": "After Keep my current terms, Charge goes through: “Paid $10.00: you get $8.00 (<date, time>) · “Charged by the tester after 7 days without a review.””.",
+          "kind": "image",
+          "desktop": "b32-09-charge-after-keep.png",
+          "phone": null
+        },
+        {
+          "title": "§8 One moment, one line",
+          "explanation": "The team stopped the test while Nora's page was open and Nora pressed Pay on Ana's piece: Pay stops once with ONE stop line: “Your Pay on Ana Silva's written answers didn't go through.” then “Since you opened this page:” with “The team stopped this test at 12:15 AM.”.",
+          "kind": "image",
+          "desktop": "b32-10-team-stop-one-line.png",
+          "phone": null
+        },
+        {
+          "title": "§9 One change, one stop",
+          "explanation": "Invite with Ivy ticked opens the Invite anyway box: “Ivy Zmknhd doesn't list a language this test needs (French) or a device it needs (Mac).”.",
+          "kind": "image",
+          "desktop": "b32-13-invite-anyway-box.png",
+          "phone": null
+        },
+        {
+          "title": "§9 One change, one stop (App bug: the box says “Your Invite”)",
+          "explanation": "Ivy added Mac meanwhile: Invite anyway stops once and the box redraws to the up-to-date list: “Ivy Zmknhd doesn't list a language this test needs (French). Your Invite didn't go through. Since you opened this page: Ivy Zmknhd now lists Mac, which this test needs. · 12:11 AM”.",
+          "kind": "image",
+          "desktop": "b32-14-invite-anyway-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§9 One change, one stop",
+          "explanation": "The next Invite anyway sends: “Invited Ivy Zmknhd.”, and Ivy is in the Invited list, “… · waiting for them to join” with Cancel invite.",
+          "kind": "image",
+          "desktop": "b32-15-invite-anyway-goes.png",
+          "phone": null
+        },
+        {
+          "title": "§10 A refused press's line sits in the page (App bug: it blinks)",
+          "explanation": "Nora paid while Ana's stop box was up: the second Charge is refused and its button goes; the blue notice “Your Charge didn't go through: Nora Lane paid $10.00 for this meanwhile.” sits INSIDE the written part, under the payment line. It doesn't stay: it showed and went 13 times in 10 seconds (about every half second).",
+          "kind": "image",
+          "desktop": "b32-16-refusal-in-part.png",
+          "phone": null
+        },
+        {
+          "title": "§11 The console drops “Needs the team today”",
+          "explanation": "The admin console has no “Needs the team today” panel: it opens on the counts, then Outages and Open disputes (the list stays in the daily admin email).",
+          "kind": "image",
+          "desktop": "b32-12-console-no-needs-team.png",
           "phone": null
         }
       ]
