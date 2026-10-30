@@ -212,6 +212,8 @@ The template is [.env.example](../.env.example). Never commit `.env*` files (the
 | `ADMIN_EMAILS` | Comma-separated admin emails (in addition to `User.isAdmin`) | Yes | `owner@example.com` in the template |
 | `OUTAGE_CHECKS` | `1` turns outage recording on (from the uptime service's alerts, batch 15 §10) | Decide at launch | `0` |
 | `HEALTH_KEY` | Secret the uptime service sends as `?key=` on its ping and on its alert webhook `POST /api/health/alert`. The keyed ping runs the 5-minute sweep of reminders and timers (batch 19 §4) and, with `OUTAGE_CHECKS=1`, writes heartbeats | Yes (the sweep needs it) | a long random value |
+| `DB_STORAGE_LIMIT_GB` | The database plan's size in GB (`0.5` on Neon's free plan, the plan's size on a paid one). The daily job compares `pg_database_size` with it (batch 30 §35) | Yes (else not checked) | empty (not checked) |
+| `UPLOADS_LIMIT_GB` | The uploads budget in GB (what you want to spend on R2). The daily job compares the stored uploads' total (from the app's own records) with it | Yes (else not checked) | empty (not checked) |
 | `SKIP_EMAIL_CONFIRM` | `1` skips the email-confirmation requirement (a strip says so). Ignored in production | Must be off | `0` |
 | `CALL_MIN_AHEAD_MINUTES` | How many minutes ahead a call request's time must be when not in production (batch 27 §6, `src/lib/callLead.ts`). Production always uses 5, whatever this says | No (ignored in production) | `1` |
 | `NEXT_DIST_DIR` | Build output folder, so a check or second server doesn't overwrite the running dev server's `.next` | No | `.next` |
@@ -286,6 +288,12 @@ with "Clear this list"), one admin bell line per incident ("Emails aren't sendin
 `/api/health`, which answers `{"ok":true,"emails":"degraded: emails"}` (still HTTP 200) once the oldest waiting email is 15 minutes old (otherwise
 `"emails":"sending"`). A second UptimeRobot **keyword** monitor on that URL alerts through UptimeRobot's own emails and texts, so it works while Resend is down
 (launch checklist). In development without a key, emails still go to the dev outbox.
+
+**Batch 30 §35: storage running out.** Once a day the daily job (`checkStorage`, server/storageAlerts.ts) measures the database (`pg_database_size`) and the
+uploads (the sum of the stored `Recording` rows' sizes, which are the app's own records of its R2 files) against `DB_STORAGE_LIMIT_GB` and `UPLOADS_LIMIT_GB`
+(unset = not checked) and keeps the result in `AppState` `storage-state`. At 80% or more of either: a red box at the top of the admin console ("Storage is 82%
+full: database 410 MB of 500 MB." / "Uploads are 85% full: 8.5 GB of 10 GB."), one admin bell line per crossing ("Storage is filling up (database 82%)"), and the
+keyed `/api/health` adds `"storage":"degraded: storage"` (still HTTP 200). Back under 80% at the next day's measurement, the box goes; a new crossing rings again.
 
 **Batch 23 §6: a chargeback hold's Pay what you owe reserves.** During a chargeback hold, Pay what you owe (after the card check) authorizes what is owed and
 not yet reserved as one PaymentIntent with `capture_method: manual` (`reserveOwed` / `authorize`; the bank's check inline if asked; a `Reservation` row).
@@ -534,7 +542,11 @@ On a fresh, healthy Postgres cluster (a new machine, Docker, Neon) none of this 
 - [ ] **UptimeRobot email alert (batch 23 §2).** Add a **second** monitor: type **Keyword**, URL
       `APP_URL/api/health?key=<HEALTH_KEY>`, keyword `degraded: emails`, alert when the keyword **exists**, every 5 minutes, with your email and phone
       (SMS) as its alert contacts. It alerts through UptimeRobot's own system when emails have been failing for 15 minutes, so you hear even when Resend is
-      down. (Test it on staging: AT-HOME section 6.)
+      down. (Test it on staging: AT-HOME section 6.) **Batch 30 §35:** make it alert on storage too: set the keyword to `degraded` (it matches both
+      `degraded: emails` and `degraded: storage`), or add a third keyword monitor with `degraded: storage`.
+- [ ] **Storage limits (batch 30 §35).** Set `DB_STORAGE_LIMIT_GB` (`0.5` on Neon's free plan, else your plan's size) and `UPLOADS_LIMIT_GB` (your R2
+      budget) in Vercel. Also turn on Neon's own usage alerts (Neon console, the project's usage / billing settings) and Cloudflare's billing notifications
+      for R2 (Cloudflare dashboard, Notifications), so the providers warn you too.
 - [ ] **UptimeRobot.** Generate a long random `HEALTH_KEY`, set `OUTAGE_CHECKS=1`, and add a 5-minute HTTP monitor on
       `APP_URL/api/health?key=<HEALTH_KEY>`. This monitor also drives the reminders and timers every 5 minutes (batch 19 §4): keep it on. Then add an Alert Contact: type **Webhook**, method **POST**, URL
       `APP_URL/api/health/alert?key=<HEALTH_KEY>`, "Send as JSON" with

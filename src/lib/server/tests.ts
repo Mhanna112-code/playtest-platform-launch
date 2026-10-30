@@ -14,7 +14,7 @@ import { displayName, fmtDate, fmtDateTime, pronouns, stopTimeIn, toCents } from
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
 import {
-  andList, closedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, WRITTEN_MAX_CHARS, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -626,6 +626,7 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
   if (!reason) throw new HttpError(400, "bad_reason", "Say why you're stopping the test (testers read it).");
   if (reason.length < WHY_MIN_CHARS) throw new HttpError(400, "bad_reason", WHY_TOO_SHORT); // (batch 20 section 27)
   let cancelled: Awaited<ReturnType<typeof cancelCallsAhead>> = [];
+  let invitesClosed: string[] = [];
   const contracts = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     // (Batch 16 section 21) Stopped in another tab: this Stop stops once naming it ("You stopped the test in another tab"), then it's already done.
@@ -642,11 +643,13 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
+    invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } }); // (batch 16 section 32) a stop closes open invites
     await recordEvent(tx, testId, "stopped", stopEventText(reason), true, { status: "stopped", stoppedAt: new Date() });
     return cs;
   });
   await tellCancelled(cancelled, "stopped");
+  await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
   // (Batch 17 §15) The reason in full in the email, never in the bell line.
   for (const c of contracts)
     await notify(c.tester.email, `“${c.title}” was stopped`, [`${displayName(dev)} stopped “${c.title}”: “${reason}”`, "Your work on it has ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled."], `/app/sessions/${c.id}`, { group: "tstopped" });
@@ -746,11 +749,11 @@ export async function nextRound(dev: U, testId: string, body: Record<string, unk
  * the box under the button, the second opens the draft. (Batch 29 section 11) On a stopped, closed or paused test it follows the same stop-once rules.
  */
 export async function goNextRound(dev: U, testId: string, body: Record<string, unknown>) {
-  const t = await ownTest(dev.id, testId);
+  await ownTest(dev.id, testId);
   const next = await db.test.findFirst({ where: { previousId: testId }, select: { id: true } });
   if (!next) throw new HttpError(409, "gone", NO_NEXT_ROUND);
-  const closed = !!t.openUntil && t.openUntil.getTime() < Date.now();
-  if (!closed) await db.$transaction((tx) => topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["next-round"], keys: ["test"] }));
+  // (Batch 30 §6, per batch 29 §11: stop-once everywhere) Also after Open until passed: no skip.
+  await db.$transaction((tx) => topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["next-round"], keys: ["test"] }));
   return { id: next.id };
 }
 /** (Batch 27 section 2) The next round's draft was deleted meanwhile. */
@@ -981,7 +984,8 @@ export async function closeJoiningAfterOpenUntil(now = new Date()) {
     await db.application.updateMany({ where: { id: { in: apps.map((a) => a.id) } }, data: { status: "closed", closedReason: "joining_closed", decidedAt: now } });
     await db.invite.updateMany({ where: { id: { in: invs.map((i) => i.id) } }, data: { status: "cancelled" } });
     const people = await db.user.findMany({ where: { id: { in: [...apps.map((a) => a.testerId), ...invs.map((i) => i.testerId)] } }, select: { id: true, email: true } });
-    const line = closedToNewLine(t.openUntil!, (d) => T(d, "date"));
+    // (Batch 30 §6) It stacks across tests in "Applications and invites": the line names its test.
+    const line = testClosedToNewLine(t.title, t.openUntil!, (d) => T(d, "date"));
     for (const p of people) await notify(p.email, line, [line], `/app/find/${t.id}`, { ...APPS_GROUP, testId: t.id });
     n += apps.length + invs.length;
   }

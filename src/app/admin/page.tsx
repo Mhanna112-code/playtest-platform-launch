@@ -13,6 +13,7 @@ import { configProblems, seesConfigBox } from "@/lib/server/config";
 import { adminOutages, gapLine, lengthText, outageLine } from "@/lib/server/outages";
 import { T, renderTimes } from "@/lib/tz";
 import { emailHealth, emailsDownLine } from "@/lib/server/email";
+import { storageAlerts } from "@/lib/server/storageAlerts";
 import { adminPage, disputeRow, type DisputeVM, type Page } from "@/lib/server/adminLists";
 import { StatTile } from "@/components/StatTile";
 import { HashJump } from "@/components/HashJump";
@@ -46,6 +47,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const cases = await adminCases();
   const outages = await adminOutages();
   const mail = await emailHealth();
+  const storage = await storageAlerts();
   // (Batch 23 section 2) Times on the admin's own clock: the time alone within a day, else the day too.
   const clock = (d: Date) => renderTimes(T(d, Date.now() - d.getTime() < 20 * 3_600_000 ? "time" : "dayTime"), u.timeZone);
   // The full app's admin tiles: people, parts awaiting review, what was charged, the platform's share, what testers are owed.
@@ -89,6 +91,14 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <AdminButton action="emails-clear" id="all" label="Clear this list (the emails are kept)" />
             </div>
           )}
+        </section>
+      )}
+
+      {/* (Owner, Oct 29, batch 30 §35) Storage at 80% or more of its limit (the last daily measurement): a red box at the top until it is under 80% again. */}
+      {storage.lines.length > 0 && (
+        <section className="scroll-mt-24 space-y-2 rounded-xl border border-rose-500/60 bg-rose-950/40 p-4 text-sm text-rose-100" id="storage" data-storage-box="">
+          {storage.lines.map((s) => <p key={s.kind} className="font-semibold text-rose-200" data-storage-line={s.kind}>{s.line}</p>)}
+          {storage.at && <p className="text-xs text-rose-200/80">Measured once a day (last {clock(storage.at)}). The uptime monitor&apos;s keyword alert tells you outside the app too.</p>}
         </section>
       )}
 

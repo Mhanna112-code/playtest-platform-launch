@@ -74,7 +74,9 @@ export async function blockUser(me: { id: string; email: string; name: string },
   }
   await (await import("./requests")).closeRequests({ contractIds: contracts.map((c) => c.id) }, "the session ended");
   await db.termsOffer.updateMany({ where: { status: "open", contractId: { in: contracts.map((c) => c.id) } }, data: { status: "superseded", decidedAt: now } });
-  await db.invite.updateMany({ where: { status: "sent", OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] }, data: { status: "cancelled" } });
+  const invitesClosed = await (await import("./invites")).openInviteIds({ OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] });
+  await db.invite.updateMany({ where: { id: { in: invitesClosed }, status: "sent" }, data: { status: "cancelled" } });
+  await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) the neutral line (never "blocked")
   // (Owner, Oct 28, batch 16 section 11) Pending applications and rejoin asks between them close, like invites. The tester reads the neutral line; the developer nothing.
   // (Application has no relations: its tests are found by developer first.)
   const pairs = [{ tester: otherId, dev: me.id }, { tester: me.id, dev: otherId }];

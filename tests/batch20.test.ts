@@ -645,10 +645,10 @@ describe("batch 20 section 14: Rate stops once for call changes between the two 
     expect((await sact(j.sessionId, "rate", j.tester.cookie, { stars: 5, seenAt: old2, pageSeenAt: old2 })).status).toBe(200);
   });
 
-  it("the developer's Rate gets the same for that tester (their call request)", () => {
+  it("(batch 30 §4) the developer's Rate has no call-change rule (it only opens once the tester's part ended)", () => {
     const r = src("lib/server/ratings.ts");
-    expect(r).toContain('kind: { in: ["requested", "booked", "confirmed", "cancelled", "withdrew_req", "declined_req"] } } })).filter((e) => !e.text.startsWith("You ")));');
-    expect(r).toContain('!c.test.developer.ignoredAlerts.includes("calls")');
+    expect(r).not.toContain('kind: { in: ["requested", "booked", "confirmed", "cancelled", "withdrew_req", "declined_req"] } } })).filter((e) => !e.text.startsWith("You ")));');
+    expect(r).not.toContain('!c.test.developer.ignoredAlerts.includes("calls")');
   });
 });
 

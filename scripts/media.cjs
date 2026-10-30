@@ -4983,7 +4983,7 @@ group("b18b", async () => {
   const nora = await account(`dev+media${TS}db@playtest.test`, "Nora Lane", "developer", "she");
   await subscribeDev(nora);
   const t = await postTest(nora, { title: "Harbor Run: open beta", spots: "10" });
-  // (A developer starts at 10 spots per test; one who earned more has up to 50: this test is given 40.)
+  // (Batch 31: every new test takes at most 10 testers; a test posted before that keeps its spots. This one is given 40, as such an older test, to show the row.)
   own(`update "Test" set spots = 40 where id = '${t}'`);
   const names = ["Ana Silva", "Ben Okafor", "Cam Lee", "Dee Park", "Eli Novak", "Fay Mendes", "Gus Hale", "Hana Ito", "Ivo Brandt", "Jo Kim", "Kai Moreno", "Lia Costa", "Max Weber", "Noor Aziz"];
   for (const [i, n] of names.entries()) {

@@ -81,8 +81,9 @@ describe("batch 14 section 3: applicants and invited testers are told, stacked",
     }
     const lines = await db.notification.findMany({ where: { userId: ana.user.id, groupKey: "apps" } });
     expect(lines.map((l) => l.text).sort()).toEqual(["“Harbor Run”'s listing changed, so your application was closed. You can apply again on the current listing.", "“Reef Dash”'s listing changed, so your application was closed. You can apply again on the current listing."]);
-    expect(groupTitle("appclosed", 2)).toBe("2 tests you applied to changed: your applications were closed");
-    expect(groupTitle("reinvited", 3)).toBe("3 tests you were invited to changed: your invites were sent again");
+    // (Batch 30 §6) The old "Applications closed" / "Invites sent again" stacks are gone (batch 29 §23: "Applications and invites").
+    expect(groupTitle("appclosed", 2)).toBeUndefined();
+    expect(groupTitle("reinvited", 3)).toBeUndefined();
     // Re-sent invites.
     const { dev, testId } = await setup({ joinMode: "invite" });
     const ben = await makeUser({ tester: true, name: "Ben Ward" });

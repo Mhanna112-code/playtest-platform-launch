@@ -233,12 +233,8 @@ async function devRateGate(testId: string, contractId: string, body: Record<stri
   const stop = await devStopSince(testId, contractId, since);
   if (stop) lines.push(stop);
   lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })));
-  // (Batch 20 section 14) On a running test: call changes with this tester since the page loaded (theirs: batch 29 section 12, never the developer's own from another tab); other testers'
-  // never. Alerts: "Call changes" ticked off doesn't stop.
-  const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { status: true, test: { select: { status: true, developer: { select: { ignoredAlerts: true } } } } } });
-  if (c.status === "working" && c.test.status === "open" && !c.test.developer.ignoredAlerts.includes("calls")) {
-    lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, createdAt: { gt: since }, kind: { in: ["requested", "booked", "confirmed", "cancelled", "withdrew_req", "declined_req"] } } })).filter((e) => !e.text.startsWith("You ")));
-  }
+  // (Owner, Oct 29, batch 30 §4) No call changes here: the developer's Rate only opens after the tester rated (which ends their part) or at close-out, so "call changes
+  // between the two of them while that tester is still working" could never apply.
   if (lines.length) stopBox(lines.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
 function refuse(s: RateState, already: string): never {

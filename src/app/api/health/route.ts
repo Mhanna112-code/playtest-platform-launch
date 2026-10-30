@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { healthKeyOf, healthKeyOk, heartbeat, outageChecksOn } from "@/lib/server/outages";
 import { SWEEP_BUDGET_MS, healthSweep } from "@/lib/server/timers";
 import { EMAIL_DEGRADED_KEYWORD, emailsDegraded } from "@/lib/server/email";
+import { STORAGE_DEGRADED_KEYWORD, storageDegraded } from "@/lib/server/storageAlerts";
 
 // (NEWEST+6, GATED; batch 15 section 10) The outside uptime checker calls GET /api/health?key=<HEALTH_KEY> every 5 minutes. With
 // OUTAGE_CHECKS=1 and the right key, a heartbeat is written for information only (missing pings never create an outage: outages
@@ -12,19 +13,23 @@ import { EMAIL_DEGRADED_KEYWORD, emailsDegraded } from "@/lib/server/email";
 // (Owner, Oct 29, batch 23 section 2) With the key it also says whether emails are sending: "degraded: emails" once emails have been failing for 15 minutes or more (still
 // HTTP 200: the site is up). A second UptimeRobot monitor of type "keyword" on this URL alerts when that keyword appears, through UptimeRobot's own emails and texts, so
 // the owner hears even while Resend is down.
+// (Owner, Oct 29, batch 30 §35) And storage: `"storage": "degraded: storage"` while the last daily measurement found the database or the uploads at 80% or more of
+// their limit (only then; still HTTP 200), for the same keyword monitor.
 export async function GET(req: Request) {
   let ok = true;
   let emails = "";
+  let storage = false;
   const keyed = healthKeyOk(healthKeyOf(req));
   try {
     await db.$queryRaw`SELECT 1`;
     if (outageChecksOn() && keyed) await heartbeat(new Date(), true);
     if (keyed) emails = (await emailsDegraded()) ? EMAIL_DEGRADED_KEYWORD : "sending";
+    if (keyed) storage = await storageDegraded();
   } catch {
     ok = false;
   }
   if (ok && keyed) await sweepAfterAnswer();
-  return ok ? Response.json({ ok: true, ...(emails ? { emails } : {}) }) : Response.json({ ok: false }, { status: 503 });
+  return ok ? Response.json({ ok: true, ...(emails ? { emails } : {}), ...(storage ? { storage: STORAGE_DEGRADED_KEYWORD } : {}) }) : Response.json({ ok: false }, { status: 503 });
 }
 
 /** After the answer is sent when the platform allows it (Vercel's waitUntil); otherwise here, waiting at most SWEEP_BUDGET_MS (the sweep then finishes on its own). */

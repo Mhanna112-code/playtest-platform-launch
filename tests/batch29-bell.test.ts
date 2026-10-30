@@ -184,7 +184,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     expect(soon[0].text).toMatch(/^Closing soon: 2 pieces close by [A-Z][a-z]{2} \d{1,2} \(/);
     expect(soon[0].text).toContain("Ana's written answers on “Harbor Run”");
     expect(soon[0].text).toContain("Ben's written answers on “Sky Lab”");
-    expect(soon[0]).toMatchObject({ link: "/app#needs-you", mustEmail: true, payment: true, groupKey: "closeout" });
+    expect(soon[0]).toMatchObject({ link: "/app#needs-review", mustEmail: true, payment: true, groupKey: "closeout" });
     expect((await db.submission.findUniqueOrThrow({ where: { id: a.sub.id } })).devMarks).toContain("co:3");
     // The old per-piece lines are gone.
     expect((await lines(dev.user.id)).some((l) => /^Pay Ana Silva's work on/.test(l.text))).toBe(false);
@@ -192,7 +192,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     const now = (await lines(dev.user.id)).filter((l) => l.text.startsWith("Pay now:"));
     expect(now).toHaveLength(1);
     expect(now[0].text).toMatch(/^Pay now: 2 pieces on 2 tests: their testers can charge or let them go \(the first closes [A-Z][a-z]{2} \d{1,2}\)$/);
-    expect(now[0]).toMatchObject({ link: "/app#needs-you", mustEmail: true, payment: true });
+    expect(now[0]).toMatchObject({ link: "/app#needs-review", mustEmail: true, payment: true });
     expect((await lines(dev.user.id)).some((l) => /reviewed by/.test(l.text))).toBe(false);
     // Email Off: the money lines went out in the end-of-day email.
     const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: dev.user.email } });

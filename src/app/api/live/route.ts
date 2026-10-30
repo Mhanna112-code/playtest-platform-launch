@@ -9,11 +9,12 @@ import { outageLines } from "@/lib/server/outages";
 import { renderTimes } from "@/lib/tz";
 import { CONTRACT_KINDS, testerChanges } from "@/lib/server/testerGate";
 import { ownTest } from "@/lib/server/tests";
+import { inviteClosedLine } from "@/lib/server/invites";
 
 /** (Owner, Oct 28, batch 16 section 32) "Your invite to “Harbor Run” was closed." for each invite of theirs closed since `since` (never why). */
 async function invitesClosedSince(userId: string, since: Date, testId?: string) {
   const closed = await db.invite.findMany({ where: { testerId: userId, status: "cancelled", updatedAt: { gt: since }, ...(testId ? { testId } : {}) }, include: { test: { select: { title: true } } }, take: 20 });
-  return closed.map((i) => ({ kind: "invite", text: `Your invite to “${i.test.title}” was closed.`, createdAt: i.updatedAt }));
+  return closed.map((i) => ({ kind: "invite", text: inviteClosedLine(i.test.title), createdAt: i.updatedAt }));
 }
 
 // The live top notice (owner, NEWEST+3): every stop-once reason (A-E) on this page since it was opened, as the page's

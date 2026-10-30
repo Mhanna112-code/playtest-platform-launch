@@ -23,9 +23,11 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   if (!info) throw new HttpError(409, "not_paused", "That test isn't paused.");
   const reason = pauseClosedReason(info.causes, by);
   const cs = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
+  let invitesClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
     const fresh = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     if (fresh.status === "stopped") return null; // somebody stopped it a moment ago: nothing to do
+    invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: now, endReason: "The test ended." } });
     const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test ended.");
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: now } });
@@ -37,6 +39,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   });
   if (!cancelled) return { closed: false };
   await tellCancelled(cancelled, "closed");
+  await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6)
   for (const c of cs) await notify(c.tester.email, `“${c.title}” ended`, [`“${c.title}” ended. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
   // (A system explanation, never a typed reason: it stays in the line.)
   await notify(t.developer.email, `“${t.title}” was closed. ${reason}`, [`“${t.title}” was closed. ${reason}`, "What testers already sent still waits for you to pay. Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
