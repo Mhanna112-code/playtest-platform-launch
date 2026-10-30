@@ -108,7 +108,7 @@ describe("O) pop-up failures", () => {
     for (const f of ["app/app/sessions/[id]/SessionActions.tsx", "app/app/sessions/[id]/ChoiceBox.tsx"]) expect(src(f), f).toContain("didntGo");
     expect(src("components/RateBox.tsx")).toContain("didntGo={p.working}");
     expect(src("components/GapDialog.tsx")).toContain("Your press didn&apos;t go through.");
-    expect(src("app/app/tests/[id]/InvitePanel.tsx")).toContain("Your press didn't go through.");
+    expect(src("app/app/tests/[id]/InvitePanel.tsx")).toContain("Your Invite anyway didn't go through.") // (batch 32 §9) names the press;
   });
 });
 
