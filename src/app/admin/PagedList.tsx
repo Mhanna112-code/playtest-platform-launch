@@ -248,7 +248,7 @@ const sameFilter = (a: Filter, b: Filter) => a.q === b.q && a.ticks.join(",") ==
  * go straight in). Each row keeps its anchor (dispute-ID, user-ID, test-ID) so a bell line or a link can open the exact row. Phones: the same box, full width.
  * `fixed`: one pinned row (opened from a link): no live check and no end line.
  */
-export function PagedList({ kind, initial, arg = "", title, level = 2, fixed = false }: { kind: Kind; initial: Page<AnyRow> | null; arg?: string; title?: string; level?: 2 | 3; fixed?: boolean }) {
+export function PagedList({ kind, initial, arg = "", title, level = 2, fixed = false, sideFilter }: { kind: Kind; initial: Page<AnyRow> | null; arg?: string; title?: string; level?: 2 | 3; fixed?: boolean; sideFilter?: "developer" | "tester" }) {
   const search = isSearchKind(kind) ? SEARCHABLE[kind] : null;
   const [rows, setRows] = useState<AnyRow[]>(initial?.rows ?? []);
   const [total, setTotal] = useState(initial?.total ?? 0);
@@ -274,8 +274,8 @@ export function PagedList({ kind, initial, arg = "", title, level = 2, fixed = f
   }, [rows, applied]);
 
   const url = useCallback(
-    (after: string | null, f: Filter) => `/api/admin/more?kind=${kind}&after=${encodeURIComponent(after ?? "")}${arg ? `&arg=${encodeURIComponent(arg)}` : ""}${f.q ? `&q=${encodeURIComponent(f.q)}` : ""}${f.ticks.length ? `&f=${encodeURIComponent(f.ticks.join(","))}` : ""}`,
-    [kind, arg],
+    (after: string | null, f: Filter) => `/api/admin/more?kind=${kind}${sideFilter ? `&side=${sideFilter}` : ""}&after=${encodeURIComponent(after ?? "")}${arg ? `&arg=${encodeURIComponent(arg)}` : ""}${f.q ? `&q=${encodeURIComponent(f.q)}` : ""}${f.ticks.length ? `&f=${encodeURIComponent(f.ticks.join(","))}` : ""}`,
+    [kind, arg, sideFilter],
   );
 
   /** The first 25 for a filter (or the lazy first load): replaces the rows and goes back to the top. */

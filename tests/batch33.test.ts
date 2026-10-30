@@ -259,7 +259,7 @@ describe("batch 33 §6: the console shows only its twelve sections, in order", (
     expect(page.indexOf("data-storage-box")).toBeGreaterThan(page.indexOf('data-console-section="settings"'));
     // Outages in a scroll box; the header row untouched.
     expect(page).toContain('data-scroll-box="outages"');
-    expect(page).toContain('<Link href="/app/find" data-admin-find="">Find tests</Link>');
+    expect(src("app/admin/AdminNav.tsx")).toContain('href="/app/find" data-admin-find=""');
   });
 
   it("“Tests you paused” lists only the signed-in admin's pauses still in place; Suspensions lists the accounts suspended now", async () => {
