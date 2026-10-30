@@ -873,11 +873,11 @@ export const chargebackReversedLine = (cents: number, backCents: number, refunde
 export const RESERVE_DAYS = 7;
 export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's taken when the team approves lifting your hold.`;
 export const RESERVE_EXPIRED = "Your reservation expired: press Pay what you owe again so the team can approve it.";
-/**
- * (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: what is added after the reservation is charged right after the team's Approve lifts the hold.
- * "Reserved $23.00: it's taken when the team approves lifting your hold. $5.00 added since will be charged right after."
- */
-export const reservedAddedLine = (reservedCents: number, addedCents: number) => `${reservedLine(reservedCents)}${addedCents > 0 ? ` ${money(addedCents)} added since will be charged right after.` : ""}`;
+/** (Batch 34 §3) The developer's reservation line; added charges are explained by the disabled button. */
+export const reservedAddedLine = (reservedCents: number, addedCents: number) => {
+  void addedCents;
+  return reservedLine(reservedCents);
+};
 /** (Batch 28 §8) The admin's chargeback row: "$23.00 reserved · $5.00 added since (charged after the hold lifts)". */
 export const adminReservedLine = (reservedCents: number, addedCents: number) => `${money(reservedCents)} reserved${addedCents > 0 ? ` · ${money(addedCents)} added since (charged after the hold lifts)` : ""}`;
 export const STILL_SUSPENDED_LINE = "Your payment went through. Your tests stay paused while your account is suspended.";

@@ -289,7 +289,7 @@ describe("batch 28 §8: Pay what you owe reserves once; what's added after is ch
     const again = await x.press(500, [added.id]);
     expect(again.status).toBe(409);
     expect(again.body.error.message).toBe(reservedAddedLine(800, 500));
-    expect(reservedAddedLine(800, 500)).toBe("Reserved $8.00: it's taken when the team approves lifting your hold. $5.00 added since will be charged right after.");
+    expect(reservedAddedLine(800, 500)).toBe("Reserved $8.00: it's taken when the team approves lifting your hold.");
     const rows = (await adminPage("chargebacks", x.dev.user.id, null)).rows as ChargebackVM[];
     expect(rows.find((c) => c.id === x.dev.user.id)?.owedLine).toBe(" ($8.00 reserved · $5.00 added since (charged after the hold lifts))");
     expect(src("components/OwedBox.tsx")).toContain("disabled={busy || verifyFirst || reservedOnce}");
