@@ -15,6 +15,34 @@ export async function invitesV(testerId: string) {
 }
 
 /**
+ * (Owner's repro, Oct 29, batch 30 §8) The join page follows the tester's own application or ask to rejoin (`join=<testId>`): accepted, declined, closed or withdrawn,
+ * and their session there starting (an accepted ask, an invite meeting the ask).
+ */
+export async function joinPageV(testerId: string, testId: string) {
+  const [a, c] = await Promise.all([
+    db.application.findUnique({ where: { testId_testerId: { testId, testerId } }, select: { id: true, status: true, decidedAt: true, changedAt: true } }),
+    db.contract.findUnique({ where: { testId_testerId: { testId, testerId } }, select: { id: true, status: true } }),
+  ]);
+  return [a ? `${a.id}:${a.status}:${a.decidedAt?.getTime() ?? 0}:${a.changedAt?.getTime() ?? 0}` : "", c ? `${c.id}:${c.status}` : ""].join("|");
+}
+
+/** (Batch 30 §8) The line the join page shows once its tester is in the test (an accepted application or ask), with their session. */
+export async function joinedFromPage(testerId: string, testId: string) {
+  const c = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId } }, include: { test: { select: { title: true } } } });
+  if (!c || c.status !== "working") return null;
+  const a = await db.application.findUnique({ where: { testId_testerId: { testId, testerId } }, select: { kind: true } });
+  const { T } = await import("@/lib/tz");
+  return { line: a?.kind === "rejoin" ? joinBackLine(c.test.title, T(c.dueAt)) : joinInLine(c.test.title), href: `/app/sessions/${c.id}` };
+}
+/** "You're back in “Harbor Run”: your deadline is Nov 12, 3:00 PM." */
+export const joinBackLine = (title: string, due: string) => `You're back in “${title}”: your deadline is ${due}.`;
+/** "You're in: “Harbor Run”." (the accepted application's line, quoted) */
+export const joinInLine = (title: string) => `You're in: “${title}”.`;
+/** On the join page while their latest ask is declined. */
+export const rejoinDeclinedLine = "Your ask to rejoin wasn't accepted.";
+export const applyDeclinedLine = (title: string) => `Your application to “${title}” wasn't accepted.`;
+
+/**
  * The test page's (`test=<id>`, the developer) or the session page's (`session=<id>`, the tester) fingerprint: events, payments, holds, disputes, invites, messages, keys,
  * the developer's own presses, call requests and calls, profiles, suspensions, ratings, ended sessions and blocks. "" when there's no such test (the caller checks access).
  */

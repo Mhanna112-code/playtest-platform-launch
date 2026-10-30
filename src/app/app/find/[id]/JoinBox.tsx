@@ -2,7 +2,7 @@
 import { NdaBox } from "@/components/NdaBox";
 import { Err } from "@/components/Err";
 import { MistakeList, announcePress, focusFirstMistake } from "@/components/FieldChecks";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { api, errOf, ApiError } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
@@ -31,6 +31,9 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
+  // (Batch 30 §8) Their application or ask changed (the page followed it live: pending, declined, closed): the "Sent." line gives way to what the page now shows.
+  const appState = p.application?.status ?? "";
+  useEffect(() => setDone(""), [appState]);
   // (NEXT-UI 4b) The full app's "What this test needs" pop-up (devices and languages), and the blue notice under the
   // button when the profile covers everything by the time it is pressed.
   const [asking, setAsking] = useState<{ ask: GapAsk; gaps: Gaps } | null>(null);

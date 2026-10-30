@@ -20,6 +20,14 @@ export async function GET(req: Request) {
     if (q.get("invites")) {
       return ok({ v: await (await import("@/lib/server/pulseV")).invitesV(u.id), restricted: false });
     }
+    // (Owner's repro, Oct 29, batch 30 §8) The join page follows the tester's application or ask to rejoin: once they're in, the line and their session.
+    const joinTest = q.get("join");
+    if (joinTest) {
+      const { joinPageV, joinedFromPage } = await import("@/lib/server/pulseV");
+      const back = await joinedFromPage(u.id, joinTest);
+      const { renderTimes } = await import("@/lib/tz");
+      return ok({ v: await joinPageV(u.id, joinTest), back: back ? { ...back, line: renderTimes(back.line, u.timeZone) } : null, restricted: false });
+    }
     // (Owner, Oct 29, batch 24 section 1) The developer dashboard's "Your bank wants you to confirm": a charge arriving, confirmed (here, another tab, the test page),
     // past its date (counted as declined), cancelled, or turning red under 24 hours refreshes it. It shows during a hold or suspension too, so it always refreshes.
     // (Batch 25 section 4) Only a developer has the box: anyone else gets the plain pulse.

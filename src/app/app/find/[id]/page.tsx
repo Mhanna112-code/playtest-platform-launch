@@ -15,7 +15,8 @@ import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { LiveTop } from "@/components/LiveTop";
 import { AutoRefresh } from "@/components/AutoRefresh";
-import { invitesV } from "@/lib/server/pulseV";
+import { applyDeclinedLine, invitesV, joinPageV, rejoinDeclinedLine } from "@/lib/server/pulseV";
+import { JoinWatch } from "./JoinWatch";
 import { ANSWER_MIN_LINE, qRequired, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
@@ -47,6 +48,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   // (Batch 30 §8) The invitations fingerprint as of BEFORE the page reads the test and the invite: AutoRefresh starts from it.
   const invitesFp = await invitesV(u.id);
+  // (Owner's repro, Oct 29, batch 30 §8) The same for their application or ask to rejoin (JoinWatch).
+  const joinFp = await joinPageV(u.id, id);
   const t = await db.test.findUnique({ where: { id }, include: { developer: true } });
   // (Batch 17 section 8) The team opens any test from their Find tests, drafts too.
   if (!t || (t.status === "draft" && !isAdmin(u))) notFound();
@@ -75,6 +78,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const ratedHere = mine ? (await db.rating.count({ where: { contractId: mine.id } })) > 0 : false;
   const invite = await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } });
   const canRejoin = !!mine && canAskToRejoin(mine, ratedHere);
+  const myApp = await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } });
   const seenAt = new Date().toISOString();
   // (Owner, Oct 27) A paused test (a hold, a suspension or the team's pause) is not listed and not joinable. Someone who joined, was invited or applied still sees it (with a Paused tag);
   // anyone else opening the link reads "This test isn't available right now."
@@ -241,6 +245,9 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
       {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && !blocked && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
       {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && !blocked && <p className="info">You can&apos;t ask to rejoin this test.</p>}
+      {/* (Owner's repro, Oct 29, batch 30 §8) Their application or ask, followed live: accepted (the line and Go to your session →), declined (the line below). */}
+      {t.developerId !== u.id && !isAdmin(u) && <JoinWatch testId={t.id} v={joinFp} />}
+      {t.developerId !== u.id && !isAdmin(u) && myApp?.status === "declined" && <p className="info" data-app-declined="">{myApp.kind === "rejoin" ? rejoinDeclinedLine : applyDeclinedLine(t.title)}</p>}
       {/* (Batch 17 section 8) The team never gets Join / Apply. */}
       {isAdmin(u) && t.developerId !== u.id ? null : t.developerId === u.id ? (
         <div className="card flex flex-wrap items-center gap-3">
@@ -278,7 +285,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             devName={dev}
             spotsLeft={t.spots - testersIn}
             dueIfNow={dueIfNow}
-            application={await db.application.findUnique({ where: { testId_testerId: { testId: t.id, testerId: u.id } } }).then((a) => (a ? { status: a.status, changed: !!a.changedAt, kind: a.kind } : null))}
+            application={myApp ? { status: myApp.status, changed: !!myApp.changedAt, kind: myApp.kind } : null}
           />
         </div>
       )}
