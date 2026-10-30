@@ -9,10 +9,16 @@ export const PRESS_VERBS: Record<string, string> = {
   "cancel-set": "Cancel calls", "pay-extra": "Pay more", "key-broken": "Report", open: "Accept testers again", review: "Pay", "post-draft": "Post the test", "delete-draft": "Delete", "withdraw-application": "Withdraw",
 };
 
+/** (Batch 30 §20) The buttons on a call request. */
+export const ANSWER_REQUEST_VERBS: Record<string, string> = { withdraw: "Withdraw", accept: "Accept", decline: "Decline" };
+
 /** The label of the press behind an API path: "/api/tests/<id>/edit" → "Save"; "/api/review" → "Pay"; "/api/sessions/<id>/written" → "Send". */
-export function pressLabelOf(path: string): string {
+export function pressLabelOf(path: string, body?: unknown): string {
   const p = path.split("?")[0].split("/").filter(Boolean); // api, tests, <id>, <action>
   if (p[1] === "review") return "Pay";
+  // (Batch 30 §20) A call request's answer names the button pressed: Withdraw, Accept or Decline (not "Answer").
+  const action = body && typeof body === "object" ? (body as { action?: unknown }).action : undefined;
+  if (p[3] === "answer-request" && typeof action === "string") return ANSWER_REQUEST_VERBS[action] ?? "Answer";
   if (p[1] === "calls" && p[3] === "join") return "Join call";
   if ((p[1] === "tests" || p[1] === "sessions") && p[3]) return PRESS_VERBS[p[3]] ?? "press";
   if (p[1] === "tests" && !p[2]) return "Post the test";

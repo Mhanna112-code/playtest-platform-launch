@@ -1108,7 +1108,8 @@ export async function autoChargeCalls(now: Date) {
         await db.payment.update({ where: { id: row.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
         await receipt(dev.email, what, amount, r.status, `/app/tests/${c.testId}#call-${x.id}`);
         const line = autoPaidTesterLine(displayName(dev), amount, x.startsAt);
-        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tarrived" });
+        // (Batch 30 §20) In the day's "You were paid" stack with the other payments (it arrived on time: not "Delayed payments arrived").
+        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tpaid" });
       }
     } catch (e) {
       if (e instanceof HttpError && e.code === "payment_unknown") continue; // checked later by the stuck-payment check (recovery.ts)

@@ -18,7 +18,6 @@ import { testerAutoChargeLine } from "@/lib/rules";
 import { chargeClosesLine, closeOutSoon, notPaidClosedLine } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { fmtTime } from "@/lib/format";
-import { T, renderTimes } from "@/lib/tz";
 import { ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
@@ -44,7 +43,7 @@ import { qText } from "@/lib/questions";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
-import { TEAM_CLOSED_NO_DISPUTE, canSendAgain, lateBeforeSendLine, lateSentLine, teamClosedLine, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
+import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lateSentLine, teamClosedLine, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { WrittenAttachments } from "./WrittenAttachments";
@@ -309,7 +308,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <PartBadges written={c.test.writtenCents != null} recording={c.test.recordingCents != null} live={c.test.liveRateCents != null} />
               {c.test.devices.length > 0 && <span className="badge" data-badge="devices"><Monitor className="h-3.5 w-3.5" /> {c.test.devices.join(" · ")}</span>}
               {c.test.languages.length > 0 && <span className="badge" data-badge="languages"><Languages className="h-3.5 w-3.5" /> {c.test.languages.join(", ")}</span>}
-              <span className="badge"><Users className="h-3.5 w-3.5" /> {testersIn} tester{testersIn === 1 ? "" : "s"} on this test</span>
+              {/* (Batch 30 §20) No "0 testers on this test" (a stopped or emptied test). */}
+              {testersIn > 0 && <span className="badge"><Users className="h-3.5 w-3.5" /> {testersIn} tester{testersIn === 1 ? "" : "s"} on this test</span>}
               {c.test.mature && <span className="badge border-rose-300/40 text-rose-200" title={c.test.matureWhy}>Mature (18+)</span>}
             </div>
           </div>
@@ -460,7 +460,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               {sub && !sub.review && sub.late && sub.agreedCents != null && sub.agreedCents > 0 && !devGone && !chargeShut(sub.id) && <p className="text-xs text-slate-400" data-sent-late="">{lateSentLine(fmtDate(c.dueAt), dev)}</p>}
               {sub && !sub.review && !sub.late && sub.agreedCents != null && sub.agreedCents > 0 && !devGone && !chargeShut(sub.id) && !sub.choiceOfferedAt && (() => {
                 const opens = chargeOpensAt(sub, c.test, c, now);
-                return opens && opens > now ? <p className="text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(dev, renderTimes(T(opens, "date"), u.timeZone))}</p> : null;
+                return opens && opens > now ? <p className="text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(dev, pieceDay(opens, u.timeZone))}</p> : null;
               })()}
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
               {sub && !sub.review && !sub.late && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
@@ -488,7 +488,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · {chargeShut(x.id) ? notPaidClosedLine(shutOn(x.id)) : <>waiting for {dev} to pay</>}</p>
                 {/* (Owner, Oct 29, batch 28 §21) A listed call: charged automatically 7 days after the call (moved by pauses); no Charge or Let it go. */}
                 {/* (Batch 29 §37) Only while that date is ahead (a team-paused test past it shows nothing until the date moves on). */}
-                {x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, renderTimes(T(x.payBy, "date"), u.timeZone))}</p>}
+                {x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}
                 {failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
 
@@ -644,7 +644,7 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
   // (Owner, Oct 29, batch 30 §16) More than 4 payment lines: a plain scroll box about 4 lines tall (PayLinesBox); the lines under them stay outside it.
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
-      <PayLinesBox count={1 + extras.length}>
+      <PayLinesBox count={1 + extras.length + (update ? 1 : 0)}>
       {review.rejected ? (
         // (Batch 15 section 30) Old rejections stay, and read "Rejected".
         <p><b>Rejected</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
@@ -665,7 +665,7 @@ function TesterReview({ sessionId, kind, id, review, dispute, delayed = false, o
       {update && <p data-update-closed="">{updateClosedZeroLine(dev)} ({fmtDateTime(update.at)}){update.note && <> · “{update.note}”</>}</p>}
       {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
       </PayLinesBox>
-      {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : ""}.`}</p>}
+      {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : "."}`}</p>}
       {delayed && <p className="info" data-dispute-delayed="">Payment may be delayed until the test resumes.</p>}
       {/* (Owner, Oct 29, batch 28 §14) Whether this part can still be paid more (grey; not a stop). */}
       {more && !review.rejected && !review.teamClosedById && (

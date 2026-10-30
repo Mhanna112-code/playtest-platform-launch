@@ -1,4 +1,5 @@
 import { money } from "@/lib/format";
+import { fmtIn } from "@/lib/tz";
 
 // ---------- (Batch 30 §3) Late work: no Charge ----------
 
@@ -44,3 +45,11 @@ export const updateWaiting = (s: { paidUpdateAt: Date | null; paidUpdateDoneAt: 
   !!s.paidUpdateAt && !!s.review && !s.review.rejected && !s.review.teamClosedById && (!s.paidUpdateDoneAt || s.paidUpdateDoneAt.getTime() < s.paidUpdateAt.getTime());
 /** (Batch 30 §2) Whether the tester may send a part again: not sent yet, unpaid, or paid (not an old rejection, not closed by the team). */
 export const canSendAgain = (s: { review?: { rejected: boolean; teamClosedById?: string | null } | null } | null | undefined) => !s?.review || (!s.review.rejected && !s.review.teamClosedById);
+
+// ---------- (Batch 30 §20) One date for a piece on both sides ----------
+
+/**
+ * (Owner, Oct 29, batch 30 §20) A piece's review / charge date ("Oct 30"), as both sides read it: the same instant, written in the reader's own saved zone (no zone:
+ * UTC), never in the server's clock. The developer's "If you don't pay by …", the tester's "If <dev> hasn't paid by …", and the listed call's automatic charge.
+ */
+export const pieceDay = (at: Date, tz: string | null | undefined) => fmtIn(tz, at, "date");

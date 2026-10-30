@@ -10,7 +10,7 @@ import { blockedEitherWay } from "./blocks";
 import { labelled, reportedOver3 } from "./reports";
 import { partAnchor } from "@/lib/links";
 import { isAdmin } from "./session";
-import { cardRefusal, charge, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, cardRefusal, charge, type NeedsAction } from "./stripe";
 import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
@@ -78,7 +78,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
   if (devNow.devSuspendedAt || devNow.holdStartedAt) throw new HttpError(403, devNow.devSuspendedAt ? "suspended" : "held", devNow.devSuspendedAt ? "Your account is suspended: Pay waits until it is lifted." : PAY_WAITS);
 
-  const reserved = await db.$transaction(async (tx) => {
+  const reserved = await reserving(() => db.$transaction(async (tx) => {
     const piece = await loadPiece(tx, kind, id);
     if (!piece || piece.contract.test.developerId !== dev.id) throw new HttpError(404, "not_found", "That work doesn't exist or isn't on your test.");
     const c = piece.contract;
@@ -137,7 +137,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
           data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: payKey },
         });
     return { rev, payment, c, piece, name };
-  });
+  }));
 
   const { rev, payment, c, piece, name } = reserved;
   let result;
@@ -171,6 +171,21 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   // (Batch 11) The bank wants the developer to confirm: the piece stays locked while its pop-up is open (batch 12 section 5), nothing is charged yet.
   if (result.status === "requires_action") return (await import("./confirm")).pressAction(payment!.id, result as NeedsAction & Record<string, unknown>);
   return finishReviewPay(payment!.id, result);
+}
+
+/** (Batch 30 §20) Prisma's "transaction timed out / already closed" (P2028). */
+export const isTxTimeout = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2028";
+/**
+ * (Batch 30 §20) A Pay / Pay more reservation that timed out under load: Prisma rolled it back (no review, no payment row) and nothing reached Stripe, so the
+ * press gets the plain line instead of a 500.
+ */
+export async function reserving<T>(run: () => Promise<T>): Promise<T> {
+  try {
+    return await run();
+  } catch (e) {
+    if (isTxTimeout(e)) throw new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
+    throw e;
+  }
 }
 
 /** (Batch 11) A Pay went through (at once, or once the bank confirmed it): the payment is recorded, the tester told, the receipt sent. */
@@ -478,7 +493,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const at = piece.kind === "call" ? { callId: piece.where.callId! } : { submissionId: piece.where.submissionId! };
   // (Batch 15 section 41, M2) The repeat check, the room check and the reservation happen together under the test's row lock (as Pay does), and (kind, payKey) and
   // (kind, pressKey) are unique, so two presses at once can never both pass the cap or charge twice.
-  const reserved = await db.$transaction(async (tx) => {
+  const reserved = await reserving(() => db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     // (Batch 15 section 13) The same press again (its answer was lost): never twice. A press that failed without a charge can be pressed again.
     const again = await tx.payment.findFirst({ where: { kind: "extra", pressKey: extraKey } });
@@ -498,7 +513,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     // (Batch 11) The row exists before the charge (pending), so a payment the bank wants confirmed counts toward the piece's cap while it waits.
     const row = await tx.payment.create({ data: { kind: "extra", contractId: c.id, ...at, note, developerId: dev.id, testerId: c.testerId, amountCents: amount!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: extraKey } });
     return { row, stripeKey };
-  });
+  }));
   if ("again" in reserved && reserved.again) return { paid: true, amountCents: reserved.again.amountCents, status: reserved.again.status, repeated: true };
   const { row, stripeKey } = reserved as { row: NonNullable<(typeof reserved)["row"]>; stripeKey: string };
   let result;

@@ -116,7 +116,7 @@ describe("batch 29 §37: a developer who deleted their account", () => {
 describe("batch 29 §37: the automatic-charge dates", () => {
   it("the developer's Pay box date is in their saved zone; the tester's line shows only while the date is ahead", () => {
     const dev = src("app/app/tests/[id]/page.tsx");
-    expect(dev).toContain('autoChargeLine(renderTimes(T(x.x!.payBy, "date"), u.timeZone)');
+    expect(dev).toContain('autoChargeLine(pieceDay(x.x!.payBy, u.timeZone)'); // (batch 30 §20) one shared date helper
     expect(dev).not.toContain("autoChargeLine(fmtDate(");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('{x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-auto-charge="">');
   });

@@ -17,7 +17,6 @@ import { StatTile } from "@/components/StatTile";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
 import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
-import { T as tzToken, renderTimes as tzRender } from "@/lib/tz";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests } from "@/lib/server/tests";
@@ -47,7 +46,7 @@ import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } fr
 import { closeOutSoon, payClosesLine } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
-import { lateSentLine, updateWaiting } from "@/lib/moneyLines";
+import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
 
 export const metadata = { title: "Home · Playtest" };
 import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
@@ -597,7 +596,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <>
                   <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
-                  {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), tzRender(tzToken(opens, "date"), user.timeZone))}</p>}
+                  {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), pieceDay(opens, user.timeZone))}</p>}
                   {listed && s.late && <p className="basis-full text-xs text-slate-400" data-sent-late="">{lateSentLine(fmtDate(c.dueAt), displayName(c.test.developer))}</p>}
                 </>
               );
