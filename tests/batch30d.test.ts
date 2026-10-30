@@ -110,7 +110,8 @@ describe("batch 30 §8: a new invite shows on the tester dashboard live", () => 
     const { dev, testId } = await setup({ title });
     await db.user.update({ where: { id: dev.user.id }, data: { name: "Marc Hanna" } });
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
-    const since = new Date(Date.now() - 1000).toISOString();
+    // (A minute back: Ana is new, so nothing else can be in it, and the database clock may differ from this one under load.)
+    const since = new Date(Date.now() - 60_000).toISOString();
     expect((await act(testId, "invite", dev.cookie, { testerIds: [ana.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
     const live = async (s: string) => ((await json(await liveGET(req(`/api/live?scope=invites:me&since=${encodeURIComponent(s)}`, { cookie: ana.cookie })))).body as { changes: { text: string }[] }).changes.map((c) => c.text);
     expect(await live(since)).toEqual([invitedYouLine("Marc Hanna", title)]);
