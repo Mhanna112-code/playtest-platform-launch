@@ -37,6 +37,8 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const q = await searchParams;
   // (Batch 33 §7) The fingerprint as of BEFORE the lists are read (AutoRefresh's baseline): a change right after this render is caught.
   const liveV = await adminConsoleV();
+  // (Owner, Oct 30, batch 34 §1) The page's time (before anything is read): the outage buttons send it, so a press on an older page is named or stops once.
+  const seenAt = new Date().toISOString();
   const [chargebacks, mine, myPaused, suspensions, disputes, reportsP, liftsP, noShows, contactP] = await Promise.all(
     (["chargebacks", "mine", "mypaused", "suspensions", "disputes", "reports", "lifts", "noshows", "contact"] as const).map((k) => adminPage(k, u.id, null)),
   );
@@ -115,7 +117,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               <ul className="space-y-1 text-sm" data-outage-gaps>
                 {outages.gaps.map((g) => (
                   <li key={g.id} className="text-amber-200" data-outage-gap>
-                    {renderTimes(gapLine(g, u.timeZone), u.timeZone)} <AdminButton action="approve-gap" id={g.id} label="Approve: move every timer" /> <AdminButton action="dismiss-gap" id={g.id} label="Dismiss" />
+                    {renderTimes(gapLine(g, u.timeZone), u.timeZone)} <AdminButton action="approve-gap" id={g.id} label="Approve: move every timer" extra={{ since: seenAt }} /> <AdminButton action="dismiss-gap" id={g.id} label="Dismiss" extra={{ since: seenAt }} />
                   </li>
                 ))}
               </ul>
@@ -125,7 +127,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
               {outages.rows.map((o) => (
                 <li key={o.id} data-outage-line>
                   {o.needsApproval && !o.approvedAt ? (
-                    <span className="text-amber-200">Over 24 hours: the uptime service says the site was down from {fmtDateTime(o.startAt)} to {fmtDateTime(o.endAt)} ({lengthText(o.ms)}). Nothing has moved yet. <AdminButton action="approve-outage" id={o.id} label="Approve: move every timer" /></span>
+                    <span className="text-amber-200">Over 24 hours: the uptime service says the site was down from {fmtDateTime(o.startAt)} to {fmtDateTime(o.endAt)} ({lengthText(o.ms)}). Nothing has moved yet. <AdminButton action="approve-outage" id={o.id} label="Approve: move every timer" extra={{ since: seenAt }} /></span>
                   ) : (
                     <>{renderTimes(outageLine(o.startAt, o.endAt, o.ms), u.timeZone)} <span className="text-slate-400">({lengthText(o.ms)}, recorded {fmtDateTime(o.recordedAt)}{o.approvedAt ? ", approved" : ""})</span></>
                   )}

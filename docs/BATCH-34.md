@@ -15,3 +15,9 @@ This file wins over the earlier batches and the design doc where they differ.
 
 ## 3. The reserved Pay what you owe (Codex task 6)
 - With a reservation in place the button is clearly off (grey, not the bright style) and reads "$10.00 is charged after the team approves" instead of "Pay what you owe ($10.00)".
+
+## 4. No Reinstate of the developer side during a hold (owner, Oct 30)
+- An admin can't reinstate a developer's DEVELOPER side (lift the suspension) while that developer is on a payment hold or a chargeback hold. On the profile's admin box (and the console's Suspensions) the developer side's Reinstate is replaced by a note: "Reinstate waits for the payment hold: they pay what they owe first." / "Reinstate waits for the chargeback hold: the team approves it first."
+- The server refuses an old page's press the same way: "That developer is on a payment hold: it has to clear before the developer side can be reinstated." (or "chargeback hold").
+- The tester side's Reinstate is unaffected. The live redraw brings Reinstate back when the hold clears.
+- Tests for both holds and the tester side; a screenshot in the admin run.

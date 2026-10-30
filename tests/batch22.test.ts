@@ -226,6 +226,6 @@ describe("batch 22 section 5: Lift the pause on a test that isn't paused any mor
     expect((await aact(a.cookie, "pause-test", { id: t.testId, note: "Checking" })).status).toBe(200);
     const closedAt = new Date();
     await db.test.update({ where: { id: t.testId }, data: { status: "stopped", stoppedAt: closedAt, pauseClosedAt: closedAt } });
-    expect((await aact(a.cookie, "unpause-test", { id: t.testId })).body.error.message).toMatch(/^That test's pause was already lifted when it closed at .+\.$/);
+    expect((await aact(a.cookie, "unpause-test", { id: t.testId })).body.error.message).toMatch(/^That test was already closed \(by the app at .+\)\.$/); // (batch 34 §1) who and when
   });
 });

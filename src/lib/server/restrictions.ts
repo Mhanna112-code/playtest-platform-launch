@@ -8,6 +8,7 @@ import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./test
 import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
 import { accountEvent } from "./reports";
+import { accountChangesSince, adminEmail, byAt, checkFrom, liftRefusal, pausedRefusal, stopIfChanged, stoppedRefusal, testChangesSince, type AdminSeen } from "./adminRace";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
 //   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; (owner, Oct 28 afternoon) under
@@ -175,6 +176,9 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   return { ok: true, side };
 }
 
+/** (Batch 34 §4) "That developer is on a payment hold: it has to clear before the developer side can be reinstated." */
+export const reinstateHeldLine = (hold: "payment" | "chargeback") => `That developer is on a ${hold} hold: it has to clear before the developer side can be reinstated.`;
+
 /** Admin: lift the suspension of one side (batch 15 section 16). A one-role account, or an account with only one side suspended, needs no side named. */
 export async function reinstateAccount(userId: string, asked?: unknown, adminId: string | null = null, seen: SeenFrom | null = null) {
   const u = await db.user.findUnique({ where: { id: userId } });
@@ -188,13 +192,15 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
   }
   const f = fields(side);
   if (adminId) await refuseIfChangedSince(adminId, userId, side, seen); // (Batch 17 §6)
+  // (Owner, Oct 30, batch 34 §4) The developer side isn't reinstated while a payment or chargeback hold is on: the hold clears first (the tester side is unaffected).
+  if (side === "developer" && u.devSuspendedAt && u.holdStartedAt) throw new HttpError(409, "on_hold", reinstateHeldLine(u.holdReason === "chargeback" ? "chargeback" : "payment"));
   const start = u[f.at], now = new Date();
   // Two admins at once: the second is refused, naming the first.
   // (Batch 17 §6) The lift and its record commit together, so a second admin's refusal can always name who reinstated it.
   const lifted = start
     ? await db.$transaction(async (tx) => {
         const r = await tx.user.updateMany({ where: { id: userId, [f.at]: start }, data: { [f.at]: null, [f.note]: "", [f.by]: null, [f.back]: now } });
-        if (r.count === 1) await tx.accountEvent.create({ data: { userId, kind: "reinstated", byId: adminId ?? u[f.by], note: "", side } });
+        if (r.count === 1) await tx.accountEvent.create({ data: { userId, kind: "reinstated", byId: adminId ?? u[f.by], note: "", side, createdAt: now } });
         return r;
       })
     : { count: 0 };
@@ -267,6 +273,63 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   return { ok: true };
 }
 
+/** (Batch 34 §1) "That account was already deleted (by bo@… at 12:19 AM)." (by its owner, from Settings). */
+async function alreadyDeleted(userId: string) {
+  const u = await db.user.findUniqueOrThrow({ where: { id: userId } });
+  const act = u.deletedBy === "admin" ? await db.adminAction.findFirst({ where: { targetId: userId, action: "delete-account" }, orderBy: { createdAt: "desc" } }) : null;
+  const who = u.deletedBy === "self" ? "its owner" : await adminEmail(act?.adminId, "the team");
+  return new HttpError(409, "deleted", `That account was already deleted ${byAt(who, u.deletedAt ?? new Date())}.`);
+}
+
+/**
+ * (Owner, Oct 30, batch 34 §1) The admin's Delete account: already deleted, refused naming who and when; another admin suspended, reinstated or closed its open reviews
+ * at $0 since the page loaded, it stops once (the second press goes ahead).
+ */
+export async function adminDeleteAccount(adminId: string, userId: string, reason: string, seen: AdminSeen | null = null) {
+  const u = await db.user.findUnique({ where: { id: userId } });
+  if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
+  if (u.deletedAt) throw await alreadyDeleted(userId);
+  const from = checkFrom(seen);
+  if (from) stopIfChanged("Delete account", await accountChangesSince(userId, adminId, from, ["suspended", "reinstated", "team-closed"]));
+  try {
+    return await deleteAccount(userId, "admin", reason);
+  } catch (e) {
+    if (e instanceof HttpError && e.code === "deleted") throw await alreadyDeleted(userId);
+    throw e;
+  }
+}
+
+/** "That test's locked fields were already given 3 more changes (by bo@… at 12:19 AM)." */
+const allowedRefusal = async (testId: string) => {
+  const last = await db.adminAction.findFirst({ where: { targetId: testId, action: "allow-critical-changes" }, orderBy: { createdAt: "desc" } });
+  return last ? new HttpError(409, "already", `That test's locked fields were already given 3 more changes ${byAt(await adminEmail(last.adminId), last.createdAt)}.`) : null;
+};
+
+/**
+ * (Owner, Oct 28 afternoon; batch 34 §1) Allow 3 more changes of a test's locked fields: each locked field gets its 3 changes back; the other fields keep their counts.
+ * Nothing locked any more (another admin allowed them meanwhile): refused naming who and when; another admin's change to the test since the page loaded: stops once.
+ */
+export async function allowLockedChanges(adminId: string, testId: string, seen: AdminSeen | null = null) {
+  const { countsOf, countingSince, lockedFields, storedCounts } = await import("@/lib/limits");
+  const t = await db.test.findUnique({ where: { id: testId } });
+  if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
+  if (t.status === "stopped") throw await stoppedRefusal(t);
+  if (!lockedFields(countsOf(t.criticalCounts)).length && seen) throw (await allowedRefusal(testId)) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
+  const from = checkFrom(seen);
+  if (from) stopIfChanged("Allow 3 more changes of the locked fields", await testChangesSince(testId, adminId, from));
+  // Two admins at once: the test is locked, so the second finds nothing locked and is refused naming the first.
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
+    const counts = countsOf(now.criticalCounts);
+    const locked = lockedFields(counts);
+    if (!locked.length && seen) throw (await allowedRefusal(testId)) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
+    for (const f of locked) counts[f] = 0;
+    await tx.test.update({ where: { id: testId }, data: { criticalCounts: storedCounts(counts, countingSince(now.criticalCounts)) } }); // (batch 14) when the count started stays
+  });
+  return { ok: true };
+}
+
 /** (Owner, Oct 26-27) A reminder every DAY to the admins to review suspended accounts: one line covering all of them (the daily job). Deleted admins get nothing. */
 export async function suspendedAccountsReminder(now = new Date()) {
   const state = await db.appState.findUnique({ where: { key: "suspended-reminder" } });
@@ -283,13 +346,23 @@ export async function suspendedAccountsReminder(now = new Date()) {
 // ---------- the team pausing or stopping one test (design doc 6 and 10) ----------
 
 /** Admin: pause one test. The developer can stop it, end testers' work early or cancel calls (batch 15 sections 23 and 37); testers see it as paused. */
-export async function pauseTest(adminId: string, testId: string, note: string) {
+export async function pauseTest(adminId: string, testId: string, note: string, seen: AdminSeen | null = null) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  if (t.status === "stopped") throw new HttpError(409, "stopped", "That test was stopped.");
-  if (t.adminPausedAt) throw new HttpError(409, "already", "That test is already paused.");
+  // (Batch 34 §1) No longer possible: refused naming who and when. Still possible after another admin's change since the page loaded: stops once.
+  if (t.status === "stopped") throw await stoppedRefusal(t);
+  if (t.adminPausedAt) throw await pausedRefusal(t);
+  const from = checkFrom(seen);
+  if (from) stopIfChanged("Pause", await testChangesSince(testId, adminId, from));
   await markPaused({ id: testId }); // (batch 9) one clock per paused test: kept if a hold or suspension already paused it
-  await db.$transaction((tx) => recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId }));
+  // (Batch 34 §1) Two admins at once: the test is locked, so the second reads the first's pause and is refused naming them.
+  await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
+    if (now.status === "stopped") throw await stoppedRefusal(now);
+    if (now.adminPausedAt) throw await pausedRefusal(now);
+    await recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId });
+  });
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
@@ -298,27 +371,13 @@ export async function pauseTest(adminId: string, testId: string, note: string) {
   return { ok: true };
 }
 
-/**
- * (Owner, Oct 29, batch 22 section 5) Why Lift the pause can't go through: the pause was lifted already (by whom and when), the test closed (when), or the test is
- * paused only by the developer's account state (a hold or a suspension, which admins don't lift here).
- */
-async function liftRefusal(testId: string) {
-  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
-  if (t.status === "stopped") return new HttpError(409, "pause_lifted", `That test's pause was already lifted when it closed at ${fmtDateTime(t.pauseClosedAt ?? t.stoppedAt ?? t.adminStoppedAt ?? new Date())}.`);
-  const last = await db.adminAction.findFirst({ where: { targetId: testId, action: "unpause-test" }, orderBy: { createdAt: "desc" } });
-  if (last) {
-    const by = await db.user.findUnique({ where: { id: last.adminId }, select: { email: true, deletedAt: true } });
-    return new HttpError(409, "pause_lifted", `That test's pause was already lifted (by ${!by || by.deletedAt ? "an admin (deleted)" : by.email} at ${fmtTime(last.createdAt)}).`);
-  }
-  if (t.developer.holdStartedAt || t.developer.devSuspendedAt) return new HttpError(409, "pause_lifted", "That test isn't paused by the team: it's paused by the developer's account state.");
-  return new HttpError(409, "pause_lifted", "That test isn't paused.");
-}
-
 /** Admin: lift the team's pause. Two admins at once: the first lifts it (its admin action is kept with it), the second is refused naming them. */
-export async function unpauseTest(testId: string, adminId: string | null = null) {
+export async function unpauseTest(testId: string, adminId: string | null = null, seen: AdminSeen | null = null) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   if (!t.adminPausedAt || t.status === "stopped") throw await liftRefusal(testId);
+  const from = checkFrom(seen);
+  if (from && adminId) stopIfChanged("Lift the pause", await testChangesSince(testId, adminId, from)); // (batch 34 §1)
   const start = t.adminPausedAt, now = new Date();
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   const lifted = await db.$transaction(async (tx) => {
@@ -327,7 +386,7 @@ export async function unpauseTest(testId: string, adminId: string | null = null)
     // (Owner, Oct 28 afternoon, DEFAULT) The same clock shift as a hold lift or a reinstatement (only the part not covered by the developer's own pause, if one is still on).
     await shiftAfterPause(tx, t, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
-    if (adminId) await tx.adminAction.create({ data: { adminId, action: "unpause-test", targetId: testId } });
+    if (adminId) await tx.adminAction.create({ data: { adminId, action: "unpause-test", targetId: testId, createdAt: now } });
     return true;
   });
   if (!lifted) throw await liftRefusal(testId);
@@ -336,17 +395,19 @@ export async function unpauseTest(testId: string, adminId: string | null = null)
 }
 
 /** Admin: stop one test for good (what was sent still waits to be paid or rejected). */
-export async function adminStopTest(testId: string, note: string, adminId: string | null = null) {
+export async function adminStopTest(testId: string, note: string, adminId: string | null = null, seen: AdminSeen | null = null) {
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was already stopped.");
+  if (t.status === "stopped") throw await stoppedRefusal(t); // (batch 34 §1) who and when
+  const from = checkFrom(seen);
+  if (from && adminId) stopIfChanged("Stop (close)", await testChangesSince(testId, adminId, from));
   let cs: Awaited<ReturnType<typeof db.contract.findMany<{ include: { tester: true } }>>> = [];
   let invitesClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
     // (Batch 15 section 35) The same test lock as the developer's Stop: a developer Stop and an admin Stop at once can't both run; the second is refused.
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-    const now = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { status: true } });
-    if (now.status === "stopped") throw new HttpError(409, "stopped", "This test was already stopped.");
+    const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
+    if (now.status === "stopped") throw await stoppedRefusal(now);
     cs = await tx.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });

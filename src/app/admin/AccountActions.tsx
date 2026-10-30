@@ -29,6 +29,16 @@ export function AccountActions({ initial }: { initial: AccountState }) {
     }
     setMsg((e as Error).message);
   };
+  // (Owner, Oct 30, batch 34 §1) Delete stopped once (another admin changed this account since the page loaded): the box is under Delete, and the state shown here
+  // updates from the stop.
+  const stopped = (data: Record<string, unknown>) => {
+    const now = (data as { account?: AccountState | null }).account;
+    if (now) {
+      setAcct(now);
+      setPreviewAt(null);
+    }
+    setMsg("");
+  };
   const line = msg ? <p className="err" data-account-msg="">{msg}</p> : null;
   if (acct.deleted) {
     return (
@@ -46,7 +56,12 @@ export function AccountActions({ initial }: { initial: AccountState }) {
       {(["developer", "tester"] as const).filter((s) => acct.suspended[s]).map((s) => (
         <div key={s} className="flex flex-wrap items-center gap-2" data-suspended-side={s}>
           <b>Suspended ({s} side)</b> <span className="line-clamp-2 max-w-full break-words" title={acct.suspended[s]}>{acct.suspended[s]}</span>
-          <AdminButton action="unsuspend" id={acct.id} label="Reinstate" extra={{ side: s, ...seen }} onRefused={refused} />
+          {/* (Owner, Oct 30, batch 34 §4) The developer side waits for a payment or chargeback hold to clear: a note instead of Reinstate (back on the live redraw). */}
+          {s === "developer" && acct.held ? (
+            <span className="note" data-reinstate-waits={acct.held}>{acct.held === "chargeback" ? "Reinstate waits for the chargeback hold: the team approves it first." : "Reinstate waits for the payment hold: they pay what they owe first."}</span>
+          ) : (
+            <AdminButton action="unsuspend" id={acct.id} label="Reinstate" extra={{ side: s, ...seen }} onRefused={refused} />
+          )}
         </div>
       ))}
       {/* (Owner, Oct 29, batch 23 section 7) Top to bottom, full width (phones too): Preview and its effects, then the side choice and the reason box, then Suspend. */}
@@ -65,7 +80,7 @@ export function AccountActions({ initial }: { initial: AccountState }) {
       {/* (Batch 30 §5) A developer's open reviews, closed at $0 by the team (Preview first, then the reason). */}
       {acct.isDeveloper && <TeamCloseBox id={acct.id} scope="developer" />}
       <div className="flex flex-wrap items-center gap-2">
-        <AdminButton action="delete-account" id={acct.id} label="Delete account" danger onRefused={refused} fields={[{ name: "note", label: "Why" }]} />
+        <AdminButton action="delete-account" id={acct.id} label="Delete account" danger extra={{ since: acct.at }} onRefused={refused} onStop={stopped} fields={[{ name: "note", label: "Why" }]} />
       </div>
       {line}
     </div>

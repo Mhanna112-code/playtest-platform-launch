@@ -309,20 +309,45 @@ async function settleOwedRow(dev: { id: string; name: string; email: string }, p
  * batch 28 §8) Something added after the reservation never blocks it: the reservation is taken, the hold lifts, and what was added is charged right after (deferAfterLift).
  * A reservation that can't be captured any more (it lapsed) is released and refused.
  */
-export async function approveChargebackHold(devId: string) {
+/**
+ * (Owner, Oct 30, batch 34 §1) "That hold was already approved (by bo@… at 12:19 AM)." when another admin's Approve is on record for it (the approval lifts the hold,
+ * so the hold itself no longer says so); otherwise the plain line.
+ */
+async function approvedRefusal(devId: string, fallback: HttpError) {
+  const race = await import("./adminRace");
+  const last = await race.lastAction(devId, ["approve-chargeback"]);
+  const hold = await db.accountEvent.findFirst({ where: { userId: devId, kind: "hold" }, orderBy: { createdAt: "desc" } });
+  if (!last || (hold && hold.createdAt > last.createdAt)) return fallback; // an approval of an earlier hold
+  return new HttpError(409, "already", `That hold was already approved ${race.byAt(await race.adminEmail(last.adminId), last.createdAt)}.`);
+}
+/** Another admin's Don't approve since the page loaded: " (bo@… released it at 12:19 AM)" for the "nothing is reserved" lines. */
+async function releasedBy(devId: string, adminId: string | null, from: Date | null) {
+  if (!adminId || !from) return "";
+  const race = await import("./adminRace");
+  const last = await db.adminAction.findFirst({ where: { targetId: devId, action: "decline-chargeback", adminId: { not: adminId }, createdAt: { gt: from } }, orderBy: { createdAt: "desc" } });
+  return last ? `${await race.adminEmail(last.adminId)} released it at ${race.whenText(last.createdAt)}` : "";
+}
+
+export async function approveChargebackHold(devId: string, adminId: string | null = null, seen: import("./adminRace").AdminSeen | null = null) {
+  const race = await import("./adminRace");
+  const from = race.checkFrom(seen);
   const steps = await chargebackSteps(devId);
-  if (!steps) throw new HttpError(409, "no_chargeback_hold", "That account isn't on a chargeback hold.");
-  if (steps.approved) throw new HttpError(409, "already", "That hold was already approved.");
+  if (!steps) throw await approvedRefusal(devId, new HttpError(409, "no_chargeback_hold", "That account isn't on a chargeback hold."));
+  if (steps.approved) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."));
   const owing = await owed(devId);
   const rs = await reserveState(devId);
   const owedCents = owing.reduce((a, p) => a + p.amountCents, 0);
   const { plan, after } = assign(owing, rs.active);
   const nothingReserved = owedCents > 0 && !rs.active.length;
-  if (!steps.cardVerified && nothingReserved) throw new HttpError(409, "steps_missing", `Not yet: the card isn't verified, and nothing is reserved (${money(owedCents)} is owed).`);
+  // (Batch 34 §1) Nothing reserved because another admin's Don't approve released it since the page loaded: the line says who and when.
+  const released = nothingReserved ? await releasedBy(devId, adminId, seen?.since ?? null) : "";
+  if (!steps.cardVerified && nothingReserved) throw new HttpError(409, "steps_missing", `Not yet: the card isn't verified, and nothing is reserved (${money(owedCents)} is owed${released ? `; ${released}` : ""}).`);
   if (!steps.cardVerified) throw new HttpError(409, "steps_missing", "Not yet: the card isn't verified.");
-  if (nothingReserved) throw new HttpError(409, "steps_missing", `Not yet: nothing is reserved (${money(owedCents)} is owed).`);
+  if (nothingReserved) throw new HttpError(409, "steps_missing", `Not yet: nothing is reserved (${money(owedCents)} is owed${released ? `; ${released}` : ""}).`);
+  // (Batch 34 §1) Another admin's Don't approve since the page loaded (the developer reserved again since): the Approve stops once; the second press takes it.
+  if (from && adminId) race.stopIfChanged("Approve", await race.holdChangesSince(devId, adminId, from));
   const claimed = await db.user.updateMany({ where: { id: devId, chargebackApprovedAt: null, holdStartedAt: { not: null }, holdReason: "chargeback" }, data: { chargebackApprovedAt: new Date() } });
-  if (claimed.count !== 1) throw new HttpError(409, "already", "That hold was already approved.");
+  if (claimed.count !== 1) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."));
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   let taken = 0;
   for (const r of rs.active) {
@@ -377,12 +402,19 @@ export const approvedLiftedLine = (cents: number) => `${APPROVED_LINE}: ${cents 
 export const approvedStillSuspendedLine = (cents: number) => `${APPROVED_LINE}${cents ? `: the ${money(cents)} reserved on your card was taken` : ""}. Your tests stay paused while your account is suspended.`;
 
 /** (Batch 23 section 6) The team doesn't approve (yet): every reservation is cancelled (nothing taken) and the hold stays. */
-export async function declineChargebackReserve(devId: string, note = "") {
+export async function declineChargebackReserve(devId: string, note = "", adminId: string | null = null, seen: import("./adminRace").AdminSeen | null = null) {
   const u = await db.user.findUnique({ where: { id: devId } });
-  if (!u?.holdStartedAt || u.holdReason !== "chargeback") throw new HttpError(409, "no_chargeback_hold", "That account isn't on a chargeback hold.");
-  if (u.chargebackApprovedAt) throw new HttpError(409, "already", "That hold was already approved.");
+  // (Batch 34 §1) Approved meanwhile: refused naming who and when.
+  if (!u?.holdStartedAt || u.holdReason !== "chargeback") throw await approvedRefusal(devId, new HttpError(409, "no_chargeback_hold", "That account isn't on a chargeback hold."));
+  if (u.chargebackApprovedAt) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."));
+  const race = await import("./adminRace");
+  const from = race.checkFrom(seen);
+  if (from && adminId && (await reserveState(devId)).active.length) race.stopIfChanged("Don't approve: release the reservation", await race.holdChangesSince(devId, adminId, from));
   const cents = await releaseReservations(devId);
-  if (!cents) throw new HttpError(409, "nothing_reserved", "Nothing is reserved on that account.");
+  if (!cents) {
+    const released = await releasedBy(devId, adminId, seen?.since ?? null);
+    throw new HttpError(409, "nothing_reserved", released ? `Nothing is reserved on that account (${released}).` : "Nothing is reserved on that account.");
+  }
   const line = notApprovedLine(cents);
   await notify(u.email, line, [line, ...(note ? [`Their note: “${note}”`] : [])], "/app/payments#chargeback-steps", { payment: true, group: "admindecision" });
   return { ok: true, releasedCents: cents };

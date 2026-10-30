@@ -32,7 +32,7 @@ export async function reportPerson(me: { id: string }, body: Record<string, unkn
 
 /** (Owner, Oct 27) One line in an account's history for the admin: a hold starting / lifting / approved, a suspension, a reinstatement, and who acted. */
 export async function accountEvent(userId: string, kind: "hold" | "hold-lifted" | "hold-approved" | "suspended" | "reinstated" | "deleted", byId: string | null = null, note = "", side = "") {
-  await db.accountEvent.create({ data: { userId, kind, byId, note, side } }).catch(() => null);
+  await db.accountEvent.create({ data: { userId, kind, byId, note, side, createdAt: new Date() } }).catch(() => null); // (batch 34) this server's clock, like the page times it is compared with
 }
 
 // ---------- The "Reported more than 3 times" label (owner, Oct 27) ----------

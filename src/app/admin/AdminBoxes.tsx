@@ -1,4 +1,8 @@
-import { adminPage, userTotals, type Kind, type Page } from "@/lib/server/adminLists";
+import { adminPage, testRowsByIds, userTotals, type Kind, type Page } from "@/lib/server/adminLists";
+import { db } from "@/lib/db";
+import { fmtDateTime } from "@/lib/format";
+import { pauseClosesAt, pauseCountdownLine } from "@/lib/pause";
+import { TestActions } from "./TestActions";
 import { accountState } from "@/lib/server/accountState";
 import { AccountActions } from "./AccountActions";
 import { PagedList } from "./PagedList";
@@ -60,10 +64,15 @@ export async function AdminPersonBoxes({ userId, adminId, developer, tester }: {
 /** On a test's own page: the timeline, the contract changes (the terms each tester joined on, and offers), and the payments. */
 export async function AdminTestBoxes({ testId, adminId }: { testId: string; adminId: string }) {
   const [timeline, contracts, payments] = await Promise.all((["t-timeline", "t-contracts", "t-payments"] as const).map((k) => first(k, adminId, testId)));
+  // (Batch 22 section 5; batch 34 §1) The test's own admin actions, with when they were read.
+  const [row] = await testRowsByIds([testId]);
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
+  const info = t && t.status !== "stopped" ? pauseClosesAt(t.developer, t) : null;
   return (
     <section className="card space-y-4 border-amber-300/30" id="admin-boxes" data-admin-only="">
       <h2 className="text-lg font-semibold text-white">For the team (only admins see this)</h2>
       {/* (Batch 30 §5) This test's open reviews, closed at $0 by the team (Preview first, then the reason). */}
+      {row && <TestActions id={testId} seen={row.seen ?? new Date().toISOString()} adminPaused={row.adminPaused} stopped={row.stopped} critical={row.critical} closure={info ? `${pauseCountdownLine(info.at, info.causes)} (${fmtDateTime(info.at)})` : null} />}
       <TeamCloseBox id={testId} scope="test" />
       <Box title="Timeline" kind="t-timeline" arg={testId} page={timeline} />
       <Box title="Contract changes" kind="t-contracts" arg={testId} page={contracts} />

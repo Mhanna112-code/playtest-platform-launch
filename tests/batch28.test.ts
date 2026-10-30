@@ -590,7 +590,7 @@ describe("batch 28 §1 and §2: heartbeat gaps wait for an admin; an uptime repo
     await O.dismissGap(g2.id);
     expect((await O.adminOutages()).gaps).toHaveLength(0);
     expect((await dueOf(sessionId)) - due0).toBe(32 * MIN);
-    expect(src("app/admin/page.tsx")).toContain('<AdminButton action="dismiss-gap" id={g.id} label="Dismiss" />');
+    expect(src("app/admin/page.tsx")).toContain('<AdminButton action="dismiss-gap" id={g.id} label="Dismiss" extra={{ since: seenAt }} />'); // (batch 34 §1) with the page's time
     // Any server activity is a heartbeat (API calls and page loads).
     expect(src("lib/server/http.ts")).toContain("m.touchHeartbeat()");
     expect(src("lib/server/page-auth.ts")).toContain("m.touchHeartbeat()");
