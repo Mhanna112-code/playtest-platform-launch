@@ -7,8 +7,9 @@ Next.js 15, Prisma 6, Postgres, Stripe. `docs/HANDOVER.md` explains the setup; `
 ## Where you work
 - Never work in `C:/Users/march/Projects/playtest-lite` itself: the owner's dev server (port 3400) and the screenshot server (3450) hot-reload from it.
   Work in your own git worktree on your own branch, e.g.
-  `git -C C:/Users/march/Projects/playtest-lite worktree add ../pl-codex-<task> -b codex/<task> master`, then link node_modules:
-  `cmd /c mklink /J node_modules C:\Users\march\Projects\playtest-lite\node_modules` (from inside the worktree).
+  `git -C C:/Users/march/Projects/playtest-lite worktree add ../pl-codex-<task> -b codex/<task> master`, then install your own node_modules inside it: `npm ci`.
+  Never link (junction) node_modules to another folder: `npx prisma generate` writes the database client into node_modules, and a shared
+  one breaks the owner's dev server and every other task the moment your schema differs.
 - Never start a server on 3400, 3450 or 3460, and never stop processes you didn't start.
 - Never push, never merge into master, never force anything. Finish with commits on your branch; Claude reviews, merges and pushes.
 
