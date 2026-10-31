@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-31T07:14:52.242Z",
+  "generated": "2026-10-31T08:33:20.672Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -9634,6 +9634,33 @@
           "explanation": "Nora types their side of Ben's dispute and a rating note for Ana, then reloads: both come back marked Draft with Discard; Discard empties the rating note.",
           "kind": "video",
           "desktop": "b35u-08-dev-drafts-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Redraw and the Updated box together (batch 35 §37)",
+      "explanation": "One check, not two (docs/BATCH-35.md §37): the page's redraw and the live “Updated” box now run on ONE 20-second clock, so the rows, buttons and Listing panel change in the same moment as the box's line (or, with the box out of view, the “1 new update ↑” pill) that says why. Each video shows two windows side by side with a clock in the corner (the time, and how long ago the page's last 20-second check ran); nothing is cut and nothing nudges the clock, so each wait is the real one. The “seen” rule is unchanged (batch 32 §12): a line counts as seen only once the top box is in view, so a press made while it was off screen stops once.",
+      "cases": [
+        {
+          "title": "§37 The test page: the redraw and the box together",
+          "explanation": "Two windows of the same developer, a clock in each corner (nothing cut, nothing nudges the 20-second check). (a) This window at the top; the other tab saves a new last line of the instructions; 6.9 s later, on this page's 20-second check, the top box's line “Updated · 3:28 AM: You saved the listing in another tab · See it” and the Listing panel's “Updated Sat, Oct 31, 3:28 AM” on What to do appear in the same frame; down at Invite, the press goes straight through: “Invited Ana Wrenfield.” (b) This window down at the tester rows, Cam Wrenfield ticked and tagged “Doesn't list languages”; the other tab unticks Spanish; 9.4 s later, on the check, the page redraws (the Languages filter goes) in the same frame as the pill “2 new updates ↑”, and Cam's search row loses its tag about half a second later (the Find testers search is asked again after the redraw). Invite pressed there stops once: “Your Invite didn't go through. Since you opened this page: You re-sent Ana Wrenfield's invite (the listing changed) · 3:28 AM · You saved the listing in another tab · 3:28 AM · See it · Press Invite again to go ahead.” Up to the box (both lines), back down, and the next press: “Invited Cam Wrenfield.”",
+          "kind": "video",
+          "desktop": "b35v-01-test-page-redraw-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§37 The join page: the redraw and the box together",
+          "explanation": "Ana's join page beside the developer's Edit, a clock in each corner (nothing cut). (a) Ana at the top; the developer saves a new last line of the instructions; 12.8 s later, on Ana's page's 20-second check, the top box's line “Updated · 3:30 AM: Nora Lane edited the listing · See it” and the Listing panel's Updated tag on What to do appear in the same frame; down at Join, the press goes straight through (the session page opens). (b) Ana on the second test's join page, scrolled down at Join; the developer saves again; 13.3 s later, on the check, “Changed since you opened this page · Nora Lane edited the listing · 3:30 AM · See it” above the button and the pill “1 new update ↑” appear in the same frame; Join stops once (“Your Join didn't go through. Since you opened this page: Nora Lane edited the listing · 3:30 AM · See it … Press again to join on the current listing.”), and the next press joins.",
+          "kind": "video",
+          "desktop": "b35v-02-join-page-redraw-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§37 Pay more after another tab paid",
+          "explanation": "Two windows of the same developer, a clock in each corner (nothing cut). The other tab pays Ana Silva's written answers $10.00 while this window sits scrolled down at Ana's row in the Testers panel (“paid $0.00 of $10.00”), the top box off screen; 14.9 s later, on this page's 20-second check, the row turns into “Pay more · Listing: $10.00 for written answers” (“paid $10.00 of $10.00”) in the same frame as the pill “1 new update ↑”. $2.00 typed and Pay more pressed stops once, the rule the owner kept: “Your Pay more on Ana Silva's written answers didn't go through. Since you opened this page: You paid Ana Silva $10.00 for the written answers in another tab · 3:32 AM · Press Pay more again to go ahead.” The second press pays (“Paid $2.00.”), and the row reads “paid $12.00 of $10.00”.",
+          "kind": "video",
+          "desktop": "b35v-03-pay-more-video.webm",
           "phone": null
         }
       ]
