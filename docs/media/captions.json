@@ -17919,7 +17919,7 @@
     "size": "desktop"
   },
   "b35r-71-log-waited.png": {
-    "caption": "This time Stripe's dispute (evt_1UWT0GAwolF8enxCcCHZQsaf) came after the payment was recorded, so there was nothing to wait for (no “waited” line); delivery answered 200.",
+    "caption": "This time Stripe's dispute (evt_1UWTyMAwolF8enxCLQNDDG0m) came after the payment was recorded, so there was nothing to wait for (no “waited” line); delivery answered 200.",
     "kind": "image",
     "title": "§9 The dispute arrived after the payment was recorded",
     "section": "Early dispute (batch 35 §9)",
@@ -17952,6 +17952,339 @@
     "section": "Early dispute (batch 35 §9)",
     "group": "b35r9a",
     "order": 122005,
+    "size": "desktop"
+  },
+  "b35r-10-updated-line.png": {
+    "caption": "The new tab's save reached the old tab as one blue line in its top box (out of view while Invite was pressed; the pill read “1 new update ↑”): “Updated · 11:16 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · See it”",
+    "kind": "image",
+    "title": "§8 The old test page's line",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r2",
+    "order": 126002,
+    "size": "desktop"
+  },
+  "b35r-11-invite-stops.png": {
+    "caption": "The old tab's Invite stops once: “Your Invite didn't go through. Since you opened this page: The test's requirements changed: Languages: none → Spanish · 11:16 PM You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · 11:16 PM · See it Press Invite again to go ahead.”; Ben Quill and Cam Quill are still ticked.",
+    "kind": "image",
+    "title": "§8 Invite stops once; the ticks stay",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r2",
+    "order": 126001,
+    "size": "desktop"
+  },
+  "b35r-12-pay-kept.png": {
+    "caption": "Meanwhile Ana's piece still holds the typed $6.00 and “The second answer was short; thanks for the first one.”.",
+    "kind": "image",
+    "title": "§8 The Pay box keeps what was typed",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r2",
+    "order": 126003,
+    "size": "desktop"
+  },
+  "b35r-13-test-page-two-tabs-video.webm": {
+    "caption": "Left, the old tab types $6.00 and a note on Ana's piece and ticks two testers to invite; right, the new tab saves a new name and Spanish as a needed language. The old tab shows “Updated · …” with See it; its Invite stops once (“Your Invite didn't go through. Since you opened this page: The test's requirements changed: Languages: none → Spanish · …”); the ticks and the typed note stay.",
+    "kind": "video",
+    "title": "§8 The test page in two tabs",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r2",
+    "order": 126005,
+    "size": "desktop"
+  },
+  "b35r-19-join-changed-since.png": {
+    "caption": "Ana's page is scrolled down to Join; right above the button: “Changed since you opened this page Nora Lane edited the listing at 11:14 PM: title (now “Harbor Run: night harbors”), description · See it”, and the pill at the bottom reads “1 new update ↑”.",
+    "kind": "image",
+    "title": "§8 The change reaches the old join page, out of view of the top box",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r3",
+    "order": 127001,
+    "size": "desktop"
+  },
+  "b35r-20-join-stops.png": {
+    "caption": "The top box never came into view, so the change wasn't seen yet; Join stops once: “Your Join didn't go through. Since you opened this page: Nora Lane edited the listing at 11:14 PM: title (now “Harbor Run: night harbors”), description · See it You can turn these stops off below, or with Alerts on your dashboard. New terms from the developer and a key marked as working still stop. Turn off alerts Press again to join on the current listing.”",
+    "kind": "image",
+    "title": "§8 Join stops once, naming what changed",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r3",
+    "order": 127002,
+    "size": "desktop"
+  },
+  "b35r-21-join-see-it.png": {
+    "caption": "See it in the stop box jumps to the Listing panel on the join page, which now reads “Harbor Run: night harbors” with the new instructions and “Updated” tags.",
+    "kind": "image",
+    "title": "§8 See it",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r3",
+    "order": 127003,
+    "size": "desktop"
+  },
+  "b35r-22-join-old-tab-video.webm": {
+    "caption": "Right, the developer saves a new name and instructions while Ana's join page (loaded before) is scrolled down to Join; the change shows right above the button and as the pill, but the top box never came into view, so Join stops once, naming what changed; See it jumps to the Listing panel; the second press joins (the session page opens).",
+    "kind": "video",
+    "title": "§8 The join page in an old tab",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r3",
+    "order": 127004,
+    "size": "desktop"
+  },
+  "b35r-11b-invite-second-press.png": {
+    "caption": "Invite pressed again: the needs box reads “Ben Quill doesn't list a language this test needs (Spanish). Cam Quill doesn't list a language this test needs (Spanish). Invite anyway Cancel”.",
+    "kind": "image",
+    "title": "§8 The second press",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r2",
+    "order": 126004,
+    "size": "desktop"
+  },
+  "b35r-30-all-tabs-login.png": {
+    "caption": "Log out pressed in the third tab; all three tabs show the login page; tabs 1 and 2 keep their page to come back to.",
+    "kind": "image",
+    "title": "§8 Sign out in one tab: every tab goes to the login page",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128001,
+    "size": "desktop"
+  },
+  "b35r-31-back-with-drafts.png": {
+    "caption": "After signing in again in the third tab, the Edit tab is back with its whole draft (“Harbor Run: night harbors”, Draft beside each changed field) and the test page with the Pay note (“6.00”, “The second answer was short; thanks for the first one.”, Draft).",
+    "kind": "image",
+    "title": "§8 Signed back in: both tabs come back with their drafts",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128002,
+    "size": "desktop"
+  },
+  "b35r-32-edit-title-draft.png": {
+    "caption": "The name came back as typed, “Harbor Run: night harbors”, marked “Draft” with “Use saved”.",
+    "kind": "image",
+    "title": "§8 Edit: one field's Draft",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128003,
+    "size": "desktop"
+  },
+  "b35r-33-edit-mature-draft.png": {
+    "caption": "The draft came back whole: Mature (18+) ticked and “Sea monsters attack the boats in the night levels.”, each marked Draft.",
+    "kind": "image",
+    "title": "§8 Edit: the Mature tick comes back with its why",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128004,
+    "size": "desktop"
+  },
+  "b35r-34-edit-parts-questions-draft.png": {
+    "caption": "The written price came back as $12.00 and the questions with the added line; Parts and prices and the questions each carry one Draft with Use saved.",
+    "kind": "image",
+    "title": "§8 Edit: prices and questions",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128005,
+    "size": "desktop"
+  },
+  "b35r-35-edit-use-saved-one.png": {
+    "caption": "Use saved beside the name puts it back to the saved “Harbor Run: first 3 levels” (it read “Harbor Run: night harbors”) and its Draft goes; the other fields keep theirs.",
+    "kind": "image",
+    "title": "§8 Use saved on one field",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128006,
+    "size": "desktop"
+  },
+  "b35r-36-edit-use-saved-all.png": {
+    "caption": "Under the form, next to Save: “Use saved for all” puts every field still marked Draft back to its saved value.",
+    "kind": "image",
+    "title": "§8 “Use saved for all” beside Save",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128007,
+    "size": "desktop"
+  },
+  "b35r-37-pay-note-draft.png": {
+    "caption": "Ana's piece came back with the amount $6.00 and the note “The second answer was short; thanks for the first one.”, marked Draft with Use saved; the Pay tick is unticked: it's needed again before Pay.",
+    "kind": "image",
+    "title": "§8 The test page: the Pay note and its amount",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128008,
+    "size": "desktop"
+  },
+  "b35r-38-edit-after-all.png": {
+    "caption": "Every field is back to its saved value (name “Harbor Run: first 3 levels”, price $10.00, Mature unticked) and no Draft tag is left.",
+    "kind": "image",
+    "title": "§8 After “Use saved for all”",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r4",
+    "order": 128009,
+    "size": "desktop"
+  },
+  "b35r-40-tester-all-login.png": {
+    "caption": "Ana presses Log out in the chat tab: all three tabs show the login page.",
+    "kind": "image",
+    "title": "§8 The tester signs out",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129001,
+    "size": "desktop"
+  },
+  "b35r-50-three-tabs-typed.png": {
+    "caption": "Ana's session page open in three tabs; each types a different first answer, the third tab last.",
+    "kind": "image",
+    "title": "§8 Three tabs, three different answers",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r6",
+    "order": 130001,
+    "size": "desktop"
+  },
+  "b35r-60-other-account.png": {
+    "caption": "Omar Reyes logs in on the login page left open in tab 3; tabs 1 and 2 switch to Omar's dashboard, and none of the three shows any of Nora's text (no “Harbor Run”, no typed name, note or $6.00).",
+    "kind": "image",
+    "title": "§8 Another account signs in",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r7",
+    "order": 131001,
+    "size": "desktop"
+  },
+  "b35r-61-first-account-back.png": {
+    "caption": "Omar logs out; Nora logs in again and opens Edit and the test page: the drafts are back, marked Draft (Edit: “Harbor Run: night harbors” …; the Pay box: $6.00 and “The second answer was short; thanks for the first one.”).",
+    "kind": "image",
+    "title": "§8 The first account signs back in later",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r7",
+    "order": 131002,
+    "size": "desktop"
+  },
+  "b35r-62-other-account-video.webm": {
+    "caption": "Nora types into Edit and a Pay note; Omar Reyes logs in on the login page left open in tab 3, and tabs 1 and 2 switch to Omar's dashboard with none of Nora's text. Later Omar logs out, Nora logs in again and opens the same pages: the drafts are back, marked Draft.",
+    "kind": "video",
+    "title": "§8 Another account signs in",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r7",
+    "order": 131003,
+    "size": "desktop"
+  },
+  "b35r-41-written-draft.png": {
+    "caption": "Ana's typed answers came back (“The night harbors look lovely, and the lantern light helps a lot.” / “The third harbor: the map doesn't show the second bridge.”) with “Draft” and “Use saved” beside Send my answers.",
+    "kind": "image",
+    "title": "§8 Session A: the written answers",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129002,
+    "size": "desktop"
+  },
+  "b35r-41b-written-draft-tag.png": {
+    "caption": "“Draft” with “Use saved” (written answers keep this button, per batch 35 §10: it puts the answers back to their saved version).",
+    "kind": "image",
+    "title": "§8 …the tag beside Send my answers",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129003,
+    "size": "desktop"
+  },
+  "b35r-42a-dispute-folded.png": {
+    "caption": "After signing in, “Dispute the pay” is folded (the reason is inside, not visible until it's opened).",
+    "kind": "image",
+    "title": "§8 Session B: the dispute reason is in a closed fold",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129004,
+    "size": "desktop"
+  },
+  "b35r-42-dispute-draft.png": {
+    "caption": "The reason came back, “I answered both questions in full; the second answer named the exact level.”, marked Draft with “Discard” (nothing is saved there yet: it empties the box); the fold had to be opened to see it.",
+    "kind": "image",
+    "title": "§8 Session B: the dispute reason",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129005,
+    "size": "desktop"
+  },
+  "b35r-43-chat-draft.png": {
+    "caption": "Opened again from the dashboard (Log out was pressed in this tab, so Log in landed there), the chat came back in the box, “Hi Nora, is the night build the one on the link?”, marked Draft with “Discard”.",
+    "kind": "image",
+    "title": "§8 The chat message",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129006,
+    "size": "desktop"
+  },
+  "b35r-44-chat-use-saved.png": {
+    "caption": "Nothing was ever saved there, so Discard empties the box and the Draft tag goes.",
+    "kind": "image",
+    "title": "§8 Discard on the chat message",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129007,
+    "size": "desktop"
+  },
+  "b35r-45-tester-drafts-video.webm": {
+    "caption": "Ana types written answers on session A, a dispute reason on session B and a chat message; Log out in the chat tab sends all three tabs to the login page; after Log in (the chat tab, where Log out was pressed, lands on the dashboard and the chat is opened again), each comes back with its own Draft: the written answers with “Use saved”, the dispute reason and the chat message with “Discard” / “Discard” (nothing saved there yet); Discard empties the chat box.",
+    "kind": "video",
+    "title": "§8 The tester's drafts",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r5",
+    "order": 129008,
+    "size": "desktop"
+  },
+  "b35r-51-three-tabs-last.png": {
+    "caption": "App bug: the tabs show different answers: tab 1 “First tab: the harbor lights look great, but the map is hard to read.”; tab 2 “First tab: the harbor lights look great, but the map is hard to read.”; tab 3 “First tab: the harbor lights look great, but the map is hard to read.”.",
+    "kind": "image",
+    "title": "§8 After signing back in",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r6",
+    "order": 130002,
+    "size": "desktop"
+  },
+  "b35r-52-three-tabs-video.webm": {
+    "caption": "Three tabs on one session type different answers (tab 3 last); Log out in tab 1, Log in in tab 2 (tab 1 opened again from the dashboard): App bug: the tabs come back with different answers.",
+    "kind": "video",
+    "title": "§8 One draft per form",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r6",
+    "order": 130003,
+    "size": "desktop"
+  },
+  "b35r-75-paid.png": {
+    "caption": "Jo Rivera presses Pay on Kai Moss's answers with the test card 4000 0000 0000 0259: the app records the payment; Stripe shows the PaymentIntent “Succeeded”; the log on the right shows Stripe's deliveries.",
+    "kind": "image",
+    "title": "§9 Paid with 0259",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9b",
+    "order": 123001,
+    "size": "desktop"
+  },
+  "b35r-76-first-503.png": {
+    "caption": "This time the payment was recorded before the dispute arrived: answered 200 (no 503 to show).",
+    "kind": "image",
+    "title": "§9 The first delivery",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9b",
+    "order": 123002,
+    "size": "desktop"
+  },
+  "b35r-77-resent-200.png": {
+    "caption": "`stripe events resend evt_1UWU2rAwolF8enxCigza7vdC` delivers the same event again; stripe listen shows [200] then [200], and the chargeback hold starts.",
+    "kind": "image",
+    "title": "§9 Resent: answered 200, the hold starts",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9b",
+    "order": 123003,
+    "size": "desktop"
+  },
+  "b35r-78-hold-after-resend.png": {
+    "caption": "Jo Rivera's Payments: “Your bank reversed a payment, so your account is on a chargeback hold. Your tests are paused. To lift it: A card verified with 3D Secure What you owe reserved on your card The team's approval Still to do: verify a card with 3D Secure, then …”.",
+    "kind": "image",
+    "title": "§9 The hold after the resend",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9b",
+    "order": 123004,
+    "size": "desktop"
+  },
+  "b35r-79-retry-video.webm": {
+    "caption": "With the wait off (DISPUTE_WAIT_MS=0) Stripe's first delivery of the dispute is answered 200 and no hold starts; Stripe retries by itself on the live site, but the local forwarder doesn't, so the event is resent by hand (`stripe events resend`): answered 200, and the chargeback hold starts.",
+    "kind": "video",
+    "title": "§9 Answered 503, then the retry",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9b",
+    "order": 123005,
     "size": "desktop"
   }
 }
