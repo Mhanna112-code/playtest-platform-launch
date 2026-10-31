@@ -9,7 +9,7 @@ import { approveChargebackHold, declineChargebackReserve } from "@/lib/server/ch
 import { clearFailedEmails } from "@/lib/server/email";
 import { adminClosePaused, extendPauseClosure } from "@/lib/server/pauseClosure";
 import { adminDeleteAccount, adminStopTest, allowLockedChanges, pauseTest, previewSuspension, reinstateAccount, seenFromBody, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
-import { adminSeen } from "@/lib/server/adminRace";
+import { adminSeen, markPress, ownChange, presserOf, youAlready } from "@/lib/server/adminRace";
 import { withAccountState } from "@/lib/server/accountState";
 import { previewTeamClose, teamClose, type TeamCloseScope } from "@/lib/server/teamClose";
 
@@ -29,10 +29,13 @@ export async function POST(req: Request, { params }: Ctx) {
     if (!isAdmin(u)) throw new HttpError(403, "not_admin", "Only admins can do that.");
     const body = await readJson(req);
     const id = String(body.id ?? "");
+    const start = new Date();
     const res = await run(u, action, id, body);
     // (Batch 15 section 21) Every admin action is kept with the admin who did it (a preview changes nothing). (Batch 22 section 5) Lift the pause keeps its own, with
     // the lift itself, so a second admin's press names the first.
     if (action !== "preview-suspension" && action !== "unpause-test" && action !== "preview-team-close") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id, createdAt: new Date() } }); // (batch 34 §1) this server's clock, like the page times
+    // (Batch 35 §45) What this page load did (from the press's start to now): its own presses never stop for it; other tabs' read "You … in another tab".
+    if (action !== "preview-suspension" && action !== "preview-team-close") await markPress(u.id, typeof body.tab === "string" ? body.tab : "", start);
     return res;
   });
 }
@@ -46,6 +49,9 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         if (done.count !== 1) {
           const m = await db.contactMessage.findUnique({ where: { id } });
           if (!m) throw new HttpError(404, "not_found", "That message doesn't exist.");
+          // (Batch 35 §45) This admin's own (another tab): "You already marked this replied in another tab at 3:20 AM."
+          const own = m.repliedAt ? await ownChange(presserOf(u.id, body), m.repliedById, m.repliedAt) : null;
+          if (own && m.repliedAt) throw new HttpError(409, "replied", youAlready("marked this replied", own, m.repliedAt));
           const by = m.repliedById ? await db.user.findUnique({ where: { id: m.repliedById }, select: { email: true } }) : null;
           throw new HttpError(409, "replied", `${by?.email ?? "An admin (deleted)"} already marked this replied${m.repliedAt ? ` at ${fmtTime(m.repliedAt)}` : ""}.`);
         }
@@ -95,12 +101,12 @@ async function run(u: Awaited<ReturnType<typeof requireUser>>, action: string, i
         return ok(await clearFailedEmails());
       // A paused test closes after 7 days: the admin can move its date later (days, default 7) or close it now (id = the test).
       case "approve-outage":
-        return ok(await (await import("@/lib/server/outages")).approveOutage(u.id, id));
+        return ok(await (await import("@/lib/server/outages")).approveOutage(u.id, id, presserOf(u.id, body)));
       // (Batch 28 §1) A heartbeat gap: Approve moves every timer by it; Dismiss drops it (id = the gap).
       case "approve-gap":
-        return ok(await (await import("@/lib/server/outages")).approveGap(u.id, id));
+        return ok(await (await import("@/lib/server/outages")).approveGap(u.id, id, presserOf(u.id, body)));
       case "dismiss-gap":
-        return ok(await (await import("@/lib/server/outages")).dismissGap(id));
+        return ok(await (await import("@/lib/server/outages")).dismissGap(id, presserOf(u.id, body)));
       // (Batch 30 §5) Close a developer's open reviews at $0 (id = the developer, scope "developer"; or id = a test, scope "test"): Preview first, then the reason.
       case "preview-team-close":
         return ok(await previewTeamClose(teamCloseScope(id, body)));

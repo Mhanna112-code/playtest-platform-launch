@@ -400,7 +400,7 @@ describe("U) admin views on profiles and on a test's own page", () => {
     expect(await text("u-payments", dev.user.id)).toMatch(/review \$10\.00 to /);
     expect(await text("u-payouts", tester.user.id)).toMatch(/\$8\.00 from /);
     expect(await text("u-holds", dev.user.id)).toMatch(/Payment hold started/);
-    expect(await text("u-holds", tester.user.id)).toMatch(new RegExp(`Suspended by ${a.user.email}: Testing`));
+    expect(await text("u-holds", tester.user.id)).toMatch(new RegExp(`Suspended by ${a.user.email}: “Testing”`)); // (batch 35 §43) the reason in its quoted box (in quotes as text)
     expect(await text("u-tests", dev.user.id)).toMatch(/Posted “Harbor Run”/);
     expect(await text("u-tests", tester.user.id)).toMatch(/Joined “Harbor Run”/);
     expect(await text("u-parts", tester.user.id)).toMatch(/written answers · paid \$10\.00/);

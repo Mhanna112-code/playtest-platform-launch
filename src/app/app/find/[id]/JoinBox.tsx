@@ -16,8 +16,8 @@ import { fmtTimeIn } from "@/lib/format";
 import { savedZone } from "@/components/TimeZoneSync";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
-import { GapDialog, JustUpdated, type PopupAnswer } from "@/components/GapDialog";
-import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
+import { GapDialog, UpdatedLabels, type MyGaps, type PopupAnswer } from "@/components/GapDialog";
+import { gapSources, noGaps, type GapAsk, type Gaps, type GapTimes } from "@/lib/gaps";
 import { TermsAgainBox } from "@/components/TermsAgainBox";
 import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
 import { DraftTag, useKept } from "@/lib/useKept";
@@ -49,8 +49,9 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   useEffect(() => setDone(""), [appState]);
   // (NEXT-UI 4b) The full app's "What this test needs" pop-up (devices and languages), and the blue notice under the
   // button when the profile covers everything by the time it is pressed.
-  const [asking, setAsking] = useState<{ ask: GapAsk; gaps: Gaps } | null>(null);
-  const [covered, setCovered] = useState<{ at: string; ask: GapAsk } | null>(null);
+  // (Batch 35 §44) `opened`: the server's time as the pop-up opened (a newer profile or needs save names where a change came from); `from`: what the covered line names.
+  const [asking, setAsking] = useState<{ ask: GapAsk; gaps: Gaps; opened?: GapTimes } | null>(null);
+  const [covered, setCovered] = useState<{ at: string; ask: GapAsk; from: GapTimes } | null>(null);
   const [inviteId, setInviteId] = useState(p.inviteId ?? "");
   // (Batch 18 section 1; batch 20 section 21) The account accepted an older Terms of Use: one more required tick above the button (shown from the start; or once the
   // server says the Terms changed while the page was open), with its red line when pressed unticked.
@@ -98,8 +99,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
    * (Batch 30 §12, owner's finding) The profile now covers the test's needs: "You now meet this test's needs" shows IN ADDITION to every change the page hadn't
    * shown (the save that covered them included): those stop this press in the box under the button, and the next press goes ahead.
    */
-  async function coveredNow(ask: GapAsk) {
-    setCovered({ at: new Date().toISOString(), ask });
+  async function coveredNow(ask: GapAsk, from: GapTimes = {}) {
+    setCovered({ at: new Date().toISOString(), ask, from });
     const verb = p.rejoin && !p.invited ? "ask" : ask === "apply" ? "apply" : "join";
     const r = await api<{ changes?: Change[]; now?: string; tail?: string }>(`/api/tests/${p.testId}/my-gaps`, { seenAt, verb, ...(boxAt ? { boxAt, confirmed: true } : {}) }).catch(() => null);
     if (r?.changes?.length) showBox({ changes: r.changes, tail: r.tail ?? "Press again to go ahead.", top: false, now: r.now ?? new Date().toISOString() });
@@ -148,13 +149,14 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     }
     if (noGaps(p.missing)) return go(action);
     setBusy(true);
-    const now = await api<{ gaps: Gaps }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
+    const now = await api<MyGaps>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
     setBusy(false);
     if (now && noGaps(now.gaps)) {
-      await coveredNow(action === "apply" ? "apply" : "join");
+      // (Batch 35 §44) Covered since the page loaded: by the tester's own profile in another tab, the developer's needs, or both (newer than the page's time).
+      await coveredNow(action === "apply" ? "apply" : "join", gapSources({ profileAt: seenAt, needsAt: seenAt }, { profileAt: now.profileAt, needsAt: now.needsSaveAt }));
       return;
     }
-    setAsking({ ask: action === "apply" ? "apply" : "join", gaps: now?.gaps ?? p.missing });
+    setAsking({ ask: action === "apply" ? "apply" : "join", gaps: now?.gaps ?? p.missing, ...(now?.now ? { opened: { profileAt: now.now, needsAt: now.now } } : {}) });
   }
 
   async function go(action: "join" | "apply" | "rejoin-ask" | "withdraw-application", anyway = false) {
@@ -179,7 +181,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         setErr(e.message);
         if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
-      } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: action === "apply" ? "apply" : "join", gaps: e.data.gaps as Gaps });
+      } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: action === "apply" ? "apply" : "join", gaps: e.data.gaps as Gaps, ...(typeof e.data.now === "string" ? { opened: { profileAt: e.data.now, needsAt: e.data.now } } : {}) });
       // (Batch 16 section 10) The server's "Accept the NDA to join." belongs to the tick.
       else if (e instanceof ApiError && e.code === "nda" && p.nda) { setNdaErr(e.message); requestAnimationFrame(() => { const root = document.getElementById("join-card"); announcePress(root); focusFirstMistake(root); }); }
       // (Batch 16 section 32) The invite closed meanwhile: refused with the reason (no stop box), and the page drops the invite.
@@ -263,7 +265,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         <span className="text-sm text-slate-400">{p.spotsLeft} spot{p.spotsLeft === 1 ? "" : "s"} left{(applying || rejoining) && " · the developer accepts"}</span>
       </div>
       {covered && (
-        <p role="status" className="info"><JustUpdated at={covered.at} /> You now meet this test&apos;s needs. Press {covered.ask === "apply" ? "Apply" : "Join"} to {covered.ask === "apply" ? "apply" : "join"}.</p>
+        // (Batch 35 §44) Named where the change came from: "You updated your profile in another tab (3:20 AM): you now meet this test's needs. Press Join to join."
+        <p role="status" className="info" data-covered-line=""><UpdatedLabels at={covered.at} from={covered.from} devName={p.devName} />{covered.from.profileAt || covered.from.needsAt ? "you" : "You"} now meet this test&apos;s needs. Press {covered.ask === "apply" ? "Apply" : "Join"} to {covered.ask === "apply" ? "apply" : "join"}.</p>
       )}
       {asking && (
         <GapDialog
@@ -273,7 +276,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           needs={p.needs}
           devName={p.devName}
           send={sendFromPopup}
-          onCovered={() => { const ask = asking.ask; setAsking(null); void coveredNow(ask); }}
+          onCovered={(_at, from) => { const ask = asking.ask; setAsking(null); void coveredNow(ask, from); }}
+          opened={asking.opened}
           onClose={() => setAsking(null)}
           press={rejoining ? "Ask to rejoin" : applying ? "Apply" : "Join"}
           seeIt="#listing"

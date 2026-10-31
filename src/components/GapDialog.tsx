@@ -2,24 +2,33 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Languages, RefreshCw } from "lucide-react";
 import { api } from "@/lib/client";
-import { noGaps, sameGaps, TESTER_ASK, testerGapButton, testerGapText, type GapAsk, type Gaps } from "@/lib/gaps";
+import { gapSources, noGaps, sameGapItems, sameGaps, TESTER_ASK, testerGapButton, testerGapText, updateLabels, type GapAsk, type Gaps, type GapTimes } from "@/lib/gaps";
 import { MissingNeedWords } from "@/components/MissingNeeds";
 import { seeItClick } from "@/components/ListingInfo";
 import type { Change } from "@/components/ChangesBox";
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
-/** The full app's blue-notice label: a small round "updated" badge, then "Just updated (2:41 PM):" in bold. */
-export function JustUpdated({ at }: { at: string }) {
+/**
+ * The full app's blue-notice label: a small round "updated" badge, then "Just updated (2:41 PM):" in bold. (Batch 35 §44) `label`: the label naming where the
+ * change came from instead ("You updated your profile in another tab (3:20 AM):", "<Dev> changed what this test needs (3:20 AM):").
+ */
+export function JustUpdated({ at, label }: { at: string; label?: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 align-middle">
+    <span className="inline-flex items-center gap-1.5 align-middle" data-updated-label="">
       <span aria-hidden className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-sky-300/60 bg-sky-400/15">
         <RefreshCw className="h-4 w-4 text-sky-300" />
       </span>
-      <strong className="font-semibold text-sky-50">Just updated ({clock(at)}):</strong>
+      <strong className="font-semibold text-sky-50">{label ?? `Just updated (${clock(at)}):`}</strong>
     </span>
   );
 }
+/** (Batch 35 §44) Where a change came from, as labels: one per source (both: both), else "Just updated". */
+export function UpdatedLabels({ at, from, devName }: { at: string; from: GapTimes; devName: string }) {
+  return <>{updateLabels(from, devName, clock, at).map((l) => <span key={l}><JustUpdated at={at} label={l} /> </span>)}</>;
+}
+/** (Batch 35 §44) What the my-gaps check answers: the gaps, the test's needs, and the save times that say where a change came from. */
+export type MyGaps = { gaps: Gaps; needs: Needs; needsSaveAt?: string; profileAt?: string; now?: string };
 
 /**
  * The pop-up's press answered. (Owner, Oct 29, batch 26 section 13) `ok` with `moving`: the page is going elsewhere (Join anyway opens the session page), so the pop-up
@@ -71,19 +80,23 @@ export function PopupStop({ lines, press, seeIt }: { lines: Change[]; press: str
   );
 }
 
-export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs: Needs; devName: string; send: (shown: Gaps) => Promise<PopupAnswer>; onCovered: (at: string) => void; onClose: () => void; /** (Batch 34 §14) the page's press: "Join" / "Apply" / "Ask to rejoin" */ press: string; /** (Batch 34 §14) where a listing line's See it goes ("#listing") */ seeIt?: string }) {
+export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs: Needs; devName: string; send: (shown: Gaps) => Promise<PopupAnswer>; onCovered: (at: string, from: GapTimes) => void; onClose: () => void; /** (Batch 34 §14) the page's press: "Join" / "Apply" / "Ask to rejoin" */ press: string; /** (Batch 34 §14) where a listing line's See it goes ("#listing") */ seeIt?: string; /** (Batch 35 §44) the save times as the pop-up opened (server times): a newer one names where a change came from */ opened?: GapTimes }) {
   const ref = useRef<HTMLDialogElement>(null);
   const id = useId();
   const [shown, setShown] = useState<Gaps>(p.initial);
   const shownRef = useRef(shown);
   shownRef.current = shown;
   const [changedAt, setChangedAt] = useState<string | null>(null);
+  // (Batch 35 §44) Where the last change came from (the tester's own profile in another tab, the developer's needs, or both) and the save times last seen.
+  const [changedFrom, setChangedFrom] = useState<GapTimes>({});
+  const times = useRef<GapTimes>(p.opened ?? { profileAt: new Date().toISOString(), needsAt: new Date().toISOString() }); // the pop-up's open time (the server's, when the page knows it)
   const [stop, setStop] = useState<{ lines: Change[]; button: string } | null>(null);
   const [sending, setSending] = useState(false);
   const sendingRef = useRef(false);
   // The TEST's needs when this opened, and what it changed since: a listing change, so the first "anyway" press stops
   // once, naming it (like the Invite anyway box), then the next goes ahead.
   const needs0 = useRef(p.needs);
+  const needsNow = useRef(p.needs);
   const [testChange, setTestChange] = useState<string[]>([]);
   const testChangeRef = useRef<string[]>([]);
   testChangeRef.current = testChange;
@@ -97,24 +110,39 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
   }, []);
 
   // Open: checked every few seconds and on coming back to the tab. What's covered drops off; all covered closes it.
+  // (Owner, Oct 31, batch 35 §47) It stops or updates only when a kind (devices, languages) flips between covered and missing: a second item added or dropped
+  // within a kind (by the tester or the developer) is no news (a missing kind's named items are refreshed silently). (§44) A flip names where it came from.
   useEffect(() => {
     const live = async () => {
       if (sendingRef.current) return;
-      const r = await api<{ gaps: Gaps; needs: Needs; needsSaveAt?: string }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
+      const r = await api<MyGaps>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
       if (!r || sendingRef.current) return;
-      const changed = needsChange(p.devName, needs0.current, r.needs);
-      if (changed.length) needsSave.current = r.needsSaveAt;
-      if (JSON.stringify(changed) !== JSON.stringify(testChangeRef.current)) {
-        setTestChange(changed);
-        acked.current = changed.length === 0;
+      const now: GapTimes = { profileAt: r.profileAt, needsAt: r.needsSaveAt };
+      const from = gapSources(times.current, now);
+      times.current = { ...times.current, ...from };
+      if (sameGaps(r.gaps, shownRef.current)) {
+        // No flip: the needs as they are now become the base (a later flip's lines name only what flipped), and the named items follow silently.
+        if (acked.current) needs0.current = r.needs;
+        needsNow.current = r.needs;
+        if (!sameGapItems(r.gaps, shownRef.current)) setShown(r.gaps);
+        return;
       }
-      if (sameGaps(r.gaps, shownRef.current)) return;
+      if (from.needsAt) {
+        const changed = needsChange(p.devName, needs0.current, r.needs);
+        if (changed.length) {
+          needsSave.current = r.needsSaveAt;
+          setTestChange(changed);
+          acked.current = false;
+        }
+      }
+      needsNow.current = r.needs;
       if (noGaps(r.gaps)) {
         ref.current?.close();
-        p.onCovered(new Date().toISOString());
+        p.onCovered(new Date().toISOString(), from);
         return;
       }
       setShown(r.gaps);
+      setChangedFrom(from);
       setChangedAt(new Date().toISOString());
     };
     const t = setInterval(live, 4_000);
@@ -134,6 +162,7 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
     // The test's needs changed while this was open: stop once, naming the change, before joining.
     if (!acked.current && testChangeRef.current.length) {
       acked.current = true;
+      needs0.current = needsNow.current; // (batch 35 §47) shown: the next lines start from here
       const at = new Date().toISOString();
       setStop({ lines: testChangeRef.current.map((text) => ({ text, at, listing: true, ...(needsSave.current ? { saveAt: needsSave.current } : {}) })), button });
       setChangedAt(new Date().toISOString());
@@ -159,12 +188,13 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
     if (r.gaps) {
       if (noGaps(r.gaps)) {
         ref.current?.close();
-        p.onCovered(new Date().toISOString());
+        p.onCovered(new Date().toISOString(), {});
         return;
       }
       setShown(r.gaps);
     }
     setStop({ lines: r.stop ?? [], button });
+    setChangedFrom({});
     setChangedAt(new Date().toISOString());
   }
 
@@ -174,7 +204,7 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
       className="!m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-white/15 bg-ink-900 p-5 text-slate-200 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm">
       {stop && <PopupStop lines={stop.lines} press={p.press} seeIt={p.seeIt} />}
       <h2 id={`${id}-title`} className="flex items-center gap-2 font-semibold text-white"><Languages className="h-5 w-5 text-amber-300" /> {title}</h2>
-      <p id={`${id}-text`} role="status" className="mt-2 text-sm text-slate-300">{changedAt && !stop && <><JustUpdated at={changedAt} /> </>}{noGaps(shown) ? testerGapText(shown, p.ask) : <>Your profile <MissingNeedWords g={shown} />. {TESTER_ASK[p.ask].question}</>}</p>
+      <p id={`${id}-text`} role="status" className="mt-2 text-sm text-slate-300">{changedAt && !stop && <UpdatedLabels at={changedAt} from={changedFrom} devName={p.devName} />}{noGaps(shown) ? testerGapText(shown, p.ask) : <>Your profile <MissingNeedWords g={shown} />. {TESTER_ASK[p.ask].question}</>}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" className="btn px-3 py-1.5 text-sm" onClick={go} disabled={sending} autoFocus>{sending ? "Sending…" : testerGapButton(shown, p.ask)}</button>
         {/* A new tab: this pop-up stays where it is and follows the profile as it's saved there. */}

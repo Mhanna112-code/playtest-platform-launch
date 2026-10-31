@@ -4,7 +4,7 @@ import { api, errOf } from "@/lib/client";
 import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf, shownWithFresh } from "@/lib/adminScroll";
 import { AccountActions } from "./AccountActions";
 import { DisputeWork } from "./DisputeWork";
-import { ScrollText } from "@/components/ScrollText";
+import { ReasonQuote, ScrollText } from "@/components/ScrollText";
 import type { ContactVM } from "@/lib/server/adminLists";
 import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, ReportVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
 import { AdminButton } from "./AdminButton";
@@ -104,7 +104,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           <p data-dispute-top=""><b>{d.top ? <AdminRich parts={d.top} /> : d.head}</b></p>
           {d.people && <p data-dispute-people=""><AdminRich parts={d.people} /></p>}
           <p>{d.money}</p>
-          <p data-dispute-said="">{d.saidParts ? <AdminRich parts={d.saidParts} /> : d.said}</p>
+          {/* (Batch 35 §43) Each reason in the small quoted box: a <div>, the boxes are blocks. */}
+          <div data-dispute-said="">{d.saidParts ? <AdminRich parts={d.saidParts} /> : d.said}</div>
           <DisputeWork work={d.work ?? null} />
           {/* (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last, in a scroll box: the only place the team reads a chat. */}
           <details className="rounded-lg border border-white/10 p-2" data-dispute-chat={d.id}>
@@ -117,8 +118,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           </details>
           {d.open && d.range && <p data-dispute-range="">{d.range}</p>}
           {d.open ? <DisputeDecision id={d.id} minCents={d.min} maxCents={d.max} side={d.devSide ?? ""} sideAt={d.devSideAt ?? null} dev={d.dev ?? "The developer"} /> : <>
-            {d.devSide && <p>Developer&apos;s side: “{d.devSide}”</p>}
-            <p className="note">{d.decided}</p>
+            {d.devSide && <div data-dev-side="">Developer&apos;s side:<ReasonQuote text={d.devSide} className="mt-0.5" /></div>}
+            <div className="note" data-decided="">{d.decided}{d.decisionNote && <ReasonQuote text={d.decisionNote} className="mt-0.5" />}</div>
           </>}
         </div>
       );
@@ -139,16 +140,16 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
         <div id={`report-${r.id}`} className="scroll-mt-24 space-y-0.5 rounded border-t border-white/[0.06] py-2 text-sm first:border-t-0 data-[marked]:ring-2 data-[marked]:ring-sky-300" data-report-row={r.id}>
           {/* (Batch 33 §1) Each name opens the profile, its email after it. */}
           <p><a href={r.reporterHref}>{r.reporter}</a>{r.reporterEmail ? ` (${r.reporterEmail})` : ""} reported <a href={r.reportedHref}>{r.reported}</a>{r.reportedEmail ? ` (${r.reportedEmail})` : ""} · {r.when}</p>
-          <p className="text-slate-300">“{r.note}”</p>
+          <ReasonQuote text={r.note} className="text-slate-300" />{/* (batch 35 §43) */}
         </div>
       );
     }
     case "mine": {
       const m = row as MineVM;
       return (
-        <p className="border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-mine-row={m.testId || m.id}>
+        <div className="border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-mine-row={m.testId || m.id}>
           {m.parts ? <AdminRich parts={m.parts} /> : <>{m.testId ? <a href={`/app/find/${m.testId}`}>“{m.title}”</a> : <span>{m.title}</span>} · {m.dev} · {m.why} · {m.when}</>}
-        </p>
+        </div>
       );
     }
     case "users": {
@@ -245,7 +246,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
     }
     default: {
       const t = row as TextVM;
-      return <li className="py-2 text-sm text-slate-300">{t.parts ? <AdminRich parts={t.parts} /> : t.href ? <a href={t.href}>{t.text}</a> : t.text}{t.em && <i className="text-slate-200"> “{t.em}”</i>}</li>;
+      return <li className="py-2 text-sm text-slate-300">{t.parts ? <AdminRich parts={t.parts} /> : t.href ? <a href={t.href}>{t.text}</a> : t.text}{t.em && <ReasonQuote text={t.em} className="mt-0.5" />}</li>;
     }
   }
 }

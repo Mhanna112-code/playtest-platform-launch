@@ -18,7 +18,18 @@ import type { DisputedWork } from "@/app/admin/DisputeWork";
 import type { Prisma } from "@prisma/client";
 import { accountStates, type AccountState } from "./accountState";
 import { textFilters } from "@/lib/nameSearch";
-import { plainOf, type Rich } from "@/lib/rich";
+import { plainOf, quoted, type Rich } from "@/lib/rich";
+
+/** (Owner, Oct 31, batch 35 §43) A $0 close-out's note ("2 open reviews closed for $0 on “T”: <reason>"): the line before the reason, and the reason (for the quoted box). */
+const splitCloseNote = (note: string): [string, string] => {
+  const m = /^(\d+ open reviews? closed for \$0(?: on “[^”]*”)?): ([\s\S]*)$/.exec(note);
+  return m ? [m[1], m[2]] : [note, ""];
+};
+/** (Batch 35 §43) A line ending in a typed reason in quotes ("…: “<reason>”"): the line and the reason. */
+const splitTrailingQuote = (text: string): [string, string] => {
+  const m = /^([\s\S]*?): “([\s\S]*)”$/.exec(text);
+  return m ? [m[1], m[2]] : [text, ""];
+};
 import { linkNames, person, personName, profileHref, stripeIds, testLink, whoById } from "./adminLinks";
 
 // (Owner, Oct 26) The admin dashboard's lists, 25 rows at a time (keyset by date: newest first; the lists ordered by closure date go soonest first). Rows are
@@ -29,7 +40,7 @@ export const PAGE = 25;
 export type Page<T> = { rows: T[]; next: string | null; total: number };
 
 export type DisputeVM = {
-  work?: DisputedWork | null; type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string;
+  work?: DisputedWork | null; type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; /** (batch 35 §43) the decision's note, in the quoted box */ decisionNote?: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string;
   /** (Batch 28 §15) "$20.00 paid · can raise up to $20.00 more" */ range?: string;
   /** (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last: the only place an admin can read a chat. */ chat?: { id: string; who: string; at: string; text: string }[];
   /** (Batch 33 §2) The test and the part, above the rest: "“Harbor Run” · Ana Silva's written answers · paid $10.00" (the test and the name are links). */ top?: Rich;
@@ -140,7 +151,8 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   const piece = call ? `live call (${fmtDateTime(call.startsAt)})` : sub?.kind === "recording" ? "recording" : "written answers";
   const top: Rich = [testLink(c ? { id: c.testId, title: c.title } : null), " · ", personName(tester), `'s ${piece} · ${r?.rejected ? "rejected" : `paid ${money(paidForPiece)}`}`];
   const people: Rich = [...person(tester, !!c && flagged.has(c.testerId)), " vs ", ...person(devU, !!c && flagged.has(c.test.developerId))];
-  const saidParts: Rich = [personName(tester), `'s reason: “${d.reason}”`, ...(r?.reason ? [" · ", personName(devU), `'s note when ${r.rejected ? "rejecting" : "paying"}: “${r.reason}”`] : [])];
+  // (Batch 35 §43) Each typed reason in the small quoted box.
+  const saidParts: Rich = [personName(tester), `'s reason:`, quoted(d.reason), ...(r?.reason ? [" · ", personName(devU), `'s note when ${r.rejected ? "rejecting" : "paying"}:`, quoted(r.reason)] : [])];
   return {
     id: d.id,
     at: d.createdAt.toISOString(),
@@ -159,7 +171,8 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
     devSideAt: d.devSideAt ? d.devSideAt.toISOString() : null,
     dev: c ? displayName(c.test.developer) : "",
     open: d.status === "open",
-    decided: d.status === "open" ? "" : `Decided ${d.decidedAt ? fmtDateTime(d.decidedAt) : ""}${d.decidedById ? ` by ${(await adminEmails([d.decidedById]))(d.decidedById)}` : ""}: ${money(d.decidedCents)} in all${d.decisionNote ? ` · “${d.decisionNote}”` : ""}`,
+    decided: d.status === "open" ? "" : `Decided ${d.decidedAt ? fmtDateTime(d.decidedAt) : ""}${d.decidedById ? ` by ${(await adminEmails([d.decidedById]))(d.decidedById)}` : ""}: ${money(d.decidedCents)} in all${d.decisionNote ? ":" : ""}`,
+    decisionNote: d.decisionNote ?? "", // (batch 35 §43) in the quoted box under the line
     min,
     max,
   };
@@ -196,9 +209,15 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
       const at = e.side === "tester" ? p.testerSuspendedAt : p.devSuspendedAt;
       if (!at || at.getTime() > e.createdAt.getTime() + 5_000 || at.getTime() < e.createdAt.getTime() - 5_000) continue; // reinstated since (or suspended again by someone else)
     }
+    // (Batch 35 §43) A close-out's reason in the quoted box, after the line.
+    const closeParts = (ev: typeof e, email: string): Rich => {
+      if (ev.kind !== "team-closed") return [` (${email}) · ${why} · ${fmtDateTime(ev.createdAt)}`];
+      const [line, reason] = splitCloseNote(ev.note);
+      return [` (${email}) · ${line.replace(/^(\d+ open reviews?) closed/, "$1 closed by you")} · ${fmtDateTime(ev.createdAt)}${reason ? ":" : ""}`, ...(reason ? [quoted(reason)] : [])];
+    };
     const why = e.kind === "team-closed" ? `${e.note.replace(/^(\d+ open reviews?) closed/, "$1 closed by you")}` : e.kind === "deleted" ? "account deleted by you" : `suspended by you (${e.side || "developer"} side)`;
     // (Batch 33 §1) The person suspended (or deleted, or whose reviews were closed) opens their profile.
-    all.push({ id: `acct-${e.id}`, testId: "", date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt), parts: [{ t: displayName({ ...p, deletedAt: null }), href: profileHref(p) }, ` (${p.email}) · ${why} · ${fmtDateTime(e.createdAt)}`] });
+    all.push({ id: `acct-${e.id}`, testId: "", date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt), parts: [{ t: displayName({ ...p, deletedAt: null }), href: profileHref(p) }, ...closeParts(e, p.email)] });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
   return slice(all, (r) => r.date, cursor);
@@ -351,7 +370,7 @@ async function noShows(cursor: string | null): Promise<Page<TextVM>> {
       // (Batch 33 §1) Both people and the test as links.
       const tester = person(x.contract.tester, flagged.has(x.contract.testerId)), dev = person(x.contract.test.developer, flagged.has(x.contract.test.developerId));
       const [by, against] = x.noShowBy === "tester" ? [tester, dev] : [dev, tester];
-      const parts: Rich = [`${fmtDateTime(x.startsAt)} · `, testLink({ id: x.contract.testId, title: x.contract.title }), ` · reported by the ${x.noShowBy} (`, ...by, ") against ", ...against, `: “${x.noShowNote}”`];
+      const parts: Rich = [`${fmtDateTime(x.startsAt)} · `, testLink({ id: x.contract.testId, title: x.contract.title }), ` · reported by the ${x.noShowBy} (`, ...by, ") against ", ...against, `:`, quoted(x.noShowNote ?? "")]; // (batch 35 §43)
       return { id: x.id, at: (x.noShowAt ?? x.startsAt).toISOString(), text: plainOf(parts), parts };
     }),
     next: list.length > PAGE && last ? cur(last.noShowAt ?? last.startsAt, last.id) : null,
@@ -646,13 +665,18 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
       const c = cs.get(d.contractId);
       // (Batch 33 §1) The test and the other person as links.
       const other = c ? (c.testerId === userId ? c.test.developer : c.tester) : null;
-      rows.push(mk("dispute", d.id, d.createdAt, [testLink(c ? { id: c.testId, title: c.title } : null), ...(other ? [" with ", ...person(other)] : []), `: “${d.reason}” · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}`]));
+      rows.push(mk("dispute", d.id, d.createdAt, [testLink(c ? { id: c.testId, title: c.title } : null), ...(other ? [" with ", ...person(other)] : []), ` · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}:`, quoted(d.reason)])); // (batch 35 §43)
     }
   } else if (kind === "u-chargebacks") {
     for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${money(p.amountCents)} (${p.chargeback})`, ...stripeIds(p)]));
   } else if (kind === "u-holds") {
     const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated", "team-closed": "Team closure" }; // (batch 30 §5)
-    for (const e of await db.accountEvent.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("acct", e.id, e.createdAt, `${labels[e.kind] ?? e.kind}${e.byId ? ` by ${await name(e.byId)}` : ""}${e.note ? `: ${e.note}` : ""}`));
+    for (const e of await db.accountEvent.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 2000 })) {
+      // (Batch 35 §43) A typed reason (a suspension's, a hold lift's note, a close-out's) in the quoted box.
+      const head = `${labels[e.kind] ?? e.kind}${e.byId ? ` by ${await name(e.byId)}` : ""}`;
+      const [line, reason] = e.kind === "team-closed" ? splitCloseNote(e.note) : e.kind === "suspended" || e.kind === "hold-approved" ? ["", e.note] : [e.note, ""];
+      rows.push(mk("acct", e.id, e.createdAt, reason ? [`${head}${line ? `: ${line}` : ""}:`, quoted(reason)] : `${head}${line ? `: ${line}` : ""}`));
+    }
   } else if (kind === "u-tests") {
     // (Batch 33 §1) The test as the link (and, for a joined test, its developer).
     for (const t of await db.test.findMany({ where: { developerId: userId }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("posted", t.id, t.createdAt, ["Posted ", testLink(t), ` (${t.status})`]));
@@ -660,9 +684,9 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
   } else if (kind === "u-reports") {
     const reports = await db.report.findMany({ where: { reportedId: userId }, orderBy: { createdAt: "desc" }, take: 2000 });
     const reporters = await whoById(reports.map((r) => r.reporterId));
-    for (const r of reports) rows.push(mk("report", r.id, r.createdAt, ["Reported by ", ...person(reporters.get(r.reporterId)), `: “${r.note}”`]));
+    for (const r of reports) rows.push(mk("report", r.id, r.createdAt, ["Reported by ", ...person(reporters.get(r.reporterId)), ":", quoted(r.note)])); // (batch 35 §43)
     const calls = await db.call.findMany({ where: { noShowBy: { not: null }, OR: [{ noShowBy: "tester", contract: { test: { developerId: userId } } }, { noShowBy: "developer", contract: { testerId: userId } }] }, orderBy: { noShowAt: "desc" }, take: 2000, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
-    for (const c of calls) rows.push(mk("noshow", c.id, c.noShowAt ?? c.startsAt, ["Call report on ", testLink({ id: c.contract.testId, title: c.contract.title }), ` by the ${c.noShowBy} (`, ...person(c.noShowBy === "tester" ? c.contract.tester : c.contract.test.developer), `): “${c.noShowNote}”`]));
+    for (const c of calls) rows.push(mk("noshow", c.id, c.noShowAt ?? c.startsAt, ["Call report on ", testLink({ id: c.contract.testId, title: c.contract.title }), ` by the ${c.noShowBy} (`, ...person(c.noShowBy === "tester" ? c.contract.tester : c.contract.test.developer), "):", quoted(c.noShowNote ?? "")])); // (batch 35 §43)
   } else if (kind === "u-parts") {
     const subs = await db.submission.findMany({ where: { contract: { testerId: userId } }, include: { contract: { include: { test: { include: { developer: true } } } }, review: true }, orderBy: { sentAt: "desc" }, take: 2000 });
     for (const s of subs) rows.push(mk("part", s.id, s.sentAt, [testLink({ id: s.contract.testId, title: s.contract.title }), " by ", ...person(s.contract.test.developer), `: ${s.kind === "recording" ? "recording" : "written answers"} · ${s.review ? (s.review.rejected ? "rejected" : `paid ${money(s.review.amountCents)}`) : "waiting for review"}`]));
@@ -725,10 +749,10 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       if (x === SUBSCRIPTION_ENDED) return `${dev}'s subscription ended`;
       if (x.startsWith("Your bank reversed your ")) return `${dev}'s bank reversed their ${x.slice("Your bank reversed your ".length)}`;
       if (x.startsWith("You ")) return `${dev} ${x.slice(4)}`;
-      if (x === "The team paused this test") return `${by("pause-test", e.createdAt)} paused this test${t.adminPausedAt && Math.abs(t.adminPausedAt.getTime() - e.createdAt.getTime()) < 5_000 && t.adminNote ? `: ${t.adminNote}` : ""}`;
+      if (x === "The team paused this test") return `${by("pause-test", e.createdAt)} paused this test${t.adminPausedAt && Math.abs(t.adminPausedAt.getTime() - e.createdAt.getTime()) < 5_000 && t.adminNote ? `: “${t.adminNote}”` : ""}`;
       if (x.startsWith("The team closed ")) return `${closedBy(e.createdAt)} closed ${x.slice("The team closed ".length)}`;
       if (x === "The team lifted the pause on this test") return `${by("unpause-test", e.createdAt)} lifted the pause on this test`;
-      if (x === "The team stopped this test") return `${by("stop-test", e.createdAt)} stopped this test${t.adminStoppedAt && t.adminNote ? `: ${t.adminNote}` : ""}`;
+      if (x === "The team stopped this test") return `${by("stop-test", e.createdAt)} stopped this test${t.adminStoppedAt && t.adminNote ? `: “${t.adminNote}”` : ""}`;
       return x.replace(/ rated you$/, ` rated ${dev}`).replace(/\(rated you\)$/, `(rated ${dev})`);
     };
     const decisions = events.filter((e) => e.kind === "admin" && e.text.startsWith("The team decided"));
@@ -737,9 +761,12 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       if (e.kind === "dispute" || decisions.includes(e)) continue;
       // The closing after a pause has its own line (below), with who closed it.
       if (t.pauseClosedAt && e.text === "The test was closed") continue;
-      const text = thirdPerson(e);
+      // (Batch 35 §43) A pause's, a stop's or a $0 close-out's reason ends the line in quotes: it goes in the quoted box.
+      const typed = e.text === "The team paused this test" || e.text === "The team stopped this test" || e.text.startsWith("The team closed ");
+      const [text, reason] = typed ? splitTrailingQuote(thirdPerson(e)) : [thirdPerson(e), ""];
       const name = of(e.contractId);
-      rows.push(mk("event", e.id, e.createdAt, L(`${text}${name && !text.includes(name) ? ` (${name})` : ""}`, e.contractId)));
+      const line = L(`${text}${name && !text.includes(name) ? ` (${name})` : ""}`, e.contractId);
+      rows.push(mk("event", e.id, e.createdAt, reason ? [...line, ":", quoted(reason)] : line));
     }
     for (const i of await db.invite.findMany({ where: { testId } })) rows.push(mk("invite", i.id, i.createdAt, `Invited a tester (${i.status})`));
     for (const k of await db.call.findMany({ where: { contractId: { in: ids } } })) {

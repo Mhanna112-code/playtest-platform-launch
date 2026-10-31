@@ -138,11 +138,11 @@ export async function noteGap(start: Date, end: Date): Promise<Gap | null> {
 }
 
 /** (Batch 28 §1) An admin approves a listed gap: it becomes an outage and every timer moves by it (whatever its length: the admin decided). Once. */
-export async function approveGap(adminId: string, id: string) {
+export async function approveGap(adminId: string, id: string, p: import("./adminRace").Presser | null = null) {
   const row = id.startsWith(GAP_PREFIX) ? await db.appState.findUnique({ where: { key: id } }) : null;
   const g = row ? gapOf(row) : null;
   const HttpError = (await import("./http")).HttpError;
-  if (!g || (await db.appState.deleteMany({ where: { key: id, value: row!.value } })).count !== 1) throw await gapDone(id);
+  if (!g || (await db.appState.deleteMany({ where: { key: id, value: row!.value } })).count !== 1) throw await gapDone(id, p);
   const long = g.ms > OUTAGE_APPROVE_OVER_MS;
   let o;
   try {
@@ -155,18 +155,22 @@ export async function approveGap(adminId: string, id: string) {
 }
 
 /** (Batch 28 §1) An admin dismisses a listed gap: nothing moves, and it leaves the list. */
-export async function dismissGap(id: string) {
-  if (!id.startsWith(GAP_PREFIX) || (await db.appState.deleteMany({ where: { key: id } })).count !== 1) throw await gapDone(id);
+export async function dismissGap(id: string, p: import("./adminRace").Presser | null = null) {
+  if (!id.startsWith(GAP_PREFIX) || (await db.appState.deleteMany({ where: { key: id } })).count !== 1) throw await gapDone(id, p);
   return { ok: true };
 }
 
-/** (Owner, Oct 30, batch 34 §1) A gap already decided: "That possible outage was already dismissed (by bo@… at 12:19 AM)." (or approved). */
-async function gapDone(id: string) {
+/**
+ * (Owner, Oct 30, batch 34 §1) A gap already decided: "That possible outage was already dismissed (by bo@… at 12:19 AM)." (or approved). (Batch 35 §45) This
+ * admin's own decision (another tab): "You already dismissed this possible outage in another tab at 3:20 AM."
+ */
+async function gapDone(id: string, p: import("./adminRace").Presser | null = null) {
   const { HttpError } = await import("./http");
   const race = await import("./adminRace");
   const last = await race.lastAction(id, ["approve-gap", "dismiss-gap"]);
   if (!last) return new HttpError(409, "done", "That possible outage was already approved or dismissed.");
-  return new HttpError(409, "done", `That possible outage was already ${last.action === "approve-gap" ? "approved" : "dismissed"} ${race.byAt(await race.adminEmail(last.adminId), last.createdAt)}.`);
+  const did = last.action === "approve-gap" ? "approved" : "dismissed";
+  return new HttpError(409, "done", await race.alreadyLine(p, last.adminId, last.createdAt, (who) => `That possible outage was already ${did} ${race.byAt(who, last.createdAt)}.`, `${did} this possible outage`));
 }
 
 /** (Batch 28 §1) Any server activity is a heartbeat: checked at most once a minute per server process (the sweep checks every run). */
@@ -267,13 +271,13 @@ export async function recordOutage(start: Date, end: Date) {
 }
 
 /** (Batch 15 section 41, M4) An admin approves a long outage: then every timer moves by it, as for any other outage. */
-export async function approveOutage(adminId: string, outageId: string) {
+export async function approveOutage(adminId: string, outageId: string, p: import("./adminRace").Presser | null = null) {
   const claimed = await db.outage.updateMany({ where: { id: outageId, needsApproval: true, approvedAt: null }, data: { approvedAt: new Date(), approvedById: adminId } });
   if (claimed.count !== 1) {
     // (Batch 34 §1) Approved by another admin: who and when.
     const o = await db.outage.findUnique({ where: { id: outageId } });
     const race = await import("./adminRace");
-    if (o?.approvedAt) throw new (await import("./http")).HttpError(409, "done", `That outage was already approved ${race.byAt(await race.adminEmail(o.approvedById), o.approvedAt)}.`);
+    if (o?.approvedAt) throw new (await import("./http")).HttpError(409, "done", await race.alreadyLine(p, o.approvedById, o.approvedAt, (who) => `That outage was already approved ${race.byAt(who, o.approvedAt!)}.`, "approved this outage")); // (batch 35 §45) "You already …"
     throw new (await import("./http")).HttpError(409, "done", "That outage was already approved, or doesn't need it.");
   }
   const o = await db.outage.findUniqueOrThrow({ where: { id: outageId } });

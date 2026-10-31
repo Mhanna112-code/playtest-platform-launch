@@ -144,7 +144,9 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         const stop = typeof body.seenAt === "string" ? await joinStopList(u.id, id, body, verb) : null;
         // (Batch 35 §14) `needsSaveAt`: the Save that last changed the needs, for the pop-up's own lines' See it.
         const needsSave = await (await import("@/lib/server/listingPanel")).needsSaveAt(id);
-        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })), needs: { devices: t.devices, languages: t.languages }, ...(needsSave ? { needsSaveAt: needsSave } : {}), ...(stop ?? {}) });
+        // (Batch 35 §44) `profileAt` (the tester's own profile's last save) and `needsSaveAt` against the pop-up's open time (`now` as it opened) say where a change came from.
+        const profile = await db.testerProfile.findUnique({ where: { userId: u.id } });
+        return ok({ gaps: gapsOf(t, profile), needs: { devices: t.devices, languages: t.languages }, ...(needsSave ? { needsSaveAt: needsSave } : {}), ...(profile ? { profileAt: profile.updatedAt.toISOString() } : {}), now: new Date().toISOString(), ...(stop ?? {}) });
       }
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));

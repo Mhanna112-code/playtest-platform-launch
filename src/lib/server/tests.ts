@@ -876,9 +876,11 @@ export function gapStop(t: { devices: string[]; languages: string[] }, profile: 
   if (noGaps(gaps)) return;
   // (Batch 20 section 3) In the Invite anyway box's words, both kinds in one line.
   const message = `Your profile ${missingNeedText(gaps)}.\n${verb === "Ask" ? "Ask to rejoin" : verb} anyway?`;
-  if (body.anyway !== true) throw new HttpError(409, "needs", message, { gaps });
+  // (Batch 35 §44) `now`: the pop-up's open time (server time): a profile or needs save after it names where a change came from.
+  if (body.anyway !== true) throw new HttpError(409, "needs", message, { gaps, now: new Date().toISOString() });
+  // (Batch 35 §47) Stops again only for a KIND missing now that the pop-up showed as covered (one-or-none, like the Invite rows), never for items within a kind.
   const shown = readGaps(body.gapsShown);
-  if (shown && gapsUnseen(gaps, shown)) throw new HttpError(409, "needs", message, { gaps, changed: true });
+  if (shown && gapsUnseen(gaps, shown)) throw new HttpError(409, "needs", message, { gaps, changed: true, now: new Date().toISOString() });
 }
 /** Why this tester's profile doesn't fit the test's needs, or "" when it does (every unmet need). */
 export const needsGap = (t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) => needsLines(t, p).join(" ");

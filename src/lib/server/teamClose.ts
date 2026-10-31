@@ -67,10 +67,11 @@ export async function teamClose(adminId: string, scope: TeamCloseScope, body: Re
   if (!asked.length) throw new HttpError(400, "no_preview", "Press Preview first: it lists what this closes.");
   // (Owner, Oct 30, batch 34 §1) Another admin suspended or reinstated the developer since the Preview: the close-out stops once; the second press goes ahead.
   const race = await import("./adminRace");
-  const from = race.checkFrom(race.adminSeen(body));
+  const seen = race.adminSeen(body);
+  const from = race.checkFrom(seen);
   if (from) {
     const devId = "developerId" in scope ? scope.developerId : (await db.test.findUnique({ where: { id: scope.testId }, select: { developerId: true } }))?.developerId;
-    if (devId) race.stopIfChanged("developerId" in scope ? "Close all open reviews for $0" : "Close this test's open reviews for $0", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"]));
+    if (devId) race.stopIfChanged("developerId" in scope ? "Close all open reviews for $0" : "Close this test's open reviews for $0", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"], seen?.tab)); // (batch 35 §45) with the tab: own changes in another tab too
   }
   const now = new Date();
   // Only pieces still open in this scope (a piece outside it is never touched); the rest of the preview's list were settled meanwhile.

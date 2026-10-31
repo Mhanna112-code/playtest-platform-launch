@@ -19,6 +19,8 @@ export type AccountState = {
   deleted: string;
   /** (Batch 34 §4) A payment or chargeback hold is on ("" = none): the developer side's Reinstate waits for it. */
   held?: "" | "payment" | "chargeback";
+  /** (Batch 35 §43) The typed reasons on their own, for the small quoted box: each suspended side's Why and the deletion's. */
+  notes?: { developer: string; tester: string; deleted: string };
 };
 
 type Acct = Pick<User, "id" | "email" | "isDeveloper" | "isTester" | "devSuspendedAt" | "devSuspendedById" | "devSuspendNote" | "testerSuspendedAt" | "testerSuspendedById" | "testerSuspendNote" | "deletedAt" | "deletedBy" | "deleteReason"> & Partial<Pick<User, "holdStartedAt" | "holdReason">>;
@@ -47,6 +49,7 @@ export async function accountStates(users: Acct[]): Promise<Map<string, AccountS
         isDeveloper: u.isDeveloper,
         isTester: u.isTester,
         suspended: { developer: side(u, "developer"), tester: side(u, "tester") },
+        notes: { developer: u.devSuspendedAt ? u.devSuspendNote ?? "" : "", tester: u.testerSuspendedAt ? u.testerSuspendNote ?? "" : "", deleted: u.deletedAt ? u.deleteReason ?? "" : "" },
         held: u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "payment") : "",
         deleted: u.deletedAt ? `Deleted ${fmtDateTime(u.deletedAt)} by ${u.deletedBy === "admin" ? deletedBy.get(u.id) ?? "the team" : "the owner of the account"}${u.deleteReason ? `: ${u.deleteReason}` : ""}` : "",
       },

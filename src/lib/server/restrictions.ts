@@ -8,7 +8,7 @@ import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./test
 import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
 import { accountEvent } from "./reports";
-import { accountChangesSince, adminEmail, byAt, checkFrom, liftRefusal, pausedRefusal, stopIfChanged, stoppedRefusal, testChangesSince, type AdminSeen } from "./adminRace";
+import { accountChangesSince, adminEmail, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
 //   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; (owner, Oct 28 afternoon) under
@@ -103,11 +103,11 @@ const fields = (s: SuspendSide) =>
 /** An admin's Suspend / Reinstate / any press on a deleted account (delete wins). */
 export const ACCOUNT_DELETED = "That account was deleted.";
 /** What the admin's Suspend or Reinstate was pressed on: when their Preview (or else the page, or the list's row) was loaded. */
-export type SeenFrom = { since: Date; from: "preview" | "page" };
+export type SeenFrom = { since: Date; from: "preview" | "page"; /** (batch 35 §45) the page load the press came from */ tab?: string };
 export function seenFromBody(body: Record<string, unknown>): SeenFrom | null {
   const since = typeof body.since === "string" ? new Date(body.since) : null;
   if (!since || isNaN(since.getTime())) return null;
-  return { since, from: body.from === "preview" ? "preview" : "page" };
+  return { since, from: body.from === "preview" ? "preview" : "page", tab: typeof body.tab === "string" ? body.tab.slice(0, 64) : "" };
 }
 const cap = (s: string) => (s.includes("@") ? s : s.charAt(0).toUpperCase() + s.slice(1)); // an email stays as it is
 /** "Since your Preview, bo@… reinstated that account's developer side at Oct 28, 3:10 PM." */
@@ -129,18 +129,32 @@ async function refuseDeleted(u: { id: string; deletedAt: Date | null; deletedBy:
   throw new HttpError(409, "deleted", deletedSinceLine(u.deletedBy === "self" ? "its owner" : await emailOf(act?.adminId, "an admin"), u.deletedAt));
 }
 
-/** Another admin suspended or reinstated this side after the admin's Preview (or page) was loaded: refused, naming who and when. */
+/** (Batch 35 §45) "Since this page loaded, you reinstated that account's developer side in another tab at Oct 28, 3:10 PM." */
+export const changedSinceYouLine = (from: SeenFrom["from"], verb: "suspended" | "reinstated", side: SuspendSide, at: Date) =>
+  `${from === "preview" ? "Since your Preview" : "Since this page loaded"}, you ${verb} that account's ${sideWord(side)} in another tab at ${fmtDateTime(at)}.`;
+
+/**
+ * Another admin suspended or reinstated this side after the admin's Preview (or page) was loaded: refused, naming who and when. (Batch 35 §45) This admin's own
+ * change in another tab too ("Since this page loaded, you …"), unless it made the press impossible: then the press's own refusal says "You already …".
+ */
 // The side's own times (written by this server, like `since`; never the database's clock) say what changed last: a suspension clears the reinstated time.
-async function refuseIfChangedSince(adminId: string, userId: string, side: SuspendSide, seen: SeenFrom | null) {
+async function refuseIfChangedSince(adminId: string, userId: string, side: SuspendSide, seen: SeenFrom | null, pressing: "suspend" | "reinstate") {
   if (!seen) return;
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) return;
   const f = fields(side);
+  const p: Presser = { adminId, tab: seen.tab ?? "" };
   const suspendedAt = u[f.at], reinstatedAt = u[f.back];
-  if (suspendedAt && suspendedAt > seen.since && u[f.by] !== adminId) throw new HttpError(409, "changed_since", changedSinceLine(seen.from, await emailOf(u[f.by], "the team"), "suspended", side, suspendedAt));
+  if (suspendedAt && suspendedAt > seen.since) {
+    const own = await ownChange(p, u[f.by], suspendedAt);
+    if (!own) throw new HttpError(409, "changed_since", changedSinceLine(seen.from, await emailOf(u[f.by], "the team"), "suspended", side, suspendedAt));
+    if (own === "other" && pressing === "reinstate") throw new HttpError(409, "changed_since", changedSinceYouLine(seen.from, "suspended", side, suspendedAt));
+  }
   if (!suspendedAt && reinstatedAt && reinstatedAt > seen.since) {
     const ev = await db.accountEvent.findFirst({ where: { userId, kind: "reinstated", side: side === "developer" ? { in: ["developer", ""] } : "tester" }, orderBy: { createdAt: "desc" } });
-    if (ev?.byId !== adminId) throw new HttpError(409, "changed_since", changedSinceLine(seen.from, await emailOf(ev?.byId, "the team"), "reinstated", side, reinstatedAt));
+    const own = await ownChange(p, ev?.byId, ev?.createdAt ?? reinstatedAt);
+    if (!own) throw new HttpError(409, "changed_since", changedSinceLine(seen.from, await emailOf(ev?.byId, "the team"), "reinstated", side, reinstatedAt));
+    if (own === "other" && pressing === "suspend") throw new HttpError(409, "changed_since", changedSinceYouLine(seen.from, "reinstated", side, reinstatedAt));
   }
 }
 
@@ -156,12 +170,15 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   if (!side) throw new HttpError(400, "choose_side", "Choose the side to suspend: Developer side or Tester side.");
   const f = fields(side);
   // (Batch 17 §6) Pressed on a Preview (or page) older than another admin's change to this side: refused, naming who and when.
-  await refuseIfChangedSince(adminId, userId, side, seen);
+  await refuseIfChangedSince(adminId, userId, side, seen, "suspend");
   // Two admins at once: the second is refused, naming the first (batch 15 section 21). (Batch 17 §6) A Delete at the same moment wins.
   const claimed = await db.user.updateMany({ where: { id: userId, [f.at]: null, deletedAt: null }, data: { [f.at]: new Date(), [f.note]: note, [f.by]: adminId, [f.back]: null } });
   if (claimed.count !== 1) {
     const now = await db.user.findUniqueOrThrow({ where: { id: userId } });
     if (now.deletedAt) throw new HttpError(409, "deleted", ACCOUNT_DELETED);
+    // (Batch 35 §45) This admin's own suspension (another tab): "You already suspended the developer side in another tab at 3:20 AM."
+    const own = now[f.at] ? await ownChange(presserOf(adminId, seen), now[f.by], now[f.at]!) : null;
+    if (own) throw new HttpError(409, "already", youAlready(`suspended the ${sideWord(side)}`, own, now[f.at]!));
     const by = now[f.by] ? await db.user.findUnique({ where: { id: now[f.by]! }, select: { email: true } }) : null;
     throw new HttpError(409, "already", `That account's ${sideWord(side)} is already suspended${by ? ` (by ${by.email})` : ""}.`);
   }
@@ -191,7 +208,7 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
     throw new HttpError(409, "not_suspended", "That account isn't suspended.");
   }
   const f = fields(side);
-  if (adminId) await refuseIfChangedSince(adminId, userId, side, seen); // (Batch 17 §6)
+  if (adminId) await refuseIfChangedSince(adminId, userId, side, seen, "reinstate"); // (Batch 17 §6)
   // (Owner, Oct 30, batch 34 §4) The developer side isn't reinstated while a payment or chargeback hold is on: the hold clears first (the tester side is unaffected).
   if (side === "developer" && u.devSuspendedAt && u.holdStartedAt) throw new HttpError(409, "on_hold", reinstateHeldLine(u.holdReason === "chargeback" ? "chargeback" : "payment"));
   const start = u[f.at], now = new Date();
@@ -206,6 +223,9 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
     : { count: 0 };
   if (!start || lifted.count !== 1) {
     const ev = await db.accountEvent.findFirst({ where: { userId, kind: "reinstated", side }, orderBy: { createdAt: "desc" } });
+    // (Batch 35 §45) This admin's own reinstatement (another tab): "You already reinstated the developer side in another tab at 3:20 AM."
+    const own = ev ? await ownChange(presserOf(adminId, seen), ev.byId, ev.createdAt) : null;
+    if (own && ev) throw new HttpError(409, "not_suspended", youAlready(`reinstated the ${sideWord(side)}`, own, ev.createdAt));
     const by = ev?.byId ? await db.user.findUnique({ where: { id: ev.byId }, select: { email: true } }) : null;
     throw new HttpError(409, "not_suspended", `That account's ${sideWord(side)} was already reinstated${by ? ` (by ${by.email})` : ""}.`);
   }
@@ -274,9 +294,12 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
 }
 
 /** (Batch 34 §1) "That account was already deleted (by bo@… at 12:19 AM)." (by its owner, from Settings). */
-async function alreadyDeleted(userId: string) {
+async function alreadyDeleted(userId: string, p: Presser | null = null) {
   const u = await db.user.findUniqueOrThrow({ where: { id: userId } });
   const act = u.deletedBy === "admin" ? await db.adminAction.findFirst({ where: { targetId: userId, action: "delete-account" }, orderBy: { createdAt: "desc" } }) : null;
+  // (Batch 35 §45) This admin's own Delete (another tab): "You already deleted this account in another tab at 3:20 AM."
+  const own = act ? await ownChange(p, act.adminId, act.createdAt) : null;
+  if (own && act) return new HttpError(409, "deleted", youAlready("deleted this account", own, act.createdAt));
   const who = u.deletedBy === "self" ? "its owner" : await adminEmail(act?.adminId, "the team");
   return new HttpError(409, "deleted", `That account was already deleted ${byAt(who, u.deletedAt ?? new Date())}.`);
 }
@@ -288,21 +311,23 @@ async function alreadyDeleted(userId: string) {
 export async function adminDeleteAccount(adminId: string, userId: string, reason: string, seen: AdminSeen | null = null) {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
-  if (u.deletedAt) throw await alreadyDeleted(userId);
+  const p = presserOf(adminId, seen);
+  if (u.deletedAt) throw await alreadyDeleted(userId, p);
   const from = checkFrom(seen);
-  if (from) stopIfChanged("Delete account", await accountChangesSince(userId, adminId, from, ["suspended", "reinstated", "team-closed"]));
+  if (from) stopIfChanged("Delete account", await accountChangesSince(userId, adminId, from, ["suspended", "reinstated", "team-closed"], seen?.tab));
   try {
     return await deleteAccount(userId, "admin", reason);
   } catch (e) {
-    if (e instanceof HttpError && e.code === "deleted") throw await alreadyDeleted(userId);
+    if (e instanceof HttpError && e.code === "deleted") throw await alreadyDeleted(userId, p);
     throw e;
   }
 }
 
 /** "That test's locked fields were already given 3 more changes (by bo@… at 12:19 AM)." */
-const allowedRefusal = async (testId: string) => {
+const allowedRefusal = async (testId: string, p: Presser | null = null) => {
   const last = await db.adminAction.findFirst({ where: { targetId: testId, action: "allow-critical-changes" }, orderBy: { createdAt: "desc" } });
-  return last ? new HttpError(409, "already", `That test's locked fields were already given 3 more changes ${byAt(await adminEmail(last.adminId), last.createdAt)}.`) : null;
+  // (Batch 35 §45) This admin's own (another tab): "You already allowed 3 more changes of this test's locked fields in another tab at 3:20 AM."
+  return last ? new HttpError(409, "already", await alreadyLine(p, last.adminId, last.createdAt, (who) => `That test's locked fields were already given 3 more changes ${byAt(who, last.createdAt)}.`, "allowed 3 more changes of this test's locked fields")) : null;
 };
 
 /**
@@ -313,17 +338,17 @@ export async function allowLockedChanges(adminId: string, testId: string, seen: 
   const { countsOf, countingSince, lockedFields, storedCounts } = await import("@/lib/limits");
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  if (t.status === "stopped") throw await stoppedRefusal(t);
-  if (!lockedFields(countsOf(t.criticalCounts)).length && seen) throw (await allowedRefusal(testId)) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
+  if (t.status === "stopped") throw await stoppedRefusal(t, presserOf(adminId, seen));
+  if (!lockedFields(countsOf(t.criticalCounts)).length && seen) throw (await allowedRefusal(testId, presserOf(adminId, seen))) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
   const from = checkFrom(seen);
-  if (from) stopIfChanged("Allow 3 more changes of the locked fields", await testChangesSince(testId, adminId, from));
+  if (from) stopIfChanged("Allow 3 more changes of the locked fields", await testChangesSince(testId, adminId, from, seen?.tab));
   // Two admins at once: the test is locked, so the second finds nothing locked and is refused naming the first.
   await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     const counts = countsOf(now.criticalCounts);
     const locked = lockedFields(counts);
-    if (!locked.length && seen) throw (await allowedRefusal(testId)) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
+    if (!locked.length && seen) throw (await allowedRefusal(testId, presserOf(adminId, seen))) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
     for (const f of locked) counts[f] = 0;
     await tx.test.update({ where: { id: testId }, data: { criticalCounts: storedCounts(counts, countingSince(now.criticalCounts)) } }); // (batch 14) when the count started stays
   });
@@ -350,17 +375,17 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
   // (Batch 34 §1) No longer possible: refused naming who and when. Still possible after another admin's change since the page loaded: stops once.
-  if (t.status === "stopped") throw await stoppedRefusal(t);
-  if (t.adminPausedAt) throw await pausedRefusal(t);
+  if (t.status === "stopped") throw await stoppedRefusal(t, presserOf(adminId, seen));
+  if (t.adminPausedAt) throw await pausedRefusal(t, presserOf(adminId, seen));
   const from = checkFrom(seen);
-  if (from) stopIfChanged("Pause", await testChangesSince(testId, adminId, from));
+  if (from) stopIfChanged("Pause", await testChangesSince(testId, adminId, from, seen?.tab));
   await markPaused({ id: testId }); // (batch 9) one clock per paused test: kept if a hold or suspension already paused it
   // (Batch 34 §1) Two admins at once: the test is locked, so the second reads the first's pause and is refused naming them.
   await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
-    if (now.status === "stopped") throw await stoppedRefusal(now);
-    if (now.adminPausedAt) throw await pausedRefusal(now);
+    if (now.status === "stopped") throw await stoppedRefusal(now, presserOf(adminId, seen));
+    if (now.adminPausedAt) throw await pausedRefusal(now, presserOf(adminId, seen));
     await recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId });
   });
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
@@ -375,9 +400,9 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
 export async function unpauseTest(testId: string, adminId: string | null = null, seen: AdminSeen | null = null) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  if (!t.adminPausedAt || t.status === "stopped") throw await liftRefusal(testId);
+  if (!t.adminPausedAt || t.status === "stopped") throw await liftRefusal(testId, presserOf(adminId, seen));
   const from = checkFrom(seen);
-  if (from && adminId) stopIfChanged("Lift the pause", await testChangesSince(testId, adminId, from)); // (batch 34 §1)
+  if (from && adminId) stopIfChanged("Lift the pause", await testChangesSince(testId, adminId, from, seen?.tab)); // (batch 34 §1)
   const start = t.adminPausedAt, now = new Date();
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   const lifted = await db.$transaction(async (tx) => {
@@ -389,7 +414,7 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
     if (adminId) await tx.adminAction.create({ data: { adminId, action: "unpause-test", targetId: testId, createdAt: now } });
     return true;
   });
-  if (!lifted) throw await liftRefusal(testId);
+  if (!lifted) throw await liftRefusal(testId, presserOf(adminId, seen));
   await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
   return { ok: true };
 }
@@ -398,16 +423,16 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
 export async function adminStopTest(testId: string, note: string, adminId: string | null = null, seen: AdminSeen | null = null) {
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
-  if (t.status === "stopped") throw await stoppedRefusal(t); // (batch 34 §1) who and when
+  if (t.status === "stopped") throw await stoppedRefusal(t, presserOf(adminId, seen)); // (batch 34 §1) who and when
   const from = checkFrom(seen);
-  if (from && adminId) stopIfChanged("Stop (close)", await testChangesSince(testId, adminId, from));
+  if (from && adminId) stopIfChanged("Stop (close)", await testChangesSince(testId, adminId, from, seen?.tab));
   let cs: Awaited<ReturnType<typeof db.contract.findMany<{ include: { tester: true } }>>> = [];
   let invitesClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
     // (Batch 15 section 35) The same test lock as the developer's Stop: a developer Stop and an admin Stop at once can't both run; the second is refused.
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
-    if (now.status === "stopped") throw await stoppedRefusal(now);
+    if (now.status === "stopped") throw await stoppedRefusal(now, presserOf(adminId, seen));
     cs = await tx.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });

@@ -262,9 +262,29 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
 export async function withdrawApplication(tester: { id: string }, testId: string, body: Record<string, unknown> = {}) {
   if (await db.application.count({ where: { testId, testerId: tester.id, status: "pending" } })) await listingGate(tester.id, testId, body, "withdraw");
   const n = await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
-  if (!n.count) throw new HttpError(409, "gone", "There's no pending application to withdraw.");
+  if (!n.count) throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
   await logEvent(testId, "applied", `${displayName(await db.user.findUniqueOrThrow({ where: { id: tester.id } }))} withdrew their application`);
   return { withdrawn: true };
+}
+
+/** "There's no pending application to withdraw." (never one, or one that ended some other way). */
+export const NO_PENDING_APPLICATION = "There's no pending application to withdraw.";
+/**
+ * (Owner, Oct 31, batch 35 §48) Withdraw on an application that's no longer pending says why, with the time: "<Dev> accepted your application at 3:20 AM, so
+ * you're in this test." / "<Dev> declined your application at 3:20 AM." / "You withdrew it in another tab at 3:20 AM." / "It closed when <Dev> changed the
+ * listing at 3:20 AM. You can apply again."; never one (or closed another way): the plain line.
+ */
+export async function withdrawGoneLine(testerId: string, testId: string) {
+  const a = await db.application.findUnique({ where: { testId_testerId: { testId, testerId } } });
+  if (!a) return NO_PENDING_APPLICATION;
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: true } });
+  const dev = t ? displayName(t.developer) : "The developer";
+  const at = fmtTime(a.decidedAt ?? new Date());
+  if (a.status === "accepted") return `${dev} accepted your application at ${at}, so you're in this test.`;
+  if (a.status === "declined") return `${dev} declined your application at ${at}.`;
+  if (a.status === "withdrawn") return `You withdrew it in another tab at ${at}.`;
+  if (a.status === "closed" && a.closedReason === "listing") return `It closed when ${dev} changed the listing at ${at}. You can apply again.`;
+  return NO_PENDING_APPLICATION;
 }
 
 /**

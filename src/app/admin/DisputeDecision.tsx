@@ -9,6 +9,7 @@ import { DraftTag, useKept } from "@/lib/useKept";
 import { adminDraftKey } from "@/lib/keptText";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
+import { ReasonQuote } from "@/components/ScrollText";
 
 const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
 
@@ -60,7 +61,8 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
   });
   return (
     <div ref={root} className="space-y-2" data-mistakes-root="">
-      {side.text && <p data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}: “{side.text}”</p>}
+      {/* (Batch 35 §43) The developer's side in the small quoted box. */}
+      {side.text && <div data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}:<ReasonQuote text={side.text} className="mt-0.5" /></div>}
       {fin.done ? (
         <div className="flex flex-wrap items-center gap-2" data-decide-done="">
           <button className="btn-ghost" disabled>Decide</button>

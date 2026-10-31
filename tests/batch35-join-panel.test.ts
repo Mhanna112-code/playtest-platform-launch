@@ -162,7 +162,7 @@ describe("batch 35 §14: See it on every listing line of the join page", () => {
     expect(join.match(/seeIt="#listing"/g)?.length).toBe(4); // the two waiting views' boxes, the pop-up, the box under the button
     expect(src("app/app/find/[id]/NoThanksButton.tsx")).toContain('<ChangesBox changes={changes} error={error} press="No thanks" side="tester" seeIt="#listing" alertsWhere="join" />');
     const gap = src("components/GapDialog.tsx");
-    expect(gap).toContain("if (changed.length) needsSave.current = r.needsSaveAt;");
+    expect(gap).toMatch(/if \(changed\.length\) \{\s+needsSave\.current = r\.needsSaveAt;/); // (batch 35 §47) only on a flip
     expect(gap).toContain("listing: true, ...(needsSave.current ? { saveAt: needsSave.current } : {})");
     expect(src("components/LiveTop.tsx")).toContain("seeItClick(e, seeIt, l.at, l.saveAt, l.keys)");
   });

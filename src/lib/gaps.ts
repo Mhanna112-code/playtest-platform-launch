@@ -3,9 +3,41 @@ export type Gaps = { languages: string[]; devices: string[] };
 export type GapAsk = "apply" | "join";
 
 export const noGaps = (g: Gaps | null | undefined) => !g || (!g.languages.length && !g.devices.length);
-/** Something is missing now that the pop-up didn't show. */
-export const gapsUnseen = (now: Gaps, shown: Gaps) => now.languages.some((l) => !shown.languages.includes(l)) || now.devices.some((d) => !shown.devices.includes(d));
-export const sameGaps = (a: Gaps, b: Gaps) => a.languages.join("|") === b.languages.join("|") && a.devices.join("|") === b.devices.join("|");
+/**
+ * (Owner, Oct 31, batch 35 §47) The kinds missing: the same one-or-none rule as the developer's Invite rows (testerNeedsChangedLines, the "Doesn't list languages"
+ * badge): a kind (devices, languages) is missing only when the profile lists NONE of the test's items of that kind; listing at least one covers it.
+ */
+export const gapKinds = (g: Gaps | null | undefined): ("devices" | "languages")[] => (!g ? [] : [...(g.devices.length ? ["devices" as const] : []), ...(g.languages.length ? ["languages" as const] : [])]);
+/** A kind is missing now that the pop-up didn't show as missing (a kind that flipped from covered to missing). Items within a kind already missing are no news. */
+export const gapsUnseen = (now: Gaps, shown: Gaps) => gapKinds(now).some((k) => !gapKinds(shown).includes(k));
+/** (Batch 35 §47) The same kinds missing: a second item added or dropped within a kind (covered or missing) changes nothing. */
+export const sameGaps = (a: Gaps, b: Gaps) => gapKinds(a).join("|") === gapKinds(b).join("|");
+/** The same items too (the pop-up's words name a missing kind's items: refreshed silently when only they changed). */
+export const sameGapItems = (a: Gaps, b: Gaps) => a.languages.join("|") === b.languages.join("|") && a.devices.join("|") === b.devices.join("|");
+
+// ---------- (Owner, Oct 31, batch 35 §44) where a change in the pop-up came from ----------
+
+/** What the pop-up (or the page) last knew: the profile's and the test's needs' save times (server times, ISO). */
+export type GapTimes = { profileAt?: string; needsAt?: string };
+/** Which changed since `base`: the tester's own profile (saved in another tab or device), the developer's needs, or both; empty when neither is newer. */
+export function gapSources(base: GapTimes, now: GapTimes): GapTimes {
+  const newer = (a?: string, b?: string) => !!b && (!a || b > a);
+  return { ...(newer(base.profileAt, now.profileAt) ? { profileAt: now.profileAt } : {}), ...(newer(base.needsAt, now.needsAt) ? { needsAt: now.needsAt } : {}) };
+}
+/** "You updated your profile in another tab (3:20 AM):" */
+export const profileUpdatedLabel = (time: string) => `You updated your profile in another tab (${time}):`;
+/** "Nora Lane changed what this test needs (3:20 AM):" */
+export const needsChangedLabel = (dev: string, time: string) => `${dev} changed what this test needs (${time}):`;
+/** The labels for a change from these sources (both: both lines, the profile's first); none known: the plain "Just updated (3:20 AM):". */
+export function updateLabels(from: GapTimes, dev: string, clock: (iso: string) => string, at: string) {
+  const out = [...(from.profileAt ? [profileUpdatedLabel(clock(from.profileAt))] : []), ...(from.needsAt ? [needsChangedLabel(dev, clock(from.needsAt))] : [])];
+  return out.length ? out : [`Just updated (${clock(at)}):`];
+}
+/** The page's line once the pop-up closed covered: "You updated your profile in another tab (3:20 AM): you now meet this test's needs. Press Join to join." */
+export function coveredLine(from: GapTimes, dev: string, clock: (iso: string) => string, at: string, ask: GapAsk) {
+  const tail = `${from.profileAt || from.needsAt ? "you" : "You"} now meet this test's needs. Press ${ask === "apply" ? "Apply" : "Join"} to ${ask === "apply" ? "apply" : "join"}.`;
+  return `${updateLabels(from, dev, clock, at).join(" ")} ${tail}`;
+}
 
 /** What a tester's profile lacks for a test: the test's languages / devices when the profile lists none of them. */
 export function gapsOf(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null): Gaps {

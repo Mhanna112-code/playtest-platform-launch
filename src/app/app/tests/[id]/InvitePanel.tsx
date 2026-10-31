@@ -33,6 +33,9 @@ type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; found
  * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (from 1 character since batch 20 section 9, after a short pause in
  * typing) and the ticks ask it again; every match shows in a scroll box, and above 100 the first 100 with "Showing 100 of N: type more of the name".
  */
+/** The pause in typing before the name search asks the server (a redraw's search asks at once: batch 35 §46). */
+export const SEARCH_PAUSE = 300;
+
 export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelData; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean;
   /** (Batch 20 section 10) Nobody can be invited right now (full, paused, joining closed): Invite is disabled with this line; ticks stay. */ blocked?: { line: string; full: boolean } | null;
   /** Open until, while it's ahead: at that moment Invite disables with this line. */ closes?: { at: string; line: string } }) {
@@ -112,11 +115,17 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   // (Batch 16 section 21) When the page refreshes (an invite from another tab, the poll), the lists follow: the server's lists again, or the search asked again.
   const [again, setAgain] = useState(0);
   const lastInitial = useRef(p.initial);
+  // (Owner, Oct 31, batch 35 §46) A search asked again for the page's redraw (liveSync §37) goes at once, without the typing pause, so the found rows land with
+  // the redraw and the pill (not ~0.4 s after them); the rows already shown stay until the answer comes (no "Searching…").
+  const forRedraw = useRef(false);
   useEffect(() => {
     if (lastInitial.current === p.initial) return;
     lastInitial.current = p.initial;
     if (!term && !f.devices.length && !f.languages.length) setData(p.initial);
-    else setAgain((n) => n + 1);
+    else {
+      forRedraw.current = true;
+      setAgain((n) => n + 1);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.initial]);
   useEffect(() => {
@@ -125,13 +134,19 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       return;
     }
     const n = ++asked.current;
-    setSearching(true);
-    const t = setTimeout(() => {
+    const redraw = forRedraw.current;
+    forRedraw.current = false;
+    const ask = () =>
       void api<PanelData>(`/api/tests/${p.testId}/invite-search`, { q: term, devices: f.devices, languages: f.languages })
         .then((r) => { if (n === asked.current) setData(r); })
         .catch(() => null)
         .finally(() => { if (n === asked.current) setSearching(false); });
-    }, 300);
+    if (redraw) {
+      ask(); // (batch 35 §46) at once, with the redraw
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(ask, SEARCH_PAUSE);
     return () => clearTimeout(t);
   }, [term, f, p.testId, again]);
   const worked = data.worked;

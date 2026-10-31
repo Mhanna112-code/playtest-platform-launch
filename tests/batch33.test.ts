@@ -99,7 +99,7 @@ describe("batch 33 §1: every person, test and payment the team reads is a link"
     const withIds = pays.find((p) => p.text.includes(pi))!;
     expect(withIds.text).toContain(`to Ana Silva (${w.tester.user.email}) on “Harbor Run”`);
     expect(hrefsOf(withIds.parts!)).toEqual([tester(testerId), testPage(w.testId), `https://dashboard.stripe.com/payments/${pi}`, `https://dashboard.stripe.com/connect/transfers/${tr}`]);
-    expect(withIds.parts!.filter((s) => typeof s !== "string" && s.ext)).toHaveLength(2); // the Stripe ids open in a new tab
+    expect(withIds.parts!.filter((s) => typeof s !== "string" && "ext" in s && s.ext)).toHaveLength(2); // the Stripe ids open in a new tab
     const outs = await rowsOf<TextVM>("u-payouts", a.user.id, testerId);
     expect(outs.find((p) => p.text.includes(pi))!.text).toContain(`from Nora Lane (${w.dev.user.email}) (review) on “Harbor Run”`);
     const ds = await rowsOf<TextVM>("u-disputes", a.user.id, devId);

@@ -93,8 +93,8 @@ describe("a chargeback is a hold with extra steps", () => {
     expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).status).toBe("working");
     expect(await db.testEvent.count({ where: { testId, kind: "resumed" } })).toBeGreaterThan(0);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
-    // Nothing left to approve: (batch 34 §1) refused naming who approved it and when.
-    expect((await approve(a.cookie, dev.user.id)).body.error).toMatchObject({ code: "already", message: expect.stringMatching(new RegExp(`^That hold was already approved \\(by ${a.user.email.replace(/[.+]/g, "\\$&")} at .+\\)\\.$`)) });
+    // Nothing left to approve: (batch 34 §1) refused naming who approved it and when; (batch 35 §45) the same admin reads "You already ...".
+    expect((await approve(a.cookie, dev.user.id)).body.error).toMatchObject({ code: "already", message: expect.stringMatching(/^You already approved lifting this hold at .+\.$/) });
   });
 
   it("a verification from before a newer chargeback no longer counts", async () => {

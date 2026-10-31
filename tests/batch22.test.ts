@@ -187,7 +187,7 @@ describe("batch 22 section 4: the admin's test timeline speaks about people", ()
     expect(rows.find((r) => /disputed/.test(r.text))?.em).toBe("I answered every question in full.");
     expect(texts.filter((t) => /decided/.test(t))).toEqual([`${a.user.email} decided ${ana}'s dispute: kept the pay at $5.00`]);
     expect(texts.some((t) => /^You |^Your /.test(t))).toBe(false);
-    expect(src("app/admin/PagedList.tsx")).toContain("{t.em && <i className=\"text-slate-200\"> “{t.em}”</i>}");
+    expect(src("app/admin/PagedList.tsx")).toContain("{t.em && <ReasonQuote text={t.em} className=\"mt-0.5\" />}"); // (batch 35 §43) the reason in the quoted box
   });
 
   it("the three lists are the scroll boxes of batch 17 §7", () => {

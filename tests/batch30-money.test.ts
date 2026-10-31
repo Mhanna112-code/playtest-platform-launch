@@ -309,7 +309,7 @@ describe("batch 30 §5: the team closes a developer's open reviews at $0", () =>
     expect(await db.adminAction.count({ where: { adminId: ad.user.id, action: "team-close", targetId: w.a.dev.user.id } })).toBe(1);
     const { adminPage } = await import("@/lib/server/adminLists");
     const holds = (await adminPage("u-holds", ad.user.id, null, w.a.dev.user.id)).rows as { text: string }[];
-    expect(holds.some((x) => x.text.endsWith(`Team closure by ${ad.user.email}: 2 open reviews closed for $0: ${reason}`))).toBe(true);
+    expect(holds.some((x) => x.text.endsWith(`Team closure by ${ad.user.email}: 2 open reviews closed for $0: “${reason}”`))).toBe(true);
     const mine = (await adminPage("mine", ad.user.id, null)).rows as { why: string }[];
     expect(mine.some((x) => x.why.startsWith("2 open reviews closed by you for $0"))).toBe(true);
     const timeline = (await adminPage("t-timeline", ad.user.id, null, w.testB)).rows as { text: string }[];

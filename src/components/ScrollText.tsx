@@ -7,7 +7,7 @@
 export function ScrollText({ text, lines = 6, className = "", label }: { text: string; lines?: number; className?: string; label?: string }) {
   return (
     <div
-      className={`max-w-full overflow-y-auto whitespace-pre-wrap break-words pr-1 ${className}`}
+      className={`max-w-full overflow-y-auto whitespace-pre-wrap break-words pr-1 [overflow-wrap:anywhere] ${className}`}
       style={{ maxHeight: `${lines * 1.5}em` }}
       tabIndex={0}
       role="region"
@@ -22,7 +22,8 @@ export function ScrollText({ text, lines = 6, className = "", label }: { text: s
 export function ReasonQuote({ text, className = "" }: { text: string; className?: string }) {
   if (!text.trim()) return null;
   return (
-    <blockquote className={`max-w-full overflow-y-auto whitespace-pre-wrap break-words border-l-2 border-white/20 pl-3 italic text-slate-200 ${className}`} style={{ maxHeight: "6em" }} tabIndex={0} data-reason="">
+    // (Owner, Oct 31, batch 35 §43) A long unbroken word wraps too (overflow-wrap: anywhere), never widening the page.
+    <blockquote className={`min-w-0 max-w-full overflow-y-auto whitespace-pre-wrap break-words [overflow-wrap:anywhere] border-l-2 border-white/20 pl-3 italic text-slate-200 ${className}`} style={{ maxHeight: "6em" }} tabIndex={0} data-reason="">
       “{text.trim()}”
     </blockquote>
   );

@@ -296,6 +296,10 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
     const ok = dev && !dev.holdStartedAt ? await db.accountEvent.findFirst({ where: { userId: devId, kind: "hold-approved" }, orderBy: { createdAt: "desc" } }) : null;
     const hold = ok ? await db.accountEvent.findFirst({ where: { userId: devId, kind: "hold" }, orderBy: { createdAt: "desc" } }) : null;
     if (ok && (!hold || hold.createdAt <= ok.createdAt)) {
+      // (Batch 35 §45) This admin's own Approve (another tab): "You already approved this lift in another tab at 3:20 AM."
+      const race = await import("./adminRace");
+      const own = await race.ownChange(race.presserOf(adminId, seen), ok.byId, ok.createdAt);
+      if (own) throw new HttpError(409, "decided", race.youAlready("approved this lift", own, ok.createdAt));
       const by = ok.byId ? await db.user.findUnique({ where: { id: ok.byId } }) : null;
       throw new HttpError(409, "decided", `This lift was already approved${by ? ` by ${displayName(by)}` : ""} at ${fmtDateTime(ok.createdAt)}.`);
     }
@@ -304,13 +308,15 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
   const race = await import("./adminRace");
   const already = async () => {
     const now = await db.user.findUniqueOrThrow({ where: { id: devId } }); // (batch 34) read again: the first admin's approval names them
+    const own = now.holdApprovedAt ? await race.ownChange(race.presserOf(adminId, seen), now.holdApprovedById, now.holdApprovedAt) : null; // (batch 35 §45)
+    if (own && now.holdApprovedAt) return new HttpError(409, "decided", race.youAlready("approved this lift", own, now.holdApprovedAt));
     const by = now.holdApprovedById ? await db.user.findUnique({ where: { id: now.holdApprovedById } }) : null;
     return new HttpError(409, "decided", `This lift was already approved${by ? ` by ${displayName(by)}` : ""}${now.holdApprovedAt ? ` at ${fmtDateTime(now.holdApprovedAt)}` : ""}.`);
   };
   if (dev.holdApprovedAt) throw await already();
   // (Owner, Oct 30, batch 34 §1) Another admin suspended (or reinstated) this developer since the page loaded: the Approve stops once; the second press goes ahead.
   const from = race.checkFrom(seen);
-  if (from) race.stopIfChanged("Approve", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"]));
+  if (from) race.stopIfChanged("Approve", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"], seen?.tab));
   const claimed = await db.user.updateMany({ where: { id: devId, holdApprovedAt: null, holdStartedAt: { not: null } }, data: { holdApprovedAt: new Date(), holdApprovedById: adminId } });
   if (claimed.count !== 1) throw await already();
   await accountEvent(devId, "hold-approved", adminId, note);

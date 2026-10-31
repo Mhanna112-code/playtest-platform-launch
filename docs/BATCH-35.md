@@ -405,3 +405,66 @@ the developer changes the questions (and the tester switches to them), answers t
   (200). Every answer says Accept-Ranges: bytes. Who may watch is unchanged. R2's presigned URLs already answer ranges.
 - Recordings uploaded before this keep their missing Duration (nothing is rewritten on the server): the player still shows no length for them, though the
   route now answers their ranges too.
+
+## §43 Admin reasons in the quoted box (owner, Oct 31)
+- On the admin pages every reason or note someone typed shows in the same small quoted box testers and developers already read (ReasonQuote,
+  src/components/ScrollText.tsx: italic, in quotes, about 4 lines, scrolls): the tester's dispute reason and the developer's note when paying or rejecting (the
+  dispute row), "Developer's side:" (Decide's box and a decided dispute), the decision's note (under "Decided … : $10.00 in all:"), report notes and no-show
+  notes (the console's Reports and Call reports, a person's Reports box), the reasons on a person's Holds and suspensions box (a suspension's Why, a hold
+  lift's note, a $0 close-out's reason) and Disputes box, a test's timeline (the team's pause and stop reasons, a close-out's reason, a dispute's reason),
+  "Your actions" (a close-out's reason), and an account's state (each suspended side's Why under its line, a deletion's reason).
+- A reason is its own part of the admin line (`quoted(…)` in src/lib/rich.ts; AdminRich draws it as the box, so those lines sit in a <div> or <li>); as plain
+  text it still reads in quotes. A long unbroken word wraps (overflow-wrap: anywhere) in ReasonQuote and ScrollText, never widening the page.
+- Contact us keeps its 8-line ScrollText.
+
+## §44 The needs pop-up names where a change came from (owner, Oct 31)
+- In "What this test needs" (GapDialog), a change is labelled by its source instead of "Just updated (3:20 AM):": the tester's own profile saved in another tab
+  or device: "You updated your profile in another tab (3:20 AM):"; the developer changing what the test needs: "<Dev> changed what this test needs (3:20 AM):";
+  both: both lines. The time is the save's own.
+- When the pop-up closes because the profile now covers the needs, the page's line says the same: "You updated your profile in another tab (3:20 AM): you now
+  meet this test's needs. Press Join to join." (or "<Dev> changed what this test needs (…): you now meet …", Apply on an apply test). Pressing Join when the
+  page's needs are already covered compares with the page's load time.
+- How: the my-gaps answer carries `profileAt` (the profile's last save), `needsSaveAt` (the Save that last changed the needs) and `now`; the pop-up keeps the
+  times as it opened (the server's `now` from the check that opened it, or the "needs" refusal's `now`) and the last ones it saw: a newer one is the source.
+  Neither newer: the plain "Just updated (…)".
+
+## §45 Admins' own actions in another tab (owner, Oct 31)
+- An admin's own change made in another tab or page since this page's time now counts like another admin's, in the second person, with the same pairs as batch
+  34 §1. Stop once: "You paused this test in another tab at 3:20 AM." then "Press Pause again to go ahead.". The lines:
+  - a test: "You paused this test", "You lifted the pause on this test", "You stopped this test", "You extended this test's closing date", "You closed this
+    test", "You allowed 3 more changes of this test's locked fields", "You closed this test's open reviews for $0" (… "in another tab at 3:20 AM.");
+  - an account: "You suspended the developer side", "You reinstated the tester side", "You closed 2 open reviews for $0", "You approved lifting the hold";
+  - a chargeback hold: "You approved lifting the hold", "You didn't approve lifting the hold (the reservation was released)"; Approve's "nothing is reserved"
+    line: "…; you released it in another tab at 3:20 AM".
+- A press no longer possible says "You already … in another tab at 3:20 AM." instead of "(by you@… at …)": "You already paused this test", "… stopped this
+  test" / "… closed this test", "… lifted the pause on this test", "… deleted this account", "… allowed 3 more changes of this test's locked fields", "…
+  approved lifting this hold" (chargeback), "… approved this lift" (payment hold), "… approved / dismissed this possible outage", "… approved this outage",
+  "… marked this replied", "… suspended the developer side", "… reinstated the tester side". Suspend / Reinstate's own batch 17 refusal for a still-possible
+  press reads "Since this page loaded, you reinstated that account's developer side in another tab at Oct 31, 3:20 AM."
+- A press from the same page load never stops itself: every press sends its page load's id (the x-tab header every browser request already carries), and every
+  admin press that goes through leaves a marker (an ActionLog row, "test" `admin-tab`, no migration) with that id and the press's start and end; a change made
+  within one of this page's presses is never news to it. A press without the id (an API call) counts only other admins, as before. Other admins' wording is
+  unchanged.
+
+## §46 Invite search rows with the redraw (owner, Oct 31)
+- With a name typed in Invite's "Find testers", the found rows came ~0.4 s after the page's redraw and the pill (InvitePanel asked the search again behind its
+  300 ms typing pause). On a redraw (liveSync §37) the search is asked again at once, without the pause, and the rows shown stay until the answer replaces them
+  (no "Searching…"); typing keeps its pause.
+
+## §47 The needs pop-up follows the Invite rows' one-or-none rule (owner, Oct 31)
+- Per kind (devices, languages) the tester is missing a kind only when they list NONE of the test's needed items of that kind; listing at least one covers it
+  (the developer's Invite rows' rule: testerNeedsChangedLines, the "Doesn't list languages" badge).
+- The pop-up opens on Join / Apply / Ask to rejoin only when a kind is missing; it names only the missing kinds (with the items that would cover each, batch 20
+  section 3's words: "doesn't list a language this test needs (Spanish or French)"). While open it stops or updates (the label, §44; the developer's needs
+  lines on the next press) only when a kind flips between covered and missing, whether from the tester's own profile or the developer's needs, never for a
+  second item added or dropped within a kind. A missing kind's item list follows the needs silently (no label, no stop).
+- The server agrees (`gapsUnseen`, `sameGaps` in src/lib/gaps.ts): Join / Apply / Ask to rejoin anyway stops again only for a kind missing now that the pop-up
+  showed as covered.
+
+## §48 Withdraw says why there's nothing to withdraw (owner, Oct 31)
+- Withdraw on an application that is no longer pending names why, with the time: accepted: "<Dev> accepted your application at 3:20 AM, so you're in this
+  test."; declined: "<Dev> declined your application at 3:20 AM."; withdrawn in another tab: "You withdrew it in another tab at 3:20 AM."; closed by a listing
+  change: "It closed when <Dev> changed the listing at 3:20 AM. You can apply again."; never applied (or closed another way): "There's no pending application
+  to withdraw." as before. Withdraw's listing-change stop once and the join page's live lines (batch 30 §8) are unchanged.
+
+Tests: tests/batch35-admin-tabs.test.ts.

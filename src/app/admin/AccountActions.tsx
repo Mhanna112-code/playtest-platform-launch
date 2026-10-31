@@ -5,6 +5,13 @@ import type { AccountState } from "@/lib/server/accountState";
 import { AdminButton } from "./AdminButton";
 import { PreviewButton } from "./PreviewButton";
 import { TeamCloseBox } from "./TeamCloseBox";
+import { ReasonQuote } from "@/components/ScrollText";
+
+/** (Owner, Oct 31, batch 35 §43) A state line without its typed reason (the reason shows in the small quoted box under it). */
+export function withoutNote(line: string, note: string | undefined, kind: "suspended" | "deleted") {
+  const tail = !note ? "" : kind === "suspended" ? ` · “${note}”` : `: ${note}`;
+  return tail && line.endsWith(tail) ? line.slice(0, -tail.length) : line;
+}
 
 /**
  * (Batch 15 section 16; batch 17 §6) An account's Suspend (per side, a reason up to 1,000 characters, with Preview), Reinstate per suspended side and Delete: the same
@@ -43,7 +50,7 @@ export function AccountActions({ initial }: { initial: AccountState }) {
   if (acct.deleted) {
     return (
       <div className="space-y-1" data-account-actions={acct.id} data-account-state="deleted">
-        <p className="text-xs text-rose-300">{acct.deleted}</p>
+        <div className="text-xs text-rose-300">{withoutNote(acct.deleted, acct.notes?.deleted, "deleted")}{acct.notes?.deleted ? ":" : ""}<ReasonQuote text={acct.notes?.deleted ?? ""} className="mt-0.5" /></div>
         {line}
       </div>
     );
@@ -58,7 +65,9 @@ export function AccountActions({ initial }: { initial: AccountState }) {
       {/* (Owner, Oct 30, batch 15 section 16) Each suspended side has its own line and Reinstate. (Batch 33) A <div>, never a <p>: the button's mistake list is a <div>. */}
       {(["developer", "tester"] as const).filter((s) => acct.suspended[s]).map((s) => (
         <div key={s} className="flex flex-wrap items-center gap-2" data-suspended-side={s}>
-          <b>Suspended ({s} side)</b> <span className="line-clamp-2 max-w-full break-words" title={acct.suspended[s]}>{acct.suspended[s]}</span>
+          <b>Suspended ({s} side)</b> <span className="max-w-full break-words [overflow-wrap:anywhere]">{withoutNote(acct.suspended[s], acct.notes?.[s], "suspended")}</span>
+          {/* (Batch 35 §43) The Why in the small quoted box (its own line). */}
+          {acct.notes?.[s] && <ReasonQuote text={acct.notes[s]} className="basis-full text-sm" />}
           {/* (Owner, Oct 30, batch 34 §4) The developer side waits for a payment or chargeback hold to clear: a note instead of Reinstate (back on the live redraw). */}
           {s === "developer" && acct.held ? (
             <span className="note" data-reinstate-waits={acct.held}>{acct.held === "chargeback" ? "Reinstate waits for the chargeback hold: the team approves it first." : "Reinstate waits for the payment hold: they pay what they owe first."}</span>
