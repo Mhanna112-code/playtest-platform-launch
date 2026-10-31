@@ -3,6 +3,7 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
+- **Better ways to see what changed in updated work (owner, Oct 31).** When a tester sends an updated version of written answers or a recording, the developer should see what changed more easily (e.g. written answers: each changed answer marked, Before / Now per question; a recording: which one is new, with the old one still playable side by side). Ideas to settle first.
 - **Confirm all (owner, Oct 31).** One "Confirm all" for every payment the bank wants confirmed (dashboard box, Payments, the test page's Needs you), instead of one Confirm with your bank per payment. Check: can several PaymentIntents share one bank check, or does it run each check in turn?
 - **Invite: the Accept line doesn't allow for long messages (owner, Oct 31).** A long invite message breaks the line with Accept / Decline; clamp it to a few lines (Show more, like other long text) so the buttons stay in place.
 - **Save cards only, no Stripe Link (before launch; found Oct 31).** Saving a card offers Stripe Link; a Link wallet doesn't ask the bank to confirm like the card itself, so off-session charges (tester Charge, retries, Decide) fail into a hold instead of waiting for Confirm. Ask Stripe for card-only when saving a card (payment_method_types card).
