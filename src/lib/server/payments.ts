@@ -293,6 +293,9 @@ export async function paidAndCap(pieces: { submissionId?: string | null; callId?
 }
 
 /** Admin: decide a dispute. The total can only go up (to at most the piece's cap, batch 28 §15); blank keeps the pay; the extra is charged. */
+/** (Batch 35 §70) Decide on a piece whose payment is waiting for the developer's bank. */
+export const DECIDE_LOCKED = "The developer is confirming a payment for this piece with their bank. Decide again once it's confirmed or fails.";
+
 export async function decideDispute(admin: U, disputeId: string, body: Record<string, unknown>) {
   if (!isAdmin(admin)) throw new HttpError(403, "not_admin", "Only admins can decide disputes.");
   const d = await db.dispute.findUnique({ where: { id: disputeId } });
@@ -305,6 +308,9 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     const dev = (await db.contract.findUnique({ where: { id: d.contractId }, include: { test: { include: { developer: true } } } }))?.test.developer;
     throw new HttpError(409, "stop_once", "Press Decide again to go ahead.", { changes: [{ text: `${dev ? displayName(dev) : "The developer"} added their side at ${fmtTime(d.devSideAt)}: read it, then press Decide again.`, at: d.devSideAt }], devSide: d.devSide });
   }
+  // (Owner, Oct 31, batch 35 §70) The developer's own payment on this piece waiting for their bank (up to 15 minutes) would be charged on top of the decision: refused until
+  // it's confirmed or fails, so the piece is never paid more than decided.
+  if (await (await import("./confirm")).pieceLocked({ submissionId: d.submissionId, callId: d.callId })) throw new HttpError(409, "locked", DECIDE_LOCKED);
   const { review, min, max, poolBinds } = await disputeBounds(d);
   // A blank box keeps the pay as it is.
   const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
