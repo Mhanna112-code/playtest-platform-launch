@@ -3,6 +3,7 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
+- **Admins can lift any kind of hold, then a suspension (owner, Oct 31).** A team button to lift a payment hold or a chargeback hold directly (with a reason; what is owed stays owed or is written off — to decide), and once no hold is left, Reinstate works on the developer side as usual (today a held developer side can't be reinstated).
 - **Flaky tests to fix:** batch22 "two admins at once" (race), batch17-rate §12 and codex9 "resource_missing" (~1 in 3), batch34-invite-beats-application "asked to rejoin first…" (rare), batch16-account-tabs (once).
 - **Open question: drafts propagating to old tabs (owner, Oct 31).** Today unsent typing never shows in another open tab until it reloads (one shared draft per form, last typed wins). Should an old tab learn about a newer draft typed in another tab (e.g. a "You have newer unsent changes from another tab · Load them" line), or keep showing its own?
 - **"You can't join this test again." should say why** (e.g. "<Dev> rated your work on this test, so this test is finished for you."); today the generic line covers a developer's rating of the tester.
