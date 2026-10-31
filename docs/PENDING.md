@@ -3,6 +3,7 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
+- **Save cards only, no Stripe Link (before launch; found Oct 31).** Saving a card offers Stripe Link; a Link wallet doesn't ask the bank to confirm like the card itself, so off-session charges (tester Charge, retries, Decide) fail into a hold instead of waiting for Confirm. Ask Stripe for card-only when saving a card (payment_method_types card).
 - **The admin's Decide should respect the bank-check lock (found Oct 31).** Decide charges a dispute's extra without checking pieceLocked; if the developer's own Pay more on that piece is waiting for their bank (up to 15 min), both could go through and the piece end up paid more than decided. Fix: Decide on a locked piece is refused ("The developer is confirming a payment for this piece with their bank. Decide again once it's confirmed or fails."), or the waiting amount counts as paid when the extra is worked out.
 - **Admins can lift any kind of hold, then a suspension (owner, Oct 31).** A team button to lift a payment hold or a chargeback hold directly (with a reason; what is owed stays owed or is written off — to decide), and once no hold is left, Reinstate works on the developer side as usual (today a held developer side can't be reinstated).
 - **Flaky tests to fix:** batch22 "two admins at once" (race), batch17-rate §12 and codex9 "resource_missing" (~1 in 3), batch34-invite-beats-application "asked to rejoin first…" (rare), batch16-account-tabs (once).
