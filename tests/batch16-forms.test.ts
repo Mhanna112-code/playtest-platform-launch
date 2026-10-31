@@ -16,7 +16,6 @@ const FORMS: [file: string, uses: "FormMistakes" | "MistakeList", press: string]
   ["app/app/tests/[id]/PayBox.tsx", "FormMistakes", 'press={more ? "Pay more" : "Pay"}'],
   ["app/app/sessions/[id]/ChoiceBox.tsx", "FormMistakes", 'press="Charge"'],
   ["app/app/sessions/[id]/RecordingUpload.tsx", "FormMistakes", "press={sentBefore"],
-  ["app/app/sessions/[id]/WrittenAttachments.tsx", "FormMistakes", 'press="Attach"'],
   ["app/admin/DisputeDecision.tsx", "FormMistakes", 'press="Decide"'],
   ["app/admin/AdminButton.tsx", "FormMistakes", "press={label}"],
   ["components/CancelMenu.tsx", "MistakeList", 'press={p.label ?? "Cancel this call"}'],
@@ -54,7 +53,6 @@ const SAME_TEXT: [string, string, string][] = [
   ["app/app/tests/[id]/DevCallPanel.tsx", "lib/server/requests.ts", "Enter the call's length in minutes."],
   ["app/app/tests/[id]/TopPanel.tsx", "lib/server/tests.ts", "Say why you're ending their work (they read it)."],
   ["app/app/sessions/[id]/RecordingUpload.tsx", "lib/server/recordings.ts", "Recordings can be at most 500 MB."],
-  ["app/app/sessions/[id]/WrittenAttachments.tsx", "lib/server/recordings.ts", "Files can be at most 500 MB."],
   ["components/ReportButton.tsx", "lib/server/reports.ts", "Say what happened (the team reads it)."],
 ];
 

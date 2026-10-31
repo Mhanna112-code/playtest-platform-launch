@@ -9,6 +9,7 @@ import { jumpTo } from "@/lib/markJump";
 import { KEY_BOX_ID } from "@/lib/keys";
 import { pillLabel, pillSide, type PillSide } from "@/lib/livePill";
 import { seeItClick } from "@/components/ListingInfo";
+import { LIVE_TICK, boxSync, rideLiveClock, whileRedrawn } from "@/lib/liveSync";
 
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 const key = (c: Change) => `${c.at}|${c.text}`;
@@ -17,8 +18,9 @@ const key = (c: Change) => `${c.at}|${c.text}`;
  * The live top notice (owner, NEWEST+3): one box at the top of the page listing every change since the page was opened
  * (new terms, payments, call changes, listing edits, your own actions in another tab), newest first, as the page's
  * 20-second refresh picks them up. Shown changes count as seen: the page's buttons then send a later "seen" marker.
+ * (Batch 35 §37) It checks on the page's one 20-second beat (lib/liveSync.ts), at once whenever the page redraws, and a new line redraws the page at once.
  */
-export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: { scope: string; seenAt: string; every?: number; seeIt?: string; contractLink?: "scroll" | { testId: string } }) {
+export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string; seenAt: string; seeIt?: string; contractLink?: "scroll" | { testId: string } }) {
   const [lines, setLines] = useState<Change[]>([]);
   const [hiddenUpTo, setHiddenUpTo] = useState("");
   const known = useRef(new Set<string>());
@@ -95,37 +97,63 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
     }
   }, []);
 
+  /**
+   * (Owner, Oct 31, batch 35 §37) One check, not two: the box checks on the page's one beat (the same tick as the page's redraw poll), and at once whenever the
+   * page redraws (a new server render time: the poll's redraw, a press, focus, another part of the page). New lines ask the page to redraw at once; while that
+   * redraw is on its way they are held and show (with the pill) as it lands, so the rows and the line change together.
+   */
+  const [sync] = useState(boxSync);
+  const check = useRef<() => Promise<void>>(async () => {});
+  const drawnWith = useRef(seenAt);
+  useEffect(() => {
+    if (drawnWith.current === seenAt) return;
+    drawnWith.current = seenAt; // the page redrew: held lines show now, and the box checks at once
+    sync.drawn();
+    void check.current();
+  }, [seenAt, sync]);
+
   useEffect(() => {
     let alive = true;
     const tick = async () => {
+      const started = Date.now();
       const r = await api<{ changes: Change[]; now: string }>(`/api/live?scope=${encodeURIComponent(scope)}&since=${encodeURIComponent(since.current)}`).catch(() => null);
       if (!r || !alive) return;
       const added = r.changes.filter((c) => !known.current.has(key(c)));
       added.forEach((c) => known.current.add(key(c)));
-      // (Batch 35 §34) A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
-      if (added.length) setLines((old) => mergeChanges(old, added));
-      // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); (batch 27 section 4) each one raises the pill when the box is out of view.
-      // Ignored (greyed) Alerts lines count as updates too, since they still show.
-      const fresh = added.filter((c) => !wasShownInBox(c));
-      if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
-      // (Batch 32 §12) Seen only when the box is in view; otherwise kept until it comes into view (a later poll with nothing new keeps the earlier mark).
-      if (!where()) {
-        unseenUpTo.current = "";
-        setShown(scope, r.now);
-      } else if (added.length || unseenUpTo.current) unseenUpTo.current = r.now;
-      else setShown(scope, r.now);
-      announce(added);
+      const apply = (redrawn: boolean) => {
+        if (!alive) return;
+        // (Batch 35 §34) A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
+        if (added.length) setLines((old) => mergeChanges(old, added));
+        // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); (batch 27 section 4) each one raises the pill when the box is out of view.
+        // Ignored (greyed) Alerts lines count as updates too, since they still show.
+        const fresh = added.filter((c) => !wasShownInBox(c));
+        if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
+        // (Batch 32 §12) Seen only when the box is in view; otherwise kept until it comes into view (a later poll with nothing new keeps the earlier mark).
+        if (!where()) {
+          unseenUpTo.current = "";
+          setShown(scope, r.now);
+        } else if (added.length || unseenUpTo.current) unseenUpTo.current = r.now;
+        else setShown(scope, r.now);
+        whileRedrawn(redrawn, () => announce(added));
+      };
+      // (Batch 35 §37) New lines redraw the page at once and show as it lands (at once if it already redrew during this check).
+      if (!added.length) apply(false);
+      else sync.lines(started, apply);
     };
-    const t = setInterval(tick, every);
-    const onTick = () => tick();
-    window.addEventListener("live-tick", onTick);
+    check.current = tick;
+    // (Batch 35 §37) No timer of its own: the page's one 20-second clock beats for the box and the redraw together.
+    const leave = rideLiveClock();
+    const onTick = () => void tick();
+    window.addEventListener(LIVE_TICK, onTick);
     return () => {
       alive = false;
-      clearInterval(t);
-      window.removeEventListener("live-tick", onTick);
+      leave();
+      window.removeEventListener(LIVE_TICK, onTick);
+      sync.stop();
       clearShown(scope);
     };
-  }, [scope, every]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- announceFresh and where read refs and setters only
+  }, [scope, sync]);
 
   const show = lines.filter((l) => !hiddenUpTo || new Date(l.at).toISOString() > hiddenUpTo).sort((a, b) => (a.at < b.at ? 1 : -1));
   if (!show.length) return null;
