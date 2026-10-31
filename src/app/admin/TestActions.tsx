@@ -1,5 +1,20 @@
 "use client";
+import { useEffect, useRef } from "react";
 import { AdminButton } from "./AdminButton";
+import { dropKept } from "@/lib/useKept";
+import { adminDraftKey } from "@/lib/keptText";
+
+/**
+ * (Owner, Oct 30, batch 35 §11) The test was paused while its Pause box was shown (by another admin, or this one): the Why typed for that Pause goes with it, so a
+ * later Pause starts with its own empty box (batch 27 section 5: never the old one's leftovers).
+ */
+export function usePauseDraftGoes(id: string, adminPaused: boolean) {
+  const was = useRef(adminPaused);
+  useEffect(() => {
+    if (adminPaused && !was.current) void dropKept(adminDraftKey("pause-test", id));
+    was.current = adminPaused;
+  }, [id, adminPaused]);
+}
 
 /**
  * (Owner, Oct 29, batch 22 section 5; batch 34 §1) A test's own admin actions on its page's admin box: Pause or Lift the pause (only the team's own pause can be
@@ -8,6 +23,7 @@ import { AdminButton } from "./AdminButton";
  * naming who and when.
  */
 export function TestActions({ id, seen, adminPaused, stopped, critical, closure }: { id: string; seen: string; adminPaused: boolean; stopped: boolean; critical: number; closure: string | null }) {
+  usePauseDraftGoes(id, adminPaused);
   if (stopped) return null;
   const extra = { since: seen };
   return (

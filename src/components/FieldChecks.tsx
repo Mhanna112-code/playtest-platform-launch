@@ -308,7 +308,9 @@ export function FieldChecks() {
 }
 
 /** "Fix the mistake above, then press Save again." / "Fix the 2 mistakes above, …". */
-export const fixLine = (n: number, press: string) => `Fix the ${n === 1 ? "mistake" : `${n} mistakes`} above, then press ${press} again.`;
+export const fixLine = (n: number, press: string, top = false) =>
+  // (Owner, Oct 30) A list shown at the top of its form doesn't point up: "Fix these 5 mistakes, then press Send my answers again."
+  top ? `Fix ${n === 1 ? "this mistake" : `these ${n} mistakes`}, then press ${press} again.` : `Fix the ${n === 1 ? "mistake" : `${n} mistakes`} above, then press ${press} again.`;
 
 /**
  * (Batch 16 section 10) The list under a button: the heading and one bullet per field red right now (the same text as its line), each a link to its
@@ -316,7 +318,7 @@ export const fixLine = (n: number, press: string) => `Fix the ${n === 1 ? "mista
  * follows the fields live: fixing a field removes its bullet at the same moment, and the list goes with the last one. With no red field, a mistake
  * that belongs to no field shows as a plain red line.
  */
-export function MistakeList({ press, orphans = [], shown }: { press: string; orphans?: string[]; shown?: boolean }) {
+export function MistakeList({ press, orphans = [], shown, top = false }: { press: string; orphans?: string[]; shown?: boolean; top?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [pressed, setPressed] = useState(false);
   const [items, setItems] = useState<{ el: HTMLElement; text: string }[]>([]);
@@ -344,7 +346,7 @@ export function MistakeList({ press, orphans = [], shown }: { press: string; orp
     <div ref={ref} data-mistake-list="" className="space-y-1" hidden={!on || n === 0}>
       {on && n > 0 && items.length > 0 && (
         <>
-          <p className="err-field">{fixLine(n, press)}</p>
+          <p className="err-field">{fixLine(n, press, top)}</p>
           <ul className="err-field list-disc pl-5">
             {items.map((i, k) => (
               <li key={k}>

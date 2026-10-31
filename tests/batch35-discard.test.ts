@@ -73,6 +73,11 @@ describe("batch 35 §10: Discard where nothing is saved", () => {
       "app/app/tests/TestForm.tsx": { discard: 0, saved: 2 }, // Edit / Post (each field, and the access keys)
       "app/app/tests/[id]/PayBox.tsx": { discard: 0, saved: 1 }, // Pay / Pay more
       "app/app/profile/ProfileForm.tsx": { discard: 0, saved: 1 }, // the profile
+      // (Batch 35 §11) The admin console's boxes.
+      "app/admin/AdminButton.tsx": { discard: 1, saved: 0 }, // every reason / note / days box (Suspend, Delete, Pause, Stop, Extend, Don't approve)
+      "app/admin/DisputeDecision.tsx": { discard: 1, saved: 1 }, // Decide's note; its total (Use saved = blank, keep the pay)
+      "app/admin/TeamCloseBox.tsx": { discard: 1, saved: 0 }, // the team close-out's reason
+      "app/admin/PagedList.tsx": { discard: 1, saved: 0 }, // the hold lift's note to the developer
     };
     for (const [f, n] of Object.entries(want)) {
       const s = src(f);

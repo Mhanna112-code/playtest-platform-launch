@@ -49,6 +49,9 @@ export function AccountActions({ initial }: { initial: AccountState }) {
     );
   }
   const open = (["developer", "tester"] as const).filter((s) => (s === "developer" ? acct.isDeveloper : acct.isTester) && !acct.suspended[s]);
+  // (Owner, Oct 30, batch 35 §11) Suspend's draft belongs to the sides open when it was typed: when another admin suspended or reinstated a side since, the fresh
+  // box (batch 33 §7) starts empty, never with the old state's side and Why.
+  const openKey = open.join(",");
   const roles = (acct.isDeveloper ? 1 : 0) + (acct.isTester ? 1 : 0);
   return (
     <div className="space-y-1" data-account-actions={acct.id} data-account-state={acct.suspended.developer || acct.suspended.tester ? "suspended" : "normal"}>
@@ -70,11 +73,11 @@ export function AccountActions({ initial }: { initial: AccountState }) {
           <PreviewButton id={acct.id} onLoaded={setPreviewAt} />
           {/* A one-role account just shows Suspend; an account with both roles chooses the side. */}
           {open.length > 0 && (roles === 2 && open.length === 2 ? (
-            <AdminButton action="suspend" id={acct.id} label="Suspend" danger stacked extra={seen} onRefused={refused} choice={{ name: "side", label: "Side to suspend", options: [{ value: "developer", label: "Developer side" }, { value: "tester", label: "Tester side" }] }} fields={[{ name: "note", label: "Why" }]} />
+            <AdminButton action="suspend" id={acct.id} label="Suspend" danger stacked extra={seen} onRefused={refused} choice={{ name: "side", label: "Side to suspend", options: [{ value: "developer", label: "Developer side" }, { value: "tester", label: "Tester side" }] }} fields={[{ name: "note", label: "Why" }]} draftFor={openKey} />
           ) : (
-            <AdminButton action="suspend" id={acct.id} label={roles === 2 ? `Suspend the ${open[0]} side` : "Suspend"} danger stacked extra={{ side: open[0], ...seen }} onRefused={refused} fields={[{ name: "note", label: "Why" }]} />
+            <AdminButton action="suspend" id={acct.id} label={roles === 2 ? `Suspend the ${open[0]} side` : "Suspend"} danger stacked extra={{ side: open[0], ...seen }} onRefused={refused} fields={[{ name: "note", label: "Why" }]} draftFor={openKey} />
           ))}
-          {roles === 0 && <AdminButton action="suspend" id={acct.id} label="Suspend" danger stacked extra={seen} onRefused={refused} fields={[{ name: "note", label: "Why" }]} />}
+          {roles === 0 && <AdminButton action="suspend" id={acct.id} label="Suspend" danger stacked extra={seen} onRefused={refused} fields={[{ name: "note", label: "Why" }]} draftFor={openKey} />}
         </div>
       )}
       {/* (Batch 30 §5) A developer's open reviews, closed at $0 by the team (Preview first, then the reason). */}

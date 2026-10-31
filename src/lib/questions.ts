@@ -65,6 +65,23 @@ export function answersMissing(questions: string[], answers: string[], min = ANS
   return null;
 }
 
+/**
+ * (Owner, Oct 30, batch 35 §12) The questions box takes no 21st question: typing on a new line past 20 questions is ignored and a paste keeps the first 20
+ * (empty lines don't count; editing the 20 is free).
+ */
+export function capQuestions(text: string, max: number = LIMITS.questions.max) {
+  let n = 0;
+  const out: string[] = [];
+  for (const line of text.split("\n")) {
+    if (line.trim()) {
+      if (n >= max) continue;
+      n++;
+    }
+    out.push(line);
+  }
+  return out.join("\n");
+}
+
 /** (Owner, Oct 28, batch 20 section 2) "At most 20 questions." once the list (one question per line) reaches 20; "" below that. */
 export function questionLimitLine(text: string) {
   return text.split("\n").map((q) => q.trim()).filter(Boolean).length >= LIMITS.questions.max ? `At most ${LIMITS.questions.max} questions.` : "";

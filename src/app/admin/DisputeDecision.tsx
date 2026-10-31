@@ -5,13 +5,24 @@ import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { LIMITS } from "@/lib/limits";
 import { counterText, decideTickLabel, reasonTooLong } from "@/lib/rules";
+import { DraftTag, useKept } from "@/lib/useKept";
+import { adminDraftKey } from "@/lib/keptText";
 
 const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
+
+/**
+ * (Owner, Oct 30, batch 35 §11) What Decide's draft puts back: the total and the note. The tick is never kept: a restored raise is ticked again before Decide
+ * (batch 35 §1), whatever the draft holds.
+ */
+export const decideFromDraft = (d: Record<string, unknown>) => ({ total: typeof d.total === "string" ? d.total : "", note: typeof d.note === "string" ? d.note : "", tickedFor: null as number | null });
 
 /**
  * The admin's decision on a dispute: the total pay for THIS piece, between what it was paid (min) and the part's listing minus
  * what was already paid for that part on other pieces (max; batch 10: for an unlisted part, its max of $1000 or $200/h × the logged minutes, minus what was already paid). Blank keeps the pay as it is. Range hint next to the box,
  * red at the box when it is left with an amount outside it.
+ * (Owner, Oct 30, batch 35 §11) The total and the note are a draft ("admin:decide:<id>", admins only): "Draft" after a reload; after a sign-in the total's "Use saved"
+ * puts it back to blank (keep the pay as it is) and the note's "Discard" empties it. A restored raise needs the tick again (§1: the tick is never kept). Cleared when
+ * Decide goes through; a stopped or refused Decide keeps it.
  */
 export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", sideAt: sideAt0 = null, dev = "The developer" }: { id: string; minCents: number; maxCents: number; side?: string; sideAt?: string | null; dev?: string }) {
   const root = useRef<HTMLDivElement>(null);
@@ -37,6 +48,12 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
   const extra = typed != null && typed > minCents && typed <= Math.max(minCents, maxCents) ? typed - minCents : 0;
   const [tickedFor, setTickedFor] = useState<number | null>(null);
   const ticked = extra > 0 && tickedFor === typed;
+  const keep = useKept<Record<string, unknown>>(adminDraftKey("decide", id), { total, note }, total.trim() === "" && note.trim() === "", (d) => {
+    const back = decideFromDraft(d);
+    setTotal(back.total);
+    setNote(back.note);
+    setTickedFor(back.tickedFor);
+  });
   return (
     <div ref={root} className="space-y-2" data-mistakes-root="">
       {side.text && <p data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}: “{side.text}”</p>}
@@ -45,6 +62,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         <span>$</span>
         <input id={`total-${id}`} className="input w-28" inputMode="decimal" data-money="" aria-label="Total pay for this piece ($)" data-min={String(minCents / 100)} data-max={String(maxCents / 100)}
           data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} data-match="^(?!Keep it to)" value={total} onChange={(e) => setTotal(e.target.value)} />
+        {keep.restored && total !== "" && <DraftTag kind="saved" field="total" onUseSaved={keep.signedIn ? () => { setTotal(""); setTickedFor(null); } : undefined} />}
         <span className="text-xs text-slate-500">{dollars(minCents)}-{dollars(maxCents)} · leave blank to keep it as it is</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -53,6 +71,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         <textarea id={`note-${id}`} rows={2} className={`input w-72 max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} />
         <span className={`block text-right text-xs ${note.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(note.length, LIMITS.reason)}</span>
         {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
+        {keep.restored && note !== "" && <DraftTag kind="discard" field="note" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}
         <button
           className="btn-ghost"
           disabled={busy || (extra > 0 && !ticked)}
@@ -62,6 +81,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
             setMsg(null);
             try {
               await api("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
+              await keep.clear();
               setMsg({ ok: true, text: "Done." });
               setTimeout(() => window.location.reload(), 600);
             } catch (e) {

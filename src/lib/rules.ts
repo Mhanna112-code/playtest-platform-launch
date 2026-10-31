@@ -252,6 +252,19 @@ export const spotsCap = (saved?: number | null) => Math.max(MAX_SPOTS, saved ?? 
 
 /** (Batch 15 section 32) The red messages at the field on Post and Edit. */
 export const QUESTION_TOO_LONG = `Keep each question to ${LIMITS.question.toLocaleString("en-US")} characters.`;
+/** (Owner, Oct 30, batch 35 §13) Each question once: the same text twice (ignoring case and spaces) is refused, named. */
+export const sameQuestion = (q: string) => qText(q).trim().replace(/\s+/g, " ").toLowerCase();
+export function duplicateQuestion(questions: string[]) {
+  const seen = new Set<string>();
+  for (const q of questions) {
+    const k = sameQuestion(q);
+    if (!k) continue;
+    if (seen.has(k)) return qText(q).trim();
+    seen.add(k);
+  }
+  return "";
+}
+export const duplicateQuestionLine = (q: string) => `“${q.length > 80 ? q.slice(0, 80) + "…" : q}” is in the list twice: each question can be there once.`;
 /** (Owner, Oct 28, batch 16 section 9) The Mature (18+) "why": required, at least 5 characters; the same two lines at the field and from the server. */
 export const MATURE_WHY_MIN = 5;
 export const MATURE_WHY_REQUIRED = "Say why this test is mature (18+): it's required for mature content.";
@@ -422,6 +435,7 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);
   // (Owner, Oct 30, batch 15 section 3) At most 20,000 characters per question (checked when the questions are saved).
   if (isNew("questions") && l.questions.some((q) => qText(q).length > LIMITS.question)) errs.push(QUESTION_TOO_LONG);
+  if (isNew("questions") && duplicateQuestion(l.questions)) errs.push(duplicateQuestionLine(duplicateQuestion(l.questions)));
   return errs;
 }
 

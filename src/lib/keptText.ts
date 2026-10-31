@@ -19,6 +19,10 @@ export type ProfileDraftField = (typeof PROFILE_DRAFT_FIELDS)[number];
 /** Its written ones (kept by SIGN_IN_DRAFTS "written"); the others are selections. */
 export const PROFILE_TEXT_FIELDS = ["name", "bio"] as const;
 
+/** (Batch 35 §11) The admin console's drafts: "admin:<action>:<id>" (only admins keep or read them). */
+export const ADMIN_DRAFT_PREFIX = "admin:";
+export const adminDraftKey = (action: string, id: string) => `${ADMIN_DRAFT_PREFIX}${action}:${id}`;
+
 /** Edit / Post's written fields (the coordinator's split, Oct 30): the access keys' text (`keysText`) is written too. */
 export const TEST_TEXT_FIELDS = ["productName", "title", "description", "buildUrl", "ndaText", "matureWhy", "questions"] as const;
 export type TestTextField = (typeof TEST_TEXT_FIELDS)[number];
@@ -27,7 +31,7 @@ export const isTestTextField = (k: string): k is TestTextField => (TEST_TEXT_FIE
 /**
  * The written parts of every other kept form, by name: written answers (`answers`, `notes`; `questions` says which questions they were typed for), chat and
  * Contact us (`text`, `message`), dispute reasons and sides (`reason`, `text`), pay / pay-more / End early / Stop reasons (`reason`), rating comments (`comment`),
- * (batch 35 §10) the Apply / Ask to rejoin note (`note`).
+ * (batch 35 §10) the Apply / Ask to rejoin note (`note`), (batch 35 §11) the admin boxes' reasons and notes (`note`, `reason`; Decide's total and Extend's days are numbers).
  * Anything else (Contact us' topic, a call request's rows, length and ticks) is a selection.
  */
 const TEXT_PARTS = ["answers", "notes", "questions", "text", "message", "reason", "comment", "note"] as const;

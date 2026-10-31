@@ -15,11 +15,15 @@ export async function flushKept(timeoutMs = 1500) {
   await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, timeoutMs))]);
 }
 
+/** (Batch 35 §11) Forget a form's draft that no longer applies (an admin box swapped out because another admin changed its state meanwhile). */
+export const dropKept = (key: string) =>
+  fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data: null }), keepalive: true }).catch(() => null);
+
 /**
  * (NEXT-UI 10) A form's typed-but-unsent text, kept on the server per person and form (any device, and after signing in
  * again): the form starts from it with the "Draft" tag (batch 35 §8; it read "Not sent yet"). Sending clears it (`clear()`, awaited before the
  * page moves on). Only for: written answers, chat messages, dispute text, rating comments, reject reasons, the Post / Edit
- * form, and (batch 35 §10) the tester's Apply / Ask to rejoin note and the profile edits (the server refuses any other key). `pristine`: nothing typed yet (nothing to keep); `restore` puts a kept draft back
+ * form, (batch 35 §10) the tester's Apply / Ask to rejoin note and the profile edits, and (batch 35 §11) the admin console's boxes, admins only (the server refuses any other key). `pristine`: nothing typed yet (nothing to keep); `restore` puts a kept draft back
  * (only while the form is still pristine, so what was typed meanwhile is never overwritten).
  * (Owner, Oct 30, batch 35 §8) `signedIn`: the draft came back through a sign-in (the server marked it; SIGN_IN_DRAFTS in lib/keptText.ts says what it keeps): the
  * form shows "Draft" with "Use saved" at each changed box. The mark stays on the draft (every save keeps it) until it's sent or emptied.
