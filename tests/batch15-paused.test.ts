@@ -82,7 +82,9 @@ describe("the restricted view (sections 29 and 37)", () => {
     // (Batch 16 section 21) No "Your saves and presses in another tab" type any more.
     expect([...PAUSED_ALERTS]).toEqual(["leaving", "calls", "payments", "disputes", "admin"]);
     expect([...STOPPED_ALERTS]).toEqual(["payments", "disputes", "admin"]);
-    expect(src("components/AlertsMenu.tsx")).toContain("!keys || keys.includes(a.key)");
+    // (Batch 35 §63) Every type is listed; one that can't happen there is greyed and disabled (its tick kept).
+    expect(src("components/AlertsMenu.tsx")).toContain("const off = !!keys && !keys.includes(a.key);");
+    expect(src("components/AlertsMenu.tsx")).toContain("disabled={off}");
   });
 });
 

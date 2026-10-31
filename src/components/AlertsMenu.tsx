@@ -35,12 +35,16 @@ export function AlertsMenu({ ignored: start, keys }: { ignored: string[]; keys?:
       {/* On phones the button can sit at the left edge: the menu opens in the page under it instead of hanging off-screen. */}
       <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] max-sm:static max-sm:w-full max-sm:max-w-none space-y-1.5 rounded-2xl border border-white/15 bg-slate-900 p-3 text-sm shadow-2xl">
         <p className="text-xs text-slate-400" data-alerts-intro="">Tick what should <b>not</b> {ALERTS_INTRO_REST}</p>
-        {/* (Batch 15 section 39) A paused or stopped test lists only the types that can still happen there; the other ticks are kept. */}
-        {ALERT_TYPES.filter((a) => !keys || keys.includes(a.key)).map((a) => (
-          <label key={a.key} className="flex cursor-pointer items-center gap-2 text-slate-200">
-            <input type="checkbox" checked={ignored.includes(a.key)} onChange={(e) => void toggle(a.key, e.target.checked)} /> {a.label}
-          </label>
-        ))}
+        {/* (Batch 15 section 39; owner, Oct 31, batch 35 §63) Every type is listed, so "(N off)" matches the ticks shown; a type that can't happen on a paused or
+            stopped test is greyed and can't be changed there (its tick is kept). */}
+        {ALERT_TYPES.map((a) => {
+          const off = !!keys && !keys.includes(a.key);
+          return (
+            <label key={a.key} className={`flex items-center gap-2 ${off ? "cursor-default text-slate-500" : "cursor-pointer text-slate-200"}`} data-alert-na={off ? "" : undefined}>
+              <input type="checkbox" checked={ignored.includes(a.key)} disabled={off} onChange={(e) => void toggle(a.key, e.target.checked)} /> {a.label}
+            </label>
+          );
+        })}
         {saved && <p className="text-xs text-emerald-300" role="status">{saved}</p>}
       </div>
     </details>

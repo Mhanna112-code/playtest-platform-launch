@@ -540,3 +540,7 @@ Tests (§53-§58): tests/batch35-terms-dates.test.ts, tests/rejoin.test.ts, test
 - While a form's main press is going or has finished (the §41 finished state, until the redraw lands), its draft buttons are disabled too: "Start empty", "Use
   saved", "Use saved for all", "Discard", "Discard all" (one `DraftButton` in src/lib/useKept.tsx, used by DraftTag and the top lines). A pressed draft button is
   disabled until what it does has applied (no double press).
+
+## §63 The Alerts menu lists every kind (owner, Oct 31)
+On a paused or stopped test the developer's Alerts menu used to list only the kinds that can still happen there, while "(N off)" still counted the hidden ticks.
+Now every kind is listed; one that can't happen in the test's state is greyed and can't be changed there (its tick is kept). No extra text.
