@@ -963,7 +963,8 @@ describe("batch 20 section 25: a tester's Switch / Keep never stops the develope
   it("(audit) every developer stop kind has an Alerts type, except the deliberate always-stop ones", async () => {
     const { DEV_STOP_KINDS } = await import("@/lib/rules");
     const { alertOf } = await import("@/lib/alerts");
-    expect([...DEV_STOP_KINDS].filter((k) => !alertOf(k))).toEqual(["chargeback", "subscription"]);
+    // (Batch 35 §69) Listing changes ("info") always stop the developer: no longer in their Alerts.
+    expect([...DEV_STOP_KINDS].filter((k) => !alertOf(k))).toEqual(["chargeback", "info", "subscription"]);
   });
 });
 

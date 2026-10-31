@@ -21,8 +21,7 @@ export const tabOf = (body: Record<string, unknown>) => (typeof body.tab === "st
 export type OwnAbout = { a: string; k: string[]; /** (Batch 35 §34) a listing Save's consequences ("re-sent fbbb's invite"): each its own line */ x?: string[] };
 const META = "\u001f";
 /**
- * A press on the developer's side. (Owner, Oct 29, batch 29 section 12) The changes made in another tab (BIG_OWN_ACTS) stop EVERY press on the test page and on Edit
- * once; any other action of theirs elsewhere stops only a press it touches (acts × things).
+ * A press on the developer's side. (Owner, Oct 31, batch 35 §67) Every action of theirs made in another tab stops EVERY press on the test page and on Edit once.
  */
 export type Press = {
   acts: readonly string[]; keys: readonly string[];
@@ -121,16 +120,16 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
     }
     return [e];
   });
-  // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box and
-  // stop every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines); any other action of theirs stops only a
-  // press it touches. A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
+  // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box;
+  // (batch 35 §67) every action of theirs in another tab stops every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines). A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
   const own = mine.flatMap((o): TestEventLike[] => {
     // (Batch 34 §14) A listing Save in another tab: its line carries See it to the test page's Listing panel. (Batch 35 §34) What it closed or re-sent: own lines.
     const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt, ...(o.about?.a === "edit" ? { listing: true } : {}) };
     const lines: TestEventLike[] = [line, ...(o.about?.a === "edit" ? (o.about.x ?? []).map((x) => ({ kind: "own", text: consequenceLine(x), createdAt: o.createdAt, save: true })) : [])];
     if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? lines : [];
-    if (!opts.press) return [];
-    return has(BIG_OWN_ACTS, o.about?.a) || touches(o, opts.press) ? lines : [];
+    // (Owner, Oct 31, batch 35 §67) ANY action of theirs in another tab since the page's seen time stops every press once (no longer only BIG_OWN_ACTS or a
+    // press it touches), on the test page and on Edit, both ways.
+    return opts.press ? lines : [];
   });
   // (Owner, Oct 31, batch 35 §34) Every listing change of the developer's own since the page's seen time (Saves in other tabs, renames) is ONE line: "You saved
   // the listing in another tab · See it", at the latest one, marking every field any of them changed; a Save's consequences keep their own lines.
@@ -265,13 +264,14 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
     const title = p.contractId === contractId ? "" : titles.get(p.contractId!) ?? "";
     // When a delayed payment goes through: the normal paid line (on another session: naming the test).
     const late = (p.status === "deferred" || p.status === "owed" || !!p.owedUntil) && p.createdAt > since;
-    if (late) out.push({ kind: "payment", text: delayedPayLine(dev, label, p.amountCents, title), createdAt: p.createdAt });
-    if (p.settledAt && p.settledAt > since) out.push({ kind: "paid", text: `${dev} paid ${money(p.amountCents)} for your ${label}${title ? ` on ${title}` : ""}`, createdAt: p.settledAt });
+    const piece = (p.contractId === contractId && (p.submissionId ?? p.callId)) || undefined;
+    if (late) out.push({ kind: "payment", text: delayedPayLine(dev, label, p.amountCents, title), createdAt: p.createdAt, piece });
+    if (p.settledAt && p.settledAt > since) out.push({ kind: "paid", text: `${dev} paid ${money(p.amountCents)} for your ${label}${title ? ` on ${title}` : ""}`, createdAt: p.settledAt, piece });
   }
   for (const d of disputes) {
     const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
     const raised = d.decidedCents != null && r && d.decidedCents > r.amountCents;
-    out.push({ kind: "admin", text: raised ? `The team decided your dispute: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt! });
+    out.push({ kind: "admin", text: raised ? `The team decided your dispute: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt!, piece: (d.submissionId ?? d.callId) || undefined });
   }
   return out;
 }

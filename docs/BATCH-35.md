@@ -607,3 +607,22 @@ Tests: tests/batch35-leave-stops.test.ts (§65).
   counting hasn't started. Edit's page and its live view read the same state.
 
 Tests: tests/batch35-leave-stops.test.ts (§66), tests/batch14.test.ts (section 2 rewritten).
+
+## §67 Every own other-tab action stops every press once (owner, Oct 31; replaces batch 29 §12's touches rule)
+- Developer: ANY action of theirs done in another tab since the page's seen time stops ANY developer press once, on the test page and on Edit, both ways
+  (Edit ↔ test page ↔ Edit). Before, only BIG_OWN_ACTS (Pay, Stop, a listing Save, …) stopped every press; the others (a rating, a no-show, the dispute side)
+  stopped only a press they touched. devChanges (src/lib/server/live.ts) now keeps every own line for any press; `touches` is no longer used there.
+  The live box still lists LIVE_OWN_ACTS only. The wording ("You … in another tab"), the seen rule and Alerts (own lines are never ignorable, §61) are unchanged.
+- Tester: already so: ownChanges returns every own action from another tab, on the session page and the join page, and "own" stops even with Alerts Off (§61).
+
+## §68 A Dispute always stops once for a new payment on that piece (owner, Oct 31)
+- A payment on the disputed piece since the page loaded (Pay, Pay more, a dispute decision, a Charge, a delayed payment going through) stops the tester's
+  Dispute once even with Alerts Off: it changes what's disputed. The tester's payment lines carry the piece (`piece` on the event); testerGate's `piece` option
+  (openDispute passes it) keeps those lines when Alerts is Off, like new terms. Payments on other pieces still follow Alerts.
+
+## §69 No "Listing changes" in the developer's Alerts (owner, Oct 31)
+- ALERT_TYPES (src/lib/alerts.ts) drops `listing`, so the developer's Alerts menu (AlertsMenu) no longer lists it: their own saves always stop and nobody else edits
+  their listing. Listing lines (info, renamed, edited) have no Alerts type for the developer (`alertOf` → null), so a stored "listing" tick is ignored (it no
+  longer greys or skips anything, and doesn't count in "(N off)"). Testers keep listing changes in their own Alerts (On/Off), unchanged.
+
+Tests: tests/batch35-all-tabs.test.ts (§67-§69), tests/batch20.test.ts (the always-stop kinds audit now includes "info").

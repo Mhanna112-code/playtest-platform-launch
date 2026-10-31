@@ -234,7 +234,8 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const review = await db.review.findFirst({ where: { ...where, contractId } });
   // (Batch 30 §5, owner Oct 29) The team's $0 closure is final: no dispute.
   if (review?.teamClosedById) throw new HttpError(409, "no_dispute", TEAM_CLOSED_NO_DISPUTE);
-  if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body);
+  // (Batch 35 §68) A payment on this piece since the page loaded stops it once even with Alerts Off.
+  if (review && !(await db.dispute.findFirst({ where }))) await testerGate(tester.id, contractId, c.testId, body, undefined, { piece: id });
   if (!review) throw new HttpError(409, "not_paid", "This hasn't been paid yet.");
   const existing = await db.dispute.findFirst({ where });
   // (Batch 20 section 15) Nothing a decision could add (the admin form's max, from disputeBounds): refused with the page's line (an older page).

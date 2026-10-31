@@ -50,13 +50,13 @@ export async function testerChanges(testerId: string, contractId: string, testId
     if (!r.rejected && (owedKeys.has(r.submissionId ?? r.callId) || lateKeys.has(r.submissionId ?? r.callId))) continue;
     const what = r.callId ? "your live call" : `your ${r.submission?.kind === "recording" ? "recording" : "written answers"}`;
     // (Batch 30 §5) The team's $0 closure is the team's, never the developer's.
-    out.push({ kind: r.rejected ? "rejected" : "paid", text: r.rejected ? `${dev} rejected ${what}` : r.teamClosedById ? `The team closed ${what} for $0` : `${dev} paid ${money(r.amountCents)} for ${what}`, createdAt: r.createdAt });
+    out.push({ kind: r.rejected ? "rejected" : "paid", text: r.rejected ? `${dev} rejected ${what}` : r.teamClosedById ? `The team closed ${what} for $0` : `${dev} paid ${money(r.amountCents)} for ${what}`, createdAt: r.createdAt, piece: (r.submissionId ?? r.callId) || undefined });
   }
   // (Owner, Oct 28, batch 20 section 12, bug found by the owner) A Pay more (Payment kind "extra") is a "paid" change too: before, only Reviews were read, so a Pay
   // more never stopped a tester press (a Cancel call went straight through) nor showed in the stop box or the live box. Charged (or charged before payouts are set up).
   const kinds = new Map((await db.submission.findMany({ where: { contractId }, select: { id: true, kind: true } })).map((x) => [x.id, x.kind]));
   for (const p of await db.payment.findMany({ where: { contractId, kind: "extra", createdAt: { gt: seenAt }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "asc" } })) {
-    out.push({ kind: "paid", text: payMoreLine(dev, p.amountCents, p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"), createdAt: p.createdAt });
+    out.push({ kind: "paid", text: payMoreLine(dev, p.amountCents, p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"), createdAt: p.createdAt, piece: (p.submissionId ?? p.callId) || undefined });
   }
   for (const r of devReqs) {
     const when = fmtDateTime(r.startsAt);
@@ -104,7 +104,7 @@ const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", 
 export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
-export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean } = {}) {
+export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string } = {}) {
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
   // these same stop-once rules (Rate has its own short list; Block never stops; batch 35 §59: Leave stops like the rest).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
@@ -128,9 +128,10 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const terms = changes.filter((e) => e.kind === "terms");
   const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keyfixed", "keygiven"]);
   // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer, their key marked working), and (batch 35 §61)
-  // what they did themselves in another tab.
+  // what they did themselves in another tab. (Owner, Oct 31, batch 35 §68) `piece` (the Dispute press): a payment on that piece since the page loaded (Pay, Pay more,
+  // a dispute decision, a Charge) changes what's disputed, so it stops once even with Alerts Off, like new terms.
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind)) : r.changes;
+  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || (!!opts.piece && e.piece === opts.piece)) : r.changes;
   const list = [...terms, ...rest].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0, alertsOff: !!off });
