@@ -125,7 +125,7 @@ describe("batch 35 §5: file sizes", () => {
     expect(fileSize(1024 * 1024 - 1)).toBe("1.0 MB");
     expect(fileSize(1024 * 1024)).toBe("1.0 MB");
     expect(fileSize(1.1 * 1024 * 1024)).toBe("1.1 MB");
-    for (const f of ["app/app/sessions/[id]/WrittenAttachments.tsx", "components/AnswerSets.tsx", "components/AttachmentList.tsx", "app/app/sessions/[id]/RecordingUpload.tsx"]) {
+    for (const f of ["app/app/sessions/[id]/SessionActions.tsx", "components/AnswerSets.tsx", "components/AttachmentList.tsx", "app/app/sessions/[id]/RecordingUpload.tsx"]) {
       expect(src(f)).toContain("fileSize(");
       expect(src(f)).not.toContain("/ 1024 / 1024).toFixed(1)");
     }

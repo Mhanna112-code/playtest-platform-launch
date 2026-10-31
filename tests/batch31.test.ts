@@ -147,12 +147,11 @@ describe("batch 31 section 2: written-answer files up to 500 MB", () => {
     expect(await db.recording.count({ where: { contractId: j.sessionId, part: "recording", uploadedAt: null } })).toBe(0);
   });
 
-  it("the lines: the file box says 500 MB, the client checks 500 MB; the browser abandons a failed upload and the file box can retry the same file", () => {
-    const box = src("app/app/sessions/[id]/WrittenAttachments.tsx");
-    expect(box).toContain("(images, PDF, text or zip; 500 MB each, 5 at most)");
-    expect(box).toContain('file.size > 500 * 1024 * 1024) return setErr(FIELD + "Files can be at most 500 MB.")');
-    expect(code("app/app/sessions/[id]/WrittenAttachments.tsx")).not.toMatch(/25 MB/);
-    expect(box).toContain('e.target.value = ""');
+  it("the lines: the server checks 500 MB; the browser abandons a failed upload and 📎 can retry the same file (batch 35 §38: the file box under the answers is gone)", () => {
+    expect(existsSync(path.resolve(__dirname, "..", "src/app/app/sessions/[id]/WrittenAttachments.tsx"))).toBe(false);
+    const clip = src("app/app/sessions/[id]/SessionActions.tsx");
+    expect(clip).toContain('e.target.value = ""; if (!file || pending.current) return;');
+    expect(code("app/app/sessions/[id]/SessionActions.tsx")).not.toMatch(/25 MB/);
     expect(src("app/api/recordings/[id]/upload/route.ts")).toContain('MAX_ATTACHMENT_BYTES, "Files can be at most 500 MB."');
     const up = src("lib/upload.ts");
     expect(up).toContain("recording-abandon");

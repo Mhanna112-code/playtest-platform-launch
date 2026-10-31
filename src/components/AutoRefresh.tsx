@@ -5,9 +5,12 @@ import { useRouter } from "next/navigation";
 import { bankCheckOpen } from "@/lib/bankConfirm";
 import { PRESS_REFUSED_EVENT } from "@/lib/client";
 import { publishIgnoredAlerts, publishTesterAlertsOff } from "@/lib/testerAlerts";
+import { LIVE_TICK, liveBeat, noteRedrawAsked, onBoxLines, rideLiveClock } from "@/lib/liveSync";
 
 /**
  * Keeps an open page current: polls a fingerprint every 20 s and refreshes the page's data when it changes (`refresh={false}`: only watches, e.g. on Edit, which must keep what was typed).
+ * (Owner, Oct 31, batch 35 §37) It polls on the page's one 20-second beat (lib/liveSync.ts), the same tick as the live top box's check, and redraws at once when
+ * that box finds a new line (the box then shows the line as the redraw lands).
  * (Owner, Oct 28) When the TEAM stops the test while a developer's test page or Edit is open, the page moves to the top of the test page at once (where the banner stays), not after a refused press.
  */
 /** (Batch 19 section 5) True the first time for this key in this tab (sessionStorage; without it, always true once per page load). */
@@ -35,6 +38,7 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
     shown.current = v ?? null;
   }, [v]);
   const stopped = useRef<boolean | null>(null);
+  const restrictedNow = useRef(false);
   // (Owner, Oct 28, batch 20 section 18) A last-resort reload never happens under someone's typing or an open box: it waits (a quiet "This page has updates ·
   // Refresh" shows meanwhile), and goes ahead only once nothing would be lost and the page still needs it.
   const [waiting, setWaiting] = useState(false);
@@ -54,8 +58,8 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
       go();
     };
     const testId = /^test=([^&]+)/.exec(query)?.[1];
+    // (Batch 35 §37) Runs on the page's beat ("live-tick"), the same tick as the live top box's check: no timer of its own.
     const tick = async () => {
-      window.dispatchEvent(new Event("live-tick")); // the live top notice checks at the same moment
       try {
         const r = await fetch(`/api/pulse?${query}`, { cache: "no-store" });
         if (!r.ok) return;
@@ -69,11 +73,13 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
           return;
         }
         stopped.current = !!adminStopped;
+        restrictedNow.current = !!restricted;
         // (Batch 17 §11) While the bank's check is open inline, the page waits: a refresh could move the piece (and the check) away from under the developer.
         if (refresh && bankCheckOpen()) return;
         // A suspension / hold is routed by SessionWatch (a hard move to the dashboard): refreshing a page the server is about to redirect would race it.
         const was = shown.current ?? last.current;
         if (refresh && !restricted && was !== null && v !== was && alive) {
+          noteRedrawAsked(); // (batch 35 §37) the box's line of this same beat waits for this redraw instead of asking a second one
           router.refresh();
           // Backstop: if the refresh left the main column empty (the server redirected it mid-flight), load the page again.
           setTimeout(() => reloadWhenFree(() => !document.querySelector("main")?.children.length), 6000);
@@ -86,13 +92,22 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
         // offline: try again next time
       }
     };
-    tick();
-    const t = setInterval(tick, 20_000);
+    tick(); // its own poll at once (a page shown again from the cache); the beats follow
+    const leave = rideLiveClock();
+    const onBeat = () => void tick();
+    window.addEventListener(LIVE_TICK, onBeat);
+    // (Batch 35 §37) The live top box found a new line: the page redraws at once (not on Edit's watch-only AutoRefresh, not while the bank's check is open, not
+    // while SessionWatch is routing a hold or suspension).
+    const offLines = onBoxLines(() => {
+      if (!alive || !refresh || bankCheckOpen() || restrictedNow.current) return false;
+      router.refresh();
+      return true;
+    });
     // (Batch 19 section 5) Shown again from the browser's back/forward cache: check at once (the page may be older than the last poll it made before it was left).
     const onShow = (e: PageTransitionEvent) => {
       if (!e.persisted) return;
       if (shown.current === null && refresh) router.refresh();
-      void tick();
+      liveBeat(); // every check on the page, this poll included
     };
     window.addEventListener("pageshow", onShow);
     // (Owner, Oct 29, batch 28 §9) A press refused because the state changed: redraw at once (the same as the poll's refresh; typed text and open boxes are kept),
@@ -100,12 +115,14 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
     const onRefused = () => {
       if (!alive || !refresh || bankCheckOpen()) return;
       router.refresh();
-      void tick();
+      liveBeat();
     };
     window.addEventListener(PRESS_REFUSED_EVENT, onRefused);
     return () => {
       alive = false;
-      clearInterval(t);
+      leave();
+      window.removeEventListener(LIVE_TICK, onBeat);
+      offLines();
       window.removeEventListener("pageshow", onShow);
       window.removeEventListener(PRESS_REFUSED_EVENT, onRefused);
     };

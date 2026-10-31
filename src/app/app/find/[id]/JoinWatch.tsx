@@ -2,11 +2,14 @@
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { pageBusy, watchTyping } from "@/lib/pageBusy";
+import { LIVE_TICK, noteRedrawAsked, onBoxLines, rideLiveClock } from "@/lib/liveSync";
 
 /**
  * (Owner's repro, Oct 29, batch 30 §8) The join page follows the tester's own application or ask to rejoin, starting from the fingerprint the server rendered (`v`):
  * accepted → "You're back in “Harbor Run”: your deadline is …" (or "You're in: “Harbor Run”.") with "Go to your session →", and the page moves there unless something
  * is being typed; declined, closed or withdrawn → the page redraws with its line (the top box names a closing). Polled every 20 s, on the page's live tick and on focus.
+ * (Owner, Oct 31, batch 35 §37) The 20 s are the page's one beat (lib/liveSync.ts), shared with the top box; JoinWatch is the join page's redraw driver: a new line
+ * in the top box (a listing save, a closing) redraws the page at once.
  */
 export function JoinWatch({ testId, v }: { testId: string; v: string }) {
   const router = useRouter();
@@ -29,18 +32,27 @@ export function JoinWatch({ testId, v }: { testId: string; v: string }) {
         if (j.back) {
           setBack(j.back);
           if (!pageBusy()) window.location.href = j.back.href;
-        } else router.refresh();
+        } else {
+          noteRedrawAsked();
+          router.refresh();
+        }
       } catch {
         // offline: next time
       }
     };
-    const t = setInterval(check, 20_000);
-    window.addEventListener("live-tick", check);
+    const leave = rideLiveClock();
+    window.addEventListener(LIVE_TICK, check);
+    const offLines = onBoxLines(() => {
+      if (!alive) return false;
+      router.refresh();
+      return true;
+    });
     window.addEventListener("focus", check);
     return () => {
       alive = false;
-      clearInterval(t);
-      window.removeEventListener("live-tick", check);
+      leave();
+      window.removeEventListener(LIVE_TICK, check);
+      offLines();
       window.removeEventListener("focus", check);
     };
   }, [testId, router]);

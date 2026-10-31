@@ -19,6 +19,7 @@ import { wrapSelection } from "@/lib/markdown";
 import { uploadToSession } from "@/lib/upload";
 import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
+import { fileSize } from "@/lib/format";
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
 function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[] }) {
@@ -90,10 +91,11 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const [needOne, setNeedOne] = useState(false);
   const [notes, setNotes] = useState(initialNotes);
   const [attachments, setAttachments] = useState(initialAttachments);
-  useEffect(() => {
-    const frame = requestAnimationFrame(() => window.dispatchEvent(new CustomEvent(`written-files:${sessionId}`, { detail: { attachments, places: attachments.map((a) => ({ id: a.id, labels: [...answers.map((text, i) => ({ text, label: qText(questions[i]) })), { text: notes, label: "Anything else (bugs, ideas)" }].filter((x) => hasMarkerFor(x.text, a.id, attachments)).map((x) => x.label) })) } })));
-    return () => cancelAnimationFrame(frame);
-  }, [sessionId, attachments, answers, notes, questions]);
+  /**
+   * (Owner, Oct 31, batch 35 §38) No "Files and recordings" box under the answers: files go in an answer with 📎 (its preview shows them, × removes one; the server
+   * keeps the limits: 5 files, 5 recordings, 500 MB each). Files that old box added and no answer shows still go with every Send: listed under the answers, each with ×.
+   */
+  const loose = attachments.filter((a) => ![...answers, notes].some((t) => hasMarkerFor(t, a.id, attachments)));
   const addAttachment = (item: AnswerAttachment) => setAttachments((old) => [...old.filter((a) => a.id !== item.id), item]);
   const removeAttachment = (id: string) => {
     const refs = [...answers, notes].reduce((n, a) => n + (hasMarkerFor(a, id, attachments) ? 1 : 0), 0);
@@ -193,6 +195,16 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} value={notes} onChange={setNotes} />
         {notesDraft}
       </div>
+      {loose.length > 0 && (
+        <div className="space-y-1 text-sm" data-loose-files="">
+          <p className="text-slate-400">Files not in an answer (they go with your answers when you send them):</p>
+          <ul className="flex flex-wrap gap-2">
+            {loose.map((a) => (
+              <li key={a.id} className="inline-flex items-center gap-1"><a className="rounded border border-white/15 px-2 py-1 text-xs" href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer">{a.filename} · {fileSize(a.size)}</a><button type="button" aria-label={`Remove ${a.filename}`} className="btn-ghost px-1" onClick={() => removeAttachment(a.id)}>×</button></li>
+            ))}
+          </ul>
+        </div>
+      )}
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}

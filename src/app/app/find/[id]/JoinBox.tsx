@@ -9,6 +9,7 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, errOf, ApiError } from "@/lib/client";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 import { LIVE_EVENT, mergeChanges, useLiveAppend, wasShownInBox } from "@/lib/live";
+import { announcedWithRedraw } from "@/lib/liveSync";
 import { LongList } from "@/components/LongList";
 import { fmtTimeIn } from "@/lib/format";
 import { savedZone } from "@/components/TimeZoneSync";
@@ -64,7 +65,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       const added = ((e as CustomEvent<Change[]>).detail ?? []).filter((c) => !c.quiet && !wasShownInBox(c));
       if (!added.length) return;
       setSince((old) => mergeChanges(old, added));
-      afterChanges(added);
+      afterChanges(added, announcedWithRedraw()); // (batch 35 §37) lines that came with the page's redraw need no second one
     };
     window.addEventListener(LIVE_EVENT, on);
     return () => window.removeEventListener(LIVE_EVENT, on);
@@ -74,12 +75,12 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
    * (Batch 30 §12) Listing changes the page learns of (live, or in a stop box): the page redraws to the current listing (the seen marker stays: only lines it
    * showed count as seen), and an NDA change clears the NDA tick ("read and accept it again below").
    */
-  function afterChanges(lines: Change[]) {
+  function afterChanges(lines: Change[], redrawn = false) {
     if (lines.some((c) => c.nda)) {
       setNda(false);
       setNdaErr("");
     }
-    if (lines.some((c) => c.timed)) router.refresh();
+    if (lines.some((c) => c.timed) && !redrawn) router.refresh();
   }
   /** A stop box under the button: it takes over from the "Changed since" list. */
   function showBox(sb: StopBox) {
