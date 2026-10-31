@@ -544,3 +544,7 @@ Tests (§53-§58): tests/batch35-terms-dates.test.ts, tests/rejoin.test.ts, test
 ## §63 The Alerts menu lists every kind (owner, Oct 31)
 On a paused or stopped test the developer's Alerts menu used to list only the kinds that can still happen there, while "(N off)" still counted the hidden ticks.
 Now every kind is listed; one that can't happen in the test's state is greyed and can't be changed there (its tick is kept). No extra text.
+
+## §64 Untouched Edit fields change silently again (owner, Oct 31; undoes §26)
+On an open Edit page, a field this tab hadn't touched takes another tab's saved value silently, with no "Changed in another tab at …: was …" note. A field this tab
+had changed keeps its text with the blue note and "Use theirs", as before. Spots and Open until keep their own notes.

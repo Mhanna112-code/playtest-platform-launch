@@ -94,8 +94,6 @@ function valueText(k: keyof F, v: unknown): string | string[] {
   return s;
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
-/** (Batch 35 §26) A field's value that reads "empty" in the note under it. */
-const emptyValue = (v: unknown) => v == null || v === "" || (Array.isArray(v) && v.length === 0);
 /** (Batch 35 §26) The value in "was “…”": a list (the questions) one per line. */
 const wasText = (v: string | string[] | null) => (v == null ? null : Array.isArray(v) ? v.join("\n") : v);
 // Where each form field's note shows (parts and prices share one place).
@@ -383,8 +381,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     if (Object.keys(fresh).length) setNotes((n) => ({ ...n, ...fresh }));
     // (Owner, Oct 31, batch 35 §26) Each field this tab hadn't touched that took the saved value says so under it: "Changed in another tab at 11:43 PM: was “…”" (what it
     // showed just before). Spots and Open until keep their own notes (above).
-    const quiet = m.take.filter((k) => !m.oldNote.includes(k));
-    if (quiet.length) setWas((o) => ({ ...o, ...Object.fromEntries(quiet.map((k) => [k, { at, value: emptyValue(base[k]) ? null : valueText(k, base[k]) }])) }));
+    // (Owner, Oct 31, batch 35 §64) Untouched fields change silently again: no "Changed in another tab … was …" note (§26 is undone; `was` stays empty).
   }
   /**
    * (Owner, Oct 28, batch 16 sections 18 and 20) The keys another tab, device or joining tester changed, as soon as the page sees them: the Free box becomes
