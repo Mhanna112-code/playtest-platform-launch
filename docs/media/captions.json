@@ -17847,7 +17847,7 @@
     "size": "desktop"
   },
   "b35r-01-top-line.png": {
-    "caption": "After the other tab's Save the old Edit tab's blue box reads “Updated · 10:18 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), written answers price, questions Dismiss”.",
+    "caption": "After the other tab's Save, the old Edit tab's blue box has two lines, with Dismiss: “Updated · 11:43 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), written answers price, questions” and “Updated · 11:43 PM: You renamed the test to Harbor Run: night harbors” (one save, two lines: see the bugs).",
     "kind": "image",
     "title": "§8 The old tab's top box",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -17865,7 +17865,7 @@
     "size": "desktop"
   },
   "b35r-03-questions-note.png": {
-    "caption": "The old tab's questions keep what it typed (“Did the map help you find the harbors?” added), with the blue note under them: “Saved in another tab or device at 10:18 PM: Questions: What did you like? Which harbor was hardest to find? Use theirs”.",
+    "caption": "The old tab's questions keep what it typed (“Did the map help you find the harbors?” added), with the blue note under them: “Saved in another tab or device at 11:43 PM: Questions: What did you like? · Which harbor was hardest to find?” and Use theirs.",
     "kind": "image",
     "title": "§8 A field typed here keeps the typing",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -17874,7 +17874,7 @@
     "size": "desktop"
   },
   "b35r-04-price-note.png": {
-    "caption": "The old tab's written price stays at its typed $12.00; the note under Parts and prices reads “Saved in another tab or device at 10:18 PM: Price for written answers: $15.00 Use theirs”.",
+    "caption": "The old tab's written price stays at its typed $12.00; the note under Parts and prices reads “Saved in another tab or device at 11:43 PM: Price for written answers: $15.00” with Use theirs.",
     "kind": "image",
     "title": "§8 The price",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -17892,7 +17892,7 @@
     "size": "desktop"
   },
   "b35r-06-save-stops.png": {
-    "caption": "The old tab's Save stops in the box under it: “Your Save didn't go through. Since you opened this page: Price for written answers: your version will replace the one saved in another tab at 10:20 PM. Questions: your version will replace the one saved in another tab at 10:20 PM. Press Save again to save.”",
+    "caption": "The old tab's Save stops in the box under it: “Your Save didn't go through. Since you opened this page: Price for written answers: your version will replace the one saved in another tab at 11:43 PM. Questions: your version will replace the one saved in another tab at 11:43 PM. Press Save again to save.”",
     "kind": "image",
     "title": "§8 Save stops once",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -17909,26 +17909,17 @@
     "order": 125007,
     "size": "desktop"
   },
-  "b35r-70-paid.png": {
-    "caption": "Hal Bishop presses Pay on Ivy Chen's answers with the test card 4000 0000 0000 0259: the app records the payment; Stripe shows the PaymentIntent “Succeeded”; the log on the right shows Stripe's deliveries.",
-    "kind": "image",
-    "title": "§9 Paid with 0259",
-    "section": "Early dispute (batch 35 §9)",
-    "group": "b35r9a",
-    "order": 122001,
-    "size": "desktop"
-  },
   "b35r-71-log-waited.png": {
-    "caption": "This time Stripe's dispute (evt_1UWTyMAwolF8enxCLQNDDG0m) came after the payment was recorded, so there was nothing to wait for (no “waited” line); delivery answered 200.",
+    "caption": "Hal Bishop paid Ivy Chen's written answers ($10.00) with the test card 4000 0000 0000 0259. The log (right) shows Stripe's charge.dispute.created at 23:32:54 answered 200 in 1216 ms: the payment was already recorded, so there was nothing to wait for and no “waited” line. The test page reads “Your tests are paused after a chargeback. Follow the steps in Payments.”; Stripe shows the payment “Disputed” and the dispute “needs response”.",
     "kind": "image",
-    "title": "§9 The dispute arrived after the payment was recorded",
+    "title": "§9 Paid with 0259; the dispute came after the payment was recorded",
     "section": "Early dispute (batch 35 §9)",
     "group": "b35r9a",
     "order": 122002,
     "size": "desktop"
   },
   "b35r-72-hold-steps.png": {
-    "caption": "Hal Bishop's Payments: “Your bank reversed a payment, so your account is on a chargeback hold. Your tests are paused. To lift it: A card verified with 3D Secure What you owe reserved on your card The team's approval Still to do: verify a card with 3D Secure, then pay what you owe ($2…”; Stripe shows the payment “Disputed”.",
+    "caption": "Hal Bishop's Payments: “Your bank reversed a payment, so your account is on a chargeback hold. Your tests are paused.”, the three steps not done yet (a card verified with 3D Secure, what you owe reserved on your card, the team's approval), “Still to do: verify a card with 3D Secure, then pay what you owe ($25.00), then wait for the team's approval. Paying alone doesn't lift it.” and Verify a card; Stripe shows the payment “Disputed”.",
     "kind": "image",
     "title": "§9 The chargeback hold starts at once",
     "section": "Early dispute (batch 35 §9)",
@@ -17937,7 +17928,7 @@
     "size": "desktop"
   },
   "b35r-73-blue-box.png": {
-    "caption": "The developer dashboard's blue box: “Your account is on hold Your account is on hold after a chargeback. All your tests are paused. Testers stay in them. Your dashboard, Payments, Settings and your notifications stay open. Your test pages show only the overview, where you can …”.",
+    "caption": "The developer dashboard's blue box: “Your account is on hold”: on hold after a chargeback, all tests paused with testers staying in them, and “To resume: follow the chargeback steps in Payments (it opens in a new tab). Still to do: verify a card with 3D Secure, then pay what you owe ($25.00), then wait for the team's approval.”",
     "kind": "image",
     "title": "§9 The blue box",
     "section": "Early dispute (batch 35 §9)",
@@ -17946,16 +17937,16 @@
     "size": "desktop"
   },
   "b35r-74-early-dispute-video.webm": {
-    "caption": "Hal Bishop pays with 0259; Stripe's dispute arrives moments later; (this time it came after the payment was recorded: no wait), and the chargeback hold starts: the blue box and the Payments steps.",
+    "caption": "Hal Bishop pays Ivy Chen's answers with 0259 (“Paid $10.00”); Stripe's dispute arrives about two seconds later, after the payment was already recorded, so it's answered 200 at once with no wait, and the chargeback hold starts: the test page pauses, Payments shows the steps and the dashboard the blue box. The early case (a dispute arriving before its payment, answered 503 so Stripe's retry starts the hold) didn't happen in three tries and isn't recorded; the automated tests cover it (tests/batch35-webhook.test.ts).",
     "kind": "video",
-    "title": "§9 An early dispute waits for its payment",
+    "title": "§9 The dispute and the hold",
     "section": "Early dispute (batch 35 §9)",
     "group": "b35r9a",
     "order": 122005,
     "size": "desktop"
   },
   "b35r-10-updated-line.png": {
-    "caption": "The new tab's save reached the old tab as one blue line in its top box (out of view while Invite was pressed; the pill read “1 new update ↑”): “Updated · 11:16 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · See it”",
+    "caption": "The new tab's save reached the old tab as one blue line in its top box (out of view while Invite was pressed; the pill read “1 new update ↑”): “Updated · 11:46 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · See it”, with Dismiss.",
     "kind": "image",
     "title": "§8 The old test page's line",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -17964,7 +17955,7 @@
     "size": "desktop"
   },
   "b35r-11-invite-stops.png": {
-    "caption": "The old tab's Invite stops once: “Your Invite didn't go through. Since you opened this page: The test's requirements changed: Languages: none → Spanish · 11:16 PM You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · 11:16 PM · See it Press Invite again to go ahead.”; Ben Quill and Cam Quill are still ticked.",
+    "caption": "The old tab's Invite stops once: “Your Invite didn't go through. Since you opened this page: The test's requirements changed: Languages: none → Spanish · 11:46 PM · You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · 11:46 PM · See it · Press Invite again to go ahead.” Cam Quill and Ben Quill stay ticked, now tagged “Doesn't list languages”; above the stop box an earlier line still reads “Everyone you ticked now meets this test's needs. Press Invite to send.”, which no longer holds (App bug).",
     "kind": "image",
     "title": "§8 Invite stops once; the ticks stay",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -17991,7 +17982,7 @@
     "size": "desktop"
   },
   "b35r-19-join-changed-since.png": {
-    "caption": "Ana's page is scrolled down to Join; right above the button: “Changed since you opened this page Nora Lane edited the listing at 11:14 PM: title (now “Harbor Run: night harbors”), description · See it”, and the pill at the bottom reads “1 new update ↑”.",
+    "caption": "Ana's page is scrolled down to Join; right above the button: “Changed since you opened this page · Nora Lane edited the listing at 11:48 PM: title (now “Harbor Run: night harbors”), description · See it” (the pill at the bottom of the screen read “1 new update ↑”).",
     "kind": "image",
     "title": "§8 The change reaches the old join page, out of view of the top box",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18000,7 +17991,7 @@
     "size": "desktop"
   },
   "b35r-20-join-stops.png": {
-    "caption": "The top box never came into view, so the change wasn't seen yet; Join stops once: “Your Join didn't go through. Since you opened this page: Nora Lane edited the listing at 11:14 PM: title (now “Harbor Run: night harbors”), description · See it You can turn these stops off below, or with Alerts on your dashboard. New terms from the developer and a key marked as working still stop. Turn off alerts Press again to join on the current listing.”",
+    "caption": "The top box never came into view, so the change wasn't seen yet; Join stops once: “Your Join didn't go through. Since you opened this page: Nora Lane edited the listing at 11:48 PM: title (now “Harbor Run: night harbors”), description · See it”, the note on turning these stops off with Turn off alerts, and “Press again to join on the current listing.”",
     "kind": "image",
     "title": "§8 Join stops once, naming what changed",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18009,7 +18000,7 @@
     "size": "desktop"
   },
   "b35r-21-join-see-it.png": {
-    "caption": "See it in the stop box jumps to the Listing panel on the join page, which now reads “Harbor Run: night harbors” with the new instructions and “Updated” tags.",
+    "caption": "See it in the stop box takes Ana up to the test's card at the top of the join page, which now reads “Harbor Run: night harbors” with the new last line of the instructions, “Play at night: the lanterns are new.”",
     "kind": "image",
     "title": "§8 See it",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18018,7 +18009,7 @@
     "size": "desktop"
   },
   "b35r-22-join-old-tab-video.webm": {
-    "caption": "Right, the developer saves a new name and instructions while Ana's join page (loaded before) is scrolled down to Join; the change shows right above the button and as the pill, but the top box never came into view, so Join stops once, naming what changed; See it jumps to the Listing panel; the second press joins (the session page opens).",
+    "caption": "Right, the developer saves a new name and instructions while Ana's join page (loaded before) is scrolled down to Join; the change shows right above the button and as the pill, but the top box never came into view, so Join stops once, naming what changed; See it jumps up to the test's card with the new name and instructions; the second press joins (the session page opens).",
     "kind": "video",
     "title": "§8 The join page in an old tab",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18027,7 +18018,7 @@
     "size": "desktop"
   },
   "b35r-11b-invite-second-press.png": {
-    "caption": "Invite pressed again: the needs box reads “Ben Quill doesn't list a language this test needs (Spanish). Cam Quill doesn't list a language this test needs (Spanish). Invite anyway Cancel”.",
+    "caption": "Invite pressed again: the panel now has a Languages filter (Spanish), and the needs box reads “Ben Quill doesn't list a language this test needs (Spanish). Cam Quill doesn't list a language this test needs (Spanish).” with Invite anyway and Cancel.",
     "kind": "image",
     "title": "§8 The second press",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18045,7 +18036,7 @@
     "size": "desktop"
   },
   "b35r-31-back-with-drafts.png": {
-    "caption": "After signing in again in the third tab, the Edit tab is back with its whole draft (“Harbor Run: night harbors”, Draft beside each changed field) and the test page with the Pay note (“6.00”, “The second answer was short; thanks for the first one.”, Draft).",
+    "caption": "After signing in again in the third tab, both tabs are back on their pages with their drafts: Edit shows the name “Harbor Run: night harbors” and the added sentence in the instructions, each marked “Draft” with “Use saved” (the heading still reads the saved name, Edit “Harbor Run: first 3 levels”); the test page shows Ana's Pay box with $6.00 and “The second answer was short; thanks for the first one.”, marked Draft with Use saved.",
     "kind": "image",
     "title": "§8 Signed back in: both tabs come back with their drafts",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18072,9 +18063,9 @@
     "size": "desktop"
   },
   "b35r-34-edit-parts-questions-draft.png": {
-    "caption": "The written price came back as $12.00 and the questions with the added line; Parts and prices and the questions each carry one Draft with Use saved.",
+    "caption": "The written price came back as the typed $12.00; Parts and prices carries one “Draft” with “Use saved” (the questions came back with the added line too, out of this picture).",
     "kind": "image",
-    "title": "§8 Edit: prices and questions",
+    "title": "§8 Edit: the price",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
     "group": "b35r4",
     "order": 128005,
@@ -18108,7 +18099,7 @@
     "size": "desktop"
   },
   "b35r-38-edit-after-all.png": {
-    "caption": "Every field is back to its saved value (name “Harbor Run: first 3 levels”, price $10.00, Mature unticked) and no Draft tag is left.",
+    "caption": "Every field is back to its saved value: the name “Harbor Run: first 3 levels”, the instructions without the added sentence, Mature (18+) unticked (the price, $10.00, is further down), and no Draft tag is left.",
     "kind": "image",
     "title": "§8 After “Use saved for all”",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18123,15 +18114,6 @@
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
     "group": "b35r5",
     "order": 129001,
-    "size": "desktop"
-  },
-  "b35r-50-three-tabs-typed.png": {
-    "caption": "Ana's session page open in three tabs; each types a different first answer, the third tab last.",
-    "kind": "image",
-    "title": "§8 Three tabs, three different answers",
-    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
-    "group": "b35r6",
-    "order": 130001,
     "size": "desktop"
   },
   "b35r-60-other-account.png": {
@@ -18162,7 +18144,7 @@
     "size": "desktop"
   },
   "b35r-41-written-draft.png": {
-    "caption": "Ana's typed answers came back (“The night harbors look lovely, and the lantern light helps a lot.” / “The third harbor: the map doesn't show the second bridge.”) with “Draft” and “Use saved” beside Send my answers.",
+    "caption": "Ana's typed answers came back after signing in: here the second, “The third harbor: the map doesn't show the second bridge.” (the first came back too, “The night harbors look lovely, and the lantern light helps a lot.”); the Draft tag with Use saved sits by Send my answers, next picture.",
     "kind": "image",
     "title": "§8 Session A: the written answers",
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
@@ -18222,69 +18204,6 @@
     "section": "Old tabs, sign-out and drafts (batch 35 §8)",
     "group": "b35r5",
     "order": 129008,
-    "size": "desktop"
-  },
-  "b35r-51-three-tabs-last.png": {
-    "caption": "App bug: the tabs show different answers: tab 1 “First tab: the harbor lights look great, but the map is hard to read.”; tab 2 “First tab: the harbor lights look great, but the map is hard to read.”; tab 3 “First tab: the harbor lights look great, but the map is hard to read.”.",
-    "kind": "image",
-    "title": "§8 After signing back in",
-    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
-    "group": "b35r6",
-    "order": 130002,
-    "size": "desktop"
-  },
-  "b35r-52-three-tabs-video.webm": {
-    "caption": "Three tabs on one session type different answers (tab 3 last); Log out in tab 1, Log in in tab 2 (tab 1 opened again from the dashboard): App bug: the tabs come back with different answers.",
-    "kind": "video",
-    "title": "§8 One draft per form",
-    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
-    "group": "b35r6",
-    "order": 130003,
-    "size": "desktop"
-  },
-  "b35r-75-paid.png": {
-    "caption": "Jo Rivera presses Pay on Kai Moss's answers with the test card 4000 0000 0000 0259: the app records the payment; Stripe shows the PaymentIntent “Succeeded”; the log on the right shows Stripe's deliveries.",
-    "kind": "image",
-    "title": "§9 Paid with 0259",
-    "section": "Early dispute (batch 35 §9)",
-    "group": "b35r9b",
-    "order": 123001,
-    "size": "desktop"
-  },
-  "b35r-76-first-503.png": {
-    "caption": "This time the payment was recorded before the dispute arrived: answered 200 (no 503 to show).",
-    "kind": "image",
-    "title": "§9 The first delivery",
-    "section": "Early dispute (batch 35 §9)",
-    "group": "b35r9b",
-    "order": 123002,
-    "size": "desktop"
-  },
-  "b35r-77-resent-200.png": {
-    "caption": "`stripe events resend evt_1UWU2rAwolF8enxCigza7vdC` delivers the same event again; stripe listen shows [200] then [200], and the chargeback hold starts.",
-    "kind": "image",
-    "title": "§9 Resent: answered 200, the hold starts",
-    "section": "Early dispute (batch 35 §9)",
-    "group": "b35r9b",
-    "order": 123003,
-    "size": "desktop"
-  },
-  "b35r-78-hold-after-resend.png": {
-    "caption": "Jo Rivera's Payments: “Your bank reversed a payment, so your account is on a chargeback hold. Your tests are paused. To lift it: A card verified with 3D Secure What you owe reserved on your card The team's approval Still to do: verify a card with 3D Secure, then …”.",
-    "kind": "image",
-    "title": "§9 The hold after the resend",
-    "section": "Early dispute (batch 35 §9)",
-    "group": "b35r9b",
-    "order": 123004,
-    "size": "desktop"
-  },
-  "b35r-79-retry-video.webm": {
-    "caption": "With the wait off (DISPUTE_WAIT_MS=0) Stripe's first delivery of the dispute is answered 200 and no hold starts; Stripe retries by itself on the live site, but the local forwarder doesn't, so the event is resent by hand (`stripe events resend`): answered 200, and the chargeback hold starts.",
-    "kind": "video",
-    "title": "§9 Answered 503, then the retry",
-    "section": "Early dispute (batch 35 §9)",
-    "group": "b35r9b",
-    "order": 123005,
     "size": "desktop"
   }
 }
