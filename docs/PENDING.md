@@ -3,7 +3,6 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
-- **Bank-check stalling on Charge (owner, Oct 31).** While the developer's bank confirmation is open on a piece (up to 15 min) the tester's Charge is refused; repeated Pay attempts could stall Charge. Plan: once Charge is open on a piece, the developer gets ONE locking bank check (15 min); an unconfirmed check means the next attempt within 24 h can't lock the piece again, so the tester's Charge goes through (the developer's later Pay is refused: already charged). Charge pressed during the one check: "The developer is confirming a payment for this with their bank. Try again in a few minutes." ~20 min.
 - **Flaky tests to fix:** batch22 "two admins at once" (race), batch17-rate §12 and codex9 "resource_missing" (~1 in 3), batch34-invite-beats-application "asked to rejoin first…" (rare), batch16-account-tabs (once).
 - **Open question: drafts propagating to old tabs (owner, Oct 31).** Today unsent typing never shows in another open tab until it reloads (one shared draft per form, last typed wins). Should an old tab learn about a newer draft typed in another tab (e.g. a "You have newer unsent changes from another tab · Load them" line), or keep showing its own?
 - **"You can't join this test again." should say why** (e.g. "<Dev> rated your work on this test, so this test is finished for you."); today the generic line covers a developer's rating of the tester.
@@ -16,6 +15,7 @@ Claude brings this list up when a batch lands and in summaries. Newest first.
 - **Join page: show what changed, not just which fields.** The blue "Changed since you opened this page" box (and the stop box under Join) lists Before → Now for each changed field (short values inline; description, questions and NDA in small scroll boxes of about 8 lines), instead of "questions · See it". About 30–45 min.
 
 ## Decided, not doing (owner, Oct 30)
+- Bank-check stalling on Charge (Oct 31): keep the lock as is (a developer's open bank check locks the piece for up to 15 minutes; no limit on repeats).
 - Back/Forward and paying-twice recordings (Pay on a restored page, Pay what you owe from an older tab): the owner tests these by hand; no recordings.
 - Local "Testing" buttons for Charge: no (the owner tests by hand; Claude moves a session's dates on request).
 - Listing changes have no tester bell/email line; an on-time part updated after the deadline becomes late: both stay as they are.
