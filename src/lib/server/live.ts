@@ -137,7 +137,8 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   const all = await withSaveAt(testId, [...listing, ...(await devPaymentChanges(devId, testId, since, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), tx);
   // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
   if (opts.all) return all;
-  const ignored = new Set((await tx.user.findUnique({ where: { id: devId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
+  // (Batch 35 §73) The ticks of this test's own Alerts menu.
+  const ignored = new Set((await tx.test.findUnique({ where: { id: testId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
   return ignored.size ? all.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : all;
 }
 

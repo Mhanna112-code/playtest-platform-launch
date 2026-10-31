@@ -403,18 +403,19 @@ describe("batch 20 section 7: no false \"overlaps\" flash after Request a time",
 describe("batch 20 section 8: the chip, the Alerts menu, other boxes and other tabs share one setting", () => {
   it("(cause) the chip DID save: the server has it; the menu's own state wasn't told. Now one type at a time, and the saved list is returned", async () => {
     const dev = await makeUser({ dev: true, name: "Nora Lane" });
-    const add = await json(await alertsAddPOST(req("/api/account/alerts/add", { cookie: dev.cookie, body: { key: "calls" } })));
-    expect(add.body.ignored).toEqual(["calls"]);
-    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).ignoredAlerts).toEqual(["calls"]);
-    // A menu drawn before the chip's press ticks Joins: only Joins is added (the chip's Call changes stays).
-    const menu = await json(await alertsPOST(req("/api/account/alerts", { cookie: dev.cookie, body: { key: "joins", off: true } })));
-    expect(menu.body.ignored.sort()).toEqual(["calls", "joins"]);
-    // Un-ticking Call changes in the menu turns the chip back.
-    const un = await json(await alertsPOST(req("/api/account/alerts", { cookie: dev.cookie, body: { key: "calls", off: false } })));
-    expect(un.body.ignored).toEqual(["joins"]);
-    // Other tabs and devices: the page's poll carries the saved setting.
+    // (Batch 35 §73) Saved on the test, not the account.
     const { testId } = await setup();
     await db.test.update({ where: { id: testId }, data: { developerId: dev.user.id } });
+    const add = await json(await alertsAddPOST(req("/api/account/alerts/add", { cookie: dev.cookie, body: { testId, key: "calls" } })));
+    expect(add.body.ignored).toEqual(["calls"]);
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).ignoredAlerts).toEqual(["calls"]);
+    // A menu drawn before the chip's press ticks Joins: only Joins is added (the chip's Call changes stays).
+    const menu = await json(await alertsPOST(req("/api/account/alerts", { cookie: dev.cookie, body: { testId, key: "joins", off: true } })));
+    expect(menu.body.ignored.sort()).toEqual(["calls", "joins"]);
+    // Un-ticking Call changes in the menu turns the chip back.
+    const un = await json(await alertsPOST(req("/api/account/alerts", { cookie: dev.cookie, body: { testId, key: "calls", off: false } })));
+    expect(un.body.ignored).toEqual(["joins"]);
+    // Other tabs and devices: the page's poll carries the saved setting.
     const p = await json(await pulseGET(req(`/api/pulse?test=${testId}`, { cookie: dev.cookie, method: "GET" })));
     expect(p.body.alerts).toEqual({ ignored: ["joins"] });
   });
@@ -425,11 +426,11 @@ describe("batch 20 section 8: the chip, the Alerts menu, other boxes and other t
     vi.stubGlobal("window", win);
     const heard: string[][] = [];
     win.addEventListener("dev-alerts", (e) => heard.push((e as CustomEvent<{ ignored: string[] }>).detail.ignored));
-    publishIgnoredAlerts(["calls"]);
+    publishIgnoredAlerts("tA", ["calls"]);
     expect(heard).toEqual([["calls"]]);
-    expect(ignoredAlertsNow()).toEqual(["calls"]);
+    expect(ignoredAlertsNow("tA")).toEqual(["calls"]);
     expect(JSON.parse(store.get("pt-alerts")!).ignored).toEqual(["calls"]);
-    publishIgnoredAlerts([], true);
+    publishIgnoredAlerts("tA", [], true);
     expect(heard[1]).toEqual([]);
     const off: boolean[] = [];
     win.addEventListener("tester-alerts", (e) => off.push((e as CustomEvent<{ off: boolean }>).detail.off));
@@ -439,10 +440,10 @@ describe("batch 20 section 8: the chip, the Alerts menu, other boxes and other t
     publishTesterAlertsOff(false);
     expect(testerAlertsAreOff()).toBe(false);
     // The components read the shared setting.
-    expect(src("components/QuickIgnore.tsx")).toContain("const done = useIgnoredAlerts();");
-    expect(src("components/AlertsMenu.tsx")).toContain("const shared = useIgnoredAlerts(start);");
+    expect(src("components/QuickIgnore.tsx")).toContain("const done = useIgnoredAlerts(testId);");
+    expect(src("components/AlertsMenu.tsx")).toContain("const shared = useIgnoredAlerts(testId, start);");
     expect(src("components/TesterAlertsToggle.tsx")).toContain("const off = useTesterAlertsOff(start);");
-    expect(src("components/AutoRefresh.tsx")).toContain("publishIgnoredAlerts(alerts.ignored, false)");
+    expect(src("components/AutoRefresh.tsx")).toContain("publishIgnoredAlerts(testId, alerts.ignored, false)");
   });
 
   it("the tester's Turn off alerts: saved, and the session page's poll carries it", async () => {
@@ -930,7 +931,7 @@ describe("batch 20 section 24: a tester's rating updates the developer's pages l
     const third = await makeUser({ tester: true, name: "Ivo" });
     const stop = await act(testId, "invite", dev.cookie, { testerIds: [third.user.id], seenAt: loaded2, tab: "B" });
     expect(texts(stop)).toEqual(["Hal finished their part (rated you)"]);
-    await db.user.update({ where: { id: dev.user.id }, data: { ignoredAlerts: ["leaving"] } });
+    await db.test.update({ where: { id: testId }, data: { ignoredAlerts: ["leaving"] } });
     expect(texts(await act(testId, "invite", dev.cookie, { testerIds: [third.user.id], seenAt: loaded2, tab: "B" }))).toEqual([]);
   });
 });

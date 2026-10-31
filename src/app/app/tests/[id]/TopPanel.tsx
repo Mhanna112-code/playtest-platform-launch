@@ -31,15 +31,20 @@ async function stillRestricted() {
   return !s || !!s.suspended || !!s.held;
 }
 
+/** (Batch 35 §75) The name each top press's box says ("Your End early didn't go through."). */
+export const TOP_PRESS = { "next-round": "Next round", "go-next-round": "Go to the next round", stop: "Stop the test", "end-early": "End early", open: "Accept testers again" } as const;
+
 export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const router = useRouter();
   // (Batch 16 section 21) End early stopped by another tab's action on the ticked testers: the pop-up's summary for them (calls, work waiting) refreshes.
   // (Batch 35 §40) After a press the page redraws in place: End early's ticks and reasons start empty again (as after the reload they replace).
-  const { press, changes, error, busy, at, finish } = usePress(p.seenAt, () => router.refresh(), { onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); } });
+  // (Owner bug, Oct 31, batch 35 §75) Next round, End early and Stop the test are separate presses: each box shows only under its own button, named after that
+  // press, and opening another top button clears it (one box at a time).
+  const { press, changes, error, busy, at, finish, clear } = usePress(p.seenAt, () => router.refresh(), { perKey: true, onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); } });
   // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
-  const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
+  const box = (k: keyof typeof TOP_PRESS) => (at === k ? <ChangesBox press={TOP_PRESS[k]} changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
   // End early: the full app's ticks and "All", one reason, and a confirm dialog before it presses.
   const [picked, setPicked] = useState<string[]>([]);
@@ -103,20 +108,20 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
           {(
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {!p.restricted && !stopped && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
-              {(!p.restricted || p.alertKeys) && <AlertsMenu ignored={p.ignoredAlerts ?? []} keys={p.alertKeys} />}
+              {(!p.restricted || p.alertKeys) && <AlertsMenu testId={p.id} ignored={p.ignoredAlerts ?? []} keys={p.alertKeys} />}
               {p.restricted || p.teamStopped || p.status === "draft" ? null : p.nextRoundId ? (
                 // (Owner, Oct 29, batch 27 section 2) A press, not a plain link: it stops once like Next round (the box under these buttons); the second press opens the draft.
                 <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} data-go-next-round="" onClick={() => void go("go-next-round")}><Repeat className="h-4 w-4" /> Go to the next round</button>
               ) : (
-                <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "next" ? "" : "next")}><Repeat className="h-4 w-4" /> Next round{p.perks === false && <SubscribersTag />}</button>
+                <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "next" ? "" : "next"); }}><Repeat className="h-4 w-4" /> Next round{p.perks === false && <SubscribersTag />}</button>
               )}
               {/* (Owner, Oct 28) A draft (a next round not opened yet) has no Next round and no End early. */}
-              {p.status !== "draft" && !stopped && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => setOpen(open === "end" ? "" : "end")} disabled={p.working.length === 0}>
+              {p.status !== "draft" && !stopped && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "end" ? "" : "end"); }} disabled={p.working.length === 0}>
                 End early
               </button>}
               {/* Stop the test: the full app's "Are you sure?" pop-up first; the stop-once box shows right under it. */}
               {/* (Batch 17 §15) The pop-up's "Why?" is required (also paused or restricted): its Stop stays disabled with "Say why first" until it has text. */}
-              {!stopped && <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
+              {!stopped && <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} before={() => { if (at !== "stop") clear(); return true; }} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
                 confirmDisabled={busy || !stopReady} confirmHint={!stopReason.trim() ? "Say why first" : undefined}
                 body={(
                   <div className="space-y-2">

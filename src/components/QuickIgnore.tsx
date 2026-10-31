@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { alertLabel } from "@/lib/alerts";
 import { api } from "@/lib/client";
-import { publishIgnoredAlerts, publishTesterAlertsOff, setTesterAlertsOff, useIgnoredAlerts, useTesterAlertsOff } from "@/lib/testerAlerts";
+import { alertsTestNow, publishIgnoredAlerts, publishTesterAlertsOff, setTesterAlertsOff, useIgnoredAlerts, useTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
  * (Design doc 6) Under a developer's stop box: how to stop being stopped for what is listed ("You can turn these stops off in Alerts on the test
@@ -11,17 +11,19 @@ import { publishIgnoredAlerts, publishTesterAlertsOff, setTesterAlertsOff, useIg
 export function QuickIgnore({ alerts }: { alerts: string[] }) {
   // (Batch 20 section 8) A chip reads the one shared setting: "(off)" while the type is ticked in Alerts (here, in another box, or in another tab), and back to
   // a press when it's un-ticked there.
-  const done = useIgnoredAlerts();
+  // (Owner, Oct 31, batch 35 §73) The chips save on this page's test (its Alerts are its own); a page with no test shows no chips.
+  const testId = alertsTestNow();
+  const done = useIgnoredAlerts(testId);
   if (!alerts.length) return null;
-  const off = (k: string) => api<{ ignored?: string[] }>("/api/account/alerts/add", { key: k }).then((r) => publishIgnoredAlerts(Array.isArray(r.ignored) ? r.ignored : [...new Set([...done, k])])).catch(() => null);
+  const off = (k: string) => api<{ ignored?: string[] }>("/api/account/alerts/add", { testId, key: k }).then((r) => publishIgnoredAlerts(testId, Array.isArray(r.ignored) ? r.ignored : [...new Set([...done, k])])).catch(() => null);
   return (
     <div className="mt-1 space-y-1 text-xs text-sky-200/90" data-quick-ignore="">
       <p>You can turn these stops off in Alerts on the test page.</p>
-      <p className="flex flex-wrap items-center gap-1.5">Don&apos;t stop me for:
+      {testId && <p className="flex flex-wrap items-center gap-1.5">Don&apos;t stop me for:
         {alerts.map((k) => (
           <button key={k} type="button" className="btn-ghost !rounded-md !px-2 !py-0.5 text-xs" disabled={done.includes(k)} onClick={() => void off(k)}>{done.includes(k) ? `${alertLabel(k)} (off)` : alertLabel(k)}</button>
         ))}
-      </p>
+      </p>}
     </div>
   );
 }

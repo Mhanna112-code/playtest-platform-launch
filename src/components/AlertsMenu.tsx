@@ -13,20 +13,21 @@ import { publishIgnoredAlerts, useIgnoredAlerts } from "@/lib/testerAlerts";
  * box. A payment hold, a stopped test and final refusals always stop. (Batch 16 section 21) A stored tick for a type no longer in the menu (the old
  * "Your saves and presses in another tab") is ignored.
  */
-export function AlertsMenu({ ignored: start, keys }: { ignored: string[]; keys?: string[] }) {
+export function AlertsMenu({ testId, ignored: start, keys }: { testId: string; ignored: string[]; keys?: string[] }) {
+  // (Owner, Oct 31, batch 35 §73) The ticks are this test's own (a new test and a Next round start with every alert on).
   // (Batch 20 section 8) The one shared setting: a stop box's "Don't stop me for" chip ticks it here at once (and in other tabs); un-ticking here turns the chip back.
-  const shared = useIgnoredAlerts(start);
+  const shared = useIgnoredAlerts(testId, start);
   const ignored = shared.filter((k) => ALERT_TYPES.some((a) => a.key === k));
   const [saved, setSaved] = useState("");
   async function toggle(key: string, on: boolean) {
     // One type at a time (the server adds or removes just it), so a menu drawn earlier never saves its old list over a chip's press.
-    publishIgnoredAlerts(on ? [...new Set([...shared, key])] : shared.filter((x) => x !== key), false);
-    await api<{ ignored: string[] }>("/api/account/alerts", { key, off: on }).then((r) => {
+    publishIgnoredAlerts(testId, on ? [...new Set([...shared, key])] : shared.filter((x) => x !== key), false);
+    await api<{ ignored: string[] }>("/api/account/alerts", { testId, key, off: on }).then((r) => {
       // (Owner, Oct 31, batch 35 §71) No "Saved." line: the tick itself shows it took; only a failure says so.
-      publishIgnoredAlerts(r.ignored);
+      publishIgnoredAlerts(testId, r.ignored);
       setSaved("");
     }, () => {
-      publishIgnoredAlerts(shared, false);
+      publishIgnoredAlerts(testId, shared, false);
       setSaved("Couldn't save. Try again.");
     });
   }

@@ -12,12 +12,13 @@ import { useEffect, useState } from "react";
  * everywhere else).
  */
 let OFF: boolean | null = null;
-let IGNORED: string[] | null = null;
+/** (Owner, Oct 31, batch 35 §73) The developer's Alerts belong to each test: the ticks heard per test id. */
+const IGNORED = new Map<string, string[]>();
 const TESTER_EVENT = "tester-alerts";
 const DEV_EVENT = "dev-alerts";
 const STORE = "pt-alerts";
 
-function broadcast(data: { off?: boolean; ignored?: string[] }) {
+function broadcast(data: { off?: boolean; ignored?: string[]; testId?: string }) {
   try {
     window.localStorage.setItem(STORE, JSON.stringify({ ...data, at: Date.now() }));
   } catch {
@@ -38,24 +39,32 @@ export function publishTesterAlertsOff(off: boolean, share = true) {
   if (share) broadcast({ off });
 }
 
-const same = (a: string[] | null, b: string[]) => !!a && a.length === b.length && a.every((x) => b.includes(x));
-export const ignoredAlertsNow = () => IGNORED;
-/** The developer's Alerts (the types they're not stopped for) as saved or heard from the server: the menu, every stop box's chips and (`share`) the other tabs follow. */
-export function publishIgnoredAlerts(ignored: string[], share = true) {
-  const changed = !same(IGNORED, ignored);
-  IGNORED = [...ignored];
+const same = (a: string[] | undefined, b: string[]) => !!a && a.length === b.length && a.every((x) => b.includes(x));
+export const ignoredAlertsNow = (testId: string) => IGNORED.get(testId) ?? null;
+/** (Batch 35 §73) The test a stop box's "Don't stop me for" chips save on: the test page's or Edit's, from the address ("" on any other page: no chips). */
+export function alertsTestNow(): string {
+  if (typeof window === "undefined" || !window.location) return "";
+  const id = /^\/app\/tests\/([^/?#]+)/.exec(window.location.pathname)?.[1] ?? "";
+  return id === "new" ? "" : id;
+}
+/** One test's developer Alerts (the types they're not stopped for there) as saved or heard from the server: that test's menu, every stop box's chips and
+ * (`share`) the other tabs follow. Another test's ticks are never touched. */
+export function publishIgnoredAlerts(testId: string, ignored: string[], share = true) {
+  if (!testId) return;
+  const changed = !same(IGNORED.get(testId), ignored);
+  IGNORED.set(testId, [...ignored]);
   if (typeof window === "undefined" || (!changed && !share)) return;
-  window.dispatchEvent(new CustomEvent(DEV_EVENT, { detail: { ignored: IGNORED } }));
-  if (share) broadcast({ ignored: IGNORED });
+  window.dispatchEvent(new CustomEvent(DEV_EVENT, { detail: { testId, ignored: [...ignored] } }));
+  if (share) broadcast({ testId, ignored: [...ignored] });
 }
 
 /** Another tab of this browser saved one of the settings. */
 function onStorage(e: StorageEvent) {
   if (e.key !== STORE || !e.newValue) return;
   try {
-    const d = JSON.parse(e.newValue) as { off?: unknown; ignored?: unknown };
+    const d = JSON.parse(e.newValue) as { off?: unknown; ignored?: unknown; testId?: unknown };
     if (typeof d.off === "boolean") publishTesterAlertsOff(d.off, false);
-    if (Array.isArray(d.ignored)) publishIgnoredAlerts(d.ignored.map(String), false);
+    if (Array.isArray(d.ignored) && typeof d.testId === "string") publishIgnoredAlerts(d.testId, d.ignored.map(String), false);
   } catch {
     // ignore
   }
@@ -67,21 +76,25 @@ function listen() {
   window.addEventListener("storage", onStorage);
 }
 
-/** The developer's ignored types as shown now. `start`: what the page was drawn with (it seeds the tab; a refreshed page's newer value replaces it). */
-export function useIgnoredAlerts(start?: string[]): string[] {
-  const [list, setList] = useState<string[]>(() => start ?? IGNORED ?? []);
+/** One test's developer ignored types as shown now. `start`: what the page was drawn with (it seeds the tab; a refreshed page's newer value replaces it), and
+ * the other tests' ticks never reach it. */
+export function useIgnoredAlerts(testId: string, start?: string[]): string[] {
+  const [list, setList] = useState<string[]>(() => start ?? IGNORED.get(testId) ?? []);
   const key = start ? JSON.stringify([...start].sort()) : "";
   useEffect(() => {
-    const on = (e: Event) => setList([...((e as CustomEvent<{ ignored: string[] }>).detail?.ignored ?? [])]);
+    const on = (e: Event) => {
+      const d = (e as CustomEvent<{ testId: string; ignored: string[] }>).detail;
+      if (d?.testId === testId) setList([...(d.ignored ?? [])]);
+    };
     window.addEventListener(DEV_EVENT, on);
     listen();
     if (key) {
       const drawn = JSON.parse(key) as string[];
       setList(drawn);
-      publishIgnoredAlerts(drawn, false);
-    } else if (IGNORED) setList(IGNORED);
+      publishIgnoredAlerts(testId, drawn, false);
+    } else setList(IGNORED.get(testId) ?? []);
     return () => window.removeEventListener(DEV_EVENT, on);
-  }, [key]);
+  }, [key, testId]);
   return list;
 }
 

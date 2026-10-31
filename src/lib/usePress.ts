@@ -73,7 +73,8 @@ export function useFinished(onFresh?: () => void) {
  * A panel's presses: sends the page's "seen" marker. If the server stops once, the box lists the changes directly under
  * the pressed button (its key) and the next press is sent as confirmed. A refusal shows in the same place.
  */
-export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void, opts: { once?: boolean; /** (batch 35 §41) the redraw after a finished press landed: empty the box */ onFresh?: () => void } = {}) {
+export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>) => void, opts: { once?: boolean; /** (batch 35 §41) the redraw after a finished press landed: empty the box */ onFresh?: () => void; /** (batch 35 §75) each key is its own press: another
+  key's box never confirms (or merges into) this one, and pressing another key clears it */ perKey?: boolean } = {}) {
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -88,8 +89,11 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     setError("");
     setErrData({});
     setAt(key);
+    // (Owner bug, Oct 31, batch 35 §75) With `perKey`, only this key's own box makes this press its second one.
+    const again = changes != null && (!opts.perKey || key === at);
+    if (!again && opts.perKey) setChanges(null);
     try {
-      const r = await api<T>(path, { ...body, seenAt, confirmed: changes != null || body.confirmed === true, ...(changes != null && !opts.once && boxAt ? { boxAt } : {}) });
+      const r = await api<T>(path, { ...body, seenAt, confirmed: again || body.confirmed === true, ...(again && !opts.once && boxAt ? { boxAt } : {}) });
       setChanges(null);
       const note = (r as { note?: unknown } | null)?.note;
       if (typeof note === "string") setError(note); // shown under the button (blue)
@@ -97,7 +101,7 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         // A stop after a stop adds its new lines to the box.
-        setChanges((c) => (c ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
+        setChanges((c) => (c && again ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
         onStop?.(e.data);
       } else {
@@ -118,5 +122,11 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   });
   // (Batch 35 §40, §41) A press that went through: `finish(line)` redraws the page in place; until it has, the panel stays busy (its buttons greyed) and `done`.
   const fin = useFinished(opts.onFresh);
-  return { press, changes, setChanges, error, busy: busy || fin.done, setError, at, errData, done: fin.done, doneLine: fin.line, finish: fin.finish };
+  /** (Batch 35 §75) Another button opened its panel or dialog: the box (and refusal) under the earlier press goes. */
+  const clear = () => {
+    setChanges(null);
+    setError("");
+    setAt("");
+  };
+  return { press, changes, setChanges, error, busy: busy || fin.done, setError, at, errData, done: fin.done, doneLine: fin.line, finish: fin.finish, clear };
 }

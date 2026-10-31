@@ -33,7 +33,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
       <p><a href={`/app/tests/${id}`}>← Back to the test</a></p>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-3xl font-bold tracking-tight text-white">Edit “{t.title}”</h1>
-        <AlertsMenu ignored={u.ignoredAlerts} />
+        <AlertsMenu testId={t.id} ignored={t.ignoredAlerts} />
       </div>
       {t.status === "stopped" ? (
         <p className="err-field" role="alert" data-stopped="">This test was stopped.</p>

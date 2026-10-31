@@ -170,7 +170,7 @@ export async function logTestAction(userId: string, testId: string, action: stri
     }
     case "answer-request": {
       const { when, name } = await requestLine(s(body.requestId));
-      text = body.action === "withdraw" ? `withdrew your call request for ${when}` : `${body.action === "accept" ? "accepted" : "declined"} ${name}'s call request for ${when}`;
+      text = body.action === "withdraw" ? `withdrew a call request for ${when}` /* (batch 35 §74) */ : `${body.action === "accept" ? "accepted" : "declined"} ${name}'s call request for ${when}`;
       about = { a: "answer-request", k: [`req:${s(body.requestId)}`, `c:${s(body.contractId)}`] };
       break;
     }

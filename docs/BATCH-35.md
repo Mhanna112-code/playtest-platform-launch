@@ -640,3 +640,23 @@ the top ticks or unticks every type that can happen on this test at once; greyed
 - Stop / End early pressed on a test page drawn while the developer side was suspended or on a hold sent them to the dashboard ("Done: …", batch 15 §29). Now that
   only happens if the account is still restricted at that moment; reinstated meanwhile, the press goes through and the test page just redraws in place.
 - The dashboard's "Your developer account is active again · <time>" shows on the first view only; leaving or reloading the page hides it (per browser).
+
+## §73 The developer's Alerts belong to each test (owner, Oct 31)
+The developer's Alerts ticks are saved on the test, not the account: ticking a type on one test never changes another test. A new test and a Next round start
+with every alert on (nothing is carried over). The Alerts menu (test page and Edit) and a stop box's "Don't stop me for" chips save on the page's test, and only
+that test's developer can change them. The stop gate, the live box's greyed lines and the page's poll all read the test's own list; the page's shared state is
+kept per test. The migration (`20261110090000_test_ignored_alerts`) adds `Test.ignoredAlerts` and fills each existing test with its developer's account list at
+that moment, so nothing changes for tests already running; `User.ignoredAlerts` stays (unused). The tester's one-press Alerts is unchanged (per tester).
+
+## §74 The developer's own call-request actions are theirs (owner bug, Oct 31)
+The developer withdrew their own call request on the test page, then pressed Pay more on the same page: it stopped with "dev withdrawn a call request for …" and
+offered the "Call changes" chip. Now the developer's own withdraw, decline and cancel of a set are recorded in their own voice ("You withdrew a call request for
+Sat, Nov 7, 3:35 PM", like their request, booking and call cancel already were), so the same page never stops for them; another tab stops once with the action
+log's "You withdrew a call request for Sat, Nov 7, 3:35 PM in another tab" (never in Alerts). The tester's own lines stay third person, with "withdrew"
+("fbbb withdrew a call request for …"; "withdrawn" was a typo).
+
+## §75 The top panel's presses each have their own box (owner bug, Oct 31)
+Next round, End early and Stop the test share one press state on the test page; a stop under Next round lingered after Stop the test, and End early's box was
+named "Your Stop the test didn't go through". Now each top press is its own: its box shows only under its own button and is named after it ("Your End early didn't
+go through." under End their work now), another press's box never counts as this press's first stop, and opening another top button (Next round, End early,
+Stop the test) clears the earlier box: one box at a time.

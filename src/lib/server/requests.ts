@@ -474,7 +474,12 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";
   await db.callRequest.update({ where: { id: r.id }, data: { status, decidedAt: new Date() } });
-  await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", `${displayName(user)} ${status} a call request for ${fmtDateTime(r.startsAt)}`, false, {}, contractId));
+  // (Owner bug, Oct 31, batch 35 §74) The developer's own withdraw / decline is theirs ("You …": never a stop from the same page; another tab's is the action log's
+  // "You withdrew a call request for … in another tab"), and the past tense is "withdrew" (it read "dev withdrawn a call request").
+  const verb = status === "withdrawn" ? "withdrew" : "declined";
+  const when = fmtDateTime(r.startsAt);
+  const text = side === "developer" ? `You ${verb} ${status === "withdrawn" ? "a" : `${displayName(other)}'s`} call request for ${when}` : `${displayName(user)} ${verb} a call request for ${when}`;
+  await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId));
   return { [status]: true };
 }
 
@@ -506,7 +511,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
     await tx.call.updateMany({ where: { id: { in: calls.map((x) => x.id) } }, data: { status: "cancelled", cancelledBy: side, cancelledAt: now, cancelNote: reason } });
     await tx.callSlot.updateMany({ where: { id: { in: calls.map((x) => x.slotId) } }, data: { status: "removed" } });
     if (set) await tx.callSet.update({ where: { id: set.id }, data: { status: "cancelled" } });
-    await recordEvent(tx, c.testId, "cancelled", `${displayName(user)} cancelled the ${unit} calls from ${fmtDateTime(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
+    await recordEvent(tx, c.testId, "cancelled", `${side === "developer" ? "You" : displayName(user)} cancelled the ${unit} calls from ${fmtDateTime(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
   });
   // (Batch 15 sections 11 and 20) The time in the reader's own zone; the reason only in the email, never in the bell line.
   const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${T(calls[0].startsAt)}.`;

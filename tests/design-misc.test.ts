@@ -201,7 +201,7 @@ describe("the Alerts menu (design doc 6)", () => {
     expect(stop.body.error.code).toBe("stop_once");
     expect(stop.body.error.changes[0].alert).toBe("work");
     // Ignore "Work sent": the same press goes through, and the live box lists the line greyed.
-    expect((await json(await alertsPOST(req("/api/account/alerts", { cookie: dev.cookie, body: { ignored: ["work", "nonsense"] } })))).body.ignored).toEqual(["work"]);
+    expect((await json(await alertsPOST(req("/api/account/alerts", { cookie: dev.cookie, body: { testId, ignored: ["work", "nonsense"] } })))).body.ignored).toEqual(["work"]);
     const live = (await json(await liveGET(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(opened)}`, { cookie: dev.cookie })))).body.changes;
     expect(live.find((c: { text: string }) => c.text === "Ana Silva sent her recording")).toMatchObject({ ignored: true, alert: "work" });
     expect((await pay(dev.cookie, { kind: "submission", id: sub2.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: false })).status).toBe(200);

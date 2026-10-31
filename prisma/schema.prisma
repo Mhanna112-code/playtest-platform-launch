@@ -40,7 +40,7 @@ model User {
   deletedBy     String    @default("")
   deleteReason  String    @default("")
   /// (Design doc 9) A tester's payout failed ("Your bank couldn't receive a payout"): since when, and the last 3-day bell reminder
-  /// (Design doc 6) The Alerts menu: update types the developer chose NOT to be stopped for (see src/lib/alerts.ts)
+  /// (Design doc 6) The old account-wide Alerts menu. Unused since batch 35 §73 (the ticks belong to each test: Test.ignoredAlerts); kept to avoid a destructive migration
   ignoredAlerts     String[]  @default([])
   /// (Batch 15 section 26) The tester's one-press Alerts: Off = only changes to their contract (a new terms offer, their key marked working) stop a press
   testerAlertsOff   Boolean   @default(false)
@@ -177,6 +177,9 @@ model Test {
   developerId String
   developer   User     @relation(fields: [developerId], references: [id], onDelete: Cascade)
   title       String
+  /// (Owner, Oct 31, batch 35 §73) The developer's Alerts menu for this test: the update types they chose NOT to be stopped for here (see src/lib/alerts.ts).
+  /// A new test and a Next round start empty (every alert on)
+  ignoredAlerts String[] @default([])
   /// (Design doc 4) The game, website, app or other product (60 characters); the title above is this test's own name (60)
   productName String   @default("")
   /// (Design doc 4) Mature (18+): the developer says why the content is mature (required when ticked)

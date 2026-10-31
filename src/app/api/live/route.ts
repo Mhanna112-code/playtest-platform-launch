@@ -48,9 +48,9 @@ export async function GET(req: Request) {
         changes.push({ kind: "ended", text: c.endKind === "stopped" ? (t.adminStoppedAt ? "This test was stopped" : `${dev} stopped the test`) : c.endKind === "closed" ? "This test ended" : `${dev} ended your work`, createdAt: c.endedAt });
       }
     } else if (kind === "test") {
-      await ownTest(u.id, id);
+      const own = await ownTest(u.id, id);
       changes = await devChanges(u.id, id, since, tab, db, { all: true });
-      ignored = new Set(u.ignoredAlerts);
+      ignored = new Set(own.ignoredAlerts); // (batch 35 §73) this test's Alerts
       // (Batch 20 section 24) A tester's rating, in the live box with the developer's own window: "ff rated you. You can rate them until Nov 12, 2026."
       const rated = changes.filter((c) => c.kind === "rated" && (c as { contractId?: string | null }).contractId);
       if (rated.length) {
