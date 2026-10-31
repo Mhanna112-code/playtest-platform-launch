@@ -9,7 +9,7 @@ import { FIELD } from "@/lib/client";
  * whose data-match pattern fits it, or `find`), red with the same text until that field is fixed; the page goes to the first red field; under the button,
  * MistakeList: "Fix the mistake above, then press <press> again." with one linked bullet per red field. A refusal (blue) shows as before.
  */
-export function FormMistakes({ text, press, find }: { text: string; press: string; find?: (msg: string) => Element | null | undefined }) {
+export function FormMistakes({ text, press, find, top = false }: { text: string; press: string; find?: (msg: string) => Element | null | undefined; top?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
   const red = text.startsWith(FIELD);
@@ -28,7 +28,7 @@ export function FormMistakes({ text, press, find }: { text: string; press: strin
     <>
       <span ref={ref} hidden />
       {!red && <Err text={text} />}
-      <MistakeList press={press} orphans={orphans} />
+      <MistakeList press={press} orphans={orphans} top={top} />
     </>
   );
 }

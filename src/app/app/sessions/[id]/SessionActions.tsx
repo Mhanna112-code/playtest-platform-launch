@@ -42,7 +42,8 @@ function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: R
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")}>I</button>
       <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")}>{"</>"}</button>
       <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file">📎<input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept="image/*,application/pdf,text/plain,.zip,video/*" onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
-      <FormMistakes text={err} press="Attach" />
+      {/* (Owner, Oct 30) The form's mistake list shows once, at Send: an attach problem is one line here. */}
+      <Err text={err} />
       {/* (Owner, Oct 30) No ⏺ in the written answers: recordings belong to the recorded part. 📎 attaches files (videos too). */}
     </div>
   );
@@ -163,6 +164,9 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
 
   return (
     <form className="space-y-3" onSubmit={send}>
+      {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
+      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my updated answers" : "Send my answers"}
+        find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
       <QuestionBox count={questions.length} size="form" className="space-y-3" >
@@ -188,9 +192,6 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg?.ok && <p className="ok">{msg.text}</p>}
-      {/* (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
-      <FormMistakes text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my updated answers" : "Send my answers"}
-        find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
     </form>
   );
 }
