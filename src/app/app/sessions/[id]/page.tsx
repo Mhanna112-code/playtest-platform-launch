@@ -288,7 +288,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         switchNote: switchQuestionsLine(written),
       } : null} />
       {limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}
-      {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal}</p>
+      {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal}</p>{c.status === "left" && c.endKind !== "rated" && <p data-rejoin-link="">{/* (Owner, Oct 30) The way back after leaving: the test's page asks the developer. */}<a href={`/app/find/${c.testId}`}>Ask to rejoin on the test&apos;s page →</a></p>}
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
         {c.status === "ended" && c.endKind === "early" && c.endReason && <ReasonQuote text={c.endReason} />}
         {/* (Batch 17 §15) The developer's Stop reason, the same way (only the developer's own Stop writes the note; the team's Stop reason is never shown here). */}
