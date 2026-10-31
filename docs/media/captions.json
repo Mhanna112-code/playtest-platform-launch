@@ -18592,5 +18592,230 @@
     "group": "b35v3",
     "order": 139001,
     "size": "desktop"
+  },
+  "b35w-01-delete-after-suspend.png": {
+    "caption": "The same admin suspended Lee Marsh's developer side in another tab; Delete account pressed on this older page stops once: “Your Delete account didn't go through. Since this page loaded: You suspended the developer side in another tab at 4:56 AM. Press Delete account again to go ahead.”",
+    "kind": "image",
+    "title": "§45 Delete account after you suspended in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140001,
+    "size": "desktop"
+  },
+  "b35w-02-delete-after-reinstate.png": {
+    "caption": "The page loaded with Mia Grant's developer side suspended; the same admin reinstated it in another tab, and Delete account here stops once: “Your Delete account didn't go through. Since this page loaded: You reinstated the developer side in another tab at 4:56 AM. Press Delete account again to go ahead.”",
+    "kind": "image",
+    "title": "§45 Delete account after you reinstated in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140002,
+    "size": "desktop"
+  },
+  "b35w-03-closeout-after-suspend.png": {
+    "caption": "After Preview and a reason typed, the same admin suspended Hal Bishop's developer side in another tab; the close-out press stops once: “Your Close all open reviews for $0 didn't go through. Since this page loaded: You suspended the developer side in another tab at 4:57 AM. Press Close all open reviews for $0 again to go ahead.”",
+    "kind": "image",
+    "title": "§45 The $0 close-out after you suspended in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140003,
+    "size": "desktop"
+  },
+  "b35w-04-pause-after-lift.png": {
+    "caption": "The same admin paused and then lifted the pause in another tab; Pause on this older page stops once: “Your Pause didn't go through. Since this page loaded: You paused this test in another tab at 4:57 AM. You lifted the pause on this test in another tab at 4:57 AM. Press Pause again to go ahead.”",
+    "kind": "image",
+    "title": "§45 Pause after you paused and lifted the pause in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140004,
+    "size": "desktop"
+  },
+  "b35w-20-dispute-reasons.png": {
+    "caption": "On the admin console (opened from a link), “Ana Silva's reason:”, “Nora Lane's note when paying:” and “Developer's side (added 4:54 AM):” each show in the small quoted box (italic, in quotes), the long reason wrapping over four lines instead of one long line.",
+    "kind": "image",
+    "title": "§43 A dispute on the admin console",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w2",
+    "order": 141001,
+    "size": "desktop"
+  },
+  "b35w-21-report-note.png": {
+    "caption": "On the developer's profile (For the team), “Reported by Ana Silva” with the report's note in the same quoted box: “Paid me $4.00 of $10.00 for two full answers and wrote that they were one line each, which isn't true. This is the second test where it happened.”",
+    "kind": "image",
+    "title": "§43 A report note",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w2",
+    "order": 141002,
+    "size": "desktop"
+  },
+  "b35w-30-popup-own-profile.png": {
+    "caption": "The pop-up opened on Join naming a language (Spanish or French) and a device (Mac); Cleo's other tab then added Spanish to their profile, and the open pop-up now reads “You updated your profile in another tab (4:54 AM): Your profile doesn't list a device this test needs (Mac). Join anyway?”",
+    "kind": "image",
+    "title": "§44 The needs pop-up after a profile save in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w3",
+    "order": 142001,
+    "size": "desktop"
+  },
+  "b35w-31-popup-second-language.png": {
+    "caption": "Twelve seconds after the other tab also added French (Spanish already covered the languages), the pop-up is unchanged: still “You updated your profile in another tab (4:54 AM):” and only the device (Mac).",
+    "kind": "image",
+    "title": "§47 A second language within a covered kind",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w3",
+    "order": 142002,
+    "size": "desktop"
+  },
+  "b35w-32-popup-dev-changed.png": {
+    "caption": "The developer then changed the test's languages to German; the open pop-up reads “Nora Lane changed what this test needs (4:55 AM): Your profile doesn't list a language this test needs (German) or a device it needs (Mac). Join anyway?”",
+    "kind": "image",
+    "title": "§44 The needs pop-up after the developer's change",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w3",
+    "order": 142003,
+    "size": "desktop"
+  },
+  "b35w-40-withdraw-after-accept.png": {
+    "caption": "Ana pressed Withdraw application on the page that still showed it pending, just after the developer accepted: “Nora Lane accepted your application at 4:55 AM, so you're in this test.”",
+    "kind": "image",
+    "title": "§48 Withdraw after the developer accepted",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w4",
+    "order": 143001,
+    "size": "desktop"
+  },
+  "b35w-41-withdraw-after-decline.png": {
+    "caption": "Ben pressed Withdraw application on the page that still showed it pending, just after the developer declined: “Nora Lane declined your application at 4:55 AM.”",
+    "kind": "image",
+    "title": "§48 Withdraw after the developer declined",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w4",
+    "order": 143002,
+    "size": "desktop"
+  },
+  "b35w-50-pay-more-done.png": {
+    "caption": "Right after Pay more went through: the button stays greyed, the amount box and the tick are hidden, and only “Paid $2.00 more to Ana Silva.” shows (the row above already reads “paid $12.00 of $10.00”).",
+    "kind": "image",
+    "title": "§41 Pay more right after it goes through",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w5",
+    "order": 144001,
+    "size": "desktop"
+  },
+  "b35w-60-recording-scrub.png": {
+    "caption": "A 12-second recording made with Record on the session page (a test picture stood in for the shared screen) and uploaded, playing after its time bar was moved to the middle: the player reads “0:08 / 0:12”, so the file carries its length and the jump held.",
+    "kind": "image",
+    "title": "§42 A new recording can be scrubbed",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w6",
+    "order": 145001,
+    "size": "desktop"
+  },
+  "b35w-05-lift-after-pause.png": {
+    "caption": "The page loaded paused; the same admin lifted the pause and paused again in another tab; Lift the pause here stops once: “Since this page loaded: You lifted the pause on this test in another tab at 4:57 AM. You paused this test in another tab at 4:57 AM. Press Lift the pause again to go ahead.”",
+    "kind": "image",
+    "title": "§45 Lift the pause after you lifted it and paused again in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140005,
+    "size": "desktop"
+  },
+  "b35w-06-stop-after-extend.png": {
+    "caption": "On a paused test the same admin extended the closing date in another tab; Stop (close) here stops once: “Your Stop (close) didn't go through. Since this page loaded: You extended this test's closing date in another tab at 4:57 AM. Press Stop (close) again to go ahead.”",
+    "kind": "image",
+    "title": "§45 Stop after you extended in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140006,
+    "size": "desktop"
+  },
+  "b35w-07-close-now-after-extend.png": {
+    "caption": "On a paused test the same admin extended the closing date in another tab; Close now here stops once: “Your Close now didn't go through. Since this page loaded: You extended this test's closing date in another tab at 4:57 AM. Press Close now again to go ahead.”",
+    "kind": "image",
+    "title": "§45 Close now after you extended in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140007,
+    "size": "desktop"
+  },
+  "b35w-08-allow-after-allow.png": {
+    "caption": "With two fields locked, the same admin pressed Allow 3 more changes in another tab; the press here is no longer possible and is refused: “You already allowed 3 more changes of this test's locked fields in another tab at 4:57 AM.”",
+    "kind": "image",
+    "title": "§45 Allow 3 more changes after you allowed them in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140008,
+    "size": "desktop"
+  },
+  "b35w-09-already-paused.png": {
+    "caption": "The same admin paused the test in another tab; Pause here is refused: “You already paused this test in another tab at 4:57 AM.”",
+    "kind": "image",
+    "title": "§45 Pause after you paused in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140009,
+    "size": "desktop"
+  },
+  "b35w-10-already-deleted.png": {
+    "caption": "The same admin deleted Sam Rivera's account in another tab; Delete account here is refused and the account box updates from the refusal: “Deleted Sat, Oct 31, 4:57 AM by admin+media…@playtest.test:” with the reason “Closed at their request (duplicate).” in the quoted box, and “You already deleted this account in another tab at 4:57 AM.”",
+    "kind": "image",
+    "title": "§45 Delete account after you deleted it in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140010,
+    "size": "desktop"
+  },
+  "b35w-11-hold-approve-after-suspend.png": {
+    "caption": "Quinn Park's hold lift waits for Approve; the same admin suspended their developer side in another tab, and Approve here stops once: “Your Approve didn't go through. Since this page loaded: You suspended the developer side in another tab at 4:58 AM. Press Approve again to go ahead.”",
+    "kind": "image",
+    "title": "§45 A payment hold's Approve after you suspended in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w1",
+    "order": 140011,
+    "size": "desktop"
+  },
+  "b35w-12-chargeback-approve-after-decline.png": {
+    "caption": "On Rae Novak's chargeback hold the same admin chose “Don't approve: release the reservation” in another tab; Approve on this older console reads “Not yet: nothing is reserved ($25.00 is owed; you released it in another tab at 5:07 AM).”",
+    "kind": "image",
+    "title": "§45 A chargeback hold's Approve after you chose Don't approve in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w7",
+    "order": 141001,
+    "size": "desktop"
+  },
+  "b35w-13-chargeback-already-approved.png": {
+    "caption": "On Tom Hale's chargeback hold the same admin pressed Approve in another tab; Approve on this older console is refused: “You already approved lifting this hold in another tab at 5:08 AM.”",
+    "kind": "image",
+    "title": "§45 A chargeback hold's Approve after you approved it in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w7",
+    "order": 141002,
+    "size": "desktop"
+  },
+  "b35w-14-already-replied.png": {
+    "caption": "Cleo Ward's Contact us message was marked replied by the same admin in another tab; Mark replied on this older console is refused and the row now reads “Replied by admin+media…@playtest.test · Sat, Oct 31, 5:08 AM” with “You already marked this replied in another tab at 5:08 AM.”",
+    "kind": "image",
+    "title": "§45 Mark replied after you marked it in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w7",
+    "order": 141003,
+    "size": "desktop"
+  },
+  "b35w-15-admin-done.png": {
+    "caption": "Pause went through: its Why box is hidden, the button stays greyed and “Done.” shows under it until the page has loaded again.",
+    "kind": "image",
+    "title": "§41 An admin button after its press",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w8",
+    "order": 147001,
+    "size": "desktop"
+  },
+  "b35w-16-own-press-no-stop.png": {
+    "caption": "Pause pressed on this page went through, then Stop (close) on the same page went straight through too (“Done.”), with no “You paused this test in another tab” line; the test's Timeline lists both presses. App bug: the pause's line quotes the stop's reason (“Closed by the team after the reports.”) instead of the pause's own (“Checking the reports about the build link.”).",
+    "kind": "image",
+    "title": "§45 The page's own press doesn't stop it",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35w7",
+    "order": 141005,
+    "size": "desktop"
   }
 }

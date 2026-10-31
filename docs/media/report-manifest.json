@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-31T08:33:20.672Z",
+  "generated": "2026-10-31T10:10:02.355Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -9661,6 +9661,187 @@
           "explanation": "Two windows of the same developer, a clock in each corner (nothing cut). The other tab pays Ana Silva's written answers $10.00 while this window sits scrolled down at Ana's row in the Testers panel (“paid $0.00 of $10.00”), the top box off screen; 14.9 s later, on this page's 20-second check, the row turns into “Pay more · Listing: $10.00 for written answers” (“paid $10.00 of $10.00”) in the same frame as the pill “1 new update ↑”. $2.00 typed and Pay more pressed stops once, the rule the owner kept: “Your Pay more on Ana Silva's written answers didn't go through. Since you opened this page: You paid Ana Silva $10.00 for the written answers in another tab · 3:32 AM · Press Pay more again to go ahead.” The second press pays (“Paid $2.00.”), and the row reads “paid $12.00 of $10.00”.",
           "kind": "video",
           "desktop": "b35v-03-pay-more-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+      "explanation": "Batch 35 §40–§48 as built (docs/BATCH-35.md): an admin's own change made in another tab now stops their next press once in the second person (“You paused this test in another tab at …”), and a press no longer possible says “You already … in another tab at …” (§45); the reasons people typed show in the small quoted box on the admin pages (§43); the “What this test needs” pop-up names where a change came from and follows the one-or-none rule per kind (§44, §47); Withdraw says why there's nothing to withdraw (§48); a press that went through stays greyed with only its result line until the page has redrawn (§41); and a new recording's time bar shows its length and can be dragged (§42). One picture per case; the “other tab” is the same admin's own session sending its press with another page load's id, as a second tab does.",
+      "cases": [
+        {
+          "title": "§45 Delete account after you suspended in another tab",
+          "explanation": "The same admin suspended Lee Marsh's developer side in another tab; Delete account pressed on this older page stops once: “Your Delete account didn't go through. Since this page loaded: You suspended the developer side in another tab at 4:56 AM. Press Delete account again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-01-delete-after-suspend.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Delete account after you reinstated in another tab",
+          "explanation": "The page loaded with Mia Grant's developer side suspended; the same admin reinstated it in another tab, and Delete account here stops once: “Your Delete account didn't go through. Since this page loaded: You reinstated the developer side in another tab at 4:56 AM. Press Delete account again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-02-delete-after-reinstate.png",
+          "phone": null
+        },
+        {
+          "title": "§45 The $0 close-out after you suspended in another tab",
+          "explanation": "After Preview and a reason typed, the same admin suspended Hal Bishop's developer side in another tab; the close-out press stops once: “Your Close all open reviews for $0 didn't go through. Since this page loaded: You suspended the developer side in another tab at 4:57 AM. Press Close all open reviews for $0 again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-03-closeout-after-suspend.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Pause after you paused and lifted the pause in another tab",
+          "explanation": "The same admin paused and then lifted the pause in another tab; Pause on this older page stops once: “Your Pause didn't go through. Since this page loaded: You paused this test in another tab at 4:57 AM. You lifted the pause on this test in another tab at 4:57 AM. Press Pause again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-04-pause-after-lift.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Lift the pause after you lifted it and paused again in another tab",
+          "explanation": "The page loaded paused; the same admin lifted the pause and paused again in another tab; Lift the pause here stops once: “Since this page loaded: You lifted the pause on this test in another tab at 4:57 AM. You paused this test in another tab at 4:57 AM. Press Lift the pause again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-05-lift-after-pause.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Stop after you extended in another tab",
+          "explanation": "On a paused test the same admin extended the closing date in another tab; Stop (close) here stops once: “Your Stop (close) didn't go through. Since this page loaded: You extended this test's closing date in another tab at 4:57 AM. Press Stop (close) again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-06-stop-after-extend.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Close now after you extended in another tab",
+          "explanation": "On a paused test the same admin extended the closing date in another tab; Close now here stops once: “Your Close now didn't go through. Since this page loaded: You extended this test's closing date in another tab at 4:57 AM. Press Close now again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-07-close-now-after-extend.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Allow 3 more changes after you allowed them in another tab",
+          "explanation": "With two fields locked, the same admin pressed Allow 3 more changes in another tab; the press here is no longer possible and is refused: “You already allowed 3 more changes of this test's locked fields in another tab at 4:57 AM.”",
+          "kind": "image",
+          "desktop": "b35w-08-allow-after-allow.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Pause after you paused in another tab",
+          "explanation": "The same admin paused the test in another tab; Pause here is refused: “You already paused this test in another tab at 4:57 AM.”",
+          "kind": "image",
+          "desktop": "b35w-09-already-paused.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Delete account after you deleted it in another tab",
+          "explanation": "The same admin deleted Sam Rivera's account in another tab; Delete account here is refused and the account box updates from the refusal: “Deleted Sat, Oct 31, 4:57 AM by admin+media…@playtest.test:” with the reason “Closed at their request (duplicate).” in the quoted box, and “You already deleted this account in another tab at 4:57 AM.”",
+          "kind": "image",
+          "desktop": "b35w-10-already-deleted.png",
+          "phone": null
+        },
+        {
+          "title": "§45 A payment hold's Approve after you suspended in another tab",
+          "explanation": "Quinn Park's hold lift waits for Approve; the same admin suspended their developer side in another tab, and Approve here stops once: “Your Approve didn't go through. Since this page loaded: You suspended the developer side in another tab at 4:58 AM. Press Approve again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35w-11-hold-approve-after-suspend.png",
+          "phone": null
+        },
+        {
+          "title": "§45 A chargeback hold's Approve after you chose Don't approve in another tab",
+          "explanation": "On Rae Novak's chargeback hold the same admin chose “Don't approve: release the reservation” in another tab; Approve on this older console reads “Not yet: nothing is reserved ($25.00 is owed; you released it in another tab at 5:07 AM).”",
+          "kind": "image",
+          "desktop": "b35w-12-chargeback-approve-after-decline.png",
+          "phone": null
+        },
+        {
+          "title": "§45 A chargeback hold's Approve after you approved it in another tab",
+          "explanation": "On Tom Hale's chargeback hold the same admin pressed Approve in another tab; Approve on this older console is refused: “You already approved lifting this hold in another tab at 5:08 AM.”",
+          "kind": "image",
+          "desktop": "b35w-13-chargeback-already-approved.png",
+          "phone": null
+        },
+        {
+          "title": "§45 Mark replied after you marked it in another tab",
+          "explanation": "Cleo Ward's Contact us message was marked replied by the same admin in another tab; Mark replied on this older console is refused and the row now reads “Replied by admin+media…@playtest.test · Sat, Oct 31, 5:08 AM” with “You already marked this replied in another tab at 5:08 AM.”",
+          "kind": "image",
+          "desktop": "b35w-14-already-replied.png",
+          "phone": null
+        },
+        {
+          "title": "§41 An admin button after its press",
+          "explanation": "Pause went through: its Why box is hidden, the button stays greyed and “Done.” shows under it until the page has loaded again.",
+          "kind": "image",
+          "desktop": "b35w-15-admin-done.png",
+          "phone": null
+        },
+        {
+          "title": "§45 The page's own press doesn't stop it",
+          "explanation": "Pause pressed on this page went through, then Stop (close) on the same page went straight through too (“Done.”), with no “You paused this test in another tab” line; the test's Timeline lists both presses. App bug: the pause's line quotes the stop's reason (“Closed by the team after the reports.”) instead of the pause's own (“Checking the reports about the build link.”).",
+          "kind": "image",
+          "desktop": "b35w-16-own-press-no-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§43 A dispute on the admin console",
+          "explanation": "On the admin console (opened from a link), “Ana Silva's reason:”, “Nora Lane's note when paying:” and “Developer's side (added 4:54 AM):” each show in the small quoted box (italic, in quotes), the long reason wrapping over four lines instead of one long line.",
+          "kind": "image",
+          "desktop": "b35w-20-dispute-reasons.png",
+          "phone": null
+        },
+        {
+          "title": "§43 A report note",
+          "explanation": "On the developer's profile (For the team), “Reported by Ana Silva” with the report's note in the same quoted box: “Paid me $4.00 of $10.00 for two full answers and wrote that they were one line each, which isn't true. This is the second test where it happened.”",
+          "kind": "image",
+          "desktop": "b35w-21-report-note.png",
+          "phone": null
+        },
+        {
+          "title": "§44 The needs pop-up after a profile save in another tab",
+          "explanation": "The pop-up opened on Join naming a language (Spanish or French) and a device (Mac); Cleo's other tab then added Spanish to their profile, and the open pop-up now reads “You updated your profile in another tab (4:54 AM): Your profile doesn't list a device this test needs (Mac). Join anyway?”",
+          "kind": "image",
+          "desktop": "b35w-30-popup-own-profile.png",
+          "phone": null
+        },
+        {
+          "title": "§47 A second language within a covered kind",
+          "explanation": "Twelve seconds after the other tab also added French (Spanish already covered the languages), the pop-up is unchanged: still “You updated your profile in another tab (4:54 AM):” and only the device (Mac).",
+          "kind": "image",
+          "desktop": "b35w-31-popup-second-language.png",
+          "phone": null
+        },
+        {
+          "title": "§44 The needs pop-up after the developer's change",
+          "explanation": "The developer then changed the test's languages to German; the open pop-up reads “Nora Lane changed what this test needs (4:55 AM): Your profile doesn't list a language this test needs (German) or a device it needs (Mac). Join anyway?”",
+          "kind": "image",
+          "desktop": "b35w-32-popup-dev-changed.png",
+          "phone": null
+        },
+        {
+          "title": "§48 Withdraw after the developer accepted",
+          "explanation": "Ana pressed Withdraw application on the page that still showed it pending, just after the developer accepted: “Nora Lane accepted your application at 4:55 AM, so you're in this test.”",
+          "kind": "image",
+          "desktop": "b35w-40-withdraw-after-accept.png",
+          "phone": null
+        },
+        {
+          "title": "§48 Withdraw after the developer declined",
+          "explanation": "Ben pressed Withdraw application on the page that still showed it pending, just after the developer declined: “Nora Lane declined your application at 4:55 AM.”",
+          "kind": "image",
+          "desktop": "b35w-41-withdraw-after-decline.png",
+          "phone": null
+        },
+        {
+          "title": "§41 Pay more right after it goes through",
+          "explanation": "Right after Pay more went through: the button stays greyed, the amount box and the tick are hidden, and only “Paid $2.00 more to Ana Silva.” shows (the row above already reads “paid $12.00 of $10.00”).",
+          "kind": "image",
+          "desktop": "b35w-50-pay-more-done.png",
+          "phone": null
+        },
+        {
+          "title": "§42 A new recording can be scrubbed",
+          "explanation": "A 12-second recording made with Record on the session page (a test picture stood in for the shared screen) and uploaded, playing after its time bar was moved to the middle: the player reads “0:08 / 0:12”, so the file carries its length and the jump held.",
+          "kind": "image",
+          "desktop": "b35w-60-recording-scrub.png",
           "phone": null
         }
       ]
