@@ -25,6 +25,12 @@ type Tester = { contractId: string; name: string; sent: string[]; toSend: string
  * The test page's top title panel: the developer's big buttons (Stop the test, End early, Next round).
  * Its stop-once box sits directly under this panel.
  */
+/** (Batch 35 §72) Is the developer side still suspended or on a hold right now (not as the page was drawn)? */
+async function stillRestricted() {
+  const s = await fetch("/api/account/status", { cache: "no-store" }).then((r) => r.json()).catch(() => null) as { suspended?: boolean; held?: boolean } | null;
+  return !s || !!s.suspended || !!s.held;
+}
+
 export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
@@ -63,7 +69,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
     // (Batch 27 section 2) Go to the next round: past the stop-once gate, its draft opens.
     else if (action === "go-next-round" && r.id) window.location.href = `/app/tests/${r.id}`;
     // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
-    else if (p.doneTo && (action === "stop" || action === "end-early"))
+    // (Owner, Oct 31, batch 35 §72) Only while the account is still restricted: reinstated meanwhile, the page just redraws here with the full view.
+    else if (p.doneTo && (action === "stop" || action === "end-early") && (await stillRestricted()))
       window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.` : `Done: you ended ${picked.length === 1 ? "1 tester's" : `${picked.length} testers'`} work on ${p.title}.`)}`;
     // (Batch 35 §40, §41) Everything else redraws the page in place; the buttons stay greyed until it has.
     else finish();

@@ -630,3 +630,8 @@ Tests: tests/batch35-all-tabs.test.ts (§67-§69), tests/batch20.test.ts (the al
 ## §71 The Alerts menu: no "Saved.", and an "All" tick (owner, Oct 31)
 The developer's Alerts menu no longer shows "Saved." after a tick (the tick itself shows it; "Couldn't save. Try again." still shows on a failure). An "All" tick at
 the top ticks or unticks every type that can happen on this test at once; greyed types keep their ticks.
+
+## §72 Reinstatement doesn't move the developer; "active again" shows once (owner, Oct 31)
+- Stop / End early pressed on a test page drawn while the developer side was suspended or on a hold sent them to the dashboard ("Done: …", batch 15 §29). Now that
+  only happens if the account is still restricted at that moment; reinstated meanwhile, the press goes through and the test page just redraws in place.
+- The dashboard's "Your developer account is active again · <time>" shows on the first view only; leaving or reloading the page hides it (per browser).
