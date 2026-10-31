@@ -11,7 +11,7 @@ export const KEEP_MS = Number.POSITIVE_INFINITY;
 
 /** Where the pressed button was, in page coordinates (scroll included). */
 export type Spot = { top: number; left: number; width: number };
-export type Kept = { id: number; text: string; /** the server's own words (a line under the button may show just these) */ message: string; spot: Spot | null; at: number; el: Element | null; /** (batch 32 §10) ids of the button's sections, nearest first */ anchors: string[] };
+export type Kept = { id: number; text: string; /** the server's own words (a line under the button may show just these) */ message: string; spot: Spot | null; at: number; el: Element | null; /** (batch 32 §10) ids of the button's sections, nearest first */ anchors: string[]; /** (batch 35 §85) the page it was pressed on */ path?: string };
 
 let lastPress: { el: Element | null; spot: Spot | null; at: number; anchors: string[] } | null = null;
 let kept: Kept | null = null;
@@ -48,7 +48,7 @@ export function notePress(el: Element | null, spot: Spot | null, now = Date.now(
 /** A press refused because the state changed (the page redraws now): keep its line where the button was. Returns the kept line (for tests). */
 export function keepRefusal(label: string, message: string, now = Date.now()): Kept | null {
   if (!message.trim()) return null;
-  kept = { id: ++seq, text: keptRefusalLine(label, message), message: message.trim(), spot: lastPress?.spot ?? null, at: now, el: lastPress?.el ?? null, anchors: lastPress?.anchors ?? [] };
+  kept = { id: ++seq, text: keptRefusalLine(label, message), message: message.trim(), spot: lastPress?.spot ?? null, at: now, el: lastPress?.el ?? null, anchors: lastPress?.anchors ?? [], path: typeof location === "undefined" ? undefined : location.pathname };
   publish();
   return kept;
 }

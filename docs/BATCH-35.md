@@ -717,3 +717,7 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - The "Current tests" box is gone (History still lists every test, the ones you're in first, with its search box).
 - To do has Send work for every open test you're in: the parts not sent yet as before, and a test with every part sent gets one row of its own
   ("<title> · Every part sent", Send work → its parts), so a test with nothing waiting is still on the dashboard.
+
+## §85 A kept refusal never follows you to another page (owner, Oct 31)
+- The blue "Your <press> didn't go through: …" line kept after a refused press (batch 29 §36, batch 32 §10) belongs to the page it was pressed on: going to
+  another page drops it. On the same page it still stays until your next press (in the button's section, or at the top when none is left).

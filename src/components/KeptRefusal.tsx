@@ -98,7 +98,8 @@ export function KeptRefusal() {
       if (hostRef.current.parentElement !== anchor) anchor.appendChild(hostRef.current);
     };
     const check = () => {
-      if (Date.now() - kept.at >= KEEP_MS) {
+      // (Owner, Oct 31, batch 35 §85) It belongs to the page it was pressed on: going to another page drops it (it never follows you there).
+      if (Date.now() - kept.at >= KEEP_MS || (kept.path && location.pathname !== kept.path)) {
         setShow(false);
         dropHost();
         dropKept(kept.id);
