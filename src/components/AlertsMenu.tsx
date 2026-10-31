@@ -22,12 +22,19 @@ export function AlertsMenu({ ignored: start, keys }: { ignored: string[]; keys?:
     // One type at a time (the server adds or removes just it), so a menu drawn earlier never saves its old list over a chip's press.
     publishIgnoredAlerts(on ? [...new Set([...shared, key])] : shared.filter((x) => x !== key), false);
     await api<{ ignored: string[] }>("/api/account/alerts", { key, off: on }).then((r) => {
+      // (Owner, Oct 31, batch 35 §71) No "Saved." line: the tick itself shows it took; only a failure says so.
       publishIgnoredAlerts(r.ignored);
-      setSaved("Saved.");
+      setSaved("");
     }, () => {
       publishIgnoredAlerts(shared, false);
       setSaved("Couldn't save. Try again.");
     });
+  }
+  // (Owner, Oct 31, batch 35 §71) "All": ticks (or unticks) every type that can happen here at once; greyed types keep their ticks.
+  const open = ALERT_TYPES.filter((a) => !keys || keys.includes(a.key));
+  const allOn = open.length > 0 && open.every((a) => ignored.includes(a.key));
+  async function toggleAll(on: boolean) {
+    for (const a of open) if (ignored.includes(a.key) !== on) await toggle(a.key, on);
   }
   return (
     <details className="relative" data-alerts-menu="">
@@ -37,6 +44,9 @@ export function AlertsMenu({ ignored: start, keys }: { ignored: string[]; keys?:
         <p className="text-xs text-slate-400" data-alerts-intro="">Tick what should <b>not</b> {ALERTS_INTRO_REST}</p>
         {/* (Batch 15 section 39; owner, Oct 31, batch 35 §63) Every type is listed, so "(N off)" matches the ticks shown; a type that can't happen on a paused or
             stopped test is greyed and can't be changed there (its tick is kept). */}
+        <label className="flex cursor-pointer items-center gap-2 border-b border-white/10 pb-1.5 font-medium text-slate-100" data-alerts-all="">
+          <input type="checkbox" checked={allOn} onChange={(e) => void toggleAll(e.target.checked)} /> All
+        </label>
         {ALERT_TYPES.map((a) => {
           const off = !!keys && !keys.includes(a.key);
           return (

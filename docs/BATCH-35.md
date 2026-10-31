@@ -626,3 +626,7 @@ Tests: tests/batch35-leave-stops.test.ts (§66), tests/batch14.test.ts (section 
   longer greys or skips anything, and doesn't count in "(N off)"). Testers keep listing changes in their own Alerts (On/Off), unchanged.
 
 Tests: tests/batch35-all-tabs.test.ts (§67-§69), tests/batch20.test.ts (the always-stop kinds audit now includes "info").
+
+## §71 The Alerts menu: no "Saved.", and an "All" tick (owner, Oct 31)
+The developer's Alerts menu no longer shows "Saved." after a tick (the tick itself shows it; "Couldn't save. Try again." still shows on a failure). An "All" tick at
+the top ticks or unticks every type that can happen on this test at once; greyed types keep their ticks.
