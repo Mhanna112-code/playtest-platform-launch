@@ -18817,5 +18817,50 @@
     "group": "b35w7",
     "order": 141005,
     "size": "desktop"
+  },
+  "b35x-01-own-tab-alerts-off.png": {
+    "caption": "With “Alerts: Off” and its line “Stops a press only for: new terms, your key marked as working, and what you did in another tab.”, the tester sent their written answers in another tab; Leave pressed on this older page stops once: “Your Leave didn't go through. Since you opened this page: You sent your written answers in another tab · 1:51 PM. Press Leave again to go ahead.”",
+    "kind": "image",
+    "title": "§61 Your own other tab stops a press, Alerts Off",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35x1",
+    "order": 148001,
+    "size": "desktop"
+  },
+  "b35x-02-left-in-other-tab.png": {
+    "caption": "The tester left this test in another tab; Leave pressed on this older page is refused at the top, “Your Leave didn't go through: you already left this test.”, and the page redraws as left (no Leave button, “1 new update ↑” below).",
+    "kind": "image",
+    "title": "§61 Leave after leaving in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35x1",
+    "order": 148002,
+    "size": "desktop"
+  },
+  "b35x-03-paid-in-other-tab.png": {
+    "caption": "The developer paid Cam Reyes $2.00 more in another tab; $3.00 typed and Pay more pressed on this older page stops once: “Your Pay more on Cam Reyes's written answers didn't go through. Since you opened this page: You paid Cam Reyes $2.00 more for their written answers in another tab · 1:48 PM. Press Pay more again to go ahead.”",
+    "kind": "image",
+    "title": "§61 Pay more after paying more in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35x1",
+    "order": 148003,
+    "size": "desktop"
+  },
+  "b35x-04-stopped-in-other-tab.png": {
+    "caption": "The developer stopped this test in another tab; Pay on Dee Park's written answers, pressed on this older page, stops once: “Your Pay on Dee Park's written answers didn't go through. Since you opened this page: You stopped the test in another tab · 1:53 PM. Press Pay again to go ahead.”",
+    "kind": "image",
+    "title": "§61 Pay after stopping the test in another tab",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35x1",
+    "order": 148003,
+    "size": "desktop"
+  },
+  "b35x-05-leave-new-terms.png": {
+    "caption": "The developer raised the written answers' pay to $12.00 after this page loaded; Leave stops once and takes the page up to the offer box (“Nora Lane updated the listing: written $10 → $12.” with Switch / Keep), the stop box under it: “Your Leave didn't go through. Since you opened this page: Nora Lane offered you the new terms: Switch or Keep below · 1:53 PM … Press Leave again to go ahead.”",
+    "kind": "image",
+    "title": "§59 Leave stops once for new terms",
+    "section": "Admins' other tabs, reasons, the needs pop-up, after a press (batch 35 §40–§48)",
+    "group": "b35x1",
+    "order": 148004,
+    "size": "desktop"
   }
 }

@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-31T10:10:02.355Z",
+  "generated": "2026-10-31T18:54:19.618Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -9747,10 +9747,24 @@
           "phone": null
         },
         {
+          "title": "§43 A dispute on the admin console",
+          "explanation": "On the admin console (opened from a link), “Ana Silva's reason:”, “Nora Lane's note when paying:” and “Developer's side (added 4:54 AM):” each show in the small quoted box (italic, in quotes), the long reason wrapping over four lines instead of one long line.",
+          "kind": "image",
+          "desktop": "b35w-20-dispute-reasons.png",
+          "phone": null
+        },
+        {
           "title": "§45 A chargeback hold's Approve after you chose Don't approve in another tab",
           "explanation": "On Rae Novak's chargeback hold the same admin chose “Don't approve: release the reservation” in another tab; Approve on this older console reads “Not yet: nothing is reserved ($25.00 is owed; you released it in another tab at 5:07 AM).”",
           "kind": "image",
           "desktop": "b35w-12-chargeback-approve-after-decline.png",
+          "phone": null
+        },
+        {
+          "title": "§43 A report note",
+          "explanation": "On the developer's profile (For the team), “Reported by Ana Silva” with the report's note in the same quoted box: “Paid me $4.00 of $10.00 for two full answers and wrote that they were one line each, which isn't true. This is the second test where it happened.”",
+          "kind": "image",
+          "desktop": "b35w-21-report-note.png",
           "phone": null
         },
         {
@@ -9768,31 +9782,10 @@
           "phone": null
         },
         {
-          "title": "§41 An admin button after its press",
-          "explanation": "Pause went through: its Why box is hidden, the button stays greyed and “Done.” shows under it until the page has loaded again.",
-          "kind": "image",
-          "desktop": "b35w-15-admin-done.png",
-          "phone": null
-        },
-        {
           "title": "§45 The page's own press doesn't stop it",
           "explanation": "Pause pressed on this page went through, then Stop (close) on the same page went straight through too (“Done.”), with no “You paused this test in another tab” line; the test's Timeline lists both presses. App bug: the pause's line quotes the stop's reason (“Closed by the team after the reports.”) instead of the pause's own (“Checking the reports about the build link.”).",
           "kind": "image",
           "desktop": "b35w-16-own-press-no-stop.png",
-          "phone": null
-        },
-        {
-          "title": "§43 A dispute on the admin console",
-          "explanation": "On the admin console (opened from a link), “Ana Silva's reason:”, “Nora Lane's note when paying:” and “Developer's side (added 4:54 AM):” each show in the small quoted box (italic, in quotes), the long reason wrapping over four lines instead of one long line.",
-          "kind": "image",
-          "desktop": "b35w-20-dispute-reasons.png",
-          "phone": null
-        },
-        {
-          "title": "§43 A report note",
-          "explanation": "On the developer's profile (For the team), “Reported by Ana Silva” with the report's note in the same quoted box: “Paid me $4.00 of $10.00 for two full answers and wrote that they were one line each, which isn't true. This is the second test where it happened.”",
-          "kind": "image",
-          "desktop": "b35w-21-report-note.png",
           "phone": null
         },
         {
@@ -9842,6 +9835,48 @@
           "explanation": "A 12-second recording made with Record on the session page (a test picture stood in for the shared screen) and uploaded, playing after its time bar was moved to the middle: the player reads “0:08 / 0:12”, so the file carries its length and the jump held.",
           "kind": "image",
           "desktop": "b35w-60-recording-scrub.png",
+          "phone": null
+        },
+        {
+          "title": "§41 An admin button after its press",
+          "explanation": "Pause went through: its Why box is hidden, the button stays greyed and “Done.” shows under it until the page has loaded again.",
+          "kind": "image",
+          "desktop": "b35w-15-admin-done.png",
+          "phone": null
+        },
+        {
+          "title": "§61 Your own other tab stops a press, Alerts Off",
+          "explanation": "With “Alerts: Off” and its line “Stops a press only for: new terms, your key marked as working, and what you did in another tab.”, the tester sent their written answers in another tab; Leave pressed on this older page stops once: “Your Leave didn't go through. Since you opened this page: You sent your written answers in another tab · 1:51 PM. Press Leave again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35x-01-own-tab-alerts-off.png",
+          "phone": null
+        },
+        {
+          "title": "§61 Leave after leaving in another tab",
+          "explanation": "The tester left this test in another tab; Leave pressed on this older page is refused at the top, “Your Leave didn't go through: you already left this test.”, and the page redraws as left (no Leave button, “1 new update ↑” below).",
+          "kind": "image",
+          "desktop": "b35x-02-left-in-other-tab.png",
+          "phone": null
+        },
+        {
+          "title": "§61 Pay more after paying more in another tab",
+          "explanation": "The developer paid Cam Reyes $2.00 more in another tab; $3.00 typed and Pay more pressed on this older page stops once: “Your Pay more on Cam Reyes's written answers didn't go through. Since you opened this page: You paid Cam Reyes $2.00 more for their written answers in another tab · 1:48 PM. Press Pay more again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35x-03-paid-in-other-tab.png",
+          "phone": null
+        },
+        {
+          "title": "§61 Pay after stopping the test in another tab",
+          "explanation": "The developer stopped this test in another tab; Pay on Dee Park's written answers, pressed on this older page, stops once: “Your Pay on Dee Park's written answers didn't go through. Since you opened this page: You stopped the test in another tab · 1:53 PM. Press Pay again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35x-04-stopped-in-other-tab.png",
+          "phone": null
+        },
+        {
+          "title": "§59 Leave stops once for new terms",
+          "explanation": "The developer raised the written answers' pay to $12.00 after this page loaded; Leave stops once and takes the page up to the offer box (“Nora Lane updated the listing: written $10 → $12.” with Switch / Keep), the stop box under it: “Your Leave didn't go through. Since you opened this page: Nora Lane offered you the new terms: Switch or Keep below · 1:53 PM … Press Leave again to go ahead.”",
+          "kind": "image",
+          "desktop": "b35x-05-leave-new-terms.png",
           "phone": null
         }
       ]
