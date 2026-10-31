@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-31T05:36:15.217Z",
+  "generated": "2026-10-31T07:14:52.242Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -9056,11 +9056,11 @@
     },
     {
       "title": "Old tabs, sign-out and drafts (batch 35 §8)",
-      "explanation": "Drafts after signing back in (docs/BATCH-35.md §8, with batch 23 §5 and batch 34 §9 for Edit's notes): still signed in, an old tab keeps its typing with the blue notes, the stop-once lines and the ticks; after signing out (every tab goes to the login page) and back in, every form comes back with its draft marked “Draft” with “Use saved” (or “Discard” where nothing is saved yet); another account signing in never sees the first account's text. (Three tabs on one form, the last typed winning, is recorded after its fix.)",
+      "explanation": "Drafts after signing back in (docs/BATCH-35.md §8, with batch 23 §5 and batch 34 §9 for Edit's notes): still signed in, an old tab keeps its typing with the blue notes, the stop-once lines and the ticks; after signing out (every tab goes to the login page) and back in, every form comes back with its draft marked “Draft” with “Use saved” (or “Discard” where nothing is saved yet); another account signing in never sees the first account's text; three tabs on one form come back with the last typed (batch 35 §16), marked Draft with “Use saved” under each answer and “Use saved for all” (§18).",
       "cases": [
         {
           "title": "§8 The old tab's top box",
-          "explanation": "After the other tab's Save, the old Edit tab's blue box has two lines, with Dismiss: “Updated · 11:43 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), written answers price, questions” and “Updated · 11:43 PM: You renamed the test to Harbor Run: night harbors” (one save, two lines: see the bugs).",
+          "explanation": "After the other tab's Save, the old Edit tab's blue box has two lines, with Dismiss: “Updated · 11:43 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), written answers price, questions” and “Updated · 11:43 PM: You renamed the test to Harbor Run: night harbors” (one save, two lines: see the bugs). (Fixed since: batch 35 §17, one line per rename saved with other fields.)",
           "kind": "image",
           "desktop": "b35r-01-top-line.png",
           "phone": null
@@ -9109,7 +9109,7 @@
         },
         {
           "title": "§8 Invite stops once; the ticks stay",
-          "explanation": "The old tab's Invite stops once: “Your Invite didn't go through. Since you opened this page: The test's requirements changed: Languages: none → Spanish · 11:46 PM · You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · 11:46 PM · See it · Press Invite again to go ahead.” Cam Quill and Ben Quill stay ticked, now tagged “Doesn't list languages”; above the stop box an earlier line still reads “Everyone you ticked now meets this test's needs. Press Invite to send.”, which no longer holds (App bug).",
+          "explanation": "The old tab's Invite stops once: “Your Invite didn't go through. Since you opened this page: The test's requirements changed: Languages: none → Spanish · 11:46 PM · You saved the listing in another tab: title (now “Harbor Run: night harbors”), languages · 11:46 PM · See it · Press Invite again to go ahead.” Cam Quill and Ben Quill stay ticked, now tagged “Doesn't list languages”; above the stop box an earlier line still reads “Everyone you ticked now meets this test's needs. Press Invite to send.”, which no longer holds (App bug). (Fixed since: batch 35 §21, the notice shows only while it's true.)",
           "kind": "image",
           "desktop": "b35r-11-invite-stops.png",
           "phone": null
@@ -9290,6 +9290,48 @@
           "phone": null
         },
         {
+          "title": "§8 Three tabs, three different answers",
+          "explanation": "Ana's session page open in three tabs on one session; each types different answers into both boxes, tab 1 first and tab 3 last.",
+          "kind": "image",
+          "desktop": "b35r-50-three-tabs-typed.png",
+          "phone": null
+        },
+        {
+          "title": "§8 After signing back in: the last typed in every tab",
+          "explanation": "Log out in tab 1 sent all three to the login page; after Log in in tab 2, every tab back on the session page, every tab shows tab 3's answers, “Third tab: the night levels are the best part.” and “Third tab: the map needs the bridges.”, each marked Draft with Use saved: one draft per form, the last typed wins.",
+          "kind": "image",
+          "desktop": "b35r-51-three-tabs-last.png",
+          "phone": null
+        },
+        {
+          "title": "§18 Draft under each answer",
+          "explanation": "In tab 3 each answer box that differs from what was sent (nothing yet) carries “Draft” with “Use saved” under it: here the first, “Third tab: the night levels are the best part.”.",
+          "kind": "image",
+          "desktop": "b35r-51b-per-answer-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§18 “Use saved for all” beside Send",
+          "explanation": "One “Use saved for all” beside Send my answers (in place of the single Draft tag) puts every box back to what was sent (here, empty).",
+          "kind": "image",
+          "desktop": "b35r-51c-use-saved-for-all.png",
+          "phone": null
+        },
+        {
+          "title": "§18 Use saved on one answer",
+          "explanation": "Use saved under the first answer empties that box (nothing was sent yet); the second keeps “Third tab: the map needs the bridges.” with its Draft.",
+          "kind": "image",
+          "desktop": "b35r-51d-use-saved-one-answer.png",
+          "phone": null
+        },
+        {
+          "title": "§8 One draft per form, the last typed wins",
+          "explanation": "Three tabs on one session type different answers (tab 3 last); Log out in tab 1, Log in in tab 2: every tab returns to the session page and every tab comes back with tab 3's answers, each marked Draft with Use saved, and Use saved for all beside Send; in tab 3, Use saved empties the first answer.",
+          "kind": "video",
+          "desktop": "b35r-52-three-tabs-video.webm",
+          "phone": null
+        },
+        {
           "title": "§8 Another account signs in",
           "explanation": "Omar Reyes logs in on the login page left open in tab 3; tabs 1 and 2 switch to Omar's dashboard, and none of the three shows any of Nora's text (no “Harbor Run”, no typed name, note or $6.00).",
           "kind": "image",
@@ -9342,6 +9384,256 @@
           "explanation": "Hal Bishop pays Ivy Chen's answers with 0259 (“Paid $10.00”); Stripe's dispute arrives about two seconds later, after the payment was already recorded, so it's answered 200 at once with no wait, and the chargeback hold starts: the test page pauses, Payments shows the steps and the dashboard the blue box. The early case (a dispute arriving before its payment, answered 503 so Stripe's retry starts the hold) didn't happen in three tries and isn't recorded; the automated tests cover it (tests/batch35-webhook.test.ts).",
           "kind": "video",
           "desktop": "b35r-74-early-dispute-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Batch 35 late items (§14–§23)",
+      "explanation": "Batch 35 §14–§23 as built (docs/BATCH-35.md): the join page's Listing panel with its labels apart from the values (§14, §15), See it from the top box and from the “Join anyway?” pop-up, “How <dev> reviews” and the profile without Pays on average; Edit opened from another tab's draft and a new Post's Discard and Start empty (§18, §23); Free clearing a red rate box (§19); and the chargeback hold naming the chargeback steps (§22).",
+      "cases": [
+        {
+          "title": "§14 §15 The join page's Listing panel",
+          "explanation": "Ana's join page: under the header card (Harbor Run: first 3 levels, by Nora Lane, $8.00 “You get 80% of each price”, the Game / Written answers / Spanish badges), the Listing panel lists every field as a small uppercase label over its bright value: Product, Name, What to do, the Questions numbered (“What did you like?” …), “Build link: You get it when you join”, NDA None, Devices, Languages Spanish, Parts and prices “Written answers: $8.00 for you · Required”, “Your deadline: 14 days from joining”, Open until, “Who can join: Anyone who matches (press Join)” and “Spots: 3 · 3 spots left”. What to do and Spots, changed by the developer's last save, carry “Updated Sat, Oct 31, 2:11 AM”.",
+          "kind": "image",
+          "desktop": "b35t-01-join-listing-panel.png",
+          "phone": null
+        },
+        {
+          "title": "§14 “Updated Sat, Oct 31, 2:11 AM” opens Before / Now",
+          "explanation": "“What to do”, changed by the developer's last save, carries “Updated Sat, Oct 31, 2:11 AM”; tapped, Before (“…tell us where the controls or the map get confusing.”) and Now (“…at night and tell us where the lanterns or the map get confusing.”) open below the label, above the value.",
+          "kind": "image",
+          "desktop": "b35t-02-join-updated-before-now.png",
+          "phone": null
+        },
+        {
+          "title": "§14 A save reaches the open join page",
+          "explanation": "The blue box at the top: “Updated: Nora Lane edited the listing at 2:11 AM: title (now “Harbor Run: night harbors”) · See it”.",
+          "kind": "image",
+          "desktop": "b35t-03-join-top-line.png",
+          "phone": null
+        },
+        {
+          "title": "§14 See it from the top box",
+          "explanation": "See it scrolls to the Listing panel and rings the one line that save changed, the Name, now “Harbor Run: night harbors” with its own “Updated Sat, Oct 31, 2:11 AM” (the earlier save's tags on What to do and Spots are gone: the panel tags the most recent save).",
+          "kind": "image",
+          "desktop": "b35t-04-join-see-it-marks.png",
+          "phone": null
+        },
+        {
+          "title": "§14 The “Join anyway?” pop-up names the change",
+          "explanation": "Ana (no Spanish in their profile) pressed Join and got the pop-up “A language this test needs”; the developer added French meanwhile, so Join anyway stops once inside the pop-up: “Nora Lane added French to the languages this test needs · See it” and “Your Join didn't go through. Check what this test needs now, then press again.”, above “Your profile doesn't list a language this test needs (Spanish or French). Join anyway?”",
+          "kind": "image",
+          "desktop": "b35t-05-join-anyway-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§14 See it from the pop-up",
+          "explanation": "See it in the pop-up closes it, scrolls to the Listing panel and rings the Languages line, now “Spanish, French” with “Updated Sat, Oct 31, 2:11 AM” (the pill at the bottom reads “1 new update ↑”).",
+          "kind": "image",
+          "desktop": "b35t-06-popup-see-it-marks.png",
+          "phone": null
+        },
+        {
+          "title": "§14 “How Nora Lane reviews” without Pays on average",
+          "explanation": "The join page's box reads “Typical review: -” and “Rating: no ratings yet”, with “See their profile and other tests”: no “Pays on average” line.",
+          "kind": "image",
+          "desktop": "b35t-07-how-reviews.png",
+          "phone": null
+        },
+        {
+          "title": "§14 The join page's Listing panel",
+          "explanation": "Ana's join page: the Listing panel with labels over values; “Updated …” on What to do opens Before / Now; a save while the page is open shows in the top box (“Nora Lane edited the listing at 2:11 AM: title (now “Harbor Run: night harbors”) · See it”) and See it rings the Name; Join opens “A language this test needs”, the developer adds French, Join anyway stops once naming it, and its See it closes the pop-up and rings Languages.",
+          "kind": "video",
+          "desktop": "b35t-08-join-panel-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§14 The developer's profile as testers see it",
+          "explanation": "Nora Lane's profile as Ana sees it: two tiles, Typical review and Rating, no “Pays on average”; the footnote explains only Typical review and Rating. Below, their open test.",
+          "kind": "image",
+          "desktop": "b35t-09-profile-no-pays.png",
+          "phone": null
+        },
+        {
+          "title": "§14 The developer's own dashboard keeps it",
+          "explanation": "Nora's own dashboard still shows three tiles: Pays on average (“no paid work yet”), Typical review and Rating (“no ratings yet”).",
+          "kind": "image",
+          "desktop": "b35t-10-dashboard-keeps-pays.png",
+          "phone": null
+        },
+        {
+          "title": "§15 The developer's Listing panel",
+          "explanation": "The same panel on Nora's test page (“What testers see now. A field your last save changed shows when: tap it for before and now.”): small uppercase labels over bright values, the questions numbered, the build link itself, “Updated Sat, Oct 31, 2:11 AM” after LANGUAGES, the developer's prices (“Written answers: $10.00 · Required”). App bug to check: “TESTER DEADLINE 7 days” here while the tester's panel says “Your deadline: 14 days from joining” (b35t-01).",
+          "kind": "image",
+          "desktop": "b35t-11-dev-listing-panel.png",
+          "phone": null
+        },
+        {
+          "title": "§18 Edit opened from another tab's draft",
+          "explanation": "A second tab opens Edit (no sign-in): the line at the top reads “Started from your unsent draft (Sat, Oct 31, 2:09 AM) · Use saved for all”, and each field the other tab's draft changed carries “Draft” with “Use saved”: here the name and “What should testers do?” (Parts and prices too, next pictures).",
+          "kind": "image",
+          "desktop": "b35t-12-edit-from-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§18 Per-field Draft",
+          "explanation": "The name came from the draft, “Harbor Run: night harbors”, marked “Draft” with “Use saved”.",
+          "kind": "image",
+          "desktop": "b35t-13-edit-field-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§18 Per-field Draft",
+          "explanation": "Parts and prices too: the typed $12.00 is marked “Draft” with “Use saved”.",
+          "kind": "image",
+          "desktop": "b35t-13b-edit-price-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§18 “Use saved for all” at the top",
+          "explanation": "Use saved beside the name put it back to “Harbor Run: first 3 levels”; then “Use saved for all” in the top line put every field back (the price $10.00): no Draft tag is left and the top line goes.",
+          "kind": "image",
+          "desktop": "b35t-14-edit-use-saved-for-all.png",
+          "phone": null
+        },
+        {
+          "title": "§18 Edit from another tab's draft",
+          "explanation": "Left, tab 1 types a new name, a sentence and $12.00 into Edit; right (blank until it opens), tab 2 opens Edit and starts from that draft: “Started from your unsent draft (Sat, Oct 31, 2:09 AM) · Use saved for all”, each changed field marked Draft with Use saved; Use saved puts the name back, Use saved for all the rest, and the top line goes.",
+          "kind": "video",
+          "desktop": "b35t-15-edit-from-draft-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§23 A new Post started from a draft",
+          "explanation": "Post a test in a new tab: “Started from your unsent draft (Sat, Oct 31, 2:09 AM) · Start empty”; the fields the draft filled carry “Draft” with “Discard” (never Use saved: nothing is saved yet).",
+          "kind": "image",
+          "desktop": "b35t-16-post-start-empty.png",
+          "phone": null
+        },
+        {
+          "title": "§23 Discard on one field",
+          "explanation": "Discard beside “What should testers do?” empties that field and its Draft goes (the product and name keep theirs).",
+          "kind": "image",
+          "desktop": "b35t-17-post-field-discard.png",
+          "phone": null
+        },
+        {
+          "title": "§23 After “Start empty”",
+          "explanation": "After “Start empty”: Product and Name are empty again (their grey examples show), the instructions empty, no Draft tag and no top line; the kept draft is deleted: a brand-new test.",
+          "kind": "image",
+          "desktop": "b35t-18-post-after-start-empty.png",
+          "phone": null
+        },
+        {
+          "title": "§23 A new Post: Discard and Start empty",
+          "explanation": "Left, tab 1 types a product, a name and the instructions into Post a test; right (blank until it opens), tab 2 opens Post from that draft: “Started from your unsent draft (Sat, Oct 31, 2:09 AM) · Start empty”, each field marked Draft with Discard; Discard empties the instructions, Start empty clears the whole form and deletes the draft.",
+          "kind": "video",
+          "desktop": "b35t-19-post-start-empty-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§19 The empty rate is red",
+          "explanation": "Live session ticked and its rate box left empty: the box is outlined red with “Enter an hourly rate for live calls, or tick Free.” beside it.",
+          "kind": "image",
+          "desktop": "b35t-20-rate-red.png",
+          "phone": null
+        },
+        {
+          "title": "§19 Free clears it at once",
+          "explanation": "Free ticked: the rate box is greyed (disabled), and its red outline and line are gone at once.",
+          "kind": "image",
+          "desktop": "b35t-21-free-clears-red.png",
+          "phone": null
+        },
+        {
+          "title": "§19 A disabled field is never red",
+          "explanation": "Post a test: Live session ticked and its rate box left empty goes red (“Enter an hourly rate for live calls, or tick Free.”); ticking Free greys the box and the red goes at once; unticked and left empty again it's red again, and Free clears it again.",
+          "kind": "video",
+          "desktop": "b35t-22-free-clears-red-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§22 The test page during a chargeback hold",
+          "explanation": "Hal Bishop's test page during a chargeback hold: “Your tests are paused until the chargeback steps are done.”, with “the chargeback steps” a link (to /app/payments#chargeback-steps), and “For now you can stop this test, or end testers' work early.”",
+          "kind": "image",
+          "desktop": "b35t-30-chargeback-banner.png",
+          "phone": null
+        },
+        {
+          "title": "§22 The link opens the steps",
+          "explanation": "The link opens Payments at the steps: “Your bank reversed a payment, so your account is on a chargeback hold. Your tests are paused. To lift it:” a card verified with 3D Secure, what you owe reserved on your card, the team's approval (none done yet), “Still to do: verify a card with 3D Secure, then pay what you owe ($25.00), then wait for the team's approval. Paying alone doesn't lift it.” and Verify a card.",
+          "kind": "image",
+          "desktop": "b35t-32-chargeback-steps.png",
+          "phone": null
+        },
+        {
+          "title": "§22 The chargeback steps",
+          "explanation": "During a chargeback hold the test page's banner reads “Your tests are paused until the chargeback steps are done. For now you can stop this test, or end testers' work early.”; pressing “the chargeback steps” opens Payments at the steps.",
+          "kind": "video",
+          "desktop": "b35t-33-chargeback-banner-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Drafts everywhere (batch 35 §8–§11, §18)",
+      "explanation": "More of the drafts (docs/BATCH-35.md §8, §10, §18): the tester's dispute reason and rating note, and the developer's side of a dispute and rating note, each typed, then the page reloaded: the text comes back marked “Draft” with “Discard” (nothing is saved there yet), and Discard empties it. (The admin console's drafts, §11, aren't recorded: the owner held them off.)",
+      "cases": [
+        {
+          "title": "§8 §10 The tester's dispute reason after a reload",
+          "explanation": "Ana typed a reason under “Dispute the pay” and reloaded: “I answered both questions in full; the second answer named the exact level.” came back, with “Draft” and “Discard” beside Send the dispute (nothing is saved there yet).",
+          "kind": "image",
+          "desktop": "b35u-01-tester-dispute-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§8 §10 The tester's rating note after a reload",
+          "explanation": "“Rate Nora Lane”: the note “Clear instructions and quick replies.” came back after the reload, marked “Draft” with “Discard” (the stars are never kept).",
+          "kind": "image",
+          "desktop": "b35u-02-tester-rating-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§10 Discard",
+          "explanation": "Discard empties the dispute reason and its Draft tag goes.",
+          "kind": "image",
+          "desktop": "b35u-03-tester-dispute-discard.png",
+          "phone": null
+        },
+        {
+          "title": "§8 §10 The tester's drafts after a reload",
+          "explanation": "Ana types a dispute reason and a rating note, reloads: both come back marked Draft with Discard; Discard empties the reason.",
+          "kind": "video",
+          "desktop": "b35u-04-tester-drafts-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§8 §10 The developer's side of a dispute after a reload",
+          "explanation": "On Nora's test page, Ben Hart's dispute: “Add your side” came back after the reload with “The second answer didn't name a level, so we paid for the first.”, with “Draft” and “Discard” beside Send your side.",
+          "kind": "image",
+          "desktop": "b35u-05-dev-side-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§8 §10 The developer's rating note after a reload",
+          "explanation": "“Rate Ana Silva” (shown once Ana rated): the note “Thorough answers, sent on time.” came back after the reload, marked “Draft” with “Discard”.",
+          "kind": "image",
+          "desktop": "b35u-06-dev-rating-draft.png",
+          "phone": null
+        },
+        {
+          "title": "§10 Discard",
+          "explanation": "Discard empties the rating note (its grey “A note” shows) and its Draft goes.",
+          "kind": "image",
+          "desktop": "b35u-07-dev-rating-discard.png",
+          "phone": null
+        },
+        {
+          "title": "§8 §10 The developer's drafts after a reload",
+          "explanation": "Nora types their side of Ben's dispute and a rating note for Ana, then reloads: both come back marked Draft with Discard; Discard empties the rating note.",
+          "kind": "video",
+          "desktop": "b35u-08-dev-drafts-video.webm",
           "phone": null
         }
       ]
