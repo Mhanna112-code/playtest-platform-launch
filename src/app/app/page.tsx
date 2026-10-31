@@ -449,6 +449,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const pendingCents = waiting.reduce((n, { s }) => n + (s.agreedCents != null ? testerShare(s.agreedCents) : 0), 0);
   // "To do": every part not sent yet (newest test first), each with a Send work button that opens the part. A test can be here and in Charge or cancel at once.
   const todoParts = working.flatMap((c) => toSend(c).map((p) => ({ c, p })));
+  // (Owner, Oct 31, batch 35 §84) Every open test you're in has Send work in To do: a test with every part sent gets one row of its own (opening its parts).
+  const allSent = suspended ? [] : working.filter((c) => toSend(c).length === 0);
   // "Charge or cancel": unreviewed parts where Charge has opened (7 days and the test's Open until), by test, newest first; hidden while suspended.
   const paidFor = (sid: string) => payments.filter((p) => p.submissionId === sid && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const chargeable = suspended ? [] : contracts
@@ -536,7 +538,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
 
       <section className="space-y-3" id="to-do">
         {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do")}
-        {todoParts.length === 0 && answers.length === 0 ? (
+        {todoParts.length === 0 && answers.length === 0 && allSent.length === 0 ? (
           <p className="card text-sm text-slate-400">{suspended ? "Nothing to do while your account is suspended." : "Nothing to finish. Pick up a new test below."}</p>
         ) : (
           <ScrollList className="space-y-2">
@@ -570,6 +572,16 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </li>
               );
             })}
+            {allSent.map((c) => (
+              <li key={`${c.id}-sent`} className="card flex flex-wrap items-center gap-3 p-4" data-todo-sent={c.id}>
+                <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
+                <div className="min-w-[12rem] flex-1">
+                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={c.title}>{c.title}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                  <p className="text-sm text-slate-400">Every part sent</p>
+                </div>
+                <Link href={`/app/sessions/${c.id}#parts`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
+              </li>
+            ))}
           </ScrollList>
         )}
       </section>
@@ -662,29 +674,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
-      {/* (Owner, Oct 31, batch 35 §81) "Current tests": every test the tester is still in, newest join first (a test with nothing left to do stays reachable),
-          above Tests you left, with its own search box. */}
-      {working.length > 0 && (
-        <section className="space-y-3" id="current-tests">
-          {sectionTitle(<LayoutGrid className="h-5 w-5 text-emerald-300" />, "Current tests", working.length)}
-          <HistorySearch />
-          <ScrollList className="space-y-2">
-            {working.map((c) => (
-              <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
-                <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>
-                  <span className="min-w-0 flex-1 font-medium text-white">
-                    <span className="block truncate" title={c.title}>{c.title}</span>
-                    <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · joined {fmtDate(c.joinedAt)}</span>
-                  </span>
-                  <span className="badge border-emerald-400/40 text-emerald-200">In progress</span>
-                  <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>
-                </Link>
-              </li>
-            ))}
-          </ScrollList>
-        </section>
-      )}
-
       {!suspended && left.length > 0 && (
         <section className="space-y-3" id="rejoin">
           {sectionTitle(<RotateCcw className="h-5 w-5 text-sky-300" />, "Tests you left", left.length)}
@@ -731,7 +720,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {(history.length > 0 || working.length > 0) && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-white">History</h2>
-          {/* (Owner, Oct 31, batch 35 §81) Every test: the ones you're still in first ("In progress", also in Current tests), then the ended ones; a search box filters by test or developer. */}
+          {/* (Owner, Oct 31, batch 35 §81) Every test: the ones you're still in first ("In progress"), then the ended ones; a search box filters by test or developer. */}
           <HistorySearch />
           <ScrollList className="space-y-2">
             {working.map((c) => (

@@ -712,3 +712,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
   can only be refused ("Your Accept didn't go through: this test was stopped").
 - (Same day, owner) Also a **"Current tests (N)"** box just above "Tests you left": the tests the tester is still in, newest join first, each opening the test
   page, with its own search box. History keeps every test (the ones you're still in first, then the ended ones).
+
+## §84 Send work for every open test in To do; no Current tests box (owner, Oct 31)
+- The "Current tests" box is gone (History still lists every test, the ones you're in first, with its search box).
+- To do has Send work for every open test you're in: the parts not sent yet as before, and a test with every part sent gets one row of its own
+  ("<title> · Every part sent", Send work → its parts), so a test with nothing waiting is still on the dashboard.
