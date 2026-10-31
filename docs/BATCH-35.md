@@ -101,3 +101,8 @@ gap is a second or two), so the hold starts at once; the log says "dispute arriv
   "fbbb got their first rating: 1.0". (A page that didn't say what it showed never stops for it.) The full-star rule for later changes is unchanged.
 - Post / Edit's questions box takes no 21st question: typing on a new line past 20 questions is ignored, and a paste keeps the first 20. Editing the 20
   and empty lines are free. The server's 20-question refusal stays.
+
+## §13 Each question once (owner, Oct 30)
+The same question twice in Post / Edit's questions box (ignoring case and extra spaces) is red at the box and refused on Save / Post:
+"“What did you like?” is in the list twice: each question can be there once." A tester's draft answers follow their questions by text, so after
+the developer changes the questions (and the tester switches to them), answers to questions that stayed the same keep their draft, in any order.

@@ -16,7 +16,7 @@ import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -723,7 +723,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {f.written && (
           <div id="questions-group" data-locked={fieldLocked("questions") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("questions") ? "p-2 ring-1 ring-rose-400" : ""}`}>
             <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}{draftMark("questions")}</label>
-            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : undefined} value={f.questions} onChange={(e) => set({ questions: capQuestions(e.target.value) })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : duplicateQuestion(f.questions.split("\n")) ? duplicateQuestionLine(duplicateQuestion(f.questions.split("\n"))) : undefined} value={f.questions} onChange={(e) => set({ questions: capQuestions(e.target.value) })} placeholder={"What did you like?\nWhere did you get stuck?"} />
             {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
               <ul className="mt-2 space-y-1">
                 {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (

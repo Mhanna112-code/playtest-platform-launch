@@ -27,3 +27,13 @@ describe("batch 35 §12: at most 20 questions in the box", () => {
     expect(capQuestions("a\n\n\nb")).toBe("a\n\n\nb");
   });
 });
+
+describe("batch 35 §13: each question once", () => {
+  it("the same question twice (case and spaces ignored) is named; different questions pass", async () => {
+    const { duplicateQuestion, duplicateQuestionLine } = await import("@/lib/rules");
+    expect(duplicateQuestion(["What did you like?", "Where did you get stuck?"])).toBe("");
+    expect(duplicateQuestion(["What did you like?", "  what did  you LIKE? "])).toBe("what did  you LIKE?");
+    expect(duplicateQuestion(["a", "", "", "b"])).toBe("");
+    expect(duplicateQuestionLine("What did you like?")).toBe("“What did you like?” is in the list twice: each question can be there once.");
+  });
+});
