@@ -12,14 +12,21 @@ import { DisputeDecision } from "./DisputeDecision";
 import { AdminRich } from "./AdminRich";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
+import { DraftTag, useKept } from "@/lib/useKept";
+import { adminDraftKey } from "@/lib/keptText";
+import { usePauseDraftGoes } from "./TestActions";
 
 type AnyRow = ContactVM | DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
 /** (Owner, Oct 30, batch 34 §1) A row's page time (when the server read it): its buttons send it, so a press on a row older than another admin's change stops once. */
 const since = (r: AnyRow): Record<string, string> => { const s = (r as { seen?: string }).seen; return s ? { since: s } : {}; };
 
-/** A hold lift waiting for Approve: a note box and Approve (first press wins, like Decide). */
+/**
+ * A hold lift waiting for Approve: a note box and Approve (first press wins, like Decide). (Owner, Oct 30, batch 35 §11) The note is a draft ("admin:approve-hold:<id>",
+ * admins only): "Draft" after a reload, after a sign-in "Draft" with "Discard". Cleared when Approve goes through; a stopped or refused Approve keeps it.
+ */
 function LiftApprove({ id, seen }: { id: string; seen?: string }) {
   const [note, setNote] = useState("");
+  const keep = useKept<{ note?: unknown }>(adminDraftKey("approve-hold", id), { note }, note.trim() === "", (d) => setNote(typeof d.note === "string" ? d.note : ""));
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const stop = useAdminStop(); // (batch 34 §1) another admin suspended the developer since the row was read: stops once
@@ -27,6 +34,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
     <div className="flex flex-wrap items-center gap-2">
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
       <input id={`lift-note-${id}`} className="input w-72 max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
+      {keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}
       <button
         className="btn-ghost"
         disabled={busy}
@@ -35,6 +43,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
           setMsg(null);
           try {
             await api("/api/admin/approve-hold", { id, note, ...(seen ? { since: seen } : {}), ...stop.marks() });
+            await keep.clear();
             stop.clear();
             setMsg({ ok: true, text: "Approved." });
             setTimeout(() => window.location.reload(), 600);
@@ -69,6 +78,7 @@ function PauseToggle({ t }: { t: TestVM }) {
   };
   // (Batch 27 section 5) Keyed by the state: a pause lifted (or set) elsewhere swaps in a fresh button (Pause with its own empty Why box, or Lift the pause), never the
   // old one's leftovers.
+  usePauseDraftGoes(t.id, t.adminPaused);
   return (
     <>
       {t.adminPaused ? <AdminButton key="lift" action="unpause-test" id={t.id} label="Lift the pause" extra={since(t)} onRefused={onRefused} /> : <AdminButton key="pause" action="pause-test" id={t.id} label="Pause" fields={[{ name: "note", label: "Why" }]} extra={since(t)} onRefused={onRefused} />}
