@@ -254,11 +254,13 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
   const rows = await tx.testEvent.findMany({ where: { testId, kind: LISTING_SAVE, createdAt: { gt: since } }, orderBy: { createdAt: "asc" }, take: 100 });
   if (!rows.length) return [];
   const tz = (await tx.user.findUnique({ where: { id: viewerId }, select: { timeZone: true } }))?.timeZone;
-  return rows.flatMap((e) => {
+  const lines: TestEventLike[] = rows.flatMap((e) => {
     const s = parseSave(e.text);
     const l = s ? saveLine(s, e.createdAt, tz, side) : null;
-    return l ? [{ kind: l.titleOnly ? "renamed" : "info", text: l.text, createdAt: e.createdAt, timed: true, ...(l.nda ? { nda: true } : {}) }] : [];
+    // (Batch 35 §14) On the join page every Save's line (a rename alone too) carries See it to its Listing panel, and names its Save (as the developer's lines do).
+    return l ? [{ kind: l.titleOnly ? "renamed" : "info", text: l.text, createdAt: e.createdAt, timed: true, ...(l.nda ? { nda: true } : {}), ...(side === "join" ? { listing: true } : {}) }] : [];
   });
+  return side === "join" ? withSaveAt(testId, lines, tx) : lines;
 }
 
 export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

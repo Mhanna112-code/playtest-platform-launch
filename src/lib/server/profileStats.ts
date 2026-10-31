@@ -17,6 +17,8 @@ export const DEV_FOOTNOTE =
   "Pays on average: the share of the listing paid for work in testers' contracts once decided (after any dispute); parts testers let go and work outside the contract don't count. " +
   "Typical review: the median time from when the work was sent (or the call ended) to the developer's Pay. " +
   "Rating: the average of testers' ratings, one per test, counted once they show.";
+/** (Batch 35 §14) The footnote where testers read it: no "Pays on average" (only the developer's own dashboard shows it). */
+export const DEV_FOOTNOTE_NO_PAYS = DEV_FOOTNOTE.slice(DEV_FOOTNOTE.indexOf("Typical review:"));
 export const TESTER_FOOTNOTE =
   "Accepted parts: the written answers, recordings and live calls developers paid for (in full or partly, including ones the tester charged after the review window), out of the ones sent. " +
   "Rating: the average of developers' ratings, one per test, counted once they show.";

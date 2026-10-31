@@ -21,7 +21,7 @@ export function NoThanksButton({ inviteId, seenAt }: { inviteId: string; seenAt:
       <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} onClick={async () => { if (await press(`/api/invites/${inviteId}`, {})) window.location.href = "/app"; }}>
         No thanks
       </button>
-      <ChangesBox changes={changes} error={error} press="No thanks" />
+      <ChangesBox changes={changes} error={error} press="No thanks" side="tester" seeIt="#listing" alertsWhere="join" />
     </>
   );
 }

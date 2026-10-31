@@ -1,18 +1,21 @@
 import { CheckCircle2, Star, Timer } from "lucide-react";
 import { StatTile } from "@/components/StatTile";
-import { DEV_FOOTNOTE, TESTER_FOOTNOTE, developerStats, ratingTile, testerStats } from "@/lib/server/profileStats";
+import { DEV_FOOTNOTE, DEV_FOOTNOTE_NO_PAYS, TESTER_FOOTNOTE, developerStats, ratingTile, testerStats } from "@/lib/server/profileStats";
 
-/** A developer's tiles (their profile as testers see it, and their dashboard): Pays on average, Typical review, Rating. */
-export async function DeveloperTiles({ userId }: { userId: string }) {
+/**
+ * A developer's tiles (their profile as testers see it, and their dashboard): Typical review, Rating, and (owner, Oct 30, batch 35 §14) Pays on average ONLY on the
+ * developer's own dashboard (`pays`): nothing testers see shows it (the profile, its "as testers see it" view, the join page).
+ */
+export async function DeveloperTiles({ userId, pays = false }: { userId: string; /** the developer's own dashboard */ pays?: boolean }) {
   const [s, r] = await Promise.all([developerStats(userId), ratingTile(userId)]);
   return (
     <>
-      <section className="grid gap-4 sm:grid-cols-3" aria-label="How this developer reviews">
-        <StatTile icon={CheckCircle2} label="Pays on average" value={s.pays.value} hint={s.pays.hint} tone="emerald" />
+      <section className={`grid gap-4 ${pays ? "sm:grid-cols-3" : "sm:grid-cols-2"}`} aria-label="How this developer reviews">
+        {pays && <StatTile icon={CheckCircle2} label="Pays on average" value={s.pays.value} hint={s.pays.hint} tone="emerald" />}
         <StatTile icon={Timer} label="Typical review" value={s.review.value} hint={s.review.hint} tone="amber" />
         <StatTile icon={Star} label="Rating" value={r.value} hint={r.hint} tone="fuchsia" />
       </section>
-      <p className="-mt-2 text-xs text-slate-500">{DEV_FOOTNOTE}</p>
+      <p className="-mt-2 text-xs text-slate-500">{pays ? DEV_FOOTNOTE : DEV_FOOTNOTE_NO_PAYS}</p>
     </>
   );
 }
