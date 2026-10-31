@@ -19,7 +19,6 @@ import { wrapSelection } from "@/lib/markdown";
 import { uploadToSession } from "@/lib/upload";
 import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
-import { ScreenRecorder } from "@/components/ScreenRecorder";
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
 function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[] }) {
@@ -44,7 +43,7 @@ function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: R
       <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")}>{"</>"}</button>
       <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file">📎<input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept="image/*,application/pdf,text/plain,.zip,video/*" onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
       <FormMistakes text={err} press="Attach" />
-      <ScreenRecorder sessionId={sessionId} part="written" label="⏺" disabled={!!pending.current} onCancel={() => { recordingAt.current = null; }} onStart={() => { recordingAt.current = target.current?.selectionStart ?? null; }} onUploadProgress={progress} onUploadError={failed} onUploaded={finish} />
+      {/* (Owner, Oct 30) No ⏺ in the written answers: recordings belong to the recorded part. 📎 attaches files (videos too). */}
     </div>
   );
 }
@@ -62,7 +61,10 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
     <div className="space-y-1">
       <FormatBar target={ref} onChange={onChange} sessionId={sessionId} onAttach={onAttach} known={attachments} />
       <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
-      <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
+      {/* (Owner, Oct 30) The preview scrolls in its own box (about 12 lines) instead of growing the page. */}
+      <div className="max-h-72 overflow-y-auto rounded-lg border border-white/10 p-2" tabIndex={0} data-answer-preview="">
+        <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
+      </div>
       {/* (Batch 30 §14) While an answer is below the minimum: "12 / 50 characters minimum" (grey; red once Send found it short). An empty optional answer shows nothing. */}
       {min && chars < ANSWER_MIN_CHARS && (!!value.trim() || required || short) && <p className={`text-xs ${short ? "text-rose-300" : "text-slate-500"}`} data-answer-count={chars}>{answerCounter(chars)}</p>}
     </div>
@@ -180,7 +182,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftTag onUseSaved={keep.signedIn ? () => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); } : undefined} />}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftTag kind="saved" onUseSaved={keep.signedIn ? () => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); } : undefined} />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
@@ -267,7 +269,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
         Send the dispute
       </button>
       {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
-      {keep.restored && reason !== "" && <DraftTag onUseSaved={keep.signedIn ? () => setReason("") : undefined} />}
+      {keep.restored && reason !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setReason("") : undefined} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <FormMistakes text={err} press="Send the dispute" />
     </details>

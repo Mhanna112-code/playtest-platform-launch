@@ -223,9 +223,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   };
   const draftMark = (where: string) => {
     const ks = marks[where] ?? [];
-    return ks.length ? <DraftTag field={where} onUseSaved={() => putSaved(ks)} /> : null;
+    return ks.length ? <DraftTag kind="saved" field={where} onUseSaved={() => putSaved(ks)} /> : null;
   };
-  const keysDraft = keep.signedIn && keysChanged ? <DraftTag field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
+  const keysDraft = keep.signedIn && keysChanged ? <DraftTag kind="saved" field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
   const putAllSaved = () => {
     putSaved(draftKeys);
     setKeysText(savedKeysText);
