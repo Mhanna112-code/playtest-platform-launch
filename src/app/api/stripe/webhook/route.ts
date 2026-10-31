@@ -10,22 +10,63 @@ export async function POST(req: Request) {
   // (Batch 15 section 5) Two endpoints share this URL: the platform's (STRIPE_WEBHOOK_SECRET) and Connect's (STRIPE_CONNECT_WEBHOOK_SECRET). Either secret is accepted.
   const verified = verifyWebhook(raw, req.headers.get("stripe-signature") ?? "");
   if (!verified) return new Response("Bad signature", { status: 400 });
-  const event = verified as unknown as { id?: string; type: string; account?: string; data: { object: Record<string, unknown> } };
+  const event = verified as unknown as Event;
   // (Batch 15 section 41, L3) Stripe can deliver an event twice: each event id is handled once.
   if (typeof event.id === "string" && event.id) {
     const fresh = await db.stripeEvent.create({ data: { id: event.id, type: event.type } }).then(() => true).catch(() => false);
     if (!fresh) return Response.json({ received: true, duplicate: true });
   }
+  // (Batch 35 §9) An event this server couldn't act on yet is forgotten again, so Stripe's retry (it retries for up to 3 days) is handled instead of ignored.
+  const later = async (why: string) => {
+    if (typeof event.id === "string" && event.id) await db.stripeEvent.deleteMany({ where: { id: event.id } });
+    return new Response(why, { status: 503 });
+  };
+  try {
+    return await handle(event, later);
+  } catch (e) {
+    console.error("[stripe] webhook failed:", (e as Error).message);
+    return later("Couldn't handle it now; Stripe will retry");
+  }
+}
+
+/** (Batch 35 §9) How long a dispute waits for its payment to be recorded before it is left for Stripe's retry (tests set DISPUTE_WAIT_MS=0). */
+const waitMs = () => Number(process.env.DISPUTE_WAIT_MS ?? 8000);
+
+type Event = { id?: string; type: string; account?: string; data: { object: Record<string, unknown> } };
+async function handle(event: Event, later: (why: string) => Promise<Response>): Promise<Response> {
+  // (Batch 35 §9) A dispute can arrive a moment before this server has recorded the payment it is about (seconds in test mode): wait for Stripe's retry.
+  // The usual gap is a second or two: wait up to WAIT_MS for the payment before leaving it to the retry.
+  const known = async (pi: string) => {
+    const t0 = Date.now();
+    const WAIT_MS = waitMs();
+    for (let tries = 0; ; tries++) {
+      if (await db.payment.findFirst({ where: { stripePaymentIntentId: pi }, select: { id: true } })) {
+        if (tries > 0) console.info(`[stripe] dispute arrived before its payment was recorded; waited ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+        return true;
+      }
+      if (Date.now() - t0 >= WAIT_MS) {
+        console.info(`[stripe] dispute arrived before its payment was recorded; still not recorded after ${WAIT_MS / 1000} s: left for Stripe's retry`);
+        return false;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  };
   // (Batch 8) Stripe Billing: renewals, declined renewals and the end of a developer subscription.
   if (event.type === "invoice.paid" || event.type === "invoice.payment_failed" || event.type === "invoice.payment_action_required" || event.type === "customer.subscription.deleted") await (await import("@/lib/server/subscription")).subscriptionWebhook(event.type, event.data.object);
   if (event.type === "charge.dispute.created") {
     const pi = event.data.object.payment_intent;
-    if (typeof pi === "string") await chargebackOpened(pi);
+    if (typeof pi === "string") {
+      if (!(await known(pi))) return later("That payment isn't recorded yet");
+      await chargebackOpened(pi);
+    }
   }
   // (Owner, Oct 29, batch 10) A chargeback the platform won: its amount leaves what the developer owes (refunded if they already paid it).
   if (event.type === "charge.dispute.closed" && event.data.object.status === "won") {
     const pi = event.data.object.payment_intent;
-    if (typeof pi === "string") await chargebackWon(pi);
+    if (typeof pi === "string") {
+      if (!(await known(pi))) return later("That payment isn't recorded yet");
+      await chargebackWon(pi);
+    }
   }
   // (Design doc 9) A payout that fails, or a payout account that needs attention: the tester is told (banner + a bell every 3 days).
   const account = event.account ?? (typeof event.data.object.id === "string" && event.type === "account.updated" ? (event.data.object.id as string) : "");
