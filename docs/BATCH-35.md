@@ -468,3 +468,44 @@ the developer changes the questions (and the tester switches to them), answers t
   to withdraw." as before. Withdraw's listing-change stop once and the join page's live lines (batch 30 §8) are unchanged.
 
 Tests: tests/batch35-admin-tabs.test.ts.
+
+## §53 One listing line also covers the terms (owner, Oct 31)
+
+- No "<Dev> changed the terms: questions changed, NDA changed" line anywhere: one save is the one listing line ("<Dev> edited the listing · See it", §34) plus its
+  consequences as their own lines ("… your application was closed", "<Dev> changed the NDA: read and accept it again below").
+- Root cause: the join page's rejoin reasons (a tester who left, src/lib/server/joining.ts) added a `terms_plain` line with the field list on top of the listing
+  line. It is gone: a tester who isn't working has no offer to answer.
+- A working tester's session page: the offer is a consequence, field-free: "<Dev> offered you the new terms: Switch or Keep below" (testerGate; was "offered new
+  terms: <fields>"). The offer box itself and the Contract changes history still describe the offer.
+
+## §54 Open until's dates agree (owner, Oct 31)
+
+- Root cause: Open until was stored at UTC's end of the chosen day and read back by its UTC date (toForm's `slice(0, 10)`, checkListing, openUntilShortened), while
+  the 30-day maximum was counted in the developer's zone; and a pause lift moves Open until by the pause's length (the owner's test: Nov 29 23:59:59 UTC + 7h16m =
+  Nov 30), past the maximum, while the hint still said "up to Nov 29".
+- Now one day for one stored instant, in the developer's zone (unknown: UTC): a chosen day is stored as the end of that day there (`endOfDayIn`), and the Edit box,
+  the server's checks, the red line, the tester days and the maximum all read `openUntilDay(instant, zone)`.
+- The hint never names a maximum earlier than the saved date: at or past it, "it can't move later: it's Nov 30 now (30 days after the test opened, plus pauses)".
+
+## §55 No live list by the join button (owner, Oct 31; replaces batch 30 §11)
+
+- The join page's "Changed since you opened this page" list above Join / Apply / Ask to rejoin no longer follows the page live. Live changes show only in the top
+  "Updated" box (with its pill), as on the developer's test page and the tester's session page. By the button, changes show only after a press, as the stop box
+  ("Your Join didn't go through. …"), like Edit's box above Save. "You now meet this test's needs" stays its own notice. The seen rule stays batch 32 §12.
+
+## §56 The needs pop-up's button names the press (owner, Oct 31)
+
+- "Ask to rejoin anyway" / "Apply anyway" / "Join anyway" (was "Join anyway" in the Ask to rejoin flow), and "Press Ask to rejoin to ask to rejoin." when covered.
+
+## §57 Red mistakes clear with the fix (owner, Oct 31)
+
+- The list under a button (MistakeList) follows the page's own red marks too (data-red-msg / aria-invalid set by the page, e.g. the NDA tick's "Accept the NDA to
+  join."): ticking it removes the bullet at once. A server line that belongs to no field goes as soon as anything in that form changes (or with the next press).
+
+Tests (§53-§58): tests/batch35-terms-dates.test.ts, tests/rejoin.test.ts, tests/batch30c-stops.test.ts.
+
+## §58 Draft buttons wait for the main press (owner, Oct 31)
+
+- While a form's main press is going or has finished (the §41 finished state, until the redraw lands), its draft buttons are disabled too: "Start empty", "Use
+  saved", "Use saved for all", "Discard", "Discard all" (one `DraftButton` in src/lib/useKept.tsx, used by DraftTag and the top lines). A pressed draft button is
+  disabled until what it does has applied (no double press).

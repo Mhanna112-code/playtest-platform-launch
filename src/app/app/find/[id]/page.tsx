@@ -134,7 +134,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {invite && <AutoRefresh query="invites=1" v={invitesFp} />}
       {/* (Owner, Oct 30, batch 34 §14 "The join page too"; batch 35 §14) The listing information is the Listing panel, as on the developer's test page (the tester's
           words: their share of each price, no build link before joining); its header card and "What testers said" sit inside it. Every listing line on this page
-          (the top box, "Changed since you opened this page", the stop boxes, the "… anyway?" pop-up) has See it, which comes here and marks that Save's fields. */}
+          (the top box, the stop boxes, the "… anyway?" pop-up; batch 35 §55: no live list by the button) has See it, which comes here and marks that Save's fields. */}
       <ListingSeeIt box="listing" />
       <ListingPanel side="tester" rows={panel.rows} listing={l} savedAt={panel.savedAt} when={(d) => fmtDateTimeIn(d, u.timeZone)}
         intro={`The listing as it is now. A field ${dev}'s last save changed shows when: tap it for before and now.`}

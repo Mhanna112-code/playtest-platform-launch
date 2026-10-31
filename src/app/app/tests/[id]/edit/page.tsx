@@ -42,7 +42,8 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
           <TestForm
             init={asListing(t)}
-            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) /* (batch 14) first join, application or invite */, openedAt: t.createdAt.toISOString(), capDay: openUntilCapDay(t.createdAt, u.timeZone), testerDays: t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil) : undefined }}
+            tz={u.timeZone}
+            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) /* (batch 14) first join, application or invite */, openedAt: t.createdAt.toISOString(), capDay: openUntilCapDay(t.createdAt, u.timeZone), testerDays: t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil, u.timeZone) : undefined }}
             perks={await hasPerks(u)}
           />
           {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}

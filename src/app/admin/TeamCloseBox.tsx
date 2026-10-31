@@ -31,7 +31,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
   const long = reason.length > LIMITS.reason;
   const keep = useKept<{ reason?: unknown }>(adminDraftKey(`team-close-${scope}`, id), { reason }, reason.trim() === "", (d) => setReason(typeof d.reason === "string" ? d.reason : ""));
   const boxShown = !!preview && preview.pieces.length > 0;
-  const tag = keep.restored && reason !== "" ? <DraftTag kind="discard" onUseSaved={() => setReason("")} /> : null;
+  const tag = keep.restored && reason !== "" ? <DraftTag disabled={busy} kind="discard" onUseSaved={() => setReason("")} /> : null;
   const load = () => api<Preview>("/api/admin/preview-team-close", { id, scope }).then((r) => { setMsg(null); setPreview(r); }).catch((e) => setMsg({ ok: false, text: errOf(e) }));
   return (
     <div className="flex w-full flex-col items-start gap-2" data-team-close={scope} data-mistakes-root="" data-admin-box="stacked">

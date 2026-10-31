@@ -18,7 +18,7 @@ import { T, safeZone } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
-  andList, testClosedToNewLine, daysBetween, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -91,7 +91,8 @@ function price(v: unknown, label: string, missing = ""): number | null {
 }
 
 /** Read the listing fields the form sent. Only fields present in the body are returned (Edit sends only touched ones). */
-export function parseListing(body: Record<string, unknown>, partial = false): Partial<Listing> {
+/** `tz`: the developer's zone; (batch 35 §54) a chosen Open until day is stored as the end of that day there (unknown: UTC). */
+export function parseListing(body: Record<string, unknown>, partial = false, tz?: string | null): Partial<Listing> {
   const out: Partial<Listing> = {};
   const has = (k: string) => !partial || k in body;
   // (Design doc 4) Longer than the limits are kept so the check can say so (never cut silently).
@@ -123,7 +124,7 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   if (has("joinMode")) out.joinMode = ["anyone", "apply", "invite"].includes(body.joinMode as string) ? (body.joinMode as string) : "anyone";
   if (has("openUntil")) {
     const v = str(body.openUntil, 40);
-    out.openUntil = v ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T23:59:59.000Z` : v) : null;
+    out.openUntil = v ? (/^\d{4}-\d{2}-\d{2}$/.test(v) ? endOfDayIn(v, tz).toISOString() : v) : null;
   }
   // (Batch 26 section 14) A page from before the switch may still send the old "[not required] " marker: it is the default now, so it's dropped (never a change).
   if (has("questions")) out.questions = Array.isArray(body.questions) ? body.questions.filter((q): q is string => typeof q === "string").map((q) => q.trim()).map((q) => (q.startsWith(NOT_REQUIRED) ? q.slice(NOT_REQUIRED.length).trim() : q)).filter(Boolean) : [];
@@ -232,7 +233,7 @@ const confirmedHighOf = (body: Record<string, unknown>) => (Array.isArray(body.c
 async function checkPost(dev: U, body: Record<string, unknown>) {
   if (!dev.isDeveloper) throw new HttpError(403, "not_developer", "Turn on “post tests” in your profile to post a test.");
   if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} New tests can't be posted while payments are on hold.`);
-  const l = parseListing(body) as Listing;
+  const l = parseListing(body, false, tzOf(body, dev)) as Listing;
   if (!l.mature) l.matureWhy = "";
   const now = new Date();
   // (Batch 15 section 32) The press sends the developer's time zone (the account's stored one otherwise): "today" is their date.
@@ -323,7 +324,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   await ownTest(dev.id, testId);
   const loaded = Number(body.version);
   const confirmed = body.confirmed === true;
-  const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true);
+  const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true, tzOf(body, dev));
   // (Batch 8) Switching a test to Approved-only is a new use of the perk (a test that already is Approved-only stays so, and keeps working).
   if (touched.joinMode === "apply") {
     const cur = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { joinMode: true } });
@@ -375,7 +376,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (Design doc 4/5) The Post rules, then the critical-change limit and the access keys: every red mistake is found FIRST
     // (a stop-once reason never hides one), and nothing saves while any remains.
     const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true, confirmedHigh: confirmedHighOf(body), saved: { writtenCents: t.writtenCents, recordingCents: t.recordingCents }, savedSpots: t.spots, tz: tzOf(body, dev) });
-    if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil); /* (batch 35 §30) the same line as the box */ if (short) errs.push(short); }
+    if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil, tzOf(body, dev)); /* (batch 35 §30) the same line as the box */ if (short) errs.push(short); }
     // (Batch 14) Each limited field's counter (the parts and prices share one); the count runs once anyone is affected.
     const critical = countersOf(fields);
     const since = await startedCounting(t, tx);
@@ -396,7 +397,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // the page loaded (or its last stop box). A page that doesn't send what it loaded and holds (an older page) keeps every line.
     let dcN: (TestEventLike & { fields?: string[] })[] = dc;
     let gateChanges = gate.go ? [] : gate.changes;
-    const news = seen && !onlyOwnSaves ? await editNews(tx, testId, body, current) : null;
+    const news = seen && !onlyOwnSaves ? await editNews(tx, testId, body, current, tzOf(body, dev)) : null;
     // (Batch 16 section 20) A key this press deletes that a joining tester was given meanwhile (the page hadn't shown it): not a mistake, a stop with the
     // warning; the second press saves the rest of the key edits.
     if (seen) {
@@ -480,7 +481,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     }
     // (Owner, Oct 30, batch 15 section 18) Moving Open until later by D days: tester days grow by D, and every working tester's deadline moves D days later.
     if (fields.includes("openUntil") && next.openUntil && current.openUntil) {
-      const d = daysBetween(openUntilDay(current.openUntil), openUntilDay(next.openUntil));
+      const d = daysBetween(openUntilDay(current.openUntil, tzOf(body, dev)), openUntilDay(next.openUntil, tzOf(body, dev)));
       if (d > 0) {
         await tx.test.update({ where: { id: testId }, data: { testerDays: (t.testerDays ?? testerDaysOf(t.createdAt, current.openUntil, dev.timeZone)) + d } });
         await tx.$executeRaw`UPDATE "Contract" SET "dueAt" = "dueAt" + ${d} * interval '1 day' WHERE "testId" = ${testId} AND status = 'working'`;
@@ -568,29 +569,29 @@ const OTHER_TAB_EDIT = /^You (saved|changed) the listing in another tab/; // (ba
 /** Fields the form never sends as typed (kept from an older page, or set by the server). */
 const NOT_COMPARED = new Set<keyof Listing>(["deadlineDays", "liveMinutes"]);
 /** Two values of one field are the same (Open until by its day: a pause shift moves it by the minute). */
-const sameValue = (k: keyof Listing, a: unknown, b: unknown) =>
-  k === "openUntil" ? (a ? String(a).slice(0, 10) : null) === (b ? String(b).slice(0, 10) : null) : JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+const sameValue = (k: keyof Listing, a: unknown, b: unknown, tz?: string | null) =>
+  k === "openUntil" ? (a ? openUntilDay(String(a), tz) : null) === (b ? openUntilDay(String(b), tz) : null) : JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 /**
  * (Owner, Oct 28, batch 16 sections 17 and 18) What another tab or device saved that THIS tab doesn't have: the fields it loaded (`base`) that differ from
  * what's saved now and where what it holds (`has`, typed or not) differs too. Keys are always news (the owner's exception): every free key added and
  * removed since the keys it loaded (`keysLoaded`), even one this tab also added or removed (a key given to a joining tester is a join, not a removal).
  * null when the page didn't send them (nothing is dropped then).
  */
-export async function editNews(tx: Tx, testId: string, body: Record<string, unknown>, current: Listing) {
+export async function editNews(tx: Tx, testId: string, body: Record<string, unknown>, current: Listing, tz?: string | null) {
   const obj = (v: unknown) => (v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : null);
   const b = obj(body.base), h = obj(body.has);
   if (!b || !h) return null;
   let base: Partial<Listing>, has: Partial<Listing>;
   try {
-    base = parseListing(b, true);
-    has = parseListing(h, true);
+    base = parseListing(b, true, tz);
+    has = parseListing(h, true, tz);
   } catch {
     return null; // a box this press can't read (its own mistake is said elsewhere): every line stays
   }
   // (Owner, Oct 29, batch 23 section 5) Edit keeps what you typed: a field this press doesn't send took the other tab's value (it is never undone), so only the fields it
   // sends count, except spots and Open until (they take the other tab's value even when typed: today's rule, with the press holding what it had typed).
   const sent = new Set(Object.keys(obj(body.fields) ?? {}));
-  const fields = LISTING_FIELDS.filter((k) => !NOT_COMPARED.has(k) && k in base && k in has && (takesTheirs(k) || sent.has(k)) && !sameValue(k, base[k], current[k]) && !sameValue(k, has[k], current[k]));
+  const fields = LISTING_FIELDS.filter((k) => !NOT_COMPARED.has(k) && k in base && k in has && (takesTheirs(k) || sent.has(k)) && !sameValue(k, base[k], current[k], tz) && !sameValue(k, has[k], current[k], tz));
   let added: string[] = [], removed: string[] = [];
   if (Array.isArray(body.keysLoaded)) {
     const loaded = parseKeys(body.keysLoaded);

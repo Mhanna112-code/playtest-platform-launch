@@ -9,19 +9,15 @@ import { useEffect, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, errOf, ApiError } from "@/lib/client";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
-import { LIVE_EVENT, mergeChanges, useLiveAppend, wasShownInBox } from "@/lib/live";
+import { LIVE_EVENT, useLiveAppend, wasShownInBox } from "@/lib/live";
 import { announcedWithRedraw } from "@/lib/liveSync";
-import { LongList } from "@/components/LongList";
-import { fmtTimeIn } from "@/lib/format";
-import { savedZone } from "@/components/TimeZoneSync";
 import { useRouter } from "next/navigation";
 import { UserPlus } from "lucide-react";
 import { GapDialog, UpdatedLabels, type MyGaps, type PopupAnswer } from "@/components/GapDialog";
-import { gapSources, noGaps, type GapAsk, type Gaps, type GapTimes } from "@/lib/gaps";
+import { gapAskOf, gapSources, noGaps, pressToLine, type GapAsk, type Gaps, type GapTimes } from "@/lib/gaps";
 import { TermsAgainBox } from "@/components/TermsAgainBox";
 import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
 import { DraftTag, useKept } from "@/lib/useKept";
-import { seeItClick } from "@/components/ListingInfo";
 
 /**
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
@@ -60,13 +56,12 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [agreeTerms, setAgreeTerms] = useState(false);
   // (Batch 30 §12) The seen marker is the page's FIRST render in this tab (a redraw of the page never moves it; lib/client.ts adds what the top box showed).
   const [seenAt] = useState(p.seenAt);
-  // (Batch 30 §11) "Changed since you opened this page", right above the button: the top box's lines as they come (newest first), until the tester presses.
-  const [since, setSince] = useState<Change[]>([]);
+  // (Owner, Oct 31, batch 35 §55, replacing batch 30 §11) No live list by the button any more: live changes show only in the top box (with its pill); the area by
+  // the button shows changes only after a press, as the stop box. A live listing change still redraws the page and clears the NDA tick.
   useEffect(() => {
     const on = (e: Event) => {
       const added = ((e as CustomEvent<Change[]>).detail ?? []).filter((c) => !c.quiet && !wasShownInBox(c));
       if (!added.length) return;
-      setSince((old) => mergeChanges(old, added));
       afterChanges(added, announcedWithRedraw()); // (batch 35 §37) lines that came with the page's redraw need no second one
     };
     window.addEventListener(LIVE_EVENT, on);
@@ -84,11 +79,10 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     }
     if (lines.some((c) => c.timed) && !redrawn) router.refresh();
   }
-  /** A stop box under the button: it takes over from the "Changed since" list. */
+  /** A stop box under the button. */
   function showBox(sb: StopBox) {
     setBox(sb);
     setBoxAt(sb.now);
-    setSince([]);
     afterChanges(sb.changes);
   }
   useLiveAppend(!!box, (added) => {
@@ -101,7 +95,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
    */
   async function coveredNow(ask: GapAsk, from: GapTimes = {}) {
     setCovered({ at: new Date().toISOString(), ask, from });
-    const verb = p.rejoin && !p.invited ? "ask" : ask === "apply" ? "apply" : "join";
+    const verb = ask === "rejoin" ? "ask" : ask === "apply" ? "apply" : "join";
     const r = await api<{ changes?: Change[]; now?: string; tail?: string }>(`/api/tests/${p.testId}/my-gaps`, { seenAt, verb, ...(boxAt ? { boxAt, confirmed: true } : {}) }).catch(() => null);
     if (r?.changes?.length) showBox({ changes: r.changes, tail: r.tail ?? "Press again to go ahead.", top: false, now: r.now ?? new Date().toISOString() });
     router.refresh();
@@ -124,8 +118,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         setBoxAt(String(e.data.now ?? new Date().toISOString()));
-        setSince([]);
-        afterChanges((e.data.changes as Change[]) ?? []);
+            afterChanges((e.data.changes as Change[]) ?? []);
         return { stop: (e.data.changes as Change[]) ?? [] }; // (batch 34 §14) whole lines: a listing line carries See it
       }
       if (e instanceof ApiError && e.code === "needs" && e.data.gaps) return { gaps: e.data.gaps as Gaps };
@@ -140,7 +133,6 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   // Join / Apply with something missing: the pop-up asks first (never a refusal). Covered by now: a notice, no pop-up.
   async function press(action: "join" | "apply" | "rejoin-ask") {
     setCovered(null);
-    setSince([]);
     if (p.nda && !nda) {
       setNdaErr("Accept the NDA to " + (action === "apply" ? "apply." : action === "rejoin-ask" ? "ask to rejoin." : "join."));
       // (Batch 16 section 10) The tick is red with its line, listed under the button, and gets the cursor.
@@ -153,10 +145,10 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     setBusy(false);
     if (now && noGaps(now.gaps)) {
       // (Batch 35 §44) Covered since the page loaded: by the tester's own profile in another tab, the developer's needs, or both (newer than the page's time).
-      await coveredNow(action === "apply" ? "apply" : "join", gapSources({ profileAt: seenAt, needsAt: seenAt }, { profileAt: now.profileAt, needsAt: now.needsSaveAt }));
+      await coveredNow(gapAskOf(action), gapSources({ profileAt: seenAt, needsAt: seenAt }, { profileAt: now.profileAt, needsAt: now.needsSaveAt }));
       return;
     }
-    setAsking({ ask: action === "apply" ? "apply" : "join", gaps: now?.gaps ?? p.missing, ...(now?.now ? { opened: { profileAt: now.now, needsAt: now.now } } : {}) });
+    setAsking({ ask: gapAskOf(action), gaps: now?.gaps ?? p.missing, ...(now?.now ? { opened: { profileAt: now.now, needsAt: now.now } } : {}) });
   }
 
   async function go(action: "join" | "apply" | "rejoin-ask" | "withdraw-application", anyway = false) {
@@ -164,8 +156,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     setBusy(true);
     setErr("");
     try {
-      setSince([]);
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
+        const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
       if (action !== "withdraw-application") await keep.clear(); // (batch 35 §10) Apply / Ask to rejoin / Join went through: the note's draft goes
       if (r.sessionId) { reloading = true; window.location.href = `/app/sessions/${r.sessionId}`; }
       // (Batch 35 §40) This page keeps its load time (`seenAt`), so it loads again, keeping its place (a stale "#…" dropped first); the button stays busy until then.
@@ -181,7 +172,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         setErr(e.message);
         if (typeof e.data.newInviteId === "string") setInviteId(e.data.newInviteId);
         if (typeof e.data.now === "string") setBoxAt(e.data.now);
-      } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: action === "apply" ? "apply" : "join", gaps: e.data.gaps as Gaps, ...(typeof e.data.now === "string" ? { opened: { profileAt: e.data.now, needsAt: e.data.now } } : {}) });
+      } else if (e instanceof ApiError && e.code === "needs" && e.data.gaps) setAsking({ ask: gapAskOf(action), gaps: e.data.gaps as Gaps, ...(typeof e.data.now === "string" ? { opened: { profileAt: e.data.now, needsAt: e.data.now } } : {}) });
       // (Batch 16 section 10) The server's "Accept the NDA to join." belongs to the tick.
       else if (e instanceof ApiError && e.code === "nda" && p.nda) { setNdaErr(e.message); requestAnimationFrame(() => { const root = document.getElementById("join-card"); announcePress(root); focusFirstMistake(root); }); }
       // (Batch 16 section 32) The invite closed meanwhile: refused with the reason (no stop box), and the page drops the invite.
@@ -242,20 +233,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       )}
       {(applying || rejoining) && (
         <div>
-          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}</label>
+          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag disabled={busy || !!done} kind="discard" onUseSaved={() => setNote("")} />}</label>
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
-        </div>
-      )}
-      {/* (Batch 30 §11) Right above the button where the tester is about to act (only the updated-Terms tick, when shown, sits between): the changes the top box got
-          since the page opened, newest first (3, then "Show N more"). */}
-      {since.length > 0 && !box && (
-        <div className="info text-sm" role="status" data-changed-since="">
-          <p className="font-medium">Changed since you opened this page</p>
-          <LongList className="mt-0.5 list-disc space-y-0.5 pl-5" tall="max-h-52">
-            {[...since].sort((a, b) => (a.at < b.at ? 1 : -1)).map((c) => (
-              <li key={`${c.at}|${c.text}`}>{c.timed ? c.text : `${c.text} · ${fmtTimeIn(c.at, savedZone())}`}{(c.listing || (c.timed && c.kind === "info")) && <> · <a href="#listing" data-see-it="" onClick={(e) => seeItClick(e, "#listing", c.at, c.saveAt, c.keys)}>See it</a></>}</li>
-            ))}
-          </LongList>
         </div>
       )}
       {/* (Batch 20 section 21) Above the button, with the other ticks. */}
@@ -266,7 +245,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       </div>
       {covered && (
         // (Batch 35 §44) Named where the change came from: "You updated your profile in another tab (3:20 AM): you now meet this test's needs. Press Join to join."
-        <p role="status" className="info" data-covered-line=""><UpdatedLabels at={covered.at} from={covered.from} devName={p.devName} />{covered.from.profileAt || covered.from.needsAt ? "you" : "You"} now meet this test&apos;s needs. Press {covered.ask === "apply" ? "Apply" : "Join"} to {covered.ask === "apply" ? "apply" : "join"}.</p>
+        <p role="status" className="info" data-covered-line=""><UpdatedLabels at={covered.at} from={covered.from} devName={p.devName} />{covered.from.profileAt || covered.from.needsAt ? "you" : "You"} now meet this test&apos;s needs. {pressToLine(covered.ask)}</p>
       )}
       {asking && (
         <GapDialog

@@ -287,8 +287,12 @@ export const openUntilCapDay = (openedAt: Date, tz?: string | null) => new Date(
 const capLabel = (capDay: string) => new Date(`${capDay}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 /** "Open until can be at most 30 days after the test opened (Dec 6)." (the field's red line and the server's message) */
 export const openUntilCapLine = (capDay: string) => `Open until can be at most 30 days after the test opened (${capLabel(capDay)}).`;
-/** Edit's hint next to Open until: "only later, up to Dec 6 (30 days after the test opened)". */
-export const openUntilCapHint = (capDay: string) => `only later, up to ${capLabel(capDay)} (30 days after the test opened)`;
+/**
+ * Edit's hint next to Open until: "only later, up to Dec 6 (30 days after the test opened)". (Batch 35 §54) `savedDay`: Open until's saved day; a pause can move it
+ * to or past that limit, and then the hint never names a maximum earlier than the saved date: "it can't move later: it's Nov 30 now (30 days after the test opened, plus pauses)".
+ */
+export const openUntilCapHint = (capDay: string, savedDay = "") =>
+  savedDay && savedDay >= capDay ? `it can't move later: it's ${capLabel(savedDay)} now (30 days after the test opened${savedDay > capDay ? ", plus pauses" : ""})` : `only later, up to ${capLabel(capDay)} (30 days after the test opened)`;
 /** Edit's live hint: what each tester gets after the change: "Each tester gets 19 days from when they join (14 now + 5)." */
 /**
  * (Owner, Oct 28, batch 19 section 8, replacing the batch 15 section 18 and batch 16 section 16 hints) The live line under Open until on Post and Edit: work can arrive
@@ -307,10 +311,28 @@ export function openUntilLine(openUntil: string, days: number) {
 export const dayIn = (d: Date, tz?: string | null) => d.toLocaleDateString("en-CA", { timeZone: safeZone(tz) });
 /** Whole days from one date (YYYY-MM-DD) to another. */
 export const daysBetween = (from: string, to: string) => Math.round((Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY);
-/** Open until is stored as the end of its chosen day: "2026-11-20T23:59:59.000Z". This is that day. */
-export const openUntilDay = (openUntil: Date | string) => new Date(openUntil).toISOString().slice(0, 10);
+/**
+ * (Batch 35 §54) The last second of a calendar day (YYYY-MM-DD) in a time zone: Open until is stored as the end of its chosen day in the developer's zone ("Nov 29" in
+ * US Central: 2026-11-30T05:59:59.000Z; unknown zone: UTC, "2026-11-29T23:59:59.000Z").
+ */
+export function endOfDayIn(day: string, tz?: string | null) {
+  const zone = safeZone(tz);
+  const want = Date.parse(`${day}T23:59:59.000Z`);
+  const wall = (t: number) => {
+    const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: zone, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" }).formatToParts(new Date(t)).map((x) => [x.type, x.value]));
+    return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour % 24, +p.minute, +p.second);
+  };
+  let t = want;
+  for (let i = 0; i < 3; i++) t -= wall(t) - want; // the zone's offset at that moment (twice more for a clock change that day)
+  return new Date(t);
+}
+/**
+ * (Batch 35 §54) Open until's calendar day, in the developer's zone (unknown: UTC): the one day the Edit box, its hint, the maximum and the red line all read, for the
+ * same stored instant (a pause shift can move it off the day's end: it reads as the day it falls on there).
+ */
+export const openUntilDay = (openUntil: Date | string, tz?: string | null) => dayIn(new Date(openUntil), tz);
 /** Tester days: from the day the test opened (posted, or a Next round opened) to Open until, in whole days. Posted Nov 6 with Open until Nov 20: 14. */
-export const testerDaysOf = (openedAt: Date, openUntil: Date | string, tz?: string | null) => Math.max(1, daysBetween(dayIn(openedAt, tz), openUntilDay(openUntil)));
+export const testerDaysOf = (openedAt: Date, openUntil: Date | string, tz?: string | null) => Math.max(1, daysBetween(dayIn(openedAt, tz), openUntilDay(openUntil, tz)));
 /**
  * (Batch 35 §32; batch 15 §18) The days a tester joining NOW gets: the test's tester days (they grow when Open until moves later), or, for an older test with
  * Open until but no stored days, the days from opening to Open until; with neither, the listing's deadline days. The developer's Listing panel and the tester's
@@ -400,11 +422,12 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
     const day = (n: number) => dayIn(new Date(now.getTime() + n * 86_400_000), ctx.tz);
     if (!d) errs.push(OPEN_UNTIL_RANGE);
     else if (isNaN(d.getTime())) errs.push("Enter the Open until date like 2026-12-01.");
-    else if (d.toISOString().slice(0, 10) <= day(0)) errs.push("Open until must be a date in the future.");
+    // (Batch 35 §54) The date's day in the developer's zone, the same day the Edit box shows.
+    else if (openUntilDay(d, ctx.tz) <= day(0)) errs.push("Open until must be a date in the future.");
     // (Batch 16 section 16) Edit: at most 30 days after the test opened (a test already past it keeps its date; it just can't move later). Post: 30 days from today.
-    else if (ctx.edit && ctx.openedAt && d.toISOString().slice(0, 10) > openUntilCapDay(ctx.openedAt, ctx.tz)) errs.push(openUntilCapLine(openUntilCapDay(ctx.openedAt, ctx.tz)));
-    else if (!(ctx.edit && ctx.openedAt) && d.toISOString().slice(0, 10) > day(LIMITS.openUntilMaxDays)) errs.push(OPEN_UNTIL_MAX_LINE);
-    else if (!ctx.edit && d.toISOString().slice(0, 10) < day(LIMITS.openUntilMinDays)) errs.push(OPEN_UNTIL_RANGE);
+    else if (ctx.edit && ctx.openedAt && openUntilDay(d, ctx.tz) > openUntilCapDay(ctx.openedAt, ctx.tz)) errs.push(openUntilCapLine(openUntilCapDay(ctx.openedAt, ctx.tz)));
+    else if (!(ctx.edit && ctx.openedAt) && openUntilDay(d, ctx.tz) > day(LIMITS.openUntilMaxDays)) errs.push(OPEN_UNTIL_MAX_LINE);
+    else if (!ctx.edit && openUntilDay(d, ctx.tz) < day(LIMITS.openUntilMinDays)) errs.push(OPEN_UNTIL_RANGE);
   }
   // (4) Product name and the test's own name: 60 characters each; the instructions 1,000, required.
   if (!l.productName?.trim()) { if (isNew("productName")) errs.push("Enter the product name."); }
@@ -925,11 +948,12 @@ export function checkOpenUntilChange(current: Date | null, next: Date | null, no
 }
 
 /** (Design doc 5) Open until can only be extended: a red line when the new date is earlier (or a date is added to a test with no end). "" when fine. */
-export function openUntilShortened(current: string | Date | null, next: string | Date | null) {
+export function openUntilShortened(current: string | Date | null, next: string | Date | null, tz?: string | null) {
   if (next == null) return "";
   if (current == null) return "Open until can only be extended: this test has no end date now.";
-  const day = new Date(current).toISOString().slice(0, 10);
-  return new Date(next).toISOString().slice(0, 10) < day ? openUntilExtendLine(day) : "";
+  // (Batch 35 §54) Both days in the developer's zone, as the Edit box shows them.
+  const day = openUntilDay(current, tz);
+  return openUntilDay(next, tz) < day ? openUntilExtendLine(day) : "";
 }
 /**
  * (Owner's screenshot, Oct 31, batch 35 §30) The one line for an earlier Open until, at the box and from the server alike (so it shows once): "Open until can only

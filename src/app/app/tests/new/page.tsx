@@ -28,6 +28,7 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
       <TestForm
         draft={draft ? { id: draft.id } : undefined}
         hasCard={!!u.stripePaymentMethodId}
+        tz={u.timeZone}
         perks={await hasPerks(u)}
         termsAgain={needsTermsAgain(u)}
         init={draft ? asListing(draft) : { productName: "", mature: false, matureWhy: "", ndaText: "", title: "", description: "", buildUrl: "", categories: ["Productivity"], devices: [], languages: [], spots: 5, writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: 30, deadlineDays: 7, questions: [], openUntil: null, joinMode: "anyone" }}

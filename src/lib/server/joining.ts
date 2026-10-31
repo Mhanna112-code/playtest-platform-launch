@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/format";
-import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsDiff, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
+import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
@@ -83,15 +83,14 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
     gone.push(fresh ? { kind: "invite", text: `${displayName(t.developer)} changed the listing: here's a new invite on the updated listing`, createdAt: fresh.createdAt } : { kind: "invite", text: `${displayName(t.developer)} changed the listing: your invite closed (no spots left)`, createdAt: replaced[0].updatedAt });
   }
   // (Owner) Rejoining a test they LEFT stops once for the same reasons as their in-test buttons (A-F): paid / rejected,
-  // call changes, their own other-tab actions; new terms as a plain line (they rejoin on the current listing, no offer).
+  // call changes, their own other-tab actions; the listing's one line covers new terms (they rejoin on the current listing, no offer).
   const left = await db.contract.findUnique({ where: { testId_testerId: { testId, testerId: userId } } });
   const rejoin: TestEventLike[] = [];
   if (left && left.status === "left") {
     const { testerChanges } = await import("./testerGate");
     rejoin.push(...(await testerChanges(userId, left.id, testId, d, tab)).filter((e) => e.kind !== "terms"));
-    const termsEdit = edits.filter((e) => e.kind !== "renamed").pop();
-    const diff = termsDiff({ ...left, questions: (left.questions as string[]) ?? [] }, asListing(t));
-    if (termsEdit && diff) rejoin.push({ kind: "terms_plain", text: `${displayName(t.developer)} changed the terms: ${diff}`, createdAt: termsEdit.createdAt });
+    // (Batch 35 §53) No "changed the terms: <fields>" line: the save's one listing line ("<Dev> edited the listing · See it") already covers it, and a tester
+    // who isn't working has no offer to answer.
   }
   const all = [...edits, ...gone, ...(await ownChanges(userId, testId, d, tab)), ...rejoin];
   const seen = new Set<string>();

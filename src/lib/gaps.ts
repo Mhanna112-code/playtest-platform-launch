@@ -1,6 +1,7 @@
 // The full app's "What this test needs" words (lib/devices.ts) on lean data: what a tester's profile lacks for a test.
 export type Gaps = { languages: string[]; devices: string[] };
-export type GapAsk = "apply" | "join";
+/** (Batch 35 §56) The press the needs pop-up sends: its main button names it ("Ask to rejoin anyway" / "Apply anyway" / "Join anyway"). */
+export type GapAsk = "apply" | "join" | "rejoin";
 
 export const noGaps = (g: Gaps | null | undefined) => !g || (!g.languages.length && !g.devices.length);
 /**
@@ -35,7 +36,7 @@ export function updateLabels(from: GapTimes, dev: string, clock: (iso: string) =
 }
 /** The page's line once the pop-up closed covered: "You updated your profile in another tab (3:20 AM): you now meet this test's needs. Press Join to join." */
 export function coveredLine(from: GapTimes, dev: string, clock: (iso: string) => string, at: string, ask: GapAsk) {
-  const tail = `${from.profileAt || from.needsAt ? "you" : "You"} now meet this test's needs. Press ${ask === "apply" ? "Apply" : "Join"} to ${ask === "apply" ? "apply" : "join"}.`;
+  const tail = `${from.profileAt || from.needsAt ? "you" : "You"} now meet this test's needs. ${pressToLine(ask)}`;
   return `${updateLabels(from, dev, clock, at).join(" ")} ${tail}`;
 }
 
@@ -85,7 +86,12 @@ export function gapsWords(g: Gaps) {
 export const TESTER_ASK: Record<GapAsk, { question: string; anyway: string; plain: string }> = {
   apply: { question: "Apply anyway?", anyway: "Apply anyway", plain: "Apply" },
   join: { question: "Join anyway?", anyway: "Join anyway", plain: "Join" },
+  rejoin: { question: "Ask to rejoin anyway?", anyway: "Ask to rejoin anyway", plain: "Ask to rejoin" },
 };
+/** (Batch 35 §56) The pop-up's press for a join-page action: Apply, Ask to rejoin, or Join. */
+export const gapAskOf = (action: string): GapAsk => (action === "apply" ? "apply" : action === "rejoin-ask" ? "rejoin" : "join");
+/** "Press Join to join." / "Press Apply to apply." / "Press Ask to rejoin to ask to rejoin." */
+export const pressToLine = (ask: GapAsk) => `Press ${TESTER_ASK[ask].plain} to ${TESTER_ASK[ask].plain.toLowerCase()}.`;
 export const PROFILE_COVERS = "Your profile now covers what this test needs.";
 // (Batch 20 section 3) The Join anyway box names both kinds in the Invite anyway box's words.
 export const testerGapText = (g: Gaps, ask: GapAsk) => (noGaps(g) ? PROFILE_COVERS : `Your profile ${missingNeedText(g)}. ${TESTER_ASK[ask].question}`);

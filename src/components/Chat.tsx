@@ -91,7 +91,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
         >
           <input id="chat-message" className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
           <button className="btn" disabled={busy || !text.trim()}>Send</button>
-          {keep.restored && text !== "" && <span className="self-center"><DraftTag kind="discard" onUseSaved={() => setText("")} /></span>}
+          {keep.restored && text !== "" && <span className="self-center"><DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} /></span>}
         </form>
       )}
       {/* (Batch 16 section 10) A message mistake is red at the box (and listed); a refusal stays blue. */}

@@ -6,7 +6,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
-import { DISCARD_ALL_LABEL, DraftTag, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
+import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerCounter, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
@@ -137,8 +137,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const sentAt = (i: number) => initial[i] ?? "";
   // (Owner, Oct 31, batch 35 §39) "Use saved" only once answers were sent (back to them); answers never sent: "Discard" (empties) and "Discard all".
   const answerKind = update ? "saved" : "discard";
-  const boxDraft = (i: number) => (keep.restored && answers[i] !== sentAt(i) ? <DraftTag kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);
-  const notesDraft = keep.restored && notes !== initialNotes ? <DraftTag kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;
+  const boxDraft = (i: number) => (keep.restored && answers[i] !== sentAt(i) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);
+  const notesDraft = keep.restored && notes !== initialNotes ? <DraftTag disabled={busy || fin.done} kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;
   const length = writtenLength([...answers, notes]);
   // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
   const unchanged = update && sentSame && !newFiles && same;
@@ -214,7 +214,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</button>}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
@@ -308,7 +308,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       </button>
       <PressDone line={fin.line} />
       {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
-      {keep.restored && reason !== "" && <DraftTag kind="discard" onUseSaved={() => setReason("")} />}
+      {keep.restored && reason !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setReason("")} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <FormMistakes text={err} press="Send the dispute" />
     </details>

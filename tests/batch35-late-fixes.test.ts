@@ -26,8 +26,8 @@ describe("batch 35 §18 / §23: a restored draft can always be discarded", () =>
     const files = walk(path.resolve(__dirname, "../src")).filter((f) => !f.endsWith("useKept.tsx"));
     const offenders = files.filter((f) => /onUseSaved=\{keep\w*\.signedIn \?/.test(fs.readFileSync(f, "utf8")) || /\{keep\w*\.signedIn && \w+ !== "" && <DraftTag/.test(fs.readFileSync(f, "utf8")));
     expect(offenders).toEqual([]);
-    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('{keepStop.restored && stopReason !== "" && <DraftTag kind="discard" onUseSaved={() => setStopReason("")} />}');
-    expect(src("components/Chat.tsx")).toContain('<DraftTag kind="discard" onUseSaved={() => setText("")} />');
+    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('{keepStop.restored && stopReason !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setStopReason("")} />}');
+    expect(src("components/Chat.tsx")).toContain('<DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />');
   });
 
   it("the kept draft says when it was kept; Post / Edit open with “Started from your unsent draft (<time>)” at the top", async () => {
@@ -42,10 +42,10 @@ describe("batch 35 §18 / §23: a restored draft can always be discarded", () =>
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("const fromDraft = keep.restored && (touched.size > 0 || keysChanged);");
     expect(form).toContain("{DRAFT_START_LINE(keep.restoredAt ? fmtDateTime(keep.restoredAt) : \"\")}");
-    expect(form).toContain('data-discard-draft="" onClick={discardAll}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</button>');
+    expect(form).toContain('data-discard-draft="" disabled={busy} onPress={discardAll}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</DraftButton>'); // (batch 35 §58)
     // Start empty: every field to the empty start (Edit / a saved draft: what is saved), the keys too, and the draft goes.
     const discard = form.slice(form.indexOf("const discardAll = () => {"), form.indexOf("void keep.clear();", form.indexOf("const discardAll")) + 20);
-    expect(discard).toContain("setF(edit || draft ? base : toForm(init));");
+    expect(discard).toContain("setF(edit || draft ? base : toForm(init, tz));");
     expect(discard).toContain("setTouched(new Set());");
     expect(discard).toContain("setKeysText(savedKeysText);");
     expect(form.indexOf("{fromDraft && (")).toBeLessThan(form.indexOf("marks the fields you have to fill in."));
@@ -56,9 +56,9 @@ describe("batch 35 §18 / §23: a restored draft can always be discarded", () =>
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("const isNew = !edit && !draft;");
     expect(form).toContain('const draftKind = isNew ? "discard" : "saved";');
-    expect(form).toContain("<DraftTag kind={draftKind} field={where} onUseSaved={() => putSaved(ks)} />");
-    expect(form).toContain('<DraftTag kind={draftKind} field="keys"');
-    expect(form).toContain("onClick={isNew ? discardAll : putAllSaved}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</button>");
+    expect(form).toContain("<DraftTag disabled={busy} kind={draftKind} field={where} onUseSaved={() => putSaved(ks)} />");
+    expect(form).toContain('<DraftTag disabled={busy} kind={draftKind} field="keys"');
+    expect(form).toContain("onPress={isNew ? discardAll : putAllSaved}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</DraftButton>") /* (batch 35 §58) */;
     expect(form).not.toMatch(/<DraftTag kind="saved" field=\{where\}/);
   });
 });

@@ -39,7 +39,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
   ]);
   const out: TestEventLike[] = [];
   for (const d of sides) out.push({ kind: "dispute", text: `${dev} added their side to your dispute`, createdAt: d.devSideAt! });
-  for (const o of offers) out.push({ kind: "terms", text: `${dev} offered new terms: ${o.diff}`, createdAt: o.createdAt });
+  // (Batch 35 §53) The offer is a consequence for a working tester; its fields are the listing's one line ("See it") and the offer box, never a list here.
+  for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you the new terms: Switch or Keep below`, createdAt: o.createdAt });
   const owed = await db.payment.findMany({ where: { contractId, status: "failed", owedUntil: { not: null }, settledAt: null }, select: { submissionId: true, callId: true } });
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const settledLate = await db.payment.findMany({ where: { contractId, settledAt: { not: null } }, select: { submissionId: true, callId: true } });

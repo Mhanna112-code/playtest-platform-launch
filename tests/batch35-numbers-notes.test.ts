@@ -227,7 +227,7 @@ describe("batch 35 §30: Open until's “only extended” line shows once, at th
     // The page's own line sits right under the box (no second copy under the help line); the server's same text matches the box's data-red-msg, so it isn't added.
     expect(t).toContain('below: showOn("openUntil") ? redLine(ouLine) : null');
     expect(t).not.toContain('{showOn("openUntil") && redLine(ouLine)}');
-    expect(src("lib/server/tests.ts")).toContain("const short = openUntilShortened(current.openUntil, next.openUntil);");
+    expect(src("lib/server/tests.ts")).toContain("const short = openUntilShortened(current.openUntil, next.openUntil, tzOf(body, dev));") /* (batch 35 §54) */;
     expect(src("components/FieldChecks.tsx")).toContain("for (const msg of notShownYet(messages, shown)) {");
   });
 });
@@ -249,7 +249,7 @@ describe("batch 35 §31: every mistake under the one heading", () => {
     const fc = src("components/FieldChecks.tsx");
     expect(fc).toContain(".trim() || needsFixingLine(fieldNameOf(el));");
     expect(fc).toContain("if (!out.some((x) => x.el === el || x.text === text)) out.push({ el, text }); // the same line once");
-    expect(fc).toContain("const { items: shownItems, extra, n } = mistakeBullets(items, orphans);");
+    expect(fc).toContain("const { items: shownItems, extra, n } = mistakeBullets(items, left);") /* (batch 35 §57) orphans go on the next change */;
     expect(fc).not.toContain("items.length === 0 && extra.map((o) => <p");
     expect(fc).toContain('{extra.map((o) => <li key={o} data-mistake-orphan="">{o}</li>)}');
   });
@@ -346,7 +346,7 @@ describe("batch 35 §34: all listing changes since the page's seen time are ONE 
     expect(box).toEqual([{ text: SAVED_ELSEWHERE_LINE, at: "2026-10-31T10:05:00.000Z", key: "listing", listing: true, keys: ["title", "buildUrl"] }]);
     expect(src("components/LiveTop.tsx")).toContain("if (added.length) setLines((old) => mergeChanges(old, added));");
     expect(src("components/ListingInfo.tsx")).toContain('if (plan === "mark") return mark(el, covered(el, d.keys));');
-    for (const f of ["components/ChangesBox.tsx", "components/GapDialog.tsx", "components/LiveTop.tsx", "app/app/find/[id]/JoinBox.tsx"]) expect(src(f), f).toMatch(/seeItClick\(e, [^)]*\.keys\)/);
+    for (const f of ["components/ChangesBox.tsx", "components/GapDialog.tsx", "components/LiveTop.tsx"]) expect(src(f), f).toMatch(/seeItClick\(e, [^)]*\.keys\)/);
   });
 });
 
@@ -378,7 +378,7 @@ describe("batch 35 §39: “Use saved” only where a saved version exists", () 
     expect(DISCARD_ALL_LABEL).toBe("Discard all");
     expect(draftButtonLabel("discard")).toBe(DISCARD_LABEL);
     const pay = src("app/app/tests/[id]/PayBox.tsx");
-    expect(pay).toContain('<DraftTag kind="discard" onUseSaved={useSaved} />');
+    expect(pay).toContain('<DraftTag disabled={busy} kind="discard" onUseSaved={useSaved} />');
     expect(pay).not.toContain('kind="saved"');
     // Discard: the amount back to its start (the listing amount for Pay, blank for Pay more), the note emptied, the ticks off.
     expect(pay).toContain('const startAmount = start == null ? "" : (start / 100).toFixed(2);');
@@ -390,7 +390,7 @@ describe("batch 35 §39: “Use saved” only where a saved version exists", () 
     expect(w).toContain('const answerKind = update ? "saved" : "discard";');
     expect(w).toContain("{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}");
     // Where something is saved: Edit and a saved draft (draftKind), the profile.
-    expect(src("app/app/profile/ProfileForm.tsx")).toContain('<DraftTag kind="saved" onUseSaved={useSaved} />');
+    expect(src("app/app/profile/ProfileForm.tsx")).toContain('<DraftTag disabled={busy} kind="saved" onUseSaved={useSaved} />');
     expect(src("app/app/tests/TestForm.tsx")).toContain('const draftKind = isNew ? "discard" : "saved";');
   });
 });

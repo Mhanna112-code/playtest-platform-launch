@@ -417,9 +417,25 @@ export function MistakeList({ press, orphans = [], shown, top = false }: { press
   const ref = useRef<HTMLDivElement>(null);
   const [pressed, setPressed] = useState(false);
   const [items, setItems] = useState<{ el: HTMLElement; text: string }[]>([]);
+  // (Owner, Oct 31, batch 35 §57) A server line that belongs to no field goes once the person changes anything in this form (a new refusal brings new ones).
+  const [orphansGone, setOrphansGone] = useState(false);
+  useEffect(() => setOrphansGone(false), [orphans]);
   useEffect(() => {
     const rootOf = () => ref.current?.closest("[data-mistakes-root], form") ?? null;
     const read = () => setItems(redFields(rootOf()));
+    // (Batch 35 §57) A field the page itself marks red (data-red-msg / aria-invalid set by React, e.g. the NDA tick's "Accept the NDA to join.") clears its bullet the
+    // moment the page clears it: the list follows those attributes too, not only this file's own checks.
+    const watch = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => read());
+    const root0 = rootOf();
+    if (root0) watch?.observe(root0, { attributes: true, subtree: true, attributeFilter: ["data-red-msg", "aria-invalid"] });
+    const onEdit = (e: Event) => {
+      const r = rootOf();
+      if (!r || !(e.target instanceof Node) || !r.contains(e.target)) return;
+      setOrphansGone(true);
+      queueMicrotask(read);
+    };
+    document.addEventListener("input", onEdit, true);
+    document.addEventListener("change", onEdit, true);
     const onPress = (e: Event) => {
       const r = (e as CustomEvent<Element>).detail;
       const mine = rootOf();
@@ -430,15 +446,19 @@ export function MistakeList({ press, orphans = [], shown, top = false }: { press
     window.addEventListener("field-mistakes", read);
     window.addEventListener("mistakes-press", onPress);
     return () => {
+      watch?.disconnect();
+      document.removeEventListener("input", onEdit, true);
+      document.removeEventListener("change", onEdit, true);
       window.removeEventListener("field-mistakes", read);
       window.removeEventListener("mistakes-press", onPress);
     };
   }, []);
   // (Owner, Oct 31, batch 35 §31) An orphan arriving shows the list at once (a server refusal is a press's answer).
-  const on = pressed || !!shown || orphans.some((o) => o.trim());
+  const left = orphansGone ? [] : orphans;
+  const on = pressed || !!shown || left.some((o) => o.trim());
   // (Batch 35 §31) ALL mistakes under the one heading: the red fields' lines (linked) and the ones that belong to no field, never a loose red line; no blank or
   // repeated bullet; the count is the bullets'.
-  const { items: shownItems, extra, n } = mistakeBullets(items, orphans);
+  const { items: shownItems, extra, n } = mistakeBullets(items, left);
   return (
     <div ref={ref} data-mistake-list="" className="space-y-1" hidden={!on || n === 0} role={on && n > 0 ? "alert" : undefined}>
       {on && n > 0 && (

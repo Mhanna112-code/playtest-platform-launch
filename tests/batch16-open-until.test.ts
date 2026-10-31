@@ -60,7 +60,7 @@ describe("Open until: at most 30 days from when the test opened (section 16)", (
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("openUntilLine(f.openUntil, edit.testerDays + Math.max(0, daysBetween(base.openUntil.slice(0, 10), f.openUntil)))");
     expect(form).toContain('"data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE');
-    expect(form).toContain("hint: edit?.capDay ? openUntilCapHint(edit.capDay)");
+    expect(form).toContain("hint: edit?.capDay ? openUntilCapHint(edit.capDay, base.openUntil)"); // (batch 35 §54) never a maximum earlier than the saved day
     expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("capDay: openUntilCapDay(t.createdAt, u.timeZone)");
   });
 });

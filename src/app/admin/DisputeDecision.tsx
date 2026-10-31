@@ -75,7 +75,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         <input id={`total-${id}`} className="input w-28" inputMode="decimal" data-money="" aria-label="Total pay for this piece ($)" data-min={String(minCents / 100)} data-max={String(maxCents / 100)}
           data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} data-match="^(?!Keep it to)" value={total} onChange={(e) => setTotal(e.target.value)} />
         {/* (Owner, Oct 31, batch 35 §39) One Discard for the total and the note (nothing is saved for them): both emptied, the tick needed again. */}
-        {keep.restored && (total !== "" || note !== "") && <DraftTag kind="discard" field="decide" onUseSaved={() => { setTotal(""); setNote(""); setTickedFor(null); }} />}
+        {keep.restored && (total !== "" || note !== "") && <DraftTag disabled={busy || fin.done} kind="discard" field="decide" onUseSaved={() => { setTotal(""); setNote(""); setTickedFor(null); }} />}
         <span className="text-xs text-slate-500">{dollars(minCents)}-{dollars(maxCents)} · leave blank to keep it as it is</span>
       </div>
       {/* (Batch 35 §36) As Suspend's box: the note the panel's full width, its counter under its right edge, Decide below. */}

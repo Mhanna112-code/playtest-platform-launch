@@ -136,7 +136,7 @@ describe("batch 35 §14: the join page's Listing panel", () => {
 describe("batch 35 §14: See it on every listing line of the join page", () => {
   const at = new Date().toISOString();
   const line: Change = { text: "Nora Lane edited the listing at 12:23 PM: title (now “Harbor Run 2”)", at, kind: "renamed", timed: true, listing: true, saveAt: at };
-  it("the stop boxes, the pop-up and the Changed-since list carry See it to #listing with the line's Save", () => {
+  it("the stop boxes and the pop-up carry See it to #listing with the line's Save", () => {
     const box = renderToStaticMarkup(createElement(SeeItTarget, { target: "#listing" }, createElement(ChangesBox, { side: "tester", changes: [line], press: "No thanks" })));
     expect(box).toContain('data-see-it=""');
     expect(box).toContain('href="#listing"');
@@ -158,7 +158,7 @@ describe("batch 35 §14: See it on every listing line of the join page", () => {
     expect(src("app/app/tests/[id]/ListingPanel.tsx").match(/id="listing"/g)?.length).toBe(1);
 
     const join = src("app/app/find/[id]/JoinBox.tsx");
-    expect(join).toContain('{(c.listing || (c.timed && c.kind === "info")) && <> · <a href="#listing" data-see-it="" onClick={(e) => seeItClick(e, "#listing", c.at, c.saveAt, c.keys)}>See it</a></>}');
+    expect(join).not.toContain("data-changed-since"); // (batch 35 §55) no live list by the button any more
     expect(join.match(/seeIt="#listing"/g)?.length).toBe(4); // the two waiting views' boxes, the pop-up, the box under the button
     expect(src("app/app/find/[id]/NoThanksButton.tsx")).toContain('<ChangesBox changes={changes} error={error} press="No thanks" side="tester" seeIt="#listing" alertsWhere="join" />');
     const gap = src("components/GapDialog.tsx");

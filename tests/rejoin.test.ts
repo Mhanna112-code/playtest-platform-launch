@@ -299,7 +299,7 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     expect(await db.invite.count({ where: { testId, testerId: dee.user.id, status: "sent" } })).toBe(1);
   });
 
-  it("after leaving: Find lists the test ('You left this test'); the page keeps updates; Join again stops once for paid + new terms (plain line)", async () => {
+  it("after leaving: Find lists the test ('You left this test'); the page keeps updates; Join again stops once for paid + the one listing line", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -317,10 +317,12 @@ describe("when the test fills (correction 4) and no invite cap (correction 5)", 
     await new Promise((r) => setTimeout(r, 30)); // the database clock can run a few ms ahead: the live route lists changes only up to its own now
     const sl = (await json(await liveGET(req(`/api/live?scope=session:${sessionId}&since=${encodeURIComponent(pageLoaded)}`, { cookie: tester.cookie })))).body.changes.map((c: { text: string }) => c.text);
     expect(sl).toContain("Nora Lane paid $10.00 for your written answers");
-    // Ask to rejoin (the listing's button) stops once: paid, the terms as a plain line; then the ask goes through.
+    // Ask to rejoin (the listing's button) stops once: paid, the listing's one line; then the ask goes through.
     const j = await act(testId, "rejoin-ask", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded });
     const lines = j.body.error.changes.map((c: { text: string }) => c.text);
-    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $10.00 for your written answers", "Nora Lane changed the terms: written $10 → $12"]));
+    // (Batch 35 §53) The listing's one line covers the terms: no "changed the terms: <fields>" line.
+    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $10.00 for your written answers", "Nora Lane edited the listing"]));
+    expect(lines.filter((t: string) => /changed the terms|offered/.test(t))).toEqual([]);
     expect(j.body.error.top).toBeUndefined(); // no offer box, no scroll to the top
     expect((await act(testId, "rejoin-ask", tester.cookie, { listingVersion: await listingVersion(testId), seenAt: pageLoaded, confirmed: true, anyway: true })).body).toEqual({ asked: true });
   });

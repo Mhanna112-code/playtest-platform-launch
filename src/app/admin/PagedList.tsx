@@ -39,7 +39,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
       {!fin.done && <>
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
       <input id={`lift-note-${id}`} className="input w-full max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
-      {keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}
+      {keep.restored && note !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setNote("")} />}
       </>}
       <button
         className="btn-ghost"

@@ -11,12 +11,12 @@ import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from 
 import { BUILD_URL_LINE, BUILD_URL_PATTERN, fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
-import { DRAFT_START_LINE, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
+import { DRAFT_START_LINE, DraftButton, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
 import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -41,7 +41,9 @@ type F = {
 };
 
 const dollars = (c: number | null) => (c == null ? "" : (c / 100).toFixed(2));
-export function toForm(l: Listing): F {
+/** (Batch 35 §54) Open until's day in the developer's zone (`tz`), the same day the server's checks, the hint and the red line read; a YYYY-MM-DD stays as it is. */
+export const formDay = (v: string | null | undefined, tz?: string | null) => (!v ? "" : /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : openUntilDay(v, tz));
+export function toForm(l: Listing, tz?: string | null): F {
   return {
     productName: l.productName ?? "", title: l.title, description: l.description, buildUrl: l.buildUrl, categories: l.categories, devices: l.devices, languages: l.languages,
     mature: !!l.mature, matureWhy: l.matureWhy ?? "", ndaText: l.ndaText ?? "",
@@ -49,7 +51,7 @@ export function toForm(l: Listing): F {
     recording: l.recordingCents != null, recordingPrice: dollars(l.recordingCents), live: l.liveRateCents != null,
     liveRate: dollars(l.liveRateCents), liveMinutes: String(l.liveMinutes ?? 30),
     writtenRequired: !!l.writtenRequired, recordingRequired: !!l.recordingRequired, liveRequired: !!l.liveRequired, questions: l.questions.map(qText).join("\n"), requiredQs: l.questions.filter(qRequired).map(qText),
-    openUntil: l.openUntil ? l.openUntil.slice(0, 10) : "",
+    openUntil: formDay(l.openUntil, tz),
     joinMode: l.joinMode ?? "anyone",
   };
 }
@@ -135,10 +137,10 @@ type EditProps = {
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 
 /** (Owner, Oct 28 evening) `draft`: a draft (a next round not opened yet) shown in Post a test: Post opens it for testers, and it can be deleted here. */
-export function TestForm({ init, edit, draft, perks = true, termsAgain = false, hasCard = true }: { init: Listing; edit?: EditProps; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms: the tick shows above Post */ termsAgain?: boolean; hasCard?: boolean }) {
-  const [f, setF] = useState<F>(toForm(init));
+export function TestForm({ init, edit, draft, perks = true, termsAgain = false, hasCard = true, tz }: { init: Listing; /** (Batch 35 §54) the developer's time zone: Open until's day */ tz?: string | null; edit?: EditProps; draft?: { id: string }; /** (Batch 8) false on the free plan: "Subscribers" on Approved-only */ perks?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms: the tick shows above Post */ termsAgain?: boolean; hasCard?: boolean }) {
+  const [f, setF] = useState<F>(toForm(init, tz));
   // What this tab last knew the test to be (Edit): fields that differ from it are "changed" (Save is faded when none are).
-  const [base, setBase] = useState<F>(toForm(init));
+  const [base, setBase] = useState<F>(toForm(init, tz));
   const [touched, setTouched] = useState<Set<keyof F>>(new Set());
   const [busy, setBusy] = useState(false);
   // (Batch 16 section 10) The server's mistakes go to their fields (FieldChecks); only those that belong to no field are kept here, for the list.
@@ -187,7 +189,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   const [keysNote, setKeysNote] = useState<{ own: { at: string; lines: string[] } | null; others: { at: string; lines: string[] } | null }>({ own: null, others: null });
   // (Owner, Oct 28, batch 16 sections 17 and 19) What this tab loaded (until a stop box shows the newer values), what it held in each field another tab
   // changed (before taking the newer value), and each such field's note, for Save's stop box: the server stops only for what this tab doesn't have.
-  const seenBase = useRef<F>(toForm(init));
+  const seenBase = useRef<F>(toForm(init, tz));
   const prior = useRef<Partial<Record<keyof F, { had: unknown; took: unknown }>>>({});
   const details = useRef<Partial<Record<keyof F, NoteItem>>>({});
   // (Batch 16 section 18) The free keys as of the page load (or its last stop box): Save's stop always lists what changed in them since.
@@ -198,7 +200,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   const fb = freeBoxCheck(keysText, freeLoaded, keysData);
   const keysChanged = edit ? fb.added.length > 0 || fb.removed.length > 0 : parseKeys(keysText).length > 0;
   const keep = useKept(edit ? `test:edit:${edit.id}` : draft ? `test:draft:${draft.id}` : "test:new", { f, touched: [...touched], keysText }, touched.size === 0 && !keysChanged, (v) => {
-    setF({ ...toForm(init), ...v.f });
+    setF({ ...toForm(init, tz), ...v.f });
     setTouched(new Set(v.touched));
     if (v.keysText) setKeysText(v.keysText);
   });
@@ -242,9 +244,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   };
   const draftMark = (where: string) => {
     const ks = marks[where] ?? [];
-    return ks.length ? <DraftTag kind={draftKind} field={where} onUseSaved={() => putSaved(ks)} /> : null;
+    return ks.length ? <DraftTag disabled={busy} kind={draftKind} field={where} onUseSaved={() => putSaved(ks)} /> : null;
   };
-  const keysDraft = keep.restored && keysChanged ? <DraftTag kind={draftKind} field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
+  const keysDraft = keep.restored && keysChanged ? <DraftTag disabled={busy} kind={draftKind} field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
   const putAllSaved = () => {
     putSaved(draftKeys);
     setKeysText(savedKeysText);
@@ -257,7 +259,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   const fromDraft = keep.restored && (touched.size > 0 || keysChanged);
   const discardAll = () => {
     const all = Object.keys(f) as (keyof F)[];
-    setF(edit || draft ? base : toForm(init));
+    setF(edit || draft ? base : toForm(init, tz));
     setTouched(new Set());
     setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([x]) => !all.includes(x as keyof F))) as typeof o);
     setKeysText(savedKeysText);
@@ -312,7 +314,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // to join; every tester gets the same days (opened → Open until) from when they join.
   const dlLine = "";
   // (5) Open until can only be extended.
-  const ouNow = init.openUntil ? init.openUntil.slice(0, 10) : "";
+  const ouNow = formDay(init.openUntil, tz);
   const shortened = !!edit && !!ouNow && !!f.openUntil && f.openUntil < base.openUntil && f.openUntil < ouNow;
   // (Batch 35 §30) The same line as the server's (openUntilExtendLine), so the press's refusal is this line, shown once, at the box.
   const ouLine = shortened ? openUntilExtendLine(base.openUntil.slice(0, 10)) : "";
@@ -355,7 +357,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
    * what it replaced ("Spots: 4 → 5") and, when this tab had typed something else, "What you typed (not saved):" in full with Copy.
    */
   function applyElsewhere(listing: Listing, at: string) {
-    const now = toForm(listing);
+    const now = toForm(listing, tz);
     const m = mergeElsewhere(f, base, now);
     const fresh: Record<string, { at: string; items: NoteItem[] }> = {};
     const takeover: Partial<F> = {};
@@ -474,7 +476,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
    */
   function savedHere(listing: Listing, v: number, keys?: KeysData) {
     leaving.current = true;
-    const now = toForm(listing);
+    const now = toForm(listing, tz);
     setF(now);
     setBase(now);
     seenBase.current = now;
@@ -569,7 +571,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         setStopDetails((o) => ({ ...o, ...byApi }));
         details.current = {};
         prior.current = {};
-        if (err.data.current) seenBase.current = toForm(err.data.current as Listing);
+        if (err.data.current) seenBase.current = toForm(err.data.current as Listing, tz);
         if (err.data.keys) keysSeen.current = (err.data.keys as { free: string[] }).free;
       }
       else if (err instanceof ApiError && err.code === TERMS_UPDATED_CODE) {
@@ -655,7 +657,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       {fromDraft && (
         <p className="info text-sm" data-from-draft="">
           {DRAFT_START_LINE(keep.restoredAt ? fmtDateTime(keep.restoredAt) : "")}
-          {" · "}<button type="button" className="text-sky-300 underline" data-discard-draft="" onClick={discardAll}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</button>
+          {" · "}<DraftButton className="text-sky-300 underline" data-discard-draft="" disabled={busy} onPress={discardAll}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</DraftButton>
         </p>
       )}
       <p className="note"><span className="text-punch-400">*</span> marks the fields you have to fill in.</p>
@@ -814,7 +816,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
             <p className="mt-1 text-xs text-slate-500" data-spots-line="">{spotsLine}</p>
           </div>
           <div>
-            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) }, below: showOn("openUntil") ? redLine(ouLine) : null /* (batch 35 §30) once, at the box */ })}
+            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay, base.openUntil) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) }, below: showOn("openUntil") ? redLine(ouLine) : null /* (batch 35 §30) once, at the box */ })}
             {/* (Owner, Oct 28, batch 19 section 8) Live: testers join until this date, each gets N days from joining (Edit: their days now + the extension, batch 16
                 section 16; Post: today to this date), so the last work can arrive Open until + N; then the 7 days to pay. */}
             {f.openUntil && /^\d{4}-\d{2}-\d{2}$/.test(f.openUntil) && (edit?.testerDays != null
@@ -886,7 +888,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           {/* (Batch 20 section 22) What the kept draft means here: Edit's typed changes aren't saved yet; Post's draft isn't posted yet. */}
           {keep.restored && draftKeys.length === 0 && !keysDraft && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}
           {/* (Batch 35 §8) After signing in, with fields still marked Draft: the whole form back to the saved values. */}
-          {(draftKeys.length > 0 || !!keysDraft) && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={isNew ? discardAll : putAllSaved}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</button>}
+          {(draftKeys.length > 0 || !!keysDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy} onPress={isNew ? discardAll : putAllSaved}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</DraftButton>}
         </div>
         {saved && <p className="ok">{saved}</p>}
         {/* (Batch 30 §9) The line names the change (the field name scrolls to it, marked) with Put it back beside it; then the other changes save. */}

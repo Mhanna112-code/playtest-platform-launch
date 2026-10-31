@@ -169,15 +169,14 @@ describe("batch 30 §12: the join page's stop lists every change since the page 
   });
 });
 
-describe("batch 30 §11: 'Changed since you opened this page' next to Join", () => {
-  it("the list sits right above the button, newest first, and clears when the stop box takes over", () => {
+// (Owner, Oct 31, batch 35 §55) Replaces batch 30 §11: the join page has no live "Changed since you opened this page" list by the button any more.
+describe("batch 35 §55 (replacing batch 30 §11): no live list next to Join", () => {
+  it("live changes show only in the top box; by the button only the stop box after a press", () => {
     const join = src("app/app/find/[id]/JoinBox.tsx");
-    const list = join.indexOf("data-changed-since");
-    expect(list).toBeGreaterThan(0);
-    expect(join).toContain("<p className=\"font-medium\">Changed since you opened this page</p>");
-    expect(list).toBeLessThan(join.indexOf("<UserPlus className=\"h-4 w-4\" />"));
-    expect(join).toContain("{since.length > 0 && !box && (");
-    expect(join).toContain("setSince([]);");
+    expect(join).not.toContain("data-changed-since");
+    expect(join).not.toContain("Changed since you opened this page");
+    expect(join).not.toContain("setSince(");
+    expect(join).toContain("<ChangesBox side=\"tester\" changes={box?.changes ?? null}");
   });
 });
 

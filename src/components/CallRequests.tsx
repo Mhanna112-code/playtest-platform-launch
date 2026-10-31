@@ -111,7 +111,7 @@ export function CallRequests(p: {
               data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
             <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
-            {keep.restored && <DraftTag kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); }} />}
+            {keep.restored && <DraftTag disabled={busy} kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); }} />}
           </div>
           {box("request")}
           <PressDone line={doneLine} />

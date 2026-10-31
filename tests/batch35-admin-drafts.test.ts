@@ -101,7 +101,7 @@ describe("batch 35 §11: what a restored draft puts back", () => {
     expect(d).toContain('useKept<Record<string, unknown>>(adminDraftKey("decide", id), { total, note }, total.trim() === "" && note.trim() === "", (d) => {');
     expect(d).toContain("setTickedFor(back.tickedFor);");
     // (Batch 35 §39) One Discard for the total and the note: both emptied (blank total: keep the pay), the tick needed again.
-    expect(d).toContain('{keep.restored && (total !== "" || note !== "") && <DraftTag kind="discard" field="decide" onUseSaved={() => { setTotal(""); setNote(""); setTickedFor(null); }} />}');
+    expect(d).toContain('{keep.restored && (total !== "" || note !== "") && <DraftTag disabled={busy || fin.done} kind="discard" field="decide" onUseSaved={() => { setTotal(""); setNote(""); setTickedFor(null); }} />}');
     expect(d).not.toContain('kind="saved"');
     // Decide stays disabled until a restored raise is ticked again (batch 35 §1).
     expect(d).toContain("disabled={busy || (extra > 0 && !ticked)}");
@@ -129,7 +129,7 @@ describe("batch 35 §11: every admin box keeps its draft", () => {
     const b = src("app/admin/AdminButton.tsx");
     expect(b).toContain("useKept<Record<string, unknown>>(adminDraftKey(action, id), draftFor === undefined ? v : { ...v, [DRAFT_FOR]: draftFor }, !typedAny, (d) => {");
     expect(b).toContain("}, fields.length === 0);"); // off without a box (Reinstate, Lift the pause, Mark replied, Approve, Close now, …)
-    expect(b).toContain('{keep.restored && put && typedAny && <DraftTag kind="discard" onUseSaved={() => setV({})} />}');
+    expect(b).toContain('{keep.restored && put && typedAny && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setV({})} />}');
     const press = b.slice(b.indexOf("await api(`/api/admin/${action}`"));
     expect(press.indexOf("await keep.clear();")).toBeLessThan(press.indexOf("} catch (e) {"));
     expect(press.slice(press.indexOf("} catch (e) {")).split("finally")[0]).not.toContain("keep.clear");
@@ -151,7 +151,7 @@ describe("batch 35 §11: every admin box keeps its draft", () => {
   it("the team close-out's reason: admin:team-close-<scope>:<id>, Discard (beside Preview until the box shows), cleared when Close goes through", () => {
     const t = src("app/admin/TeamCloseBox.tsx");
     expect(t).toContain('useKept<{ reason?: unknown }>(adminDraftKey(`team-close-${scope}`, id), { reason }, reason.trim() === "", (d) => setReason(typeof d.reason === "string" ? d.reason : ""));');
-    expect(t).toContain('<DraftTag kind="discard" onUseSaved={() => setReason("")} />');
+    expect(t).toContain('<DraftTag disabled={busy} kind="discard" onUseSaved={() => setReason("")} />');
     expect(t).toContain("{!boxShown && tag}");
     const press = t.slice(t.indexOf('api<{ line: string }>("/api/admin/team-close"'));
     expect(press.indexOf("await keep.clear();")).toBeLessThan(press.indexOf("} catch (e) {"));
@@ -160,7 +160,7 @@ describe("batch 35 §11: every admin box keeps its draft", () => {
   it("the hold lift's note to the developer: admin:approve-hold:<id>, Discard, cleared when Approve goes through", () => {
     const l = src("app/admin/PagedList.tsx");
     expect(l).toContain('useKept<{ note?: unknown }>(adminDraftKey("approve-hold", id), { note }, note.trim() === "", (d) => setNote(typeof d.note === "string" ? d.note : ""));');
-    expect(l).toContain('{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}');
+    expect(l).toContain('{keep.restored && note !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setNote("")} />}');
     const press = l.slice(l.indexOf('await api("/api/admin/approve-hold"'));
     expect(press.indexOf("await keep.clear();")).toBeLessThan(press.indexOf("} catch (e) {"));
   });

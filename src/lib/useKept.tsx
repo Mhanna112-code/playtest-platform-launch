@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { pageUser } from "@/lib/client";
 import { SIGNED_IN_MARK } from "@/lib/keptText";
 
@@ -193,11 +193,33 @@ export function NotSentTag({ label = DRAFT_LABEL }: { /** (Batch 20 section 22) 
  * (Batch 35 §10) `kind`: "saved" reads "Use saved" (a saved version exists), "discard" reads "Discard" (nothing is saved; the box empties).
  * (Batch 35 §18) Every restored draft, not only one back through a sign-in: the forms pass `onUseSaved` whenever their draft came back.
  */
-export function DraftTag({ onUseSaved, field, kind }: { onUseSaved?: () => void; field?: string; kind: DraftKind }) {
+export function DraftTag({ onUseSaved, field, kind, disabled = false }: { onUseSaved?: () => void; field?: string; kind: DraftKind; /** (batch 35 §58) the form's main press is going or finished */ disabled?: boolean }) {
   return (
     <span className="inline-flex items-center" data-draft-tag={field ?? ""} data-draft-kind={kind}>
       <NotSentTag />
-      {onUseSaved && <button type="button" className="ml-2 text-xs font-normal text-sky-300 underline" data-use-saved={field ?? ""} onClick={onUseSaved}>{draftButtonLabel(kind)}</button>}
+      {onUseSaved && <DraftButton className="ml-2 text-xs font-normal text-sky-300 underline" data-use-saved={field ?? ""} onPress={onUseSaved} disabled={disabled}>{draftButtonLabel(kind)}</DraftButton>}
     </span>
   );
+}
+
+/**
+ * (Owner, Oct 31, batch 35 §58) Every draft button ("Start empty", "Use saved", "Use saved for all", "Discard", "Discard all"): disabled while the form's main press
+ * is going or has finished (until the redraw lands: `disabled`), and, once pressed, until what it does has applied (no double press).
+ */
+export function DraftButton({ onPress, disabled = false, className, children, ...data }: { onPress: () => unknown; disabled?: boolean; className?: string; children: ReactNode } & Record<`data-${string}`, string>) {
+  const [applying, setApplying] = useState(false);
+  const busy = useRef(false);
+  const click = async () => {
+    if (busy.current || disabled) return;
+    busy.current = true;
+    setApplying(true);
+    try {
+      await onPress();
+      await new Promise((r) => requestAnimationFrame(() => r(null))); // applied: the boxes have redrawn
+    } finally {
+      busy.current = false;
+      setApplying(false);
+    }
+  };
+  return <button type="button" className={`${className ?? ""} disabled:cursor-not-allowed disabled:opacity-50`} disabled={disabled || applying} onClick={() => void click()} {...data}>{children}</button>;
 }

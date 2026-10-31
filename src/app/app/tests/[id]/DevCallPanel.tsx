@@ -157,7 +157,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             >
               Request a time
             </button>
-            {keep.restored && <DraftTag kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); setTicked([]); }} />}
+            {keep.restored && <DraftTag disabled={busy} kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); setTicked([]); }} />}
           </div>
           {ticked.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
           {box("request")}
