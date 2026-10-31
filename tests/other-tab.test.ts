@@ -346,7 +346,7 @@ describe("payments and disputes, only for this test", () => {
     const after = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
     // (Owner, Oct 27) The declined payment started the hold at once, so paying it lifts the hold: the tester also reads that the test is running again.
     expect(after.map((n) => n.text).slice(afterDecline)).toEqual(["Nora Lane paid $10.00 for your written answers", "“Harbor Run” is running again"]);
-    expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed, "Nora Lane paid $10.00 for your written answers"]);
+    expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane paid $10.00 for your written answers"]); // (batch 35 §76) one line per payment: paid replaces delayed
   });
 
   it("the tester's own delay on test A shows on their session on B with the same developer, not with another developer", async () => {

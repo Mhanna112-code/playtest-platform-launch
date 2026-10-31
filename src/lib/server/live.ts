@@ -137,9 +137,10 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   const all = await withSaveAt(testId, [...listing, ...(await devPaymentChanges(devId, testId, since, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), tx);
   // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
   if (opts.all) return all;
+  const loud = all.filter((c) => !c.quiet);
   // (Batch 35 §73) The ticks of this test's own Alerts menu.
   const ignored = new Set((await tx.test.findUnique({ where: { id: testId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
-  return ignored.size ? all.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : all;
+  return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : loud;
 }
 
 /** (Batch 35 §34) A listing Save's consequence as its own line: "You re-sent fbbb's invite (the listing changed)". */
@@ -234,8 +235,10 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
     const title = c?.test.title ?? "a test";
     const who = `${money(p.amountCents)} to ${c ? displayName(c.tester) : "a tester"} for the ${pieceLabel(p, kinds)}`;
     const next = " · pay what you owe in Payments"; // (Owner, Oct 27) no retries and no cut-off any more: a declined payment is a hold at once
-    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt, contractId: p.contractId } as TestEventLike);
-    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt, contractId: p.contractId } as TestEventLike);
+    // (Batch 35 §78) An owed payment that went through was the developer's own (Pay what you owe, a retry, a new card): it lifts their hold, so like a
+    // reinstatement (§72) it shows in the live box but never stops their press. A tester's Charge, a dispute decision or a failed payment stop as before.
+    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt, contractId: p.contractId, key: `pay:${p.id}`, ...(p.owedUntil ? { quiet: true } : {}) } as TestEventLike);
+    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt, contractId: p.contractId, key: `pay:${p.id}` } as TestEventLike);
   }
   // Chargebacks opened / resolved on the developer's OTHER tests (this test's come as its own events).
   const others = await tx.testEvent.findMany({ where: { kind: { in: ["chargeback", "payment"] }, createdAt: { gt: since }, testId: { not: testId }, test: { developerId: devId } }, include: { test: { select: { title: true } } }, take: 50 });
@@ -266,8 +269,10 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
     // When a delayed payment goes through: the normal paid line (on another session: naming the test).
     const late = (p.status === "deferred" || p.status === "owed" || !!p.owedUntil) && p.createdAt > since;
     const piece = (p.contractId === contractId && (p.submissionId ?? p.callId)) || undefined;
-    if (late) out.push({ kind: "payment", text: delayedPayLine(dev, label, p.amountCents, title), createdAt: p.createdAt, piece });
-    if (p.settledAt && p.settledAt > since) out.push({ kind: "paid", text: `${dev} paid ${money(p.amountCents)} for your ${label}${title ? ` on ${title}` : ""}`, createdAt: p.settledAt, piece });
+    // (Batch 35 §76) One line per payment, its latest state: once it went through, the paid line replaces its "delayed" line (a failed then paid one shows paid); both
+    // carry the payment's key, so the live box's paid line replaces the delayed one it already lists.
+    if (late && !(p.settledAt && p.settledAt > since)) out.push({ kind: "payment", text: delayedPayLine(dev, label, p.amountCents, title), createdAt: p.createdAt, piece, key: `pay:${p.id}` });
+    if (p.settledAt && p.settledAt > since) out.push({ kind: "paid", text: `${dev} paid ${money(p.amountCents)} for your ${label}${title ? ` on ${title}` : ""}`, createdAt: p.settledAt, piece, key: `pay:${p.id}` });
   }
   for (const d of disputes) {
     const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });

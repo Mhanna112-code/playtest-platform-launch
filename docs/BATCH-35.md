@@ -661,3 +661,20 @@ go through." under End their work now), another press's box never counts as this
 Stop the test) clears the earlier box: one box at a time.
 
 - The dashboard's "Your developer account is active again · <time>" keeps showing for 3 days, as before (owner, Oct 31).
+
+## §76 One line per payment, its latest state (owner bug, Oct 31)
+A tester's stop box listed "dev's payment for your written answers ($10) is delayed. You'll be told when it arrives. · 3:58 PM" and "dev paid $10.00 for your
+written answers · 4:06 PM": the same payment twice. Now a payment shows one line, its latest state: once it went through, the paid line replaces its delayed line
+(a failed then paid one shows paid), in the stop boxes and the top Updated box (both lines carry the payment's key, so the live box's paid line replaces the delayed
+one it already lists). The developer's lines already showed one per payment ("Payment failed on …" or "Payment went through on …"); they carry the key too.
+
+## §77 A part re-sent with no change isn't "updated" (owner bug, Oct 31)
+The owner saw "fbbb sent their recording · 4:19 PM" and "fbbb updated their recording · 4:19 PM" for one recording. A re-send was already refused when nothing was
+added or removed; now it is compared by content: the recordings (or the written part's files) by name and size, and the answers with their file markers read by
+file name, so a recording or file removed and the same file uploaded again is no change. A re-send with nothing new records no line, sends no email and is refused
+with "Nothing has changed since you sent it." (the existing line by Send).
+
+## §78 Your own hold lifting doesn't stop your presses (owner, Oct 31)
+An owed payment going through is the developer's own (Pay what you owe, a retry on the saved card, a new card), and it lifts their hold. Like a reinstatement (§72),
+its "Payment went through on …" line shows in the test page's top box (and on Payments) but never stops the developer's press. Other payments (a tester's Charge, a
+dispute decision, a failed payment) stop as before.

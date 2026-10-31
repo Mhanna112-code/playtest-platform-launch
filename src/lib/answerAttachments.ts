@@ -64,3 +64,11 @@ export function excerptWithFiles(text: string) { return text.replace(markerPatte
 export function removeAttachmentMarker(text: string, id: string, uploads: readonly { id: string; filename?: string }[] = [{ id }]) {
   return text.replace(markerPattern, (full: string, ...groups: (string | undefined)[]) => (resolveMarker(refOf([full, ...groups]), uploads)?.id === id ? "" : full));
 }
+
+/** (Batch 35 §77) The same set of files (by name and size, each counted): a file removed and uploaded again is no change. */
+export function sameFiles(a: { filename: string; sizeBytes: number }[], b: { filename: string; sizeBytes: number }[]) {
+  const sig = (xs: { filename: string; sizeBytes: number }[]) => xs.map((x) => `${x.filename}|${x.sizeBytes}`).sort().join("/");
+  return a.length === b.length && sig(a) === sig(b);
+}
+/** (Batch 35 §77) An answer with its markers read by file name only (a re-uploaded file's new tag is no change). */
+export const withoutTags = (s: string) => s.replace(markerPattern, (_m, _id, long, short) => `[📎 ${short ?? long}]`);

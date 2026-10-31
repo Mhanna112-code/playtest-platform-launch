@@ -10,7 +10,7 @@ import { ownContract, recordEvent, sessionRefusal } from "./tests";
 import { answerTermsFirst, testerSendGate } from "./terms";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
-import { attachmentTag, hasMarkerFor } from "@/lib/answerAttachments";
+import { attachmentTag, hasMarkerFor, sameFiles } from "@/lib/answerAttachments";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -171,7 +171,8 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     if (locked) throw new HttpError(409, "paid", locked);
     const paid = !!existing?.review;
     // (Owner, Oct 28, batch 20 section 26) Nothing added or removed since the last send: refused (no new piece, no bell).
-    if (existing && recs.every((r) => r.submissionId === existing.id) && !(await tx.recording.count({ where: { contractId, part: "removed" } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
+    // (Batch 35 §77) By content: a recording removed and the same file uploaded again is no change either (no "updated" line, no email).
+    if (existing && sameFiles(recs, await tx.recording.findMany({ where: { contractId, submissionId: existing.id, part: { in: ["recording", "removed"] } } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
     const now = new Date();
     // (Batch 30 §3) An update of a late piece stays late; one sent after the deadline is late (Charge, if it had opened, no longer applies).
     const lateNow = !!existing?.late || isLate(c.dueAt, now);

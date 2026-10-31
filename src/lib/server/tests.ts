@@ -28,6 +28,7 @@ import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
+import { withoutTags } from "@/lib/answerAttachments";
 import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS } from "@/lib/rules";
 
 type Tx = Prisma.TransactionClient;
@@ -1045,8 +1046,10 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const before = existing ? itemsOf(existing.answers, qs) : [];
     const replacesEarlier = !!existing && (!!existing.setUntil || !sameQuestions(before, items));
     // (Owner, Oct 28, batch 20 section 26) A resend identical to the last send (the same answers and notes, no new attachment) is refused: no new piece, no bell.
-    if (existing && !replacesEarlier && items.every((x, i) => x.answer === before[i]?.answer) && notes === existing.notes
-      && !(await tx.recording.count({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
+    // (Batch 35 §77) By content: a file removed and the same file placed again (a new tag in its marker) is no change either (no "updated" line, no email).
+    const sentFiles = existing ? await tx.recording.findMany({ where: { contractId, part: "written", submissionId: existing.id }, select: { filename: true, sizeBytes: true } }) : [];
+    if (existing && !replacesEarlier && items.every((x, i) => withoutTags(x.answer) === withoutTags(before[i]?.answer ?? "")) && notes === existing.notes
+      && (await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null } })).every((f) => sentFiles.some((g) => g.filename === f.filename && g.sizeBytes === f.sizeBytes))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
     // (Batch 30 §3) An update of a late piece stays late; one sent after the deadline is late (and Charge, if it had opened, no longer applies).
     const late = !!existing?.late || isLate(c.dueAt, now);
     const data = {
