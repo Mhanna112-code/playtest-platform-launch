@@ -639,7 +639,6 @@ the top ticks or unticks every type that can happen on this test at once; greyed
 ## §72 Reinstatement doesn't move the developer; "active again" shows once (owner, Oct 31)
 - Stop / End early pressed on a test page drawn while the developer side was suspended or on a hold sent them to the dashboard ("Done: …", batch 15 §29). Now that
   only happens if the account is still restricted at that moment; reinstated meanwhile, the press goes through and the test page just redraws in place.
-- The dashboard's "Your developer account is active again · <time>" shows on the first view only; leaving or reloading the page hides it (per browser).
 
 ## §73 The developer's Alerts belong to each test (owner, Oct 31)
 The developer's Alerts ticks are saved on the test, not the account: ticking a type on one test never changes another test. A new test and a Next round start
