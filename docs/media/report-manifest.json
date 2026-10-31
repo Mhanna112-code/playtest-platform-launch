@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-30T07:54:07.154Z",
+  "generated": "2026-10-31T02:33:06.729Z",
   "sizes": {
     "desktop": "1280x900",
     "phone": "375x812"
@@ -8478,6 +8478,578 @@
           "explanation": "Ten entries with something unread (Kit Moreau joined nine more tests, plus the Harbor Run stack): the bell reads “9+” (its label: “Notifications, 9+ unread”); 12 entries in the list.",
           "kind": "image",
           "desktop": "bell-number-05-nine-plus.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Paperclip (batch 27 §3)",
+      "explanation": "Files placed at the cursor in written answers (docs/BATCH-27.md §3, Codex task 3): 📎 and ⏺ in each answer's toolbar, the upload marker, the live preview under the box, and the files in place on the developer's and the team's views.",
+      "cases": [
+        {
+          "title": "§3 📎 and ⏺ in the toolbar",
+          "explanation": "Each answer box's toolbar now reads “B I </> 📎 ⏺ With my microphone”: B, I and </>, then 📎 (Attach a file) and ⏺ (record the screen); the file lands where the cursor is.",
+          "kind": "image",
+          "desktop": "b35-01-toolbar.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Uploading at the cursor",
+          "explanation": "While the file goes up, the answer holds a marker where the cursor was: “[Uploading crash-log.txt… 20%]”; when it's done it turns into the file's marker. The ⏺ button greys out meanwhile.",
+          "kind": "image",
+          "desktop": "b35-02-uploading.png",
+          "phone": null
+        },
+        {
+          "title": "§3 The live preview",
+          "explanation": "Under each box the answer renders in order: the text, the map.png thumbnail and the bridge-glitch.webm player in the first answer, and the chip “crash-log.txt · 1.1 MB” in the second, each with ×. The box itself keeps plain text with a short marker for each file: “[📎 map.png #kzbe]” and “[📎 bridge-glitch.webm #j7t7]” (the file's name and the end of its upload's id).",
+          "kind": "image",
+          "desktop": "b35-03-preview.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Files and recordings, sizes in KB",
+          "explanation": "The box under the answers lists each file with its place and its size (batch 35 §5: KB under 1 MB): “map.png in your answer to “Where did you get stuck?” · 14 KB”, “bridge-glitch.webm in your answer to “Where did you get stuck?” · 69 KB” and “crash-log.txt in your answer to “Anything else we should know?” · 1.1 MB”, each marked “goes with your answers when you send them”.",
+          "kind": "image",
+          "desktop": "b35-04-files-box.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Uploading, then the file in place",
+          "explanation": "The log goes up with “[Uploading crash-log.txt… N%]” counting up at the cursor in the second answer; when it's done the marker becomes the file and the preview under the box shows its chip with ×.",
+          "kind": "video",
+          "desktop": "b35-05-upload-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§3 The developer's piece view",
+          "explanation": "Ana's written answers read in order in the piece's scroll box: “The map breaks at the second bridge, right where the boat turns:”, the map.png thumbnail, then the text after it and the bridge-glitch.webm player below it.",
+          "kind": "image",
+          "desktop": "b35-06-piece-view.png",
+          "phone": null
+        },
+        {
+          "title": "§3 …further down the same piece",
+          "explanation": "The player, then the second answer with the chip “crash-log.txt · 1.1 MB” between “…this is the log from that run:” and “Restarting the level fixed it every time.”.",
+          "kind": "image",
+          "desktop": "b35-06b-piece-view-end.png",
+          "phone": null
+        },
+        {
+          "title": "§3 By question",
+          "explanation": "Each question with everyone's answer, files in place there too: the thumbnail and the player under “Where did you get stuck?”, the log's chip under “Anything else we should know?”.",
+          "kind": "image",
+          "desktop": "b35-07-by-question.png",
+          "phone": null
+        },
+        {
+          "title": "§3 The team's See the work",
+          "explanation": "On Ana's dispute row, See the work shows the piece as the developer saw it: the first answer with the map.png thumbnail in place.",
+          "kind": "image",
+          "desktop": "b35-08-see-the-work.png",
+          "phone": null
+        },
+        {
+          "title": "§3 …and further down",
+          "explanation": "The same box scrolled: the bridge-glitch.webm player and the second answer's “crash-log.txt · 1.1 MB” chip in place.",
+          "kind": "image",
+          "desktop": "b35-08b-see-the-work-end.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Admin top bar (batch 32 §6)",
+      "explanation": "The team's navigation (docs/BATCH-32.md §6): an admin's top bar with Dashboard, Developers, Testers and Tests, and the two side lists with their search.",
+      "cases": [
+        {
+          "title": "§6 The admin's top bar",
+          "explanation": "The console's bar reads “Playtest Dashboard Developers Testers Tests Media Admin”; there is no “Back to the app” and no green text links.",
+          "kind": "image",
+          "desktop": "b35-10-admin-bar.png",
+          "phone": null
+        },
+        {
+          "title": "§6 Dashboard",
+          "explanation": "The Dashboard link opens today's admin console under the same bar.",
+          "kind": "image",
+          "desktop": "b35-11-admin-dashboard.png",
+          "phone": null
+        },
+        {
+          "title": "§6 Developers with a search",
+          "explanation": "Developers lists only developer accounts (“Developers (1,190)” before searching); searching “Zephyr” gives “Developers: 2 match”: Zephyr Okoro and Zephyr Marlow, not Zephyr Adeyemi from the other side.",
+          "kind": "image",
+          "desktop": "b35-12-developers.png",
+          "phone": null
+        },
+        {
+          "title": "§6 Testers with a search",
+          "explanation": "Testers lists only tester accounts (“Testers (1,880)” before searching); searching “Zephyr” gives “Testers: 2 match”: Zephyr Park and Zephyr Adeyemi, not Zephyr Marlow from the other side.",
+          "kind": "image",
+          "desktop": "b35-13-testers.png",
+          "phone": null
+        },
+        {
+          "title": "§6 Tests",
+          "explanation": "The Tests link opens every test with its state (the old “Find tests” for admins), under the same bar.",
+          "kind": "image",
+          "desktop": "b35-14-admin-tests.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Needs stops (batch 34 §2)",
+      "explanation": "Accept / Decline, Invite and Cancel invite stop only for what matters (docs/BATCH-34.md §2, Codex task 5): a needed kind flipping or a rating moving by 1 star or more, named; anything else goes through.",
+      "cases": [
+        {
+          "title": "§2 The Invite rows",
+          "explanation": "Each row has the tester's public rating and tests with you, and the orange badge names only the kinds they don't list (the test needs Windows PC and Spanish): Ana Marsh “Doesn't list languages” · 4.6 ★ (5 ratings) · 0 tests with you; Ben Marsh “Doesn't list devices” · No ratings yet · 0 tests with you; Cam Marsh (no badge) · 4.5 ★ (2 ratings) · 0 tests with you; Dee Marsh “Doesn't list devices or languages” · 3.0 ★ (1 rating) · 0 tests with you.",
+          "kind": "image",
+          "desktop": "b35-20-invite-rows.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Invite stops once for a flipped need",
+          "explanation": "Cam's profile dropped Spanish after the page loaded; Invite stops once with “Your Invite didn't go through. Since you opened this page: Cam Marsh no longer lists Spanish, which this test needs. · 9:05 PM Press Invite again to go ahead.”, and the usual Invite anyway box for the language sits under it.",
+          "kind": "image",
+          "desktop": "b35-21-invite-stop-needs.png",
+          "phone": null
+        },
+        {
+          "title": "§2 A bio-only save doesn't stop",
+          "explanation": "Ana saved only a new bio after the page loaded; Invite didn't stop for it and went straight to the usual Invite anyway box for the language Ana doesn't list: “Ana Marsh doesn't list a language this test needs (Spanish).” with Invite anyway and Cancel.",
+          "kind": "image",
+          "desktop": "b35-22-bio-no-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§2 …and goes through",
+          "explanation": "Invite anyway sends it: “Invited Ana Marsh.”",
+          "kind": "image",
+          "desktop": "b35-23-bio-invited.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Accept stops for a 1-star rating change, naming Accept",
+          "explanation": "The row showed “4.6 ★ (5 ratings)”; Eve's rating fell to 3.5 after the page loaded, so Accept stops once: “Your Accept didn't go through. Since you opened this page: Eve Marsh's rating went from 4.6 to 3.5 · 9:06 PM Press Accept again to go ahead.”; the row above now reads “3.5 ★ (2 ratings)”.",
+          "kind": "image",
+          "desktop": "b35-24-accept-rating-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§2 Decline names its press too",
+          "explanation": "Fay's row showed “4.5 ★ (4 ratings)”; their rating fell to 3.3 after the page loaded, so Decline stops once: “Your Decline didn't go through. Since you opened this page: Fay Marsh's rating went from 4.5 to 3.3 · 9:06 PM Press Decline again to go ahead.”; the row above now reads “3.3 ★ (3 ratings)”.",
+          "kind": "image",
+          "desktop": "b35-25-decline-rating-stop.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Reserved Pay what you owe (batch 34 §3)",
+      "explanation": "The reserved Pay what you owe (docs/BATCH-34.md §3, Codex task 6): during a chargeback hold, after the reservation, the button names what is charged after the team approves.",
+      "cases": [
+        {
+          "title": "§3 Before the reservation",
+          "explanation": "During the chargeback hold the box lists “Your bank reversed a $8 payment: $8 + $15 chargeback fee” and offers “Pay what you owe ($23.00)”.",
+          "kind": "image",
+          "desktop": "b35-30-before.png",
+          "phone": null
+        },
+        {
+          "title": "§3 The reserved button",
+          "explanation": "Pay what you owe reserved what was owed (“Reserved $23.00: it's taken when the team approves lifting your hold.”); then Ana charged $10.00 for another piece. The box reads “Reserved $23.00: it's taken when the team approves lifting your hold.” (no “added since” sentence), lists “Ana Silva's written answers $10.00 · charged by the tester while your tests were paused”, and the button, switched off (the usual green button, dimmed, not grey), reads “$10.00 is charged after the team approves”.",
+          "kind": "image",
+          "desktop": "b35-31-reserved-button.png",
+          "phone": null
+        },
+        {
+          "title": "§3 Pressing Pay what you owe during a chargeback hold",
+          "explanation": "The press reserves the money (“Reserved $23.00: it's taken when the team approves lifting your hold.”); after the tester's charge is added and the page reloads, the button reads “$10.00 is charged after the team approves”, switched off.",
+          "kind": "video",
+          "desktop": "b35-32-reserve-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Listing panel (batch 34 §14)",
+      "explanation": "The developer's Listing panel and See it (docs/BATCH-34.md §14): the current listing with Updated tags, listing lines in the blue boxes linking to it, and the join page's pop-up naming the press.",
+      "cases": [
+        {
+          "title": "§14 The Listing panel",
+          "explanation": "Right under the top overview, “Listing” (“What testers see now. A field your last save changed shows when: tap it for before and now.”) shows every field; the description and build link the last save changed carry “Updated Fri, Oct 30, 9:06 PM”, here opened to Before / Now.",
+          "kind": "image",
+          "desktop": "b35-40-listing-panel.png",
+          "phone": null
+        },
+        {
+          "title": "§14 One line with See it",
+          "explanation": "The blue box at the top: “Updated · 9:06 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), spots · See it”",
+          "kind": "image",
+          "desktop": "b35-41-top-line.png",
+          "phone": null
+        },
+        {
+          "title": "§14 See it redraws first, then marks that save's fields (batch 35 §3)",
+          "explanation": "Pressed as soon as the line arrived (the panel still read “Name: Harbor Run: first 3 levels”), See it brings the page to that save first, then rings what that save changed in the Listing panel, now “Name: Harbor Run: night harbors”: Name and Spots, each with “Updated Fri, Oct 30, 9:06 PM”, for a few seconds; the earlier save's description and build link no longer carry “Updated …”.",
+          "kind": "image",
+          "desktop": "b35-42-see-it-marks.png",
+          "phone": null
+        },
+        {
+          "title": "§14 See it",
+          "explanation": "Another tab saves the title and spots; the top box shows one line with the green See it. Pressed at once, before the page has redrawn, See it redraws to that save, scrolls to the Listing panel and rings Name and Spots.",
+          "kind": "video",
+          "desktop": "b35-43-see-it-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§14 The join page's pop-up names the press",
+          "explanation": "Ana (no Spanish) pressed Join and got the pop-up “A language this test needs” (“…Join anyway?”); the developer edited the listing meanwhile, so Join anyway stops once inside the pop-up: “Nora Lane edited the listing at 9:06 PM: product name, title (now “Harbor Run Deluxe: night harbors”), categories · See it Your Join didn't go through. Check what this test needs now, then press again.”",
+          "kind": "image",
+          "desktop": "b35-44-popup-stop.png",
+          "phone": null
+        },
+        {
+          "title": "§14 See it from the pop-up",
+          "explanation": "See it closes the pop-up and brings the join page's listing section into view: on the join page that is the top card, now “Harbor Run Deluxe: night harbors” with Game and Education; it has no Updated tags yet (the join page's own Listing panel is still on docs/PENDING.md).",
+          "kind": "image",
+          "desktop": "b35-45-popup-see-it.png",
+          "phone": null
+        },
+        {
+          "title": "§14 The join page's pop-up",
+          "explanation": "Join opens the pop-up “A language this test needs … Join anyway?”; the developer edits the listing meanwhile; Join anyway stops inside the pop-up with the listing line and its green See it above “Your Join didn't go through.”, and See it closes the pop-up and goes to the listing section (the join page's top card).",
+          "kind": "video",
+          "desktop": "b35-46-popup-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Auto-join (batch 34 §16)",
+      "explanation": "An invite plus a waiting application (docs/BATCH-34.md §16): an Invite on a page that hadn't shown the application joins the tester at once, and the reverse.",
+      "cases": [
+        {
+          "title": "§16 Invite joins someone who had applied",
+          "explanation": "Ana applied after the developer's page loaded; the developer's Invite joins them at once (contract working): the developer reads “Ana Brook had applied: they joined.”, and Ana's join page moves on to their session page (Working, the written part ready).",
+          "kind": "image",
+          "desktop": "b35-50-invite-joins-applicant.png",
+          "phone": null
+        },
+        {
+          "title": "§16 Invite after an application",
+          "explanation": "Right: Ana presses Apply to join; left: the developer, whose page hadn't shown the application yet, ticks Ana and presses Invite: “Ana Brook had applied: they joined.”, and Ana's page moves on to their session page.",
+          "kind": "video",
+          "desktop": "b35-51-invite-joins-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§16 Ana's bell",
+          "explanation": "The invite's join gives Ana the usual line: “You're in: Harbor Run: first 3 levels just now”",
+          "kind": "image",
+          "desktop": "b35-50b-tester-bell.png",
+          "phone": null
+        },
+        {
+          "title": "§16 Apply joins someone just invited",
+          "explanation": "The invite came after Ben's join page loaded; Ben's Apply to join joins at once (contract working, no application filed) and opens their session page; the developer's top box reads “Updated · 8:04 PM: Ben Brook joined”.",
+          "kind": "image",
+          "desktop": "b35-52-apply-joins-invited.png",
+          "phone": null
+        },
+        {
+          "title": "§16 Apply after an invite",
+          "explanation": "The developer invites Ben while Ben's join page still shows Apply to join; Ben's Apply joins at once (no application) and the developer's page says Ben joined.",
+          "kind": "video",
+          "desktop": "b35-53-apply-joins-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Dispute tick (batch 35 §1)",
+      "explanation": "A tick on a dispute decision that charges (docs/BATCH-35.md §1): a raised total names what it charges, and Decide waits for the tick.",
+      "cases": [
+        {
+          "title": "§1 A raise shows the tick",
+          "explanation": "Total pay $10.00 on a piece paid $4.00: next to Decide the tick reads “Charge Dana Reyes $6.00 more ($10.00 in all for this piece)”, and Decide is disabled until it's ticked.",
+          "kind": "image",
+          "desktop": "b35-60-tick-shown.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Ticked",
+          "explanation": "With “Charge Dana Reyes $6.00 more ($10.00 in all for this piece)” ticked, Decide is enabled.",
+          "kind": "image",
+          "desktop": "b35-61-ticked.png",
+          "phone": null
+        },
+        {
+          "title": "§1 Decided",
+          "explanation": "Decide went through (“Done.”): the dispute is decided, $10.00 paid in all for the piece, and the row now reads ““Harbor Run: first 3 levels” · Ana Silva's written answers · paid $10.00” … “Decided Fri, Oct 30, 8:02 PM by admin+media1793408267425db35g@playtest.test: $10.00 in all · “The answers covered both questions: paid in full.”” (the developer is charged the $6.00 more).",
+          "kind": "image",
+          "desktop": "b35-62-decided.png",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Two separate sides (batch 34 §5)",
+      "explanation": "One account with both sides works like two separate accounts (docs/BATCH-34.md §5, Codex task 8): only the switch button changes sides, a page of the other side shows only a notice with that button, and the bell, Payments, Account, Notifications, Messages and the email keep each side's things apart.",
+      "cases": [
+        {
+          "title": "§5 A developer page opened on the tester side",
+          "explanation": "Kai, on their tester side (the header reads “Kai Morgan · Tester”, with Find tests), pasted the address of their own test /app/tests/…: the page shows only “This page is on your developer side.” and the button “Switch to your developer side”; nothing of the test is on it (no “Lantern Keep: castle demo”, no Ana Silva).",
+          "kind": "image",
+          "desktop": "b35s-01-pasted-address.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The same from an email link",
+          "explanation": "Kai opened the email's line “Receipt: you paid $12.00 for Ana Silva's written answers” (its link /app/tests/…#tester-…) while on the tester side (“Kai Morgan · Tester”): the page says “This page is on your developer side.”, and the button keeps that exact address, part included.",
+          "kind": "image",
+          "desktop": "b35s-02-email-link.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The button switches and opens that page",
+          "explanation": "After “Switch to your developer side” the header reads “Kai Morgan · Developer” (Post a test instead of Find tests), and Kai's test page opens scrolled to Ana Silva's row, the part the receipt's link names (/app/tests/…#tester-…).",
+          "kind": "image",
+          "desktop": "b35s-03-switched.png",
+          "phone": null
+        },
+        {
+          "title": "§5 From the notice to the page",
+          "explanation": "The email's link on the tester side shows “This page is on your developer side.”; pressing “Switch to your developer side” changes the header to Developer and opens that exact page.",
+          "kind": "video",
+          "desktop": "b35s-04-switch-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§5 …and the other way round",
+          "explanation": "On the developer side (“Kai Morgan · Developer”), Kai's session page /app/sessions/… shows only “This page is on your tester side.” with “Switch to your tester side”; nothing of it shows (no “Tide Tracker: widgets”, no Omar Reyes).",
+          "kind": "image",
+          "desktop": "b35s-05-tester-page-on-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The old /app/switch link opens the page directly",
+          "explanation": "An old email link /app/switch?to=tester&next=/app/sessions/… answered with a redirect (307) straight to /app/sessions/…: no “…and continue” page, the side is still developer (“Kai Morgan · Developer”), and the page shows “This page is on your tester side.” with its button.",
+          "kind": "image",
+          "desktop": "b35s-06-old-switch-link.png",
+          "phone": null
+        },
+        {
+          "title": "§5 No in-between page",
+          "explanation": "Opening the old /app/switch link: the next thing on screen is the session's notice “This page is on your tester side.”; no green “Switch to your … side and continue” page flashes in between, and the header stays on Developer.",
+          "kind": "video",
+          "desktop": "b35s-07-old-link-video.webm",
+          "phone": null
+        },
+        {
+          "title": "§5 The header on the developer side",
+          "explanation": "“Kai Morgan · Developer”: the bell reads 5 (“Notifications, 5 unread”) and Messages reads 2.",
+          "kind": "image",
+          "desktop": "b35s-10-header-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The header on the tester side",
+          "explanation": "“Kai Morgan · Tester”: the bell reads 4 (“Notifications, 4 unread”) and Messages reads 1, against 5 and 2 on the developer side.",
+          "kind": "image",
+          "desktop": "b35s-10-header-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The bell list on the developer side",
+          "explanation": "8 lines, the developer side's and the account's: “Your password was changed” · “Ana Silva sent you a message on “Lantern Keep: castle demo”” · “Ana Silva sent you a message on “Lantern Keep: castle demo”” · “Ana Silva sent written answers for “Lantern Keep: castle demo”” · “Ana Silva joined “Lantern Keep: castle demo”” · “Receipt: you paid $12.00 for Ana Silva's written answers” · “You're subscribed ($7/month), renewing Nov 30, 2026” · “Receipt: you paid $7.00 for your subscription ($7/month)” (“Your password was changed” is an account-wide line put in the database for this picture: no action in the app files one for this account yet).",
+          "kind": "image",
+          "desktop": "b35s-11-bell-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 The bell list on the tester side",
+          "explanation": "5 lines, the tester side's and the account's: “Your password was changed” · “Omar Reyes sent you a message on “Tide Tracker: widgets”” · “Work sent: your written answers for “Tide Tracker: widgets”” · “Rate Omar Reyes on “Tide Tracker: widgets”” · “Omar Reyes paid you $9.00 for your written answers on “Tide Tracker: widgets”” (“Your password was changed” is an account-wide line put in the database for this picture: no action in the app files one for this account yet).",
+          "kind": "image",
+          "desktop": "b35s-11-bell-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Payments on the developer side",
+          "explanation": "Only this side's money: “What you've paid Total $19.00 Ana Silva's written answers on “Lantern Keep: castle demo” Fri, Oct 30, 8:25 PM · $12.00 Subscription Fri, Oct 30, 8:25 PM · $7.00”",
+          "kind": "image",
+          "desktop": "b35s-12-payments-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Payments on the tester side",
+          "explanation": "Only this side's money: “Everything you sent Each part you sent, by test, newest first, and where its money is now. Whatever the developer paid for a part, $0 included, can be disputed once, on its session page. Tide Tracker: widgets · Omar Reyes Written answers Paid $9.00 · you get $7.20”",
+          "kind": "image",
+          "desktop": "b35s-12-payments-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Account on the developer side",
+          "explanation": "“Kai Morgan · Developer” with the button “Switch to your tester side” under it.",
+          "kind": "image",
+          "desktop": "b35s-13-account-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Delete account on the developer side",
+          "explanation": "“This deletes your whole account: both your developer side and your tester side. Your tests stop, your invites and applications are cancelled, and you leave the tests you are in. History stays. This can't be undone.”",
+          "kind": "image",
+          "desktop": "b35s-14-delete-intro-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Delete pressed (not confirmed) on the developer side",
+          "explanation": "The pop-up reads “Delete your account? This deletes your whole account: both your developer side and your tester side. Pay already sent to your Stripe account stays there. Your Stripe account is separate from Playtest: you can still sign in to Stripe and withdraw it. You leave every test you're in. Calls ahead are cancelled, and your invites and applications are cancelled. Open disputes are withdrawn. Your chats close. The ratings you gave and got stay. You can't sign in again, and this can't be undone. Testers can still charge for parts already open to charging. Work you haven't reviewed can't be charged after you delete. Your subscription ends now, with no refund for the rest of the month. Every open tab of your account is signed out and told the account no longer exists.”, with Cancel and Delete my account; Cancel closed it and nothing was deleted.",
+          "kind": "image",
+          "desktop": "b35s-15-delete-dialog-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Account on the tester side",
+          "explanation": "“Kai Morgan · Tester” with the button “Switch to your developer side” under it.",
+          "kind": "image",
+          "desktop": "b35s-13-account-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Delete account on the tester side",
+          "explanation": "“This deletes your whole account: both your developer side and your tester side. Your tests stop, your invites and applications are cancelled, and you leave the tests you are in. History stays. This can't be undone.”",
+          "kind": "image",
+          "desktop": "b35s-14-delete-intro-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Delete pressed (not confirmed) on the tester side",
+          "explanation": "The pop-up reads “Delete your account? This deletes your whole account: both your developer side and your tester side. Pay already sent to your Stripe account stays there. Your Stripe account is separate from Playtest: you can still sign in to Stripe and withdraw it. You leave every test you're in. Calls ahead are cancelled, and your invites and applications are cancelled. Open disputes are withdrawn. Your chats close. The ratings you gave and got stay. You can't sign in again, and this can't be undone. Testers can still charge for parts already open to charging. Work you haven't reviewed can't be charged after you delete. Your subscription ends now, with no refund for the rest of the month. Every open tab of your account is signed out and told the account no longer exists.”, with Cancel and Delete my account; Cancel closed it and nothing was deleted.",
+          "kind": "image",
+          "desktop": "b35s-15-delete-dialog-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Notification settings on the developer side",
+          "explanation": "The help under the email choices reads “Payment updates are always emailed the same evening, even with email Off, Weekly or Monthly: receipts, failures, holds, retries and chargebacks. Some account emails always send.”",
+          "kind": "image",
+          "desktop": "b35s-16-settings-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Notification settings on the tester side",
+          "explanation": "The help under the email choices reads “Payment updates are always emailed the same evening, even with email Off, Weekly or Monthly: payments, delays and payouts. Some account emails always send.”",
+          "kind": "image",
+          "desktop": "b35s-16-settings-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Messages on the developer side",
+          "explanation": "1 conversation: “Ana Silva · Lantern Keep: castle demo” / “Ana Silva: Happy to try the next build too.” with 2 unread; the header's Messages reads 2.",
+          "kind": "image",
+          "desktop": "b35s-17-messages-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Messages on the tester side",
+          "explanation": "1 conversation: “Omar Reyes · Tide Tracker: widgets” / “Omar Reyes: No, that's a bug: thanks for catching it.” with 1 unread; the header's Messages reads 1.",
+          "kind": "image",
+          "desktop": "b35s-17-messages-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 One email with both sides",
+          "explanation": "The end-of-day email to Kai (from the dev outbox; one summary email for the account) puts its lines under “Your account”, “As a developer”, “As a tester”: “Your account” “• Your password was changed” “As a developer” “• Receipt: you paid $7.00 for your subscription ($7/month)” “• You're subscribed ($7/month), renewing Nov 30, 2026” “• Ana Silva joined “Lantern Keep: castle demo”” “• Ana Silva sent written answers for “Lantern Keep: castle demo”” “• Receipt: you paid $12.00 for Ana Silva's written answers” “• Ana Silva sent you a message on “Lantern Keep: castle demo”” “• Ana Silva sent you a message on “Lantern Keep: castle demo”” “As a tester” “• Work sent: your written answers for “Tide Tracker: widgets”” “• Omar Reyes paid you $9.00 for your written answers on “Tide Tracker: widgets”” “• Rate Omar Reyes on “Tide Tracker: widgets”” “• Omar Reyes sent you a message on “Tide Tracker: widgets”” (“Your password was changed” is an account-wide line put in the database for this picture: no action in the app files one for this account yet).",
+          "kind": "image",
+          "desktop": "b35s-18-email.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Payments, developer side",
+          "explanation": "The whole Payments page on the developer side (“Kai Morgan · Developer”), with this side's “Lantern Keep: castle demo”, “Ana Silva”, $12.00. Not there: no “Tide Tracker: widgets”, no Omar Reyes, no $9.00 or $7.20 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-20-proof-payments-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Account, developer side",
+          "explanation": "The whole Account page on the developer side (“Kai Morgan · Developer”), with no test names or amounts of either side. Not there: no “Tide Tracker: widgets”, no Omar Reyes, no $9.00 or $7.20 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-21-proof-account-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Notifications, developer side",
+          "explanation": "The whole Notifications page on the developer side (“Kai Morgan · Developer”), with this side's “Lantern Keep: castle demo”, “Ana Silva”, $12.00. Not there: no “Tide Tracker: widgets”, no Omar Reyes, no $9.00 or $7.20 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-22-proof-notifications-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Messages, developer side",
+          "explanation": "The whole Messages page on the developer side (“Kai Morgan · Developer”), with this side's “Lantern Keep: castle demo”, “Ana Silva”. Not there: no “Tide Tracker: widgets”, no Omar Reyes, no $9.00 or $7.20 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-23-proof-messages-dev.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Payments, tester side",
+          "explanation": "The whole Payments page on the tester side (“Kai Morgan · Tester”), with this side's “Tide Tracker: widgets”, “Omar Reyes”, $9.00, $7.20. Not there: no “Lantern Keep: castle demo”, no Ana Silva, no $12.00 or $9.60 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-20-proof-payments-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Account, tester side",
+          "explanation": "The whole Account page on the tester side (“Kai Morgan · Tester”), with no test names or amounts of either side. Not there: no “Lantern Keep: castle demo”, no Ana Silva, no $12.00 or $9.60 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-21-proof-account-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Notifications, tester side",
+          "explanation": "The whole Notifications page on the tester side (“Kai Morgan · Tester”), with this side's “Tide Tracker: widgets”, “Omar Reyes”, $9.00. Not there: no “Lantern Keep: castle demo”, no Ana Silva, no $12.00 or $9.60 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-22-proof-notifications-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Leak proof: Messages, tester side",
+          "explanation": "The whole Messages page on the tester side (“Kai Morgan · Tester”), with this side's “Tide Tracker: widgets”, “Omar Reyes”. Not there: no “Lantern Keep: castle demo”, no Ana Silva, no $12.00 or $9.60 (checked in the page text too).",
+          "kind": "image",
+          "desktop": "b35s-23-proof-messages-tester.png",
+          "phone": null
+        },
+        {
+          "title": "§5 Two tabs",
+          "explanation": "Left: Kai's dashboard, right: their Payments, both “Kai Morgan · Developer”. The switch in the left tab turns it to “Kai Morgan · Tester”; the right tab, which nobody touched, reloads by itself 17.4 seconds later (its regular check) and reads “Kai Morgan · Tester”.",
+          "kind": "video",
+          "desktop": "b35s-30-two-tabs-video.webm",
+          "phone": null
+        }
+      ]
+    },
+    {
+      "title": "Stripe light proof (Oct 30)",
+      "explanation": "Two pictures on real Stripe in TEST MODE for the reserved Pay what you owe (docs/BATCH-34.md §3): during a chargeback hold the press reserves what's owed on the card (Stripe: a manual-capture PaymentIntent, Uncaptured), and the team's Approve takes it (Succeeded). Each is the app beside the local viewer that reads the same PaymentIntent from Stripe's API.",
+      "cases": [
+        {
+          "title": "Reserved: Uncaptured (batch 34 §3)",
+          "explanation": "Hal's card 0259 was charged $10.00 and the bank disputed it, so Hal is on a chargeback hold. After a card check with 3D Secure, Pay what you owe reserved the $25.00 ($10.00 + the $15 fee): Payments reads “Reserved $25.00: it's taken when the team approves lifting your hold.” with “A card verified with 3D Secure” and “What you owe reserved on your card” ticked and “The team's approval” still open. Stripe (right, test mode) shows that $25.00 PaymentIntent “Uncaptured” (capture: manual, 3D Secure: authenticated) and the $10.00 payment “Disputed”.",
+          "kind": "image",
+          "desktop": "stripe-l-reserved.png",
+          "phone": null
+        },
+        {
+          "title": "Approve takes it: Succeeded",
+          "explanation": "The team pressed Approve on Hal's chargeback row in the admin console: the hold lifted (Payments no longer shows the chargeback steps) and “What you've paid” lists “Paid again after your bank reversed a payment: Ivy Chen's written answers on “Harbor Run: first 3 levels”” · $25.00. Stripe (right) shows the same $25.00 PaymentIntent now “Succeeded” (capture: manual · captured $25.00).",
+          "kind": "image",
+          "desktop": "stripe-l-approved.png",
           "phone": null
         }
       ]
