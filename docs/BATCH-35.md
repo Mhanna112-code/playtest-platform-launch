@@ -696,8 +696,3 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - On the test page every payment the bank wants confirmed is in **Needs you** (counted there), so the dashboard's "Your bank wants you to confirm" box,
   Payments and the bell all land in Needs you. Under the piece (and under the tester's row for a charge with no part) there's only a small link up to it:
   "Confirm with your bank in Needs you ↑". A paused or held test's page keeps its own "Your bank wants you to confirm" box as before.
-
-## §81 Find tests shows the tests you're in (owner, Oct 31)
-- A tester's dashboard lists a test only while something waits there (a part to send, a payment, a call within 7 days), so a test with nothing left to do
-  (e.g. its only call over and paid) had no way back from the app. Find tests now starts with **"Tests you're in (N)"**: one row per test they're working on
-  ("<title> · by <developer>", Open → the test page), newest join first, in a scroll box about 3 rows tall, whatever the search and filters.

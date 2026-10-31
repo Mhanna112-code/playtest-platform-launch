@@ -16,7 +16,6 @@ import { adminFindTests, ADMIN_FIND_LIMIT } from "@/lib/server/findSearch";
 import { findQuery, noFindMatchLine, statesFrom, type TestState } from "@/lib/findSearch";
 import { FindSearch, StateTicks } from "./FindSearch";
 import { otherSideNotice } from "@/components/OtherSideNotice";
-import { ScrollList } from "@/components/ScrollList";
 
 export const metadata = { title: "Find tests · Playtest" };
 export const dynamic = "force-dynamic";
@@ -59,8 +58,6 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   const found = admin ? await adminFindTests(typed, ticked) : null;
   const [open, profile] = await Promise.all([found ? found.tests : findTests(u, typed), admin ? null : db.testerProfile.findUnique({ where: { userId: u.id } })]);
   const devRatings = new Map(await Promise.all([...new Set(open.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id)).line] as const)));
-  // (Owner, Oct 31, batch 35 §81) "Tests you're in": every test the tester is working on, at the top, whatever the search and filters (Find lists only tests to join).
-  const mineNow = admin ? [] : await db.contract.findMany({ where: { testerId: u.id, status: "working" }, orderBy: { joinedAt: "desc" }, select: { id: true, test: { select: { title: true, developer: { select: { name: true, email: true } } } } } });
   const invitedTo = admin ? new Set<string>() : new Set((await db.invite.findMany({ where: { testerId: u.id, status: "sent", testId: { in: open.map((t) => t.id) } } })).map((i) => i.testId));
   // The full app's filters: category chips, then Device / Part / Sort by / Show. "Everything" is the default (a test the
   // profile doesn't fit is listed with what it needs).
@@ -85,22 +82,6 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
         <h1 className="text-3xl font-bold tracking-tight text-white">Find tests</h1>
         <p className="text-slate-400">{admin ? "Every test, whatever its state. A card opens the test's page with the team's boxes." : "Apps, websites and games looking for feedback. You earn the amount shown as each part of your work is accepted."}</p>
       </div>
-
-      {mineNow.length > 0 && (
-        <section className="card space-y-3" data-find-mine="">
-          <h2 className="font-semibold text-white">Tests you&apos;re in <span className="text-sm font-normal text-slate-400">{mineNow.length}</span></h2>
-          <ScrollList size="three" className="space-y-2" label="Tests you're in">
-            {mineNow.map((c) => (
-              <li key={c.id}>
-                <Link href={`/app/sessions/${c.id}`} className="flex items-center gap-3 rounded-lg border border-white/10 p-3 text-sm no-underline hover:no-underline" data-find-mine-row={c.id}>
-                  <span className="min-w-0 flex-1 truncate text-slate-300" title={c.test.title}><b className="text-white">{c.test.title}</b> · by {displayName(c.test.developer)}</span>
-                  <span className="shrink-0 text-indigo-300">Open →</span>
-                </Link>
-              </li>
-            ))}
-          </ScrollList>
-        </section>
-      )}
 
       {/* (Batch 17 section 8) The search box at the top; it works together with the chips and the filters (the search runs on the server). */}
       <FindSearch params={params} />
