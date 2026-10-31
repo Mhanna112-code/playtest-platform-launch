@@ -169,7 +169,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   const payCloses = new Map(await Promise.all(unpaidKeys.map(async (k) => [k.submissionId ?? k.callId!, await pieceCloseOut(k, "developer", now)] as const)));
   const payShut = (pieceId: string) => closedOut(payCloses.get(pieceId) ?? null, now);
   const [apps, reqs, spent, unreadList, invites, owedPays, freeKeys, nextCalls] = await Promise.all([
-    db.application.findMany({ where: { testId: { in: testIds }, status: "pending" }, orderBy: { createdAt: "desc" } }).then(answerable), // (batch 34 §16) not an invited applicant
+    db.application.findMany({ where: { testId: { in: allTests.filter((t) => t.status !== "stopped").map((t) => t.id) }, status: "pending" }, orderBy: { createdAt: "desc" } }).then(answerable), // (batch 34 §16) not an invited applicant
     db.callRequest.findMany({ where: { testId: { in: testIds }, status: "pending", fromSide: "tester", startsAt: { gt: now } }, orderBy: { createdAt: "desc" } }),
     db.payment.aggregate({ where: { developerId: userId, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } }),
     Promise.all(allTests.flatMap((t) => t.contracts.map(async (c) => [c.id, await unreadCount(userId, t.id, c.testerId)] as const))),

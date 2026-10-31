@@ -126,7 +126,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
   // A developer batch sent to several testers shows once per tester; that's fine: each copy is that tester's.
   // (Batch 34 §16) An applicant who holds a sent invite isn't answered here: they're in the Invited list, and joining closes the application.
-  const pendingApps = await answerable(await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } }));
+  const pendingApps = await answerable((t.status === "stopped" ? [] : await db.application.findMany({ where: { testId: id, status: "pending" }, orderBy: { createdAt: "asc" } })));
   const appUsers = await db.user.findMany({ where: { id: { in: pendingApps.map((a) => a.testerId) } }, include: { profile: true } });
   const appInfo = await testerRowInfo(u.id, t, appUsers);
   const apps = pendingApps.map((a) => {

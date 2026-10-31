@@ -727,6 +727,8 @@ export async function stopTest(dev: U, testId: string, body: Record<string, unkn
     if (cs.length) await tx.contractNote.createMany({ data: cs.map((c) => ({ contractId: c.id, kind: STOP_NOTE_KIND, text: stopNoteText(reason) })) });
     cancelled = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
+    // (Owner, Oct 31, batch 35 §83) Waiting applications and rejoin asks close too, like the team's Stop (restrictions.ts): nothing left to Accept on a stopped test.
+    await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } }); // (batch 16 section 32) a stop closes open invites

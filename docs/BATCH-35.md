@@ -705,3 +705,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §82 "Payment may be delayed" says "until the test resumes" only while the test is paused (owner, Oct 31)
 - A dispute decision waiting for the developer's bank on a running test read "Payment may be delayed until the test resumes." Now it reads "Payment may be
   delayed." (page and email); the longer line stays when the test is paused (a hold, including one this decision's decline started, a suspension or the team's pause).
+
+## §83 A stopped test has nothing left to Accept (owner, Oct 31)
+- The developer's own Stop now closes waiting applications and rejoin asks, like the team's Stop and a paused test closing already did (the applicant reads
+  the usual "the test was stopped" line). Ones left over from before are hidden from the dashboard's Needs you and the test page, so there's no Accept that
+  can only be refused ("Your Accept didn't go through: this test was stopped").
