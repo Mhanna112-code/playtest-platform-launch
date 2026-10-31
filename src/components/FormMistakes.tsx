@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Err } from "@/components/Err";
 import { MistakeList, focusFirstMistake, markServerMistakes } from "@/components/FieldChecks";
 import { FIELD } from "@/lib/client";
+import { useGoneOnNewVersion } from "@/lib/pageVersion";
 
 /**
  * (Owner, Oct 28, batch 16 section 10) Where a form showed `<Err text={err} />`: a red server mistake (errOf: the FIELD mark) goes to its field (the box
@@ -13,6 +14,8 @@ export function FormMistakes({ text, press, find, top = false }: { text: string;
   const ref = useRef<HTMLSpanElement>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
   const red = text.startsWith(FIELD);
+  // (Batch 35 §60) The mistakes no field shows (under the button) go once the page redraws with a new version of itself.
+  const gone = useGoneOnNewVersion(red && orphans.length ? orphans : null, text.slice(1));
   useEffect(() => {
     if (!red) {
       setOrphans([]);
@@ -28,7 +31,7 @@ export function FormMistakes({ text, press, find, top = false }: { text: string;
     <>
       <span ref={ref} hidden />
       {!red && <Err text={text} />}
-      <MistakeList press={press} orphans={orphans} top={top} />
+      <MistakeList press={press} orphans={gone ? [] : orphans} top={top} />
     </>
   );
 }

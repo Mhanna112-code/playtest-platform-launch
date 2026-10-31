@@ -8,7 +8,7 @@ import { asLines, devChanges } from "@/lib/server/live";
 import { requireUser } from "@/lib/server/session";
 import { outageLines } from "@/lib/server/outages";
 import { renderTimes } from "@/lib/tz";
-import { CONTRACT_KINDS, testerChanges } from "@/lib/server/testerGate";
+import { ALERTS_OFF_KINDS, testerChanges } from "@/lib/server/testerGate";
 import { ownTest } from "@/lib/server/tests";
 import { inviteClosedLine } from "@/lib/server/invites";
 
@@ -81,7 +81,7 @@ export async function GET(req: Request) {
     // live-box lines only: marked, so an open stop box under a button never takes them in (it lists only what stops a press).
     if (kind === "test") lines.forEach((l, i) => { if ((DEV_QUIET_KINDS as readonly string[]).includes(shown[i].kind)) Object.assign(l, { quiet: true }); });
     // (Batch 15 section 26) A tester with Alerts Off: everything but their contract's changes shows greyed (it won't stop a press).
-    if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!CONTRACT_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
+    if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!ALERTS_OFF_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
     return ok({ changes: [...lines, ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
   });
 }

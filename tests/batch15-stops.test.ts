@@ -35,7 +35,7 @@ describe("every stop names the press (section 36)", () => {
 });
 
 describe("the tester's one-press Alerts (section 26) and Leave (section 25)", () => {
-  it("Off: a payment line doesn't stop Send (it shows greyed); a terms offer still does; Leave never stops", async () => {
+  it("Off: a payment line doesn't stop Send (it shows greyed); a terms offer still does; Leave stops once (batch 35 §59)", async () => {
     const { dev, testId } = await setup({ recordingCents: "5.00" });
     const { tester, sessionId } = await joined(testId);
     const other = await joined(testId, "Ben Okafor");
@@ -60,14 +60,17 @@ describe("the tester's one-press Alerts (section 26) and Leave (section 25)", ()
     await settle();
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"], seenAt: loaded2 });
     expect(r.body.error?.code).toBe("answer_terms");
-    // Leave never stops (Alerts On or Off).
+    // (Batch 35 §59, replaces section 25 for Leave) Leave stops once like the other presses: the new terms send the page up to the offer box; confirmed, it leaves.
     await db.user.update({ where: { id: other.tester.user.id }, data: { testerAlertsOff: false } });
-    expect((await sact(other.sessionId, "leave", other.tester.cookie, { seenAt: loaded })).status).toBe(200);
+    const l0 = await sact(other.sessionId, "leave", other.tester.cookie, { seenAt: loaded });
+    expect(l0.body.error?.code, JSON.stringify(l0.body)).toBe("stop_once");
+    expect(l0.body.error.top).toBe(true);
+    expect((await sact(other.sessionId, "leave", other.tester.cookie, { seenAt: loaded, confirmed: true })).status).toBe(200);
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("<TesterAlertsToggle off={u.testerAlertsOff} />");
     // (Batch 16 section 4) One grey line for the state shown: what stops a press.
     const toggle = src("components/TesterAlertsToggle.tsx");
-    expect(toggle).toContain('"Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs."');
-    expect(toggle).toContain('"Stops a press only for: new terms, your key marked as working."');
+    expect(toggle).toContain('"Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, and what you did in another tab."');
+    expect(toggle).toContain('"Stops a press only for: new terms, your key marked as working, and what you did in another tab."');
     expect(toggle).toContain('<p className="text-xs text-slate-400" data-tester-alerts-line="">{off ? ALERTS_OFF_LINE : ALERTS_ON_LINE}</p>');
     expect(toggle).not.toContain("Off: only new terms from the developer stop it.");
   });

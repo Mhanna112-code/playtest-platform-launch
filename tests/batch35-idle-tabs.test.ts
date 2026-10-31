@@ -107,7 +107,9 @@ describe("batch 35 §16: an idle tab never resends its older draft", () => {
 
   it("the hook's wiring: typing marks it unsent, the save clears it, every flush asks flushDraft", () => {
     const k = src("lib/useKept.tsx");
-    expect(k).toMatch(/if \(pristine && !saved\.current\) return;\s+unsent\.current = true;\s+const t = setTimeout\(/);
+    // (Batch 35 §65) The same rules, plus only this tab's own edits: draftWrite decides, then the save is marked unsent.
+    expect(k).toMatch(/if \(!draftWrite\(\{[^}]*\}\)\) return;\s+unsent\.current = true;\s+const t = setTimeout\(/);
+    expect(k).toContain("return !(s.pristine && !s.saved);");
     expect(k).toMatch(/if \(cleared\.current\) return;\s+unsent\.current = false;/);
     expect(k).toContain("const what = flushDraft({ ready: ready.current, cleared: cleared.current, pristine: latest.current.pristine, saved: saved.current, unsent: unsent.current });");
     expect(k).toContain('if (what === "skip") return null;');

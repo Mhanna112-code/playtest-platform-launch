@@ -6,11 +6,11 @@ import { publishTesterAlertsOff, setTesterAlertsOff, useTesterAlertsOff } from "
 
 /**
  * (Owner, Oct 30, batch 15 section 26) The tester's one-press Alerts, at the top right of the session page, saved per tester for all their tests.
- * On: a button stops once when something changed since the page opened. Off: only new terms from the developer and their key marked working stop it; every other
+ * On: a button stops once when something changed since the page opened. Off: only new terms from the developer, their key marked working and (batch 35 §61) what they did in another tab stop it; every other
  * change still shows in the live box, greyed. (Owner, Oct 28, batch 16 section 4) The grey line under the button says what stops a press, for the state shown.
  */
-export const ALERTS_ON_LINE = "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.";
-export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key marked as working.";
+export const ALERTS_ON_LINE = "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, and what you did in another tab.";
+export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key marked as working, and what you did in another tab.";
 export function TesterAlertsToggle({ off: start }: { off: boolean }) {
   // (Batch 20 section 8) The one shared setting: a box's "Turn off alerts", another tab or the page's poll changes it here at once.
   const off = useTesterAlertsOff(start);

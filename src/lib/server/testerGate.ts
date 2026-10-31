@@ -91,6 +91,9 @@ export const payMoreLine = (dev: string, cents: number, part: string) => `${dev}
 
 /** (Batch 15 sections 26 and 45) Changes to the tester's own contract: they stop a press even with Alerts Off. */
 export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);
+/** (Owner, Oct 31, batch 35 §61) What stops a tester's press even with Alerts Off: changes to their contract and what they did themselves in another tab ("own",
+ * like the developer's own other-tab actions, batch 29 §12). Never an Alerts-ignorable kind. */
+export const ALERTS_OFF_KINDS = new Set([...CONTRACT_KINDS, "own"]);
 
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute"];
 /**
@@ -103,7 +106,7 @@ export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean } = {}) {
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
-  // these same stop-once rules (Rate has its own short list; Leave and Block never stop).
+  // these same stop-once rules (Rate has its own short list; Block never stops; batch 35 §59: Leave stops like the rest).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
   // Block send no boxAt, so they still stop just once.
   const boxAt = seenOf(body.boxAt);
@@ -124,9 +127,10 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
   const terms = changes.filter((e) => e.kind === "terms");
   const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keyfixed", "keygiven"]);
-  // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer, their key marked working).
+  // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer, their key marked working), and (batch 35 §61)
+  // what they did themselves in another tab.
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  const rest = r.go ? [] : off ? r.changes.filter((e) => CONTRACT_KINDS.has(e.kind)) : r.changes;
+  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind)) : r.changes;
   const list = [...terms, ...rest].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0, alertsOff: !!off });

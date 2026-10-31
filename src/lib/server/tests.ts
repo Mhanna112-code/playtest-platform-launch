@@ -4,7 +4,7 @@ import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
-import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts } from "@/lib/limits";
+import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
 import { givenDeletedLine, keyGivenEventLine, keyGivenToYouLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
@@ -24,6 +24,7 @@ import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gap
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
+import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
@@ -51,26 +52,34 @@ export const listingData = (l: Listing) => ({ ...l, openUntil: l.openUntil ? new
 
 /** The written-answer questions in a contract; extra written work with no questions gets one open box. */
 /**
- * (Owner, Oct 29, batch 14 section 2) The 3-change count starts once anyone is affected: the first tester joins, the first application arrives or the first invite is
- * sent. Stored as "since" in criticalCounts (kept when the only applicant withdraws). Called where each of those happens; a test from before this keeps counting from
- * its first such row (startedCounting reads them).
+ * (Owner, Oct 31, batch 35 §66; replaces batch 14 section 2's start) The 3-change count starts when the FIRST TESTER JOINS (a working contract: a join, an Accept or
+ * an auto-join that joins); an invite or an application no longer starts it, and saves before the first join never count. Stored as "since" in criticalCounts
+ * (kept when the tester leaves). Called on a join only (joinTest); a test from before this counts from its first contract (startedCounting reads it).
  */
 export async function stampCounting(testId: string, tx: Prisma.TransactionClient | typeof db = db, at = new Date()) {
   await tx.$executeRaw`UPDATE "Test" SET "criticalCounts" = COALESCE("criticalCounts", '{}'::jsonb) || jsonb_build_object('since', ${at.toISOString()}::text) WHERE id = ${testId} AND NOT jsonb_exists(COALESCE("criticalCounts", '{}'::jsonb), 'since')`;
 }
-/** When the count started (null: nobody affected yet, edits are free and nobody is told). */
-export async function startedCounting(t: { id: string; criticalCounts: unknown }, tx: Prisma.TransactionClient | typeof db = db): Promise<Date | null> {
-  const since = countingSince(t.criticalCounts);
-  if (since) return since;
-  const [c, a, i] = await Promise.all([
-    tx.contract.findFirst({ where: { testId: t.id }, orderBy: { joinedAt: "asc" }, select: { joinedAt: true } }),
-    tx.application.findFirst({ where: { testId: t.id }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
-    tx.invite.findFirst({ where: { testId: t.id }, orderBy: { createdAt: "asc" }, select: { createdAt: true } }),
-  ]);
-  const first = [c?.joinedAt, a?.createdAt, i?.createdAt].filter((d): d is Date => !!d).sort((x, y) => x.getTime() - y.getTime())[0] ?? null;
-  if (first) await stampCounting(t.id, tx, first);
-  return first;
+/**
+ * When the count started (null: nobody joined yet, edits are free and nobody is told), with the counts as they stand. (Batch 35 §66) A "since" stored from an
+ * invite or an application (before the first join, or with nobody joined) is recomputed from the first join: the saves counted before it never count, so
+ * the counts start again at 0 from the first join (none at all while nobody has joined).
+ */
+export async function countingState(t: { id: string; criticalCounts: unknown }, tx: Prisma.TransactionClient | typeof db = db): Promise<{ since: Date | null; counts: CriticalCounts }> {
+  const stored = countingSince(t.criticalCounts);
+  const c = await tx.contract.findFirst({ where: { testId: t.id }, orderBy: { joinedAt: "asc" }, select: { joinedAt: true } });
+  const first = c?.joinedAt ?? null;
+  if (stored && first && stored.getTime() >= first.getTime() - 1000) return { since: stored, counts: countsOf(t.criticalCounts) };
+  if (!stored && !first) return { since: null, counts: countsOf(t.criticalCounts) };
+  if (!stored) {
+    await stampCounting(t.id, tx, first!);
+    return { since: first, counts: countsOf(t.criticalCounts) };
+  }
+  const counts = countsOf({});
+  await tx.test.update({ where: { id: t.id }, data: { criticalCounts: storedCounts(counts, first) } });
+  return { since: first, counts };
 }
+/** When the count started (null: nobody joined yet, edits are free and nobody is told). */
+export const startedCounting = async (t: { id: string; criticalCounts: unknown }, tx: Prisma.TransactionClient | typeof db = db): Promise<Date | null> => (await countingState(t, tx)).since;
 
 export const writtenQuestions = (c: { questions: unknown }) => {
   const qs = (c.questions as string[]) ?? [];
@@ -379,10 +388,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil, tzOf(body, dev)); /* (batch 35 §30) the same line as the box */ if (short) errs.push(short); }
     // (Batch 14) Each limited field's counter (the parts and prices share one); the count runs once anyone is affected.
     const critical = countersOf(fields);
-    const since = await startedCounting(t, tx);
+    const { since, counts } = await countingState(t, tx);
     const everJoined = !!since;
     // (Owner, Oct 28 afternoon) Each limited field has its OWN 3 changes: only a field that used all of them is refused (the others still save).
-    const counts = countsOf(t.criticalCounts);
     const lockedNow = everJoined ? critical.filter((f) => lockedFields(counts).includes(f)) : [];
     errs.push(...lockedNow.map(criticalLine));
     const plan = await planKeyChange(tx, testId, keysAdd, keysRemove, next.spots);
@@ -932,7 +940,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
-    await stampCounting(testId, tx); // (batch 14) the 3-change count starts
+    await stampCounting(testId, tx); // (batch 35 §66) the 3-change count starts with the first join
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
     // (Design doc 5) Each joining tester gets an access key (the key they had, if it still works, else the oldest free one).
     await assignKeyAtJoin(tx, testId, contract.id, body.keyStillWorks === true);
@@ -970,13 +978,19 @@ export function sessionRefusal(c: { status: string; endKind: string; endedAt: Da
 
 export async function leaveTest(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
+  const refused = (c: Parameters<typeof sessionRefusal>[0]) => {
+    const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
+    if (refusal) throw new HttpError(409, "gone", refusal === "You left this test." ? "You already left this test." : refusal);
+  };
+  // (Owner, Oct 31, batch 35 §59; replaces batch 15 §25 for Leave) Leave goes through the tester's one gate like their other presses: the first press stops once
+  // for changes the page hasn't shown (Alerts Off: only contract changes; new terms send the page up to the offer box), the confirmed press leaves. A refusal
+  // (leaving can't happen) comes first and is unchanged.
+  refused(c0);
+  await testerGate(tester.id, contractId, c0.testId, body);
   const c = await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
-    const refusal = sessionRefusal(c, { openUntil: null }, displayName(c0.test.developer));
-    if (refusal) throw new HttpError(409, "gone", refusal === "You left this test." ? "You already left this test." : refusal);
-    // (Owner, Oct 30, batch 15 section 25) Leave never stops: no tester gate (its confirm pop-up is built from the current state when opened).
-    void body;
+    refused(c);
     await tx.contract.update({ where: { id: c.id }, data: { status: "left", endedAt: new Date() } });
     await cancelCallsAhead(tx, [c.id], `${displayName(tester)} left the test.`);
     await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });

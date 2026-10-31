@@ -7,6 +7,7 @@ import { PRESS_REFUSED_EVENT } from "@/lib/client";
 import { publishIgnoredAlerts, publishTesterAlertsOff } from "@/lib/testerAlerts";
 import { LIVE_TICK, liveBeat, noteRedrawAsked, onBoxLines, rideLiveClock } from "@/lib/liveSync";
 import { reloadKeepingPlace } from "@/lib/keepPlace";
+import { publishShownVersion, setVersionSource } from "@/lib/pageVersion";
 
 /**
  * Keeps an open page current: polls a fingerprint every 20 s and refreshes the page's data when it changes (`refresh={false}`: only watches, e.g. on Edit, which must keep what was typed).
@@ -37,7 +38,14 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
   const shown = useRef<string | null>(v ?? null);
   useEffect(() => {
     shown.current = v ?? null;
-  }, [v]);
+    // (Batch 35 §60) The version the page shows now: a refusal or stop line from before a newer one goes.
+    if (v) publishShownVersion(query, v);
+  }, [v, query]);
+  // (Batch 35 §60) A line's baseline: this page's version on the server when the line appeared (the same poll). Only a page drawn with a fingerprint.
+  useEffect(() => {
+    if (v === undefined || !refresh) return;
+    return setVersionSource(query, () => fetch(`/api/pulse?${query}`, { cache: "no-store" }).then((r) => (r.ok ? r.json() : null)).then((j: { v?: unknown } | null) => (typeof j?.v === "string" ? j.v : null)));
+  }, [query, refresh, v === undefined]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopped = useRef<boolean | null>(null);
   const restrictedNow = useRef(false);
   // (Owner, Oct 28, batch 20 section 18) A last-resort reload never happens under someone's typing or an open box: it waits (a quiet "This page has updates ·

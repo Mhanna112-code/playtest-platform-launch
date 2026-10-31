@@ -548,3 +548,62 @@ Now every kind is listed; one that can't happen in the test's state is greyed an
 ## §64 Untouched Edit fields change silently again (owner, Oct 31; undoes §26)
 On an open Edit page, a field this tab hadn't touched takes another tab's saved value silently, with no "Changed in another tab at …: was …" note. A field this tab
 had changed keeps its text with the blue note and "Use theirs", as before. Spots and Open until keep their own notes.
+
+## §59 Leave stops once, like the other tester presses (owner, Oct 31; replaces batch 15 §25 for Leave only)
+- Leave (the session page's confirm pop-up) now goes through the tester's one gate (`testerGate`, the one Send, Charge / Let it go, Dispute, call requests
+  and Cancel call use). The first press stops once for changes the page hasn't shown, with the tester's Alerts setting respected (Alerts Off: only changes to
+  their own contract stop: new terms, their key marked as working; a payment doesn't). The stop box shows under the Leave button ("Your press didn't go
+  through."); new terms take the page up to the Switch / Keep offer box, as for every other tester press. The second (confirmed) press leaves.
+- A refusal (leaving can't happen: already left, removed, the test ended) is checked first and is unchanged. Block still never stops.
+- (Owner's clarification) Leave follows the other tester presses' Alerts rule exactly, through the same gate and the same filter: with Alerts Off, an
+  ignorable kind (pay, calls, delayed pay, the dispute, listing changes) doesn't stop it; the exceptions that still stop are the ones that stop every tester
+  press: changes to the contract itself (new terms, their key marked as working) and, from §61, what they did themselves in another tab.
+
+Tests: tests/batch35-leave-stops.test.ts (batch 15 §25's assertions updated in tests/batch15-stops.test.ts and tests/batch16-tester-states.test.ts).
+
+## §60 A refusal line goes when the page has moved on (owner, Oct 31)
+- The redraw in place (§40, §37's live redraw, AutoRefresh) keeps every box's state, so a refusal under a button stayed after its situation changed (e.g.
+  "Answer the new terms first: Switch or Keep." under Send the dispute after the tester left or the test ended). Now a refusal or stop line under a button
+  (Err's blue refusals, ChangesBox's stop box or refusal, usePress's error / changes through it, FormMistakes' lines no field shows) goes once the page
+  redraws with a NEW version of itself (src/lib/pageVersion.ts): each AutoRefresh publishes the version (`v`) the page was drawn with; when a line appears,
+  its baseline is the page's version on the server at that moment (the same poll), so the redraw that brings the line's own change keeps it, and a later
+  version clears it. A redraw that brings nothing new keeps it; a box that goes away takes its line with it. The same press refused again shows its line again
+  (api() announces every refusal). Red form mistakes stay until the field is fixed. Pages without a fingerprint (Edit) keep their lines as before.
+- Applies on every page with AutoRefresh: the session page, the developer's test page, the join page (its invite poll), the dashboard and the admin boxes.
+
+## §61 What you did in another tab always stops once (owner, Oct 31; replaces batch 29 §13's Alerts rule)
+- The tester's own actions in another tab ("You sent your written answers in another tab", a Charge, a call request, Apply…) stop a press once even with
+  Alerts Off, like the developer's (batch 29 §12): `ALERTS_OFF_KINDS` (src/lib/server/testerGate.ts) = the contract changes plus "own", used by the tester
+  gate, the join page's stop (it no longer drops them with Alerts Off) and the live box (never greyed as ignored).
+- The Alerts lines: On "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, and what you did in another
+  tab." Off "Stops a press only for: new terms, your key marked as working, and what you did in another tab." The stop box's hint: "New terms from the
+  developer, a key marked as working and what you did in another tab still stop." The developer's Alerts menu has no other-tab type (unchanged).
+
+## §62 See it stays at the Listing panel (owner's bug, Oct 31)
+- See it scrolled up to the Listing panel and then jumped back down: when the panel was behind, See it redraws the page (§3), the stop box the line was in
+  picks up the redraw's lines and brought itself back into view (bringInView). Now a See it press holds bringInView while its jump and redraw are under way
+  (until the marked fields are in view, then 1.5 s for the smooth scroll; at most 12 s) and drops any kept place still waiting to be put back (keepPlace).
+  The page stays at the panel with the marked fields in view, on the developer's test page and the join page.
+
+Tests: tests/batch35-leave-stops.test.ts (§59–§62), tests/batch29-gates.test.ts (Alerts Off now stops for another tab).
+
+## §65 Only this tab's own edits write the shared draft (owner's repro, Oct 31)
+- Tab B (Edit) typed every field; the owner looked at old tab A (Edit, untouched) and then opened a new Edit page C: C showed the saved values, B's draft was
+  gone. useKept's save ran on ANY change of the form's value: tab A's redraw on becoming visible changed its value, and A (opened from an earlier draft, untouched,
+  so "pristine" with a copy saved) sent null 700 ms later, deleting B's draft (or sent its own older value).
+- Now a form writes or forgets the shared draft only because of this tab's own edits: a value change within a moment (800 ms) of a real keystroke, click,
+  paste or drop in this tab (typing, ticks, chips, Use saved / Discard). A change from a redraw, the server or another tab's save never writes; a
+  restored-but-untouched form never deletes or overwrites the draft. Typing still waiting to be saved is saved even if a redraw lands meanwhile. §16 is
+  unchanged and consistent: only what this tab typed since its last save is flushed on leaving or hiding.
+
+Tests: tests/batch35-leave-stops.test.ts (§65).
+
+## §66 The 3-change count starts at the first join (owner, Oct 31; replaces batch 14 §2's start)
+- The 3-change count on Edit's limited fields starts only when the first tester joins (a working contract: Join, an Accept or an auto-join that joins), not at
+  the first invite or application. Saves before that never count. `stampCounting` is called on a join only (joinTest); invites.ts and joining.ts's Apply no
+  longer stamp it. `startedCounting` / `countingState` (src/lib/server/tests.ts) fall back to the first contract only.
+- Older tests whose stored "since" came from an invite or an application (earlier than the first join, or with nobody joined) are recomputed when read: the
+  count starts at the first join with the counts back at 0 (the saves counted before it can't be told apart, so none of them count); with nobody joined,
+  counting hasn't started. Edit's page and its live view read the same state.
+
+Tests: tests/batch35-leave-stops.test.ts (§66), tests/batch14.test.ts (section 2 rewritten).

@@ -26,6 +26,32 @@ export function flushDraft(s: { ready: boolean; cleared: boolean; pristine: bool
   return "draft";
 }
 
+/**
+ * (Owner's repro, Oct 31, batch 35 §65) A form writes (or forgets) the shared draft only because of THIS tab's own edits: a value change within a moment of a
+ * real keystroke, click, paste or drop in this tab (typing, a tick, a chip, the Use saved / Discard buttons). A change that came from a redraw (the tab became
+ * visible, the live poll), from the server or from another tab's save never writes: an old tab that's only looked at, a restored-but-untouched form, never
+ * deletes or overwrites a newer draft another tab typed. Typing still waiting to be saved (`unsent`) is saved even if a redraw lands meanwhile.
+ */
+export const OWN_EDIT_MS = 800;
+let lastGesture = 0;
+let watching = false;
+function watchGestures() {
+  if (watching || typeof document === "undefined") return;
+  watching = true;
+  const on = (e: Event) => {
+    if (e.isTrusted) lastGesture = Date.now();
+  };
+  for (const g of ["input", "change", "click", "keydown", "paste", "drop", "cut"]) document.addEventListener(g, on, true);
+}
+/** A value change counts as this tab's own edit: a real gesture in this tab a moment before it. */
+export const ownEdit = (gestureAt: number, now = Date.now()) => gestureAt > 0 && now - gestureAt >= 0 && now - gestureAt <= OWN_EDIT_MS;
+/** (Batch 35 §65) Whether a value change schedules a write of the shared draft. */
+export function draftWrite(s: { ready: boolean; cleared: boolean; pristine: boolean; saved: boolean; unsent: boolean; own: boolean }): boolean {
+  if (!s.ready || s.cleared) return false;
+  if (!s.own && !s.unsent) return false; // a redraw, the server or another tab: never written (and never forgotten)
+  return !(s.pristine && !s.saved);
+}
+
 /** (Batch 35 §11) Forget a form's draft that no longer applies (an admin box swapped out because another admin changed its state meanwhile). */
 export const dropKept = (key: string) =>
   fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data: null }), keepalive: true }).catch(() => null);
@@ -95,10 +121,12 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
 
   // Save a moment after typing stops; forget it when the form is empty again.
   const json = JSON.stringify(value);
+  useEffect(() => watchGestures(), []);
   useEffect(() => {
-    if (!pristine) cleared.current = false; // typing again after a send
-    if (!ready.current || cleared.current) return;
-    if (pristine && !saved.current) return;
+    const own = ownEdit(lastGesture);
+    if (!pristine && own) cleared.current = false; // typing again after a send
+    // (Batch 35 §65) Only this tab's own edits write (or forget) the draft.
+    if (!draftWrite({ ready: ready.current, cleared: cleared.current, pristine, saved: saved.current, unsent: unsent.current, own })) return;
     unsent.current = true;
     const t = setTimeout(() => {
       // (Batch 34 §9) Sent meanwhile (a Save went through within the moment): the cleared draft is never written back.

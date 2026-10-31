@@ -13,7 +13,7 @@ import { decideTerms } from "@/lib/server/terms";
 import { json, makeUser, req } from "./helpers";
 import { act, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
 
-// Batch 14 (owner, Oct 29): the 3-change limit on two more fields (the build link; the parts and prices), counted from when anyone is affected; applicants and invited
+// Batch 14 (owner, Oct 29): the 3-change limit on two more fields (the build link; the parts and prices), counted from when anyone is affected (batch 35 §66: from the first join); applicants and invited
 // testers told in stacked lines; a quieter Switch / Keep; 50,000-character written parts; the read-only Access keys notice.
 
 const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
@@ -43,29 +43,22 @@ describe("batch 14 section 1: the build link and the parts and prices are limite
   });
 });
 
-describe("batch 14 section 2: the count starts once anyone is affected", () => {
-  it("edits before anyone is told are free; the first application starts it, and it keeps counting after the applicant withdraws", async () => {
+describe("batch 14 section 2 (batch 35 §66): the count starts when the first tester joins", () => {
+  it("edits before anyone joined are free (an application doesn't start it); the first join does, and it keeps counting after they leave", async () => {
     const { dev, testId } = await setup({ joinMode: "apply" });
     expect((await edit(testId, dev.cookie, { description: "Sail around" })).status).toBe(200);
     expect((await counts(testId)).description).toBe(0);
-    expect(countingSince((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toBeNull();
     const ana = await makeUser({ tester: true, name: "Ana Silva" });
     expect((await act(testId, "apply", ana.cookie, { note: "I love boat games" })).status).toBe(200);
-    expect(countingSince((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).not.toBeNull();
-    await settle();
-    await act(testId, "withdraw-application", ana.cookie, { seenAt: seen(), confirmed: true });
+    expect(countingSince((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).toBeNull();
     expect((await edit(testId, dev.cookie, { description: "Sail around the bay" })).status).toBe(200);
-    expect((await counts(testId)).description).toBe(1);
-    // The admin's "Allow 3 more" keeps when the count started.
+    expect((await counts(testId)).description).toBe(0);
+    await db.test.update({ where: { id: testId }, data: { joinMode: "anyone" } });
+    const j = await joined(testId, "Ben Ward");
     expect(countingSince((await db.test.findUniqueOrThrow({ where: { id: testId } })).criticalCounts)).not.toBeNull();
-  });
-
-  it("the first invite starts it too", async () => {
-    const { dev, testId } = await setup({ joinMode: "invite" });
-    const ben = await makeUser({ tester: true, name: "Ben Ward" });
-    expect((await act(testId, "invite", dev.cookie, { testerIds: [ben.user.id], seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await edit(testId, dev.cookie, { devices: ["Windows PC"] })).status).toBe(200);
-    expect((await counts(testId)).devices).toBe(1);
+    await sact(j.sessionId, "leave", j.tester.cookie, { seenAt: seen(), confirmed: true });
+    expect((await edit(testId, dev.cookie, { description: "Sail around the whole bay" })).status).toBe(200);
+    expect((await counts(testId)).description).toBe(1);
   });
 });
 

@@ -98,7 +98,7 @@ describe("what still works follows the running test's stop-once rules (batch 29 
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, comment: "", seenAt: opened, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
 
-  it("paused: Cancel call stops once for a payment since the page loaded (batch 29 section 11); Leave never stops", async () => {
+  it("paused: Cancel call stops once for a payment since the page loaded (batch 29 section 11); Leave stops once too (batch 35 §59)", async () => {
     const { dev, testId } = await setup({ recordingCents: "15.00" });
     const { tester, sessionId } = await joined(testId);
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 72);
@@ -113,7 +113,10 @@ describe("what still works follows the running test's stop-once rules (batch 29 
     expect(c0.body.error?.code, JSON.stringify(c0.body)).toBe("stop_once");
     const c = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "Something came up at work.", seenAt: opened, confirmed: true, boxAt: seen() });
     expect(c.status, JSON.stringify(c.body)).toBe(200);
-    const l = await sact(sessionId, "leave", tester.cookie, { seenAt: opened });
+    // (Batch 35 §59) Leave stops once too (the payment since the page loaded); confirmed, it leaves.
+    const l0 = await sact(sessionId, "leave", tester.cookie, { seenAt: opened });
+    expect(l0.body.error?.code, JSON.stringify(l0.body)).toBe("stop_once");
+    const l = await sact(sessionId, "leave", tester.cookie, { seenAt: opened, confirmed: true });
     expect(l.status, JSON.stringify(l.body)).toBe(200);
   });
 

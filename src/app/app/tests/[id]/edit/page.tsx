@@ -1,10 +1,9 @@
 import { hasPerks } from "@/lib/server/subscription";
-import { countsOf } from "@/lib/limits";
 import { openUntilCapDay, testerDaysOf } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
-import { asListing, startedCounting } from "@/lib/server/tests";
+import { asListing, countingState } from "@/lib/server/tests";
 import { TestForm } from "../../TestForm";
 import { LiveTop } from "@/components/LiveTop";
 import { PageLoaded } from "@/components/PageLoaded";
@@ -26,6 +25,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
   // (Owner, Oct 28 evening) A draft is edited in Post a test.
   if (t.status === "draft") redirect(`/app/tests/new?draft=${t.id}`);
   const testersIn = await db.contract.count({ where: { testId: id, status: "working" } });
+  const counting = await countingState(t); // (batch 35 §66) the count runs once a tester joined
   const seenAt = new Date().toISOString();
   return (
     <>
@@ -43,7 +43,7 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
           <TestForm
             init={asListing(t)}
             tz={u.timeZone}
-            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) /* (batch 14) first join, application or invite */, openedAt: t.createdAt.toISOString(), capDay: openUntilCapDay(t.createdAt, u.timeZone), testerDays: t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil, u.timeZone) : undefined }}
+            edit={{ id, version: t.version, testersIn, draft: t.status === "draft", seenAt, keys: await keyBoxes(id), criticalCounts: counting.counts, everJoined: !!counting.since, openedAt: t.createdAt.toISOString(), capDay: openUntilCapDay(t.createdAt, u.timeZone), testerDays: t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil, u.timeZone) : undefined }}
             perks={await hasPerks(u)}
           />
           {/* (Design doc 5) Live updates from every page's rules show in a blue box under the Save button. */}

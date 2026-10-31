@@ -33,6 +33,15 @@ export function reloadKeepingPlace(w: Win = window) {
   w.location.reload();
 }
 
+/** (Batch 35 §62) A See it jump drops a place still waiting to be put back: the page stays at what See it brought into view. */
+export function cancelPlaceRestore(w: Pick<Window, "sessionStorage"> = window) {
+  try {
+    w.sessionStorage.removeItem(PLACE_KEY);
+  } catch {
+    // storage blocked: nothing was kept
+  }
+}
+
 /** The scroll to put back on this load: a place kept a moment ago for this same address, else null. */
 export function placeToRestore(raw: string | null, path: string, now = Date.now()): number | null {
   if (!raw) return null;

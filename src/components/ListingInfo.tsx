@@ -1,6 +1,8 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { holdBringInView } from "@/lib/markJump";
+import { cancelPlaceRestore } from "@/lib/keepPlace";
 
 /** (Batch 30 §15) The "See it" of a listing line in the top box: the event LiveTop sends (with the line's time) so the page can mark what that save changed. */
 export const SEE_IT_EVENT = "see-it";
@@ -20,6 +22,10 @@ export const useSeeItTarget = () => useContext(SeeItContext);
  * the page is told the line's time so it can mark what that save changed (ListingSeeIt).
  */
 export function seeItClick(e: React.MouseEvent<HTMLElement>, target: string, at?: string | Date, saveAt?: string | Date, /** (batch 35 §34) the panel lines the line's changes cover */ keys?: string[]) {
+  // (Owner's bug, Oct 31, batch 35 §62) See it stays at the panel: while its jump (and the redraw it may ask for) is under way, no box pulls the page back to
+  // itself (bringInView: the stop box's lines growing as the redraw lands) and no kept place is put back.
+  holdBringInView(SEE_IT_WAIT_MS + 2000);
+  cancelPlaceRestore();
   const dialog = e.currentTarget.closest("dialog");
   if (dialog) {
     e.preventDefault();
@@ -85,6 +91,7 @@ export function ListingSeeIt({ box }: { box: string }) {
     let wait: ReturnType<typeof setInterval> | undefined;
     const reduce = () => !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     const mark = (el: HTMLElement, marked: HTMLElement[]) => {
+      holdBringInView(1500); // (batch 35 §62) the jump has landed: boxes may scroll again once its smooth scroll is done
       (marked[0] ?? el).scrollIntoView({ block: marked[0] ? "center" : "start", behavior: reduce() ? "auto" : "smooth" });
       marked.forEach((l) => l.setAttribute("data-marked", ""));
       setTimeout(() => marked.forEach((l) => l.removeAttribute("data-marked")), 4000);

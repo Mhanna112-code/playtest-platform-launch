@@ -1,5 +1,4 @@
 import { db } from "@/lib/db";
-import { countsOf } from "@/lib/limits";
 import { gapsOf } from "@/lib/gaps";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { devCancelCall, reportNoShow } from "@/lib/server/calls";
@@ -8,7 +7,7 @@ import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/reque
 import { apply, askToRejoin, decideApplication, join, joinStopList, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
-import { startedCounting, asListing, deleteDraft, editTest, endEarly, goNextRound, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
+import { countingState, asListing, deleteDraft, editTest, endEarly, goNextRound, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
 import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
@@ -36,7 +35,8 @@ export async function GET(req: Request, { params }: Ctx) {
     if (!u) throw new HttpError(401, "signed_out", "You're signed out. Sign in again to keep going.");
     if (action !== "listing") throw new HttpError(404, "not_found", "That doesn't exist.");
     const t = await ownTest(u.id, id);
-    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalCounts: countsOf(t.criticalCounts), everJoined: !!(await startedCounting(t)) }); // (batch 14) the count runs once anyone is affected
+    const counting = await countingState(t); // (batch 35 §66) the count runs once a tester joined
+    return ok({ version: t.version, listing: asListing(t), keys: await keyBoxes(id), at: new Date().toISOString(), criticalCounts: counting.counts, everJoined: !!counting.since });
   });
 }
 

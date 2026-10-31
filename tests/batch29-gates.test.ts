@@ -218,7 +218,7 @@ describe("batch 29 section 13: the tester's own changes in another tab, the same
     expect(texts(later2)).toContain("You charged Nora Lane $10.00 for your written answers in another tab");
   });
 
-  it("a call request in A stops Dispute in B once; with Alerts Off it doesn't", async () => {
+  it("a call request in A stops Dispute in B once; with Alerts Off too (batch 35 §61)", async () => {
     const w = await paidWork();
     const loaded = await loadedNow();
     expect((await sact(w.sessionId, "request-time", w.tester.cookie, { startsAt: atHours(50), seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
@@ -227,9 +227,12 @@ describe("batch 29 section 13: the tester's own changes in another tab, the same
     const d = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B });
     expect(d.body.error?.code).toBe("stop_once");
     expect(texts(d)).toEqual([`You requested a call for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
-    // Alerts Off: own changes from another tab don't stop (they follow Alerts like the other tabs' lines).
+    // (Batch 35 §61, replaces this section's Alerts rule) Alerts Off: what they did in another tab still stops once; the confirmed press goes ahead.
     await db.user.update({ where: { id: w.tester.user.id }, data: { testerAlertsOff: true } });
-    const d2 = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B });
+    const d1 = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B });
+    expect(d1.body.error?.code, JSON.stringify(d1.body)).toBe("stop_once");
+    expect(texts(d1)).toEqual([`You requested a call for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
+    const d2 = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B, confirmed: true, boxAt: seen() });
     expect(d2.status, JSON.stringify(d2.body)).toBe(200);
     // The same press again: a plain refusal.
     expect((await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B, tab: "C" })).body.error.message).toMatch(/^You already disputed this payment/);

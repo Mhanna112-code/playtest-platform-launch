@@ -14,12 +14,18 @@ export function jumpTo(id: string) {
   setTimeout(() => el.removeAttribute("data-marked"), 4000);
 }
 
+/** (Owner's bug, Oct 31, batch 35 §62) Until then a box under a button doesn't pull the page back to itself: a See it jump is under way. */
+let heldUntil = 0;
+/** Held for `ms` from now (a later call replaces the time: the jump's own scroll landing shortens it). */
+export const holdBringInView = (ms: number, now = Date.now()) => void (heldUntil = now + ms);
+export const bringInViewHeld = (now = Date.now()) => now < heldUntil;
+
 /**
  * (Owner, NEXT-UI 13) After a press, bring the notice (and the button right above it) into view with the least scrolling:
  * nothing moves when both are already visible; never the top of the page.
  */
 export function bringInView(el: HTMLElement | null) {
-  if (!el) return;
+  if (!el || bringInViewHeld()) return;
   const prev = el.previousElementSibling as HTMLElement | null;
   const r = el.getBoundingClientRect();
   const top = prev && prev.tagName === "BUTTON" ? Math.min(prev.getBoundingClientRect().top, r.top) : r.top;

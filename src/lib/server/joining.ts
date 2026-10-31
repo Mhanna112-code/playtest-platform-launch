@@ -6,7 +6,7 @@ import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
-import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, stampCounting } from "./tests";
+import { asListing, devGate, gapStop, joinTest, needsGap, ownTest } from "./tests";
 import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
 import { ratingSummary } from "./ratings";
 
@@ -120,9 +120,9 @@ export async function joinStopList(userId: string, testId: string, body: Record<
   const raw0 = await joinPageChanges(userId, testId, body.confirmed === true ? boxAt!.toISOString() : body.seenAt, tabOf(body));
   // (Batch 17 section 13) The tester's box drops "Turn off alerts" when their Alerts are already Off.
   const alertsOff = !!(await db.user.findUnique({ where: { id: userId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  // (Owner, Oct 29, batch 29 section 13) Their own changes in another tab ("You applied to join in another tab") follow Alerts like the other tabs' lines: Off, they
-  // don't stop (the same press made there is a plain refusal).
-  const raw = alertsOff ? raw0.filter((e) => e.kind !== "own") : raw0;
+  // (Owner, Oct 31, batch 35 §61; replaces batch 29 section 13 here) Their own changes in another tab ("You applied to join in another tab") always stop once,
+  // Alerts Off too, like the developer's own other-tab actions.
+  const raw = raw0;
   // (Batch 17 section 4) A full test keeps the invite open: No thanks just declines it (the test filling or a spot opening doesn't stop it).
   const changes = withRenamed(verb === "decline" ? raw.filter((e) => e.kind !== "full" && e.kind !== "spot_open") : raw, body);
   if (!changes.length) return null;
@@ -252,7 +252,6 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
     update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "apply", ndaAcceptedAt, createdAt: new Date() }, // (batch 34 §16) applied now
     create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
-  await stampCounting(testId); // (batch 14) the 3-change count starts with the first application
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", text: `${displayName(tester)} applied to join` } }));
   await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`Their note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`);
   return { applied: true };

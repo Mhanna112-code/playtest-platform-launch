@@ -6,7 +6,7 @@ import { displayName, fmtDate, pronouns } from "@/lib/format";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { asListing, devGate, needsGap, ownTest, recordEvent, stampCounting } from "./tests";
+import { asListing, devGate, needsGap, ownTest, recordEvent } from "./tests";
 import { ratingSummary, revealedRatingsWhere } from "./ratings";
 import { doesntListItems, doesntListTag, withYouText } from "@/lib/inviteRows";
 import { INVITE_ACTS } from "./live";
@@ -321,7 +321,6 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       }
       // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
       await tx.invite.create({ data: { testId, testerId: p.id } });
-      await stampCounting(testId, tx); // (batch 14) the 3-change count starts with the first invite
       invited.push({ id: p.id, name, email: p.email, pronoun: p.pronoun });
     }
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);

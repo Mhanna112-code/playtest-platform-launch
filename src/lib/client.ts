@@ -76,7 +76,18 @@ export const offerShown = () => typeof document !== "undefined" && !!document.ge
 
 /** (Batch 28 §9) Sent when the server refuses a press because the state changed: the page redraws at once (AutoRefresh). */
 export const PRESS_REFUSED_EVENT = "press-refused";
+/** (Batch 35 §60) Sent (with the message) whenever a press is refused or stopped. */
+export const PRESS_ERROR_EVENT = "press-error";
+/** (Batch 35 §60) Every press refused or stopped says so (lib/pageVersion.ts): a line hidden by a newer page shows again when the same press is refused again. */
 export async function api<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
+  try {
+    return await callApi<T>(path, body, method);
+  } catch (e) {
+    if (e instanceof ApiError && typeof window !== "undefined") window.dispatchEvent(new CustomEvent(PRESS_ERROR_EVENT, { detail: e.message }));
+    throw e;
+  }
+}
+async function callApi<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
   if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
   // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
   // (Owner) New terms (reason A) are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.

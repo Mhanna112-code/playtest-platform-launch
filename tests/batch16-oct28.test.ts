@@ -127,8 +127,8 @@ describe("Find: Most time to finish sorts by days per tester (section 3)", () =>
 describe("the tester's Alerts line (section 4)", () => {
   it("one grey line for the state shown; every tester stop kind in the code is in the On list", () => {
     const toggle = src("components/TesterAlertsToggle.tsx");
-    expect(toggle).toContain('export const ALERTS_ON_LINE = "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, other tabs.";');
-    expect(toggle).toContain('export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key marked as working.";');
+    expect(toggle).toContain('export const ALERTS_ON_LINE = "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, and what you did in another tab.";');
+    expect(toggle).toContain('export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key marked as working, and what you did in another tab.";');
     expect(toggle).toContain("max-w-xs");
     expect(toggle).toContain("text-right max-sm:items-start max-sm:text-left");
     // The kinds the tester gate stops for, and the words in the line that cover them.

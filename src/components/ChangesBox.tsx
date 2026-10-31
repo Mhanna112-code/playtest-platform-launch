@@ -15,6 +15,7 @@ import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { fmtTimeIn } from "@/lib/format";
 import { savedZone } from "@/components/TimeZoneSync";
 import { seeItClick, useSeeItTarget } from "@/components/ListingInfo";
+import { useGoneOnNewVersion } from "@/lib/pageVersion";
 
 export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** (Batch 35 §34) the panel lines all the listing changes it covers changed */ keys?: string[] };
 
@@ -43,7 +44,9 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
     // (Batch 27 section 1) The new-terms line stays under its button while the page goes up to the Switch / Keep box.
     if (changes || (error && error !== ANSWER_TERMS_FIRST)) bringInView(ref.current);
   }, [changes, error]);
-  if (!changes && !error) return null;
+  // (Batch 35 §60) A stop box or refusal under a button goes once the page redraws with a new version of itself; the same stop or refusal again shows again.
+  const gone = useGoneOnNewVersion(changes ?? error ?? null, changes ? "" : error ?? "");
+  if ((!changes && !error) || gone) return null;
   if (!changes && error && error.startsWith("\u0001")) return <p ref={ref as unknown as React.RefObject<HTMLParagraphElement>} className="err-field basis-full">{error.slice(1)}</p>;
   const name = press ?? (label || lastPressLabel());
   const named = name && name !== "press" ? name : "";
