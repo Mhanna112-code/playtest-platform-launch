@@ -3,6 +3,7 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
+- **Found by the last screenshot run (Oct 31), not fixed yet:** (1) the admin's test Timeline can quote the wrong reason for a pause when Pause and Stop happen within seconds (both read the test's single adminNote; src/lib/server/adminLists.ts ~line 752); (2) the needs pop-up shows a language icon next to "A device this test runs on"; (3) once, Delete account after the same admin's Suspend in another tab went straight through (likely the page had redrawn and shown the suspension, which counts as seen; recheck); (4) recordings made before Oct 31 have no length, so their time bar can't be dragged (new ones can).
 - **Per-field drafts (after launch; owner, Oct 31).** Today a form's draft is the whole form from the tab typed in last. Per-field: each tab sends only the fields it changed, the server keeps each field's latest (related fields as one unit: Mature + why, a part's tick + price + Required, questions + required ones, live rate + length; written answers per question). About 1½–2 hours.
 - **Join page: show what changed, not just which fields.** The blue "Changed since you opened this page" box (and the stop box under Join) lists Before → Now for each changed field (short values inline; description, questions and NDA in small scroll boxes of about 8 lines), instead of "questions · See it". About 30–45 min.
 
