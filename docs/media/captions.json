@@ -17845,5 +17845,113 @@
     "group": "stl2",
     "order": 125000,
     "size": "desktop"
+  },
+  "b35r-01-top-line.png": {
+    "caption": "After the other tab's Save the old Edit tab's blue box reads “Updated · 10:18 PM: You saved the listing in another tab: title (now “Harbor Run: night harbors”), written answers price, questions Dismiss”.",
+    "kind": "image",
+    "title": "§8 The old tab's top box",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r1",
+    "order": 125001,
+    "size": "desktop"
+  },
+  "b35r-02-title-quiet.png": {
+    "caption": "The old tab never touched the name: it now reads “Harbor Run: night harbors”, the other tab's save, with no note.",
+    "kind": "image",
+    "title": "§8 An untouched field takes the save quietly",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r1",
+    "order": 125002,
+    "size": "desktop"
+  },
+  "b35r-03-questions-note.png": {
+    "caption": "The old tab's questions keep what it typed (“Did the map help you find the harbors?” added), with the blue note under them: “Saved in another tab or device at 10:18 PM: Questions: What did you like? Which harbor was hardest to find? Use theirs”.",
+    "kind": "image",
+    "title": "§8 A field typed here keeps the typing",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r1",
+    "order": 125003,
+    "size": "desktop"
+  },
+  "b35r-04-price-note.png": {
+    "caption": "The old tab's written price stays at its typed $12.00; the note under Parts and prices reads “Saved in another tab or device at 10:18 PM: Price for written answers: $15.00 Use theirs”.",
+    "kind": "image",
+    "title": "§8 The price",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r1",
+    "order": 125004,
+    "size": "desktop"
+  },
+  "b35r-05-mature-kept.png": {
+    "caption": "The other tab didn't change them: the Mature (18+) tick and “Sea monsters attack the boats in the night levels.” stay as typed here, with no note.",
+    "kind": "image",
+    "title": "§8 Mature and why stay as typed",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r1",
+    "order": 125005,
+    "size": "desktop"
+  },
+  "b35r-06-save-stops.png": {
+    "caption": "The old tab's Save stops in the box under it: “Your Save didn't go through. Since you opened this page: Price for written answers: your version will replace the one saved in another tab at 10:20 PM. Questions: your version will replace the one saved in another tab at 10:20 PM. Press Save again to save.”",
+    "kind": "image",
+    "title": "§8 Save stops once",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r1",
+    "order": 125006,
+    "size": "desktop"
+  },
+  "b35r-07-edit-two-tabs-video.webm": {
+    "caption": "Left, the old tab adds a question, ticks Mature with why, and types $12.00; right, the new tab saves a new name, a changed question and $15.00. The old tab's name takes the save quietly, blue notes with “Use theirs” appear under its questions and prices, and its Save stops once.",
+    "kind": "video",
+    "title": "§8 Edit in two tabs",
+    "section": "Old tabs, sign-out and drafts (batch 35 §8)",
+    "group": "b35r1",
+    "order": 125007,
+    "size": "desktop"
+  },
+  "b35r-70-paid.png": {
+    "caption": "Hal Bishop presses Pay on Ivy Chen's answers with the test card 4000 0000 0000 0259: the app records the payment; Stripe shows the PaymentIntent “Succeeded”; the log on the right shows Stripe's deliveries.",
+    "kind": "image",
+    "title": "§9 Paid with 0259",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9a",
+    "order": 122001,
+    "size": "desktop"
+  },
+  "b35r-71-log-waited.png": {
+    "caption": "This time Stripe's dispute (evt_1UWT0GAwolF8enxCcCHZQsaf) came after the payment was recorded, so there was nothing to wait for (no “waited” line); delivery answered 200.",
+    "kind": "image",
+    "title": "§9 The dispute arrived after the payment was recorded",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9a",
+    "order": 122002,
+    "size": "desktop"
+  },
+  "b35r-72-hold-steps.png": {
+    "caption": "Hal Bishop's Payments: “Your bank reversed a payment, so your account is on a chargeback hold. Your tests are paused. To lift it: A card verified with 3D Secure What you owe reserved on your card The team's approval Still to do: verify a card with 3D Secure, then pay what you owe ($2…”; Stripe shows the payment “Disputed”.",
+    "kind": "image",
+    "title": "§9 The chargeback hold starts at once",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9a",
+    "order": 122003,
+    "size": "desktop"
+  },
+  "b35r-73-blue-box.png": {
+    "caption": "The developer dashboard's blue box: “Your account is on hold Your account is on hold after a chargeback. All your tests are paused. Testers stay in them. Your dashboard, Payments, Settings and your notifications stay open. Your test pages show only the overview, where you can …”.",
+    "kind": "image",
+    "title": "§9 The blue box",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9a",
+    "order": 122004,
+    "size": "desktop"
+  },
+  "b35r-74-early-dispute-video.webm": {
+    "caption": "Hal Bishop pays with 0259; Stripe's dispute arrives moments later; (this time it came after the payment was recorded: no wait), and the chargeback hold starts: the blue box and the Payments steps.",
+    "kind": "video",
+    "title": "§9 An early dispute waits for its payment",
+    "section": "Early dispute (batch 35 §9)",
+    "group": "b35r9a",
+    "order": 122005,
+    "size": "desktop"
   }
 }
