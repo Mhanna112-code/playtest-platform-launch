@@ -59,4 +59,17 @@ describe("batch 35 §1: the tick on a dispute decision that charges", () => {
     expect(src).toContain("tickedFor === typed");
     expect(src).toContain("tickCents: extra");
   });
+
+  it("(batch 35 §70) Decide on a piece whose payment is waiting for the developer's bank is refused; nothing is charged; the dispute stays open", async () => {
+    const { admin, row } = await disputed();
+    const sub = await db.submission.findUniqueOrThrow({ where: { id: row.submissionId! } });
+    const c = await db.contract.findUniqueOrThrow({ where: { id: sub.contractId }, include: { test: true } });
+    await db.payment.create({ data: { kind: "extra", submissionId: sub.id, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: 600, feeCents: 120, testerCents: 480, status: "needs_action" } });
+    const made: unknown[] = [];
+    setStripeForTests({ paymentIntents: { create: async (p: unknown) => { made.push(p); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    const { DECIDE_LOCKED } = await import("@/lib/server/payments");
+    await expect(decideDispute(admin, row.id, { total: "10.00", tickCents: 600 })).rejects.toThrow(DECIDE_LOCKED);
+    expect(made).toHaveLength(0);
+    expect((await db.dispute.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("open");
+  });
 });

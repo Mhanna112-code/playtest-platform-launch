@@ -626,3 +626,8 @@ Tests: tests/batch35-leave-stops.test.ts (§66), tests/batch14.test.ts (section 
   longer greys or skips anything, and doesn't count in "(N off)"). Testers keep listing changes in their own Alerts (On/Off), unchanged.
 
 Tests: tests/batch35-all-tabs.test.ts (§67-§69), tests/batch20.test.ts (the always-stop kinds audit now includes "info").
+
+## §70 Decide waits for the developer's bank (owner, Oct 31)
+While a payment on the disputed piece is waiting for the developer's bank (their own Pay / Pay more check, up to 15 minutes, or a payment waiting for Confirm),
+the admin's Decide is refused: "The developer is confirming a payment for this piece with their bank. Decide again once it's confirmed or fails." Nothing is
+charged and the dispute stays open, so the piece is never paid more than decided.
