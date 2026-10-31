@@ -696,3 +696,12 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - On the test page every payment the bank wants confirmed is in **Needs you** (counted there), so the dashboard's "Your bank wants you to confirm" box,
   Payments and the bell all land in Needs you. Under the piece (and under the tester's row for a charge with no part) there's only a small link up to it:
   "Confirm with your bank in Needs you ↑". A paused or held test's page keeps its own "Your bank wants you to confirm" box as before.
+
+## §81 The tester's History lists the tests they're in, with a search (owner, Oct 31)
+- A tester's dashboard showed a test only while something waited there, so a test with nothing left to do (e.g. its only call over and paid) had no way back.
+  History now starts with every test they're in ("In progress", "by <developer> · joined <date>", Open → the test page), then the ended ones as before, and a
+  search box over it filters by test name or developer ("No test matches." when nothing does).
+
+## §82 "Payment may be delayed" says "until the test resumes" only while the test is paused (owner, Oct 31)
+- A dispute decision waiting for the developer's bank on a running test read "Payment may be delayed until the test resumes." Now it reads "Payment may be
+  delayed." (page and email); the longer line stays when the test is paused (a hold, including one this decision's decline started, a suspension or the team's pause).

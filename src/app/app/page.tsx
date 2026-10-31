@@ -48,6 +48,7 @@ import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
 import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
 import { GetStarted } from "./GetStarted";
+import { HistorySearch } from "./HistorySearch";
 
 export const metadata = { title: "Home · Playtest" };
 import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
@@ -704,16 +705,31 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
-      {history.length > 0 && (
+      {/* (Owner, Oct 31, batch 35 §81) History also lists the tests the tester is in now (first, "In progress", opening the test page), so a test with nothing
+          left to do is still reachable; a search box filters by test or developer. */}
+      {(history.length > 0 || working.length > 0) && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-white">History</h2>
+          <HistorySearch />
           <ScrollList className="space-y-2">
+            {working.map((c) => (
+              <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
+                <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>
+                  <span className="min-w-0 flex-1 font-medium text-white">
+                    <span className="block truncate" title={c.title}>{c.title}</span>
+                    <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · joined {fmtDate(c.joinedAt)}</span>
+                  </span>
+                  <span className="badge border-emerald-400/40 text-emerald-200">In progress</span>
+                  <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>
+                </Link>
+              </li>
+            ))}
             {history.sort(byEnd).map((c) => {
               const rejected = c.submissions.some((s) => s.review?.rejected) && !c.submissions.some((s) => s.review && !s.review.rejected);
               const mine = allOffers.filter((o) => o.contractId === c.id);
               const pays = payments.filter((p) => p.contractId === c.id && (p.status === "charged" || p.status === "not_set_up"));
               return (
-                <li key={c.id}>
+                <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
                   <details className="card p-4" data-history={c.id}>
                     <summary className="flex cursor-pointer flex-wrap items-center gap-3">
                       <span className="min-w-0 flex-1 font-medium text-white">
