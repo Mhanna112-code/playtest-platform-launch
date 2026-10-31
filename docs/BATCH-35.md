@@ -710,3 +710,5 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - The developer's own Stop now closes waiting applications and rejoin asks, like the team's Stop and a paused test closing already did (the applicant reads
   the usual "the test was stopped" line). Ones left over from before are hidden from the dashboard's Needs you and the test page, so there's no Accept that
   can only be refused ("Your Accept didn't go through: this test was stopped").
+- (Same day, owner) Also a **"Current tests (N)"** box just above "Tests you left": the tests the tester is still in, newest join first, each opening the test
+  page, with its own search box. History keeps every test (the ones you're still in first, then the ended ones).

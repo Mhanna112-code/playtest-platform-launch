@@ -662,6 +662,29 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
+      {/* (Owner, Oct 31, batch 35 §81) "Current tests": every test the tester is still in, newest join first (a test with nothing left to do stays reachable),
+          above Tests you left, with its own search box. */}
+      {working.length > 0 && (
+        <section className="space-y-3" id="current-tests">
+          {sectionTitle(<LayoutGrid className="h-5 w-5 text-emerald-300" />, "Current tests", working.length)}
+          <HistorySearch />
+          <ScrollList className="space-y-2">
+            {working.map((c) => (
+              <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
+                <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>
+                  <span className="min-w-0 flex-1 font-medium text-white">
+                    <span className="block truncate" title={c.title}>{c.title}</span>
+                    <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · joined {fmtDate(c.joinedAt)}</span>
+                  </span>
+                  <span className="badge border-emerald-400/40 text-emerald-200">In progress</span>
+                  <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>
+                </Link>
+              </li>
+            ))}
+          </ScrollList>
+        </section>
+      )}
+
       {!suspended && left.length > 0 && (
         <section className="space-y-3" id="rejoin">
           {sectionTitle(<RotateCcw className="h-5 w-5 text-sky-300" />, "Tests you left", left.length)}
@@ -705,11 +728,10 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
-      {/* (Owner, Oct 31, batch 35 §81) History also lists the tests the tester is in now (first, "In progress", opening the test page), so a test with nothing
-          left to do is still reachable; a search box filters by test or developer. */}
       {(history.length > 0 || working.length > 0) && (
         <section className="space-y-3">
           <h2 className="text-lg font-semibold text-white">History</h2>
+          {/* (Owner, Oct 31, batch 35 §81) Every test: the ones you're still in first ("In progress", also in Current tests), then the ended ones; a search box filters by test or developer. */}
           <HistorySearch />
           <ScrollList className="space-y-2">
             {working.map((c) => (
