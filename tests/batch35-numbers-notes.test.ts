@@ -137,7 +137,7 @@ describe("batch 35 §26: notes under untouched Edit fields", () => {
   it("TestForm: set live from applyElsewhere, shown under the field, gone when the field is edited and on Save", () => {
     const t = src("app/app/tests/TestForm.tsx");
     // (Batch 35 §64) Untouched fields change silently again: nothing sets a "was" note.
-    expect(t).not.toContain("setWas((o) =>");
+    expect(t).not.toContain("value: emptyValue(base[k])");
     expect(t).toContain("batch 35 §64) Untouched fields change silently again");
     expect(t).toContain("dropWas(Object.keys(p) as (keyof F)[]); // (batch 35 §26) edited here");
     expect(t).toContain('dropWas("all"); // (batch 35 §26) on Save');
