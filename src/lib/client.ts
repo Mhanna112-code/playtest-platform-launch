@@ -49,6 +49,15 @@ export const resetToLogin = () => {
 
 /** This page load's id: the server never stops a press for what this same tab did ("another tab" only). */
 export const TAB = typeof window === "undefined" ? "" : Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
+/**
+ * (Owner, Oct 31, batch 35 §51) This PAGE load's id, sent with every press (x-load): the tab's id plus a new part for every page drawn in it (an admin page moving to
+ * another page in the same tab, Back included, starts a new one). Admins' "this page's own" change means one made from this same page load.
+ */
+let PAGE_LOAD = TAB;
+export const pageLoad = () => PAGE_LOAD;
+export const newPageLoad = () => {
+  if (typeof window !== "undefined") PAGE_LOAD = `${TAB}.${Math.random().toString(36).slice(2, 8)}${Date.now().toString(36)}`;
+};
 
 /**
  * (Owner, Oct 29, batch 27 section 1) While the page shows an open new-terms offer (the Switch / Keep box), Send and every call press don't go out: the page goes up
@@ -76,7 +85,7 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}) },
+      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {

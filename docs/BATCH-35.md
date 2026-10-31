@@ -469,6 +469,37 @@ the developer changes the questions (and the tester switches to them), answers t
 
 Tests: tests/batch35-admin-tabs.test.ts.
 
+## §49 Each admin action keeps its own reason (owner, Oct 31)
+- The admin test Timeline quoted the test's one `adminNote` on a "paused" line whenever the pause was within 5 s of it, so a Stop right after a Pause made the
+  pause line quote the stop's reason. Now every team Pause and Stop keeps its reason with its own event (an ActionLog row, "test" `admin-note`, keyed by the
+  event's id; "" when none was given; no migration), and the Timeline quotes that event's own reason. A Pause without a reason never borrows a later Stop's.
+- Older events without a stored reason keep today's behaviour (the test's note: a pause within 5 s of the test's pause time, a stop when the test was stopped).
+
+## §50 The device icon in the needs pop-up (owner, Oct 31)
+- "A device this test runs on" (GapDialog, devices only) shows the device icon (lucide Monitor, as on the join page's device badge) instead of the language
+  icon. "A language this test needs" and "What this test needs" (both kinds) keep the language icon.
+
+## §51 Admins' "same page" is the same page load (owner, Oct 31)
+- §45's "a change from this same page never stops its own presses" now means the same PAGE LOAD, not the same browser tab: every browser press sends x-load
+  (the tab's id plus a new part for each page drawn in it; src/app/admin/PageLoad.tsx starts a new one whenever an admin page is drawn, Back included), and
+  the press markers (ActionLog "admin-tab") and the "own" check key on it. A change made in the same tab before a reload or from another page counts as "in
+  another tab" when the pressing page didn't show it: "You suspended the developer side in another tab at 3:20 AM." A press without x-load (an older page)
+  falls back to its x-tab; without either (an API call) only other admins count, as before.
+- The cases: (a) suspended in window A, window B (loaded before) presses Delete account without redrawing: stops once with "You suspended the developer side in
+  another tab at …", the second press goes ahead; (b) window B redrew after the suspension (its page time is later): Delete goes straight through; (c) same
+  tab, suspend, reload, Delete: goes through (the reloaded page's time is after the change); (d) a press from the page that made the change never stops itself.
+- Note: the tab id (`TAB` in src/lib/client.ts) is made when the page's script loads, so a full reload already gave a new one; it lived on across in-app
+  navigation (and Back) inside the tab. The owner's Delete stop was case (a): the page's time was before the suspension (it hadn't redrawn), which is correct.
+
+
+## §52 One pick-list chip (owner, Oct 31)
+- On Post / Edit, Language requirements and Technology requirements (the shared Choices list) were squarer (rounded-lg) with only a green outline when ticked,
+  unlike Categories' round pills. Every pick list now uses one chip style, `PICK_CHIP` in src/components/Choices.tsx (Categories' pill: rounded-full, green
+  outline and fill when ticked): Categories, Language and Technology requirements, the profile's devices and languages (Choices), Find's state ticks and the
+  Invite panel's filter ticks. No other behaviour change.
+
+Tests: tests/batch35-reasons-page-load.test.ts.
+
 ## §53 One listing line also covers the terms (owner, Oct 31)
 
 - No "<Dev> changed the terms: questions changed, NDA changed" line anywhere: one save is the one listing line ("<Dev> edited the listing · See it", §34) plus its

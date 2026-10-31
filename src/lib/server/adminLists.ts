@@ -7,6 +7,7 @@ import { NOT_LISTED, termsLine } from "@/lib/rules";
 import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/limits";
 import { SUBSCRIPTION_ENDED, adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
+import { notesOf } from "./adminRace";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
 import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine, disputeRangeLine } from "@/lib/rules";
 import { callMinutesOf } from "@/lib/callMeasure";
@@ -725,6 +726,14 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       db.dispute.findMany({ where: { contractId: { in: ids } }, include: { submission: { select: { kind: true } } } }),
       db.accountEvent.findMany({ where: { userId: t.developerId, kind: "team-closed" }, orderBy: { createdAt: "asc" } }), // (batch 30 §5)
     ]);
+    // (Batch 35 §49) Each pause's and stop's own reason, kept with its event (older events have none: they quote the test's note as before).
+    const notes = await notesOf(events.filter((e) => e.text === "The team paused this test" || e.text === "The team stopped this test").map((e) => e.id));
+    /** ": “reason”" for this event: its own reason when it kept one, else (older events) the test's note when `old` says it is this event's. */
+    const reasonOf = (e: { id: string }, old: boolean) => {
+      const own = notes.get(e.id);
+      const r = own !== undefined ? own : old ? t.adminNote : "";
+      return r ? `: “${r}”` : "";
+    };
     const emails = await adminEmails([...suspensions.map((s) => s.byId), ...actions.map((a) => a.adminId), ...disputes.map((d) => d.decidedById), ...closures.map((x) => x.byId)]);
     /** (Batch 30 §5) The admin who closed open reviews at $0 at that moment (the account history records it right after the pieces). */
     const closedBy = (at: Date) => {
@@ -740,7 +749,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       const s = suspensions.filter((x) => x.createdAt.getTime() <= at.getTime() + 60_000).pop();
       return (s && emails(s.byId)) || "the team";
     };
-    const thirdPerson = (e: { text: string; createdAt: Date }) => {
+    const thirdPerson = (e: { id: string; text: string; createdAt: Date }) => {
       const x = e.text;
       if (x === "Your account is paused") return `${dev}'s developer account was paused (by ${suspendedBy(e.createdAt)})`;
       if (x === "Your tests are running again") return `${dev}'s tests are running again`;
@@ -749,10 +758,10 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       if (x === SUBSCRIPTION_ENDED) return `${dev}'s subscription ended`;
       if (x.startsWith("Your bank reversed your ")) return `${dev}'s bank reversed their ${x.slice("Your bank reversed your ".length)}`;
       if (x.startsWith("You ")) return `${dev} ${x.slice(4)}`;
-      if (x === "The team paused this test") return `${by("pause-test", e.createdAt)} paused this test${t.adminPausedAt && Math.abs(t.adminPausedAt.getTime() - e.createdAt.getTime()) < 5_000 && t.adminNote ? `: “${t.adminNote}”` : ""}`;
+      if (x === "The team paused this test") return `${by("pause-test", e.createdAt)} paused this test${reasonOf(e, !!t.adminPausedAt && Math.abs(t.adminPausedAt.getTime() - e.createdAt.getTime()) < 5_000)}`;
       if (x.startsWith("The team closed ")) return `${closedBy(e.createdAt)} closed ${x.slice("The team closed ".length)}`;
       if (x === "The team lifted the pause on this test") return `${by("unpause-test", e.createdAt)} lifted the pause on this test`;
-      if (x === "The team stopped this test") return `${by("stop-test", e.createdAt)} stopped this test${t.adminStoppedAt && t.adminNote ? `: “${t.adminNote}”` : ""}`;
+      if (x === "The team stopped this test") return `${by("stop-test", e.createdAt)} stopped this test${reasonOf(e, !!t.adminStoppedAt)}`;
       return x.replace(/ rated you$/, ` rated ${dev}`).replace(/\(rated you\)$/, `(rated ${dev})`);
     };
     const decisions = events.filter((e) => e.kind === "admin" && e.text.startsWith("The team decided"));

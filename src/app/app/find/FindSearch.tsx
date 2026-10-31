@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { FIND_SEARCH_LABEL, FIND_SEARCH_MAX, TEST_STATES, stateKey, type TestState } from "@/lib/findSearch";
+import { PICK_CHIP } from "@/components/Choices";
 
 /** The page's address with `changes` applied (empty values dropped), keeping the chips' and filters' other params. */
 function hrefWith(params: Record<string, string | undefined>, changes: Record<string, string>) {
@@ -49,10 +50,10 @@ export function StateTicks({ params, ticked }: { params: Record<string, string |
     router.replace(hrefWith(params, { states: TEST_STATES.filter((x) => next.includes(x)).map(stateKey).join(",") }), { scroll: false });
   };
   return (
-    <fieldset className="flex flex-wrap items-center gap-x-4 gap-y-2" data-state-ticks="">
+    <fieldset className="flex flex-wrap items-center gap-2" data-state-ticks="">
       <legend className="sr-only">States</legend>
       {TEST_STATES.map((s) => (
-        <label key={s} className="flex items-center gap-1.5 text-sm text-slate-300">
+        <label key={s} className={PICK_CHIP}>
           <input type="checkbox" checked={ticked.includes(s)} onChange={() => flip(s)} /> {s}
         </label>
       ))}

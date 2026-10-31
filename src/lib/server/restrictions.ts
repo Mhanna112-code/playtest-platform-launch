@@ -8,7 +8,7 @@ import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./test
 import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
 import { accountEvent } from "./reports";
-import { accountChangesSince, adminEmail, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
+import { accountChangesSince, adminEmail, keepNote, tabOf, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
 //   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; (owner, Oct 28 afternoon) under
@@ -107,7 +107,7 @@ export type SeenFrom = { since: Date; from: "preview" | "page"; /** (batch 35 §
 export function seenFromBody(body: Record<string, unknown>): SeenFrom | null {
   const since = typeof body.since === "string" ? new Date(body.since) : null;
   if (!since || isNaN(since.getTime())) return null;
-  return { since, from: body.from === "preview" ? "preview" : "page", tab: typeof body.tab === "string" ? body.tab.slice(0, 64) : "" };
+  return { since, from: body.from === "preview" ? "preview" : "page", tab: tabOf(body) }; // (batch 35 §51) the page load
 }
 const cap = (s: string) => (s.includes("@") ? s : s.charAt(0).toUpperCase() + s.slice(1)); // an email stays as it is
 /** "Since your Preview, bo@… reinstated that account's developer side at Oct 28, 3:10 PM." */
@@ -386,7 +386,8 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     if (now.status === "stopped") throw await stoppedRefusal(now, presserOf(adminId, seen));
     if (now.adminPausedAt) throw await pausedRefusal(now, presserOf(adminId, seen));
-    await recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId });
+    const ev = await recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId });
+    await keepNote(tx, ev.id, adminId, note); // (batch 35 §49) the pause's own reason, with its event
   });
   await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
@@ -441,7 +442,8 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
     // (Owner, Oct 28) Not an "admin decision" stop-once: a stopped test always refuses what it does not allow, and Pay / Reject carry on without stopping for it.
-    await recordEvent(tx, testId, "stopped", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note, adminStoppedById: adminId });
+    const ev = await recordEvent(tx, testId, "stopped", "The team stopped this test", true, { status: "stopped", stoppedAt: new Date(), adminStoppedAt: new Date(), adminNote: note, adminStoppedById: adminId });
+    await keepNote(tx, ev.id, adminId, note); // (batch 35 §49) the stop's own reason, with its event
     return list;
   });
   await tellCancelled(cancelled, "stopped");

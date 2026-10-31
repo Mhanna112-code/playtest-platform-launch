@@ -145,7 +145,7 @@ export async function recordEvent(tx: Tx, testId: string, kind: string, text: st
     const t = await tx.test.update({ where: { id: testId }, data: { ...(bump ? { version: { increment: 1 } } : {}), ...extra } });
     if (bump) version = t.version;
   }
-  await tx.testEvent.create({ data: { testId, kind, text, version, contractId, ...(tab ? { tab } : {}) } });
+  return tx.testEvent.create({ data: { testId, kind, text, version, contractId, ...(tab ? { tab } : {}) } }); // (batch 35 §49) the event, for a reason kept with it
 }
 
 const working = (testId: string) => ({ testId, status: "working" });
