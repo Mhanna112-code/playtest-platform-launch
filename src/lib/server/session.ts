@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { HttpError } from "./http";
+import { trimDraftsAtSignIn } from "./kept";
 
 export const SESSION_COOKIE = "pt_session";
 export const SESSION_DAYS = 30;
@@ -12,6 +13,8 @@ export async function createSession(userId: string) {
   const token = newToken();
   const expiresAt = new Date(Date.now() + SESSION_DAYS * 86_400_000);
   await db.session.create({ data: { tokenHash: hashToken(token), userId, expiresAt } });
+  // (Batch 35 §8) Signing in: the person's drafts come back marked "Draft" (lib/keptText.ts SIGN_IN_DRAFTS: whole, or written parts only). Never stops the sign-in.
+  await trimDraftsAtSignIn(userId).catch(() => null);
   return { token, expiresAt };
 }
 

@@ -11,7 +11,8 @@ import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from 
 import { fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
-import { NotSentTag, useKept } from "@/lib/useKept";
+import { DraftTag, NotSentTag, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
+import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
@@ -94,6 +95,20 @@ const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 // Where each form field's note shows (parts and prices share one place).
 const NOTE_AT: Partial<Record<keyof F, string>> = { written: "parts", writtenPrice: "parts", recording: "parts", recordingPrice: "parts", live: "parts", liveRate: "parts", writtenRequired: "parts", recordingRequired: "parts", liveRequired: "parts", questions: "questions", requiredQs: "questions" };
 
+/**
+ * (Owner, Oct 30, batch 35 §8) After signing in, where the form marks "Draft" (with "Use saved"): every field that came back (SIGN_IN_DRAFTS, lib/keptText.ts) and
+ * still differs from the saved value, by the place its mark shows (the parts and prices share one; the questions and their Required ticks share one).
+ */
+export function draftMarks(f: F, base: F): Record<string, (keyof F)[]> {
+  const out: Record<string, (keyof F)[]> = {};
+  for (const k of Object.keys(f) as (keyof F)[]) {
+    if (!signInKeeps(k) || same(f[k], base[k])) continue;
+    const where = NOTE_AT[k] ?? k;
+    (out[where] ??= []).push(k);
+  }
+  return out;
+}
+
 // The parts, as the full app's Parts and prices cards (prices-widget.tsx there), with lean's names and price limits.
 const PARTS = [
   { on: "written", req: "writtenRequired", price: "writtenPrice", title: "Written report", help: "Answers to your questions", ph: "10.00", unit: "", min: "1", max: "1000", key: "written", lowMsg: partLowLine("written answers"), highMsg: partHighLine("written answers") },
@@ -170,7 +185,8 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // (Batch 16 section 18) The free keys as of the page load (or its last stop box): Save's stop always lists what changed in them since.
   const keysSeen = useRef<string[]>(edit?.keys.free.map((k) => k.value) ?? []);
   const [stopDetails, setStopDetails] = useState<Record<string, NoteItem[]>>({});
-  // (NEXT-UI 10) The form typed and not sent is kept on the server ("Not sent yet"), for Post and for each Edit.
+  // (NEXT-UI 10) The form typed and not sent is kept on the server, for Post and for each Edit. (Owner, Oct 30, batch 35 §8) After signing in, it comes back with
+  // each changed field marked "Draft" with "Use saved" (whether selections come back too: SIGN_IN_DRAFTS, lib/keptText.ts).
   const fb = freeBoxCheck(keysText, freeLoaded, keysData);
   const keysChanged = edit ? fb.added.length > 0 || fb.removed.length > 0 : parseKeys(keysText).length > 0;
   const keep = useKept(edit ? `test:edit:${edit.id}` : draft ? `test:draft:${draft.id}` : "test:new", { f, touched: [...touched], keysText }, touched.size === 0 && !keysChanged, (v) => {
@@ -191,6 +207,28 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     setF((o) => ({ ...o, [k]: base[k] }));
     setTouched((t) => new Set([...t].filter((x) => x !== k)));
     setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([x]) => x !== k)) as typeof o);
+  };
+  /**
+   * (Owner, Oct 30, batch 35 §8) After signing in, each field whose draft came back and still differs from the saved value: "Draft" and "Use saved" (the saved
+   * value back). Fields that share one place (the parts and prices; the questions and their Required ticks) share one mark; "Use saved for all" at Save puts the
+   * whole form back. Which fields come back at all: SIGN_IN_DRAFTS (lib/keptText.ts).
+   */
+  const savedKeysText = edit ? freeLoaded.join("\n") : "";
+  const marks = keep.signedIn ? draftMarks(f, base) : {};
+  const draftKeys = Object.values(marks).flat();
+  const putSaved = (ks: (keyof F)[]) => {
+    setF((o) => ({ ...o, ...Object.fromEntries(ks.map((k) => [k, base[k]])) }));
+    setTouched((t) => new Set([...t].filter((x) => !ks.includes(x))));
+    setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([x]) => !ks.includes(x as keyof F))) as typeof o);
+  };
+  const draftMark = (where: string) => {
+    const ks = marks[where] ?? [];
+    return ks.length ? <DraftTag field={where} onUseSaved={() => putSaved(ks)} /> : null;
+  };
+  const keysDraft = keep.signedIn && keysChanged ? <DraftTag field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
+  const putAllSaved = () => {
+    putSaved(draftKeys);
+    setKeysText(savedKeysText);
   };
   const leave = (k: string) => setBlurred((b) => (b.has(k) ? b : new Set([...b, k])));
 
@@ -520,7 +558,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // (Owner) Every box with a range says it next to it and is checked as soon as it's left (FieldChecks).
   const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number; disabled?: boolean; after?: React.ReactNode; /** (Batch 30 §18) the field's minimum: its counter shows it while under */ min?: number } = {}) => (
     <div>
-      <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}{opts.after}</label>
+      <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}{opts.after}{draftMark(k)}</label>
       <div className="flex flex-wrap items-center gap-2">
         <input id={k} type={opts.type ?? "text"} disabled={opts.disabled} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} maxLength={opts.max}
           onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} onBlur={() => leave(k)} {...(opts.req ? { "data-required": "" } : {})} {...opts.attrs} />
@@ -574,7 +612,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {text("productName", "Product", { req: true, ph: "Harbor Run", max: LIMITS.productName, attrs: { "data-required-msg": "Enter the product name." } })}
         {text("title", "Name of this test", { req: true, ph: "First 3 levels", max: LIMITS.testName, min: LISTING_MIN_CHARS, attrs: { "data-required-msg": "Give the test a title.", "data-match": `^${TITLE_FIELD}: at least`, ...minAttrs("title", TITLE_FIELD) } })}
         <div>
-          <label className="label req" htmlFor="description">What should testers do?{left("description")}</label>
+          <label className="label req" htmlFor="description">What should testers do?{left("description")}{draftMark("description")}</label>
           <textarea id="description" rows={4} disabled={fieldLocked("description")} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg={DESCRIPTION_REQUIRED} data-match={`^${STEPS_FIELD}: at least`} {...minAttrs("description", STEPS_FIELD)} onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
           <p className="mt-1 text-right text-xs text-slate-500" data-steps-count="">{f.description.trim().length < LISTING_MIN_CHARS ? minCounter(f.description.trim().length) : `${f.description.length.toLocaleString("en-US")} / ${LIMITS.whatToDo.toLocaleString("en-US")}`}</p>
           {lockNote("description")}
@@ -585,7 +623,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {lockNote("buildUrl")}
         {/* The full app's Categories: a row of tick boxes, at least one. */}
         <fieldset id="categories" data-field-group="" className="space-y-2">
-          <legend className="label req">Categories</legend>
+          <legend className="label req">Categories{draftMark("categories")}</legend>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((o) => (
               <label key={o} className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm text-slate-300 has-[:checked]:border-indigo-400/60 has-[:checked]:bg-indigo-500/15 has-[:checked]:text-white">
@@ -597,25 +635,25 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         </fieldset>
         {/* (Owner, Oct 28 afternoon) Required languages and devices are limited fields: each locks after its own 3rd change since testers joined. */}
         <fieldset id="languages-group" disabled={fieldLocked("languages")} data-locked={fieldLocked("languages") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("languages") ? "p-2 ring-1 ring-rose-400" : ""}`}>
-          <Choices label="Language requirements (any one)" aside={left("languages")} options={LANGUAGES} value={f.languages} onChange={(languages) => set({ languages })} />
+          <Choices label="Language requirements (any one)" aside={<>{left("languages")}{draftMark("languages")}</>} options={LANGUAGES} value={f.languages} onChange={(languages) => set({ languages })} />
           {lockNote("languages")}
           {note("languages")}
         </fieldset>
         <fieldset id="devices-group" disabled={fieldLocked("devices")} data-locked={fieldLocked("devices") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("devices") ? "p-2 ring-1 ring-rose-400" : ""}`}>
-          <Choices label="Technology requirements: devices, platforms or skills (any one; none ticked = any)" aside={left("devices")} options={DEVICES} value={f.devices} onChange={(devices) => set({ devices })} />
+          <Choices label="Technology requirements: devices, platforms or skills (any one; none ticked = any)" aside={<>{left("devices")}{draftMark("devices")}</>} options={DEVICES} value={f.devices} onChange={(devices) => set({ devices })} />
           {lockNote("devices")}
           {note("devices")}
         </fieldset>
         {/* (4) Mature (18+): ticking it shows the required "why" at once. */}
         <div className="space-y-1.5">
           <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-ink-200">
-            <input type="checkbox" checked={f.mature} onChange={(e) => set({ mature: e.target.checked })} /> Mature (18+) content
+            <input type="checkbox" checked={f.mature} onChange={(e) => set({ mature: e.target.checked })} /> Mature (18+) content{draftMark("mature")}
           </label>
           {/* (Owner, Oct 28, batch 16 section 9) One line that doesn't contradict itself. */}
           <p className="text-xs text-slate-500" data-mature-hint="">Tick this if your test has mature content, and say why. Never allowed: sexual content involving minors, illegal content, real-world gore. Other graphic content must be marked Mature.</p>
           {f.mature && (
             <div>
-              <label className="label req" htmlFor="matureWhy">Why is this test mature?</label>
+              <label className="label req" htmlFor="matureWhy">Why is this test mature?{draftMark("matureWhy")}</label>
               {/* (Batch 16 section 9) At least 5 characters: the red line under the box says which rule (empty, or too short), the same lines as the server. */}
               <textarea id="matureWhy" rows={2} className="input" maxLength={LIMITS.matureWhy} value={f.matureWhy} placeholder="e.g. Violence in the boss fights; testers must be 18 or older"
                 data-required="" data-required-msg={MATURE_WHY_REQUIRED} data-min-chars={String(MATURE_WHY_MIN)} data-msg={MATURE_WHY_SHORT} onBlur={() => leave("matureWhy")} onChange={(e) => set({ matureWhy: e.target.value })} />
@@ -634,7 +672,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {/* (Batch 30 §9) Locked, EVERY input in the group is disabled (the ticks, Required, prices, Free and the over-$200 tick); a note's Use theirs still works. */}
         <fieldset id="parts" data-field-group="" className="space-y-2 scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300" data-locked={fieldLocked("parts") ? "" : undefined}>
           {/* (Batch 14) Parts and prices: ONE limited counter for the part ticks, prices, Required and Free ticks, the live rate and call length. */}
-          <legend className="label req">Parts and prices{left("parts")}</legend>
+          <legend className="label req">Parts and prices{left("parts")}{draftMark("parts")}</legend>
           {lockNote("parts")}
           {PARTS.map((part) => {
             const on = f[part.on] as boolean;
@@ -684,7 +722,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         </fieldset>
         {f.written && (
           <div id="questions-group" data-locked={fieldLocked("questions") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("questions") ? "p-2 ring-1 ring-rose-400" : ""}`}>
-            <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}</label>
+            <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}{draftMark("questions")}</label>
             <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : undefined} value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
             {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
               <ul className="mt-2 space-y-1">
@@ -733,7 +771,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         </div>
         {edit && testersIn > 0 && <p className="note">{testersIn} tester{testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}
         <div>
-          <label className="label" htmlFor="joinMode">How testers join{!perks && <> <span className="text-xs font-normal text-slate-400">Approved only:</span> <SubscribersTag /></>}</label>
+          <label className="label" htmlFor="joinMode">How testers join{!perks && <> <span className="text-xs font-normal text-slate-400">Approved only:</span> <SubscribersTag /></>}{draftMark("joinMode")}</label>
           <select id="joinMode" className="input max-w-xs" value={f.joinMode} onChange={(e) => set({ joinMode: e.target.value })}>
             <option value="anyone">Anyone can join (they press Join)</option>
             <option value="apply">Approved only (you accept or decline)</option>
@@ -747,7 +785,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         <h2>Optional</h2>
         {/* (Owner, Oct 29, batch 13 section 5) The NDA in its own card, as in the full app; the Switch / Keep offer stays; (batch 34 §15) no change limit on the NDA. */}
         <section className="space-y-3 rounded-xl border border-white/10 p-3" data-nda-card="">
-          <h3 className="flex items-center gap-2 font-semibold text-white"><ShieldCheck className="h-5 w-5 text-emerald-300" /> <label htmlFor="ndaText">Keep it confidential? (NDA, optional)</label></h3>
+          <h3 className="flex items-center gap-2 font-semibold text-white"><ShieldCheck className="h-5 w-5 text-emerald-300" /> <label htmlFor="ndaText">Keep it confidential? (NDA, optional)</label>{draftMark("ndaText")}</h3>
           <ul className="list-disc space-y-0.5 pl-5 text-sm text-slate-400">
             <li>An NDA stops testers sharing your build or what they saw. They must accept it before joining.</li>
             <li>With or without one, <strong className="text-slate-200">you can always use the feedback you receive</strong> to improve your product.</li>
@@ -762,12 +800,13 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           <KeyBoxes data={keysData} typed={keysText} onType={(t) => setKeysText(t)} onBlur={() => leave("keys")} openSpots={openN} line={keysBad ? keyLine : ""} warnings={fb.warnings} note={note("keys")} />
         ) : (
           <div>
-            <label className="label" htmlFor="accessKeys">Access keys (one per line; each joining tester gets one)</label>
+            <label className="label" htmlFor="accessKeys">Access keys (one per line; each joining tester gets one){keysDraft}</label>
             <textarea id="accessKeys" rows={3} className={"input font-mono" + (keysBad ? " field-bad" : "")} data-red-msg={keysBad ? keyLine : undefined} value={keysText} onBlur={() => leave("keys")} onChange={(e) => setKeysText(e.target.value)} placeholder={"KEY-1111\nKEY-2222"} />
             <p className="mt-1 text-xs text-slate-500">Optional. With keys, there must be at least as many keys as spots.</p>
             {keysBad && redLine(keyLine)}
           </div>
         )}
+        {edit && keysDraft}
       </div>
 
       <div className="space-y-2">
@@ -792,7 +831,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           {/* (Batch 20 section 22) Unchanged: visibly greyed (the app's disabled style), with its tooltip. */}
           <button className={`btn ${nothingChanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined} data-save-idle={nothingChanged ? "" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
           {/* (Batch 20 section 22) What the kept draft means here: Edit's typed changes aren't saved yet; Post's draft isn't posted yet. */}
-          {keep.restored && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}
+          {keep.restored && !keep.signedIn && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}
+          {/* (Batch 35 §8) After signing in, with fields still marked Draft: the whole form back to the saved values. */}
+          {(draftKeys.length > 0 || !!keysDraft) && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={putAllSaved}>{USE_SAVED_ALL_LABEL}</button>}
         </div>
         {saved && <p className="ok">{saved}</p>}
         {/* (Batch 30 §9) The line names the change (the field name scrolls to it, marked) with Put it back beside it; then the other changes save. */}

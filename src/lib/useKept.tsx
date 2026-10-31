@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { pageUser } from "@/lib/client";
+import { SIGNED_IN_MARK } from "@/lib/keptText";
 
 /** (Batch 35 §6) Sent before the tab reloads to the other side: every mounted form sends its draft at once (each adds its request to `waits`). */
 export const KEPT_FLUSH_EVENT = "kept-flush";
@@ -16,13 +17,17 @@ export async function flushKept(timeoutMs = 1500) {
 
 /**
  * (NEXT-UI 10) A form's typed-but-unsent text, kept on the server per person and form (any device, and after signing in
- * again): the form starts from it with the full app's "Not sent yet" tag. Sending clears it (`clear()`, awaited before the
+ * again): the form starts from it with the "Draft" tag (batch 35 §8; it read "Not sent yet"). Sending clears it (`clear()`, awaited before the
  * page moves on). Only for: written answers, chat messages, dispute text, rating comments, reject reasons, the Post / Edit
  * form (the server refuses any other key). `pristine`: nothing typed yet (nothing to keep); `restore` puts a kept draft back
  * (only while the form is still pristine, so what was typed meanwhile is never overwritten).
+ * (Owner, Oct 30, batch 35 §8) `signedIn`: the draft came back through a sign-in (the server marked it; SIGN_IN_DRAFTS in lib/keptText.ts says what it keeps): the
+ * form shows "Draft" with "Use saved" at each changed box. The mark stays on the draft (every save keeps it) until it's sent or emptied.
  */
 export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v: T) => void) {
   const [restored, setRestored] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const signedInRef = useRef(false);
   const ready = useRef(false); // the server's copy has been looked at
   const saved = useRef(false); // there is a copy on the server
   const pristineRef = useRef(pristine);
@@ -33,6 +38,11 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
   const restoreRef = useRef(restore);
   restoreRef.current = restore;
 
+  const mark = useCallback((data: unknown) => (data && typeof data === "object" && !Array.isArray(data) && signedInRef.current ? { ...(data as object), [SIGNED_IN_MARK]: true } : data), []);
+  const forget = useCallback(() => {
+    signedInRef.current = false;
+    setSignedIn(false);
+  }, []);
   const send = useCallback((data: unknown) => fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data }), keepalive: true }).catch(() => null), [key]);
 
   useEffect(() => {
@@ -45,6 +55,9 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
         if (r?.data != null) {
           saved.current = true;
           if (pristineRef.current && !cleared.current) {
+            const after = !!(r.data && typeof r.data === "object" && (r.data as Record<string, unknown>)[SIGNED_IN_MARK]);
+            signedInRef.current = after;
+            setSignedIn(after);
             restoreRef.current(r.data);
             setRestored(true);
           }
@@ -70,20 +83,21 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
       if (latest.current.pristine) {
         saved.current = false;
         setRestored(false);
+        forget();
         void send(null);
       } else {
         saved.current = true;
-        void send(latest.current.value);
+        void send(mark(latest.current.value));
       }
     }, 700);
     return () => clearTimeout(t);
-  }, [json, pristine, send]);
+  }, [json, pristine, send, mark, forget]);
 
   // Leaving the page with something unsaved: send it now.
   useEffect(() => {
     const flush = () => {
       if (!ready.current || cleared.current || (latest.current.pristine && !saved.current)) return null;
-      return send(latest.current.pristine ? null : latest.current.value);
+      return send(latest.current.pristine ? null : mark(latest.current.value));
     };
     const onHide = () => document.visibilityState === "hidden" && void flush();
     const onLeave = () => void flush();
@@ -100,20 +114,41 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
       window.removeEventListener("pagehide", onLeave);
       window.removeEventListener(KEPT_FLUSH_EVENT, onFlush);
     };
-  }, [send]);
+  }, [send, mark]);
 
   /** The form was sent: forget the draft (wait for this before the page reloads). */
   const clear = useCallback(async () => {
     cleared.current = true;
     setRestored(false);
+    forget();
     if (saved.current || !ready.current) await send(null);
     saved.current = false;
-  }, [send]);
+  }, [send, forget]);
 
-  return { restored, clear };
+  return { restored, signedIn, clear };
 }
 
-/** The full app's "Not sent yet" tag. */
-export function NotSentTag({ label = "Not sent yet" }: { /** (Batch 20 section 22) "Not saved yet" on Edit, "Not posted yet" on Post */ label?: string }) {
+/** (Batch 35 §8) The tag on a restored draft. */
+export const DRAFT_LABEL = "Draft";
+/** (Batch 35 §8) Puts the box back to its saved value (a box with nothing saved yet empties). */
+export const USE_SAVED_LABEL = "Use saved";
+/** (Batch 35 §8) Edit / Post: every field marked Draft back to its saved value. */
+export const USE_SAVED_ALL_LABEL = "Use saved for all";
+
+/** The tag on a restored draft: "Draft" (batch 35 §8; it read "Not sent yet"). */
+export function NotSentTag({ label = DRAFT_LABEL }: { /** (Batch 20 section 22) "Not saved yet" on Edit, "Not posted yet" on Post */ label?: string }) {
   return <span data-not-sent="draft" className="badge ml-2 border-amber-300/50 bg-amber-300/10 text-amber-200">{label}</span>;
+}
+
+/**
+ * (Owner, Oct 30, batch 35 §8) A written box's draft that came back after signing in: the "Draft" tag, and with `onUseSaved` the "Use saved" button beside it
+ * (the box goes back to its saved value; nothing saved yet: it empties). `field`: which box (Edit has one per field).
+ */
+export function DraftTag({ onUseSaved, field }: { onUseSaved?: () => void; field?: string }) {
+  return (
+    <span className="inline-flex items-center" data-draft-tag={field ?? ""}>
+      <NotSentTag />
+      {onUseSaved && <button type="button" className="ml-2 text-xs font-normal text-sky-300 underline" data-use-saved={field ?? ""} onClick={onUseSaved}>{USE_SAVED_LABEL}</button>}
+    </span>
+  );
 }

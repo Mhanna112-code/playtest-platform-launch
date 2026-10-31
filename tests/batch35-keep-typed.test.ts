@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as keptPOST } from "@/app/api/kept/route";
 import { KEPT_FLUSH_EVENT, flushKept } from "@/lib/useKept";
-import { KEPT_TYPED_LINE, TYPED_TTL_MS, dropStaleTyped, keepable, restoreTyped, saveTyped, snapshotOf, typedKey, type FieldEl, type StoreLike } from "@/lib/keepTyped";
+import { TYPED_TTL_MS, dropStaleTyped, keepable, restoreTyped, saveTyped, snapshotOf, typedKey, type FieldEl, type StoreLike } from "@/lib/keepTyped";
 import { json, makeUser, req } from "./helpers";
 
-// Batch 35 §6 (owner, Oct 30): a tab that moves because the account switched sides, or because another account signed in, in another tab, keeps what was typed:
-// the forms' drafts are sent first (side switch only), the other typed fields are kept in the tab for that same account, side and path.
+// Batch 35 §6 (owner, Oct 30): a tab that moves because the account switched sides in another tab keeps what was typed: the forms' drafts are sent first, the
+// other typed fields are kept in the tab for that same account, side and path. (§8: the side switch only; another account's sign-in snapshots nothing.)
 // The project has no DOM test environment: the helpers take plain field and storage objects, and the wiring is checked in the source.
 
 const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
@@ -95,7 +95,6 @@ describe("batch 35 §6: what was typed is kept before the tab moves", () => {
     expect(a[0].events).toEqual(["input", "change"]);
     expect(a[0].attrs["data-kept-typed"]).toBe("");
     expect(s.map.has(keyA)).toBe(false);
-    expect(KEPT_TYPED_LINE).toBe("Kept what you typed before you switched.");
   });
 
   it("never overwrites what was typed since; fields not drawn yet stay kept; an hour later every snapshot goes, any account's", () => {
@@ -155,19 +154,21 @@ describe("batch 35 §6: the forms' drafts are sent before a side switch reloads 
     expect(Date.now() - t).toBeLessThan(1000);
   });
 
-  it("each mounted form listens; its requests name the page's account; SessionWatch keeps before both moves, and sends drafts only on a side switch", () => {
+  it("each mounted form listens; its requests name the page's account; SessionWatch keeps (and sends the drafts) before a side switch only (batch 35 §8)", () => {
     const kept = src("lib/useKept.tsx");
     expect(kept).toContain("window.addEventListener(KEPT_FLUSH_EVENT, onFlush)");
     expect(kept).toContain('headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data }), keepalive: true');
     expect(kept).toContain('{ cache: "no-store", headers: uidHeader() }');
     const watch = src("components/SessionWatch.tsx");
-    const sideAt = watch.indexOf("await keepTypedBeforeLeaving(userId, sideRef.current, pathRef.current, true);");
+    const sideAt = watch.indexOf("await keepTypedBeforeSideSwitch(userId, sideRef.current, pathRef.current);");
     expect(sideAt).toBeGreaterThan(0);
     expect(watch.indexOf("window.location.reload()", sideAt)).toBeGreaterThan(sideAt);
-    const acctAt = watch.indexOf("await keepTypedBeforeLeaving(userId, sideRef.current, pathRef.current, false);");
+    // (Batch 35 §8) Another account signing in: nothing is snapshotted (this tab's snapshots go instead).
+    const acctAt = watch.indexOf("window.location.replace(landingOfNewSignIn())");
     expect(acctAt).toBeGreaterThan(0);
-    expect(watch.indexOf("window.location.replace(landingOfNewSignIn())", acctAt)).toBeGreaterThan(acctAt);
-    expect(watch).toContain("if (sameAccount) await flushKept()");
+    expect(watch.slice(watch.lastIndexOf("s.userId !== userId", acctAt), acctAt)).toContain("forgetTyped();");
+    expect(watch.slice(watch.lastIndexOf("s.userId !== userId", acctAt), acctAt)).not.toContain("saveTyped");
+    expect(watch).toContain("await flushKept().catch(() => null);");
     expect(watch).toContain("typedKey(userId, side, path)");
   });
 

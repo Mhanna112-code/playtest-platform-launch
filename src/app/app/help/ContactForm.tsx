@@ -4,7 +4,7 @@ import { Send } from "lucide-react";
 import { api, errOf } from "@/lib/client";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
-import { NotSentTag, useKept } from "@/lib/useKept";
+import { DraftTag, useKept } from "@/lib/useKept";
 
 /** "Contact us": a topic and the message. (Batch 16 section 10) A mistake is red at its box, with the server's own line, and listed under Send. */
 export function ContactForm({ topics }: { topics: readonly string[] }) {
@@ -47,7 +47,7 @@ export function ContactForm({ topics }: { topics: readonly string[] }) {
         <textarea id="message" required minLength={10} maxLength={3000} data-required="" data-required-msg="Write a few words about what happened (at least 10 characters)." data-min-chars="10" data-msg="Write a few words about what happened (at least 10 characters)." data-match="few words|keep it to" className="input min-h-32" value={message} onChange={(e) => setMessage(e.target.value)}
           placeholder="What happened, and what you'd like us to do. Include amounts and dates if it's about a payment." />
       </label>
-      <div className="flex flex-wrap items-center"><button className="btn" disabled={busy}><Send className="h-4 w-4" /> {busy ? "Sending…" : "Send to the team"}</button>{keep.restored && <NotSentTag />}</div>
+      <div className="flex flex-wrap items-center"><button className="btn" disabled={busy}><Send className="h-4 w-4" /> {busy ? "Sending…" : "Send to the team"}</button>{keep.restored && (message !== "" || topic !== "") && <DraftTag onUseSaved={keep.signedIn ? () => { setMessage(""); setTopic(""); } : undefined} />}</div>
       <FormMistakes text={err} press="Send to the team" />
     </form>
   );

@@ -1,6 +1,6 @@
 /**
- * (Owner, Oct 30, batch 35 §6) A tab that moves because the account switched sides, or because another account signed in, in another tab, keeps what was typed
- * there. The fields useKept doesn't cover (inputs, text boxes and dropdowns with an id or name inside the page's main content; never passwords, files, hidden
+ * (Owner, Oct 30, batch 35 §6; §8: the side switch only, still signed in; restored silently) A tab that moves because the account switched sides in another tab
+ * keeps what was typed there. The fields useKept doesn't cover (inputs, text boxes and dropdowns with an id or name inside the page's main content; never passwords, files, hidden
  * fields, ticks or card / payment fields) are snapshotted into this tab's sessionStorage before it moves, keyed by the ACCOUNT, the SIDE and the page path,
  * and put back only when that same account, on that same side, shows that same path in this tab again: into fields still empty (a dropdown still on its
  * starting choice), with the input events React needs. Restored or older than an hour, a snapshot goes. Another account never gets one.
@@ -8,7 +8,6 @@
 
 export const TYPED_PREFIX = "pt-typed:";
 export const TYPED_TTL_MS = 3_600_000;
-export const KEPT_TYPED_LINE = "Kept what you typed before you switched.";
 
 /** The snapshot's key: account, side and path ("pt-typed:<user>:<side>:/app/tests/x"). */
 export const typedKey = (userId: string, side: string | null | undefined, path: string) => `${TYPED_PREFIX}${userId}:${side || "-"}:${path}`;
@@ -99,6 +98,21 @@ export function dropStaleTyped(store: StoreLike | null, now = Date.now()) {
       const s = read(store, k);
       if (!s || now - s.at > TYPED_TTL_MS) drop(store, k);
     }
+  } catch {
+    // storage blocked
+  }
+}
+
+/** (Batch 35 §8) Every snapshot in this tab (any account) goes: signed out, or another account signed in. */
+export function dropAllTyped(store: StoreLike | null) {
+  if (!store) return;
+  try {
+    const keys: string[] = [];
+    for (let i = 0; i < store.length; i++) {
+      const k = store.key(i);
+      if (k && k.startsWith(TYPED_PREFIX)) keys.push(k);
+    }
+    for (const k of keys) drop(store, k);
   } catch {
     // storage blocked
   }

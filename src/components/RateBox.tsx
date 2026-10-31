@@ -7,7 +7,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { FIELD } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
-import { NotSentTag, useKept } from "@/lib/useKept";
+import { DraftTag, useKept } from "@/lib/useKept";
 
 /**
  * (NEWEST+5) Rate, as the full app's rating box: 1-5 and an optional note (500 max). A rating that finishes the part
@@ -20,7 +20,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
   const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
   const { press, changes, error, busy } = usePress(p.seenAt);
-  // (NEXT-UI 10) The note typed and not sent is kept on the server ("Not sent yet").
+  // (NEXT-UI 10) The note typed and not sent is kept on the server ("Draft"; batch 35 §8: after signing in, with "Use saved").
   const keep = useKept(`rate:${p.path.replace(/[^A-Za-z0-9]+/g, "-")}${p.body?.contractId ? ":" + String(p.body.contractId) : ""}`, { comment }, comment === "", (v) => setComment(v.comment ?? ""));
   const box = useRef<HTMLDivElement>(null);
   const send = async () => {
@@ -51,7 +51,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
         )}
       </div>
       {p.disabledLine && <p className="text-xs text-ink-400" data-rate-disabled="">{p.disabledLine}</p>}
-      {keep.restored && <p><NotSentTag /></p>}
+      {keep.restored && comment !== "" && <p><DraftTag onUseSaved={keep.signedIn ? () => setComment("") : undefined} /></p>}
       <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} didntGo={p.working} />
       <FormMistakes text={error.startsWith(FIELD) ? error : ""} press={p.working ? "Rate and finish" : "Rate"} />
     </div>

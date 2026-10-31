@@ -6,7 +6,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
-import { NotSentTag, useKept } from "@/lib/useKept";
+import { DraftTag, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerCounter, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
@@ -111,7 +111,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   }, [JSON.stringify(initial), initialNotes]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
-  // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Not sent yet".
+  // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Draft" (batch 35 §8: after signing in, with "Use saved": the saved answers, or empty).
   const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
   // The draft says which questions it was typed for: after a switch to changed questions, an answer never lands under a different question.
   const [typedFor] = useState(questions); // the questions the boxes were made for (a refresh after a switch doesn't re-pair them)
@@ -180,7 +180,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && <NotSentTag />}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftTag onUseSaved={keep.signedIn ? () => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); } : undefined} />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
@@ -267,7 +267,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
         Send the dispute
       </button>
       {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
-      {keep.restored && <NotSentTag />}
+      {keep.restored && reason !== "" && <DraftTag onUseSaved={keep.signedIn ? () => setReason("") : undefined} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <FormMistakes text={err} press="Send the dispute" />
     </details>

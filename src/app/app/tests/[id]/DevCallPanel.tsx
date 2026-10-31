@@ -9,7 +9,7 @@ import { FIELD } from "@/lib/client";
 import { JoinCall } from "@/components/JoinCall";
 import { CalendarPlus } from "lucide-react";
 import { usePress } from "@/lib/usePress";
-import { NotSentTag, useKept } from "@/lib/useKept";
+import { DraftTag, useKept } from "@/lib/useKept";
 import { LivePanel } from "@/components/LivePanel";
 import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
@@ -49,7 +49,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const [ticked, setTicked] = useState<string[]>([]);
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [minutes, setMinutes] = useState("");
-  // (Owner, Oct 28, batch 20 section 18) The typed times, length and ticks survive any reload (kept on the server, "Not sent yet"), and are forgotten once sent.
+  // (Owner, Oct 28, batch 20 section 18) The typed times, length and ticks survive any reload (kept on the server, "Draft"; batch 35 §8: after signing in, with "Use saved"), and are forgotten once sent.
   const keep = useKept<{ rows: RowState[]; minutes: string; ticked: string[] }>(`request:t-${testId}`, { rows, minutes, ticked }, rows.every((r) => !r.when) && !minutes.trim(), (v) => {
     if (Array.isArray(v.rows) && v.rows.length) setRows(v.rows);
     setMinutes(typeof v.minutes === "string" ? v.minutes : "");
@@ -158,7 +158,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             >
               Request a time
             </button>
-            {keep.restored && <NotSentTag />}
+            {keep.restored && <DraftTag onUseSaved={keep.signedIn ? () => { setRows([newRow()]); setMinutes(""); setTicked([]); } : undefined} />}
           </div>
           {ticked.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
           {box("request")}

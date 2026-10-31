@@ -1,12 +1,12 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { setPageUser } from "@/lib/client";
 import { usePathname } from "next/navigation";
 import { restrictionKey } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
 import { BELL_REFRESH, publishBell } from "./BellLink";
 import { flushKept } from "@/lib/useKept";
-import { KEPT_TYPED_LINE, dropStaleTyped, restoreTyped, saveTyped, tabStore, typedKey } from "@/lib/keepTyped";
+import { dropAllTyped, dropStaleTyped, restoreTyped, saveTyped, tabStore, typedKey } from "@/lib/keepTyped";
 
 // (Design doc 2; owner, Oct 27) Signed-in pages stay in step with the account: signing out in any tab signs out every tab and window of the browser
 // (they all go to the sign-in page); signing in (in any tab) brings the tabs waiting on the login page back to where they were; signing in as a
@@ -19,6 +19,7 @@ const KEY = "pt-auth";
 
 /** Tell the other tabs: "in" (someone signed in, landing on `to`) or "out" (signed out). */
 export function announceAuth(event: "in" | "out", to = "") {
+  forgetTyped(); // (Batch 35 §8) this tab's snapshots go at every sign-in and sign-out
   try {
     window.localStorage.setItem(KEY, JSON.stringify({ event, at: Date.now(), to }));
   } catch {
@@ -60,23 +61,30 @@ export function landingOfNewSignIn() {
 }
 
 /**
- * (Owner, Oct 30, batch 35 §6) Before a tab moves because of another tab (the account switched sides; another account signed in), what was typed here is kept:
- * this page's typed fields go into the tab's sessionStorage under THIS account, side and path. On a side switch the forms' drafts are also sent to the server now
- * (still this account). Not on an account change: the browser's cookie is already the other account's, so nothing is sent (each kept request names this page's
- * account, and the server refuses it for another).
+ * (Owner, Oct 30, batch 35 §6 and §8) Before a tab reloads because the account switched sides in another tab (still signed in), what was typed here is kept: this
+ * page's typed fields go into the tab's sessionStorage under THIS account, side and path, and the forms' drafts are sent to the server now. (Batch 35 §8) Never
+ * when another account signs in: nothing is snapshotted then (the server's drafts bring the written boxes back when this person signs in again).
  */
-async function keepTypedBeforeLeaving(userId: string, side: string | null | undefined, path: string, sameAccount: boolean) {
+async function keepTypedBeforeSideSwitch(userId: string, side: string | null | undefined, path: string) {
   try {
     saveTyped(tabStore(), document.querySelector("main"), typedKey(userId, side, path));
   } catch {
     // keeping is a nicety: the tab still moves
   }
-  if (sameAccount) await flushKept().catch(() => null);
+  await flushKept().catch(() => null);
 }
 
-/** (Batch 35 §6) When this account, on this side, shows a path that has a snapshot in this tab: the fields still empty get it back (they may draw a moment later). */
+/** (Batch 35 §8) Signed out, deleted, or another account signed in: this tab's snapshots all go (a later sign-in starts from the server's drafts only). */
+function forgetTyped() {
+  try {
+    dropAllTyped(tabStore());
+  } catch {
+    // storage blocked
+  }
+}
+
+/** (Batch 35 §6) When this account, on this side, shows a path that has a snapshot in this tab: the fields still empty get it back (they may draw a moment later). (§8) Silently. */
 function useRestoreTyped(userId: string, side: string | null | undefined, path: string) {
-  const [kept, setKept] = useState(false);
   useEffect(() => {
     const store = tabStore();
     dropStaleTyped(store);
@@ -84,7 +92,7 @@ function useRestoreTyped(userId: string, side: string | null | undefined, path: 
     const timers = [0, 400, 1200, 3000, 6000].map((ms) =>
       setTimeout(() => {
         try {
-          if (restoreTyped(store, document.querySelector("main"), key, Date.now(), document.activeElement) > 0) setKept(true);
+          restoreTyped(store, document.querySelector("main"), key, Date.now(), document.activeElement);
         } catch {
           // keeping is a nicety
         }
@@ -92,19 +100,13 @@ function useRestoreTyped(userId: string, side: string | null | undefined, path: 
     );
     return () => timers.forEach(clearTimeout);
   }, [userId, side, path]);
-  useEffect(() => {
-    if (!kept) return;
-    const t = setTimeout(() => setKept(false), 10_000);
-    return () => clearTimeout(t);
-  }, [kept]);
-  return { kept, dismiss: () => setKept(false) };
 }
 
 export function SessionWatch({ userId, restriction, side }: { userId: string; name?: string; restriction: string; side?: "developer" | "tester" | null }) {
   const path = usePathname();
   const pathRef = useRef(path);
   pathRef.current = path;
-  const restored = useRestoreTyped(userId, side, path);
+  useRestoreTyped(userId, side, path);
   const restrictionRef = useRef(restriction);
   const sideRef = useRef(side);
   sideRef.current = side;
@@ -128,16 +130,21 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
       }
       // (Batch 29 §28) The bell's number, live on every page.
       if (s.state === "ok" && typeof s.bell === "number") publishBell(s.bell);
-      if (s.state === "deleted") window.location.replace("/login?gone=1");
-      else if (s.state === "out") window.location.replace(`/login?next=${encodeURIComponent(pathRef.current)}`);
-      else if (s.userId && s.userId !== userId) {
-        // A different account signed in elsewhere: switch to it. (Batch 35 §6) What was typed here stays in this tab for this account only.
-        await keepTypedBeforeLeaving(userId, sideRef.current, pathRef.current, false);
+      if (s.state === "deleted") {
+        forgetTyped();
+        window.location.replace("/login?gone=1");
+      } else if (s.state === "out") {
+        forgetTyped();
+        window.location.replace(`/login?next=${encodeURIComponent(pathRef.current)}`);
+      } else if (s.userId && s.userId !== userId) {
+        // A different account signed in elsewhere: switch to it. (Batch 35 §8) Nothing typed here is snapshotted, and this tab's snapshots go: the server's drafts
+        // bring the written boxes back when this person signs in again; another account never sees them.
+        forgetTyped();
         window.location.replace(landingOfNewSignIn());
       } else {
         if (sideRef.current && sideFor({ isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side }, pathRef.current) !== sideRef.current) {
           // (Batch 35 §6) The account switched sides in another tab: this tab reloads to the new side, keeping what was typed.
-          await keepTypedBeforeLeaving(userId, sideRef.current, pathRef.current, true);
+          await keepTypedBeforeSideSwitch(userId, sideRef.current, pathRef.current);
           if (alive) window.location.reload();
           return;
         }
@@ -188,11 +195,5 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
     };
   }, [userId]);
 
-  if (!restored.kept) return null;
-  return (
-    <p role="status" className="fixed bottom-5 left-5 z-40 flex items-center gap-2 rounded-full border border-amber-300/40 bg-slate-900/95 px-4 py-2 text-sm text-amber-200 shadow-xl" data-kept-typed-line="">
-      {KEPT_TYPED_LINE}
-      <button type="button" className="text-xs text-slate-400 underline" onClick={restored.dismiss}>Dismiss</button>
-    </p>
-  );
+  return null;
 }

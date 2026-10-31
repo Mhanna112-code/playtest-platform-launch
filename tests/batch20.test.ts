@@ -859,9 +859,9 @@ describe("batch 20 section 22: a ticked part needs a price; Save looks disabled;
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain('{...(on && !free ? { "data-required": "", "data-required-msg": PART_PRICE_MISSING[part.on] } : {})}');
     expect(form).toContain('<button className={`btn ${nothingChanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || nothingChanged}');
-    expect(form).toContain('{keep.restored && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}');
+    expect(form).toContain('{keep.restored && !keep.signedIn && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}');
     const { NotSentTag } = await import("@/lib/useKept");
-    expect(html(createElement(NotSentTag, {}))).toContain("Not sent yet");
+    expect(html(createElement(NotSentTag, {}))).toContain("Draft"); // (batch 35 §8) it read "Not sent yet"
     expect(html(createElement(NotSentTag, { label: "Not saved yet" }))).toContain("Not saved yet");
   });
 });

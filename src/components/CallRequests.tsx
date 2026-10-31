@@ -6,7 +6,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { FormMistakes } from "@/components/FormMistakes";
 import { FIELD, offerShown } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
-import { NotSentTag, useKept } from "@/lib/useKept";
+import { DraftTag, useKept } from "@/lib/useKept";
 import type { RowJson } from "@/lib/callRows";
 import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallRequestsPanel } from "@/components/CallRequestsPanel";
@@ -35,7 +35,7 @@ export function CallRequests(p: {
   const [minutes, setMinutes] = useState("");
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [ticked, setTicked] = useState<string[]>(p.targets.length === 1 ? [p.targets[0].contractId] : []);
-  // (Owner, Oct 28, batch 20 section 18) The typed times and length survive any reload (kept on the server, "Not sent yet"), and are forgotten once sent.
+  // (Owner, Oct 28, batch 20 section 18) The typed times and length survive any reload (kept on the server, "Draft"; batch 35 §8: after signing in, with "Use saved"), and are forgotten once sent.
   const keep = useKept<{ rows: RowState[]; minutes: string }>(`request:${p.path.split("/").filter(Boolean).pop() ?? ""}`, { rows, minutes }, rows.every((r) => !r.when) && !minutes.trim(), (v) => {
     if (Array.isArray(v.rows) && v.rows.length) setRows(v.rows);
     setMinutes(typeof v.minutes === "string" ? v.minutes : "");
@@ -109,7 +109,7 @@ export function CallRequests(p: {
               data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
             <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
-            {keep.restored && <NotSentTag />}
+            {keep.restored && <DraftTag onUseSaved={keep.signedIn ? () => { setRows([newRow()]); setMinutes(""); } : undefined} />}
           </div>
           {box("request")}
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />

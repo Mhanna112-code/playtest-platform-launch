@@ -3,7 +3,7 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, errOf, newPressId } from "@/lib/client";
-import { NotSentTag, useKept } from "@/lib/useKept";
+import { DraftTag, useKept } from "@/lib/useKept";
 
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
 
@@ -30,7 +30,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
   const pressId = useRef<string | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const count = useRef(0);
-  // (NEXT-UI 10) The message typed and not sent is kept on the server (back after a reload / another device, "Not sent yet").
+  // (NEXT-UI 10) The message typed and not sent is kept on the server (back after a reload / another device, "Draft"; batch 35 §8: after signing in, with "Use saved").
   const keep = useKept(keepKey, { text }, text === "", (v) => setText(v.text ?? ""));
   // Scroll to the newest message when one arrives.
   useEffect(() => {
@@ -91,7 +91,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
         >
           <input id="chat-message" className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
           <button className="btn" disabled={busy || !text.trim()}>Send</button>
-          {keep.restored && <span className="self-center"><NotSentTag /></span>}
+          {keep.restored && text !== "" && <span className="self-center"><DraftTag onUseSaved={keep.signedIn ? () => setText("") : undefined} /></span>}
         </form>
       )}
       {/* (Batch 16 section 10) A message mistake is red at the box (and listed); a refusal stays blue. */}

@@ -2,6 +2,7 @@
 import { LogOut } from "lucide-react";
 import { api } from "@/lib/client";
 import { announceAuth } from "@/components/SessionWatch";
+import { flushKept } from "@/lib/useKept";
 
 /** (Batch 15 section 41, L6) Settings: "Sign out of all devices". */
 export function SignOutAll() {
@@ -9,6 +10,7 @@ export function SignOutAll() {
     <button
       className="btn-secondary"
       onClick={async () => {
+        await flushKept().catch(() => null); // (Batch 35 §8) what was typed this moment is kept before signing out
         await api("/api/auth/logout", { everywhere: true }).catch(() => null);
         announceAuth("out");
         window.location.href = "/login";
@@ -27,6 +29,7 @@ export function SignOut() {
       title="Log out"
       aria-label="Log out"
       onClick={async () => {
+        await flushKept().catch(() => null); // (Batch 35 §8) what was typed this moment is kept before signing out
         await api("/api/auth/logout", {}).catch(() => null);
         announceAuth("out");
         window.location.href = "/login"; // (Owner, Oct 27) every tab and window goes to the sign-in page
