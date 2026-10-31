@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import { displayName, money } from "@/lib/format";
 import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
-import { LISTING_SAVE, parseSave, saveLine } from "@/lib/listingSave";
-import { LISTING_SAVED, parseSaved } from "@/lib/listingPanel";
+import { INFO_FIELDS, LISTING_SAVE, SAVED_ELSEWHERE_LINE, editedLine, ndaAgainLine, parseSave, saveLine } from "@/lib/listingSave";
+import { LISTING_SAVED, panelKeysOf, parseSaved } from "@/lib/listingPanel";
 
 type Tx = Prisma.TransactionClient;
 
@@ -18,7 +18,7 @@ export const tabOf = (body: Record<string, unknown>) => (typeof body.tab === "st
  * (Owner, Oct 28, batch 16 section 21) What an action was about, kept with its log line (after META, so no new column): the press (`a`, e.g. "pay")
  * and the things it touched (`k`: "c:<contract>", "sub:<id>", "call:<id>", "req:<id>", "t:<tester>", "set:<id>", "app:<id>", "test").
  */
-export type OwnAbout = { a: string; k: string[] };
+export type OwnAbout = { a: string; k: string[]; /** (Batch 35 §34) a listing Save's consequences ("re-sent fbbb's invite"): each its own line */ x?: string[] };
 const META = "\u001f";
 /**
  * A press on the developer's side. (Owner, Oct 29, batch 29 section 12) The changes made in another tab (BIG_OWN_ACTS) stop EVERY press on the test page and on Edit
@@ -114,6 +114,9 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
       // (the other tab's page redraw asks at once) found the rename without it, and the live box keeps every line it got, so the next poll's Save line made two.
       // The Save's own record says it at once: a Save of more than the title (or with the access keys) from another tab has that line, so its rename isn't one.
       if (hasSaveLine(saves.find((x) => x.createdAt.getTime() <= e.createdAt.getTime()), tab)) return [];
+      // (Batch 35 §34) The tab that saved it: its own Save (the rename in it) is never a line there.
+      const sv = saves.find((x) => x.createdAt.getTime() <= e.createdAt.getTime());
+      if (tab && sv?.tab === tab) return [];
       return [{ ...e, text: e.text.replace(`${me} `, "You "), listing: true }];
     }
     return [e];
@@ -122,17 +125,40 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // stop every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines); any other action of theirs stops only a
   // press it touches. A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
   const own = mine.flatMap((o): TestEventLike[] => {
-    // (Batch 34 §14) A listing Save in another tab: its line carries See it to the test page's Listing panel.
+    // (Batch 34 §14) A listing Save in another tab: its line carries See it to the test page's Listing panel. (Batch 35 §34) What it closed or re-sent: own lines.
     const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt, ...(o.about?.a === "edit" ? { listing: true } : {}) };
-    if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? [line] : [];
+    const lines: TestEventLike[] = [line, ...(o.about?.a === "edit" ? (o.about.x ?? []).map((x) => ({ kind: "own", text: consequenceLine(x), createdAt: o.createdAt, save: true })) : [])];
+    if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? lines : [];
     if (!opts.press) return [];
-    return has(BIG_OWN_ACTS, o.about?.a) || touches(o, opts.press) ? [line] : [];
+    return has(BIG_OWN_ACTS, o.about?.a) || touches(o, opts.press) ? lines : [];
   });
-  const all = await withSaveAt(testId, [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...own].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), tx);
+  // (Owner, Oct 31, batch 35 §34) Every listing change of the developer's own since the page's seen time (Saves in other tabs, renames) is ONE line: "You saved
+  // the listing in another tab · See it", at the latest one, marking every field any of them changed; a Save's consequences keep their own lines.
+  const listing = await collapseListing([...theirs, ...own], SAVED_ELSEWHERE_LINE, testId, since, tab, tx);
+  const all = await withSaveAt(testId, [...listing, ...(await devPaymentChanges(devId, testId, since, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), tx);
   // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
   if (opts.all) return all;
   const ignored = new Set((await tx.user.findUnique({ where: { id: devId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
   return ignored.size ? all.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : all;
+}
+
+/** (Batch 35 §34) A listing Save's consequence as its own line: "You re-sent fbbb's invite (the listing changed)". */
+export const consequenceLine = (x: string) => `You ${x}${/\)$/.test(x) ? "" : " (the listing changed)"}`;
+
+/**
+ * (Owner, Oct 31, batch 35 §34; replaces batch 34 §8's one line per Save naming its fields) All the listing lines among `lines` (`listing`: a Save's line, a rename)
+ * become ONE line with `text` and no field list, at the latest one's time, keyed "listing" (a box replaces its earlier one), with every panel line any listing
+ * Save since `since` changed (`keys`: See it marks the union; `tab`: only other tabs' Saves). A rename alone stays info only (kind "renamed": it never stops).
+ */
+export async function collapseListing(lines: TestEventLike[], text: string, testId: string, since: Date, tab: string | null, tx: Tx | typeof db = db): Promise<TestEventLike[]> {
+  const ls = lines.filter((l) => l.listing);
+  if (!ls.length) return lines;
+  const latest = ls.reduce((a, l) => (l.createdAt > a.createdAt ? l : a), ls[0]);
+  const saves = await tx.testEvent.findMany({ where: { testId, kind: LISTING_SAVED, createdAt: { gt: since, lte: latest.createdAt } }, select: { text: true, tab: true } });
+  const fields = saves.filter((s) => tab == null || (tab ? s.tab !== tab : true)).flatMap((s) => parseSaved(s.text)?.fields ?? []);
+  const renamedOnly = ls.every((l) => l.kind === "renamed");
+  const one: TestEventLike = { kind: renamedOnly ? "renamed" : latest.kind === "renamed" ? "own" : latest.kind, text, createdAt: latest.createdAt, listing: true, key: "listing", keys: panelKeysOf(fields.length ? fields : renamedOnly ? ["title"] : []) };
+  return [...lines.filter((l) => !l.listing), one];
 }
 
 /** (Batch 35 §17) The listing Saves' records up to `at`, newest first (each rename sits in its Save's transaction, after that Save's record). */
@@ -275,14 +301,21 @@ export function withRenamed(changes: TestEventLike[], body: Record<string, unkno
 export async function listingSaveLines(testId: string, since: Date, viewerId: string, side: "join" | "session", tx: Tx | typeof db = db): Promise<TestEventLike[]> {
   const rows = await tx.testEvent.findMany({ where: { testId, kind: LISTING_SAVE, createdAt: { gt: since } }, orderBy: { createdAt: "asc" }, take: 100 });
   if (!rows.length) return [];
-  const tz = (await tx.user.findUnique({ where: { id: viewerId }, select: { timeZone: true } }))?.timeZone;
-  const lines: TestEventLike[] = rows.flatMap((e) => {
+  // (Owner, Oct 31, batch 35 §34) ONE line for every edit since the page's seen time, no field list: "Nora Lane edited the listing · See it", at the latest edit,
+  // marking every field any of them changed (`keys`). A rename alone stays info only. The join page's NDA to accept again keeps its own line (it clears the tick).
+  const saves = rows.flatMap((e) => {
     const s = parseSave(e.text);
-    const l = s ? saveLine(s, e.createdAt, tz, side) : null;
-    // (Batch 35 §14) On the join page every Save's line (a rename alone too) carries See it to its Listing panel, and names its Save (as the developer's lines do).
-    return l ? [{ kind: l.titleOnly ? "renamed" : "info", text: l.text, createdAt: e.createdAt, timed: true, ...(l.nda ? { nda: true } : {}), ...(side === "join" ? { listing: true } : {}) }] : [];
+    const l = s ? saveLine(s, e.createdAt, null, side) : null;
+    return s && l ? [{ s, l, at: e.createdAt }] : [];
   });
+  if (!saves.length) return [];
+  const last = saves[saves.length - 1];
+  const fields = [...new Set(saves.flatMap((x) => (side === "join" ? x.s.fields : x.s.fields.filter((f) => f === "title" || (INFO_FIELDS as string[]).includes(f)))))];
+  const lines: TestEventLike[] = [{ kind: saves.every((x) => x.l.titleOnly) ? "renamed" : "info", text: editedLine(last.s.by), createdAt: last.at, listing: true, key: "listing", keys: panelKeysOf(fields) }];
+  const ndaSave = [...saves].reverse().find((x) => x.s.fields.includes("ndaText"));
+  if (side === "join" && ndaSave?.s.nda) lines.push({ kind: "info", text: ndaAgainLine(ndaSave.s.by), createdAt: ndaSave.at, nda: true });
+  void viewerId; // (the times are the box's, in the reader's zone)
   return side === "join" ? withSaveAt(testId, lines, tx) : lines;
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

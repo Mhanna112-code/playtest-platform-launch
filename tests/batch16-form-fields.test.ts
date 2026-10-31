@@ -64,7 +64,7 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
       keyNeedLine(3, 1),
       keyRefusal("HR-1111", "free"),
       keyRefusal("HR-1111", "inuse", { working: true, name: "Ana Silva" }),
-      R.openUntilShortened(new Date(Date.now() + 10 * DAY).toISOString(), new Date(Date.now() + 5 * DAY).toISOString(), (d) => d.toISOString().slice(0, 10)),
+      R.openUntilShortened(new Date(Date.now() + 10 * DAY).toISOString(), new Date(Date.now() + 5 * DAY).toISOString()), // (batch 35 §30) one wording, no formatter
     ].filter(Boolean);
     expect(messages.length).toBeGreaterThan(30);
     const misses = messages.filter((m) => fieldOfMistake(m) == null);
@@ -93,6 +93,7 @@ describe("every Post / Edit field mistake lands on its field (section 10)", () =
       parts: form.includes('<fieldset id="parts" data-field-group=""'), spots: form.includes('text("spots"'), highWritten: form.includes("id={`high-${part.key}`}"), highRecording: form.includes("id={`high-${part.key}`}"),
       writtenPrice: form.includes('price: "writtenPrice"') && form.includes("id={part.price}"), recordingPrice: form.includes('price: "recordingPrice"'), liveRate: form.includes('price: "liveRate"'),
       questions: form.includes('id="questions"'), keys: form.includes('id="accessKeys"') && keys.includes('id="keysFree"'),
+      buildUrl: form.includes('text("buildUrl"'), // (batch 35 §27)
     };
     for (const [k] of LISTING_MISTAKES) expect(has[k], k).toBe(true);
   });

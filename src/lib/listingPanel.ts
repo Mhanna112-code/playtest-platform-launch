@@ -44,6 +44,8 @@ export const PANEL_ROWS = [
   { key: "spots", label: "Spots", fields: ["spots"] },
 ] as const satisfies readonly { key: string; label: string; fields: readonly (keyof Listing)[] }[];
 export type PanelKey = (typeof PANEL_ROWS)[number]["key"];
+/** (Batch 35 §34) The panel lines that show any of these listing fields (what a See it covering those changes marks), in panel order. */
+export const panelKeysOf = (fields: readonly string[]): PanelKey[] => PANEL_ROWS.filter((r) => r.fields.some((f) => fields.includes(f))).map((r) => r.key);
 
 const JOIN_MODES: Record<string, string> = { anyone: "Anyone who matches (they press Join)", apply: "Approved only (you accept or decline)", invite: "Invite only" };
 /** (Batch 35 §14) The same choices in the tester's words (the developer's "you" is the developer). */
@@ -82,7 +84,7 @@ export function rowText(key: PanelKey, l: Listing, side: PanelSide = "developer"
       `Screen recording: ${l.recordingCents == null ? NOT_LISTED : `${price(l.recordingCents)} · ${need(l.recordingRequired)}`}`,
     ].join("\n");
     case "call": return l.liveRateCents == null ? NOT_LISTED : `${l.liveRateCents === 0 ? "Free" : `${money(t ? testerShare(l.liveRateCents) : l.liveRateCents)}/h${t ? " for you" : ""}`}${l.liveMinutes ? ` · ${l.liveMinutes}-minute calls` : ""} · ${need(l.liveRequired)}`;
-    case "deadlineDays": return `${l.deadlineDays} day${l.deadlineDays === 1 ? "" : "s"}${t ? " from joining" : ""}`;
+    case "deadlineDays": return `${l.deadlineDays} day${l.deadlineDays === 1 ? "" : "s"} from joining`; // (batch 35 §32) the same words on both sides
     case "openUntil": return l.openUntil ? new Date(l.openUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "No end date";
     case "joinMode": return (t ? TESTER_JOIN_MODES : JOIN_MODES)[l.joinMode] ?? l.joinMode;
     case "spots": return String(l.spots);

@@ -34,7 +34,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
   const tag = keep.restored && reason !== "" ? <DraftTag kind="discard" onUseSaved={() => setReason("")} /> : null;
   const load = () => api<Preview>("/api/admin/preview-team-close", { id, scope }).then((r) => { setMsg(null); setPreview(r); }).catch((e) => setMsg({ ok: false, text: errOf(e) }));
   return (
-    <div className="flex w-full max-w-xl flex-col items-start gap-2" data-team-close={scope} data-mistakes-root="">
+    <div className="flex w-full flex-col items-start gap-2" data-team-close={scope} data-mistakes-root="" data-admin-box="stacked">
       <span className="inline-flex flex-wrap items-center gap-2">
         <button type="button" className="btn-ghost" onClick={load}>Preview: {label.replace(/^Close/, "close")}</button>
         {!boxShown && tag}

@@ -8,7 +8,7 @@ import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine, capQuestions } from "@/lib/questions";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
-import { fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
+import { BUILD_URL_LINE, BUILD_URL_PATTERN, fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { DRAFT_START_LINE, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
@@ -16,14 +16,14 @@ import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
 import { ScrollText } from "@/components/ScrollText";
 import { fmtDateTime, toCents } from "@/lib/format";
 import { KeyBoxes, freeBoxCheck, type KeysData } from "./KeyBoxes";
-import { FieldNote, GroupNote, NoteItems, TheirsNote, type NoteItem } from "@/components/FieldNote";
+import { FieldNote, GroupNote, NoteItems, TheirsNote, WasNote, type NoteItem } from "@/components/FieldNote";
 import { CHANGED_ELSEWHERE, SAVED_ELSEWHERE, UPDATED_AT, mergeElsewhere, takesTheirs } from "@/lib/editMerge";
 import { ShieldCheck } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -92,6 +92,10 @@ function valueText(k: keyof F, v: unknown): string | string[] {
   return s;
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** (Batch 35 §26) A field's value that reads "empty" in the note under it. */
+const emptyValue = (v: unknown) => v == null || v === "" || (Array.isArray(v) && v.length === 0);
+/** (Batch 35 §26) The value in "was “…”": a list (the questions) one per line. */
+const wasText = (v: string | string[] | null) => (v == null ? null : Array.isArray(v) ? v.join("\n") : v);
 // Where each form field's note shows (parts and prices share one place).
 const NOTE_AT: Partial<Record<keyof F, string>> = { written: "parts", writtenPrice: "parts", recording: "parts", recordingPrice: "parts", live: "parts", liveRate: "parts", writtenRequired: "parts", recordingRequired: "parts", liveRequired: "parts", questions: "questions", requiredQs: "questions" };
 
@@ -175,6 +179,10 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   const [notes, setNotes] = useState<Record<string, { at: string; items: NoteItem[] }>>({});
   // (Owner, Oct 29, batch 23 section 5) Fields typed here that another tab or device saved meanwhile: the text stays, and the note under it shows their value (saved at `at`).
   const [theirs, setTheirs] = useState<Partial<Record<keyof F, string>>>({});
+  // (Owner, Oct 31, batch 35 §26) Fields this tab hadn't touched that took another tab's saved value: what each showed before, and when (the note under it), until that
+  // field is edited or Save is pressed.
+  const [was, setWas] = useState<Partial<Record<keyof F, { at: string; value: string | string[] | null }>>>({});
+  const dropWas = (ks: (keyof F)[] | "all") => setWas((o) => (ks === "all" ? {} : Object.keys(o).some((k) => ks.includes(k as keyof F)) ? (Object.fromEntries(Object.entries(o).filter(([k]) => !ks.includes(k as keyof F))) as typeof o) : o));
   // (Batch 23 section 5) The keys' note in two groups: your own saves elsewhere ("Added / Removed"), and what other people caused (a tester joining and given a key).
   const [keysNote, setKeysNote] = useState<{ own: { at: string; lines: string[] } | null; others: { at: string; lines: string[] } | null }>({ own: null, others: null });
   // (Owner, Oct 28, batch 16 sections 17 and 19) What this tab loaded (until a stop box shows the newer values), what it held in each field another tab
@@ -198,6 +206,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     setF((o) => ({ ...o, ...p }));
     setTouched((t) => new Set([...t, ...(Object.keys(p) as (keyof F)[])]));
     setSaved("");
+    dropWas(Object.keys(p) as (keyof F)[]); // (batch 35 §26) edited here: its "Changed in another tab" note goes
     // (Batch 23 section 5) Your text now matches what the other tab saved: its note goes.
     const matched = (Object.keys(p) as (keyof F)[]).filter((k) => theirs[k] && same(p[k], base[k]));
     if (matched.length) setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([k]) => !matched.includes(k as keyof F))) as typeof o);
@@ -229,6 +238,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     setF((o) => ({ ...o, ...Object.fromEntries(ks.map((k) => [k, base[k]])) }));
     setTouched((t) => new Set([...t].filter((x) => !ks.includes(x))));
     setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([x]) => !ks.includes(x as keyof F))) as typeof o);
+    dropWas(ks);
   };
   const draftMark = (where: string) => {
     const ks = marks[where] ?? [];
@@ -252,6 +262,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([x]) => !all.includes(x as keyof F))) as typeof o);
     setKeysText(savedKeysText);
     setBlurred(new Set());
+    dropWas("all");
     void keep.clear();
   };
   const leave = (k: string) => setBlurred((b) => (b.has(k) ? b : new Set([...b, k])));
@@ -303,7 +314,8 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // (5) Open until can only be extended.
   const ouNow = init.openUntil ? init.openUntil.slice(0, 10) : "";
   const shortened = !!edit && !!ouNow && !!f.openUntil && f.openUntil < base.openUntil && f.openUntil < ouNow;
-  const ouLine = shortened ? `Open until can only be extended: it's ${new Date(base.openUntil + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })} now.` : "";
+  // (Batch 35 §30) The same line as the server's (openUntilExtendLine), so the press's refusal is this line, shown once, at the box.
+  const ouLine = shortened ? openUntilExtendLine(base.openUntil.slice(0, 10)) : "";
   // Keys: every open spot needs a free key.
   const spotsN = Number(f.spots);
   const freeAfter = parseKeys(keysText).length;
@@ -367,6 +379,10 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     if (settled.length) setTouched((t) => new Set([...t].filter((k) => !settled.includes(k))));
     if (moved.length) setTheirs((o) => ({ ...Object.fromEntries(Object.entries(o).filter(([k]) => !settled.includes(k as keyof F))), ...Object.fromEntries(m.keep.map((k) => [k, at])) }) as typeof o);
     if (Object.keys(fresh).length) setNotes((n) => ({ ...n, ...fresh }));
+    // (Owner, Oct 31, batch 35 §26) Each field this tab hadn't touched that took the saved value says so under it: "Changed in another tab at 11:43 PM: was “…”" (what it
+    // showed just before). Spots and Open until keep their own notes (above).
+    const quiet = m.take.filter((k) => !m.oldNote.includes(k));
+    if (quiet.length) setWas((o) => ({ ...o, ...Object.fromEntries(quiet.map((k) => [k, { at, value: emptyValue(base[k]) ? null : valueText(k, base[k]) }])) }));
   }
   /**
    * (Owner, Oct 28, batch 16 sections 18 and 20) The keys another tab, device or joining tester changed, as soon as the page sees them: the Free box becomes
@@ -469,6 +485,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     details.current = {};
     setTheirs({});
     setNotes({});
+    setWas({});
     setStopDetails({});
     setChanges(null);
     setBoxAt("");
@@ -499,6 +516,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     e.preventDefault();
     if (nothingChanged) return;
     setPressed(true);
+    dropWas("all"); // (batch 35 §26) on Save, the "Changed in another tab" notes go
     if (locked) return;
     setBusy(true);
     setOrphans([]);
@@ -580,7 +598,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // far)."). On Edit only once that field is changed: an older test's short value never blocks saving another field.
   const minAttrs = (k: "title" | "description", label: string): Record<string, string> => (!edit || f[k] !== base[k] ? { "data-min-chars": String(LISTING_MIN_CHARS), "data-min-label": label } : {});
   // (Owner) Every box with a range says it next to it and is checked as soon as it's left (FieldChecks).
-  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number; disabled?: boolean; after?: React.ReactNode; /** (Batch 30 §18) the field's minimum: its counter shows it while under */ min?: number } = {}) => (
+  const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number; disabled?: boolean; after?: React.ReactNode; /** (batch 35 §30) a red line of the page's own, right under the box */ below?: React.ReactNode; /** (Batch 30 §18) the field's minimum: its counter shows it while under */ min?: number } = {}) => (
     <div>
       <label className={"label" + (opts.req ? " req" : "")} htmlFor={k}>{label}{opts.after}{draftMark(k)}</label>
       <div className="flex flex-wrap items-center gap-2">
@@ -589,6 +607,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {opts.hint && <span className="text-xs text-slate-500">{opts.hint}</span>}
         {opts.max && <span className="ml-auto text-xs text-slate-500" aria-hidden data-count={k}>{opts.min && (f[k] as string).trim().length < opts.min ? minCounter((f[k] as string).trim().length) : `${(f[k] as string).length}/${opts.max}`}</span>}
       </div>
+      {opts.below}
       {note(k)}
     </div>
   );
@@ -606,10 +625,13 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     // Typed fields another tab saved (still different from what you typed): their value, with Use theirs.
     const mine = (Object.keys(theirs) as (keyof F)[]).filter((x) => (NOTE_AT[x] ?? x) === k && !takesTheirs(String(x)) && !same(f[x], base[x]));
     const at = mine.map((x) => theirs[x]!).sort().pop();
-    if (!n && !at) return null;
+    // (Batch 35 §26) Untouched fields here that took another tab's saved value: what each was.
+    const quiet = (Object.keys(was) as (keyof F)[]).filter((x) => (NOTE_AT[x] ?? x) === k);
+    if (!n && !at && !quiet.length) return null;
     return (
       <>
         {n && <FieldNote key={n.at + JSON.stringify(n.items)} label={`${CHANGED_ELSEWHERE} ${clock(n.at)}`} items={n.items} />}
+        {quiet.length > 0 && <WasNote items={quiet.map((x) => ({ field: String(x), name: x === k ? undefined : NAMES[x] ?? String(x), time: clock(was[x]!.at), was: wasText(was[x]!.value) }))} />}
         {at && <TheirsNote heading={`${SAVED_ELSEWHERE} ${clock(at)}`} items={mine.map((x) => ({ field: String(x), name: NAMES[x] ?? String(x), value: valueText(x, base[x]), onUse: () => takeTheirs(x) }))} />}
       </>
     );
@@ -649,7 +671,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           {note("description")}
         </div>
         {/* (Batch 14) The build link is a limited field with its own 3 changes. */}
-        {text("buildUrl", "Link to the product or build", { ph: "https://…", after: left("buildUrl"), disabled: fieldLocked("buildUrl") })}
+        {/* (Owner, Oct 31, batch 35 §27) The link checks itself: red at the box as soon as it holds something not starting with https:// (on leaving it, then as it's
+            typed in once red), and the server's same line lands here too. On Edit only once the link is changed (an older link never blocks saving another field). */}
+        {text("buildUrl", "Link to the product or build", { ph: "https://…", after: left("buildUrl"), disabled: fieldLocked("buildUrl"), attrs: { "data-match": "^The build link must start", ...(!edit || f.buildUrl !== base.buildUrl ? { "data-pattern": BUILD_URL_PATTERN, "data-msg": BUILD_URL_LINE } : {}) } })}
         {lockNote("buildUrl")}
         {/* The full app's Categories: a row of tick boxes, at least one. */}
         <fieldset id="categories" data-field-group="" className="space-y-2">
@@ -747,7 +771,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
               </div>
             );
           })}
-          <p className="text-xs text-slate-500">Any cents. Free makes a part unpaid. Otherwise $1 to $1,000 for the written answers or a recording, and $10 to $200 an hour for a live call (each call request sets its own length). A written or recording price over $200 needs a tick.</p>
+          <p className="text-xs text-slate-500" data-parts-help="">{/* (Owner, Oct 31, batch 35 §28) */}Prices can include cents, like 9.99. Free makes a part unpaid. Otherwise $1 to $1,000 for the written answers or a recording, and $10 to $200 an hour for a live call (each call request sets its own length). A written or recording price over $200 needs a tick.</p>
           {note("parts")}
         </fieldset>
         {f.written && (
@@ -790,13 +814,12 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
             <p className="mt-1 text-xs text-slate-500" data-spots-line="">{spotsLine}</p>
           </div>
           <div>
-            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) } })}
+            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) }, below: showOn("openUntil") ? redLine(ouLine) : null /* (batch 35 §30) once, at the box */ })}
             {/* (Owner, Oct 28, batch 19 section 8) Live: testers join until this date, each gets N days from joining (Edit: their days now + the extension, batch 16
                 section 16; Post: today to this date), so the last work can arrive Open until + N; then the 7 days to pay. */}
             {f.openUntil && /^\d{4}-\d{2}-\d{2}$/.test(f.openUntil) && (edit?.testerDays != null
               ? <p className="mt-1 text-xs text-slate-400" data-tester-days="">{openUntilLine(f.openUntil, edit.testerDays + Math.max(0, daysBetween(base.openUntil.slice(0, 10), f.openUntil)))}</p>
               : daysBetween(localToday(), f.openUntil) > 0 && <p className="mt-1 text-xs text-slate-400" data-tester-days="">{openUntilLine(f.openUntil, daysBetween(localToday(), f.openUntil))}</p>)}
-            {showOn("openUntil") && redLine(ouLine)}
           </div>
         </div>
         {edit && testersIn > 0 && <p className="note">{testersIn} tester{testersIn === 1 ? " is" : "s are"} in: spots can&apos;t go below that.</p>}

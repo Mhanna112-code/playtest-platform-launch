@@ -35,11 +35,11 @@ import { rowsOf, toJson } from "@/lib/callRows";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, STOP_NOTE_KIND, stopReasonOf } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, stopReasonOf } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
-import { autoChargeLine, paidMostLine, pausedUntil } from "@/lib/rules";
+import { autoChargeLine, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
@@ -263,10 +263,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (shown in the row; batch 29 section 30: only the tester removes one).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
   const shownEx = await db.excerpt.findMany({ where: { testId: t.id, status: "shown" }, orderBy: { decidedAt: "desc" } });
-  // (Batch 15 section 43) Each tester's contract changes (their row): renames, and a Stop with the reason they read.
-  const notesByContract = await db.contractNote.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   // (Owner, Oct 30, batch 34 §14) The Listing panel (it replaces the Contract changes fold): the current listing, the fields the most recent save changed tagged.
-  const listingNow = asListing(t);
+  // (Batch 35 §32) The tester deadline as a tester joining now gets it (the same helper as the join page): an Open until moved later grows it (batch 15 §18).
+  const listingNow = { ...asListing(t), deadlineDays: joinerDays(t) };
   const lastSave = await lastListingSave(t.id);
   const listingRows = panelRows(listingNow, lastSave);
   // (Batch 17 §15) The developer's own Stop and its reason (the team's Stop has its own): (batch 34 §14, the Contract changes fold gone) in the red banner.
@@ -638,14 +637,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Batch 17 §11) A waiting charge whose piece isn't listed above (a dispute decision or retry with no part) sits under the tester's row. */}
                 {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
-                {/* (Batch 15 section 24) Renames are recorded in each tester's contract changes. */}
-                {notesByContract.some((n) => n.contractId === c.id) && (
-                  <ul className="note space-y-0.5" data-contract-notes="">
-                    {notesByContract.filter((n) => n.contractId === c.id).map((n) => n.kind === STOP_NOTE_KIND
-                      ? <li key={n.id}>Test stopped · {fmtDateTime(n.createdAt)}<ReasonQuote text={stopReasonOf(n.text)} /></li> // (Batch 17 §15) the reason they read
-                      : <li key={n.id}>{n.text} · {fmtDateTime(n.createdAt)}</li>)}
-                  </ul>
-                )}
+                {/* (Owner, Oct 31, batch 35 §33) Only the terms line: the contract changes (renames, a Stop's note…) are still recorded for the tester's own page, never
+                    listed under the developer's row. */}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
                 <PrevSetFolds developer attachments={c.submissions.flatMap((s) => s.recordings).filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
                 {/* (Batch 13) Excerpts shown from this test. (Batch 29 section 30) Only the tester removes one (Remove on their profile): no Take down here. */}

@@ -7,11 +7,15 @@ import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
 import { NdaBox } from "@/components/NdaBox";
 import { QuestionList } from "@/components/QuestionList";
+import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 
+/** (Batch 35 §29) An offered question as the lists show it: its text, and whether it's required (a small tag). */
+type OfferQuestion = { text: string; required?: boolean };
+
 /** New terms offered (Switch / Keep). Its stop-once box and refusals show directly under these buttons. */
-export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; questions?: string[]; fromQuestions?: string[]; answers?: string[]; switchNote?: string } | null; devName: string }) {
+export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; questions?: OfferQuestion[]; fromQuestions?: OfferQuestion[]; answers?: string[]; switchNote?: string } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
   // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
@@ -86,8 +90,9 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       {offer.questions && offer.fromQuestions && JSON.stringify(offer.questions) !== JSON.stringify(offer.fromQuestions) && (
         <details className="text-sm" open>
           <summary className="cursor-pointer font-medium">The questions changed: before and after</summary>
-          <div className="mt-1 text-xs text-sky-200/80">Before: <QuestionList items={offer.fromQuestions} /></div>
-          <div className="mt-1">After: <QuestionList items={offer.questions} /></div>
+          {/* (Owner, Oct 31, batch 35 §29) As the Listing panel (§15): each list under its own small uppercase label, numbered, Required as a small tag. */}
+          <div className="mt-1 text-xs text-sky-200/80"><FieldLabel>Before</FieldLabel><FieldValue><QuestionList numbered items={offer.fromQuestions} /></FieldValue></div>
+          <div className="mt-1"><FieldLabel>After</FieldLabel><FieldValue><QuestionList numbered items={offer.questions} /></FieldValue></div>
           {offer.answers && offer.answers.some(Boolean) && <p className="mt-1 whitespace-pre-wrap text-xs text-sky-200/80">Your answers so far: {offer.answers.filter(Boolean).join(" / ")}</p>}
           {offer.switchNote && <p className="mt-1" data-switch-questions="">{offer.switchNote}</p>}
         </details>

@@ -488,7 +488,7 @@ describe("follow-up 6) one Save in another tab is one line in one voice, and 'Ch
     expect((await act(testId, "edit", dev.cookie, { version: v, tab: "tab-2", fields: { description: "Sail further", liveRateCents: "40.00" } })).status).toBe(200);
     // (Batch 29 section 12) A Save in another tab stops every press once: Next round here stops with one line, in one voice.
     const next = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "tab-1" });
-    expect(next.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["You saved the listing in another tab: description, live call rate"]);
+    expect(next.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["You saved the listing in another tab"]); // (batch 35 §34) one line, no field list
     const log = await db.actionLog.findFirstOrThrow({ where: { testId, tab: "tab-2" } });
     expect(log.text.split("\u001f")[0]).toBe("You saved the listing in another tab: description, live call rate");
   });

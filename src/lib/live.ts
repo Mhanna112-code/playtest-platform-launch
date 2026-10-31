@@ -72,6 +72,11 @@ export function mergeChanges(old: Change[], added: Change[]) {
   // (Batch 20 section 4) A keyed line (one per ticked tester's needs) replaces the box's earlier line with that key: one line per tester, its latest time.
   const keys = new Set(added.map((c) => c.key).filter(Boolean));
   const kept = old.filter((c) => !c.key || !keys.has(c.key));
+  // (Batch 35 §34) The one listing line replacing an earlier one covers what that one covered too (See it marks the union).
+  added = added.map((c) => {
+    const was = c.key ? old.filter((o) => o.key === c.key && o.keys?.length) : [];
+    return was.length ? { ...c, keys: [...new Set([...was.flatMap((o) => o.keys!), ...(c.keys ?? [])])] } : c;
+  });
   const have = new Set(kept.map(ck));
   // (Owner's finding, Oct 29, batch 32 §8) The same moment from two places reads as one line: the server's "This test was stopped at 3:22 PM." and the live
   // update's "This test was stopped" (shown "· 3:22 PM") within the same minute. The box keeps its own wording.

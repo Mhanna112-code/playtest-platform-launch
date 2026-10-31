@@ -490,7 +490,7 @@ describe("batch 23 section 7: Suspend's Preview laid out above the boxes", () =>
     expect(p).toContain('className="w-full space-y-1" data-preview-block=""');
     expect(p).toContain('<ul className="note w-full list-disc');
     const b = src("app/admin/AdminButton.tsx");
-    expect(b).toContain('stacked ? "flex w-full flex-col items-start gap-2"');
+    expect(b).toContain('stack ? "flex w-full flex-col items-start gap-2"'); // (batch 35 §36) any button with a box
     // The "Since your Preview" race check stays.
     expect(a).toContain("since: previewAt ?? acct.at");
     // (Batch 22) No held shares in the Preview's tester line.

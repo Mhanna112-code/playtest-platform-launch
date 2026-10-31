@@ -40,7 +40,8 @@ import { unreadCount } from "@/lib/server/messages";
 import { PersonHover } from "@/components/PersonHover";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { LiveTop } from "@/components/LiveTop";
-import { qText } from "@/lib/questions";
+import { qRequired, qText } from "@/lib/questions";
+import { FIELD_BOX, FieldLabel, FieldValue } from "@/components/FieldLines";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
@@ -282,7 +283,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
       <ListingSeeIt box="scope" />
       <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? {
-        id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map(qText), fromQuestions: ((c.questions as string[]) ?? []).map(qText),
+        id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) })), fromQuestions: ((c.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) })),
         answers: sentItems.map((x) => x.answer),
         // (Batch 18 section 8) Switching means answering the new questions; answers already sent stay payable at their price.
         switchNote: switchQuestionsLine(written),
@@ -358,40 +359,49 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           information (always the current listing, live; a line changed since joining carries "Updated <time>": before → now). The top box's See it opens it. */}
       <details className="card scroll-mt-24" id="scope" data-scope="">
         <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><FileSignature className="h-5 w-5 text-indigo-300" /> Your agreed scope</summary>
+        {/* (Owner, Oct 31, batch 35 §29) Both parts list their fields as the Listing panel does (§15): the label small, muted and uppercase on its own line (with its
+            "Updated" tag), the value bright below it; the questions numbered with "Required" as a small tag; long texts in their scroll boxes. */}
         <p className="mt-3 text-sm font-medium text-white">Your contract</p>
-        <ul className="mt-1 space-y-1 text-sm text-slate-300" data-scope-contract="">
+        <ul className="mt-1 space-y-2.5 text-sm" data-scope-contract="">
           {([
             { name: "Written answers", cents: c.writtenCents, required: c.writtenRequired, perHour: false },
             { name: "Screen recording", cents: c.recordingCents, required: c.recordingRequired, perHour: false },
             { name: "Live call", cents: c.liveRateCents, required: c.liveRequired, perHour: true },
           ] as const).map((x) => (
             <li key={x.name} data-scope-part={x.name}>
-              {x.name}: {x.cents == null ? NOT_LISTED : `${x.cents === 0 ? "Free" : `${money(testerShare(x.cents))}${x.perHour ? "/h" : ""} for you`} · ${x.required ? "Required" : "Not required"}`}
-              {x.perHour && x.cents != null && c.liveMinutes != null && ` · ${c.liveMinutes}-minute calls`}
+              <FieldLabel>{x.name}</FieldLabel>
+              <FieldValue>
+                {x.cents == null ? NOT_LISTED : `${x.cents === 0 ? "Free" : `${money(testerShare(x.cents))}${x.perHour ? "/h" : ""} for you`} · ${x.required ? "Required" : "Not required"}`}
+                {x.perHour && x.cents != null && c.liveMinutes != null && ` · ${c.liveMinutes}-minute calls`}
+              </FieldValue>
             </li>
           ))}
           {/* (Batch 20 section 1) More than 3 questions: all of them in a scroll box about 3 questions tall. */}
-          {writtenQuestions(c).length > 0 && <li data-scope-questions="">Questions: <QuestionList items={writtenQuestions(c).map((q) => qText(q))} /></li>}
+          {writtenQuestions(c).length > 0 && <li data-scope-questions=""><FieldLabel>Questions</FieldLabel><FieldValue><QuestionList numbered items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></li>}
           {c.ndaText && c.ndaAcceptedAt ? (
             <li data-nda="">
-              <details><summary className="cursor-pointer">NDA: accepted {fmtDate(c.ndaAcceptedAt)}</summary><div className="mt-1"><NdaBox text={c.ndaText} /></div></details>
+              <FieldLabel>NDA</FieldLabel>
+              <FieldValue><details><summary className="cursor-pointer">Accepted {fmtDate(c.ndaAcceptedAt)}</summary><div className="mt-1"><NdaBox text={c.ndaText} /></div></details></FieldValue>
             </li>
-          ) : <li>NDA: none</li>}
-          <li>Due {fmtDate(c.dueAt)}</li>
+          ) : <li><FieldLabel>NDA</FieldLabel><FieldValue>None</FieldValue></li>}
+          <li data-scope-due=""><FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue></li>
           <li className="text-slate-400">Agreed {fmtDate(c.joinedAt)}. Your contract stays as it is: if {dev} changes these terms later, you choose Switch or Keep.</li>
         </ul>
         <p className="mt-3 text-sm font-medium text-white">The listing information</p>
         <p className="text-xs text-slate-400">Always the current listing: it follows {dev}&apos;s changes as they&apos;re made.</p>
-        <ul className="mt-1 space-y-1 text-sm text-slate-300" data-scope-info="">
+        <ul className="mt-1 space-y-2.5 text-sm" data-scope-info="">
           {info.filter((l) => l.key !== "productName" || l.now !== "(none)" || l.before != null).filter((l) => l.key !== "mature" || c.test.mature || l.before != null).map((l) => (
             <li key={l.key} className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line={l.key} {...(l.before != null ? { "data-updated-at": l.updatedAt?.toISOString() ?? "" } : {})}>
-              {l.key === "description" && l.now !== "(none)" ? (
-                <><span>{l.label}:</span>{l.before != null && <UpdatedTag when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} />}<ScrollText text={c.test.description} className="text-slate-300" /></>
-              ) : l.key === "buildUrl" && c.test.buildUrl ? (
-                <>{l.label}: <a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="break-all">{c.test.buildUrl}</a>{l.before != null && <UpdatedTag when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} />}</>
-              ) : (
-                <>{l.label}: <span className="whitespace-pre-wrap break-words">{l.now}</span>{l.before != null && <UpdatedTag when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} />}</>
-              )}
+              <FieldLabel tag={l.before != null ? <UpdatedTag when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>
+              <FieldValue>
+                {l.key === "description" && l.now !== "(none)" ? (
+                  <ScrollText text={c.test.description} className={FIELD_BOX} label="What to do" />
+                ) : l.key === "buildUrl" && c.test.buildUrl ? (
+                  <a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="break-all">{c.test.buildUrl}</a>
+                ) : (
+                  <span className="whitespace-pre-wrap break-words">{l.now}</span>
+                )}
+              </FieldValue>
             </li>
           ))}
         </ul>
@@ -406,8 +416,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
-                    <div>Then: <QuestionList items={(o.fromQuestions as string[]).map(qText)} /></div>
-                    <div>Offered: <QuestionList items={((o.questions as string[]) ?? []).map(qText)} /></div></details>
+                    {/* (Batch 35 §29) Labels apart from the questions, numbered with their Required tags. */}
+                    <div className="mt-1"><FieldLabel>Then</FieldLabel><FieldValue><QuestionList numbered items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div>
+                    <div className="mt-1"><FieldLabel>Offered</FieldLabel><FieldValue><QuestionList numbered items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
                 )}
                 {o.fromNdaText !== o.ndaText && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">NDA then and now</summary>

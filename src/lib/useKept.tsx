@@ -165,14 +165,17 @@ export const USE_SAVED_LABEL = "Use saved";
 /** (Batch 35 §10) The same button on a box with no saved version (its text only exists once its button is pressed): it empties the box and the draft goes. */
 export const DISCARD_LABEL = "Discard";
 /**
- * (Owner, Oct 30, batch 35 §10) Which button a DraftTag shows: "saved" ("Use saved") where a saved version exists (Edit, Post, Pay / Pay more, written answers,
- * the profile); "discard" ("Discard") where nothing is saved (End early / Stop reasons, dispute reason and side, rating comments, chat, Contact us, call requests,
- * the Apply note). Same behaviour either way.
+ * (Owner, Oct 30, batch 35 §10; Oct 31, §39) Which button a DraftTag shows: "saved" ("Use saved") ONLY where a saved version of that box exists (Edit's fields, a
+ * saved draft opened from the drafts list, profile edits, written answers already sent: back to the sent answers); "discard" ("Discard") everywhere else (Pay and
+ * Pay more: the amount back to its start, the note emptied, the ticks off; the admin's Decide total and note together; written answers never sent; End early /
+ * Stop reasons, admin reasons, dispute reason and side, rating comments, chat, Contact us, call requests, the Apply note, a new Post).
  */
 export type DraftKind = "saved" | "discard";
 export const draftButtonLabel = (kind: DraftKind) => (kind === "discard" ? DISCARD_LABEL : USE_SAVED_LABEL);
 /** (Batch 35 §8) Edit / Post: every field marked Draft back to its saved value. */
 export const USE_SAVED_ALL_LABEL = "Use saved for all";
+/** (Owner, Oct 31, batch 35 §39) The same for boxes with nothing saved (written answers never sent): every box emptied, the draft goes. */
+export const DISCARD_ALL_LABEL = "Discard all";
 
 /** (Owner, Oct 31, batch 35 §18) The line at the top of Post / Edit when the form opened with a restored draft. */
 export const DRAFT_START_LINE = (when: string) => `Started from your unsent draft${when ? ` (${when})` : ""}`;

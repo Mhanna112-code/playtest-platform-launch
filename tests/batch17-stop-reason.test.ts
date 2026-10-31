@@ -138,7 +138,7 @@ describe("the developer's Stop pop-up (section 15)", () => {
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain('const bannerReason = bannerCause === "stopped" && stopEntry ? stopEntry.reason : bannerCauseReason;');
     expect(page).toContain("<TestBanner cause={bannerCause} reason={bannerReason}");
-    expect(page).toContain("Test stopped · {fmtDateTime(n.createdAt)}<ReasonQuote text={stopReasonOf(n.text)} />");
+    expect(page).not.toContain("data-contract-notes"); // (batch 35 §33) the rows keep only the terms line; the tester's own page lists the Stop's note
     expect(src("app/app/tests/[id]/TestBanner.tsx")).toContain("{reason && <ReasonQuote text={reason}");
   });
 

@@ -41,7 +41,7 @@ describe("batch 30 §10: one line per listing save for testers", () => {
     const j = await act(testId, "join", outsider.cookie, { seenAt: pageLoaded });
     expect(j.body.error.code).toBe("stop_once");
     expect(texts(j)).toEqual([expect.stringMatching(saveRe("Nora Lane", "product name, title (now “lllllq”), description, build link, recording price, live call rate"))]);
-    expect(j.body.error.changes[0]).toMatchObject({ timed: true, kind: "info" });
+    expect(j.body.error.changes[0]).toMatchObject({ kind: "info", listing: true, keys: ["productName", "title", "description", "buildUrl", "parts", "call"] }); // (batch 35 §34) one line, See it marks them all
     const lj = await live(outsider.cookie, `listing:${testId}`, pageLoaded);
     expect(lj.body.changes.map((c: { text: string }) => c.text)).toEqual(texts(j));
     // The session page: the listing information only (the prices come as new terms, Switch / Keep): one line in the top box.
@@ -70,7 +70,7 @@ describe("batch 30 §10: one line per listing save for testers", () => {
     await later();
     expect((await edit(testId, dev.cookie, { title: "Harbor Run 9", description: "Sail on" }, { tab: "tab-a" })).status).toBe(200);
     const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-b" });
-    expect(texts(r)).toEqual(["You saved the listing in another tab: title (now “Harbor Run 9”), description"]);
+    expect(texts(r)).toEqual(["You saved the listing in another tab"]); // (batch 35 §34) no field list
     const l = await live(dev.cookie, `test:${testId}`, pageLoaded);
     expect(l.body.changes.map((c: { text: string }) => c.text)).toEqual(texts(r));
   });
@@ -110,16 +110,17 @@ describe("batch 30 §12: the join page's stop lists every change since the page 
     await edit(testId, dev.cookie, { ndaText: "Keep it secret, please." });
     const r = await act(testId, "join", ana.cookie, { seenAt: pageLoaded, ndaAccepted: true });
     expect(r.body.error.code).toBe("stop_once");
+    // (Batch 35 §34) The three edits are ONE line (covering every field); the NDA to accept again keeps its own.
     expect(texts(r)).toEqual([
-      expect.stringMatching(saveRe("Nora Lane", "questions")),
-      expect.stringMatching(saveRe("Nora Lane", "product name, description")),
+      expect.stringMatching(saveRe("Nora Lane", "questions, product name, description, NDA")),
       expect.stringMatching(saveRe("Nora Lane", "read and accept it again below", "changed the NDA")),
     ]);
-    expect(r.body.error.changes[2]).toMatchObject({ nda: true });
+    expect(r.body.error.changes[0]).toMatchObject({ keys: ["productName", "description", "questions", "ndaText"] });
+    expect(r.body.error.changes[1]).toMatchObject({ nda: true });
     expect(ats(r)).toEqual([...ats(r)].sort((a, b) => a - b));
     // The top box showed the first two: a press sent with its marker stops only for what came after.
     const l = await live(ana.cookie, `listing:${testId}`, pageLoaded);
-    expect(l.body.changes).toHaveLength(3);
+    expect(l.body.changes).toHaveLength(2);
     await later();
     expect((await edit(testId, dev.cookie, { categories: ["Game", "Education"] })).status).toBe(200);
     const again = await act(testId, "join", ana.cookie, { seenAt: l.body.now, ndaAccepted: true });

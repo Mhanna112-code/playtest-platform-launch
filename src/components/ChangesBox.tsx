@@ -16,7 +16,7 @@ import { fmtTimeIn } from "@/lib/format";
 import { savedZone } from "@/components/TimeZoneSync";
 import { seeItClick, useSeeItTarget } from "@/components/ListingInfo";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** (Batch 35 §34) the panel lines all the listing changes it covers changed */ keys?: string[] };
 
 /** (Batch 28 §4) Every time in the box is in the reader's saved zone (the browser's only when none is saved), like the stop lines. */
 const time = (iso: string) => fmtTimeIn(iso, savedZone());
@@ -66,7 +66,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
                 {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
                 {/* (Batch 30 §10; batch 34 §14) A listing change (a tester's "… edited the listing at 6:55 PM: …", the developer's "You saved the listing in another tab: …"). */}
-                {seeTo && ((c.timed && c.kind === "info") || c.listing) && <> · <a href={seeTo} data-see-it="" onClick={(e) => seeItClick(e, seeTo, c.at, c.saveAt)}>See it</a></>}
+                {seeTo && ((c.timed && c.kind === "info") || c.listing) && <> · <a href={seeTo} data-see-it="" onClick={(e) => seeItClick(e, seeTo, c.at, c.saveAt, c.keys)}>See it</a></>}
                 {/* (Batch 34 §12) The key the developer's Save gave this tester: See it jumps to the key box. */}
                 {c.kind === "keygiven" && <> · <a href={`#${KEY_BOX_ID}`} data-see-it="key" onClick={(e) => { e.preventDefault(); jumpTo(KEY_BOX_ID); }}>See it</a></>}
                 {(() => { const d = detail?.(c); return d ? <div className="mt-0.5 text-xs" data-stop-detail="">{d}</div> : null; })()}

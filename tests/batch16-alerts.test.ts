@@ -169,7 +169,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     const ed = await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { spots: 4 }, seenAt: seen(), confirmed: true, tab: "A" });
     expect(ed.status).toBe(200);
     expect((await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
-    const lines = ["You saved the listing in another tab: spots", "You declined Ana Silva's application in another tab"];
+    const lines = ["You saved the listing in another tab", /* (batch 35 §34) no field list */ "You declined Ana Silva's application in another tab"];
     expect((await devLive(dev.cookie, testId, loaded, "B")).filter((t) => /another tab/.test(t))).toEqual(lines);
     const d = await act(testId, "application", dev.cookie, { applicationId: app.id, action: "decline", seenAt: loaded, tab: "B" });
     expect(d.body.error).toMatchObject({ message: "You already declined this application." });

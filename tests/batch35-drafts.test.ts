@@ -130,11 +130,12 @@ describe("batch 35 §8: the other forms after signing back in", () => {
     expect(back).toEqual({ answers: ["I liked the sailing.", ""], notes: "The map froze once.", questions: ["What did you like?", "Where did you get stuck?"], [SIGNED_IN_MARK]: true });
     const s = src("app/app/sessions/[id]/SessionActions.tsx");
     // (Batch 35 §18) Per box: Draft + Use saved under each answer (and the notes) the draft changed; Use saved for all beside Send.
-    expect(s).toContain('const boxDraft = (i: number) => (keep.restored && answers[i] !== sentAt(i) ? <DraftTag kind="saved" field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);');
-    expect(s).toContain('const notesDraft = keep.restored && notes !== initialNotes ? <DraftTag kind="saved" field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;');
+    expect(s).toContain('const answerKind = update ? "saved" : "discard";'); // (batch 35 §39) Use saved only once the answers were sent
+    expect(s).toContain('const boxDraft = (i: number) => (keep.restored && answers[i] !== sentAt(i) ? <DraftTag kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);');
+    expect(s).toContain('const notesDraft = keep.restored && notes !== initialNotes ? <DraftTag kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;');
     expect(s).toContain("{boxDraft(i)}");
     expect(s).toContain("{notesDraft}");
-    expect(s).toContain('{keep.restored && !same && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{USE_SAVED_ALL_LABEL}</button>}');
+    expect(s).toContain('{keep.restored && !same && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</button>}');
     // Use saved puts the boxes back to what was sent (nothing sent yet: empty), so the form is unchanged and its draft is forgotten.
     expect((await keep(cookie, t.user.id, key, null)).status).toBe(200);
     expect(await read(cookie, t.user.id, key)).toBeNull();
@@ -143,7 +144,7 @@ describe("batch 35 §8: the other forms after signing back in", () => {
     expect(src("components/Chat.tsx")).toContain('<DraftTag kind="discard" onUseSaved={() => setText("")} />');
     expect(src("components/RateBox.tsx")).toContain('<DraftTag kind="discard" onUseSaved={() => setComment("")} />');
     expect(src("app/app/tests/[id]/DisputeSide.tsx")).toContain('<DraftTag kind="discard" onUseSaved={() => setText("")} />');
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('<DraftTag kind="saved" onUseSaved={useSaved} />');
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('<DraftTag kind="discard" onUseSaved={useSaved} />'); // (batch 35 §39)
     expect(src("app/app/help/ContactForm.tsx")).toContain('<DraftTag kind="discard" onUseSaved={() => { setMessage(""); setTopic(""); }} />');
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('{keepStop.restored && stopReason !== "" && <DraftTag kind="discard" onUseSaved={() => setStopReason("")} />}');
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('{keepEnd.restored && reason !== "" && <DraftTag kind="discard" onUseSaved={() => setReason("")} />}');

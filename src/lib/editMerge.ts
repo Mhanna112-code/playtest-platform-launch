@@ -1,7 +1,8 @@
 // (Owner, Oct 29, batch 23 section 5; final, replaces batch 16 section 19's "the box takes the other tab's value") Edit keeps what you typed; it shows what the other tab
 // saved. Shared by Edit's form (TestForm.tsx) and the Save route (server/tests.ts editTest), so the two can't drift.
 //
-// - A field you haven't touched takes the other tab's saved value silently (no note), so your Save never undoes it.
+// - A field you haven't touched takes the other tab's saved value, so your Save never undoes it; (owner, Oct 31, batch 35 §26) a small blue note under it says so
+//   ("Changed in another tab at 11:43 PM: was “Harbor Run”", wasLine below), until that field is edited or Save is pressed. No "Use theirs": it shows their value.
 // - A field you typed in keeps your text; under it a blue note shows what the other tab saved ("Saved in another tab or device at 3:54 PM:" and their value) with
 //   "Use theirs". Further saves elsewhere update the note's value; making your text match theirs removes the note.
 // - On Save, each field where your text differs from what's saved now stops once: "Instructions: your version will replace the one saved in another tab at 3:54 PM."
@@ -54,3 +55,8 @@ export const SAVED_ELSEWHERE = "Saved in another tab or device at";
 /** (Batch 23 section 5) Note headings: your own saves elsewhere, and changes other people caused (a tester joining and given a key). */
 export const CHANGED_ELSEWHERE = "Changed in another tab or device at";
 export const UPDATED_AT = "Updated at";
+
+/** (Owner, Oct 31, batch 35 §26) The note under an untouched field that took another tab's saved value (the page passes the time, "11:43 PM"). */
+export const CHANGED_IN_TAB = "Changed in another tab at";
+/** "Changed in another tab at 11:43 PM: was “Harbor Run”" (`was` null: "was empty"); where one note holds several fields: "…: Price for a recording was “$15.00”". */
+export const wasLine = (time: string, was: string | null, name?: string) => `${CHANGED_IN_TAB} ${time}: ${name ? `${name} was` : "was"} ${was == null ? "empty" : `“${was}”`}`;

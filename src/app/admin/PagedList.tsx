@@ -31,9 +31,10 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
   const [busy, setBusy] = useState(false);
   const stop = useAdminStop(); // (batch 34 §1) another admin suspended the developer since the row was read: stops once
   return (
-    <div className="flex flex-wrap items-center gap-2">
+    // (Batch 35 §36) As Suspend's box: the note the panel's full width, Approve below it.
+    <div className="flex w-full flex-col items-start gap-2" data-admin-box="stacked">
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
-      <input id={`lift-note-${id}`} className="input w-72 max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
+      <input id={`lift-note-${id}`} className="input w-full max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
       {keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}
       <button
         className="btn-ghost"
@@ -460,7 +461,8 @@ export function PagedList({ kind, initial, arg = "", title, level = 2, fixed = f
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-list-filters={kind}>
           <input type="search" className="input w-full sm:w-80" aria-label={search.label} placeholder={search.placeholder} maxLength={SEARCH_MAX} value={typed} onChange={(e) => setTyped(e.target.value)} data-list-search={kind} />
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1" role="group" aria-label="Show only">
-            {search.ticks.map((t) => (
+            {/* (Owner, Oct 31, batch 35 §35) The Developers / Testers pages list one side already: no Developer / Tester ticks there (the other ticks stay). */}
+            {search.ticks.filter((t) => !(sideFilter && "group" in t && t.group === "role")).map((t) => (
               <label key={t.value} className="inline-flex items-center gap-1.5 text-sm text-slate-300">
                 <input type="checkbox" checked={ticks.includes(t.value)} onChange={(e) => setTicks((now) => (e.target.checked ? [...now, t.value] : now.filter((x) => x !== t.value)))} data-list-tick={t.value} /> {t.label}
               </label>

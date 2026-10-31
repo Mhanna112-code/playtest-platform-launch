@@ -165,7 +165,7 @@ describe("batch 29 section 12: the developer's own changes in another tab stop e
     const loaded = await loadedNow();
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { description: "Sail faster", spots: 6 }, seenAt: seen(), tab: "A" })).status).toBe(200);
-    const line = "You saved the listing in another tab: description, spots";
+    const line = "You saved the listing in another tab"; // (batch 35 §34) no field list
     const B = { seenAt: loaded, tab: "B" };
     const n = await act(testId, "next-round", dev.cookie, B);
     expect(n.body.error?.code).toBe("stop_once");

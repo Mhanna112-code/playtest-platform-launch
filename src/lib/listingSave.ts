@@ -38,6 +38,13 @@ export function parseSave(text: string): ListingSave | null {
 /** The NDA's words on the join page, where the tester accepts it before joining. */
 export const NDA_AGAIN = "read and accept it again below";
 
+/** (Owner, Oct 31, batch 35 §34) The tester's ONE line for all the developer's listing edits since the page's seen time: "Nora Lane edited the listing". */
+export const editedLine = (by: string) => `${by} edited the listing`;
+/** (Batch 35 §34) The join page's own line when an edit changed the NDA: the tester accepts it again before joining. */
+export const ndaAgainLine = (by: string) => `${by} changed the NDA: ${NDA_AGAIN}`;
+/** (Batch 35 §34) The developer's ONE line for their own listing Saves (and renames) in other tabs since the page's seen time. */
+export const SAVED_ELSEWHERE_LINE = "You saved the listing in another tab";
+
 /**
  * The tester's line for one save, at `at` in the reader's zone; null when nothing on that page is about it. `join`: the join page (every field; an NDA change asks
  * to accept it again); `session`: a working tester's session page (the listing information only: their contract's terms come as an offer). `titleOnly`: a rename alone

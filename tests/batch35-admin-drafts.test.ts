@@ -100,9 +100,9 @@ describe("batch 35 §11: what a restored draft puts back", () => {
     // The draft holds the total and the note only, and the restore sets the tick from the helper (null).
     expect(d).toContain('useKept<Record<string, unknown>>(adminDraftKey("decide", id), { total, note }, total.trim() === "" && note.trim() === "", (d) => {');
     expect(d).toContain("setTickedFor(back.tickedFor);");
-    // Use saved on the total puts it back to blank (keep the pay) and unticks; the note's Discard empties it.
-    expect(d).toContain('<DraftTag kind="saved" field="total" onUseSaved={() => { setTotal(""); setTickedFor(null); }} />');
-    expect(d).toContain('<DraftTag kind="discard" field="note" onUseSaved={() => setNote("")} />');
+    // (Batch 35 §39) One Discard for the total and the note: both emptied (blank total: keep the pay), the tick needed again.
+    expect(d).toContain('{keep.restored && (total !== "" || note !== "") && <DraftTag kind="discard" field="decide" onUseSaved={() => { setTotal(""); setNote(""); setTickedFor(null); }} />}');
+    expect(d).not.toContain('kind="saved"');
     // Decide stays disabled until a restored raise is ticked again (batch 35 §1).
     expect(d).toContain("disabled={busy || (extra > 0 && !ticked)}");
     // Cleared only when Decide goes through.

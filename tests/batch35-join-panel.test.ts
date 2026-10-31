@@ -112,11 +112,13 @@ describe("batch 35 §14: the join page's Listing panel", () => {
     await save(testId, dev.cookie, { title: "Harbor Run 3" }); // a rename alone: a listing line too
     const second = await render(testId);
     const live = asLines(await joinPageChanges(ana.user.id, testId, since, "tab-ana"));
-    expect(live.map((l) => l.text)).toEqual([expect.stringMatching(/^Nora Lane edited the listing at .+: description$/), expect.stringMatching(/^Nora Lane edited the listing at .+: title \(now “Harbor Run 3”\)$/)]);
+    // (Batch 35 §34) ONE line for both edits, naming the newest Save and covering both.
+    expect(live.map((l) => l.text)).toEqual(["Nora Lane edited the listing"]);
     expect(live.every((l) => l.listing)).toBe(true);
-    expect(live.map((l) => (l.saveAt as Date).toISOString())).toEqual([first.savedAt, second.savedAt]);
+    expect(live.map((l) => (l.saveAt as Date).toISOString())).toEqual([second.savedAt]);
+    expect(live[0].keys).toEqual(["title", "description"]);
     const stop = await joinStopList(ana.user.id, testId, { seenAt: since }, "join");
-    expect(stop!.changes.filter((c) => c.listing).map((c) => (c.saveAt as Date).toISOString())).toEqual([first.savedAt, second.savedAt]);
+    expect(stop!.changes.filter((c) => c.listing).map((c) => (c.saveAt as Date).toISOString())).toEqual([second.savedAt]);
     // The panel shows the second Save: its line marks; the first's marks nothing; a line newer than the panel redraws first.
     expect(seeItPlan(second.savedAt, second.savedAt, Date.now())).toBe("mark");
     expect(seeItPlan(second.savedAt, first.savedAt, Date.now())).toBe("none");
@@ -156,13 +158,13 @@ describe("batch 35 §14: See it on every listing line of the join page", () => {
     expect(src("app/app/tests/[id]/ListingPanel.tsx").match(/id="listing"/g)?.length).toBe(1);
 
     const join = src("app/app/find/[id]/JoinBox.tsx");
-    expect(join).toContain('{(c.listing || (c.timed && c.kind === "info")) && <> · <a href="#listing" data-see-it="" onClick={(e) => seeItClick(e, "#listing", c.at, c.saveAt)}>See it</a></>}');
+    expect(join).toContain('{(c.listing || (c.timed && c.kind === "info")) && <> · <a href="#listing" data-see-it="" onClick={(e) => seeItClick(e, "#listing", c.at, c.saveAt, c.keys)}>See it</a></>}');
     expect(join.match(/seeIt="#listing"/g)?.length).toBe(4); // the two waiting views' boxes, the pop-up, the box under the button
     expect(src("app/app/find/[id]/NoThanksButton.tsx")).toContain('<ChangesBox changes={changes} error={error} press="No thanks" side="tester" seeIt="#listing" alertsWhere="join" />');
     const gap = src("components/GapDialog.tsx");
     expect(gap).toContain("if (changed.length) needsSave.current = r.needsSaveAt;");
     expect(gap).toContain("listing: true, ...(needsSave.current ? { saveAt: needsSave.current } : {})");
-    expect(src("components/LiveTop.tsx")).toContain("seeItClick(e, seeIt, l.at, l.saveAt)");
+    expect(src("components/LiveTop.tsx")).toContain("seeItClick(e, seeIt, l.at, l.saveAt, l.keys)");
   });
 });
 

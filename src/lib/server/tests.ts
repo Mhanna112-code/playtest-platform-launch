@@ -11,6 +11,7 @@ import { givenDeletedLine, keyGivenEventLine, keyGivenToYouLine, keyNeedLine, ke
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
+import { BUILD_URL_LINE, buildUrlOk } from "@/lib/listingFields";
 import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, pronouns, stopTimeIn, toCents } from "@/lib/format";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone } from "@/lib/tz";
@@ -103,7 +104,7 @@ export function parseListing(body: Record<string, unknown>, partial = false): Pa
   if (has("buildUrl")) {
     out.buildUrl = str(body.buildUrl, 500);
     // (Batch 15 section 35) https:// only, as the message says.
-    if (out.buildUrl && !/^https:\/\//i.test(out.buildUrl)) throw new HttpError(400, "bad_url", "The build link must start with https://");
+    if (out.buildUrl && !buildUrlOk(out.buildUrl)) throw new HttpError(400, "bad_url", BUILD_URL_LINE); // (batch 35 §27) the same rule and line as the box
   }
   if (has("categories")) out.categories = list(body.categories, CATEGORIES);
   if (has("devices")) out.devices = list(body.devices, DEVICES);
@@ -374,7 +375,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (Design doc 4/5) The Post rules, then the critical-change limit and the access keys: every red mistake is found FIRST
     // (a stop-once reason never hides one), and nothing saves while any remains.
     const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true, confirmedHigh: confirmedHighOf(body), saved: { writtenCents: t.writtenCents, recordingCents: t.recordingCents }, savedSpots: t.spots, tz: tzOf(body, dev) });
-    if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil, fmtDate); if (short) errs.push(short); }
+    if (fields.includes("openUntil")) { const short = openUntilShortened(current.openUntil, next.openUntil); /* (batch 35 §30) the same line as the box */ if (short) errs.push(short); }
     // (Batch 14) Each limited field's counter (the parts and prices share one); the count runs once anyone is affected.
     const critical = countersOf(fields);
     const since = await startedCounting(t, tx);
@@ -403,7 +404,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       if (given.length) dcN = [...dcN, { kind: "own", text: givenDeletedLine(given.map((k) => ({ name: k.contract ? displayName(k.contract.tester) : "A tester", value: k.value }))), createdAt: given.reduce((a, k) => ((k.assignedAt ?? k.createdAt) > a ? k.assignedAt ?? k.createdAt : a), given[0].assignedAt ?? given[0].createdAt) }];
     }
     if (news) {
-      const isEdit = (e: TestEventLike) => (e.kind === "own" && OTHER_TAB_EDIT.test(e.text)) || e.kind === "edited" || e.kind === "edited_spots";
+      const isEdit = (e: TestEventLike) => (e.kind === "own" && (OTHER_TAB_EDIT.test(e.text) || !!e.save)) || (e.kind === "renamed" && !!e.listing) || e.kind === "edited" || e.kind === "edited_spots";
       const dropped = [...dc, ...gateChanges].filter(isEdit);
       dcN = dcN.filter((e) => !isEdit(e));
       gateChanges = gateChanges.filter((e) => !isEdit(e));
@@ -563,7 +564,7 @@ function testerDaysFor(openUntil: Date | string | null, dev: { timeZone?: string
 /** (Batch 34 §9) The test events a listing Save records (its version bump). */
 const LISTING_SAVE_KINDS = ["edited", "edited_spots"];
 /** The developer's own listing save in another tab, as the action log says it ("You saved the listing in another tab: description, access keys"). */
-const OTHER_TAB_EDIT = /^You saved the listing in another tab: /;
+const OTHER_TAB_EDIT = /^You (saved|changed) the listing in another tab/; // (batch 35 §34) the one line for every Save since the page loaded
 /** Fields the form never sends as typed (kept from an older page, or set by the server). */
 const NOT_COMPARED = new Set<keyof Listing>(["deadlineDays", "liveMinutes"]);
 /** Two values of one field are the same (Open until by its day: a pause shift moves it by the minute). */
@@ -615,6 +616,8 @@ export const devLine = (c: TestEventLike & { contractId?: string | null }, withA
   ...(c.listing ? { listing: true } : {}),
   // (Batch 35 §3) ... and names its Save, so See it marks that Save's fields only.
   ...(c.saveAt ? { saveAt: c.saveAt } : {}),
+  // (Batch 35 §34) ... and the panel lines all the listing changes it covers changed (See it marks the union).
+  ...(c.keys?.length ? { keys: c.keys } : {}),
 });
 
 /**

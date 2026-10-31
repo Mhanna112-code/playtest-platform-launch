@@ -4,7 +4,7 @@ import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money } from "@/lib/format";
-import { REVIEW_DAYS, closedToNewLine, dueFromJoin, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
+import { REVIEW_DAYS, closedToNewLine, dueFromJoin, joinerDays, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
 const utcDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 import { ScrollText } from "@/components/ScrollText";
 import { QUESTION_BOX_AFTER, QuestionBox } from "@/components/QuestionBox";
@@ -107,7 +107,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const closed = paused || t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
   // (Owner, Oct 30, batch 15 section 18) Every tester gets the same days from when they join: "Your deadline: Dec 3 (14 days from joining)".
-  const days = t.testerDays ?? (t.openUntil ? testerDaysOf(t.createdAt, t.openUntil) : t.deadlineDays);
+  const days = joinerDays(t); // (batch 35 §32) the same helper as the developer's Listing panel
   const dueAt = t.testerDays ? dueFromJoin(new Date(), t.testerDays, t.developer.timeZone) : t.openUntil ?? new Date(Date.now() + t.deadlineDays * 86_400_000);
   const dueIfNow = yourDeadlineLine(dueAt, days, utcDay).replace(/^Your deadline: /, "");
   const joinClosed = t.openUntil && t.openUntil < new Date() ? closedToNewLine(t.openUntil, utcDay) : "";

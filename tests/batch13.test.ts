@@ -307,6 +307,6 @@ describe("batch 13 section 9: long text", () => {
     for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx"]) expect(src(p)).toContain("<NdaBox");
     expect(f).not.toContain("<NdaBox"); // (batch 16 section 8) no "How testers see it" preview on Post / Edit
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox label="Before"');
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("<QuestionList items={offer.fromQuestions} />"); // (batch 15 section 3)
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("<QuestionList numbered items={offer.fromQuestions} />"); // (batch 15 section 3; batch 35 §29 numbered)
   });
 });

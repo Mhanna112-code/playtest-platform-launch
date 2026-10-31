@@ -69,13 +69,13 @@ describe("batch 35 §10: Discard where nothing is saved", () => {
       "app/app/tests/[id]/DevCallPanel.tsx": { discard: 1, saved: 0 }, // the developer's Request a call
       "components/CallRequests.tsx": { discard: 1, saved: 0 }, // the tester's Propose times
       "app/app/find/[id]/JoinBox.tsx": { discard: 1, saved: 0 }, // the Apply / Ask to rejoin note
-      "app/app/sessions/[id]/SessionActions.tsx": { discard: 1, saved: 2 }, // the tester's dispute reason; written answers (batch 35 §18: each box, and the notes)
+      "app/app/sessions/[id]/SessionActions.tsx": { discard: 1, saved: 0 }, // the tester's dispute reason; written answers: kind={answerKind} (batch 35 §39: Use saved only once sent)
       "app/app/tests/TestForm.tsx": { discard: 0, saved: 0 }, // Edit / Post (each field, and the access keys): kind={draftKind}, below (batch 35 §23)
-      "app/app/tests/[id]/PayBox.tsx": { discard: 0, saved: 1 }, // Pay / Pay more
+      "app/app/tests/[id]/PayBox.tsx": { discard: 1, saved: 0 }, // Pay / Pay more (batch 35 §39: nothing saved, Discard)
       "app/app/profile/ProfileForm.tsx": { discard: 0, saved: 1 }, // the profile
       // (Batch 35 §11) The admin console's boxes.
       "app/admin/AdminButton.tsx": { discard: 1, saved: 0 }, // every reason / note / days box (Suspend, Delete, Pause, Stop, Extend, Don't approve)
-      "app/admin/DisputeDecision.tsx": { discard: 1, saved: 1 }, // Decide's note; its total (Use saved = blank, keep the pay)
+      "app/admin/DisputeDecision.tsx": { discard: 1, saved: 0 }, // Decide's total and note: one Discard (batch 35 §39)
       "app/admin/TeamCloseBox.tsx": { discard: 1, saved: 0 }, // the team close-out's reason
       "app/admin/PagedList.tsx": { discard: 1, saved: 0 }, // the hold lift's note to the developer
     };
@@ -92,7 +92,7 @@ describe("batch 35 §10: Discard where nothing is saved", () => {
       if (rel === "lib/useKept.tsx") continue;
       const tags = s.match(/<DraftTag\b[^>]*/g) ?? [];
       if (tags.length) expect(Object.keys(want), rel).toContain(rel);
-      for (const t of tags) expect(t, rel).toMatch(rel === "app/app/tests/TestForm.tsx" ? /^<DraftTag kind=\{draftKind\}/ : /^<DraftTag kind="(saved|discard)"/);
+      for (const t of tags) expect(t, rel).toMatch(rel === "app/app/tests/TestForm.tsx" ? /^<DraftTag kind=\{draftKind\}/ : rel === "app/app/sessions/[id]/SessionActions.tsx" ? /^<DraftTag kind=(\{answerKind\}|"discard")/ : /^<DraftTag kind="(saved|discard)"/);
     }
     // (Batch 35 §23) Edit and a saved draft keep "Use saved" / "Use saved for all"; a new Post has nothing saved: "Discard" and "Start empty".
     const form = src("app/app/tests/TestForm.tsx");

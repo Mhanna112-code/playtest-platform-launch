@@ -33,5 +33,9 @@ export async function json(res: Response) {
 }
 
 const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-/** (Batch 30 §10) A tester's one line per listing save: "Nora Lane edited the listing at 3:04 PM: description" (any time). */
-export const saveRe = (who: string, rest: string, verb = "edited the listing") => new RegExp(`^${esc(who)} ${verb} at \\d{1,2}:\\d{2}\\s[AP]M${rest ? `: ${esc(rest)}` : ""}$`);
+/**
+ * (Batch 30 §10; batch 35 §34) The tester's listing line: since batch 35 §34 ONE line for every edit since the page's seen time, with no field list and no time in
+ * its text ("Nora Lane edited the listing"): `rest` (the fields the edits changed) stays in the calls as what the line covers (its See it marks them). The join
+ * page's NDA line keeps its words: "Nora Lane changed the NDA: read and accept it again below".
+ */
+export const saveRe = (who: string, rest: string, verb = "edited the listing") => new RegExp(`^${esc(who)} ${verb}${verb === "edited the listing" ? "" : `: ${esc(rest)}`}$`);

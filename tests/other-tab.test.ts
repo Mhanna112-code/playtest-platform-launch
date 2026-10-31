@@ -174,7 +174,7 @@ describe("(F) listing info", () => {
     // (Batch 30 §10) One line per save, saying its own time.
     expect(texts(r)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description"))]);
     const l = await live(tester.cookie, `session:${sessionId}`, pageLoaded);
-    expect(l.body.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(saveRe("Nora Lane", "description")), kind: "info", timed: true })]);
+    expect(l.body.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(saveRe("Nora Lane", "description")), kind: "info", listing: true, keys: ["description"] })]);
     const j = await act(testId, "join", outsider.cookie, { seenAt: pageLoaded });
     expect(texts(j)).toEqual([expect.stringMatching(saveRe("Nora Lane", "description"))]);
   });
@@ -188,7 +188,7 @@ describe("(F) listing info", () => {
     await joined(testId);
     const r = await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: editOpened, tab: "tab-1" });
     expect(r.body.error.code).toBe("changed");
-    expect(texts(r)).toEqual(["You saved the listing in another tab: description", "Ana Silva joined"]);
+    expect(texts(r)).toEqual(["You saved the listing in another tab", "Ana Silva joined"]); // (batch 35 §34)
     expect(r.body.error.listingEdited).toBe(true); // the "fields you didn't touch keep the newer values" tail
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "12.00" }, seenAt: editOpened, tab: "tab-1", confirmed: true })).status).toBe(200);
   });

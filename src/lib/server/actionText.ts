@@ -95,7 +95,8 @@ export async function logTestAction(userId: string, testId: string, action: stri
         ...(r.notReinvited ?? []).map((n) => `didn't re-invite ${n}`),
       ];
       // (Batch 29 section 12) Any Save is a change that stops the other tabs' presses once.
-      about = { a: "edit", k: ["test"] };
+      // (Batch 35 §34) What the Save closed or re-sent goes with it, each its own line on the other tabs ("You re-sent fbbb's invite (the listing changed)").
+      about = { a: "edit", k: ["test"], ...(closings.length ? { x: closings } : {}) };
       // (Owner, Oct 28; batch 29 section 12) One Save, one line, one voice: "You saved the listing in another tab: spots, description". (Batch 30 §10, Oct 29
       // addition) A rename saved with other fields is named here ("title (now “X”)"), and its own "You renamed the test to X" line is dropped (live.ts devChanges).
       // (Owner's finding, Oct 30, batch 34 §8) A save that also closed or re-sent invites names its fields too: "…: description, build link; this re-sent fbbb's invite".

@@ -62,7 +62,7 @@ export function PopupStop({ lines, press, seeIt }: { lines: Change[]; press: str
       {lines.length > 0 && (
         <ul className="list-disc space-y-0.5 pl-6">
           {lines.map((c, i) => (
-            <li key={`${c.text}|${i}`}>{c.text}{seeIt && isListingLine(c) && <> · <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, c.at, c.saveAt)}>See it</a></>}</li>
+            <li key={`${c.text}|${i}`}>{c.text}{seeIt && isListingLine(c) && <> · <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, c.at, c.saveAt, c.keys)}>See it</a></>}</li>
           ))}
         </ul>
       )}

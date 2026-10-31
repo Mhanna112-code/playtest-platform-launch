@@ -5,7 +5,8 @@
 //   - number boxes: data-min / data-max (and data-zero-ok: 0 is allowed too), data-msg for the message (data-min-msg / data-max-msg
 //     when below / above differ, matching the server's own lines);
 //   - date / time boxes: min / max (data-msg, e.g. "Pick a time in the future.");
-//   - text: maxLength, data-min-chars (counted after trimming), and data-required (+ data-required-msg): blank is red.
+//   - text: maxLength, data-min-chars (counted after trimming), and data-required (+ data-required-msg): blank is red; data-pattern (batch 35 §27): a
+//     filled-in box that doesn't match it is red with data-msg.
 // Presses that aren't form submits call checkFields(root) first: every box in it is checked and marked.
 // (Owner, Oct 28, batch 16 section 10) ONE rule for every form: a mistake shows at its field (red box, red line), from the client check or the
 // server (markServerMistakes, the same text); a field stays red until its OWN value is fixed (re-checked as it's typed in once it's red; editing
@@ -14,6 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { roundedMoneyText } from "@/lib/format";
 import { scrollQuestionBoxTo } from "@/components/QuestionBox";
+import { digitsOnly, keyAllowed, moneyText, pastedNumber, typedMoney, wholeText } from "@/lib/numberInput";
 
 type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
@@ -21,7 +23,7 @@ const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInput
 const server = new WeakMap<Element, { msg: string; value: string }>();
 const hasRules = (el: Element) =>
   server.has(el) ||
-  (isField(el) && (el.dataset.required != null || el.dataset.min != null || el.dataset.max != null || el.dataset.minChars != null || (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local") && (!!el.min || !!el.max))));
+  (isField(el) && (el.dataset.required != null || el.dataset.pattern != null || el.dataset.min != null || el.dataset.max != null || el.dataset.minChars != null || (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local") && (!!el.min || !!el.max))));
 
 /** A box's value (a tick: whether it's ticked); a group of boxes (data-field-group): all of theirs. */
 const valueOf = (el: Element): string => {
@@ -35,6 +37,8 @@ function clientMessage(el: Field): string {
   const msg = el.dataset.msg;
   // (Design doc 4) A required box left blank is red at the field (on blur and on submit).
   if (el.dataset.required != null && !v) return el.dataset.requiredMsg ?? "This is required.";
+  // (Owner, Oct 31, batch 35 §27) data-pattern: what a filled-in box must match (case-insensitive; the build link: "^https://"), data-msg its line.
+  if (el.dataset.pattern != null && v && !new RegExp(el.dataset.pattern, "i").test(v)) return msg ?? "Check this field.";
   if (el instanceof HTMLInputElement && (el.type === "date" || el.type === "datetime-local")) {
     if (!v) return "";
     if (el.min && v < el.min) return msg ?? "Pick a time in the future.";
@@ -147,7 +151,7 @@ export function recheckRed() {
   }
 }
 /** (Batch 35 §19) The attributes that decide a field's rule: a change to any of them re-checks the red fields. */
-export const RULE_ATTRS = ["disabled", "data-required", "data-required-msg", "data-min", "data-max", "data-min-chars", "data-zero-ok", "min", "max"];
+export const RULE_ATTRS = ["disabled", "data-required", "data-required-msg", "data-pattern", "data-min", "data-max", "data-min-chars", "data-zero-ok", "min", "max"];
 
 /** The fields red right now inside `root`, top to bottom, each with the text of its red line. */
 export function redFields(root: Element | null): { el: HTMLElement; text: string }[] {
@@ -160,10 +164,31 @@ export function redFields(root: Element | null): { el: HTMLElement; text: string
     if (isOff(el)) continue; // (batch 35 §19) a disabled field is never in the list
     const note = notes.get(el);
     const described = el.getAttribute("aria-describedby");
-    const text = (note?.isConnected ? note.textContent : "") || el.dataset.redMsg || (described ? document.getElementById(described.split(" ")[0])?.textContent : "") || "";
-    if (text && !out.some((x) => x.el === el)) out.push({ el, text });
+    // (Owner, Oct 31, batch 35 §31) Never an empty bullet: a red field with no line text is named instead ("Open until needs fixing.").
+    const text = ((note?.isConnected ? note.textContent : "") || el.dataset.redMsg || (described ? document.getElementById(described.split(" ")[0])?.textContent : "") || "").trim() || needsFixingLine(fieldNameOf(el));
+    if (!out.some((x) => x.el === el || x.text === text)) out.push({ el, text }); // the same line once
   }
   return out;
+}
+
+/** (Batch 35 §31) A red field's name, for a bullet when it has no line of its own: its label, aria-label, legend or placeholder. */
+export function fieldNameOf(el: HTMLElement): string {
+  const byFor = el.id ? document.querySelector(`label[for="${CSS.escape(el.id)}"]`)?.textContent : "";
+  const own = el.getAttribute("aria-label") || byFor || el.closest("label")?.textContent || el.closest("fieldset")?.querySelector("legend")?.textContent || el.getAttribute("placeholder") || "";
+  return own.replace(/\s+/g, " ").replace(/\*/g, "").trim();
+}
+/** (Batch 35 §31) "Open until needs fixing." (a field with no name: "A field needs fixing."). */
+export const needsFixingLine = (name: string) => (name ? `${name} needs fixing.` : "A field needs fixing.");
+
+/**
+ * (Owner, Oct 31, batch 35 §31) The bullets under "Fix the mistake(s) above": every red field's line (linked to it), then every mistake that belongs to no field,
+ * blank lines dropped, each text once (trimmed); the heading's count is the number of bullets.
+ */
+export function mistakeBullets<T extends { text: string }>(items: T[], orphans: string[]): { items: T[]; extra: string[]; n: number } {
+  const seen = new Set<string>();
+  const its = items.filter((i) => { const t = i.text.trim(); if (!t || seen.has(t)) return false; seen.add(t); return true; });
+  const extra = orphans.map((o) => o.trim()).filter((o) => { if (!o || seen.has(o)) return false; seen.add(o); return true; });
+  return { items: its, extra, n: its.length + extra.length };
 }
 
 /** Scrolls to a red field and puts the cursor in it (a group: its first box). */
@@ -228,18 +253,8 @@ export function markServerMistakes(root: Element | null, messages: string[], fin
   return orphans;
 }
 
-/**
- * (Owner, Oct 28, batch 20 section 19) What a whole-number box (data-whole: spots, a call's Length, the admin's Extend days…) may hold: digits only (a minus, "e",
- * "+", "." and letters are dropped), never 0 or below: a value that is only zeros is ignored (the box keeps what it had). The maximum keeps its red line.
- */
-export function wholeText(next: string, prev = "") {
-  const digits = next.replace(/\D/g, "");
-  if (!digits) return "";
-  if (/^0+$/.test(digits)) return prev;
-  return digits.replace(/^0+/, "");
-}
-/** (Batch 20 section 19) A money box never takes a minus sign ($0 stays allowed where it is today). */
-export const moneyText = (next: string) => next.replace(/[-\u2212]/g, "");
+// (Owner, Oct 31, batch 35 §25) Number-only boxes: the one shared helper (src/lib/numberInput.ts); wholeText / moneyText stay importable from here.
+export { moneyText, wholeText } from "@/lib/numberInput";
 const setValue = (el: HTMLInputElement, next: string) => Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set?.call(el, next);
 
 /** Rounds a money box (data-money) in place, through the native setter so a React-controlled box takes the new value too. */
@@ -269,23 +284,55 @@ export function FieldChecks() {
       if (isField(e.target)) recheck(e.target);
       queueMicrotask(recheckRed); // (batch 35 §19) after the page's own redraw
     };
-    // (Batch 20 section 19) Whole-number and money boxes: what can't be in them is never typed or pasted in (checked before the page's own handlers see it).
+    // (Batch 20 section 19; batch 35 §25: src/lib/numberInput.ts) Whole-number and money boxes: what can't be in them is never typed or pasted in (checked before
+    // the page's own handlers see it). A money box: digits and one decimal point, at most 2 decimals; a whole-number box: digits only.
+    const kindOf = (el: EventTarget | null): "money" | "whole" | null =>
+      el instanceof HTMLInputElement ? (el.dataset.whole != null ? "whole" : el.dataset.money != null ? "money" : null) : null;
+    /** The box's selection, or null where the browser has none to give (a type="number" box). */
+    const selOf = (el: HTMLInputElement): [number | null, number | null] => {
+      try {
+        return [el.selectionStart, el.selectionEnd];
+      } catch {
+        return [null, null];
+      }
+    };
     const last = new WeakMap<HTMLInputElement, string>();
+    /** A money box's value just before the keystroke (the value it goes back to when the keystroke is ignored), with its selection. */
+    const before = new WeakMap<HTMLInputElement, { value: string; sel: [number | null, number | null] }>();
     const onKey = (e: KeyboardEvent) => {
       const el = e.target;
-      if (!(el instanceof HTMLInputElement) || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
-      if (el.dataset.whole != null && !/\d/.test(e.key)) e.preventDefault();
-      else if (el.dataset.money != null && (e.key === "-" || e.key === "\u2212")) e.preventDefault();
+      const kind = kindOf(el);
+      if (!kind || !(el instanceof HTMLInputElement) || e.ctrlKey || e.metaKey || e.altKey || e.key.length !== 1) return;
+      const [a, b] = selOf(el);
+      const outside = a == null || b == null ? el.value : el.value.slice(0, a) + el.value.slice(b);
+      if (!keyAllowed(kind, e.key, outside)) e.preventDefault();
+    };
+    // (Batch 35 §25) Typing that would leave a money box holding something else (a third decimal, a second point; a phone keyboard's keys have no key name) is
+    // stopped before it lands; where the browser can't stop it, onRaw puts the box back.
+    const onBefore = (e: InputEvent) => {
+      const el = e.target;
+      if (kindOf(el) !== "money" || !(el instanceof HTMLInputElement)) return;
+      const sel = selOf(el);
+      before.set(el, { value: el.value, sel });
+      if (e.inputType !== "insertText" || e.data == null || sel[0] == null || sel[1] == null) return;
+      const next = el.value.slice(0, sel[0]) + e.data + el.value.slice(sel[1]);
+      if (typedMoney(next, el.value) !== next && e.cancelable) e.preventDefault();
     };
     const onPaste = (e: ClipboardEvent) => {
       const el = e.target;
-      if (!(el instanceof HTMLInputElement) || (el.dataset.whole == null && el.dataset.money == null)) return;
+      const kind = kindOf(el);
+      if (!kind || !(el instanceof HTMLInputElement)) return;
       const text = e.clipboardData?.getData("text") ?? "";
-      const clean = el.dataset.whole != null ? wholeText(text, "") : moneyText(text);
-      if (clean === text) return;
+      const [a, b] = selOf(el);
+      const next = pastedNumber(kind, el.value, text, a, b, el.value);
+      const plain = a == null || b == null ? text : el.value.slice(0, a) + text + el.value.slice(b);
+      if (next === plain) return; // it fits as it is: the browser pastes it
+      const clean = kind === "whole" ? digitsOnly(text) : moneyText(text);
       e.preventDefault();
-      if (!clean) return;
-      setValue(el, el.dataset.whole != null ? wholeText(clean, el.value) : clean);
+      if (next === el.value) return;
+      setValue(el, next);
+      const at = a == null ? null : Math.min(next.length, a + clean.length);
+      if (at != null) try { el.setSelectionRange(at, at); } catch { /* a box without a selection */ }
       el.dispatchEvent(new Event("input", { bubbles: true }));
     };
     // The value it had when entered: a lone "0" typed over it brings it back.
@@ -300,8 +347,15 @@ export function FieldChecks() {
         if (next !== el.value) setValue(el, next);
         last.set(el, next);
       } else if (el.dataset.money != null) {
-        const next = moneyText(el.value);
-        if (next !== el.value) setValue(el, next);
+        const was = before.get(el);
+        before.delete(el);
+        const pasted = e instanceof InputEvent && /^insertFrom/.test(e.inputType);
+        const next = pasted ? moneyText(el.value) : typedMoney(el.value, was?.value);
+        if (next !== el.value) {
+          setValue(el, next);
+          // An ignored keystroke leaves the cursor where it was.
+          if (was && next === was.value && was.sel[0] != null && was.sel[1] != null) try { el.setSelectionRange(was.sel[0], was.sel[1]); } catch { /* no selection */ }
+        }
       }
     };
     const onChange = (e: Event) => {
@@ -327,6 +381,7 @@ export function FieldChecks() {
     document.addEventListener("keydown", onKey, true);
     document.addEventListener("focusin", onEnter, true);
     document.addEventListener("paste", onPaste, true);
+    document.addEventListener("beforeinput", onBefore, true);
     document.addEventListener("input", onRaw, true);
     document.addEventListener("input", onType);
     document.addEventListener("change", onChange);
@@ -336,6 +391,7 @@ export function FieldChecks() {
       document.removeEventListener("keydown", onKey, true);
       document.removeEventListener("focusin", onEnter, true);
       document.removeEventListener("paste", onPaste, true);
+      document.removeEventListener("beforeinput", onBefore, true);
       document.removeEventListener("input", onRaw, true);
       document.removeEventListener("input", onType);
       document.removeEventListener("change", onChange);
@@ -354,8 +410,8 @@ export const fixLine = (n: number, press: string, top = false) =>
 /**
  * (Batch 16 section 10) The list under a button: the heading and one bullet per field red right now (the same text as its line), each a link to its
  * field; then any server mistake that belongs to no field. It shows once a press was made in its form (or box: the nearest data-mistakes-root) and
- * follows the fields live: fixing a field removes its bullet at the same moment, and the list goes with the last one. With no red field, a mistake
- * that belongs to no field shows as a plain red line.
+ * follows the fields live: fixing a field removes its bullet at the same moment, and the list goes with the last one. (Batch 35 §31) A mistake that belongs to
+ * no field is a bullet in the same list too (never a loose red line).
  */
 export function MistakeList({ press, orphans = [], shown, top = false }: { press: string; orphans?: string[]; shown?: boolean; top?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
@@ -378,25 +434,26 @@ export function MistakeList({ press, orphans = [], shown, top = false }: { press
       window.removeEventListener("mistakes-press", onPress);
     };
   }, []);
-  const on = pressed || !!shown;
-  const extra = orphans.filter((o) => !items.some((i) => i.text === o));
-  const n = items.length + extra.length;
+  // (Owner, Oct 31, batch 35 §31) An orphan arriving shows the list at once (a server refusal is a press's answer).
+  const on = pressed || !!shown || orphans.some((o) => o.trim());
+  // (Batch 35 §31) ALL mistakes under the one heading: the red fields' lines (linked) and the ones that belong to no field, never a loose red line; no blank or
+  // repeated bullet; the count is the bullets'.
+  const { items: shownItems, extra, n } = mistakeBullets(items, orphans);
   return (
-    <div ref={ref} data-mistake-list="" className="space-y-1" hidden={!on || n === 0}>
-      {on && n > 0 && items.length > 0 && (
+    <div ref={ref} data-mistake-list="" className="space-y-1" hidden={!on || n === 0} role={on && n > 0 ? "alert" : undefined}>
+      {on && n > 0 && (
         <>
           <p className="err-field">{fixLine(n, press, top)}</p>
           <ul className="err-field list-disc pl-5">
-            {items.map((i, k) => (
+            {shownItems.map((i, k) => (
               <li key={k}>
                 <a href={i.el.id ? `#${i.el.id}` : "#"} className="text-rose-300 underline decoration-rose-300/50 hover:text-rose-200" data-mistake-link="" onClick={(e) => { e.preventDefault(); focusField(i.el); }}>{i.text}</a>
               </li>
             ))}
-            {extra.map((o) => <li key={o}>{o}</li>)}
+            {extra.map((o) => <li key={o} data-mistake-orphan="">{o}</li>)}
           </ul>
         </>
       )}
-      {on && n > 0 && items.length === 0 && extra.map((o) => <p key={o} className="err-field" role="alert">{o}</p>)}
     </div>
   );
 }

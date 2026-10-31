@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
-import { announce, clearShown, setShown, wasShownInBox } from "@/lib/live";
+import { announce, clearShown, mergeChanges, setShown, wasShownInBox } from "@/lib/live";
 import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
 import { jumpTo } from "@/lib/markJump";
@@ -102,7 +102,8 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
       if (!r || !alive) return;
       const added = r.changes.filter((c) => !known.current.has(key(c)));
       added.forEach((c) => known.current.add(key(c)));
-      if (added.length) setLines((old) => [...old, ...added]);
+      // (Batch 35 §34) A keyed line (the one listing line) replaces the box's earlier one, covering its fields too.
+      if (added.length) setLines((old) => mergeChanges(old, added));
       // Only a live update nobody pressed for is announced (lines a stop box showed are quiet); (batch 27 section 4) each one raises the pill when the box is out of view.
       // Ignored (greyed) Alerts lines count as updates too, since they still show.
       const fresh = added.filter((c) => !wasShownInBox(c));
@@ -157,7 +158,7 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
               <>
                 {l.timed || l.listing ? " · " : " "}
                 {/* (Batch 30 §15) The page can mark the lines that save changed (the session page's contract box; batch 34 §14: the developer's Listing panel). */}
-                <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, l.at, l.saveAt)}>See it</a>
+                <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, l.at, l.saveAt, l.keys)}>See it</a>
               </>
             )}
           </li>

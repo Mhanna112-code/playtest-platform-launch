@@ -90,14 +90,14 @@ describe("(NEWEST+12) which test changes alert testers", () => {
     await edit(testId, dev.cookie, { openUntil: new Date(Date.now() + 20 * 86_400_000).toISOString().slice(0, 10) });
     expect((await tryButton()).status).toBe(200);
     // Who can join, the build link, categories: alert.
-    for (const [field, value, line] of [["joinMode", "apply", "who can join"], ["buildUrl", "https://example.com/b2", "build link"]] as const) {
+    for (const [field, value, line] of [["joinMode", "apply", "joinMode"], ["buildUrl", "https://example.com/b2", "buildUrl"]] as const) {
       await later();
       const before = seen();
       await later();
       await edit(testId, dev.cookie, { [field]: value });
       const r = await sact(sessionId, "request-time", tester.cookie, { seenAt: before, startsAt: new Date(Date.now() + 96 * 3_600_000).toISOString() });
       expect(r.status).toBe(409);
-      expect((r.body.error.changes as { text: string }[]).some((c) => c.text.includes(line))).toBe(true);
+      expect((r.body.error.changes as { text: string; keys?: string[] }[]).some((c) => c.text === "Nora Lane edited the listing" && !!c.keys?.includes(line))).toBe(true); // (batch 35 §34) the one line covers it
     }
     // The title: info only (the press goes through).
     const before = seen();

@@ -311,6 +311,13 @@ export const daysBetween = (from: string, to: string) => Math.round((Date.parse(
 export const openUntilDay = (openUntil: Date | string) => new Date(openUntil).toISOString().slice(0, 10);
 /** Tester days: from the day the test opened (posted, or a Next round opened) to Open until, in whole days. Posted Nov 6 with Open until Nov 20: 14. */
 export const testerDaysOf = (openedAt: Date, openUntil: Date | string, tz?: string | null) => Math.max(1, daysBetween(dayIn(openedAt, tz), openUntilDay(openUntil)));
+/**
+ * (Batch 35 §32; batch 15 §18) The days a tester joining NOW gets: the test's tester days (they grow when Open until moves later), or, for an older test with
+ * Open until but no stored days, the days from opening to Open until; with neither, the listing's deadline days. The developer's Listing panel and the tester's
+ * join page both show this (the stored deadlineDays alone goes stale after an Open until move).
+ */
+export const joinerDays = (t: { testerDays?: number | null; openUntil: Date | string | null; createdAt: Date; deadlineDays: number }) =>
+  t.testerDays ?? (t.openUntil ? testerDaysOf(t.createdAt, t.openUntil) : t.deadlineDays);
 /** A tester's deadline: the end of the day they join + tester days. Joining Nov 6 with 14 days: Nov 20; joining Nov 19: Dec 3. */
 export function dueFromJoin(joinedAt: Date, testerDays: number, tz?: string | null) {
   const start = Date.parse(`${dayIn(joinedAt, tz)}T23:59:59.000Z`);
@@ -494,7 +501,7 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
  */
 export const STOP_ONCE_KINDS = ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed"] as const;
 export const CALL_KINDS = ["booked", "confirmed", "cancelled", "offered", "removed"] as const;
-export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the test page's Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save that line is about (its record's time): See it marks that Save's fields only */ saveAt?: Date };
+export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the test page's Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save that line is about (its record's time): See it marks that Save's fields only */ saveAt?: Date; /** (Batch 35 §34) the panel lines (PanelKey) the listing changes this line covers changed: See it marks them all */ keys?: string[]; /** (Batch 35 §34) a consequence of a listing Save (a re-sent invite): Edit's stop treats it with that Save */ save?: boolean };
 
 /** Events since the page's "seen" marker that stop a press once, oldest first. */
 export function stopOnceChanges(events: TestEventLike[], seenAt: Date, kinds: readonly string[] = STOP_ONCE_KINDS) {
@@ -918,11 +925,17 @@ export function checkOpenUntilChange(current: Date | null, next: Date | null, no
 }
 
 /** (Design doc 5) Open until can only be extended: a red line when the new date is earlier (or a date is added to a test with no end). "" when fine. */
-export function openUntilShortened(current: string | null, next: string | null, fmt: (d: Date) => string) {
+export function openUntilShortened(current: string | Date | null, next: string | Date | null) {
   if (next == null) return "";
   if (current == null) return "Open until can only be extended: this test has no end date now.";
-  return new Date(next).toISOString().slice(0, 10) < new Date(current).toISOString().slice(0, 10) ? `Open until can only be extended: it's ${fmt(new Date(current))} now.` : "";
+  const day = new Date(current).toISOString().slice(0, 10);
+  return new Date(next).toISOString().slice(0, 10) < day ? openUntilExtendLine(day) : "";
 }
+/**
+ * (Owner's screenshot, Oct 31, batch 35 §30) The one line for an earlier Open until, at the box and from the server alike (so it shows once): "Open until can only
+ * be extended: it's Nov 28 now." (no year, like the hint beside it "only later, up to Nov 29 …"). `day`: the saved date, YYYY-MM-DD.
+ */
+export const openUntilExtendLine = (day: string) => `Open until can only be extended: it's ${capLabel(day)} now.`;
 
 /** Which Open until heads-up is due now (3 days, then 1 day before), if any. */
 export function headsUpDue(openUntil: Date | null, now: Date, sent3d: boolean, sent1d: boolean): "3d" | "1d" | null {

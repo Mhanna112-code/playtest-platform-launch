@@ -88,12 +88,14 @@ describe("batch 35 §3: See it marks only the fields of the line's own save", ()
 
     // The top box's lines (and a stop box's) carry their save.
     const live = asLines(await devChanges(dev.user.id, testId, since, "tab-page", db, { all: true })).filter((l) => l.listing);
-    expect(live.map((l) => l.text)).toEqual(["You saved the listing in another tab: description", "You saved the listing in another tab: build link"]);
-    expect(live.map((l) => (l.saveAt as Date).toISOString())).toEqual([first.savedAt, second.savedAt]);
+    // (Batch 35 §34) The two Saves are ONE line, naming the newest Save and covering both Saves' fields.
+    expect(live.map((l) => l.text)).toEqual(["You saved the listing in another tab"]);
+    expect(live.map((l) => (l.saveAt as Date).toISOString())).toEqual([second.savedAt]);
+    expect(live[0].keys).toEqual(["description", "buildUrl"]);
     const stop = (await devChanges(dev.user.id, testId, since, "tab-page", db, { press: { acts: ["pay"], keys: ["c:x"] } })).map((c) => devLine(c)).filter((l) => l.listing);
-    expect(stop.map((l) => (l.saveAt as Date).toISOString())).toEqual([first.savedAt, second.savedAt]);
+    expect(stop.map((l) => (l.saveAt as Date).toISOString())).toEqual([second.savedAt]);
 
-    const newest = { at: new Date(live[1].at).getTime(), saveAt: second.savedAt };
+    const newest = { at: new Date(live[0].at).getTime(), saveAt: second.savedAt };
     // The panel still shows the previous save: redraw first (never mark the previous save's fields).
     expect(seeItPlan(first.savedAt, newest.saveAt, newest.at)).toBe("refresh");
     expect(seeItPlan("", newest.saveAt, newest.at)).toBe("refresh");
@@ -114,7 +116,7 @@ describe("batch 35 §3: See it marks only the fields of the line's own save", ()
     const info = src("components/ListingInfo.tsx");
     expect(info).toContain("router.refresh()");
     expect(info).toContain("seeItPlan(now.dataset.savedAt, d.saveAt, at)");
-    for (const f of ["components/LiveTop.tsx", "components/ChangesBox.tsx"]) expect(src(f)).toMatch(/seeItClick\(e, \w+, \w\.at, \w\.saveAt\)/);
+    for (const f of ["components/LiveTop.tsx", "components/ChangesBox.tsx"]) expect(src(f)).toMatch(/seeItClick\(e, \w+, \w\.at, \w\.saveAt, \w\.keys\)/);
   });
 });
 

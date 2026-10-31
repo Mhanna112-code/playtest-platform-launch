@@ -247,7 +247,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           <p className="font-medium">Changed since you opened this page</p>
           <LongList className="mt-0.5 list-disc space-y-0.5 pl-5" tall="max-h-52">
             {[...since].sort((a, b) => (a.at < b.at ? 1 : -1)).map((c) => (
-              <li key={`${c.at}|${c.text}`}>{c.timed ? c.text : `${c.text} · ${fmtTimeIn(c.at, savedZone())}`}{(c.listing || (c.timed && c.kind === "info")) && <> · <a href="#listing" data-see-it="" onClick={(e) => seeItClick(e, "#listing", c.at, c.saveAt)}>See it</a></>}</li>
+              <li key={`${c.at}|${c.text}`}>{c.timed ? c.text : `${c.text} · ${fmtTimeIn(c.at, savedZone())}`}{(c.listing || (c.timed && c.kind === "info")) && <> · <a href="#listing" data-see-it="" onClick={(e) => seeItClick(e, "#listing", c.at, c.saveAt, c.keys)}>See it</a></>}</li>
             ))}
           </LongList>
         </div>

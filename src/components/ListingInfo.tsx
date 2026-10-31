@@ -19,7 +19,7 @@ export const useSeeItTarget = () => useContext(SeeItContext);
  * (Batch 30 §15; batch 34 §14) A "See it" press: a line inside a pop-up closes the pop-up first (its own scroll then brings the target into view); a fold opens; and
  * the page is told the line's time so it can mark what that save changed (ListingSeeIt).
  */
-export function seeItClick(e: React.MouseEvent<HTMLElement>, target: string, at?: string | Date, saveAt?: string | Date) {
+export function seeItClick(e: React.MouseEvent<HTMLElement>, target: string, at?: string | Date, saveAt?: string | Date, /** (batch 35 §34) the panel lines the line's changes cover */ keys?: string[]) {
   const dialog = e.currentTarget.closest("dialog");
   if (dialog) {
     e.preventDefault();
@@ -29,7 +29,7 @@ export function seeItClick(e: React.MouseEvent<HTMLElement>, target: string, at?
     const el = document.querySelector(target);
     if (el instanceof HTMLDetailsElement) el.open = true;
     if (dialog && el) el.scrollIntoView({ block: "start", behavior: window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
-    window.dispatchEvent(new CustomEvent(SEE_IT_EVENT, { detail: { at: at ? new Date(at).toISOString() : undefined, saveAt: saveAt ? new Date(saveAt).toISOString() : undefined } }));
+    window.dispatchEvent(new CustomEvent(SEE_IT_EVENT, { detail: { at: at ? new Date(at).toISOString() : undefined, saveAt: saveAt ? new Date(saveAt).toISOString() : undefined, ...(keys?.length ? { keys } : {}) } }));
   }, 0);
 }
 
@@ -90,8 +90,10 @@ export function ListingSeeIt({ box }: { box: string }) {
       setTimeout(() => marked.forEach((l) => l.removeAttribute("data-marked")), 4000);
     };
     const updated = (el: HTMLElement) => [...el.querySelectorAll<HTMLElement>("[data-info-line][data-updated-at]")];
+    // (Owner, Oct 31, batch 35 §34) One line covers every listing change since the page's seen time: See it marks every panel line any of them changed.
+    const covered = (el: HTMLElement, keys?: string[]) => (keys?.length ? [...el.querySelectorAll<HTMLElement>("[data-info-line]")].filter((l) => keys.includes(l.dataset.infoLine ?? "")) : updated(el));
     const on = (e: Event) => {
-      const d = (e as CustomEvent<{ at?: string; saveAt?: string }>).detail ?? {};
+      const d = (e as CustomEvent<{ at?: string; saveAt?: string; keys?: string[] }>).detail ?? {};
       const at = new Date(d.at ?? "").getTime();
       const el = document.getElementById(box);
       if (!el) return;
@@ -99,6 +101,7 @@ export function ListingSeeIt({ box }: { box: string }) {
       if (wait) clearInterval(wait);
       wait = undefined;
       const plan = seeItPlan(el.dataset.savedAt, d.saveAt, at);
+      if (plan === "legacy" && d.keys?.length) return mark(el, covered(el, d.keys));
       if (plan === "legacy") {
         const lines = updated(el);
         let marked = isNaN(at) ? [] : lines.filter((l) => new Date(l.dataset.updatedAt ?? "").getTime() >= at - 10_000);
@@ -106,7 +109,7 @@ export function ListingSeeIt({ box }: { box: string }) {
         return mark(el, marked);
       }
       // The panel's tagged lines are exactly the fields of the Save it shows.
-      if (plan === "mark") return mark(el, updated(el));
+      if (plan === "mark") return mark(el, covered(el, d.keys));
       if (plan === "none") return mark(el, []);
       // The line's Save is newer than the panel: redraw, then mark once the panel shows that Save (the panel is drawn again, so it's looked up each time).
       el.scrollIntoView({ block: "start", behavior: reduce() ? "auto" : "smooth" });
@@ -118,7 +121,7 @@ export function ListingSeeIt({ box }: { box: string }) {
         if (now && (p === "mark" || p === "none")) {
           clearInterval(wait);
           wait = undefined;
-          return mark(now, p === "mark" ? updated(now) : []);
+          return mark(now, p === "mark" ? covered(now, d.keys) : []);
         }
         if (Date.now() > until) {
           clearInterval(wait);

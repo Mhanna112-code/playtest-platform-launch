@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { LongList } from "@/components/LongList";
+import { wasLine } from "@/lib/editMerge";
 
 /**
  * (Owner, Oct 28, batch 16 section 19) What another tab or device changed in one field, named as on the form ("Spots: 4 → 5"; long text: "Instructions:"
@@ -155,6 +156,31 @@ export function GroupNote({ groups }: { groups: { heading: string; lines: string
           <LongList as="div" className="space-y-0.5">{g.lines.map((l) => <p key={l}>{l}</p>)}</LongList>
         </div>
       ))}
+    </div>
+  );
+}
+
+export type WasItem = { field: string; /** the field's short name, when the place holds more than one field (the parts and prices) */ name?: string; time: string; was: string | null };
+
+/**
+ * (Owner, Oct 31, batch 35 §26) Under a field this tab hasn't touched that took another tab's saved value (it already shows their value: no "Use theirs"): "Changed
+ * in another tab at 11:43 PM: was “Harbor Run”" (lib/editMerge.ts wasLine), live; long text folds. It goes when the field is edited or on Save.
+ */
+export function WasNote({ items }: { items: WasItem[] }) {
+  if (!items.length) return null;
+  return (
+    <div className="info mt-1.5 space-y-1 !p-2 text-xs" role="status" data-field-note="" data-was-note="">
+      {items.map((it) => {
+        const line = wasLine(it.time, it.was, it.name);
+        return it.was == null || isShort(it.was) ? (
+          <p key={it.field} className="font-medium" data-was-field={it.field}>{line}</p>
+        ) : (
+          <div key={it.field} data-was-field={it.field}>
+            <p className="font-medium">{wasLine(it.time, null, it.name).replace(/ empty$/, "")}</p>
+            <FoldText text={`“${it.was}”`} />
+          </div>
+        );
+      })}
     </div>
   );
 }

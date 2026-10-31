@@ -7,9 +7,16 @@ import { CRITICAL_KEYS, criticalLine } from "@/lib/limits";
 /** The field keys; each is the id of its box (or group) in TestForm ("keys": accessKeys on Post, keysFree on Edit). */
 export type ListingField =
   | "joinMode" | "openUntil" | "productName" | "title" | "description" | "matureWhy" | "ndaText" | "categories" | "parts" | "spots"
-  | "highWritten" | "highRecording" | "writtenPrice" | "recordingPrice" | "liveRate" | "questions" | "keys";
+  | "highWritten" | "highRecording" | "writtenPrice" | "recordingPrice" | "liveRate" | "questions" | "keys" | "buildUrl";
+
+/** (Batch 15 section 35; owner, Oct 31, batch 35 §27) The build link: https:// only. The server's refusal and the box's own red line are this one line. */
+export const BUILD_URL_LINE = "The build link must start with https://";
+/** (Batch 35 §27) What the box checks as it's left (FieldChecks data-pattern, case-insensitive), the same rule as the server's. */
+export const BUILD_URL_PATTERN = "^https://";
+export const buildUrlOk = (url: string) => !url.trim() || new RegExp(BUILD_URL_PATTERN, "i").test(url.trim());
 
 export const LISTING_MISTAKES: [ListingField, RegExp][] = [
+  ["buildUrl", /^The build link must start/], // (batch 35 §27) at the box, never a loose line above Save
   ["joinMode", /who can join/i],
   ["openUntil", /open until/i],
   ["productName", /product name/i],

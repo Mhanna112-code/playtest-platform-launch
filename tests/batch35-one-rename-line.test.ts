@@ -48,8 +48,9 @@ describe("batch 35 §17: one save, one line (a rename saved with other fields in
       expect(early.map((c) => c.text)).not.toContain("You renamed the test to Harbor Run: night harbors");
     });
     const after = await live(dev.cookie, testId, pageLoaded, "tab-b");
-    expect(after.map((c) => c.text)).toEqual(["You saved the listing in another tab: title (now “Harbor Run: night harbors”), description"]);
-    expect(kept(early, after)).toEqual(["You saved the listing in another tab: title (now “Harbor Run: night harbors”), description"]);
+    // (Batch 35 §34) One line for the Save (the rename in it).
+    expect(after.map((c) => c.text)).toEqual(["You saved the listing in another tab"]);
+    expect(kept(early, after)).toEqual(["You saved the listing in another tab"]);
     // A press in that moment: one stop line too.
     await withoutSaveLine(testId, "tab-a", async () => {
       const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-b" });
@@ -69,7 +70,7 @@ describe("batch 35 §17: one save, one line (a rename saved with other fields in
     let early: { text: string; at: string }[] = [];
     await withoutSaveLine(testId, "tab-a", async () => { early = await live(dev.cookie, testId, pageLoaded, "tab-b"); });
     const after = await live(dev.cookie, testId, pageLoaded, "tab-b");
-    expect(kept(early, after)).toEqual(["You saved the listing in another tab: title (now “Harbor Run: keys”), access keys"]);
+    expect(kept(early, after)).toEqual(["You saved the listing in another tab"]);
   });
 
   it("a rename alone is still its own line (the Save has no other line); the tab that saved never gets a second one", async () => {
@@ -78,13 +79,13 @@ describe("batch 35 §17: one save, one line (a rename saved with other fields in
     const pageLoaded = seen();
     await later();
     expect((await edit(testId, dev.cookie, { title: "Harbor Run 7" }, { tab: "tab-a" })).status).toBe(200);
-    expect((await live(dev.cookie, testId, pageLoaded, "tab-b")).map((c) => c.text)).toEqual(["You renamed the test to Harbor Run 7"]);
+    expect((await live(dev.cookie, testId, pageLoaded, "tab-b")).map((c) => c.text)).toEqual(["You saved the listing in another tab"]); // (batch 35 §34) a rename is the one line too
     await later();
     const second = seen();
     await later();
     expect((await edit(testId, dev.cookie, { title: "Harbor Run 8", description: "Sail on" }, { tab: "tab-a" })).status).toBe(200);
-    // The saving tab: its own Save is never a line there; the rename reads as before (one line).
-    expect((await live(dev.cookie, testId, second, "tab-a")).map((c) => c.text)).toEqual(["You renamed the test to Harbor Run 8"]);
+    // The saving tab: its own Save (the rename in it) is never a line there (batch 35 §34).
+    expect((await live(dev.cookie, testId, second, "tab-a")).map((c) => c.text)).toEqual([]);
   });
 
   it("hasSaveLine: more than the title or the keys, from another tab", () => {

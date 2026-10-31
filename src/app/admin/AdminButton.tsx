@@ -50,8 +50,11 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
     setV(back);
     setPut(true);
   }, fields.length === 0);
+  // (Owner's screenshot, Oct 31, batch 35 §36) Every admin button with a box (a reason, a note, Extend's days) is laid out as Suspend's: the box the panel's full
+  // width, its counter under the box's right edge, the button below it. A plain button stays inline.
+  const stack = stacked || fields.length > 0;
   return (
-    <span className={stacked ? "flex w-full flex-col items-start gap-2" : "inline-flex flex-wrap items-center gap-2"} data-mistakes-root="">
+    <span className={stack ? "flex w-full flex-col items-start gap-2" : "inline-flex flex-wrap items-center gap-2"} data-mistakes-root="" data-admin-box={stack ? "stacked" : undefined}>
       {choice && (
         <span className="inline-flex flex-wrap items-center gap-2" role="radiogroup" aria-label={choice.label} data-side-choice="">
           {choice.options.map((o) => (
@@ -64,8 +67,8 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
       {fields.map((f) =>
         // (Owner, Oct 30, batch 15 section 20) A reason ("note") box: up to 1,000 characters with a live counter; over it is red at the field (the server refuses it too).
         f.name === "note" ? (
-          <span key={f.name} className={stacked ? "flex w-full flex-col" : "inline-flex flex-col"}>
-            <textarea id={`${action}-${id}-note`} aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} className={`input ${stacked ? "w-full" : "w-64"} max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`}
+          <span key={f.name} className="flex w-full flex-col">
+            <textarea id={`${action}-${id}-note`} aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} className={`input w-full max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`}
               {...(action === "delete-account" || action === "suspend" ? { "data-required": "", "data-required-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).`, "data-min-chars": "3", "data-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).` } : {})} data-match="record why|keep it to"
               data-red-msg={(v[f.name] ?? "").length > LIMITS.reason ? reasonTooLong() : undefined} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
             <span className={`text-right text-xs ${(v[f.name] ?? "").length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText((v[f.name] ?? "").length, LIMITS.reason)}</span>

@@ -1,5 +1,6 @@
 import { ClipboardList } from "lucide-react";
 import { UpdatedTag } from "@/components/ListingInfo";
+import { FIELD_BOX, FieldLabel, FieldValue } from "@/components/FieldLines";
 import { ScrollText } from "@/components/ScrollText";
 import { QuestionList } from "@/components/QuestionList";
 import { qRequired, qText } from "@/lib/questions";
@@ -15,10 +16,9 @@ import type { Listing } from "@/lib/rules";
  * (Owner, Oct 31, batch 35 §15) Each line is its label (small, muted, uppercase, with its "Updated" tag) over its value (bright); the questions a numbered list
  * with "Required" as a small tag.
  */
-/** (Owner, Oct 31, batch 35 §15) Labels apart from values: a small muted uppercase label on its own line, the value below it in bright text. */
-const LABEL = "text-[11px] font-medium uppercase tracking-wide text-slate-400";
-/** The long values (What to do, NDA) keep their scroll boxes, on a faint ground. */
-const BOX = "rounded-md bg-white/[0.03] px-2 py-1 text-slate-100";
+/** (Owner, Oct 31, batch 35 §15) Labels apart from values: a small muted uppercase label on its own line, the value below it in bright text (§29: the shared
+ * FieldLabel / FieldValue, src/components/FieldLines.tsx, used wherever listing or contract fields are listed). */
+const BOX = FIELD_BOX;
 
 export function ListingPanel({ rows, listing, when, savedAt, side = "developer", intro, head, foot, after }: { rows: PanelRow[]; listing: Listing; when: (d: Date) => string; /** (Batch 35 §3) the Save this panel shows (its record's time; "" for none): See it waits for the line's Save */ savedAt?: string; side?: PanelSide; intro?: string; head?: React.ReactNode; foot?: React.ReactNode; after?: Partial<Record<PanelKey, React.ReactNode>> }) {
   const tag = (l: PanelRow) => (l.before != null ? <UpdatedTag when={l.updatedAt ? when(l.updatedAt) : ""} before={l.before} now={l.now} /> : null);
@@ -33,8 +33,8 @@ export function ListingPanel({ rows, listing, when, savedAt, side = "developer",
           {rows.map((l) => (
             <li key={l.key} className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line={l.key} {...(l.before != null ? { "data-updated-at": l.updatedAt?.toISOString() ?? "" } : {})}>
               {/* (Batch 35 §15) The label: small, muted, uppercase, on its own line with its "Updated <time>" (Before / Now opens below it). */}
-              <div className="leading-5"><span className={LABEL} data-panel-label="">{l.label}</span>{tag(l)}</div>
-              <div className="mt-0.5 text-slate-100" data-panel-value="">
+              <FieldLabel tag={tag(l)}>{l.label}</FieldLabel>
+              <FieldValue>
                 {l.key === "description" && listing.description ? (
                   <ScrollText text={listing.description} className={BOX} label="What to do" />
                 ) : l.key === "buildUrl" && link ? (
@@ -46,7 +46,7 @@ export function ListingPanel({ rows, listing, when, savedAt, side = "developer",
                 ) : (
                   <><span className="whitespace-pre-wrap break-words">{l.now}</span>{after?.[l.key]}</>
                 )}
-              </div>
+              </FieldValue>
             </li>
           ))}
         </ul>
