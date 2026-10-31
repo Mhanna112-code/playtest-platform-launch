@@ -180,7 +180,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftTag onUseSaved={keep.signedIn ? () => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); } : undefined} />}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftTag kind="saved" onUseSaved={keep.signedIn ? () => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); } : undefined} />}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
@@ -267,7 +267,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
         Send the dispute
       </button>
       {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
-      {keep.restored && reason !== "" && <DraftTag onUseSaved={keep.signedIn ? () => setReason("") : undefined} />}
+      {keep.restored && reason !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setReason("") : undefined} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <FormMistakes text={err} press="Send the dispute" />
     </details>

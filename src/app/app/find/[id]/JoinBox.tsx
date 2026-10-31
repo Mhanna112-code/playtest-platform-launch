@@ -18,6 +18,7 @@ import { GapDialog, JustUpdated, type PopupAnswer } from "@/components/GapDialog
 import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
 import { TermsAgainBox } from "@/components/TermsAgainBox";
 import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
+import { DraftTag, useKept } from "@/lib/useKept";
 
 /**
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
@@ -30,6 +31,9 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [ndaErr, setNdaErr] = useState("");
   const [keyWorks, setKeyWorks] = useState(false);
   const [note, setNote] = useState("");
+  // (Batch 35 §10) The note sent with Apply (and Ask to rejoin) is kept as a draft; nothing is saved before the press, so after a sign-in its button reads "Discard".
+  // A press that goes through (Apply, Ask to rejoin, or Join) clears it; a stopped or refused press keeps it.
+  const keep = useKept(`apply:${p.testId}`, { note }, note === "", (v) => setNote(typeof v.note === "string" ? v.note : ""));
   const [box, setBox] = useStopBox();
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
@@ -104,6 +108,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     const action = rejoining ? "rejoin-ask" : applying ? "apply" : "join";
     try {
       const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
+      await keep.clear(); // (batch 35 §10) the press went through: the note's draft goes
       // (Batch 26 section 13) Join anyway opens the session page (the pop-up stays meanwhile); Apply anyway and Ask to rejoin anyway stay here: the pop-up closes and the
       // done line shows.
       if (r.sessionId) {
@@ -155,6 +160,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     try {
       setSince([]);
       const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
+      if (action !== "withdraw-application") await keep.clear(); // (batch 35 §10) Apply / Ask to rejoin / Join went through: the note's draft goes
       if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
       else if (action === "withdraw-application") window.location.reload();
       else setDone(action === "rejoin-ask" ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
@@ -229,7 +235,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       )}
       {(applying || rejoining) && (
         <div>
-          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}</label>
+          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}</label>
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}

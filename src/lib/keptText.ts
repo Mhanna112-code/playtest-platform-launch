@@ -13,6 +13,12 @@ export const SIGN_IN_DRAFTS = "whole" as "whole" | "written";
 /** Set on a draft trimmed at a sign-in; the form keeps it on its saves until the draft is sent or emptied. */
 export const SIGNED_IN_MARK = "_signin";
 
+/** (Batch 35 §10) The profile fields a profile draft keeps (`{ f: { …the fields that differ from the saved profile } }`, key "profile:<side>"). */
+export const PROFILE_DRAFT_FIELDS = ["name", "pronoun", "devices", "languages", "categories", "bio"] as const;
+export type ProfileDraftField = (typeof PROFILE_DRAFT_FIELDS)[number];
+/** Its written ones (kept by SIGN_IN_DRAFTS "written"); the others are selections. */
+export const PROFILE_TEXT_FIELDS = ["name", "bio"] as const;
+
 /** Edit / Post's written fields (the coordinator's split, Oct 30): the access keys' text (`keysText`) is written too. */
 export const TEST_TEXT_FIELDS = ["productName", "title", "description", "buildUrl", "ndaText", "matureWhy", "questions"] as const;
 export type TestTextField = (typeof TEST_TEXT_FIELDS)[number];
@@ -20,10 +26,11 @@ export const isTestTextField = (k: string): k is TestTextField => (TEST_TEXT_FIE
 
 /**
  * The written parts of every other kept form, by name: written answers (`answers`, `notes`; `questions` says which questions they were typed for), chat and
- * Contact us (`text`, `message`), dispute reasons and sides (`reason`, `text`), pay / pay-more / End early / Stop reasons (`reason`), rating comments (`comment`).
+ * Contact us (`text`, `message`), dispute reasons and sides (`reason`, `text`), pay / pay-more / End early / Stop reasons (`reason`), rating comments (`comment`),
+ * (batch 35 §10) the Apply / Ask to rejoin note (`note`).
  * Anything else (Contact us' topic, a call request's rows, length and ticks) is a selection.
  */
-const TEXT_PARTS = ["answers", "notes", "questions", "text", "message", "reason", "comment"] as const;
+const TEXT_PARTS = ["answers", "notes", "questions", "text", "message", "reason", "comment", "note"] as const;
 /** Parts that only describe the draft (never "typed" on their own). */
 const META_PARTS = new Set(["questions"]);
 
@@ -35,6 +42,12 @@ export function textOnly(key: string, data: unknown): Record<string, unknown> | 
   if (!isObj(data)) return null;
   // Call requests (both sides): times, length and ticks only.
   if (key.startsWith("request:")) return null;
+  // (Batch 35 §10) The profile: its name and bio only.
+  if (key.startsWith("profile:")) {
+    const f = isObj(data.f) ? data.f : {};
+    const kept = Object.fromEntries(PROFILE_TEXT_FIELDS.filter((k) => typeof f[k] === "string").map((k) => [k, f[k]]));
+    return Object.keys(kept).length ? { f: kept } : null;
+  }
   if (key.startsWith("test:")) {
     const f = isObj(data.f) ? data.f : {};
     const touched = Array.isArray(data.touched) ? data.touched.filter((k): k is string => typeof k === "string") : [];

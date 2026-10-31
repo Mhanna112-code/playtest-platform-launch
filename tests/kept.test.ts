@@ -26,8 +26,9 @@ describe("kept forms", () => {
 
   it("refuses forms that aren't kept (sign-in, sign-up) and signed-out use", async () => {
     const a = await makeUser({ tester: true });
-    for (const key of ["login", "signup:email", "password", "profile:name", "../etc"]) expect((await put(a.cookie, key, { x: 1 })).status).toBe(400);
+    // (Batch 35 §10) The profile edits are kept now ("profile:<side>"); sign-in, sign-up and passwords never are.
+    for (const key of ["login", "signup:email", "password", "profiles:name", "../etc"]) expect((await put(a.cookie, key, { x: 1 })).status).toBe(400);
     expect((await put("", "chat:t1:u1", { text: "hi" })).status).toBe(401);
-    for (const key of ["written:x", "chat:x:y", "dispute:call:1", "rate:-api-sessions-x-rate", "reject:submission:1", "test:new", "test:edit:abc"]) expect((await put(a.cookie, key, { v: 1 })).status).toBe(200);
+    for (const key of ["written:x", "chat:x:y", "dispute:call:1", "rate:-api-sessions-x-rate", "reject:submission:1", "test:new", "test:edit:abc", "apply:t1", "profile:tester"]) expect((await put(a.cookie, key, { v: 1 })).status).toBe(200);
   });
 });

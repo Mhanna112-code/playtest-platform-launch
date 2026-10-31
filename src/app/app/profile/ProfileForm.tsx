@@ -6,8 +6,26 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError, errOf } from "@/lib/client";
 import { mergeChanges } from "@/lib/live";
 import { DEVICES, LANGUAGES } from "@/lib/options";
+import { DraftTag, useKept } from "@/lib/useKept";
+import { PROFILE_DRAFT_FIELDS, type ProfileDraftField } from "@/lib/keptText";
 
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string };
+
+/** (Batch 35 §10) The profile's draft: the fields that differ from the saved profile (never the first setup's sides). */
+export function profileDraft(v: Init, saved: Init): Partial<Pick<Init, ProfileDraftField>> {
+  return Object.fromEntries(PROFILE_DRAFT_FIELDS.filter((k) => JSON.stringify(v[k]) !== JSON.stringify(saved[k])).map((k) => [k, v[k]]));
+}
+/** (Batch 35 §10) A kept profile draft's fields, as the form takes them (anything of the wrong shape is left out). */
+export function profileFromDraft(d: unknown): Partial<Pick<Init, ProfileDraftField>> {
+  const f = d && typeof d === "object" && !Array.isArray(d) ? (d as { f?: unknown }).f : null;
+  if (!f || typeof f !== "object" || Array.isArray(f)) return {};
+  const out: Record<string, unknown> = {};
+  for (const k of PROFILE_DRAFT_FIELDS) {
+    const x = (f as Record<string, unknown>)[k];
+    if (k === "devices" || k === "categories" || k === "languages" ? Array.isArray(x) && x.every((y) => typeof y === "string") : typeof x === "string") out[k] = x;
+  }
+  return out as Partial<Pick<Init, ProfileDraftField>>;
+}
 
 /** The profile form of the side in use: the developer's is the name; the tester's adds devices, languages and a bio. (Batch 16 section 10) A mistake is red at its box and listed under the button. */
 export function ProfileForm({ init, first, admin = false, side = "tester", seenAt: seen0 }: { init: Init; first?: boolean; /** (Batch 20 section 16) an admin's first setup: Name and Pronoun only, then the admin console */ admin?: boolean; side?: "developer" | "tester"; /** (Batch 16 section 27) the page's load time */ seenAt?: string }) {
@@ -32,6 +50,18 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
     });
   }, [init]);
   const tester = first ? v.isTester : side === "tester";
+  // (Batch 35 §10) The profile edits are kept as a draft per side (the fields that differ from the saved profile; the first setup keeps none): "Draft" after a
+  // reload, and after a sign-in "Draft" with "Use saved" (back to the saved values). Save profile going through clears it; a stopped or refused Save keeps it.
+  const draft = profileDraft(v, init);
+  const keep = useKept(`profile:${side}`, { f: draft }, Object.keys(draft).length === 0, (d) => {
+    const f = profileFromDraft(d);
+    for (const k of Object.keys(f) as (keyof Init)[]) typed.current.add(k);
+    setV((o) => ({ ...o, ...f }));
+  }, !!first);
+  const useSaved = () => {
+    typed.current.clear();
+    setV(init);
+  };
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -41,6 +71,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
       await api("/api/profile", { ...v, ...(seenAt ? { seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) } : {}) });
       setChanges(null);
       typed.current.clear();
+      if (!first) await keep.clear(); // (batch 35 §10) saved: the draft goes
       if (first) window.location.href = admin && !v.isDeveloper && !v.isTester ? "/admin" : "/app";
       else setMsg({ ok: true, text: "Your profile is saved." });
     } catch (err) {
@@ -88,6 +119,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
       )}
       <div className="flex flex-wrap items-center gap-3">
         <button className="btn" disabled={busy}>{busy ? "Saving…" : first ? "Continue" : "Save profile"}</button>
+        {keep.restored && Object.keys(draft).length > 0 && <DraftTag kind="saved" onUseSaved={keep.signedIn ? useSaved : undefined} />}
         <span role="status" aria-live="polite">{msg?.ok && <span className="text-emerald-300">{msg.text}</span>}</span>
       </div>
       <ChangesBox changes={changes} press={first ? "Continue" : "Save profile"} />

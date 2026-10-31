@@ -7,7 +7,8 @@ import { trimAtSignIn } from "@/lib/keptText";
 // signing out). ONLY these kinds of form (a key starts with one of them); never sign-in / sign-up.
 // (Batch 20 section 18) Also Request a time (both sides), End early's and Stop's reasons. (Batch 35 §8) And the Pay / Pay more boxes' note ("pay:", "more:"; the
 // boxes that replaced Reject in batch 15 kept under these keys, which this list never had, so their notes were never kept).
-const KINDS = ["written:", "chat:", "dispute:", "rate:", "reject:", "pay:", "more:", "test:", "request:", "endearly:", "stop:"];
+// (Batch 35 §10) And the tester's Apply / Ask to rejoin note ("apply:<testId>") and the profile edits ("profile:<side>").
+const KINDS = ["written:", "chat:", "dispute:", "rate:", "reject:", "pay:", "more:", "test:", "request:", "endearly:", "stop:", "apply:", "profile:"];
 const MAX_BYTES = 1_100_000; // (batch 15 sections 3 and 17) room for 20 questions and the steps at 20,000 characters each, or a 50,000-character written part with its questions
 /** (Batch 15 section 41, L2) Kept forms per person. */
 export const MAX_KEPT = 50;

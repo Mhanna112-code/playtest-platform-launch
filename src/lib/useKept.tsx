@@ -19,12 +19,13 @@ export async function flushKept(timeoutMs = 1500) {
  * (NEXT-UI 10) A form's typed-but-unsent text, kept on the server per person and form (any device, and after signing in
  * again): the form starts from it with the "Draft" tag (batch 35 §8; it read "Not sent yet"). Sending clears it (`clear()`, awaited before the
  * page moves on). Only for: written answers, chat messages, dispute text, rating comments, reject reasons, the Post / Edit
- * form (the server refuses any other key). `pristine`: nothing typed yet (nothing to keep); `restore` puts a kept draft back
+ * form, and (batch 35 §10) the tester's Apply / Ask to rejoin note and the profile edits (the server refuses any other key). `pristine`: nothing typed yet (nothing to keep); `restore` puts a kept draft back
  * (only while the form is still pristine, so what was typed meanwhile is never overwritten).
  * (Owner, Oct 30, batch 35 §8) `signedIn`: the draft came back through a sign-in (the server marked it; SIGN_IN_DRAFTS in lib/keptText.ts says what it keeps): the
  * form shows "Draft" with "Use saved" at each changed box. The mark stays on the draft (every save keeps it) until it's sent or emptied.
+ * (Batch 35 §10) `off`: this form keeps nothing (the profile's first setup): nothing is read, saved or cleared.
  */
-export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v: T) => void) {
+export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v: T) => void, off = false) {
   const [restored, setRestored] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const signedInRef = useRef(false);
@@ -46,6 +47,7 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
   const send = useCallback((data: unknown) => fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data }), keepalive: true }).catch(() => null), [key]);
 
   useEffect(() => {
+    if (off) return;
     let alive = true;
     fetch(`/api/kept?key=${encodeURIComponent(key)}`, { cache: "no-store", headers: uidHeader() })
       .then((r) => (r.ok ? r.json() : null))
@@ -69,7 +71,7 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
     return () => {
       alive = false;
     };
-  }, [key]);
+  }, [key, off]);
 
   // Save a moment after typing stops; forget it when the form is empty again.
   const json = JSON.stringify(value);
@@ -121,17 +123,26 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
     cleared.current = true;
     setRestored(false);
     forget();
-    if (saved.current || !ready.current) await send(null);
+    if (!off && (saved.current || !ready.current)) await send(null);
     saved.current = false;
-  }, [send, forget]);
+  }, [send, forget, off]);
 
   return { restored, signedIn, clear };
 }
 
 /** (Batch 35 §8) The tag on a restored draft. */
 export const DRAFT_LABEL = "Draft";
-/** (Batch 35 §8) Puts the box back to its saved value (a box with nothing saved yet empties). */
+/** (Batch 35 §8) Puts the box back to its saved value. */
 export const USE_SAVED_LABEL = "Use saved";
+/** (Batch 35 §10) The same button on a box with no saved version (its text only exists once its button is pressed): it empties the box and the draft goes. */
+export const DISCARD_LABEL = "Discard";
+/**
+ * (Owner, Oct 30, batch 35 §10) Which button a DraftTag shows: "saved" ("Use saved") where a saved version exists (Edit, Post, Pay / Pay more, written answers,
+ * the profile); "discard" ("Discard") where nothing is saved (End early / Stop reasons, dispute reason and side, rating comments, chat, Contact us, call requests,
+ * the Apply note). Same behaviour either way.
+ */
+export type DraftKind = "saved" | "discard";
+export const draftButtonLabel = (kind: DraftKind) => (kind === "discard" ? DISCARD_LABEL : USE_SAVED_LABEL);
 /** (Batch 35 §8) Edit / Post: every field marked Draft back to its saved value. */
 export const USE_SAVED_ALL_LABEL = "Use saved for all";
 
@@ -141,14 +152,15 @@ export function NotSentTag({ label = DRAFT_LABEL }: { /** (Batch 20 section 22) 
 }
 
 /**
- * (Owner, Oct 30, batch 35 §8) A written box's draft that came back after signing in: the "Draft" tag, and with `onUseSaved` the "Use saved" button beside it
+ * (Owner, Oct 30, batch 35 §8) A written box's draft that came back after signing in: the "Draft" tag, and with `onUseSaved` the button beside it
  * (the box goes back to its saved value; nothing saved yet: it empties). `field`: which box (Edit has one per field).
+ * (Batch 35 §10) `kind`: "saved" reads "Use saved" (a saved version exists), "discard" reads "Discard" (nothing is saved; the box empties).
  */
-export function DraftTag({ onUseSaved, field }: { onUseSaved?: () => void; field?: string }) {
+export function DraftTag({ onUseSaved, field, kind }: { onUseSaved?: () => void; field?: string; kind: DraftKind }) {
   return (
-    <span className="inline-flex items-center" data-draft-tag={field ?? ""}>
+    <span className="inline-flex items-center" data-draft-tag={field ?? ""} data-draft-kind={kind}>
       <NotSentTag />
-      {onUseSaved && <button type="button" className="ml-2 text-xs font-normal text-sky-300 underline" data-use-saved={field ?? ""} onClick={onUseSaved}>{USE_SAVED_LABEL}</button>}
+      {onUseSaved && <button type="button" className="ml-2 text-xs font-normal text-sky-300 underline" data-use-saved={field ?? ""} onClick={onUseSaved}>{draftButtonLabel(kind)}</button>}
     </span>
   );
 }
