@@ -10,6 +10,7 @@ import { ownContract, recordEvent, sessionRefusal } from "./tests";
 import { answerTermsFirst, testerSendGate } from "./terms";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
+import { attachmentTag, hasMarkerFor } from "@/lib/answerAttachments";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -47,7 +48,9 @@ export async function startRecording(tester: U, contractId: string, body: Record
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".mp4";
   const storageKey = `recordings/${contractId}/${randomBytes(12).toString("hex")}${ext}`;
   const rec = await db.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part } });
-  return { recordingId: rec.id, uploadUrl: uploadTarget(rec.id, storageKey, size, type) };
+  // (Batch 35 §4) The short tag its marker carries ("[📎 map.png #k3f9]"): the end of its id, unique among the contract's uploads.
+  const ids = (await db.recording.findMany({ where: { contractId }, select: { id: true } })).map((r) => r.id);
+  return { recordingId: rec.id, tag: attachmentTag(rec.id, ids), uploadUrl: uploadTarget(rec.id, storageKey, size, type) };
 }
 
 export async function finishRecording(tester: U, contractId: string, body: Record<string, unknown>) {
@@ -122,9 +125,11 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
   if (body.written === true) {
     if (!rec || rec.contractId !== contractId || rec.part !== "written") throw new HttpError(404, "not_found", "That file was already removed.");
     // A sent set owns its uploads for its full history. An unsubmitted upload can go once no kept draft uses its marker.
-    if (rec.submissionId || JSON.stringify(owned.prevSets).includes(`[[attachment:${rec.id}|`)) return { removed: true, retained: true };
+    // (Batch 35 §4) A marker (short "[📎 map.png #k3f9]" or the old long form) is resolved against the contract's uploads.
+    const uploads = await db.recording.findMany({ where: { contractId }, select: { id: true, filename: true } });
+    if (rec.submissionId || hasMarkerFor(JSON.stringify(owned.prevSets ?? null), rec.id, uploads)) return { removed: true, retained: true };
     const draft = await db.keptForm.findUnique({ where: { userId_key: { userId: tester.id, key: `written:${contractId}` } }, select: { data: true } });
-    if (JSON.stringify(draft?.data ?? {}).includes(`[[attachment:${rec.id}|`)) return { removed: true, retained: true };
+    if (hasMarkerFor(JSON.stringify(draft?.data ?? {}), rec.id, uploads)) return { removed: true, retained: true };
     await db.recording.delete({ where: { id: rec.id } });
     await deleteStored(rec.storageKey);
     return { removed: true };

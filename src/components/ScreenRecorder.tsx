@@ -12,7 +12,7 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  * timer and Stop, then a preview, then uploads through the recording upload (500 MB, 5 per session). `part`: the Recording part, or attached to the written part.
  * Modelled on the full app's recording-uploader.
  */
-export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, onUploadProgress, onUploadError, onStart, onCancel, disabled = false }: { sessionId: string; part: "recording" | "written"; label?: string; onUploaded?: (id: string, filename: string, file: Blob) => void; onUploadProgress?: (filename: string, pct: number) => void; onUploadError?: () => void; onStart?: () => void; onCancel?: () => void; disabled?: boolean }) {
+export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, onUploadProgress, onUploadError, onStart, onCancel, disabled = false }: { sessionId: string; part: "recording" | "written"; label?: string; onUploaded?: (id: string, filename: string, file: Blob, tag: string) => void; onUploadProgress?: (filename: string, pct: number) => void; onUploadError?: () => void; onStart?: () => void; onCancel?: () => void; disabled?: boolean }) {
   const [phase, setPhase] = useState<Phase>({ name: "idle" });
   const [can, setCan] = useState(false);
   const [withMic, setWithMic] = useState(true);
@@ -76,8 +76,8 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
     try {
       const filename = `recording-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.webm`;
       onUploadProgress?.(filename, 0);
-      const id = await uploadToSession(sessionId, blob, filename, part, (pct) => { setPhase({ name: "uploading", pct }); onUploadProgress?.(filename, pct); });
-      if (onUploaded) onUploaded(id, filename, blob); else window.location.reload();
+      const { id, tag } = await uploadToSession(sessionId, blob, filename, part, (pct) => { setPhase({ name: "uploading", pct }); onUploadProgress?.(filename, pct); });
+      if (onUploaded) onUploaded(id, filename, blob, tag); else window.location.reload();
       setPhase({ name: "idle" });
     } catch (e) {
       onUploadError?.();

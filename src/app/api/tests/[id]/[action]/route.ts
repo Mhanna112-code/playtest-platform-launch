@@ -13,6 +13,7 @@ import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
 import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS } from "@/lib/restricted";
+import { bodyPressVerb } from "@/lib/pressLabels";
 
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
 const NEEDS_CONFIRMED = new Set(["join", "apply", "post-draft"]);
@@ -45,10 +46,11 @@ export async function POST(req: Request, { params }: Ctx) {
     const { id, action } = await params;
     // (Batch 17 section 2) Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
     // (Batch 27 section 2) "Go to the next round" only opens the draft (it was a plain link): never refused for a paused test or account.
-    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "go-next-round", devSide: !TESTER_SIDE.has(action) });
+    const what = await pressWhat(req, action);
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "go-next-round", devSide: !TESTER_SIDE.has(action), what });
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
-    await adminRefusal(req, u.id, id, action);
+    await adminRefusal(req, u.id, id, action, what);
     if (NEEDS_CURRENT_TERMS.has(action)) await requireCurrentTerms(u, body);
     const res0 = await run(u, id, action, body);
     const data = await res0.clone().json().catch(() => null);
@@ -67,17 +69,26 @@ const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-applicatio
  * (Design doc 6; batch 15 sections 23 and 37) The team paused the test: the developer can stop it, end testers' work early or cancel calls. The team stopped it: every press the developer made
  * fails and they are sent back to the test, where a permanent banner says so and names the press that failed.
  */
-async function adminRefusal(req: Request, userId: string, testId: string, action: string) {
+async function adminRefusal(req: Request, userId: string, testId: string, action: string, what?: string) {
   if (TESTER_SIDE.has(action) || action === "go-next-round") return;
   const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, adminPausedAt: true, adminStoppedAt: true } });
   if (!t || t.developerId !== userId) return;
   // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
   // and problem report) goes on under its own rules.
-  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action)) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req) });
+  if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action)) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req, what) });
   if (t.adminStoppedAt) return;
   // (Batch 15 section 1) Chat is never closed by a paused test.
   // (Batch 15 sections 23 and 37) A test the team paused: Stop, End early and Cancel call (and chat, and the side of a dispute); every other press goes to the banner.
-  if (t.adminPausedAt && !TEAM_PAUSED_OK_ACTIONS.has(action)) throw new HttpError(409, "admin_paused", "The team paused this test: you can stop it, end testers' work early, or cancel calls.", { failed: await failedLine(req) });
+  if (t.adminPausedAt && !TEAM_PAUSED_OK_ACTIONS.has(action)) throw new HttpError(409, "admin_paused", "The team paused this test: you can stop it, end testers' work early, or cancel calls.", { failed: await failedLine(req, what) });
+}
+
+/**
+ * (Batch 35 §2) An application's Accept / Decline is named by its body's `action`: the failed-press lines read "Your Accept on <test> didn't go through" (not "Answer").
+ * The body is peeked from a copy of the request (small bodies only), since the account checks run before it is read.
+ */
+async function pressWhat(req: Request, action: string) {
+  if (action !== "application" || Number(req.headers.get("content-length") || 0) > 100_000) return undefined;
+  return bodyPressVerb(action, await req.clone().json().catch(() => null));
 }
 
 async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {

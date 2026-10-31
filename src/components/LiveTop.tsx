@@ -157,7 +157,7 @@ export function LiveTop({ scope, seenAt, every = 20_000, seeIt, contractLink }: 
               <>
                 {l.timed || l.listing ? " · " : " "}
                 {/* (Batch 30 §15) The page can mark the lines that save changed (the session page's contract box; batch 34 §14: the developer's Listing panel). */}
-                <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, l.at)}>See it</a>
+                <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, l.at, l.saveAt)}>See it</a>
               </>
             )}
           </li>

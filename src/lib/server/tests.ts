@@ -611,6 +611,8 @@ export const devLine = (c: TestEventLike & { contractId?: string | null }, withA
   ...(c.key ? { key: c.key } : {}),
   // (Batch 34 §14) A listing change: See it jumps to the test page's Listing panel.
   ...(c.listing ? { listing: true } : {}),
+  // (Batch 35 §3) ... and names its Save, so See it marks that Save's fields only.
+  ...(c.saveAt ? { saveAt: c.saveAt } : {}),
 });
 
 /**

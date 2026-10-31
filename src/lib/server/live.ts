@@ -4,6 +4,7 @@ import { displayName, money } from "@/lib/format";
 import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
 import { LISTING_SAVE, parseSave, saveLine } from "@/lib/listingSave";
+import { LISTING_SAVED } from "@/lib/listingPanel";
 
 type Tx = Prisma.TransactionClient;
 
@@ -121,11 +122,28 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
     if (!opts.press) return [];
     return has(BIG_OWN_ACTS, o.about?.a) || touches(o, opts.press) ? [line] : [];
   });
-  const all = [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...own].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const all = await withSaveAt(testId, [...theirs, ...(await devPaymentChanges(devId, testId, since, tx)), ...own].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), tx);
   // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
   if (opts.all) return all;
   const ignored = new Set((await tx.user.findUnique({ where: { id: devId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
   return ignored.size ? all.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : all;
+}
+
+/**
+ * (Owner's finding, Oct 30, batch 35 §3) Each listing line names the Save it is about: the time of that Save's record (the newest "listing_saved" at or before the
+ * line; the Save writes it, then its line). The test page's Listing panel says which Save it shows, so See it marks that Save's fields only, after a redraw when the
+ * line is newer than the panel.
+ */
+async function withSaveAt(testId: string, lines: TestEventLike[], tx: Tx | typeof db): Promise<TestEventLike[]> {
+  const ls = lines.filter((l) => l.listing);
+  if (!ls.length) return lines;
+  const newest = Math.max(...ls.map((l) => l.createdAt.getTime()));
+  const saves = await tx.testEvent.findMany({ where: { testId, kind: LISTING_SAVED, createdAt: { lte: new Date(newest) } }, orderBy: { createdAt: "desc" }, take: 50, select: { createdAt: true } });
+  return lines.map((l) => {
+    if (!l.listing) return l;
+    const s = saves.find((x) => x.createdAt.getTime() <= l.createdAt.getTime());
+    return s ? { ...l, saveAt: s.createdAt } : l;
+  });
 }
 
 /** (Batch 14 section 4) Several testers switching in one day: one line, "3 testers switched to the new terms" (at the latest one; no contract link). */
@@ -243,4 +261,4 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
   });
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

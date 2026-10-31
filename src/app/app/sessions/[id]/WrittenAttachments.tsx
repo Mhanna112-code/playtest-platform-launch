@@ -4,6 +4,7 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { FIELD, errOf } from "@/lib/client";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { uploadToSession } from "@/lib/upload";
+import { fileSize } from "@/lib/format";
 
 type Item = { id: string; filename: string; size: number; uploaded: boolean; video: boolean; sent: boolean };
 
@@ -47,7 +48,7 @@ export function WrittenAttachments({ sessionId, items, canAdd }: { sessionId: st
       {uploaded.length > 0 && (
         <ul className="space-y-1">
           {uploaded.map((i) => (
-            <li key={i.id}><a href={`/api/recordings/${i.id}/file`} target="_blank" rel="noreferrer">{i.filename}</a> <span className="text-slate-400">{places.find((p) => p.id === i.id)?.labels.map((q) => `in your answer to “${q}”`).join("; ") || "not in an answer"}</span> · {(i.size / 1024 / 1024).toFixed(1)} MB{i.sent ? "" : <span className="ml-1 text-xs text-amber-200">· goes with your answers when you send them</span>}</li>
+            <li key={i.id}><a href={`/api/recordings/${i.id}/file`} target="_blank" rel="noreferrer">{i.filename}</a> <span className="text-slate-400">{places.find((p) => p.id === i.id)?.labels.map((q) => `in your answer to “${q}”`).join("; ") || "not in an answer"}</span> · {fileSize(i.size)}{i.sent ? "" : <span className="ml-1 text-xs text-amber-200">· goes with your answers when you send them</span>}</li>
           ))}
         </ul>
       )}

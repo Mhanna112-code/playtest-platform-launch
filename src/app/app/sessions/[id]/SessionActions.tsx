@@ -17,17 +17,18 @@ import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
 import { uploadToSession } from "@/lib/upload";
-import { attachmentMarker, removeAttachmentMarker, type AnswerAttachment } from "@/lib/answerAttachments";
+import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
-function FormatBar({ target, onChange, sessionId, onAttach }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void }) {
+function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[] }) {
   const [err, setErr] = useState("");
   const pending = useRef("");
   const recordingAt = useRef<number | null>(null);
   const progress = (filename: string, pct: number) => { const el = target.current; if (!el) return; const next = `[Uploading ${filename}… ${pct}%]`; onChange(pending.current ? el.value.replace(pending.current, next) : el.value.slice(0, recordingAt.current ?? el.selectionStart) + next + el.value.slice(recordingAt.current ?? el.selectionStart)); pending.current = next; recordingAt.current = null; };
-  const finish = (id: string, filename: string, file: Blob) => { if (target.current) onChange(target.current.value.replace(pending.current, attachmentMarker(id, filename))); pending.current = ""; recordingAt.current = null; onAttach({ id, filename, size: file.size, contentType: file.type.split(";")[0] }); };
+  // (Batch 35 §4) The short marker "[📎 map.png #k3f9]" (its tag from the server, unique among the contract's uploads).
+  const finish = (id: string, filename: string, file: Blob, tag: string) => { if (target.current) onChange(target.current.value.replace(pending.current, tagMarker(tag || attachmentTag(id, known.map((a) => a.id)), filename))); pending.current = ""; recordingAt.current = null; onAttach({ id, filename, size: file.size, contentType: file.type.split(";")[0] }); };
   const failed = () => { if (target.current) onChange(target.current.value.replace(pending.current, "")); pending.current = ""; recordingAt.current = null; };
   const apply = (kind: "bold" | "italic" | "code") => {
     const el = target.current;
@@ -41,7 +42,7 @@ function FormatBar({ target, onChange, sessionId, onAttach }: { target: React.Re
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs font-bold" title="Bold" onClick={() => apply("bold")}>B</button>
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")}>I</button>
       <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")}>{"</>"}</button>
-      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file">📎<input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept="image/*,application/pdf,text/plain,.zip,video/*" onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const id = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
+      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file">📎<input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept="image/*,application/pdf,text/plain,.zip,video/*" onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
       <FormMistakes text={err} press="Attach" />
       <ScreenRecorder sessionId={sessionId} part="written" label="⏺" disabled={!!pending.current} onCancel={() => { recordingAt.current = null; }} onStart={() => { recordingAt.current = target.current?.selectionStart ?? null; }} onUploadProgress={progress} onUploadError={failed} onUploaded={finish} />
     </div>
@@ -59,9 +60,9 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
   const chars = min ? answerChars(value) : 0;
   return (
     <div className="space-y-1">
-      <FormatBar target={ref} onChange={onChange} sessionId={sessionId} onAttach={onAttach} />
+      <FormatBar target={ref} onChange={onChange} sessionId={sessionId} onAttach={onAttach} known={attachments} />
       <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
-      <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id)); onRemove(id); }} />
+      <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
       {/* (Batch 30 §14) While an answer is below the minimum: "12 / 50 characters minimum" (grey; red once Send found it short). An empty optional answer shows nothing. */}
       {min && chars < ANSWER_MIN_CHARS && (!!value.trim() || required || short) && <p className={`text-xs ${short ? "text-rose-300" : "text-slate-500"}`} data-answer-count={chars}>{answerCounter(chars)}</p>}
     </div>
@@ -87,14 +88,14 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const [notes, setNotes] = useState(initialNotes);
   const [attachments, setAttachments] = useState(initialAttachments);
   useEffect(() => {
-    const frame = requestAnimationFrame(() => window.dispatchEvent(new CustomEvent(`written-files:${sessionId}`, { detail: { attachments, places: attachments.map((a) => ({ id: a.id, labels: [...answers.map((text, i) => ({ text, label: qText(questions[i]) })), { text: notes, label: "Anything else (bugs, ideas)" }].filter((x) => x.text.includes(`[[attachment:${a.id}|`)).map((x) => x.label) })) } })));
+    const frame = requestAnimationFrame(() => window.dispatchEvent(new CustomEvent(`written-files:${sessionId}`, { detail: { attachments, places: attachments.map((a) => ({ id: a.id, labels: [...answers.map((text, i) => ({ text, label: qText(questions[i]) })), { text: notes, label: "Anything else (bugs, ideas)" }].filter((x) => hasMarkerFor(x.text, a.id, attachments)).map((x) => x.label) })) } })));
     return () => cancelAnimationFrame(frame);
   }, [sessionId, attachments, answers, notes, questions]);
   const addAttachment = (item: AnswerAttachment) => setAttachments((old) => [...old.filter((a) => a.id !== item.id), item]);
   const removeAttachment = (id: string) => {
-    const refs = [...answers, notes].reduce((n, a) => n + (a.includes(`[[attachment:${id}|`) ? 1 : 0), 0);
+    const refs = [...answers, notes].reduce((n, a) => n + (hasMarkerFor(a, id, attachments) ? 1 : 0), 0);
     if (refs > 1) return;
-    const data = { answers: answers.map((a) => removeAttachmentMarker(a, id)), notes: removeAttachmentMarker(notes, id), questions };
+    const data = { answers: answers.map((a) => removeAttachmentMarker(a, id, attachments)), notes: removeAttachmentMarker(notes, id, attachments), questions };
     void api("/api/kept", { key: `written:${sessionId}`, data }).then(() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true })).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setMsg({ ok: false, text: errOf(e) }));
   };
   // (Owner's finding, Oct 30, batch 32 §12) Answers sent from another device or tab arrive with the page's next redraw: boxes nobody touched here take them

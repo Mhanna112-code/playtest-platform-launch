@@ -31,5 +31,11 @@ export function bringInView(el: HTMLElement | null) {
   if (Math.abs(dy) > 1) window.scrollBy({ top: dy, behavior: "smooth" });
 }
 
+/**
+ * (Owner, Oct 30, batch 35 §7) Where a link goes when its target isn't on the page: a sent piece ("piece-<id>", in Needs you) that was paid since is shown on its
+ * tester's row ("part-<id>", the part's line there). The first of these on the page wins.
+ */
+export const hashTargets = (id: string) => (id.startsWith("piece-") ? [id, `part-${id.slice("piece-".length)}`] : [id]);
+
 /** The classes a jump target carries. */
 export const MARKABLE = "scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300";

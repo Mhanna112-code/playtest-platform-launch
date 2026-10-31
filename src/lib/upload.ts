@@ -5,9 +5,10 @@ import { api } from "@/lib/client";
  * Upload one file to a session through the recording upload (start -> PUT to storage -> done). (Owner, Oct 29, batch 11) `part: "written"` attaches it to the written
  * part (a file, or a screen recording); otherwise it is a recording for the Recording part. The server checks the type, the size and the counts.
  */
-export async function uploadToSession(sessionId: string, file: Blob, filename: string, part: "recording" | "written", onProgress?: (pct: number) => void) {
+export async function uploadToSession(sessionId: string, file: Blob, filename: string, part: "recording" | "written", onProgress?: (pct: number) => void): Promise<{ id: string; tag: string }> {
   const contentType = (file.type || (part === "recording" ? "video/mp4" : "application/octet-stream")).split(";")[0];
-  const { recordingId, uploadUrl } = await api<{ recordingId: string; uploadUrl: string }>(`/api/sessions/${sessionId}/recording-start`, { filename, size: file.size, contentType, part });
+  // (Batch 35 §4) `tag`: the short tag of a written answer's marker ("[📎 map.png #k3f9]"), unique among the contract's uploads.
+  const { recordingId, tag, uploadUrl } = await api<{ recordingId: string; tag: string; uploadUrl: string }>(`/api/sessions/${sessionId}/recording-start`, { filename, size: file.size, contentType, part });
   try {
     await put(uploadUrl, file, contentType, onProgress);
     await api(`/api/sessions/${sessionId}/recording-done`, { recordingId });
@@ -17,7 +18,7 @@ export async function uploadToSession(sessionId: string, file: Blob, filename: s
     await api(`/api/sessions/${sessionId}/recording-abandon`, { recordingId }).catch(() => null);
     throw e;
   }
-  return recordingId;
+  return { id: recordingId, tag };
 }
 
 /** The PUT to storage (R2's presigned URL, or the local upload route), reporting its percentage. */

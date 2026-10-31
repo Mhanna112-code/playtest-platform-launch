@@ -1,5 +1,18 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { pageUser } from "@/lib/client";
+
+/** (Batch 35 §6) Sent before the tab reloads to the other side: every mounted form sends its draft at once (each adds its request to `waits`). */
+export const KEPT_FLUSH_EVENT = "kept-flush";
+/** (Batch 35 §6) The page user's id on every kept request: a draft is read and written only as the account the page belongs to (the server refuses another). */
+const uidHeader = (): Record<string, string> => (pageUser() ? { "x-uid": pageUser() } : {});
+
+/** (Batch 35 §6) Send every form's unsaved draft now (keepalive) and wait for them, at most `timeoutMs`. */
+export async function flushKept(timeoutMs = 1500) {
+  const waits: Promise<unknown>[] = [];
+  window.dispatchEvent(new CustomEvent(KEPT_FLUSH_EVENT, { detail: { waits } }));
+  await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, timeoutMs))]);
+}
 
 /**
  * (NEXT-UI 10) A form's typed-but-unsent text, kept on the server per person and form (any device, and after signing in
@@ -20,11 +33,11 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
   const restoreRef = useRef(restore);
   restoreRef.current = restore;
 
-  const send = useCallback((data: unknown) => fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ key, data }), keepalive: true }).catch(() => null), [key]);
+  const send = useCallback((data: unknown) => fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data }), keepalive: true }).catch(() => null), [key]);
 
   useEffect(() => {
     let alive = true;
-    fetch(`/api/kept?key=${encodeURIComponent(key)}`, { cache: "no-store" })
+    fetch(`/api/kept?key=${encodeURIComponent(key)}`, { cache: "no-store", headers: uidHeader() })
       .then((r) => (r.ok ? r.json() : null))
       .then((r: { data: T | null } | null) => {
         if (!alive) return;
@@ -69,15 +82,23 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
   // Leaving the page with something unsaved: send it now.
   useEffect(() => {
     const flush = () => {
-      if (!ready.current || cleared.current || (latest.current.pristine && !saved.current)) return;
-      void send(latest.current.pristine ? null : latest.current.value);
+      if (!ready.current || cleared.current || (latest.current.pristine && !saved.current)) return null;
+      return send(latest.current.pristine ? null : latest.current.value);
     };
-    const onHide = () => document.visibilityState === "hidden" && flush();
+    const onHide = () => document.visibilityState === "hidden" && void flush();
+    const onLeave = () => void flush();
+    // (Batch 35 §6) The tab is about to reload to the other side: send it now and let the reload wait for it.
+    const onFlush = (e: Event) => {
+      const p = flush();
+      if (p) (e as CustomEvent<{ waits: Promise<unknown>[] }>).detail?.waits.push(p);
+    };
     document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", flush);
+    window.addEventListener("pagehide", onLeave);
+    window.addEventListener(KEPT_FLUSH_EVENT, onFlush);
     return () => {
       document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", flush);
+      window.removeEventListener("pagehide", onLeave);
+      window.removeEventListener(KEPT_FLUSH_EVENT, onFlush);
     };
   }, [send]);
 

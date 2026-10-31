@@ -11,10 +11,10 @@ import type { Listing } from "@/lib/rules";
  * current listing, the way testers see it (the tester's "Your agreed scope" lines). A field changed in the most recent save carries "Updated <time>", opening
  * Before / Now (each a scroll box about 8 lines tall). Every listing line in the page's blue boxes has a "See it" that jumps here (and marks those lines).
  */
-export function ListingPanel({ rows, listing, when }: { rows: PanelRow[]; listing: Listing; when: (d: Date) => string }) {
+export function ListingPanel({ rows, listing, when, savedAt }: { rows: PanelRow[]; listing: Listing; when: (d: Date) => string; /** (Batch 35 §3) the Save this panel shows (its record's time; "" for none): See it waits for the line's Save */ savedAt?: string }) {
   const tag = (l: PanelRow) => (l.before != null ? <UpdatedTag when={l.updatedAt ? when(l.updatedAt) : ""} before={l.before} now={l.now} /> : null);
   return (
-    <section className="card scroll-mt-24" id="listing" data-listing-panel="">
+    <section className="card scroll-mt-24" id="listing" data-listing-panel="" data-saved-at={savedAt}>
       <h2 className="flex items-center gap-2 font-semibold text-white"><ClipboardList className="h-5 w-5 text-indigo-300" /> Listing</h2>
       <p className="text-xs text-slate-400">What testers see now. A field your last save changed shows when: tap it for before and now.</p>
       <ul className="mt-2 space-y-1 text-sm text-slate-300" data-listing-fields="">

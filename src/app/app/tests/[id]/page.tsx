@@ -267,7 +267,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const notesByContract = await db.contractNote.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   // (Owner, Oct 30, batch 34 §14) The Listing panel (it replaces the Contract changes fold): the current listing, the fields the most recent save changed tagged.
   const listingNow = asListing(t);
-  const listingRows = panelRows(listingNow, await lastListingSave(t.id));
+  const lastSave = await lastListingSave(t.id);
+  const listingRows = panelRows(listingNow, lastSave);
   // (Batch 17 §15) The developer's own Stop and its reason (the team's Stop has its own): (batch 34 §14, the Contract changes fold gone) in the red banner.
   const stopEvent = t.status === "stopped" && !t.adminStoppedAt ? await db.testEvent.findFirst({ where: { testId: id, kind: "stopped" }, orderBy: { createdAt: "desc" } }) : null;
   const stopEntry = stopEvent && stopReasonOf(stopEvent.text) ? { at: stopEvent.createdAt.toISOString(), reason: stopReasonOf(stopEvent.text) } : null;
@@ -414,7 +415,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <PageLoaded at={seenAt} />
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />
       {/* (Owner, Oct 30, batch 34 §14) The first panel under the overview (and its notices): the current listing, as testers see it. */}
-      <ListingPanel rows={listingRows} listing={listingNow} when={(d) => fmtDateTimeIn(d, u.timeZone)} />
+      <ListingPanel rows={listingRows} listing={listingNow} when={(d) => fmtDateTimeIn(d, u.timeZone)} savedAt={lastSave?.at.toISOString() ?? ""} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
@@ -553,7 +554,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <p className="note">Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
                 <ul className="space-y-1 text-sm" data-parts-sent="">
                   {partRows.filter((r) => r.on).map((r) => (
-                    <li key={r.name} className="flex flex-wrap items-center gap-2">
+                    // (Batch 35 §7) A bell or email link to a piece ("#piece-<id>") that has left Needs you (paid) lands on this line (HashJump's fallback).
+                    <li key={r.name} className="flex flex-wrap items-center gap-2 scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" {...(r.sub ? { id: `part-${r.sub.id}` } : {})}>
                       <b className="text-white">{r.name}</b>
                       <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>

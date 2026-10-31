@@ -125,8 +125,9 @@ describe("batch 30 §15: an Edit save and the tester's session", () => {
     // The contract part (fixed) is the contract's own fields.
     expect(p).toContain('{ name: "Written answers", cents: c.writtenCents, required: c.writtenRequired, perHour: false }');
     // (Batch 34 §14) The See it press is shared (LiveTop, the stop boxes, the join page's pop-up): it still tells the page the line's time.
-    expect(src("components/LiveTop.tsx")).toContain("onClick={(e) => seeItClick(e, seeIt, l.at)}");
-    expect(src("components/ListingInfo.tsx")).toContain("new CustomEvent(SEE_IT_EVENT, { detail: { at: at ? new Date(at).toISOString() : undefined } })");
+    expect(src("components/LiveTop.tsx")).toContain("onClick={(e) => seeItClick(e, seeIt, l.at, l.saveAt)}");
+    // (Batch 35 §3) ... and the save the line is about.
+    expect(src("components/ListingInfo.tsx")).toContain("new CustomEvent(SEE_IT_EVENT, { detail: { at: at ? new Date(at).toISOString() : undefined, saveAt: saveAt ? new Date(saveAt).toISOString() : undefined } })");
     // Access keys aren't part of either: the key box is unchanged.
     expect(p).toContain("<KeyBox canReport={!meOff}");
   });

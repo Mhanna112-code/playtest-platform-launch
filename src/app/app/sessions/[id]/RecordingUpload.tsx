@@ -10,6 +10,7 @@ import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { NOTHING_CHANGED_LINE } from "@/lib/rules";
+import { fileSize } from "@/lib/format";
 
 type Rec = { id: string; filename: string; size: number; uploaded: boolean; sent?: boolean };
 
@@ -24,7 +25,7 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
       <video controls preload="metadata" className="max-h-56 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} onLoadedMetadata={(e) => setLength(clock(e.currentTarget.duration))} />
       <p className="flex flex-wrap items-center gap-2 text-sm">
         <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer" className="min-w-0 break-all">{r.filename}</a>
-        <span className="text-xs text-slate-500">{length && `${length} · `}{(r.size / 1024 / 1024).toFixed(1)} MB{r.sent ? " · sent" : " · not sent yet"}</span>
+        <span className="text-xs text-slate-500">{length && `${length} · `}{fileSize(r.size)}{r.sent ? " · sent" : " · not sent yet"}</span>
         {canRemove && (
           <ConfirmButton className="btn-ghost ml-auto !px-2 !py-0.5 text-xs" title="Remove this recording?" confirmLabel="Remove" body={<p>{r.sent ? "It stays with what you sent until you send again; then it's left out. Its slot is free at once." : "It's deleted and its slot is free again."}</p>}
             onConfirm={() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: r.id }).then(() => window.location.reload()).catch((e) => setErr(errOf(e)))}>

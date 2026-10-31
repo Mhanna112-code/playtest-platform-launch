@@ -1,3 +1,9 @@
+/** (Batch 35 §5) A file's size: KB under 1 MB ("15 KB"), MB with one decimal from 1 MB ("1.1 MB"). */
+export function fileSize(bytes: number): string {
+  const kb = Math.max(1, Math.round(bytes / 1024));
+  return kb < 1024 ? `${kb} KB` : `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
 /** Counts with thousands separators: 1,240. */
 export const num = (n: number) => n.toLocaleString("en-US");
 

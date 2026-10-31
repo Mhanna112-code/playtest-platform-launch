@@ -26,6 +26,8 @@ let PAGE_USER = "";
 export const setPageUser = (id: string) => {
   PAGE_USER = id;
 };
+/** (Batch 35 §6) The account this page belongs to ("" before the layout set it): kept drafts name it too, so another account's cookie never takes them. */
+export const pageUser = () => PAGE_USER;
 
 /** This page load's id: the server never stops a press for what this same tab did ("another tab" only). */
 export const TAB = typeof window === "undefined" ? "" : Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
