@@ -15,7 +15,7 @@ export function DisputeSide({ testId, disputeId, seenAt }: { testId: string; dis
       <textarea id={`side-${disputeId}`} rows={2} className="input" value={text} onChange={(e) => setText(e.target.value)} />
       <p className={`text-xs ${text.length > LIMITS.devSide ? "text-rose-300" : "text-slate-500"}`} data-side-count="">{text.length.toLocaleString("en-US")} / {LIMITS.devSide.toLocaleString("en-US")}</p>
       <PressButton disabled={!text.trim() || text.length > LIMITS.devSide} seenAt={seenAt} path={`/api/tests/${testId}/dispute-side`} body={{ disputeId, text }} onDone={async () => { await keep.clear(); window.location.reload(); }}>Send your side</PressButton>
-      {keep.restored && text !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setText("") : undefined} />}
+      {keep.restored && text !== "" && <DraftTag kind="discard" onUseSaved={() => setText("")} />}
     </div>
   );
 }

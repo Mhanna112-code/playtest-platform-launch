@@ -149,7 +149,8 @@ describe("Pays on average without the split (section 5)", () => {
     const { dev } = await setup();
     expect((await developerStats(dev.user.id)).pays).toEqual({ value: "-", hint: "no paid work yet" });
     expect(src("lib/server/profileStats.ts")).not.toContain("accepted in full");
-    expect(src("app/app/find/[id]/page.tsx")).toContain('devStats.pays.value === "-" ? <span className="text-slate-500">{devStats.pays.hint}</span>');
+    // (Owner, Oct 30, batch 35 §14) Pays on average is only on the developer's own dashboard: the join page no longer shows it.
+    expect(src("app/app/find/[id]/page.tsx")).not.toContain("Pays on average");
   });
 });
 

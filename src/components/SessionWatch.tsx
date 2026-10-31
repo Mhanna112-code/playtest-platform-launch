@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef } from "react";
-import { setPageUser } from "@/lib/client";
+import { setPageUser, toLogin } from "@/lib/client";
 import { usePathname } from "next/navigation";
 import { restrictionKey } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
@@ -132,10 +132,10 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
       if (s.state === "ok" && typeof s.bell === "number") publishBell(s.bell);
       if (s.state === "deleted") {
         forgetTyped();
-        window.location.replace("/login?gone=1");
+        toLogin(true); // (batch 35 §20) once, whichever gets there first (a refused request or this check)
       } else if (s.state === "out") {
         forgetTyped();
-        window.location.replace(`/login?next=${encodeURIComponent(pathRef.current)}`);
+        toLogin(); // (batch 35 §20) /login?next=<path + hash>, once
       } else if (s.userId && s.userId !== userId) {
         // A different account signed in elsewhere: switch to it. (Batch 35 §8) Nothing typed here is snapshotted, and this tab's snapshots go: the server's drafts
         // bring the written boxes back when this person signs in again; another account never sees them.

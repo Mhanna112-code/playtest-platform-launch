@@ -246,7 +246,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
         <StatTile icon={Users} label="Testers joined" value={compact(testersTotal)} hint={`across ${plural(allTests.length, "test")}`} tone="indigo" />
         <StatTile icon={Wallet} label="Spent so far" value={compactMoney(spent._sum.amountCents ?? 0)} hint="accepting work" tone="emerald" />
       </section>
-      <DeveloperTiles userId={userId} />
+      <DeveloperTiles userId={userId} pays />
 
       {/* (Batch 17 section 17) Every rating the developer can give now (hidden while suspended or on a hold). */}
       <RatingsToGive user={user} side="developer" />

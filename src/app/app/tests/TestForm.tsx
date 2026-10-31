@@ -11,7 +11,7 @@ import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from 
 import { fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
-import { DraftTag, NotSentTag, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
+import { DRAFT_START_LINE, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
 import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
@@ -21,7 +21,7 @@ import { LISTING_MIN_CHARS, duplicateQuestion, duplicateQuestionLine, STEPS_FIEL
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
 import { ScrollText } from "@/components/ScrollText";
-import { toCents } from "@/lib/format";
+import { fmtDateTime, toCents } from "@/lib/format";
 import { KeyBoxes, freeBoxCheck, type KeysData } from "./KeyBoxes";
 import { FieldNote, GroupNote, NoteItems, TheirsNote, type NoteItem } from "@/components/FieldNote";
 import { CHANGED_ELSEWHERE, SAVED_ELSEWHERE, UPDATED_AT, mergeElsewhere, takesTheirs } from "@/lib/editMerge";
@@ -214,7 +214,16 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
    * whole form back. Which fields come back at all: SIGN_IN_DRAFTS (lib/keptText.ts).
    */
   const savedKeysText = edit ? freeLoaded.join("\n") : "";
-  const marks = keep.signedIn ? draftMarks(f, base) : {};
+  // (Owner, Oct 31, batch 35 §18) Not only after a sign-in: whenever the form opened from a restored draft (a reload, a new tab, another tab's draft), every field
+  // that differs from the saved listing (Edit) / the empty start (Post) carries its mark, until the draft is saved, posted or emptied (a field typed here after
+  // opening keeps its mark too: the marks follow the draft, not who typed it).
+  const marks = keep.restored ? draftMarks(f, base) : {};
+  /**
+   * (Owner, Oct 31, batch 35 §23) Post a test for a NEW test ("test:new") has nothing saved: each field's mark reads "Discard" (that field back to the empty start)
+   * and the whole form's button "Start empty"; never "Use saved". A saved draft opened from the drafts list and Edit keep "Use saved" / "Use saved for all".
+   */
+  const isNew = !edit && !draft;
+  const draftKind = isNew ? "discard" : "saved";
   const draftKeys = Object.values(marks).flat();
   const putSaved = (ks: (keyof F)[]) => {
     setF((o) => ({ ...o, ...Object.fromEntries(ks.map((k) => [k, base[k]])) }));
@@ -223,12 +232,27 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   };
   const draftMark = (where: string) => {
     const ks = marks[where] ?? [];
-    return ks.length ? <DraftTag kind="saved" field={where} onUseSaved={() => putSaved(ks)} /> : null;
+    return ks.length ? <DraftTag kind={draftKind} field={where} onUseSaved={() => putSaved(ks)} /> : null;
   };
-  const keysDraft = keep.signedIn && keysChanged ? <DraftTag kind="saved" field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
+  const keysDraft = keep.restored && keysChanged ? <DraftTag kind={draftKind} field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
   const putAllSaved = () => {
     putSaved(draftKeys);
     setKeysText(savedKeysText);
+  };
+  /**
+   * (Owner, Oct 31, batch 35 §18) The form opened with a restored draft (a reload, a new tab, a sign-in): a line at the top says so, with a way out. Post a test
+   * ("test:new"): "Start empty" puts every field back to the empty start and deletes the draft (a brand-new test). Edit (and a saved draft opened in Post):
+   * "Use saved for all" puts every field and the keys back to what is saved, and the draft goes.
+   */
+  const fromDraft = keep.restored && (touched.size > 0 || keysChanged);
+  const discardAll = () => {
+    const all = Object.keys(f) as (keyof F)[];
+    setF(edit || draft ? base : toForm(init));
+    setTouched(new Set());
+    setTheirs((o) => Object.fromEntries(Object.entries(o).filter(([x]) => !all.includes(x as keyof F))) as typeof o);
+    setKeysText(savedKeysText);
+    setBlurred(new Set());
+    void keep.clear();
   };
   const leave = (k: string) => setBlurred((b) => (b.has(k) ? b : new Set([...b, k])));
 
@@ -606,6 +630,12 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
 
   return (
     <form ref={formRef} className="space-y-4" onSubmit={submit} {...(edit ? { "data-red-and-blue": "" } : {})} noValidate>
+      {fromDraft && (
+        <p className="info text-sm" data-from-draft="">
+          {DRAFT_START_LINE(keep.restoredAt ? fmtDateTime(keep.restoredAt) : "")}
+          {" · "}<button type="button" className="text-sky-300 underline" data-discard-draft="" onClick={discardAll}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</button>
+        </p>
+      )}
       <p className="note"><span className="text-punch-400">*</span> marks the fields you have to fill in.</p>
       <div className="panel">
         <h2>What are testers trying?</h2>
@@ -723,7 +753,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {f.written && (
           <div id="questions-group" data-locked={fieldLocked("questions") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("questions") ? "p-2 ring-1 ring-rose-400" : ""}`}>
             <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}{draftMark("questions")}</label>
-            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : duplicateQuestion(f.questions.split("\n")) ? duplicateQuestionLine(duplicateQuestion(f.questions.split("\n"))) : undefined} value={f.questions} onChange={(e) => set({ questions: capQuestions(e.target.value) })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={!f.written ? undefined /* (batch 35 §24) the written part off: no question checks */ : f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : duplicateQuestion(f.questions.split("\n")) ? duplicateQuestionLine(duplicateQuestion(f.questions.split("\n"))) : undefined} value={f.questions} onChange={(e) => set({ questions: capQuestions(e.target.value) })} placeholder={"What did you like?\nWhere did you get stuck?"} />
             {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
               <ul className="mt-2 space-y-1">
                 {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
@@ -831,9 +861,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           {/* (Batch 20 section 22) Unchanged: visibly greyed (the app's disabled style), with its tooltip. */}
           <button className={`btn ${nothingChanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || nothingChanged} aria-disabled={nothingChanged} title={nothingChanged ? "Nothing has changed yet" : undefined} data-save-idle={nothingChanged ? "" : undefined}>{busy ? "Saving…" : edit ? "Save" : "Post the test"}</button>
           {/* (Batch 20 section 22) What the kept draft means here: Edit's typed changes aren't saved yet; Post's draft isn't posted yet. */}
-          {keep.restored && !keep.signedIn && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}
+          {keep.restored && draftKeys.length === 0 && !keysDraft && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}
           {/* (Batch 35 §8) After signing in, with fields still marked Draft: the whole form back to the saved values. */}
-          {(draftKeys.length > 0 || !!keysDraft) && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={putAllSaved}>{USE_SAVED_ALL_LABEL}</button>}
+          {(draftKeys.length > 0 || !!keysDraft) && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={isNew ? discardAll : putAllSaved}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</button>}
         </div>
         {saved && <p className="ok">{saved}</p>}
         {/* (Batch 30 §9) The line names the change (the field name scrolls to it, marked) with Put it back beside it; then the other changes save. */}

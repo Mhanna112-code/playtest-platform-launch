@@ -119,7 +119,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
       )}
       <div className="flex flex-wrap items-center gap-3">
         <button className="btn" disabled={busy}>{busy ? "Saving…" : first ? "Continue" : "Save profile"}</button>
-        {keep.restored && Object.keys(draft).length > 0 && <DraftTag kind="saved" onUseSaved={keep.signedIn ? useSaved : undefined} />}
+        {keep.restored && Object.keys(draft).length > 0 && <DraftTag kind="saved" onUseSaved={useSaved} />}
         <span role="status" aria-live="polite">{msg?.ok && <span className="text-emerald-300">{msg.text}</span>}</span>
       </div>
       <ChangesBox changes={changes} press={first ? "Continue" : "Save profile"} />

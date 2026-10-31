@@ -4,7 +4,7 @@ import { displayName, money } from "@/lib/format";
 import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
 import { LISTING_SAVE, parseSave, saveLine } from "@/lib/listingSave";
-import { LISTING_SAVED } from "@/lib/listingPanel";
+import { LISTING_SAVED, parseSaved } from "@/lib/listingPanel";
 
 type Tx = Prisma.TransactionClient;
 
@@ -102,12 +102,18 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // its listing-info event ("Nora Lane changed the description") is dropped, and a rename of their own reads "You renamed the test to ...".
   const me = displayName(await tx.user.findUniqueOrThrow({ where: { id: devId } }));
   const mine = await ownChanges(devId, testId, since, tab, tx);
+  const ownRenames = events.filter((e) => e.kind === "renamed" && e.text.startsWith(`${me} `));
+  const saves = ownRenames.length ? await savesUpTo(testId, ownRenames[ownRenames.length - 1].createdAt, tx) : [];
   const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e) => {
     if (e.kind === "info" && e.text.startsWith(`${me} `)) return [];
     if (e.kind === "renamed" && e.text.startsWith(`${me} `)) {
       // (Batch 30, Oct 29 addition) One line per save: a rename saved in another tab with other fields is already in that save's line ("title (now “X”)").
       const title = e.text.slice(`${me} renamed the test to `.length);
       if (mine.some((o) => o.about?.a === "edit" && o.text.includes(`title (now “${title}”)`))) return [];
+      // (Batch 35 §17, seen on video Oct 31) The Save's own line is written to the action log only after its transaction (and its response): a poll in that moment
+      // (the other tab's page redraw asks at once) found the rename without it, and the live box keeps every line it got, so the next poll's Save line made two.
+      // The Save's own record says it at once: a Save of more than the title (or with the access keys) from another tab has that line, so its rename isn't one.
+      if (hasSaveLine(saves.find((x) => x.createdAt.getTime() <= e.createdAt.getTime()), tab)) return [];
       return [{ ...e, text: e.text.replace(`${me} `, "You "), listing: true }];
     }
     return [e];
@@ -127,6 +133,22 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   if (opts.all) return all;
   const ignored = new Set((await tx.user.findUnique({ where: { id: devId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
   return ignored.size ? all.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : all;
+}
+
+/** (Batch 35 §17) The listing Saves' records up to `at`, newest first (each rename sits in its Save's transaction, after that Save's record). */
+async function savesUpTo(testId: string, at: Date, tx: Tx | typeof db) {
+  return tx.testEvent.findMany({ where: { testId, kind: LISTING_SAVED, createdAt: { lte: at } }, orderBy: { createdAt: "desc" }, take: 50, select: { createdAt: true, text: true, tab: true } });
+}
+
+/**
+ * (Batch 35 §17) Does this listing Save have its own "You saved the listing in another tab: …" line for a page in `tab`? Its action log line exists when the Save
+ * changed more than the title, or the access keys too (a rename alone is its own line: actionText "edit"); the page sees it when the Save came from another tab
+ * (ownChanges: another tab's row; a page without a tab sees the rows that have one).
+ */
+export function hasSaveLine(save: { text: string; tab: string } | undefined, tab: string) {
+  const v = save ? parseSaved(save.text) : null;
+  if (!save || !v || !(v.fields.some((f) => f !== "title") || v.keys)) return false;
+  return tab ? save.tab !== tab : save.tab !== "";
 }
 
 /**
@@ -254,11 +276,13 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
   const rows = await tx.testEvent.findMany({ where: { testId, kind: LISTING_SAVE, createdAt: { gt: since } }, orderBy: { createdAt: "asc" }, take: 100 });
   if (!rows.length) return [];
   const tz = (await tx.user.findUnique({ where: { id: viewerId }, select: { timeZone: true } }))?.timeZone;
-  return rows.flatMap((e) => {
+  const lines: TestEventLike[] = rows.flatMap((e) => {
     const s = parseSave(e.text);
     const l = s ? saveLine(s, e.createdAt, tz, side) : null;
-    return l ? [{ kind: l.titleOnly ? "renamed" : "info", text: l.text, createdAt: e.createdAt, timed: true, ...(l.nda ? { nda: true } : {}) }] : [];
+    // (Batch 35 §14) On the join page every Save's line (a rename alone too) carries See it to its Listing panel, and names its Save (as the developer's lines do).
+    return l ? [{ kind: l.titleOnly ? "renamed" : "info", text: l.text, createdAt: e.createdAt, timed: true, ...(l.nda ? { nda: true } : {}), ...(side === "join" ? { listing: true } : {}) }] : [];
   });
+  return side === "join" ? withSaveAt(testId, lines, tx) : lines;
 }
 
 export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

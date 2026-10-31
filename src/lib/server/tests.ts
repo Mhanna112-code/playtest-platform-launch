@@ -466,7 +466,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // "Updated <time>" (Before / Now). A Save of only the access keys keeps one with no fields (nothing in the panel is tagged).
     {
       const pick = (l: Listing) => Object.fromEntries(fields.map((f) => [f, l[f] ?? null]));
-      await tx.testEvent.create({ data: { testId, kind: LISTING_SAVED, text: savedText({ fields, before: pick(current), after: pick(next) }) } });
+      // (Batch 35 §17) With `keys` when it changed the access keys too, and the tab that saved it: devChanges knows from it alone whether this Save has its own
+      // "You saved the listing in another tab" line (its rename then isn't a second line), before that line's action log is written.
+      await tx.testEvent.create({ data: { testId, kind: LISTING_SAVED, text: savedText({ fields, before: pick(current), after: pick(next), ...(keysChanged ? { keys: true } : {}) }), ...(tab ? { tab } : {}) } });
     }
     // (Batch 15 section 24) A rename is recorded in every working tester's contract changes (never a note under a press).
     if (fields.includes("title") || fields.includes("productName")) {

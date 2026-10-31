@@ -721,6 +721,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       if (x === "Your account is paused") return `${dev}'s developer account was paused (by ${suspendedBy(e.createdAt)})`;
       if (x === "Your tests are running again") return `${dev}'s tests are running again`;
       if (x === "Your tests are paused until you pay what you owe") return `${dev}'s tests are paused until they pay what they owe`;
+      if (x === "Your tests are paused until the chargeback steps are done") return `${dev}'s tests are paused until the chargeback steps are done`; // (batch 35 §22)
       if (x === SUBSCRIPTION_ENDED) return `${dev}'s subscription ended`;
       if (x.startsWith("Your bank reversed your ")) return `${dev}'s bank reversed their ${x.slice("Your bank reversed your ".length)}`;
       if (x.startsWith("You ")) return `${dev} ${x.slice(4)}`;

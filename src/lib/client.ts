@@ -29,6 +29,24 @@ export const setPageUser = (id: string) => {
 /** (Batch 35 §6) The account this page belongs to ("" before the layout set it): kept drafts name it too, so another account's cookie never takes them. */
 export const pageUser = () => PAGE_USER;
 
+/**
+ * (Owner's bug, Oct 31, batch 35 §20) The sign-in page for a tab whose session is gone, keeping its place: `/login?next=<path + hash>` (the login page takes
+ * only /app and /admin pages), or `/login?gone=1` for a deleted account. Every way there (a refused request's 401, SessionWatch) goes through `toLogin`, ONCE
+ * per page: a background request that beats SessionWatch never sends the tab on without `next`, and nothing redirects twice.
+ */
+export const loginNext = (loc: { pathname: string; hash?: string }) => `/login?next=${encodeURIComponent(loc.pathname + (loc.hash ?? ""))}`;
+let LEAVING_FOR_LOGIN = false;
+export function toLogin(gone = false, w: { location: { pathname: string; hash: string; replace: (u: string) => void } } | undefined = typeof window === "undefined" ? undefined : window) {
+  if (!w || LEAVING_FOR_LOGIN) return false;
+  LEAVING_FOR_LOGIN = true;
+  w.location.replace(gone ? "/login?gone=1" : loginNext(w.location));
+  return true;
+}
+/** (Batch 35 §20) Tests: a fresh page. */
+export const resetToLogin = () => {
+  LEAVING_FOR_LOGIN = false;
+};
+
 /** This page load's id: the server never stops a press for what this same tab did ("another tab" only). */
 export const TAB = typeof window === "undefined" ? "" : Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
 
@@ -76,7 +94,8 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
         window.location.href = "/app";
       }
     }
-    if (res.status === 401 && typeof window !== "undefined") window.location.href = data?.error?.code === "deleted" ? "/login?gone=1" : "/login";
+    // (Batch 35 §20) With `next` (the tab comes back to this page after signing in), and only once.
+    if (res.status === 401 && typeof window !== "undefined") toLogin(data?.error?.code === "deleted");
     // (Design doc 2; owner, Oct 27) A press refused because the account is suspended or on a payment / chargeback hold (or one that started the hold, a declined payment): on to the
     // TOP of the dashboard, where a blue box names the press that didn't go through and says how to resume.
     // The team stopped (or paused) the test: back to the test, where its banner names the press that failed.

@@ -88,6 +88,8 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
   const testChangeRef = useRef<string[]>([]);
   testChangeRef.current = testChange;
   const acked = useRef(true);
+  // (Batch 35 §14) The Save that last changed the test's needs (the server says): the pop-up's own needs lines name it, so their See it marks that Save's fields only.
+  const needsSave = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     const d = ref.current;
@@ -98,9 +100,10 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
   useEffect(() => {
     const live = async () => {
       if (sendingRef.current) return;
-      const r = await api<{ gaps: Gaps; needs: Needs }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
+      const r = await api<{ gaps: Gaps; needs: Needs; needsSaveAt?: string }>(`/api/tests/${p.testId}/my-gaps`, {}).catch(() => null);
       if (!r || sendingRef.current) return;
       const changed = needsChange(p.devName, needs0.current, r.needs);
+      if (changed.length) needsSave.current = r.needsSaveAt;
       if (JSON.stringify(changed) !== JSON.stringify(testChangeRef.current)) {
         setTestChange(changed);
         acked.current = changed.length === 0;
@@ -132,7 +135,7 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
     if (!acked.current && testChangeRef.current.length) {
       acked.current = true;
       const at = new Date().toISOString();
-      setStop({ lines: testChangeRef.current.map((text) => ({ text, at, listing: true })), button });
+      setStop({ lines: testChangeRef.current.map((text) => ({ text, at, listing: true, ...(needsSave.current ? { saveAt: needsSave.current } : {}) })), button });
       setChangedAt(new Date().toISOString());
       return;
     }

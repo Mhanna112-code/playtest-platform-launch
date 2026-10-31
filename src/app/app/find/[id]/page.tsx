@@ -3,7 +3,7 @@ import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, He
 import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, money } from "@/lib/format";
+import { displayName, fmtDateTimeIn, money } from "@/lib/format";
 import { REVIEW_DAYS, closedToNewLine, dueFromJoin, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
 const utcDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 import { ScrollText } from "@/components/ScrollText";
@@ -32,6 +32,9 @@ import { profileTestRefusal } from "@/lib/server/profileOpenTests";
 import { needsTermsAgain } from "@/lib/termsOfUse";
 import { inviteOnlyHidden, noteJoinPageVisit } from "@/lib/server/testVisits";
 import { otherSideNotice } from "@/components/OtherSideNotice";
+import { ListingPanel } from "@/app/app/tests/[id]/ListingPanel";
+import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
+import { testerListingPanel } from "@/lib/server/listingPanel";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -117,7 +120,10 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const big = fixed.length ? money(testerShare(Math.min(...fixed))) : t.liveRateCents != null && t.liveRateCents > 0 ? `${money(testerShare(t.liveRateCents))}/h` : "Free";
   // The full app's test page: the header card (tile, title, by, price, badges, description), the invitation, how it works and
   // what the developer wants to know, "Your deal", how the developer reviews, then the Join box.
+  // (Batch 35 §14) The Listing panel's rows: the current listing in the tester's words (their deadline from joining), the most recent Save's fields tagged.
+  const panel = await testerListingPanel(t.id, { ...asListing(t), deadlineDays: days });
   return (
+    <SeeItTarget target="#listing">
     <div className="mx-auto max-w-3xl space-y-6">
       <p><a href="/app/find">← All tests</a></p>
       {isAdmin(u) && <AdminTestBoxes testId={t.id} adminId={u.id} />}
@@ -126,7 +132,14 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       <PageLoaded at={seenAt} />
       {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}
       {invite && <AutoRefresh query="invites=1" v={invitesFp} />}
-      <section className="card scroll-mt-24 space-y-4" id="listing">
+      {/* (Owner, Oct 30, batch 34 §14 "The join page too"; batch 35 §14) The listing information is the Listing panel, as on the developer's test page (the tester's
+          words: their share of each price, no build link before joining); its header card and "What testers said" sit inside it. Every listing line on this page
+          (the top box, "Changed since you opened this page", the stop boxes, the "… anyway?" pop-up) has See it, which comes here and marks that Save's fields. */}
+      <ListingSeeIt box="listing" />
+      <ListingPanel side="tester" rows={panel.rows} listing={l} savedAt={panel.savedAt} when={(d) => fmtDateTimeIn(d, u.timeZone)}
+        intro={`The listing as it is now. A field ${dev}'s last save changed shows when: tap it for before and now.`}
+        after={{ spots: <> · {plural(Math.max(0, t.spots - testersIn), "spot")} left</> }}
+        head={<>
         <div className="flex items-start gap-4">
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />
           <div className="min-w-0 flex-1">
@@ -152,16 +165,14 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           {t.languages.length > 0 && <span className="badge"><Languages className="h-3.5 w-3.5" /> {t.languages.join(", ")}</span>}
           <span className="badge"><Users className="h-3.5 w-3.5" /> {plural(testersIn, "tester")} on this test</span>
         </div>
-        {/* (Batch 15 section 17) The steps in a scroll box about 6 lines tall (short steps show without a scroll bar). */}
-        {t.description && <ScrollText text={t.description} className="text-slate-300" label="What to do" />}
-        {t.mature && <p className="info !border-rose-300/30 !bg-rose-400/10 !text-rose-100"><b>Mature (18+):</b> {t.matureWhy}</p>}
-        {devRating.comments.length > 0 && (
+        </>}
+        foot={devRating.comments.length > 0 && (
           <details className="text-sm">
             <summary className="cursor-pointer">What testers said</summary>
             <LongList shown={3} tall="max-h-52" className="list-disc pl-5">{devRating.comments.map((cm, i) => <li key={i}><ClampText text={`“${cm}”`} /></li>)}</LongList>
           </details>
         )}
-      </section>
+      />
 
       {/* (An invitation shows here, as in the full app: who invited you, how long you'd have, No thanks.) */}
       {invite && !blocked && (
@@ -240,7 +251,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         <div className="space-y-2">
           <h2 className="flex items-center gap-2 font-semibold text-white"><BarChart3 className="h-5 w-5 text-sky-300" /> How {dev} reviews</h2>
           <ul className="space-y-1 text-sm text-slate-300">
-            <li>Pays on average: {devStats.pays.value === "-" ? <span className="text-slate-500">{devStats.pays.hint}</span> : <>{devStats.pays.value} <span className="text-slate-500">{devStats.pays.hint}</span></>}</li>
+            {/* (Owner, Oct 30, batch 35 §14) The average-pay line is gone from here: only the developer's own dashboard shows it. */}
             <li>Typical review: {devStats.review.value}</li>
             <li>Rating: {devRating.line || "no ratings yet"}</li>
           </ul>
@@ -297,5 +308,6 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         </div>
       )}
     </div>
+    </SeeItTarget>
   );
 }

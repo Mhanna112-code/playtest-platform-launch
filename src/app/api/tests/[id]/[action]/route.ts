@@ -142,7 +142,9 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         // (Batch 30 §12) With the page's seen marker: what the needs-covered notice shows with it (every change the page hadn't shown), the box's time and its last line.
         const verb = body.verb === "apply" || body.verb === "ask" ? body.verb : "join";
         const stop = typeof body.seenAt === "string" ? await joinStopList(u.id, id, body, verb) : null;
-        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })), needs: { devices: t.devices, languages: t.languages }, ...(stop ?? {}) });
+        // (Batch 35 §14) `needsSaveAt`: the Save that last changed the needs, for the pop-up's own lines' See it.
+        const needsSave = await (await import("@/lib/server/listingPanel")).needsSaveAt(id);
+        return ok({ gaps: gapsOf(t, await db.testerProfile.findUnique({ where: { userId: u.id } })), needs: { devices: t.devices, languages: t.languages }, ...(needsSave ? { needsSaveAt: needsSave } : {}), ...(stop ?? {}) });
       }
       case "invite-check":
         return ok(await inviteGaps(u.id, id, Array.isArray(body.testerIds) ? body.testerIds.map(String) : []));

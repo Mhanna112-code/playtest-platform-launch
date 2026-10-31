@@ -15,6 +15,22 @@ export function gapsOf(t: { devices: string[]; languages: string[] }, p: { devic
   };
 }
 
+/** The Invite panel's notice when nobody ticked misses a need any more (the server's "needs_none" line reads the same). */
+export const EVERYONE_MEETS = "Everyone you ticked now meets this test's needs. Press Invite to send.";
+/**
+ * (Owner's bug, Oct 31, batch 35 §21) Is that notice true NOW: someone is ticked, and every ticked tester's profile as the panel shows it meets the test's current
+ * needs? After a stop for a needs change (the test now needs Spanish) the old notice stayed beside rows tagged "Doesn't list languages"; it shows only while true.
+ */
+export function everyoneMeets(needs: { devices: string[]; languages: string[] }, ticked: string[], shown: ReadonlyMap<string, { devices: string[]; languages: string[] }>) {
+  if (!ticked.length) return false;
+  return ticked.every((id) => {
+    const t = shown.get(id);
+    if (!t) return false;
+    const g = gapsOf(needs, t);
+    return !g.devices.length && !g.languages.length;
+  });
+}
+
 export function readGaps(raw: unknown): Gaps | null {
   try {
     const v = (typeof raw === "string" ? JSON.parse(raw) : raw) as Partial<Gaps> | null;

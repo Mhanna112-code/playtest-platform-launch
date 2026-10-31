@@ -10,7 +10,7 @@ export function SignOutAll() {
     <button
       className="btn-secondary"
       onClick={async () => {
-        await flushKept().catch(() => null); // (Batch 35 §8) what was typed this moment is kept before signing out
+        await flushKept().catch(() => null); // (Batch 35 §8) what was typed this moment is kept before signing out; (§16) only a form with unsent typing sends
         await api("/api/auth/logout", { everywhere: true }).catch(() => null);
         announceAuth("out");
         window.location.href = "/login";
@@ -29,7 +29,7 @@ export function SignOut() {
       title="Log out"
       aria-label="Log out"
       onClick={async () => {
-        await flushKept().catch(() => null); // (Batch 35 §8) what was typed this moment is kept before signing out
+        await flushKept().catch(() => null); // (Batch 35 §8) what was typed this moment is kept before signing out; (§16) only a form with unsent typing sends
         await api("/api/auth/logout", {}).catch(() => null);
         announceAuth("out");
         window.location.href = "/login"; // (Owner, Oct 27) every tab and window goes to the sign-in page

@@ -15,6 +15,17 @@ export async function flushKept(timeoutMs = 1500) {
   await Promise.race([Promise.all(waits), new Promise((r) => setTimeout(r, timeoutMs))]);
 }
 
+/**
+ * (Batch 35 §16, found on video Oct 31) What a form sends when the page asks it to send now (leaving, hiding, the side-switch reload, Log out): only what THIS tab
+ * typed since its last save ("one draft per form, last typed wins"). A tab with nothing unsent (idle, or its last typing already saved) sends nothing, so it
+ * never puts its older text over a newer draft another tab saved meanwhile. "draft": send the text; "empty": the box was emptied, forget the draft.
+ */
+export function flushDraft(s: { ready: boolean; cleared: boolean; pristine: boolean; saved: boolean; unsent: boolean }): "skip" | "draft" | "empty" {
+  if (!s.ready || s.cleared || !s.unsent) return "skip";
+  if (s.pristine) return s.saved ? "empty" : "skip";
+  return "draft";
+}
+
 /** (Batch 35 §11) Forget a form's draft that no longer applies (an admin box swapped out because another admin changed its state meanwhile). */
 export const dropKept = (key: string) =>
   fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data: null }), keepalive: true }).catch(() => null);
@@ -28,10 +39,13 @@ export const dropKept = (key: string) =>
  * (Owner, Oct 30, batch 35 §8) `signedIn`: the draft came back through a sign-in (the server marked it; SIGN_IN_DRAFTS in lib/keptText.ts says what it keeps): the
  * form shows "Draft" with "Use saved" at each changed box. The mark stays on the draft (every save keeps it) until it's sent or emptied.
  * (Batch 35 §10) `off`: this form keeps nothing (the profile's first setup): nothing is read, saved or cleared.
+ * (Owner, Oct 31, batch 35 §18) A restored draft can always be discarded, not only after a sign-in: every form's DraftTag shows its button ("Use saved" /
+ * "Discard") whenever it came back (a reload, a new tab, a sign-in); `restoredAt` says when it was last kept (Post / Edit's line at the top).
  */
 export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v: T) => void, off = false) {
   const [restored, setRestored] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
+  const [restoredAt, setRestoredAt] = useState(""); // (batch 35 §18) when the restored draft was last kept
   const signedInRef = useRef(false);
   const ready = useRef(false); // the server's copy has been looked at
   const saved = useRef(false); // there is a copy on the server
@@ -40,6 +54,7 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
   const latest = useRef({ value, pristine });
   latest.current = { value, pristine };
   const cleared = useRef(false);
+  const unsent = useRef(false); // (batch 35 §16) typed since this tab's last save (a save is waiting for typing to stop)
   const restoreRef = useRef(restore);
   restoreRef.current = restore;
 
@@ -55,7 +70,7 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
     let alive = true;
     fetch(`/api/kept?key=${encodeURIComponent(key)}`, { cache: "no-store", headers: uidHeader() })
       .then((r) => (r.ok ? r.json() : null))
-      .then((r: { data: T | null } | null) => {
+      .then((r: { data: T | null; at?: string } | null) => {
         if (!alive) return;
         ready.current = true;
         if (r?.data != null) {
@@ -66,6 +81,7 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
             setSignedIn(after);
             restoreRef.current(r.data);
             setRestored(true);
+            setRestoredAt(r.at ?? "");
           }
         }
       })
@@ -83,9 +99,11 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
     if (!pristine) cleared.current = false; // typing again after a send
     if (!ready.current || cleared.current) return;
     if (pristine && !saved.current) return;
+    unsent.current = true;
     const t = setTimeout(() => {
       // (Batch 34 §9) Sent meanwhile (a Save went through within the moment): the cleared draft is never written back.
       if (cleared.current) return;
+      unsent.current = false;
       if (latest.current.pristine) {
         saved.current = false;
         setRestored(false);
@@ -101,9 +119,14 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
 
   // Leaving the page with something unsaved: send it now.
   useEffect(() => {
+    // (Batch 35 §16) Only what this tab typed since its last save: an idle tab sends nothing (another tab's newer draft stays).
     const flush = () => {
-      if (!ready.current || cleared.current || (latest.current.pristine && !saved.current)) return null;
-      return send(latest.current.pristine ? null : mark(latest.current.value));
+      const what = flushDraft({ ready: ready.current, cleared: cleared.current, pristine: latest.current.pristine, saved: saved.current, unsent: unsent.current });
+      if (what === "skip") return null;
+      unsent.current = false;
+      if (what === "empty") saved.current = false;
+      else saved.current = true;
+      return send(what === "empty" ? null : mark(latest.current.value));
     };
     const onHide = () => document.visibilityState === "hidden" && void flush();
     const onLeave = () => void flush();
@@ -125,13 +148,14 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
   /** The form was sent: forget the draft (wait for this before the page reloads). */
   const clear = useCallback(async () => {
     cleared.current = true;
+    unsent.current = false;
     setRestored(false);
     forget();
     if (!off && (saved.current || !ready.current)) await send(null);
     saved.current = false;
   }, [send, forget, off]);
 
-  return { restored, signedIn, clear };
+  return { restored, signedIn, restoredAt, clear };
 }
 
 /** (Batch 35 §8) The tag on a restored draft. */
@@ -150,6 +174,11 @@ export const draftButtonLabel = (kind: DraftKind) => (kind === "discard" ? DISCA
 /** (Batch 35 §8) Edit / Post: every field marked Draft back to its saved value. */
 export const USE_SAVED_ALL_LABEL = "Use saved for all";
 
+/** (Owner, Oct 31, batch 35 §18) The line at the top of Post / Edit when the form opened with a restored draft. */
+export const DRAFT_START_LINE = (when: string) => `Started from your unsent draft${when ? ` (${when})` : ""}`;
+/** (Batch 35 §18) Post a test: every field back to the empty start, and the draft goes (a brand-new test). */
+export const START_EMPTY_LABEL = "Start empty";
+
 /** The tag on a restored draft: "Draft" (batch 35 §8; it read "Not sent yet"). */
 export function NotSentTag({ label = DRAFT_LABEL }: { /** (Batch 20 section 22) "Not saved yet" on Edit, "Not posted yet" on Post */ label?: string }) {
   return <span data-not-sent="draft" className="badge ml-2 border-amber-300/50 bg-amber-300/10 text-amber-200">{label}</span>;
@@ -159,6 +188,7 @@ export function NotSentTag({ label = DRAFT_LABEL }: { /** (Batch 20 section 22) 
  * (Owner, Oct 30, batch 35 §8) A written box's draft that came back after signing in: the "Draft" tag, and with `onUseSaved` the button beside it
  * (the box goes back to its saved value; nothing saved yet: it empties). `field`: which box (Edit has one per field).
  * (Batch 35 §10) `kind`: "saved" reads "Use saved" (a saved version exists), "discard" reads "Discard" (nothing is saved; the box empties).
+ * (Batch 35 §18) Every restored draft, not only one back through a sign-in: the forms pass `onUseSaved` whenever their draft came back.
  */
 export function DraftTag({ onUseSaved, field, kind }: { onUseSaved?: () => void; field?: string; kind: DraftKind }) {
   return (

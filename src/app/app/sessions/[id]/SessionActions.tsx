@@ -6,7 +6,7 @@ import { checkFields } from "@/components/FieldChecks";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
-import { DraftTag, useKept } from "@/lib/useKept";
+import { DraftTag, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerCounter, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
@@ -123,6 +123,14 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setNotes(v.notes ?? initialNotes);
   });
 
+  /**
+   * (Owner, Oct 31, batch 35 §18) A restored draft marks each box it changed, like Edit's fields: "Draft" with "Use saved" under every answer box (and the notes)
+   * whose text differs from what was sent (or from empty when nothing was sent); "Use saved" puts that one box back. "Use saved for all" beside Send puts every
+   * box back. A file whose marker leaves with a box's text follows the existing rules (no box names it: it's back in the files list).
+   */
+  const sentAt = (i: number) => initial[i] ?? "";
+  const boxDraft = (i: number) => (keep.restored && answers[i] !== sentAt(i) ? <DraftTag kind="saved" field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);
+  const notesDraft = keep.restored && notes !== initialNotes ? <DraftTag kind="saved" field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;
   const length = writtenLength([...answers, notes]);
   // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
   const unchanged = update && sentSame && !newFiles && same;
@@ -176,17 +184,19 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
           <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
           <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
+          {boxDraft(i)}
         </div>
       ))}
       </QuestionBox>
       <div>
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} value={notes} onChange={setNotes} />
+        {notesDraft}
       </div>
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftTag kind="saved" onUseSaved={keep.signedIn ? () => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); } : undefined} />}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{USE_SAVED_ALL_LABEL}</button>}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
@@ -270,7 +280,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
         Send the dispute
       </button>
       {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
-      {keep.restored && reason !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setReason("") : undefined} />}
+      {keep.restored && reason !== "" && <DraftTag kind="discard" onUseSaved={() => setReason("")} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <FormMistakes text={err} press="Send the dispute" />
     </details>

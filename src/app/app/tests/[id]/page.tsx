@@ -39,7 +39,7 @@ import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callList
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
-import { autoChargeLine, paidMostLine } from "@/lib/rules";
+import { autoChargeLine, paidMostLine, pausedUntil } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
@@ -679,7 +679,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         testId={t.id}
         seenAt={seenAt}
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
-        noRequestReason={t.status === "stopped" ? "" : u.holdStartedAt ? "Your tests are paused until you pay what you owe: calls wait meanwhile." : ""}
+        noRequestReason={t.status === "stopped" ? "" : u.holdStartedAt ? `${pausedUntil(u.holdReason === "chargeback")}: calls wait meanwhile.` : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
         // (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request, both directions (Needs you's rows open it here).
         requests={restricted ? [] : reqs.flatMap((r) => {
@@ -696,8 +696,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           perks={perks}
           // (Batch 20 section 10) Full, paused or joining closed: Invite is disabled with its line (the page's poll brings a spot opening or filling); Open until
           // passing while the page is open closes it at that moment.
-          blocked={inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt }, now, fmtDate)}
-          closes={t.openUntil && t.openUntil > now ? { at: t.openUntil.toISOString(), line: inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt }, new Date(t.openUntil.getTime() + 1000), fmtDate)?.line ?? "" } : undefined}
+          blocked={inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, now, fmtDate)}
+          closes={t.openUntil && t.openUntil > now ? { at: t.openUntil.toISOString(), line: inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, new Date(t.openUntil.getTime() + 1000), fmtDate)?.line ?? "" } : undefined}
           initial={invitePanelData ?? { worked: [], suggested: [], found: [], foundTotal: 0, capLine: "", searched: false }}
           sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, testerId: i.testerId, name: people.get(i.testerId) ?? "?", status: "waiting for them to join", ...inviteInfo.get(i.testerId)! }))}
         />

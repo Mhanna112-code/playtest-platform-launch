@@ -1,4 +1,5 @@
 import { ReasonQuote } from "@/components/ScrollText";
+import { CHARGEBACK_STEPS_HREF } from "@/lib/rules";
 
 export type BannerCause = "team-paused" | "team-stopped" | "hold" | "chargeback" | "suspended" | "stopped";
 
@@ -7,7 +8,8 @@ export const BANNER_TITLES: Record<BannerCause, string> = {
   "team-paused": "The team paused this test.",
   "team-stopped": "The team stopped this test.",
   hold: "Your tests are paused until you pay what you owe.",
-  chargeback: "Your tests are paused until you pay what you owe.",
+  // (Owner, Oct 31, batch 35 §22) Paying isn't enough after a chargeback (a 3D Secure card check and the team's approval too): "the chargeback steps" links to them.
+  chargeback: "Your tests are paused until the chargeback steps are done.",
   suspended: "Your account is suspended: your tests are paused.",
   stopped: "This test is stopped.",
 };
@@ -31,7 +33,7 @@ export function TestBanner({ cause, reason, failed, allowed }: { cause: BannerCa
   const why = cause === "team-paused" ? "the team paused this test" : cause === "team-stopped" ? "the team stopped this test" : "";
   return (
     <section role="alert" data-test-banner={cause} className="space-y-2 rounded-2xl border border-rose-400/50 bg-rose-500/10 p-4 text-sm text-rose-100">
-      <p className="font-semibold">{BANNER_TITLES[cause]}</p>
+      <p className="font-semibold">{cause === "chargeback" ? <>Your tests are paused until <a href={CHARGEBACK_STEPS_HREF} className="underline" data-chargeback-steps="">the chargeback steps</a> are done.</> : BANNER_TITLES[cause]}</p>
       {reason && <ReasonQuote text={reason} className="text-rose-50" />}
       {failed && <p data-failed-line="">{why && !failed.includes(":") ? `${failed.replace(/\.$/, "")}: ${why}.` : /[.!]$/.test(failed) ? failed : `${failed}.`}</p>}
       {allowed && <p className="text-rose-100/80" data-allowed-line="">{allowed}</p>}

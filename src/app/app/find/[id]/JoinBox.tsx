@@ -19,6 +19,7 @@ import { noGaps, PROFILE_COVERS, type GapAsk, type Gaps } from "@/lib/gaps";
 import { TermsAgainBox } from "@/components/TermsAgainBox";
 import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
 import { DraftTag, useKept } from "@/lib/useKept";
+import { seeItClick } from "@/components/ListingInfo";
 
 /**
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
@@ -235,7 +236,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       )}
       {(applying || rejoining) && (
         <div>
-          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}</label>
+          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}</label>
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}
@@ -246,7 +247,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           <p className="font-medium">Changed since you opened this page</p>
           <LongList className="mt-0.5 list-disc space-y-0.5 pl-5" tall="max-h-52">
             {[...since].sort((a, b) => (a.at < b.at ? 1 : -1)).map((c) => (
-              <li key={`${c.at}|${c.text}`}>{c.timed ? c.text : `${c.text} · ${fmtTimeIn(c.at, savedZone())}`}{c.timed && c.kind === "info" && <> · <a href="#listing">See it</a></>}</li>
+              <li key={`${c.at}|${c.text}`}>{c.timed ? c.text : `${c.text} · ${fmtTimeIn(c.at, savedZone())}`}{(c.listing || (c.timed && c.kind === "info")) && <> · <a href="#listing" data-see-it="" onClick={(e) => seeItClick(e, "#listing", c.at, c.saveAt)}>See it</a></>}</li>
             ))}
           </LongList>
         </div>

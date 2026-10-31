@@ -83,7 +83,7 @@ describe("batch 20 section 1: more than 3 questions sit in a scroll box", () => 
     expect(session).toContain('<li data-scope-questions="">Questions: <QuestionList items={writtenQuestions(c).map((q) => qText(q))} /></li>');
     expect(session).toContain("<div>Then: <QuestionList items={(o.fromQuestions as string[]).map(qText)} /></div>");
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("<QuestionList items={offer.fromQuestions} />");
-    expect(src("app/app/tests/[id]/ListingPanel.tsx")).toContain("<QuestionList items="); // (batch 34 §14) the Listing panel replaced Contract changes
+    expect(src("app/app/tests/[id]/ListingPanel.tsx")).toContain("<QuestionList numbered items="); // (batch 35 §15 numbered; batch 34 §14) the Listing panel replaced Contract changes
     expect(src("app/app/find/[id]/page.tsx")).toContain("<QuestionBox count={l.questions.length} as=\"ul\"");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
     const box = form.indexOf('<QuestionBox count={questions.length} size="form"');
@@ -514,7 +514,7 @@ describe("batch 20 section 10: Invite disabled while nobody can be invited", () 
     const r = await act(testId, "invite", dev.cookie, { testerIds: [t.user.id], seenAt: seen() });
     expect(r.body.error.message).toBe("Harbor Run is full. Add spots to invite more people.");
     // The page's poll changes when a spot opens (a tester leaves: an event), so the panel follows.
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("blocked={inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt }, now, fmtDate)}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('blocked={inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, now, fmtDate)}'); // (batch 35 §22) the chargeback's words
   });
 });
 
@@ -859,7 +859,7 @@ describe("batch 20 section 22: a ticked part needs a price; Save looks disabled;
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain('{...(on && !free ? { "data-required": "", "data-required-msg": PART_PRICE_MISSING[part.on] } : {})}');
     expect(form).toContain('<button className={`btn ${nothingChanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || nothingChanged}');
-    expect(form).toContain('{keep.restored && !keep.signedIn && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}');
+    expect(form).toContain('{keep.restored && draftKeys.length === 0 && !keysDraft && <NotSentTag label={edit ? "Not saved yet" : "Not posted yet"} />}'); // (batch 35 §18) the per-field marks say it when there are any
     const { NotSentTag } = await import("@/lib/useKept");
     expect(html(createElement(NotSentTag, {}))).toContain("Draft"); // (batch 35 §8) it read "Not sent yet"
     expect(html(createElement(NotSentTag, { label: "Not saved yet" }))).toContain("Not saved yet");

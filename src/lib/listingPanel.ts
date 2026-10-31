@@ -1,5 +1,5 @@
 import { money } from "@/lib/format";
-import { NOT_LISTED, type Listing } from "@/lib/rules";
+import { NOT_LISTED, testerShare, type Listing } from "@/lib/rules";
 import { qRequired, qText } from "@/lib/questions";
 
 /**
@@ -12,13 +12,13 @@ import { qRequired, qText } from "@/lib/questions";
  * Save that changed only the access keys keeps one with no fields. Read only by the developer's Listing panel: never a line anywhere (no live box, bell or timeline).
  */
 export const LISTING_SAVED = "listing_saved";
-export type SavedValues = { fields: string[]; before: Record<string, unknown>; after: Record<string, unknown> };
+export type SavedValues = { fields: string[]; before: Record<string, unknown>; after: Record<string, unknown>; /** (Batch 35 §17) the Save changed the access keys too */ keys?: boolean };
 export const savedText = (v: SavedValues) => JSON.stringify(v);
 export function parseSaved(text: string): SavedValues | null {
   try {
     const v = JSON.parse(text) as Partial<SavedValues>;
     if (!v || !Array.isArray(v.fields) || !v.before || typeof v.before !== "object" || !v.after || typeof v.after !== "object") return null;
-    return { fields: v.fields.filter((f): f is string => typeof f === "string"), before: v.before, after: v.after };
+    return { fields: v.fields.filter((f): f is string => typeof f === "string"), before: v.before, after: v.after, ...(v.keys === true ? { keys: true } : {}) };
   } catch {
     return null;
   }
@@ -46,18 +46,32 @@ export const PANEL_ROWS = [
 export type PanelKey = (typeof PANEL_ROWS)[number]["key"];
 
 const JOIN_MODES: Record<string, string> = { anyone: "Anyone who matches (they press Join)", apply: "Approved only (you accept or decline)", invite: "Invite only" };
-const price = (c: number) => (c === 0 ? "Free" : money(c));
+/** (Batch 35 §14) The same choices in the tester's words (the developer's "you" is the developer). */
+const TESTER_JOIN_MODES: Record<string, string> = { anyone: "Anyone who matches (press Join)", apply: "Approved only (the developer accepts or declines)", invite: "Invite only" };
 const need = (r: boolean | undefined) => (r ? "Required" : "Not required");
 const list = (v: string[] | undefined, none: string) => (v?.length ? v.join(", ") : none);
 
+/**
+ * (Batch 35 §14) Whose panel: the developer's test page, or the tester's join page. The tester's reads their own share of each price ("$8.00 for you", as in their
+ * "Your agreed scope"), their deadline from joining, "Who can join" in their words, and never the build link itself (they get it when they join, after any NDA).
+ */
+export type PanelSide = "developer" | "tester";
+/** The build link's line on the tester's panel: the link itself comes with joining. */
+export const BUILD_LINK_LATER = "You get it when you join";
+/** The tester's labels where they differ from the developer's. */
+const TESTER_LABELS: Partial<Record<PanelKey, string>> = { deadlineDays: "Your deadline" };
+export const rowLabel = (key: PanelKey, side: PanelSide = "developer") => (side === "tester" ? TESTER_LABELS[key] : undefined) ?? PANEL_ROWS.find((r) => r.key === key)!.label;
+
 /** How a line reads, now and in its Before (the same words for both). */
-export function rowText(key: PanelKey, l: Listing): string {
+export function rowText(key: PanelKey, l: Listing, side: PanelSide = "developer"): string {
+  const t = side === "tester";
+  const price = (c: number) => (c === 0 ? "Free" : t ? `${money(testerShare(c))} for you` : money(c));
   switch (key) {
     case "productName": return l.productName || "(none)";
     case "title": return l.title || "(none)";
     case "description": return l.description || "(none)";
     case "questions": return l.questions?.length ? l.questions.map((q, i) => `${i + 1}. ${qText(q)}${qRequired(q) ? " (required)" : ""}`).join("\n") : "(none)";
-    case "buildUrl": return l.buildUrl || "(none)";
+    case "buildUrl": return l.buildUrl ? (t ? BUILD_LINK_LATER : l.buildUrl) : "(none)";
     case "ndaText": return l.ndaText || "None";
     case "devices": return list(l.devices, "Any device");
     case "languages": return list(l.languages, "Any language");
@@ -67,10 +81,10 @@ export function rowText(key: PanelKey, l: Listing): string {
       `Written answers: ${l.writtenCents == null ? NOT_LISTED : `${price(l.writtenCents)} · ${need(l.writtenRequired)}`}`,
       `Screen recording: ${l.recordingCents == null ? NOT_LISTED : `${price(l.recordingCents)} · ${need(l.recordingRequired)}`}`,
     ].join("\n");
-    case "call": return l.liveRateCents == null ? NOT_LISTED : `${l.liveRateCents === 0 ? "Free" : `${money(l.liveRateCents)}/h`}${l.liveMinutes ? ` · ${l.liveMinutes}-minute calls` : ""} · ${need(l.liveRequired)}`;
-    case "deadlineDays": return `${l.deadlineDays} day${l.deadlineDays === 1 ? "" : "s"}`;
+    case "call": return l.liveRateCents == null ? NOT_LISTED : `${l.liveRateCents === 0 ? "Free" : `${money(t ? testerShare(l.liveRateCents) : l.liveRateCents)}/h${t ? " for you" : ""}`}${l.liveMinutes ? ` · ${l.liveMinutes}-minute calls` : ""} · ${need(l.liveRequired)}`;
+    case "deadlineDays": return `${l.deadlineDays} day${l.deadlineDays === 1 ? "" : "s"}${t ? " from joining" : ""}`;
     case "openUntil": return l.openUntil ? new Date(l.openUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "No end date";
-    case "joinMode": return JOIN_MODES[l.joinMode] ?? l.joinMode;
+    case "joinMode": return (t ? TESTER_JOIN_MODES : JOIN_MODES)[l.joinMode] ?? l.joinMode;
     case "spots": return String(l.spots);
   }
 }
@@ -81,12 +95,15 @@ export type PanelRow = { key: PanelKey; label: string; now: string; before: stri
  * Each line of the panel: its current words and, ONLY when the most recent save changed it, what it read before that save and when (a line that save didn't
  * change, or changed and that reads the same, has no tag).
  */
-export function panelRows(now: Listing, last: (SavedValues & { at: Date }) | null): PanelRow[] {
+export function panelRows(now: Listing, last: (SavedValues & { at: Date }) | null, side: PanelSide = "developer"): PanelRow[] {
   const before = last ? ({ ...now, ...last.before } as Listing) : null;
   return PANEL_ROWS.map((r) => {
-    const n = rowText(r.key, now);
-    if (!last || !before || !r.fields.some((f) => last.fields.includes(f))) return { key: r.key, label: r.label, now: n, before: null, updatedAt: null };
-    const b = rowText(r.key, before);
-    return b === n ? { key: r.key, label: r.label, now: n, before: null, updatedAt: null } : { key: r.key, label: r.label, now: n, before: b, updatedAt: last.at };
+    const label = rowLabel(r.key, side);
+    const n = rowText(r.key, now, side);
+    if (!last || !before || !r.fields.some((f) => last.fields.includes(f))) return { key: r.key, label, now: n, before: null, updatedAt: null };
+    // (Batch 35 §14) The tester's build link changed from one link to another: said without either link.
+    if (side === "tester" && r.key === "buildUrl" && before.buildUrl && now.buildUrl && before.buildUrl !== now.buildUrl) return { key: r.key, label, now: n, before: "An earlier link", updatedAt: last.at };
+    const b = rowText(r.key, before, side);
+    return b === n ? { key: r.key, label, now: n, before: null, updatedAt: null } : { key: r.key, label, now: n, before: b, updatedAt: last.at };
   });
 }

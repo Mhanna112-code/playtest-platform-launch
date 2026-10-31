@@ -61,8 +61,16 @@ function clientMessage(el: Field): string {
   return "";
 }
 
+/**
+ * (Owner's bug, Oct 31, batch 35 §19) A field that can't be filled in (disabled itself, or inside a disabled fieldset: Free ticked, its part unticked, a locked
+ * group) is never red: no outline, no line, never in the list under the button.
+ */
+export const isOff = (el: Element) => isField(el) && (el.disabled || !!el.matches?.(":disabled"));
+
 function ruleMessage(el: Element): string {
-  const own = isField(el) && !el.disabled ? clientMessage(el) : "";
+  // (Batch 35 §19) Disabled: nothing to fix there (the server's line for it goes too).
+  if (isOff(el)) return "";
+  const own = isField(el) ? clientMessage(el) : "";
   if (own) return own;
   const s = server.get(el);
   if (s && s.value === valueOf(el)) return s.msg;
@@ -71,6 +79,8 @@ function ruleMessage(el: Element): string {
 }
 
 const notes = new WeakMap<Element, HTMLElement>();
+/** (Batch 35 §19) The fields this file shows red right now: re-checked whenever what decides their rule may have changed. */
+const reds = new Set<Element>();
 let ids = 0;
 let queued = false;
 /** Tells every list under a button that the red fields changed. */
@@ -95,6 +105,7 @@ export function showField(el: Element) {
       el.classList.remove("field-bad");
       note.remove();
       notes.delete(el);
+      reds.delete(el);
       changed();
     }
     return true;
@@ -113,9 +124,30 @@ export function showField(el: Element) {
     notes.set(el, note);
   }
   if (note.textContent !== message) note.textContent = message;
+  reds.add(el);
   changed();
   return false;
 }
+
+/**
+ * (Owner's bug, Oct 31, batch 35 §19) Every red field's check again, now: after any typing or tick anywhere, and whenever a field's rules change under it (it
+ * became disabled, its required mark went: ticking Free or unticking its part). Each field still goes by its OWN value and rules (editing another field
+ * never fixes it), but a box that can no longer be filled in, or no longer needs a value, never keeps its red line. Gone from the page: forgotten.
+ */
+export function recheckRed() {
+  for (const el of Array.from(reds)) {
+    if (!el.isConnected) {
+      reds.delete(el);
+      notes.get(el)?.remove();
+      notes.delete(el);
+      changed();
+      continue;
+    }
+    showField(el);
+  }
+}
+/** (Batch 35 §19) The attributes that decide a field's rule: a change to any of them re-checks the red fields. */
+export const RULE_ATTRS = ["disabled", "data-required", "data-required-msg", "data-min", "data-max", "data-min-chars", "data-zero-ok", "min", "max"];
 
 /** The fields red right now inside `root`, top to bottom, each with the text of its red line. */
 export function redFields(root: Element | null): { el: HTMLElement; text: string }[] {
@@ -125,6 +157,7 @@ export function redFields(root: Element | null): { el: HTMLElement; text: string
     // A box inside a smaller box with its own list (data-mistakes-root inside `root`) belongs to that list only.
     const own = el.closest("[data-mistakes-root]");
     if (own && own !== root && root.contains(own)) continue;
+    if (isOff(el)) continue; // (batch 35 §19) a disabled field is never in the list
     const note = notes.get(el);
     const described = el.getAttribute("aria-describedby");
     const text = (note?.isConnected ? note.textContent : "") || el.dataset.redMsg || (described ? document.getElementById(described.split(" ")[0])?.textContent : "") || "";
@@ -156,7 +189,7 @@ export function checkFields(root: Element | null) {
   if (!root) return true;
   let ok = true;
   for (const el of Array.from(root.querySelectorAll("input, textarea, select, [data-field-group]"))) {
-    if (!hasRules(el) || (isField(el) && el.disabled)) continue;
+    if (!hasRules(el) || isOff(el)) continue;
     if (!showField(el)) ok = false;
   }
   if (redFields(root).length) ok = false;
@@ -234,6 +267,7 @@ export function FieldChecks() {
     };
     const onType = (e: Event) => {
       if (isField(e.target)) recheck(e.target);
+      queueMicrotask(recheckRed); // (batch 35 §19) after the page's own redraw
     };
     // (Batch 20 section 19) Whole-number and money boxes: what can't be in them is never typed or pasted in (checked before the page's own handlers see it).
     const last = new WeakMap<HTMLInputElement, string>();
@@ -274,7 +308,11 @@ export function FieldChecks() {
       if (!isField(e.target)) return;
       if (hasRules(e.target)) showField(e.target);
       recheck(e.target);
+      queueMicrotask(recheckRed); // (batch 35 §19) Free ticked, a part unticked: the boxes they switch off lose their red at once
     };
+    // (Batch 35 §19) A field's rules changed under it (disabled, required mark gone), however that happened: its red is checked again.
+    const watch = typeof MutationObserver === "undefined" ? null : new MutationObserver(() => recheckRed());
+    watch?.observe(document.body, { attributes: true, subtree: true, attributeFilter: RULE_ATTRS });
     // A form submit checks every box in it first (the press is stopped when one is wrong).
     const onSubmit = (e: Event) => {
       if (!(e.target instanceof HTMLFormElement)) return;
@@ -302,6 +340,7 @@ export function FieldChecks() {
       document.removeEventListener("input", onType);
       document.removeEventListener("change", onChange);
       document.removeEventListener("submit", onSubmit, true);
+      watch?.disconnect();
     };
   }, []);
   return null;
