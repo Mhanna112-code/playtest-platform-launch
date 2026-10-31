@@ -29,10 +29,28 @@ export async function POST(req: Request) {
   }
 }
 
+/** (Batch 35 §9) How long a dispute waits for its payment to be recorded before it is left for Stripe's retry (tests set DISPUTE_WAIT_MS=0). */
+const waitMs = () => Number(process.env.DISPUTE_WAIT_MS ?? 8000);
+
 type Event = { id?: string; type: string; account?: string; data: { object: Record<string, unknown> } };
 async function handle(event: Event, later: (why: string) => Promise<Response>): Promise<Response> {
   // (Batch 35 §9) A dispute can arrive a moment before this server has recorded the payment it is about (seconds in test mode): wait for Stripe's retry.
-  const known = async (pi: string) => !!(await db.payment.findFirst({ where: { stripePaymentIntentId: pi }, select: { id: true } }));
+  // The usual gap is a second or two: wait up to WAIT_MS for the payment before leaving it to the retry.
+  const known = async (pi: string) => {
+    const t0 = Date.now();
+    const WAIT_MS = waitMs();
+    for (let tries = 0; ; tries++) {
+      if (await db.payment.findFirst({ where: { stripePaymentIntentId: pi }, select: { id: true } })) {
+        if (tries > 0) console.info(`[stripe] dispute arrived before its payment was recorded; waited ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+        return true;
+      }
+      if (Date.now() - t0 >= WAIT_MS) {
+        console.info(`[stripe] dispute arrived before its payment was recorded; still not recorded after ${WAIT_MS / 1000} s: left for Stripe's retry`);
+        return false;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  };
   // (Batch 8) Stripe Billing: renewals, declined renewals and the end of a developer subscription.
   if (event.type === "invoice.paid" || event.type === "invoice.payment_failed" || event.type === "invoice.payment_action_required" || event.type === "customer.subscription.deleted") await (await import("@/lib/server/subscription")).subscriptionWebhook(event.type, event.data.object);
   if (event.type === "charge.dispute.created") {
