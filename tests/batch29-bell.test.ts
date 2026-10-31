@@ -342,7 +342,7 @@ describe("§23-27 the tester's stacks across tests", () => {
   });
 
   it("§26 excerpt answers stack in 'Excerpts' across tests", () => {
-    expect(src("lib/server/excerpts.ts")).toContain('{ testId: x.testId, group: "excerpts" }); // (batch 29 §26)');
+    expect(src("lib/server/excerpts.ts")).toContain('{ side: "tester", testId: x.testId, group: "excerpts" }); // (batch 29 §26)');
     const at = new Date();
     expect(bellKey({ id: "a", testId: "t1", own: false, groupKey: "excerpts", createdAt: at })).toBe(bellKey({ id: "b", testId: "t2", own: false, groupKey: "excerpts", createdAt: at }));
   });

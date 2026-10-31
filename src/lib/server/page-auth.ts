@@ -6,6 +6,7 @@ import { closedForSuspended } from "@/lib/closedPages";
 import { sideFor } from "@/lib/sides";
 import { hashToken, SESSION_COOKIE, userForToken } from "./session";
 import { adminAway } from "./adminPages";
+import { otherSideHere } from "./sidePage";
 export { adminAway, adminKeeps } from "./adminPages";
 
 /** The signed-in user for a server component, or null. */
@@ -17,12 +18,13 @@ export async function getPageUser() {
 /**
  * (Owner, Oct 28) A page that is closed while the account is restricted (a suspended tester; a developer under a suspension, a payment hold or a chargeback hold on their developer
  * side): every signed-in page except the dashboard, Payments, Settings and the bell list. The page itself sends them to the dashboard top before it renders anything, so the
- * redirect never depends on the layout beating the page's first bytes. `path` is the page's address (its side comes from it, as in the layout).
+ * redirect never depends on the layout beating the page's first bytes. `path` is the page's address.
  */
 export async function requireOpenPage(path: string) {
   const u = await requirePageUser();
   adminAway(u, path);
-  if (closedForSuspended(path, u, sideFor(u, path))) redirect("/app");
+  // (Batch 34 §5) A page of the other side shows the switch notice instead (the page returns at once: otherSideHere); its side's restriction applies once switched.
+  if (!(await otherSideHere(u)) && closedForSuspended(path, u, sideFor(u, path))) redirect("/app");
   return u;
 }
 

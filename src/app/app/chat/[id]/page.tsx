@@ -9,6 +9,7 @@ import { Chat } from "@/components/Chat";
 import { CHAT_PAUSED_NOTE } from "@/lib/rules";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Chat · Playtest" };
 export const dynamic = "force-dynamic";
@@ -24,6 +25,9 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   const c = await db.contract.findUnique({ where: { id }, include: { test: { include: { developer: true } }, tester: true } });
   if (!c || (c.testerId !== u.id && c.test.developerId !== u.id)) notFound();
   const dev = c.test.developerId === u.id;
+  // (Batch 34 §5) A chat of the account's other side (its role in this test): only the switch notice; nothing is read or marked read.
+  const otherSide = await otherSideNotice(u, dev ? "developer" : "tester");
+  if (otherSide) return otherSide;
   leaveIfClosed(u, "/app/chat", dev ? "developer" : "tester");
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads the chat: AutoRefresh starts from it.
   const pageV = await testV(u.id, c.testId, dev ? "" : c.id);

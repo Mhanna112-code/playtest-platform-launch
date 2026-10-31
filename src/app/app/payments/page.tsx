@@ -12,7 +12,8 @@ import { confirmItems } from "@/lib/server/confirm";
 import { ConfirmList } from "./ConfirmList";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
-import { sideFor } from "@/lib/sides";
+import { hasBoth, sideFor } from "@/lib/sides";
+import { OtherSidePage } from "@/components/OtherSidePage";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { LongList } from "@/components/LongList";
 import { paidRows } from "@/lib/server/paymentRows";
@@ -42,8 +43,16 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const q = await searchParams;
   const on = stripeOn();
   // (NEXT-UI 6 / 15) Each side has its own payments page, as in the full app (Billing / Payments): the side in use.
-  const side = sideFor(u, "/app/payments");
+  // (Owner, Oct 30, batch 34 §5) Only the side in use's content; coming back from Stripe leaves the side as it is. A return that belongs to the other side
+  // (card saved or verified: the developer's; payout setup: the tester's) shows the switch notice, so nothing of the other side is said here.
+  const side = sideFor(u);
   const dev = side === "developer", tester = side === "tester";
+  const returnSide = q.saved === "card" || q.saved === "verified" || q.error === "card" || q.error === "verify" ? "developer"
+    : q.saved === "payout" || q.pending === "payout" || q.error === "payout" || q.error === "confirm" ? "tester" : null;
+  if (hasBoth(u) && returnSide && returnSide !== side) {
+    const again = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === "string")).toString();
+    return <OtherSidePage side={returnSide} next={`/app/payments${again ? `?${again}` : ""}`} />;
+  }
   // (Batch 30 §8) The owed fingerprint as of before the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const owedFp = dev ? await owedV(u.id) : "";
   const cbSteps = dev ? await chargebackSteps(u.id) : null;

@@ -10,10 +10,10 @@ import { POST as readPOST } from "@/app/api/notifications/read/route";
 import { POST as sidePOST } from "@/app/api/account/side/route";
 import { makeUser, req } from "./helpers";
 
-vi.mock("@/lib/server/page-auth", () => ({ requirePageUser: vi.fn(), adminAway: vi.fn() }));
+vi.mock("@/lib/server/page-auth", () => ({ requirePageUser: vi.fn(), requireOpenPage: vi.fn(), requireOpenDevPage: vi.fn(), adminAway: vi.fn() }));
 vi.mock("next/headers", () => ({ headers: vi.fn(async () => new Headers({ "x-path": "/app/tests/example" })) }));
 vi.mock("next/navigation", () => ({ redirect: (to: string) => { throw new Error(`redirect:${to}`); }, useRouter: () => ({ refresh: vi.fn() }), usePathname: () => "/app", useSearchParams: () => new URLSearchParams() }));
-import { requirePageUser } from "@/lib/server/page-auth";
+import { requireOpenDevPage, requireOpenPage, requirePageUser } from "@/lib/server/page-auth";
 import { headers } from "next/headers";
 import AppLayout from "@/app/app/layout";
 import Notifications from "@/app/app/notifications/page";
@@ -36,6 +36,8 @@ async function both(side: "developer" | "tester") {
   const b = await makeUser({ dev: true, tester: true });
   b.user = await db.user.update({ where: { id: b.user.id }, data: { side } });
   vi.mocked(requirePageUser).mockResolvedValue(b.user);
+  vi.mocked(requireOpenPage).mockResolvedValue(b.user);
+  vi.mocked(requireOpenDevPage).mockResolvedValue(b.user);
   return b;
 }
 const sideOf = async (id: string) => (await db.user.findUniqueOrThrow({ where: { id } })).side;
@@ -45,14 +47,19 @@ describe("Task 8: only explicit switches change sides", () => {
   it.each(["developer", "tester"] as const)("an opposite page on the %s side shows only the switch notice and retains that side", async (side) => {
     const b = await both(side);
     const target = side === "developer" ? "tester" : "developer";
-    vi.mocked(headers).mockResolvedValue(new Headers({ "x-path": target === "developer" ? "/app/tests/example" : "/app/find/example" }) as never);
-    const tree = await AppLayout({ children: React.createElement("div", null, "PRIVATE OPPOSITE PAGE") });
-    const main = find(tree, (e) => e.type === "main")!;
-    const html = renderToStaticMarkup(React.createElement(React.Fragment, null, main.props.children as React.ReactNode));
+    vi.mocked(headers).mockResolvedValue(new Headers({ "x-path": target === "developer" ? "/app/tests/new" : "/app/find" }) as never);
+    // The page itself renders only the notice (a move inside the app keeps the layout; a full load is the same page).
+    const page = target === "developer" ? await (await import("@/app/app/tests/new/page")).default({ searchParams: Promise.resolve({}) }) : await (await import("@/app/app/find/page")).default({ searchParams: Promise.resolve({}) } as never);
+    const html = renderToStaticMarkup(page as ReactElement);
     expect(html).toContain(`This page is on your ${target} side.`);
     expect(html).toContain(`Switch to your ${target} side`);
     expect(html).toContain('method="post"');
-    expect(html).not.toContain("PRIVATE OPPOSITE PAGE");
+    expect(html).not.toMatch(target === "developer" ? /Post a test</ : /Find tests</);
+    // The layout around it stays on the side in use (no redirect, the header's side) and keeps the page's slot.
+    const tree = await AppLayout({ children: page as ReactElement });
+    const main = find(tree, (e) => e.type === "main")!;
+    expect(renderToStaticMarkup(React.createElement(React.Fragment, null, main.props.children as React.ReactNode))).toContain(`This page is on your ${target} side.`);
+    expect(renderToStaticMarkup(find(tree, (e) => e.type === "header")!)).toContain(`· ${side === "developer" ? "Developer" : "Tester"}`);
     expect(sideFor(b.user, "/app/tests/example")).toBe(side);
     expect(await sideOf(b.user.id)).toBe(side);
   });
@@ -153,10 +160,10 @@ describe("Task 8: notifications are separated by side", () => {
     const t = await createTest(b.user, listingBody());
     const other = await makeUser({ dev: true });
     const t2 = await createTest(other.user, listingBody());
-    await db.contract.create({ data: { testerId: b.user.id, testId: t2.id, title: "Other", dueAt: new Date(), questions: [] } });
+    await db.contract.create({ data: { testerId: b.user.id, testId: t2.id, title: "Other", dueAt: new Date(), questions: [], listingVersion: 1, buildUrl: "", description: "", deadlineDays: 7 } });
     const made = [];
     for (const [text, link, groupKey] of examples) made.push(await db.notification.create({ data: { userId: b.user.id, text, link, groupKey, testId: text === "Developer rating" ? t.id : text === "Tester rating" ? t2.id : null } }));
-    const sql = readFileSync("prisma/migrations/20261030180000_notification_sides/migration.sql", "utf8");
+    const sql = readFileSync("prisma/migrations/20261109090000_notification_sides/migration.sql", "utf8");
     await db.$executeRawUnsafe(sql.slice(sql.indexOf('UPDATE "Notification"')));
     const rows = await db.notification.findMany({ where: { id: { in: made.map((n) => n.id) } } });
     expect(rows).toHaveLength(examples.length);
@@ -170,7 +177,7 @@ describe("Task 8: shared pages show the current side", () => {
     const paymentTree = await Payments({ searchParams: Promise.resolve({}) });
     const html = renderToStaticMarkup(paymentTree);
     expect(html).not.toContain(side === "tester" ? "Pay what you owe" : "Everything you sent");
-    expect(html).toContain(side === "tester" ? "Payout" : "card");
+    expect(html).toMatch(side === "tester" ? /payout account/i : /Your card/);
     const accountTree = await Account();
     const accountHtml = renderToStaticMarkup(accountTree);
     expect(accountHtml).toContain(side === "tester" ? "Tester profile" : "Developer profile");
@@ -189,5 +196,176 @@ describe("Task 8: shared pages show the current side", () => {
     expect(dev).not.toContain("payouts");
     expect(tester).toContain("payments, delays and payouts");
     expect(tester).not.toMatch(/failures|holds|chargebacks/);
+  });
+});
+
+// ---------- Added when finishing Task 8 (Claude) ----------
+
+const asUser = async (id: string, side: "developer" | "tester") => {
+  const u = await db.user.update({ where: { id }, data: { side } });
+  vi.mocked(requirePageUser).mockResolvedValue(u);
+  vi.mocked(requireOpenPage).mockResolvedValue(u);
+  return u;
+};
+const at = (path: string) => vi.mocked(headers).mockResolvedValue(new Headers({ "x-path": path }) as never);
+const visible = (html: string) => html.replace(/<[^>]+>/g, " ").replace(/&#x27;|&apos;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+
+describe("Task 8 (finish): a page of the other side never runs, and never changes the side", () => {
+  it("every side page returns only the notice on the other side, before reading anything; your own public profile is the side it shows", async () => {
+    const { otherSideHere } = await import("@/lib/server/sidePage");
+    const b = await both("tester");
+    for (const p of ["/app/tests/x", "/app/tests/new", "/app/tests/x/edit", "/app/testers/someone"]) { at(p); expect(await otherSideHere(b.user), p).toBe("developer"); }
+    for (const p of ["/app/find", "/app/find/x", "/app/sessions/x", "/app/developers/someone", "/app/payments", "/app", `/app/testers/${b.user.id}`]) { at(p); expect(await otherSideHere(b.user), p).toBeNull(); }
+    at(`/app/developers/${b.user.id}`);
+    expect(await otherSideHere(b.user)).toBe("developer");
+    // A chat or a call goes by the person's role in that test.
+    expect(await otherSideHere(b.user, "developer")).toBe("developer");
+    expect(await otherSideHere(b.user, "tester")).toBeNull();
+    // One side only: never a notice.
+    const one = await makeUser({ tester: true });
+    at("/app/tests/x");
+    expect(await otherSideHere(one.user)).toBeNull();
+    expect(await sideOf(b.user.id)).toBe("tester");
+    // Each side page checks it right after signing in, before reading anything (a join-page visit isn't recorded, nothing is marked read).
+    // Every page under the side folders (today's and any added later).
+    const { readdirSync } = await import("node:fs");
+    const pages = ["tests", "testers", "find", "sessions", "developers"].flatMap((d) => (readdirSync(`src/app/app/${d}`, { recursive: true }) as string[]).filter((x) => /(^|[\\/])page\.tsx$/.test(x)).map((x) => `${d}/${x}`));
+    expect(pages.length).toBeGreaterThanOrEqual(8);
+    for (const page of pages) expect(readFileSync(`src/app/app/${page}`, "utf8"), page).toMatch(/const otherSide = await otherSideNotice\((u|viewer)\);.*\n\s*if \(otherSide\) return otherSide;/);
+    for (const page of ["chat/[id]/page.tsx", "calls/[id]/page.tsx"]) expect(readFileSync(`src/app/app/${page}`, "utf8"), page).toMatch(/const otherSide = await otherSideNotice\(u, .*\);\n\s*if \(otherSide\) return otherSide;/);
+    // The notice's button is the switch POST, back to the page itself (Next's internal _rsc parameter left out).
+    const { otherSideNotice } = await import("@/components/OtherSideNotice");
+    const b2 = await both("developer");
+    at("/app/find/abc?from=bell&_rsc=x1");
+    const html = renderToStaticMarkup((await otherSideNotice(b2.user))!);
+    expect(html).toContain('action="/app/switch"');
+    expect(html).toContain('name="to" value="tester"');
+    expect(html).toContain('name="next" value="/app/find/abc?from=bell"');
+    expect(await sideOf(b2.user.id)).toBe("developer");
+  });
+
+  it("a restricted side doesn't send a page of the other side away: it shows the notice (the restriction applies once switched)", async () => {
+    const b = await both("tester");
+    vi.mocked(requirePageUser).mockResolvedValue(await db.user.update({ where: { id: b.user.id }, data: { testerSuspendedAt: new Date() } }));
+    at("/app/tests/x");
+    const { otherSideNotice } = await import("@/components/OtherSideNotice");
+    const page = (await otherSideNotice(await db.user.findUniqueOrThrow({ where: { id: b.user.id } })))!;
+    const main = find(await AppLayout({ children: page }), (e) => e.type === "main")!; // no redirect to the dashboard
+    expect(renderToStaticMarkup(React.createElement(React.Fragment, null, main.props.children as React.ReactNode))).toContain("This page is on your developer side.");
+    // A page of its own side still goes to the dashboard.
+    at("/app/find");
+    await expect(AppLayout({ children: null })).rejects.toThrow("redirect:/app");
+  });
+
+  it("back from Stripe on the other side: the notice, not the other side's banner, and the side stays", async () => {
+    const b = await both("tester");
+    const html = renderToStaticMarkup(await Payments({ searchParams: Promise.resolve({ saved: "card" }) }));
+    expect(html).toContain("This page is on your developer side.");
+    expect(html).not.toContain("Card saved.");
+    expect(html).toContain('name="next" value="/app/payments?saved=card"');
+    await asUser(b.user.id, "developer");
+    const back = renderToStaticMarkup(await Payments({ searchParams: Promise.resolve({ saved: "payout" }) }));
+    expect(back).toContain("This page is on your tester side.");
+    expect(back).not.toContain("Your payout account is connected.");
+    expect(renderToStaticMarkup(await Payments({ searchParams: Promise.resolve({ saved: "card" }) }))).toContain("Card saved.");
+    expect(await sideOf(b.user.id)).toBe("developer");
+  });
+
+  it("an account with one side sees all its lines, with no headings in the email", async () => {
+    const t = await makeUser({ tester: true });
+    vi.mocked(requirePageUser).mockResolvedValue(t.user);
+    await bell(t.user.id, "INVITE LINE", "/app/find/x");
+    await bell(t.user.id, "ODD DEV LINE", "/app/payments", undefined, { side: "developer", own: true });
+    expect(await unreadEntryCount(t.user.id)).toBe(2);
+    await notify(t.user.email, "TESTER PAY", [], "/app/payments", { side: "tester", payment: true });
+    await sendSummaries(new Date(), [t.user.id]);
+    const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: t.user.email } });
+    expect(mail.text).toContain("TESTER PAY");
+    expect(mail.text).not.toMatch(/As a developer|As a tester|Your account/);
+  });
+
+  it("a team $0 close is the tester's line, on the tester side (it was filed under developer)", () => {
+    expect(readFileSync("src/lib/server/teamClose.ts", "utf8")).toContain('`/app/sessions/${p.contractId}#${anchor}`, { side: "tester", payment: true, group: "tpaid" }');
+  });
+
+  it("the delete warning: both sides on either side; what's owed only when the developer side owes; one side reads only its part", async () => {
+    const b = await both("tester");
+    vi.mocked(requirePageUser).mockResolvedValue(await db.user.update({ where: { id: b.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } }));
+    const tree = await Account();
+    expect(find(tree, (e) => e.type === DeleteAccount)!.props.owes).toBe(true);
+    const tester = renderToStaticMarkup(React.createElement(DeleteAccount, { sides: "tester" }));
+    expect(tester).toContain("Your applications are cancelled, and you leave the tests you are in.");
+    expect(tester).not.toMatch(/Your tests stop|both your developer side|anything you owe/);
+    const dev = renderToStaticMarkup(React.createElement(DeleteAccount, { sides: "developer", owes: true }));
+    expect(dev).toContain("Your tests stop and your invites are cancelled.");
+    expect(dev).toContain("anything you owe (a payment hold, a chargeback) stays with it");
+    // The confirm repeats the both-sides line.
+    expect(readFileSync("src/app/app/account/DeleteAccount.tsx", "utf8")).toContain('{both && <p className="font-medium text-white" data-delete-both="">{BOTH_SIDES_LINE}</p>}');
+  });
+});
+
+describe("Task 8 (finish), the owner's proof: nothing of the other side leaks", () => {
+  it("an account with both sides and money on both: Payments, Account, Notifications, Messages and the bell of each side, and one email with both headings", async () => {
+    const { POST: testsPOST } = await import("@/app/api/tests/route");
+    const { POST: reviewPOST } = await import("@/app/api/review/route");
+    const { randomUUID } = await import("node:crypto");
+    const { json } = await import("./helpers");
+    const { act, joined, sact, seen, settle, setup, listingBody } = await import("./fixtures");
+    const { bellKey } = await import("@/lib/bell");
+    const Messages = (await import("@/app/app/messages/page")).default;
+    const pay = (cookie: string, id: string) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), kind: "submission", id, amount: "10.00", tickedCents: 1000 } })).then(json);
+    // Bo has both sides: their own test "Owned Harbor" (Ana sends work, Bo pays) and Lagoon's test "Joined Lagoon" (Bo sends work, its developer pays).
+    const bo = await makeUser({ dev: true, tester: true, name: "Bo Both" });
+    const own = await json(await testsPOST(req("/api/tests", { cookie: bo.cookie, body: listingBody({ title: "Owned Harbor", productName: "Owned Harbor" }) })));
+    expect(own.status).toBe(200);
+    await settle();
+    const ana = await joined(own.body.id, "Ana Silva");
+    await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"] });
+    await settle();
+    expect((await pay(bo.cookie, (await db.submission.findFirstOrThrow({ where: { contractId: ana.sessionId } })).id)).status).toBe(200);
+    const lagoon = await setup({ title: "Joined Lagoon", productName: "Joined Lagoon" });
+    const t2 = await db.test.findUniqueOrThrow({ where: { id: lagoon.testId } });
+    const j = await act(lagoon.testId, "join", bo.cookie, { listingVersion: t2.listingVersion });
+    expect(j.status).toBe(200);
+    await settle();
+    await sact(j.body.sessionId, "written", bo.cookie, { answers: ["c", "d"] });
+    await settle();
+    expect((await pay(lagoon.dev.cookie, (await db.submission.findFirstOrThrow({ where: { contractId: j.body.sessionId } })).id)).status).toBe(200);
+    const lines = await db.notification.findMany({ where: { userId: bo.user.id } });
+    expect(lines.filter((n) => n.side === "developer").length).toBeGreaterThan(0);
+    expect(lines.filter((n) => n.side === "tester").length).toBeGreaterThan(0);
+
+    const words = {
+      developer: ["Owned Harbor", "Receipt:", "What you've paid", "Your card", "Ana Silva"],
+      tester: ["Joined Lagoon", "paid you", "Everything you sent", "Your earnings", "Where your money goes"],
+    };
+    for (const side of ["developer", "tester"] as const) {
+      const other = side === "developer" ? "tester" : "developer";
+      await asUser(bo.user.id, side);
+      at("/app/payments");
+      const pages = {
+        payments: visible(renderToStaticMarkup(await Payments({ searchParams: Promise.resolve({}) }))),
+        account: visible(renderToStaticMarkup(await Account())),
+        notifications: JSON.stringify(find(await Notifications(), (e) => Array.isArray(e.props.entries))!.props.entries),
+        messages: visible(renderToStaticMarkup(await Messages())),
+      };
+      for (const [page, text] of Object.entries(pages)) for (const w of words[other]) expect(text, `${side} ${page}: "${w}"`).not.toContain(w);
+      expect(pages.notifications, side).toContain(side === "developer" ? "Receipt:" : "paid you");
+      expect(pages.messages, side).toContain(side === "developer" ? "Owned Harbor" : "Joined Lagoon");
+      // The bell's number is this side's (plus the account's) only.
+      const mine = await db.notification.findMany({ where: { userId: bo.user.id, readAt: null, OR: [{ side }, { side: null }] } });
+      expect(await unreadEntryCount(bo.user.id), side).toBe(new Set(mine.map(bellKey)).size);
+    }
+    expect(await sideOf(bo.user.id)).toBe("tester");
+    await sendSummaries(new Date(), [bo.user.id]);
+    const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: bo.user.email }, orderBy: { createdAt: "desc" } });
+    expect(mail.text).toContain("As a developer");
+    expect(mail.text).toContain("As a tester");
+    const dev = mail.text.slice(mail.text.indexOf("As a developer"), mail.text.indexOf("As a tester"));
+    const tester = mail.text.slice(mail.text.indexOf("As a tester"));
+    expect(dev).toContain("Receipt: you paid $10.00 for Ana Silva's written answers");
+    expect(dev).not.toContain("Joined Lagoon");
+    expect(tester).toContain("Joined Lagoon");
+    expect(tester).not.toContain("Owned Harbor");
   });
 });

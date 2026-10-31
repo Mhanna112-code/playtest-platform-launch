@@ -29,8 +29,8 @@ export default async function AccountPage() {
   const side = isAdmin(u) ? null : sideFor(u, "/app/account");
   // (Owner, Oct 27) The profile editor is closed while the account is suspended or (as a developer) on hold; the other settings stay.
   const profileClosed = restrictedOn(u, side);
-  // (Owner, Oct 28, batch 16 section 30) Only the side in use: no "Developer, tester, or both" cards. With the other side off, one small line offers it;
-  // with both on, nothing here (the header's switch changes sides).
+  // (Owner, Oct 28, batch 16 section 30) Only the side in use: no "Developer, tester, or both" cards. With the other side off, one small line offers it.
+  // (Owner, Oct 30, batch 34 §5) With both on, "Switch to your … side": with the header's switch, the only thing that changes sides.
   const sideName = side === "developer" ? "Developer" : side === "tester" ? "Tester" : "";
   const other = side === "developer" ? (tester ? null : { side: "tester" as const, line: "Want to test other people's products too?", label: "Start testing too" })
     : side === "tester" ? (dev ? null : { side: "developer" as const, line: "Want to post tests too?", label: "Start posting tests too" }) : null;
@@ -53,7 +53,7 @@ export default async function AccountPage() {
         {!u.emailVerifiedAt && !confirmSkipped() && <div className="flex flex-wrap items-center gap-2 pt-1 text-sm"><ResendConfirm /></div>}
       </div>
 
-      {dev && tester && side && <div className="px-1"><SideButton side={side === "developer" ? "tester" : "developer"} add={false} seenAt={seenAt}>Switch to your {side === "developer" ? "tester" : "developer"} side</SideButton></div>}
+      {dev && tester && side && <div className="px-1" data-switch-side=""><SideButton side={side === "developer" ? "tester" : "developer"} add={false} seenAt={seenAt}>Switch to your {side === "developer" ? "tester" : "developer"} side</SideButton></div>}
 
       {other && (
         <div className="flex flex-wrap items-center gap-2 px-1 text-sm text-slate-300" data-other-side="">
@@ -85,7 +85,8 @@ export default async function AccountPage() {
         <SignOutAll />
       </section>
       {/* (Owner, Oct 28) A tester's pop-up carries their real numbers; a developer's blockers (DEFAULT) are listed with links. */}
-      <DeleteAccount both={dev && tester} owes={dev && (await owedForBox(u.id)).some((p) => p.amountCents > 0)} testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} devLines={dev ? await devDeleteLines(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />
+      {/* (Batch 34 §5) The same on either side: both sides when the account has both; what's owed only when the developer side owes something. */}
+      <DeleteAccount both={dev && tester} sides={dev && !tester ? "developer" : tester && !dev ? "tester" : "both"} owes={dev && (!!u.holdStartedAt || (await owedForBox(u.id)).length > 0)} testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} devLines={dev ? await devDeleteLines(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />
     </div>
   );
 }

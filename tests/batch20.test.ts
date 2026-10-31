@@ -727,7 +727,7 @@ describe("batch 20 section 16: admin accounts are admin only", () => {
     const r = await json(await POST(req("/api/account/side", { cookie: admin.cookie, body: { side: "tester", add: true } })));
     expect(r.body.error.message).toBe("An admin account is only for the admin console. To post or test, use a separate account.");
     expect(src("app/app/profile/ProfileForm.tsx")).toContain('if (first) window.location.href = admin && !v.isDeveloper && !v.isTester ? "/admin" : "/app";');
-    expect(src("app/app/layout.tsx")).toContain("const side = admin ? null : sideFor(u, path);");
+    expect(src("app/app/layout.tsx")).toContain("const side = admin ? null : sideFor(u);"); // (batch 34 §5) the account's side, not the page's
     expect(src("app/app/account/page.tsx")).toContain('const side = isAdmin(u) ? null : sideFor(u, "/app/account");');
   });
 });

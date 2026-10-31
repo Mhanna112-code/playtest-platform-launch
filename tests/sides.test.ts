@@ -1,14 +1,15 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as switchPOST } from "@/app/app/switch/route";
-import { hasBoth, sideFor, sideForPath, sideLink } from "@/lib/sides";
+import { hasBoth, otherSideOfPage, sideFor, sideForPath, sideLink } from "@/lib/sides";
 import { makeUser, req } from "./helpers";
 
-// (NEXT-UI 6) The side switch like the full app's: one account with both sides, per-side pages, /app/switch links.
+// (NEXT-UI 6) The side switch like the full app's: one account with both sides, per-side pages. (Batch 34 §5) The two sides are like two separate
+// accounts: only the switch button changes sides; links go straight to the page, which shows a notice when it's on the other side.
 const both = { isDeveloper: true, isTester: true, side: "tester" };
 
 describe("sides", () => {
-  it("each page belongs to a side (or to neither); a tab shows its page's side, else the side used last", () => {
+  it("each page belongs to a side (or to neither); the side in use is the account's own, whatever page is open (batch 34 §5)", () => {
     expect(sideForPath("/app/tests/abc")).toBe("developer");
     expect(sideForPath("/app/tests/new")).toBe("developer");
     expect(sideForPath("/app/testers/x")).toBe("developer");
@@ -17,14 +18,22 @@ describe("sides", () => {
     expect(sideForPath("/app/sessions/abc#chat")).toBe("tester");
     for (const shared of ["/app", "/app/notifications", "/app/profile", "/app/payments", "/app/messages", "/app/chat/x", "/app/calls/x"]) expect(sideForPath(shared)).toBeNull();
     expect(hasBoth(both)).toBe(true);
-    expect(sideFor(both, "/app/tests/abc")).toBe("developer"); // the page's side, whatever was used last
-    expect(sideFor(both, "/app/notifications")).toBe("tester"); // shared: the side used last
+    expect(sideFor(both, "/app/tests/abc")).toBe("tester"); // (batch 34 §5) the account's side: opening a developer page doesn't change it
+    expect(sideFor(both, "/app/notifications")).toBe("tester");
+    expect(otherSideOfPage(both, "/app/tests/abc")).toBe("developer"); // the page shows the switch notice
+    expect(otherSideOfPage(both, "/app/sessions/abc")).toBeNull();
+    expect(otherSideOfPage(both, "/app/payments")).toBeNull(); // shared pages show the side in use
+    expect(otherSideOfPage({ isDeveloper: true, isTester: false, side: "" }, "/app/find")).toBeNull(); // one side only: no notice
+    // Your own public profile is the side it shows.
+    expect(sideForPath("/app/testers/me", "me")).toBe("tester");
+    expect(sideForPath("/app/developers/me", "me")).toBe("developer");
+    expect(otherSideOfPage({ ...both, id: "me" }, "/app/testers/me#excerpts")).toBeNull();
     expect(sideFor({ isDeveloper: true, isTester: false, side: "" }, "/app/find")).toBe("developer"); // one side only
     expect(sideFor({ isDeveloper: false, isTester: false }, "/app")).toBeNull();
   });
 
-  it("a link to the other side's page goes through /app/switch (only with both sides)", () => {
-    expect(sideLink(both, "/app/tests/abc")).toBe("/app/switch?to=developer&next=%2Fapp%2Ftests%2Fabc");
+  it("(batch 34 §5) a link to the other side's page goes straight to it (no in-between switch page)", () => {
+    expect(sideLink(both, "/app/tests/abc")).toBe("/app/tests/abc");
     expect(sideLink(both, "/app/sessions/abc")).toBe("/app/sessions/abc"); // already on that side
     expect(sideLink(both, "/app/notifications")).toBe("/app/notifications");
     expect(sideLink({ isDeveloper: true, isTester: false, side: "" }, "/app/tests/abc")).toBe("/app/tests/abc");

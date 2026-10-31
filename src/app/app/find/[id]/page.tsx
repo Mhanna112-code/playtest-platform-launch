@@ -31,6 +31,7 @@ import { heldBrokenKey } from "@/lib/server/accessKeys";
 import { profileTestRefusal } from "@/lib/server/profileOpenTests";
 import { needsTermsAgain } from "@/lib/termsOfUse";
 import { inviteOnlyHidden, noteJoinPageVisit } from "@/lib/server/testVisits";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -47,6 +48,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   const from = (await searchParams)?.from;
   const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
+  if (otherSide) return otherSide;
   // (Batch 30 §8) The invitations fingerprint as of BEFORE the page reads the test and the invite: AutoRefresh starts from it.
   const invitesFp = await invitesV(u.id);
   // (Owner's repro, Oct 29, batch 30 §8) The same for their application or ask to rejoin (JoinWatch).

@@ -308,7 +308,7 @@ describe("L5 and L6", () => {
     const both = await makeUser({ dev: true, tester: true });
     await db.user.update({ where: { id: both.user.id }, data: { side: "developer" } });
     const get = await switchGET(req("/app/switch?to=tester&next=/app/find", { cookie: both.cookie }));
-    expect(get.headers.get("content-type")).toContain("text/html");
+    expect(get.headers.get("location")).toBe("http://localhost:3400/app/find"); // (batch 34 §5) a GET only opens the page asked for: it never switches
     expect((await db.user.findUniqueOrThrow({ where: { id: both.user.id } })).side).toBe("developer");
     const evil = await switchPOST(new Request("http://localhost:3400/app/switch", { method: "POST", headers: { cookie: both.cookie, origin: "https://evil.example", "content-type": "application/x-www-form-urlencoded" }, body: "to=tester&next=/app" }));
     expect(evil.status).toBe(403);

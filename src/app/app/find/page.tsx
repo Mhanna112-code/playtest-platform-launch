@@ -15,6 +15,7 @@ import { isAdmin } from "@/lib/server/session";
 import { adminFindTests, ADMIN_FIND_LIMIT } from "@/lib/server/findSearch";
 import { findQuery, noFindMatchLine, statesFrom, type TestState } from "@/lib/findSearch";
 import { FindSearch, StateTicks } from "./FindSearch";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Find tests · Playtest" };
 export const dynamic = "force-dynamic";
@@ -46,6 +47,8 @@ const topPrice = (t: { writtenCents: number | null; recordingCents: number | nul
 
 export default async function FindPage({ searchParams }: { searchParams: Promise<Sp> }) {
   const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
+  if (otherSide) return otherSide;
   // (Owner, Oct 28, batch 17 section 8) Admins get Find tests too: every test, each card with its state, tick boxes for the states; never Join / Apply.
   const admin = isAdmin(u);
   if (!u.isTester && !admin) redirect("/app/profile");

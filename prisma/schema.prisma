@@ -727,13 +727,13 @@ model Invite {
 
 /// The bell: every update for a user, whatever their email setting.
 model Notification {
-  /// The developer side, tester side, or null for the whole account.
-  side      String?
   id        String    @id @default(cuid())
   userId    String
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   text      String
   link      String    @default("")
+  /// (Owner, Oct 30, batch 34 §5) Whose line it is: "developer", "tester", or null for the whole account (shown on both sides)
+  side      String?
   /// (Design doc 9) The test the line is about (same-day lines about one test stack into one entry)
   testId    String?
   /// (Owner, Oct 26) Always its own line in the bell (never stacked): admin decisions, a test stopped, payment failures and holds starting,

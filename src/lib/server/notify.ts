@@ -1,4 +1,4 @@
-import { sideFor, sideForPath, type Side } from "@/lib/sides";
+import { hasBoth, sideFor, sideForPath, type Side } from "@/lib/sides";
 import { isAdmin } from "./session";
 import { db } from "@/lib/db";
 import { summaryDue } from "@/lib/rules";
@@ -36,6 +36,9 @@ export async function testIdOfLink(path: string) {
 /**
  * `own`: the line always arrives as its own entry in the bell (admin decisions, a test stopped, payment failures and holds starting, a hold or
  * pause lifted, a chargeback); every other line about the same test on the same day stacks. `testId` names the test when the link doesn't.
+ * `side`: (Owner, Oct 30, batch 34 §5) whose line it is: the developer side's, the tester side's, or null for the whole account (sign-in, password, Terms, the
+ * account's deletion or suspension, the site's own notices). Left out, the link's page decides (lineSide); a caller whose link is a shared page (the dashboard,
+ * Payments, Settings) names it.
  */
 export type Opts = { side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string };
 
@@ -45,6 +48,8 @@ export type Opts = { side?: Side | null; always?: boolean; about?: string; own?:
  * rejected, delayed, payouts, chargebacks): it is its own line unless it has a group, and it also goes out in the end-of-day payment email.
  */
 const flags = (o: { own?: boolean; group?: string; payment?: boolean }) => ({ own: o.own ?? (!!o.payment && !o.group), groupKey: o.group ?? null, payment: !!o.payment });
+/** (Batch 34 §5) A line's side: the caller's, else its link's page (your own public profile is the side it shows), else the account's (null). */
+export const lineSide = (userId: string, link: string, side: Side | null | undefined) => (side !== undefined ? side : sideForPath(link, userId));
 
 export async function notify(to: string, subject0: string, lines0: string[], path: string, opts: Opts = {}) {
   const user = await db.user.findUnique({ where: { email: to }, select: { id: true, timeZone: true } });
@@ -63,14 +68,14 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   }
   // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the end-of-day payment email). `always` marks the few
   // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE end-of-day email, once.
-  await db.notification.create({ data: { side: opts.side !== undefined ? opts.side : sideForPath(path), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  await db.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** A bell notification only (no email unless the person's summary takes it, or `always`), e.g. the Open until heads-ups. */
 export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}) {
   if (about && !(await inReach(userId, about))) return;
   const text = await renderFor(userId, text0);
-  await db.notification.create({ data: { side: opts.side !== undefined ? opts.side : sideForPath(link), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  await db.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** (Batch 15 section 11) A line's time tokens, in this person's time zone. */
@@ -112,29 +117,37 @@ function emailLines<N extends { text: string; link: string; groupKey: string | n
   return out;
 }
 
-/** One digest per account, with each side's lines together. Account notices have their own heading. */
-function sidedEmailLines<N extends { side: string | null; text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string) {
+/**
+ * (Owner, Oct 30, batch 34 §5) Still one email per account; with both sides, its lines sit under "Your account" (the account's own lines), "As a developer"
+ * and "As a tester" headings (a heading only when it has lines). An account with one side keeps the plain list.
+ */
+export const SIDE_HEADINGS = { account: "Your account", developer: "As a developer", tester: "As a tester" } as const;
+function sidedEmailLines<N extends { side: string | null; text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string, both: boolean) {
+  if (!both) return emailLines(items, line);
   const out: string[] = [];
-  for (const [side, heading] of [[null, "Your account"], ["developer", "As a developer"], ["tester", "As a tester"]] as const) {
-    const part = items.filter((n) => n.side === side);
-    if (part.length) out.push(heading, ...emailLines(part, line), "");
+  for (const [side, heading] of [[null, SIDE_HEADINGS.account], ["developer", SIDE_HEADINGS.developer], ["tester", SIDE_HEADINGS.tester]] as const) {
+    const part = items.filter((n) => (n.side === "developer" || n.side === "tester" ? n.side : null) === side);
+    if (part.length) out.push(...(out.length ? [""] : []), heading, ...emailLines(part, line));
   }
   return out;
 }
 
-/** Account-wide notices accompany the current side. Admins have only account notices. */
+/**
+ * (Owner, Oct 30, batch 34 §5) Which lines the bell, its number and the Notifications page show: with both sides, the side in use's plus the account's.
+ * An account with one side, and an admin account (no side), sees all its lines (nothing of theirs is ever hidden).
+ */
 export function notificationScope(side: Side | null) {
-  return side ? { OR: [{ side }, { side: null }] } : { side: null };
+  return side ? { OR: [{ side }, { side: null }] } : {};
 }
 export async function notificationScopeFor(userId: string) {
   const u = await db.user.findUnique({ where: { id: userId } });
-  return notificationScope(u && !isAdmin(u) ? sideFor(u, "/app/notifications") : null);
+  return notificationScope(u && !isAdmin(u) && hasBoth(u) ? sideFor(u) : null);
 }
 
 export async function sendSummaries(now = new Date(), only?: string[]) {
   const users = await db.user.findMany({
     where: { ...(only ? { id: { in: only } } : {}), notifications: { some: { summarizedAt: null, ...({ OR: [{ mustEmail: true }, { payment: true }, { user: { emailPref: { in: ["daily", "weekly", "monthly"] } } }] } as object) } } },
-    select: { id: true, email: true, emailPref: true, lastSummaryAt: true },
+    select: { id: true, email: true, emailPref: true, lastSummaryAt: true, isDeveloper: true, isTester: true },
   });
   const line = (n: { text: string; link: string }) => `• ${n.text}${n.link ? ` ${appUrl()}${n.link}` : ""}`;
   for (const u of users) {
@@ -151,7 +164,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     const dropped = all.filter((n) => !items.includes(n)).map((n) => n.id);
     try {
       const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
-      await sendEmail({ to: u.email, subject, text: [...sidedEmailLines(items, line), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` } });
+      await sendEmail({ to: u.email, subject, text: [...sidedEmailLines(items, line, hasBoth(u)), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` } });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
     } catch (e) {

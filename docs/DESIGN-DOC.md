@@ -10,7 +10,7 @@ Playtest is a marketplace where developers pay testers to try their games, websi
 - **Testers** find and join tests, send work, take calls, get paid, and rate developers.
 - **Admins** suspend and reinstate either side of an account, pause or stop tests, decide disputes, and review reports and payment holds.
 
-One account can be a developer, a tester or both; a switch in the header changes sides (Shared pages). An admin account is only an admin, with no developer or tester side (Administrator console).
+One account can be a developer, a tester or both; a switch in the header changes sides (Shared pages). With both, the two sides look like two separate accounts: only the switch button (the header's, or the Account page's "Switch to your … side") changes sides. Opening a page of the other side (a link, a bell line, an email link, a typed address, another tab) never does: that page shows only "This page is on your tester side." (or developer) with the button "Switch to your tester side", which switches and then opens it; the header stays on the side in use. Coming back from Stripe leaves the side as it is. Old /app/switch links only open the page asked for. Payments, Account, Notifications, Messages and the bell show only the side in use's content (batch 34 §5). An admin account is only an admin, with no developer or tester side (Administrator console).
 
 **The main promise:** every press that touches money, joining, permissions or agreed terms is checked on the server against what is true right now. Nobody is charged twice, loses pay they earned because an account changed, accepts terms they didn't see, or sees a success that didn't happen.
 
@@ -273,6 +273,7 @@ A page opened after the stop or pause doesn't stop for the state itself; every o
 
 ### The bell
 
+- **Each line belongs to a side** (batch 34 §5): the developer's, the tester's, or the account's (sign-in, password, Terms, the account's deletion, the site's own notices). With both sides, the bell, its number and the Notifications page show the side in use's lines plus the account's; the other side's wait there for a switch. A line's side is what it's about: the page it opens, or for shared pages (the dashboard, Payments) its kind.
 - **Reach.** A line about another person arrives only if that person is or was in one of your open tests. Invites, applications, payments and disputes always arrive, because they can come from outside an open test. Chat follows the same reach.
 - **Every line opens the exact spot**, e.g. the developer's Needs you row, the tester's part, a call, the keys box, Payments. A line about a call that's over opens that call in the tester's row (developer) or in Call history (tester), marked; a call still ahead opens Live session. Each page tab lists the lines that open it.
 - **Stacking.** Lines about one test on the same day stack into one entry that opens to show them ("that test's day"). Lines of the same kind stack across tests instead, one entry per kind per day, each line inside still opening its own spot:
@@ -367,7 +368,7 @@ No bell line when a tester removes their own excerpt.
 ### Emails
 
 - Each person picks Off, or On with Daily, Weekly or Monthly, under "How you're notified" on the Notifications page (Shared pages).
-- With email On, each email lists every bell line since the last one ("Your Playtest summary: N updates"). Each line is emailed once.
+- With email On, each email lists every bell line since the last one ("Your Playtest summary: N updates"). Each line is emailed once. Still one email per account: with both sides, its lines sit under "Your account", "As a developer" and "As a tester" headings (batch 34 §5).
 - **Payment lines are always emailed the same evening, whatever the setting:** receipts, "You were paid…", Pay more, delays and arrivals, failures and holds, retries, payouts and chargebacks, and the daily money lines (the developer's "Pay now", "Closing soon" and bank-confirmation lines; the tester's "Charge or let go"). On Daily they're inside the daily summary; on Weekly, Monthly and Off they go out the same evening in "Your Playtest payment updates". The Notifications page says so (Shared pages).
 - With email Off, nothing else is emailed except the lines in the first part of the table, which go in the same one end-of-day email (titled "Your Playtest account updates" when it holds one of them that isn't a payment line).
 - **Every deadline reminder of a tester** ("Your deadline on “<test>” is <date>: send your work before then.", all four marks) ignores the setting too: it goes in the same end-of-day email, and several stack under one "Deadlines · 2 tests" heading there, as in the bell.

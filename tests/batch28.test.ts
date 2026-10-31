@@ -542,7 +542,7 @@ describe("batch 28 §18: payment lines are emailed the same evening whatever the
     expect(await db.notification.count({ where: { userId: u.user.id, summarizedAt: null } })).toBe(1); // the other line stays in the bell only
     await sendSummaries(new Date(), [u.user.id]);
     expect(await db.outboxEmail.count({ where: { to: u.user.email } })).toBe(1); // once
-    expect(src("app/app/notifications/AlertSettings.tsx")).toContain("Payment updates are always emailed the same evening.");
+    expect(src("app/app/notifications/AlertSettings.tsx")).toContain("Payment updates are always emailed the same evening, even with email Off, Weekly or Monthly"); // (batch 34 §5) then the side's kinds
   });
 });
 

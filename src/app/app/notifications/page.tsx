@@ -4,7 +4,7 @@ import { Bell } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
-import { sideFor, sideLink } from "@/lib/sides";
+import { sideFor, sideForPath, sideLink } from "@/lib/sides";
 import { closedForSuspended } from "@/lib/closedPages";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
@@ -18,6 +18,8 @@ export const dynamic = "force-dynamic";
 // it's clicked, a stack when it's expanded or one of its lines is clicked. No "mark all as read".
 export default async function Notifications() {
   const u = await requirePageUser();
+  // (Owner, Oct 30, batch 34 §5) The side in use's lines plus the account's; the settings' help names only this side's payment kinds.
+  const side = isAdmin(u) ? null : sideFor(u);
   const items = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: { createdAt: "desc" }, take: 200 });
   // (Design doc 9) Same-day lines about the same test stack into one entry, except the lines that always arrive on their own (own); opening a stack marks its lines read, a single line is read when clicked (batch 29 §28).
   const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
@@ -28,7 +30,8 @@ export default async function Notifications() {
   }
   const todayKey = dayKey(new Date());
   // (Owner, Oct 28) A restricted account: a line whose page is closed to it lands on the dashboard top.
-  const hrefFor = (link: string) => (closedForSuspended(link, u, sideFor(u, link)) ? "/app" : sideLink(u, link));
+  // (Batch 34 §5) Straight to the page (one of the other side shows the switch notice; the line's own side decides what's closed).
+  const hrefFor = (link: string) => (closedForSuspended(link, u, sideForPath(link, u.id) ?? sideFor(u)) ? "/app" : sideLink(u, link));
   const entries: BellEntry[] = [...groups.entries()].map(([key, g]) => ({
     key,
     title: g[0].groupKey ? groupTitle(g[0].groupKey, new Set(g.map((n) => n.testId ?? n.id)).size, g.length) : g[0].testId ? titles.get(g[0].testId) : undefined,
@@ -38,12 +41,12 @@ export default async function Notifications() {
   }));
   return (
     <div className="mx-auto max-w-2xl space-y-6">
-      <AlertSettings emailPref={u.emailPref} side={isAdmin(u) ? null : sideFor(u, "/app/notifications")} />
+      <AlertSettings emailPref={u.emailPref} side={side} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><Bell className="h-7 w-7 text-indigo-300" /> Notifications</h1>
       </div>
       {items.length === 0 ? (
-        <p className="card py-10 text-center text-slate-400">Nothing yet. Your updates will appear here.</p>
+        <p className="card py-10 text-center text-slate-400">{side === "developer" ? "Nothing yet. You'll hear here when testers join, send work, or ask for a call." : side === "tester" ? "Nothing yet. You'll hear here when you're invited, accepted, reviewed or paid." : "Nothing yet."}</p>
       ) : (
         <BellList entries={entries} />
       )}

@@ -1,8 +1,8 @@
 import Link from "next/link";
 import { AdminNav } from "@/app/admin/AdminNav";
 import { ArrowLeftRight, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, UserRound } from "lucide-react";
-import { headers } from "next/headers";
-import { hasBoth, sideFor, sideForPath } from "@/lib/sides";
+import { hasBoth, otherSideOfPage, sideFor } from "@/lib/sides";
+import { contractsOnSide, pagePath } from "@/lib/server/sidePage";
 import { unreadCount } from "@/lib/server/messages";
 import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
@@ -24,22 +24,24 @@ import { unreadEntryCount } from "@/lib/server/notify";
 // and the log-out icon; the confirm-email strip under it; a wide main column.
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const u = await requirePageUser();
-  // (NEXT-UI 6) The side this tab shows: the page's own side (developer pages, tester pages), else the side used last.
-  const path = (await headers()).get("x-path") ?? "";
+  const path = await pagePath();
   // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: no side in the header (one it already has is ignored), no switch.
   const admin = isAdmin(u);
-  const side = admin ? null : sideFor(u, path);
+  // (Owner, Oct 30, batch 34 §5) The side in use is the account's own (only the switch button changes it); opening a page of the other side doesn't. That page
+  // shows only "This page is on your <side> side." with the switch button (the page itself does it); the header and everything around it stay on the side in use.
+  const side = admin ? null : sideFor(u);
+  const otherSide = admin ? null : otherSideOfPage(u, path);
   // (Design doc 2; owner, Oct 27) A suspended or held account is routed from the pages that are closed to it to the dashboard, which explains.
   // (Owner, Oct 28) Decided BEFORE any other query: the page below renders in parallel with this layout, and a redirect thrown late can reach the browser after the page's first bytes (a blank page with only the footer).
-  if (closedForSuspended(path, u, side)) redirect("/app");
-  // (Batch 29 §28) The bell counts entries with anything unread (a stack counts 1), not lines.
+  // A page of the other side shows the notice instead (its own side's restriction applies once switched).
+  if (!otherSide && closedForSuspended(path, u, side)) redirect("/app");
+  // (Batch 29 §28) The bell counts entries with anything unread (a stack counts 1), not lines: the side in use's and the account's (batch 34 §5).
   const unread = await unreadEntryCount(u.id);
   const name = u.name.trim() || u.email;
   // (Owner, Oct 28) Restricted on this side: a suspended account (both sides), or a developer on a payment or chargeback hold on their developer side.
   const off = restrictedOn(u, side);
-  const pageSide = !admin && hasBoth(u) ? sideForPath(path) : null;
-  const otherSide = pageSide && pageSide !== side ? pageSide : null;
-  const contracts = await db.contract.findMany({ where: { OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { testId: true, testerId: true } });
+  // (Batch 34 §5) The Messages number counts the side in use's conversations only.
+  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, side), select: { testId: true, testerId: true } });
   const unreadChats = (await Promise.all(contracts.map((c) => unreadCount(u.id, c.testId, c.testerId)))).reduce((a, b) => a + b, 0);
   // (Owner, Oct 28) A restricted account keeps only the links to pages it can open: Dashboard, Payments, the bell and the account (Settings). Post a test, Find tests,
   // Profile and Messages are hidden.
@@ -71,8 +73,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               {side && <span className="hidden shrink-0 text-ink-500 sm:inline">· {side === "developer" ? "Developer" : "Tester"}</span>}
             </Link>
             {!admin && hasBoth(u) && side && (
-              // Goes to the other side's dashboard (and remembers it as the side used last). (Batch 34 §17, owner) A direct POST: no in-between "Switch to your … side
-              // and continue" page to flash or hang (the GET stays for old links).
+              // Goes to the other side's dashboard: with the Account page's button, the only thing that changes sides (batch 34 §5). (Batch 34 §17, owner) A direct
+              // POST: no in-between "Switch to your … side and continue" page to flash or hang (the GET only redirects, for old links).
               <form method="post" action="/app/switch" className="flex" data-side-switch="">
                 <input type="hidden" name="to" value={side === "developer" ? "tester" : "developer"} />
                 <input type="hidden" name="next" value="/app" />
@@ -109,7 +111,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </span>
         </p>
       )}
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{otherSide ? <section className="card space-y-3" data-other-side-page=""><p>This page is on your {otherSide} side.</p><form method="post" action="/app/switch"><input type="hidden" name="to" value={otherSide} /><input type="hidden" name="next" value={path} /><button className="btn">Switch to your {otherSide} side</button></form></section> : children}</main>
+      {/* (Batch 34 §5) A page of the other side renders only its switch notice itself (components/OtherSideNotice): the layout stays put while moving between pages. */}
+      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
       <SessionWatch userId={u.id} name={name} side={side} restriction={restrictionKey(u, side)} />
       <TimeZoneSync stored={u.timeZone} />
       <HashJump />

@@ -85,6 +85,6 @@ describe("batch 30 §20: the small ones", () => {
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).toContain('`The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : "."}`');
     expect(session).toContain('{testersIn > 0 && <span className="badge"><Users className="h-3.5 w-3.5" /> {testersIn} tester');
-    expect(src("lib/server/holds.ts")).toContain('`/app/sessions/${c.id}#call-${x.id}`, { payment: true, group: "tpaid" });');
+    expect(src("lib/server/holds.ts")).toContain('`/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tpaid" });');
   });
 });

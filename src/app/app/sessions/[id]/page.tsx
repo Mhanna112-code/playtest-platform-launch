@@ -58,6 +58,7 @@ import { AnswerWithAttachments, PrevSetFolds, SetView } from "@/components/Answe
 import { carryOver, itemsFor, itemsOf, prevSetsOf, sameQuestions } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
@@ -74,6 +75,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top), except (batch 16 section 28) the limited view of a test a suspended tester was removed from.
   const u = await requirePageUser();
   adminAway(u, "/app/sessions"); // (batch 20 section 16) admin only
+  const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
+  if (otherSide) return otherSide;
   await (await import("@/lib/server/recovery")).checkStuck({ contractId: id }); // (batch 15 section 9) payments stuck "in progress"
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const head = await db.contract.findUnique({ where: { id }, select: { testId: true, testerId: true } });

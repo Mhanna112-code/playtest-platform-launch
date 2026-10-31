@@ -72,6 +72,7 @@ import { ExcerptDecision } from "@/components/Excerpts";
 import { UPDATED_AT_CAP, pieceDay, teamClosedLine, updateRowLine, updateWaiting } from "@/lib/moneyLines";
 
 import { testV } from "@/lib/server/pulseV";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
@@ -79,6 +80,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const { id } = await params;
   // First: a restricted developer may open a test page only in its restricted view (batch 15 section 29); every other page sends them to the dashboard top.
   const u = await requireOpenPage(`/app/tests/${id}`);
+  const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
+  if (otherSide) return otherSide;
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
   const { saved, offered, skipped, closed, resent, failed } = await searchParams;

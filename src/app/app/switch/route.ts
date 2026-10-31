@@ -1,3 +1,6 @@
+// (Owner, Oct 30, batch 34 §5) The side switch. Only its POST (the header's switch button, and the notice's "Switch to your … side" on a page of the other
+// side) changes sides, with the Account page's button (api/account/side). The GET (old links in emails) just opens the page asked for, never switching:
+// a page of the other side shows the notice with the button. (Batch 15 section 41, L5) The POST must come from this site.
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { hasSide } from "@/lib/sides";
@@ -10,7 +13,6 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const user = await getUserFromRequest(req);
   if (!user) return NextResponse.redirect(new URL("/login", url));
-  // Old email links still work, but only an explicit switch POST changes sides.
   return NextResponse.redirect(new URL(safeNext(url.searchParams.get("next")), url));
 }
 

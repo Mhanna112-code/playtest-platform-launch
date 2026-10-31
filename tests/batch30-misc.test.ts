@@ -132,7 +132,7 @@ describe("batch 30 §6: leftovers from the batch 29 design doc check", () => {
   it("Pay now and Closing soon open the dashboard at Needs review (marked by HashJump)", () => {
     const h = src("lib/server/holds.ts");
     expect(h).not.toContain('"/app#needs-you"');
-    expect(h.match(/"\/app#needs-review", \{ always: true, payment: true, group: "(closeout|unreviewed)"/g)).toHaveLength(2);
+    expect(h.match(/"\/app#needs-review", \{ side: "developer", always: true, payment: true, group: "(closeout|unreviewed)"/g)).toHaveLength(2);
     expect(src("app/app/page.tsx")).toContain('id="needs-review"');
     expect(src("app/app/layout.tsx")).toContain("<HashJump />");
   });

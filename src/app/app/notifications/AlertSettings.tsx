@@ -47,8 +47,8 @@ export function AlertSettings({ emailPref, side = null }: { emailPref: string; s
               ))}
             </div>
           )}
-          {/* (Owner, Oct 29, batch 28 §18) Payment lines are emailed the same evening whatever the setting, Off included. */}
-          <p className="text-xs text-slate-500" data-payment-emails="">Payment updates are always emailed the same evening. {side === "developer" ? "That includes receipts, failures, holds, retries and chargebacks." : side === "tester" ? "That includes payments, delays and payouts." : "Your account updates are included."} Even with email Off, Weekly or Monthly. Some account emails always send.</p>
+          {/* (Owner, Oct 29, batch 28 §18) Payment lines are emailed the same evening whatever the setting, Off included. (Batch 34 §5) Only the side in use's kinds. */}
+          <p className="text-xs text-slate-500" data-payment-emails="">Payment updates are always emailed the same evening, even with email Off, Weekly or Monthly{side === "developer" ? ": receipts, failures, holds, retries and chargebacks" : side === "tester" ? ": payments, delays and payouts" : ""}. Some account emails always send.</p>
         </fieldset>
         <div className="flex flex-wrap items-center gap-3">
           <button className="btn" disabled={busy}>Save</button>

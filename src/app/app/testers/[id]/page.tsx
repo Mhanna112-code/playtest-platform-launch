@@ -18,6 +18,7 @@ import { MyExcerpts, ShownExcerpts } from "@/components/ExcerptList";
 import { myExcerpts, shownExcerpts } from "@/lib/server/excerpts";
 import { TesterTests } from "@/components/TesterTests";
 import { testerTestsFor } from "@/lib/server/testerTests";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Tester · Playtest" };
 export const dynamic = "force-dynamic";
@@ -30,6 +31,8 @@ export const dynamic = "force-dynamic";
 export default async function TesterProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const viewer = await requireOpenPage("/app/testers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const otherSide = await otherSideNotice(viewer); // (batch 34 §5) a page of the other side: only the switch notice
+  if (otherSide) return otherSide;
   const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
   if (!p || !p.isTester) notFound();
   const mine = viewer.id === p.id;

@@ -170,7 +170,7 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
     const layout = src("app/app/layout.tsx");
     expect(layout).toContain("const off = restrictedOn(u, side);");
     for (const link of ['side === "developer" && !off', 'side === "tester" && !off', "{!off && !admin && <Link", "const messagesLink = off ? null"]) expect(layout, link).toContain(link);
-    expect(src("app/app/notifications/page.tsx")).toContain('closedForSuspended(link, u, sideFor(u, link)) ? "/app"');
+    expect(src("app/app/notifications/page.tsx")).toContain('closedForSuspended(link, u, sideForPath(link, u.id) ?? sideFor(u)) ? "/app"'); // (batch 34 §5) the line's own side
   });
 
   it("the dashboard: names are plain text (no hover card); a suspended tester's rows don't open closed pages; the tester's blue box", () => {

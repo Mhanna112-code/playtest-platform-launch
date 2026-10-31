@@ -11,6 +11,7 @@ import { PageLoaded } from "@/components/PageLoaded";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { AlertsMenu } from "@/components/AlertsMenu";
 import { keyBoxes } from "@/lib/server/accessKeys";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Edit test · Playtest" };
 export const dynamic = "force-dynamic";
@@ -18,6 +19,8 @@ export const dynamic = "force-dynamic";
 export default async function EditTest({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const u = await requireOpenDevPage();
+  const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
+  if (otherSide) return otherSide;
   const t = await db.test.findUnique({ where: { id } });
   if (!t || t.developerId !== u.id) notFound();
   // (Owner, Oct 28 evening) A draft is edited in Post a test.

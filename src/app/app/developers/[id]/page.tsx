@@ -16,6 +16,7 @@ import { anySuspended, devRestricted } from "@/lib/restricted";
 import { sideFor } from "@/lib/sides";
 import { openTestsV, profileOpenTests } from "@/lib/server/profileOpenTests";
 import { AutoRefresh } from "@/components/AutoRefresh";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 
 export const metadata = { title: "Developer · Playtest" };
@@ -28,6 +29,8 @@ export const dynamic = "force-dynamic";
 export default async function DeveloperProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const viewer = await requireOpenPage("/app/developers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const otherSide = await otherSideNotice(viewer); // (batch 34 §5) a page of the other side: only the switch notice
+  if (otherSide) return otherSide;
   const p = await db.user.findUnique({ where: { id } });
   if (!p || !p.isDeveloper) notFound();
   const mine = viewer.id === p.id;

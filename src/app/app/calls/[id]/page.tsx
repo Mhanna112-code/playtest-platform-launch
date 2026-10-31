@@ -6,6 +6,7 @@ import { adminAway, leaveIfClosed, requireOpenPage, requirePageUser } from "@/li
 import { CALL_NOT_AVAILABLE } from "@/lib/callMeasure";
 import { JOIN_OPENS_MIN } from "@/lib/rules";
 import { CallRoom } from "./CallRoom";
+import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Live call · Playtest" };
 export const dynamic = "force-dynamic";
@@ -24,9 +25,12 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
         <p className="info" data-call-line="">{CALL_NOT_AVAILABLE}</p>
       </div>
     );
+  const amTester = call.contract.testerId === u.id;
+  // (Batch 34 §5) A call of the account's other side (its role in this test): only the switch notice.
+  const otherSide = await otherSideNotice(u, amTester ? "tester" : "developer");
+  if (otherSide) return otherSide;
   // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top); with both sides and only a hold, the role in this call decides.
   await requireOpenPage("/app/calls");
-  const amTester = call.contract.testerId === u.id;
   leaveIfClosed(u, "/app/calls", amTester ? "tester" : "developer");
   const s = await callStatus(u, id);
   // The full app's call page header: "Call with Ana", then the test, the booked length and what's paid.

@@ -105,7 +105,7 @@ async function tellEveryone(adminId: string, scope: TeamCloseScope, closed: Piec
   for (const p of closed) {
     const line = `“${p.title}”: the team closed your ${p.part} for $0`;
     const anchor = p.kind === "call" ? "part-live" : p.part === "recording" ? "part-recording" : "part-written";
-    await notify(p.testerEmail, line, [line + ".", `The team's reason: “${reason}”`], `/app/sessions/${p.contractId}#${anchor}`, { side: "developer", payment: true, group: "tpaid" });
+    await notify(p.testerEmail, line, [line + ".", `The team's reason: “${reason}”`], `/app/sessions/${p.contractId}#${anchor}`, { side: "tester", payment: true, group: "tpaid" });
   }
   const byTest = new Map<string, Piece[]>();
   for (const p of closed) byTest.set(p.testId, [...(byTest.get(p.testId) ?? []), p]);

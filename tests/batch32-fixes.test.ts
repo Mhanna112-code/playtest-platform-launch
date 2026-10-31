@@ -92,21 +92,27 @@ describe("batch 32 §15: a tester's Charge on a developer with no saved card", (
   });
 });
 
-describe("batch 32 §16: switching sides is instant from the site and from your own visits", () => {
-  it("same-origin and direct visits (none) send the form at once; a link from elsewhere waits for the press", async () => {
+// (Batch 34 §5, owner) §16 and §17 are undone: the in-between switch page is gone (a GET only opens the page asked for, from anywhere, never switching),
+// and coming back from Stripe leaves the side as it is.
+describe("batch 32 §16, undone by batch 34 §5: no in-between switch page", () => {
+  it("a GET of /app/switch redirects to the page for every kind of visit and never switches", async () => {
     const { GET } = await import("@/app/app/switch/route");
     const { makeUser } = await import("./helpers");
-    const both = await makeUser({ tester: true, developer: true, name: "Bo Both" } as never);
-    const get = async (site?: string) => (await GET(new Request("http://localhost:3400/app/switch?to=tester&next=/app/find", { headers: { cookie: both.cookie, ...(site ? { "sec-fetch-site": site } : {}) } }))).text();
-    for (const site of ["same-origin", "same-site", "none"]) expect(await get(site), site).toContain("<script>");
-    for (const site of ["cross-site", undefined]) expect(await get(site), String(site)).not.toContain("<script>");
+    const { db } = await import("@/lib/db");
+    const both = await makeUser({ tester: true, dev: true, name: "Bo Both" });
+    await db.user.update({ where: { id: both.user.id }, data: { side: "developer" } });
+    for (const site of ["same-origin", "same-site", "none", "cross-site", undefined]) {
+      const r = await GET(new Request("http://localhost:3400/app/switch?to=tester&next=/app/find", { headers: { cookie: both.cookie, ...(site ? { "sec-fetch-site": site } : {}) } }));
+      expect(r.headers.get("location"), String(site)).toBe("http://localhost:3400/app/find");
+      expect(await r.text(), String(site)).not.toContain("<script>");
+    }
+    expect((await db.user.findUniqueOrThrow({ where: { id: both.user.id } })).side).toBe("developer");
   });
 });
 
-describe("batch 32 §17: back from Stripe on the right side", () => {
-  it("adding a card lands on the developer side; payout setup on the tester side", () => {
-    expect(src("app/api/payments/card-saved/route.ts")).toContain('if (hasSide(u, "developer") && u.side !== "developer") await db.user.update({ where: { id: u.id }, data: { side: "developer" } });');
-    expect(src("app/api/payments/payout-return/route.ts")).toContain('if (hasSide(u, "tester") && u.side !== "tester") await db.user.update({ where: { id: u.id }, data: { side: "tester" } });');
+describe("batch 32 §17, undone by batch 34 §5: back from Stripe the side stays as it is", () => {
+  it("card-saved and payout-return don't touch the side", () => {
+    for (const route of ["card-saved", "payout-return"]) expect(src(`app/api/payments/${route}/route.ts`), route).not.toMatch(/side:|hasSide/);
   });
 });
 
