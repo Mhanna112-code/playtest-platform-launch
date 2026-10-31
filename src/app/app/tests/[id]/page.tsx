@@ -39,7 +39,7 @@ import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callList
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
-import { autoChargeLine, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
+import { CONFIRM_WITH_BANK, autoChargeLine, bankAnchor, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
@@ -153,7 +153,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 17 §11) Charges made while the developer was away that their bank wants confirmed: "Confirm with your bank" under the affected piece (Payments and the bell link here).
   const bankRows = await bankWaitingOnTest(u.id, t.id);
   // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
-  const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />);
+  // (Owner, Oct 31, batch 35 §80) Confirmed in Needs you (where the dashboard's box, Payments and the bell link); under the piece only a link up to it.
+  const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>);
   // (Batch 23, a batch 21 leftover) A call whose two browsers never connected reads "Waiting to connect", not "In progress".
   const connectedCalls = new Set((await db.callPresence.findMany({ where: { call: { contract: { testId: t.id } } }, select: { callId: true }, distinct: ["callId"] })).map((p) => p.callId));
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
@@ -362,7 +363,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 30 §2) Updated versions sent after a piece was paid, below its cap while Pay more is open: each its own Needs you row with the piece's Pay more box.
   const updates = restricted || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
     .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
-  const needsCount = updates.length + pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
+  const needsCount = bankRows.length + updates.length + pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
   return (
     // (Batch 34 §14) Every stop box under any button on this page: a listing line's See it goes to the Listing panel.
     <SeeItTarget target="#listing">
@@ -418,6 +419,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
+          {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
           <Applications needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
           {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
@@ -634,8 +636,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </details>
                 )}
                 <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
-                {/* (Batch 17 §11) A waiting charge whose piece isn't listed above (a dispute decision or retry with no part) sits under the tester's row. */}
-                {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
+                {/* (Batch 17 §11; batch 35 §80) A waiting charge whose piece isn't listed above: a link up to it in Needs you under the tester's row. */}
+                {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>)}
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
                 {/* (Owner, Oct 31, batch 35 §33) Only the terms line: the contract changes (renames, a Stop's note…) are still recorded for the tester's own page, never
                     listed under the developer's row. */}

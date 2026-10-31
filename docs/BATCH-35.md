@@ -691,3 +691,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
   invite just re-sent on a new listing ("here's a new invite on the updated listing", that invite's line).
 - (Same day, small) The developer's call panel no longer repeats the tester's name: a tester's card drops its name heading when every row already starts with
   the name (booked calls, a booked set "fbbb · Daily · Sat 9:46 PM (4 left) · 39 min · …", their requests); it stays when a row reads "You requested …" or there are none.
+
+## §80 Confirm with your bank sits in Needs you (owner, Oct 31)
+- On the test page every payment the bank wants confirmed is in **Needs you** (counted there), so the dashboard's "Your bank wants you to confirm" box,
+  Payments and the bell all land in Needs you. Under the piece (and under the tester's row for a charge with no part) there's only a small link up to it:
+  "Confirm with your bank in Needs you ↑". A paused or held test's page keeps its own "Your bank wants you to confirm" box as before.
