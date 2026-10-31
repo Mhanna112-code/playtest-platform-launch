@@ -52,7 +52,21 @@ export function PayBox(p: {
   // (Batch 17 §11) The bank's check opens inline, under the button; the button stays disabled while it is open.
   const bank = useBankCheck();
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Draft"; batch 35 §8: after signing in, with "Use saved").
-  const keep = useKept(`${more ? "more" : "pay"}:${p.kind}:${p.id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
+  // (Owner, Oct 30) The amount (and a call's rate) is kept with its note, so a note never comes back next to another amount. A kept amount needs the tick again.
+  const startAmount = start == null ? "" : (start / 100).toFixed(2);
+  const startRate = isCall && listed && p.rateCents != null ? (p.rateCents / 100).toFixed(2) : "";
+  const keep = useKept(`${more ? "more" : "pay"}:${p.kind}:${p.id}`, { reason, amount, rate }, reason === "" && amount === startAmount && rate === startRate, (v: { reason?: string; amount?: string; rate?: string }) => {
+    setReason(v.reason ?? "");
+    if (typeof v.amount === "string") setAmount(v.amount);
+    if (typeof v.rate === "string") setRate(v.rate);
+  });
+  const useSaved = () => {
+    setReason("");
+    setAmount(startAmount);
+    setRate(startRate);
+    setTicked(false);
+    setOver200(false);
+  };
   // (Batch 19 section 5) One key per attempt: a double press of it charges once; a press that didn't go through (the bank's check cancelled or failed, or a refusal)
   // frees it, and the next Pay is a new attempt with a new key.
   const [payKey, setPayKey] = useState(newPressId);
@@ -139,7 +153,7 @@ export function PayBox(p: {
         <textarea id={`why-${p.id}`} className="input min-h-[2.75rem]" rows={2} data-match="why you're paying" data-red-msg={reasonMissing ? (cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`) : undefined} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={listed ? "What it's missing, or a thank-you" : "A thank-you, or what the pay is for"} />
         <p className={`text-xs ${reason.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-note-count="">{reason.length.toLocaleString("en-US")} / {LIMITS.reason.toLocaleString("en-US")}</p>
         {reasonMissing && <p className="err-field" data-reason-needed="">{cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`}</p>}
-        {keep.restored && reason !== "" && <DraftTag onUseSaved={keep.signedIn ? () => setReason("") : undefined} />}
+        {keep.restored && (reason !== "" || amount !== startAmount || rate !== startRate) && <DraftTag onUseSaved={keep.signedIn ? useSaved : undefined} />}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         {cents != null && cents > 0 && (

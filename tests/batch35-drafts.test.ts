@@ -136,7 +136,7 @@ describe("batch 35 §8: the other forms after signing back in", () => {
     expect(src("components/Chat.tsx")).toContain('<DraftTag onUseSaved={keep.signedIn ? () => setText("") : undefined} />');
     expect(src("components/RateBox.tsx")).toContain('<DraftTag onUseSaved={keep.signedIn ? () => setComment("") : undefined} />');
     expect(src("app/app/tests/[id]/DisputeSide.tsx")).toContain('<DraftTag onUseSaved={keep.signedIn ? () => setText("") : undefined} />');
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('<DraftTag onUseSaved={keep.signedIn ? () => setReason("") : undefined} />');
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('<DraftTag onUseSaved={keep.signedIn ? useSaved : undefined} />');
     expect(src("app/app/help/ContactForm.tsx")).toContain('<DraftTag onUseSaved={keep.signedIn ? () => { setMessage(""); setTopic(""); } : undefined} />');
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('{keepStop.signedIn && stopReason !== "" && <DraftTag onUseSaved={() => setStopReason("")} />}');
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('{keepEnd.signedIn && reason !== "" && <DraftTag onUseSaved={() => setReason("")} />}');
@@ -224,5 +224,14 @@ describe("batch 35 §8: the tab's own copy is for a side switch only", () => {
     // A signs back in: A's draft comes back, marked.
     const aCookie = await signBackIn(a);
     expect(await read(aCookie, a.user.id, "chat:c35")).toEqual({ text: "A's message", [SIGNED_IN_MARK]: true });
+  });
+});
+
+describe("batch 35 §8 (owner, Oct 30): the pay note comes back with its amount", () => {
+  it("Pay and Pay more keep the amount and rate with the note; Use saved puts all three back and the tick is needed again", () => {
+    const src = require("node:fs").readFileSync(require("node:path").join(process.cwd(), "src/app/app/tests/[id]/PayBox.tsx"), "utf8") as string;
+    expect(src).toContain("{ reason, amount, rate }");
+    expect(src).toContain("setAmount(startAmount);");
+    expect(src).toContain("setTicked(false);");
   });
 });
