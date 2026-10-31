@@ -69,8 +69,8 @@ describe("batch 35 §10: Discard where nothing is saved", () => {
       "app/app/tests/[id]/DevCallPanel.tsx": { discard: 1, saved: 0 }, // the developer's Request a call
       "components/CallRequests.tsx": { discard: 1, saved: 0 }, // the tester's Propose times
       "app/app/find/[id]/JoinBox.tsx": { discard: 1, saved: 0 }, // the Apply / Ask to rejoin note
-      "app/app/sessions/[id]/SessionActions.tsx": { discard: 1, saved: 1 }, // the tester's dispute reason; written answers
-      "app/app/tests/TestForm.tsx": { discard: 0, saved: 2 }, // Edit / Post (each field, and the access keys)
+      "app/app/sessions/[id]/SessionActions.tsx": { discard: 1, saved: 2 }, // the tester's dispute reason; written answers (batch 35 §18: each box, and the notes)
+      "app/app/tests/TestForm.tsx": { discard: 0, saved: 0 }, // Edit / Post (each field, and the access keys): kind={draftKind}, below (batch 35 §23)
       "app/app/tests/[id]/PayBox.tsx": { discard: 0, saved: 1 }, // Pay / Pay more
       "app/app/profile/ProfileForm.tsx": { discard: 0, saved: 1 }, // the profile
       // (Batch 35 §11) The admin console's boxes.
@@ -92,15 +92,18 @@ describe("batch 35 §10: Discard where nothing is saved", () => {
       if (rel === "lib/useKept.tsx") continue;
       const tags = s.match(/<DraftTag\b[^>]*/g) ?? [];
       if (tags.length) expect(Object.keys(want), rel).toContain(rel);
-      for (const t of tags) expect(t, rel).toMatch(/^<DraftTag kind="(saved|discard)"/);
+      for (const t of tags) expect(t, rel).toMatch(rel === "app/app/tests/TestForm.tsx" ? /^<DraftTag kind=\{draftKind\}/ : /^<DraftTag kind="(saved|discard)"/);
     }
-    // Edit / Post keep "Use saved for all".
-    expect(src("app/app/tests/TestForm.tsx")).toContain("onClick={putAllSaved}>{USE_SAVED_ALL_LABEL}</button>");
+    // (Batch 35 §23) Edit and a saved draft keep "Use saved" / "Use saved for all"; a new Post has nothing saved: "Discard" and "Start empty".
+    const form = src("app/app/tests/TestForm.tsx");
+    expect((form.match(/<DraftTag kind=\{draftKind\}/g) ?? []).length).toBe(2);
+    expect(form).toContain('const draftKind = isNew ? "discard" : "saved";');
+    expect(form).toContain("onClick={isNew ? discardAll : putAllSaved}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</button>");
   });
 
   it("Discard on a call request clears only the form being typed (sent / pending requests and booked calls untouched)", () => {
-    expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain('<DraftTag kind="discard" onUseSaved={keep.signedIn ? () => { setRows([newRow()]); setMinutes(""); setTicked([]); } : undefined} />');
-    expect(src("components/CallRequests.tsx")).toContain('<DraftTag kind="discard" onUseSaved={keep.signedIn ? () => { setRows([newRow()]); setMinutes(""); } : undefined} />');
+    expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain('<DraftTag kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); setTicked([]); }} />');
+    expect(src("components/CallRequests.tsx")).toContain('<DraftTag kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); }} />');
   });
 });
 
@@ -121,7 +124,7 @@ describe("batch 35 §10: the Apply note's draft", () => {
   it("the join box keeps it, shows Draft / Discard at the note, and clears it only when Apply, Ask to rejoin or Join goes through", () => {
     const j = src("app/app/find/[id]/JoinBox.tsx");
     expect(j).toContain('const keep = useKept(`apply:${p.testId}`, { note }, note === "", (v) => setNote(typeof v.note === "string" ? v.note : ""));');
-    expect(j).toContain('{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}');
+    expect(j).toContain('{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}');
     // The hook runs before the box's early returns (the waiting views).
     expect(j.indexOf("const keep = useKept(")).toBeLessThan(j.indexOf('if (p.application?.status === "pending"'));
     // The pop-up's press and the button's press: cleared right after the server took it (a stop or refusal throws first, so the draft stays).
@@ -166,7 +169,7 @@ describe("batch 35 §10: the profile's draft", () => {
     expect(f).toContain("const keep = useKept(`profile:${side}`, { f: draft }, Object.keys(draft).length === 0, (d) => {");
     expect(f).toContain("for (const k of Object.keys(f) as (keyof Init)[]) typed.current.add(k);"); // a live refresh never overwrites the restored fields
     expect(f).toContain("}, !!first);"); // the first setup keeps nothing
-    expect(f).toContain("{keep.restored && Object.keys(draft).length > 0 && <DraftTag kind=\"saved\" onUseSaved={keep.signedIn ? useSaved : undefined} />}");
+    expect(f).toContain("{keep.restored && Object.keys(draft).length > 0 && <DraftTag kind=\"saved\" onUseSaved={useSaved} />}");
     expect(f).toContain("typed.current.clear();\n    setV(init);");
     const save = f.slice(f.indexOf("async function save("), f.indexOf("} catch (err) {"));
     expect(save.indexOf("if (!first) await keep.clear();")).toBeGreaterThan(save.indexOf('await api("/api/profile"'));

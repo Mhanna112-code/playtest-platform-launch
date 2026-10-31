@@ -34,7 +34,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
     <div className="flex flex-wrap items-center gap-2">
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
       <input id={`lift-note-${id}`} className="input w-72 max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
-      {keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}
+      {keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}
       <button
         className="btn-ghost"
         disabled={busy}

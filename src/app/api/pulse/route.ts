@@ -73,7 +73,7 @@ export async function GET(req: Request) {
       const { inviteBlocked } = await import("@/lib/rules");
       const { fmtDate } = await import("@/lib/format");
       const testersIn = await db.contract.count({ where: { testId: t.id, status: "working" } });
-      return ok({ blocked: inviteBlocked({ ...t, testersIn, paused: !!u.holdStartedAt }, new Date(), fmtDate), restricted: false });
+      return ok({ blocked: inviteBlocked({ ...t, testersIn, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, new Date(), fmtDate), restricted: false });
     }
     // (Batch 26 section 10) The Call requests panel: each shown request that is no longer waiting, with the line its row then shows ("Closed: the tester finished
     // their part"). Only requests on this person's own sessions or tests.

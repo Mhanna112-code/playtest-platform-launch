@@ -31,7 +31,8 @@ export async function getKept(userId: string, key: unknown) {
   const k = checkKey(key);
   await checkAdminKey(userId, k);
   const row = await db.keptForm.findUnique({ where: { userId_key: { userId, key: k } } });
-  return { data: row?.data ?? null };
+  // (Batch 35 §18) With when it was last kept: Post / Edit say "Started from your unsent draft (<time>)".
+  return { data: row?.data ?? null, ...(row ? { at: row.updatedAt.toISOString() } : {}) };
 }
 
 /** Keep what's typed (data), or forget it (data = null: the form was sent, or emptied). */

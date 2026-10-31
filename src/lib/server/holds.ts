@@ -17,7 +17,7 @@ import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
-import { callReference } from "@/lib/rules";
+import { callReference, pausedUntil } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
@@ -100,7 +100,7 @@ export async function startHold(devId: string, reason: string) {
     for (const r of await (await import("./requests")).closeRequests({ contractIds: (await db.contract.findMany({ where: { testId: t.id }, select: { id: true } })).map((x) => x.id) }, "the test is paused")) {
       void r; // (Owner) a closed call request is not a bell line
     }
-    await db.$transaction((tx) => recordEvent(tx, t.id, "paused", "Your tests are paused until you pay what you owe", false));
+    await db.$transaction((tx) => recordEvent(tx, t.id, "paused", pausedUntil(reason === "chargeback"), false) /* (batch 35 §22) */);
   }
   // (Owner, Oct 27) Calls starting within 3 days are cancelled with no fault; later ones are cancelled 3 days before they start if the hold is still on (the daily job).
   await (await import("./restrictions")).cancelCallsNearPause(devId, now);

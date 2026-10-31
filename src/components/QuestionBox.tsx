@@ -9,7 +9,7 @@ const HEIGHT = { list: "max-h-48", form: "max-h-[34rem]" } as const;
  * (Owner, Oct 28, batch 20 section 1) More than 3 questions: every question inside a scroll box about 3 questions tall (no "+N more"); 3 or fewer show without a
  * box. Phones: the same box, full width. Plain markup (no state), usable from server and client components. Each question inside keeps its own clamp.
  */
-export function QuestionBox({ count, children, size = "list", as: Tag = "div", className = "space-y-1" }: { count: number; children: ReactNode; size?: keyof typeof HEIGHT; as?: "div" | "ul" | "span"; className?: string }) {
+export function QuestionBox({ count, children, size = "list", as: Tag = "div", className = "space-y-1" }: { count: number; children: ReactNode; size?: keyof typeof HEIGHT; as?: "div" | "ul" | "ol" | "span"; className?: string }) {
   if (count <= QUESTION_BOX_AFTER) return <Tag className={`block ${className}`}>{children}</Tag>;
   return (
     <Tag className={`relative block w-full overflow-y-auto pr-1 ${HEIGHT[size]} ${className}`} data-question-box={count} role="region" aria-label={`${count} questions`} tabIndex={0}>

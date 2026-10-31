@@ -236,7 +236,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       )}
       {(applying || rejoining) && (
         <div>
-          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}</label>
+          <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}</label>
           <textarea id="note" rows={2} className="input" value={note} onChange={(e) => setNote(e.target.value)} />
         </div>
       )}

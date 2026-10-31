@@ -76,7 +76,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
             {...(f.name === "days" ? { inputMode: "numeric" as const, "data-whole": "" } : {})} />
         ),
       )}
-      {keep.restored && put && typedAny && <DraftTag kind="discard" onUseSaved={keep.signedIn ? () => setV({}) : undefined} />}
+      {keep.restored && put && typedAny && <DraftTag kind="discard" onUseSaved={() => setV({})} />}
       <button
         className={danger ? "btn-danger" : "btn-ghost"}
         disabled={busy || disabled}

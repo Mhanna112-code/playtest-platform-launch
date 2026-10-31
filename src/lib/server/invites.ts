@@ -235,7 +235,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const me = await tx.user.findUniqueOrThrow({ where: { id: dev.id } });
     const testersIn = await tx.contract.count({ where: { testId, status: "working" } });
     const now = new Date();
-    const refusal = inviteTestRefusal({ ...t, testersIn, paused: !!me.holdStartedAt }, now, fmtDate);
+    const refusal = inviteTestRefusal({ ...t, testersIn, paused: !!me.holdStartedAt, chargeback: me.holdReason === "chargeback" }, now, fmtDate);
     if (refusal) throw new HttpError(409, "refused", refusal, { clearTicks: true });
     // In the order the developer ticked them, so the "Invited A and B." line is stable.
     const people = (await tx.user.findMany({ where: { id: { in: ids } }, include: { profile: true } })).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));

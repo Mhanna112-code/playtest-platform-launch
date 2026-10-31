@@ -432,10 +432,15 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
     else if (l.liveRateCents > PRICE_LIMITS.rateMax && isNew("liveRateCents")) errs.push(rateHighLine());
   }
   if (l.writtenCents != null && l.questions.filter((q) => q.trim()).length === 0) errs.push("Add at least one question for the written answers.");
-  if (l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);
+  // (Owner's bug, Oct 31, batch 35 §24) The question checks (at most 20, each at most 20,000 characters, each once) apply only while the written part is on: with it
+  // off the questions box isn't shown, so nothing there can be fixed (the stored questions stay as they are).
+  const asks = l.writtenCents != null;
+  // Turning the written part on shows the box again: its questions are checked then too.
+  const qNew = isNew("questions") || isNew("writtenCents");
+  if (asks && l.questions.length > LIMITS.questions.max) errs.push(`At most ${LIMITS.questions.max} questions.`);
   // (Owner, Oct 30, batch 15 section 3) At most 20,000 characters per question (checked when the questions are saved).
-  if (isNew("questions") && l.questions.some((q) => qText(q).length > LIMITS.question)) errs.push(QUESTION_TOO_LONG);
-  if (isNew("questions") && duplicateQuestion(l.questions)) errs.push(duplicateQuestionLine(duplicateQuestion(l.questions)));
+  if (asks && qNew && l.questions.some((q) => qText(q).length > LIMITS.question)) errs.push(QUESTION_TOO_LONG);
+  if (asks && qNew && duplicateQuestion(l.questions)) errs.push(duplicateQuestionLine(duplicateQuestion(l.questions)));
   return errs;
 }
 
@@ -935,15 +940,24 @@ export const headsUpLine = (title: string, openUntil: Date, fmt: (d: Date) => st
 export const joinClosingLine = (title: string, openUntil: Date, fmt: (d: Date) => string) => `“${title}” closes to new testers on ${fmt(openUntil)}.`;
 export const ownDeadlineLine = (title: string, dueAt: Date, fmt: (d: Date) => string) => `Your deadline on “${title}” is ${fmt(dueAt)}: send your work before then.`;
 
+/**
+ * (Owner, Oct 31, batch 35 §22) A chargeback hold isn't over when what is owed is paid (a 3D Secure card check and the team's approval too): the developer's lines
+ * say "until the chargeback steps are done" (the steps in Payments); a payment hold keeps "until you pay what you owe". Developer-facing only.
+ */
+export const CHARGEBACK_STEPS_HREF = "/app/payments#chargeback-steps";
+export const PAUSED_UNTIL_PAID = "Your tests are paused until you pay what you owe";
+export const PAUSED_UNTIL_CHARGEBACK = "Your tests are paused until the chargeback steps are done";
+export const pausedUntil = (chargeback: boolean) => (chargeback ? PAUSED_UNTIL_CHARGEBACK : PAUSED_UNTIL_PAID);
+
 /** Invite: reasons the whole press is refused for good. */
 export function inviteTestRefusal(
-  t: { status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean; title?: string },
+  t: { status: string; spots: number; testersIn: number; openUntil: Date | null; stoppedAt: Date | null; paused: boolean; /** (Batch 35 §22) the hold is a chargeback's */ chargeback?: boolean; title?: string },
   now: Date,
   fmt: (d: Date) => string,
 ) {
   if (t.status === "stopped") return `This test was stopped${t.stoppedAt ? ` on ${fmt(t.stoppedAt)}` : ""}, so nobody can be invited.`;
   if (t.openUntil && t.openUntil.getTime() < now.getTime()) return `Joining closed on ${fmt(t.openUntil)} (Open until), so nobody can be invited.`;
-  if (t.paused) return "This test is paused until you pay what you owe, so nobody can be invited.";
+  if (t.paused) return t.chargeback ? "This test is paused until the chargeback steps are done, so nobody can be invited." : "This test is paused until you pay what you owe, so nobody can be invited.";
   if (t.status !== "open") return "This test isn't taking new testers, so nobody can be invited.";
   // New invites wait for spots (open ones stay open while full: correction 6).
   if (t.testersIn >= t.spots) return `${t.title ?? "This test"} is full. Add spots to invite more people.`;

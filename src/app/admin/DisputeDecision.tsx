@@ -62,7 +62,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         <span>$</span>
         <input id={`total-${id}`} className="input w-28" inputMode="decimal" data-money="" aria-label="Total pay for this piece ($)" data-min={String(minCents / 100)} data-max={String(maxCents / 100)}
           data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} data-match="^(?!Keep it to)" value={total} onChange={(e) => setTotal(e.target.value)} />
-        {keep.restored && total !== "" && <DraftTag kind="saved" field="total" onUseSaved={keep.signedIn ? () => { setTotal(""); setTickedFor(null); } : undefined} />}
+        {keep.restored && total !== "" && <DraftTag kind="saved" field="total" onUseSaved={() => { setTotal(""); setTickedFor(null); }} />}
         <span className="text-xs text-slate-500">{dollars(minCents)}-{dollars(maxCents)} · leave blank to keep it as it is</span>
       </div>
       <div className="flex flex-wrap items-center gap-2">
@@ -71,7 +71,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         <textarea id={`note-${id}`} rows={2} className={`input w-72 max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} />
         <span className={`block text-right text-xs ${note.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(note.length, LIMITS.reason)}</span>
         {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
-        {keep.restored && note !== "" && <DraftTag kind="discard" field="note" onUseSaved={keep.signedIn ? () => setNote("") : undefined} />}
+        {keep.restored && note !== "" && <DraftTag kind="discard" field="note" onUseSaved={() => setNote("")} />}
         <button
           className="btn-ghost"
           disabled={busy || (extra > 0 && !ticked)}

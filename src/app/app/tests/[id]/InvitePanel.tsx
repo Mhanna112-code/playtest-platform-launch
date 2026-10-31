@@ -12,7 +12,7 @@ import { UserPlus } from "lucide-react";
 import { bringInView, jumpTo, MARKABLE } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
 import { MissingNeedWords } from "@/components/MissingNeeds";
-import { gapsOf, isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
+import { EVERYONE_MEETS, everyoneMeets, gapsOf, isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
 import { LiveNotices } from "@/components/LiveNotices";
 
 type Tester = { changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
@@ -167,7 +167,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   useEffect(() => {
     if (confirm && !displayedGapCount && ticked.length) {
       setConfirm(null);
-      setMsg("Everyone you ticked now meets this test's needs. Press Invite to send.");
+      setMsg(EVERYONE_MEETS);
     }
   }, [confirm, displayedGapCount, ticked.length]);
   async function invite(anyway: boolean) {
@@ -210,9 +210,12 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   useEffect(() => {
     if (boxOpen) bringInView(document.querySelector<HTMLElement>("[data-invite-anyway]"));
   }, [boxOpen]);
+  // (Owner's bug, Oct 31, batch 35 §21) "Everyone you ticked now meets this test's needs" shows only while it's true for the current ticks and rows (the test's
+  // needs as the page now has them, each ticked tester's profile as the rows show it): after a stop or redraw that made it false, it goes.
+  const msgNow = msg === EVERYONE_MEETS && !everyoneMeets(p.options, ticked, shown.current) ? "" : msg;
   useEffect(() => {
-    if (msg) bringInView(document.querySelector<HTMLElement>("[data-invite-msg]"));
-  }, [msg]);
+    if (msgNow) bringInView(document.querySelector<HTMLElement>("[data-invite-msg]"));
+  }, [msgNow]);
   useEffect(() => {
     if (!boxOpen) return;
     // At once when the ticks change, then every 15 s as profiles change.
@@ -222,7 +225,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       if (r.testers) applyRows(r.testers);
       if (!r.lines.length) {
         setConfirm(null);
-        setMsg("Everyone you ticked now meets this test's needs. Press Invite to send.");
+        setMsg(EVERYONE_MEETS);
       } else
         setConfirm((c) => {
           if (c && JSON.stringify(r.lines) !== JSON.stringify(c.filter(isMissingNeedLine))) {
@@ -353,7 +356,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         </p>
       )}
       <MistakeList press="Invite" shown={none} />
-      {msg && <p className="info" data-invite-msg="">{msg}</p>}
+      {msgNow && <p className="info" data-invite-msg="">{msgNow}</p>}
       {at !== "anyway" && <ChangesBox changes={changes} error={error} />}
       {confirm && (
         <div className="info space-y-2" data-invite-anyway="">

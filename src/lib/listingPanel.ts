@@ -12,13 +12,13 @@ import { qRequired, qText } from "@/lib/questions";
  * Save that changed only the access keys keeps one with no fields. Read only by the developer's Listing panel: never a line anywhere (no live box, bell or timeline).
  */
 export const LISTING_SAVED = "listing_saved";
-export type SavedValues = { fields: string[]; before: Record<string, unknown>; after: Record<string, unknown> };
+export type SavedValues = { fields: string[]; before: Record<string, unknown>; after: Record<string, unknown>; /** (Batch 35 §17) the Save changed the access keys too */ keys?: boolean };
 export const savedText = (v: SavedValues) => JSON.stringify(v);
 export function parseSaved(text: string): SavedValues | null {
   try {
     const v = JSON.parse(text) as Partial<SavedValues>;
     if (!v || !Array.isArray(v.fields) || !v.before || typeof v.before !== "object" || !v.after || typeof v.after !== "object") return null;
-    return { fields: v.fields.filter((f): f is string => typeof f === "string"), before: v.before, after: v.after };
+    return { fields: v.fields.filter((f): f is string => typeof f === "string"), before: v.before, after: v.after, ...(v.keys === true ? { keys: true } : {}) };
   } catch {
     return null;
   }
