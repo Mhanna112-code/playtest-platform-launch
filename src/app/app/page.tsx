@@ -48,7 +48,6 @@ import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
 import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
 import { GetStarted } from "./GetStarted";
-import { OnceNote } from "@/components/OnceNote";
 
 export const metadata = { title: "Home · Playtest" };
 import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
@@ -129,7 +128,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       {/* (Batch 15 section 16) The side in use: its own reinstatement. */}
       {(() => {
         const back = side === "tester" ? (!u.testerSuspendedAt ? u.testerReinstatedAt : null) : !u.devSuspendedAt ? u.devReinstatedAt : null;
-        return back && now.getTime() - back.getTime() < 3 * DAY ? <OnceNote id={`reinstated:${u.id}:${side}:${back.getTime()}`} className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2">Your {u.isDeveloper && u.isTester ? `${side === "tester" ? "tester" : "developer"} account` : "account"} is active again · {fmtDateTime(back)}</OnceNote> : null;
+        return back && now.getTime() - back.getTime() < 3 * DAY ? <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your {u.isDeveloper && u.isTester ? `${side === "tester" ? "tester" : "developer"} account` : "account"} is active again · {fmtDateTime(back)}</p> : null;
       })()}
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>

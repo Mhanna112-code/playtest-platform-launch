@@ -660,3 +660,5 @@ Next round, End early and Stop the test share one press state on the test page; 
 named "Your Stop the test didn't go through". Now each top press is its own: its box shows only under its own button and is named after it ("Your End early didn't
 go through." under End their work now), another press's box never counts as this press's first stop, and opening another top button (Next round, End early,
 Stop the test) clears the earlier box: one box at a time.
+
+- The dashboard's "Your developer account is active again · <time>" keeps showing for 3 days, as before (owner, Oct 31).
