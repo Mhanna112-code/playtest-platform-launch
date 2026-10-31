@@ -1,4 +1,5 @@
 "use client";
+import { useFinished } from "@/lib/usePress";
 import { useEffect, useRef, useState } from "react";
 import { Check, X } from "lucide-react";
 import { Err } from "@/components/Err";
@@ -37,14 +38,15 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<{ stripe: StripeJs; elements: Elements; setupIntentId: string } | null>(null);
-  const [done, setDone] = useState("");
+  // (Batch 35 §40, §41) Verified: the page redraws in place (the step ticks); until it has, the button stays greyed with "Card verified.".
+  const fin = useFinished(() => setForm(null));
+  const done = fin.line || (fin.done ? " " : "");
   // (Batch 17 §11) The bank's check (3D Secure) opens inline, under the button; with the fake Stripe, the clearly-marked stand-in.
   const bank = useBankCheck();
   const finish = (setupIntent: string) => (simulate?: Simulate) => api<{ verified: boolean }>("/api/payments/verify-card", { finish: true, setupIntent, ...(simulate ? { simulate } : {}) });
   const check = async (setupIntent: string, checkUrl: string | null, simulated: boolean) => {
     await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent));
-    setDone("Card verified.");
-    setTimeout(() => window.location.reload(), 1200);
+    fin.finish("Card verified.");
   };
   const mount = useRef<HTMLDivElement>(null);
   // (Batch 28 §19) Stripe's card form is mounted once its box is on the page (after the SetupIntent arrived), and "Verify this card" waits until the form is ready: a
@@ -75,7 +77,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
         return;
       }
       if (r.simulated) {
-        window.location.reload();
+        fin.finish();
         return;
       }
       if (!r.publishableKey || !r.clientSecret) throw new Error("Card verification isn't set up yet. Contact us in Settings.");
@@ -104,8 +106,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
         try { await check(r.setupIntentId, r.checkUrl, false); } catch (e) { setForm(null); throw e; }
       } else {
         await finish(r.setupIntentId)();
-        setDone("Card verified.");
-        setTimeout(() => window.location.reload(), 1200);
+        fin.finish("Card verified.");
       }
     } catch (e) {
       setErr(errOf(e));
@@ -133,7 +134,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
         </div>
       )}
       {bank.view}
-      {done && <p className="ok" data-card-verified="">{done}</p>}
+      {fin.line && <p className="ok" data-card-verified="">{fin.line}</p>}
       <Err text={err} />
     </div>
   );

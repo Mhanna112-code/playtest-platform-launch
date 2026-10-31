@@ -359,3 +359,49 @@ the developer changes the questions (and the tester switches to them), answers t
   (added through the old box, or whose marker was deleted from the text) still go with every Send, so they are listed under the answers: "Files not in an
   answer (they go with your answers when you send them):" with each file's name, size and ×. That line replaces the box's "goes with your answers when you
   send them" note; it shows only when there is such a file.
+
+## §40 Keep your place after a press (owner, Oct 31)
+- Before: on the tester's session page (Send on a recording, uploading a recording or a file, Remove, Send for written answers, call requests, Charge, …) and on
+  the developer's test page (Pay, call presses, Accept / Decline, Invite, …) a press that went through reloaded the whole page; with a "#…" in the address (a
+  bell line, an email link, See it) the reload jumped there ("Your parts"), away from the part pressed in.
+- Now a press that goes through redraws the page in place: `finish` (src/lib/usePress.ts `useFinished`) runs the router's refresh, the same redraw as the page's
+  live poll (§37). The scroll stays where it was and the "#…" is never jumped to again. The same on the dashboard (No thanks, Dismiss, Cancel call), profiles
+  (Block, Unblock, Report, excerpts) and the payment boxes (Pay what you owe, Confirm with your bank, Verify a card).
+- Where a full reload is still needed it keeps its place: `reloadKeepingPlace` (src/lib/keepPlace.ts) drops the stale "#…" first, keeps the scroll for this tab
+  and HashJump puts it back once on the load that follows (only for the same address, within 15 s). Used by: Switch / Keep the new terms and See the new terms
+  (the page's parts are built on the terms), Withdraw on the join page and the Payments subscription buttons (pages that keep their load time), the admin
+  console's presses (its lists are read by the page itself), and the backstops (AutoRefresh's last-resort reload and its "This page has updates · Refresh",
+  ShellWatch, SessionWatch's empty-page check, a restriction that ended, a page shown again from the back/forward cache).
+- Unchanged: SessionWatch's side switch from another tab (the page moves to the other side) and a restriction that just began on the dashboard (to its top).
+- Invite no longer sets "#invite" before redrawing. After the redraw a box that stays on the page starts empty (a Pay more, End early's ticks and reasons, the
+  call request forms' clash checks use the new rows).
+
+## §41 A finished press stays finished (owner, Oct 31)
+- Before: Pay more showed "Done" and then, for about a second before the reload, a live-looking Pay more again (the button enabled, the amount still typed).
+- Now one helper for every press (`useFinished`, also inside `usePress`, so every usePress panel's buttons stay busy): from the moment the press went through
+  until the page has redrawn, the pressed box's button stays greyed and disabled, its inputs (amount, note, ticks) are hidden and only the result line shows
+  (PressDone, green). The line shows at least 0.9 s; the box lets go once the redraw has landed (the router refresh's transition is over). Then a box that's
+  still there is empty and live again: Pay more appearing empty after the refresh is right (you can pay more again).
+- The lines: Pay "Paid $10.00 to <name>." / Pay more "Paid $10.00 more to <name>." (and the existing "Paid $0.", "Closed at $0.", "Recorded …"); Charge "Charged
+  <name> $5.00." / "You let it go."; "Your dispute is sent to the team."; Add your side "Your side is sent to the team."; Rate "Rated <name> 4 of 5.";
+  Accept / Decline "Accepted <name>." / "Declined <name>."; Cancel invite "Cancelled <name>'s invite."; Invite keeps its own line; "Sent your answers." /
+  "Sent your updated answers."; "Sent your recording(s)."; "Uploaded."; "Removed."; Request a time "Request sent."; "You left this test."; Switch / Keep
+  "Switched to the new terms." / "Kept your current terms."; Pay what you owe and Confirm with your bank and Verify a card keep theirs.
+- The admin console: Decide, Suspend, Delete account, Pause, Stop, Extend, close-out, Reinstate and the other AdminButton presses, and Approve on a hold lift,
+  hide their boxes and keep the button greyed with "Done." / "Approved." until the console has loaded again (keeping its place).
+- Tests: tests/batch35-after-press.test.ts.
+
+## §42 Recordings can be scrubbed (owner, Oct 31)
+- Before: dragging a recording's time bar (playing or paused) snapped back. Two causes: a WebM recorded in the browser (MediaRecorder, ScreenRecorder) has no
+  Duration in its header, and the local file route served the whole file every time, with no byte ranges.
+- The recorder now writes the recording's length (from the recorder's start to its stop) into the file's Segment Info (the EBML Duration element) before the
+  preview and the upload (src/lib/webmDuration.ts, no new dependency): only the file's first bytes are patched (the Info and, when it has one, the Segment's size),
+  the rest of the Blob is kept as it is. A file it doesn't recognise (not a WebM, a SeekHead whose positions would move) goes as it was; a Duration already set
+  is kept. No Cues are written: with the Duration and byte ranges the browser seeks (checked in headless Edge/Chromium on a 40 s, 47 MB MediaRecorder WebM
+  through this route: seeks to 30 s and 5 s paused and to 35 s while playing land there, seekable 0-40 s, each jump a 206; with the old whole-file route the
+  same file snapped back to 0).
+- The local file route (src/app/api/recordings/[id]/file/route.ts) answers "Range: bytes=…" (one range: "a-b", "a-", "-n", clamped to the file) with 206 Partial
+  Content, Content-Range and that range's length; a range outside the file gets 416 with "bytes */<size>"; several ranges or another unit get the whole file
+  (200). Every answer says Accept-Ranges: bytes. Who may watch is unchanged. R2's presigned URLs already answer ranges.
+- Recordings uploaded before this keep their missing Duration (nothing is rewritten on the server): the player still shows no length for them, though the
+  route now answers their ranges too.

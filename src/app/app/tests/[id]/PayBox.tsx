@@ -12,6 +12,7 @@ import { MIN_CHARGE_CENTS, NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_
 import { amountFromRate, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { LIMITS } from "@/lib/limits";
+import { PressDone } from "@/components/PressDone";
 
 /** What can still be paid on this piece (pieceRoom on the server). */
 export type PayRoom = { roomCents: number; aboveRoomCents: number; ceilingBinds: boolean; /** (batch 29 §38) the piece's max in all */ totalCapCents?: number };
@@ -28,6 +29,8 @@ export type PayRoom = { roomCents: number; aboveRoomCents: number; ceilingBinds:
  *   - Every amount above $0 needs the tick that names it, and over $200 also "I confirm this payment is over $200." A changed amount unticks both.
  * After a piece is paid, the tester row keeps the same box as "Pay more" (`more`: no rate, the amount starts empty) until its cap is reached.
  * (Batch 16 section 10) Each mistake is red at its box (the server's line goes to the box whose data-match fits it) and listed under the button.
+ * (Owner, Oct 31, batch 35 §41) Once a Pay or Pay more goes through, the box keeps only its greyed button and the result line ("Paid $10.00 more to <name>.")
+ * until the page has redrawn in place (§40); then a Pay more that's still there is empty, ready to pay more again.
  */
 export function PayBox(p: {
   kind: "submission" | "call"; id: string; name: string; listingCents: number | null; listingText: string; paidSoFarCents: number; seenAt: string; note?: string; owes?: boolean;
@@ -46,8 +49,8 @@ export function PayBox(p: {
   const [reason, setReason] = useState("");
   const [ticked, setTicked] = useState(false);
   const [over200, setOver200] = useState(false);
-  const { press, changes, error, busy, at } = usePress(p.seenAt);
-  const [done, setDone] = useState("");
+  // (Batch 35 §41) The redraw after a payment landed: a Pay more still here starts empty again (a new attempt, a new key).
+  const { press, changes, error, busy, at, done, doneLine, finish } = usePress(p.seenAt, undefined, { onFresh: () => { emptyBox(); setPayKey(newPressId()); } });
   const [bankErr, setBankErr] = useState("");
   // (Batch 17 §11) The bank's check opens inline, under the button; the button stays disabled while it is open.
   const bank = useBankCheck();
@@ -67,6 +70,7 @@ export function PayBox(p: {
     setTicked(false);
     setOver200(false);
   };
+  const emptyBox = useSaved;
   // (Batch 19 section 5) One key per attempt: a double press of it charges once; a press that didn't go through (the bank's check cancelled or failed, or a refusal)
   // frees it, and the next Pay is a new attempt with a new key.
   const [payKey, setPayKey] = useState(newPressId);
@@ -120,8 +124,7 @@ export function PayBox(p: {
       try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); setPayKey(newPressId()); return; }
     }
     await keep.clear();
-    setDone(res.status === "closed" ? "Closed at $0." : res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : `Paid ${money(res.amountCents)}.`);
-    setTimeout(() => window.location.reload(), 900);
+    finish(res.status === "closed" ? "Closed at $0." : res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : more ? `Paid ${money(res.amountCents)} more to ${p.name}.` : `Paid ${money(res.amountCents)} to ${p.name}.`);
   }
 
   return (
@@ -132,6 +135,7 @@ export function PayBox(p: {
         {!more && <> · You&apos;ve paid {p.name} {money(p.paidSoFarCents)} so far on this test.</>}
       </p>
       {p.warning && <p className="text-xs text-amber-200" data-calls-warning="">{p.warning}</p>}
+      {!done && <>
       <div className="flex flex-wrap items-end gap-2">
         {isCall && (
           <div>
@@ -155,30 +159,31 @@ export function PayBox(p: {
         {reasonMissing && <p className="err-field" data-reason-needed="">{cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`}</p>}
         {keep.restored && (reason !== "" || amount !== startAmount || rate !== startRate) && <DraftTag kind="discard" onUseSaved={useSaved} /> /* (batch 35 §39) nothing saved: Discard (the amount back to its start, the note emptied, the ticks off) */}
       </div>
+      </>}
       <div className="flex flex-wrap items-center gap-2">
-        {cents != null && cents > 0 && (
+        {!done && cents != null && cents > 0 && (
           <label className="flex max-w-sm items-start gap-2 text-sm text-ink-200" data-pay-tick="">
             <input type="checkbox" id={`tick-${p.id}`} className="mt-1" data-match="^Tick “I understand" checked={ticked} onChange={(e) => setTicked(e.target.checked)} /> {PAY_TICK_LINE(cents)}
           </label>
         )}
-        {over && (
+        {!done && over && (
           <label className="flex max-w-xs items-start gap-2 text-sm text-ink-200" data-over-tick="">
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
         <button className="btn-green" disabled={busy || bank.open || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
-        {p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
-        <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>
+        {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
+        {!done && <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>}
       </div>
       {bank.view}
+      <PressDone line={doneLine} />
       {at === "pay" && <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} press={`${more ? "Pay more" : "Pay"} on ${p.name}'s ${p.kind === "call" ? "call" : /recording/.test(p.listingText) ? "recording" : "written answers"}`} />}
       <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={more ? "Pay more" : "Pay"} />
       {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}
-      {!more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
-      {more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this update (a note is optional).</p>}
-      {p.note && <p className="note">{p.note}</p>}
+      {!done && !more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
+      {!done && more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this update (a note is optional).</p>}
+      {!done && p.note && <p className="note">{p.note}</p>}
       {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
-      {done && <p className="ok">{done}</p>}
     </div>
   );
 }

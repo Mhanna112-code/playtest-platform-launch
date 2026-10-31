@@ -10,11 +10,18 @@ import { QuestionList } from "@/components/QuestionList";
 import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { api, errOf } from "@/lib/client";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
+import { useFinished } from "@/lib/usePress";
+import { reloadKeepingPlace } from "@/lib/keepPlace";
+import { PressDone } from "@/components/PressDone";
 
 /** (Batch 35 §29) An offered question as the lists show it: its text, and whether it's required (a small tag). */
 type OfferQuestion = { text: string; required?: boolean };
 
-/** New terms offered (Switch / Keep). Its stop-once box and refusals show directly under these buttons. */
+/**
+ * New terms offered (Switch / Keep). Its stop-once box and refusals show directly under these buttons.
+ * (Batch 35 §40, §41) Switch / Keep change the terms every part of the page is built on, so the page loads again, keeping its place (a "#…" in the address is
+ * dropped first); until then both buttons stay greyed with the result line.
+ */
 export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; questions?: OfferQuestion[]; fromQuestions?: OfferQuestion[]; answers?: string[]; switchNote?: string } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
@@ -26,6 +33,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [err, setErr] = useState("");
+  const fin = useFinished();
   useEffect(() => {
     const on = (e: Event) => setBox((e as CustomEvent).detail as StopBox);
     window.addEventListener("tester-top", on);
@@ -56,12 +64,12 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     return box ? (
       <div className="space-y-2">
         <ChangesBox side="tester" changes={box.changes} tail={box.tail} />
-        <button className="btn-ghost" onClick={() => window.location.reload()}>See the new terms</button>
+        <button className="btn-ghost" onClick={() => reloadKeepingPlace()}>See the new terms</button>
       </div>
     ) : null;
   const decide = (choice: string) =>
     api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed, boxAt })
-      .then(() => window.location.reload())
+      .then(() => { setBox(null); fin.finish(choice === "switch" ? "Switched to the new terms." : "Kept your current terms.", { reload: true }); })
       .catch((e) => {
         const sb = stopBox(e);
         if (sb) {
@@ -98,9 +106,10 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         </details>
       )}
       <div className="flex flex-wrap gap-2">
-        <button className="btn" onClick={() => decide("switch")}>Switch to the new terms</button>
-        <button className="btn-ghost" onClick={() => decide("keep")}>Keep my current terms</button>
+        <button className="btn" disabled={fin.done} onClick={() => decide("switch")}>Switch to the new terms</button>
+        <button className="btn-ghost" disabled={fin.done} onClick={() => decide("keep")}>Keep my current terms</button>
       </div>
+      <PressDone line={fin.line} />
       <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
       <Err text={err} />
     </div>

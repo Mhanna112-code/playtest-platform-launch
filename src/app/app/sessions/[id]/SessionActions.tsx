@@ -20,6 +20,8 @@ import { uploadToSession } from "@/lib/upload";
 import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { fileSize } from "@/lib/format";
+import { useFinished } from "@/lib/usePress";
+import { PressDone } from "@/components/PressDone";
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
 function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[] }) {
@@ -116,6 +118,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   }, [JSON.stringify(initial), initialNotes]);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // (Batch 35 §40, §41) Sent: the page redraws in place (the scroll stays at the answers); until it has, Send stays greyed with its line under it.
+  const fin = useFinished(() => { setBusy(false); setBox(null); setBoxAt(""); });
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Draft" (batch 35 §8: after signing in, with "Use saved": the saved answers, or empty).
   const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
   // The draft says which questions it was typed for: after a switch to changed questions, an answer never lands under a different question.
@@ -159,7 +163,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       setMissingAt(null);
       await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt });
       await keep.clear();
-      window.location.reload();
+      fin.finish(update ? "Sent your updated answers." : "Sent your answers.");
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
       else {
@@ -210,10 +214,11 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</button>}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <button type="button" className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" onClick={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</button>}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
+      <PressDone line={fin.line} />
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg?.ok && <p className="ok">{msg.text}</p>}
     </form>
@@ -224,9 +229,10 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
+  const fin = useFinished();
   const leave = () =>
     api(`/api/sessions/${sessionId}/leave`, { seenAt, confirmed })
-      .then(() => window.location.reload())
+      .then(() => { setBox(null); fin.finish("You left this test."); })
       .catch((e) => {
         const sb = stopBox(e);
         if (sb) {
@@ -236,7 +242,7 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
       });
   return (
     <div className="space-y-2">
-      <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title={`Are you sure you want to leave “${title}”?`} confirmLabel="Leave this test" onConfirm={leave}
+      <ConfirmButton live disabled={fin.done} className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title={`Are you sure you want to leave “${title}”?`} confirmLabel="Leave this test" onConfirm={leave}
         body={(
           <ul className="list-disc space-y-1 pl-5">
             <li>What you already sent is still reviewed and paid as usual.</li>
@@ -246,6 +252,7 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
         )}>
         Leave this test
       </ConfirmButton>
+      <PressDone line={fin.line} />
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
       <Err text={err ? refusalLine("Leave", err) : ""} />
     </div>
@@ -261,15 +268,19 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // (Batch 35 §41) Sent: the box and its lines go, Send the dispute stays greyed with its line until the page has redrawn (then the dispute shows on the page).
+  const fin = useFinished(() => { setBusy(false); setReason(""); setBox(null); setBoxAt(""); });
   const keep = useKept(`dispute:${kind}:${id}`, { reason }, reason === "", (v) => setReason(v.reason ?? ""));
   // The full app's fold (no separate mode): "Dispute the pay" opens the form in place.
   return (
     <details className="space-y-2" data-mistakes-root="">
       <summary className="cursor-pointer text-sm text-volt-300">Dispute the pay</summary>
+      {!fin.done && <>
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
       <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-required="" data-required-msg="Say why you think the pay should be higher (at least a sentence)." data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." data-match="pay should be higher" value={reason} onChange={(e) => setReason(e.target.value)} />
       <p className="text-xs text-slate-500">10–2,000 characters</p>
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, {limit}.</p>
+      </>}
       <button
         className="btn"
         disabled={busy || !!disabledNote}
@@ -280,7 +291,9 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
           try {
             await api(`/api/sessions/${sessionId}/dispute`, { kind, id, reason, seenAt, confirmed, boxAt });
             await keep.clear();
-            window.location.reload();
+            setBox(null);
+            setReason(""); // sent: nothing left to discard
+            fin.finish("Your dispute is sent to the team.");
           } catch (e) {
             const sb = stopBox(e);
             if (sb) {
@@ -293,7 +306,8 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       >
         Send the dispute
       </button>
-      {disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
+      <PressDone line={fin.line} />
+      {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && reason !== "" && <DraftTag kind="discard" onUseSaved={() => setReason("")} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <FormMistakes text={err} press="Send the dispute" />

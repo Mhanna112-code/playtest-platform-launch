@@ -104,7 +104,7 @@ describe("batch 17 §11: the bank's check opens inline, under the button", () =>
     expect(real).toContain(`<iframe src="${CHECK_URL.replace(/&/g, "&amp;")}" title="Your bank&#x27;s check"`);
     expect(real).toContain(">Cancel</button>");
     // Under the button that was pressed: Pay / Pay more, Pay what you owe, Subscribe (PressButton) and Verify a card each render the check right after their button.
-    expect(src("app/app/tests/[id]/PayBox.tsx")).toMatch(/at least \$0\.50 \(or 0\)<\/span>\s*<\/div>\s*\{bank\.view\}/);
+    expect(src("app/app/tests/[id]/PayBox.tsx")).toMatch(/at least \$0\.50 \(or 0\)<\/span>\}?\s*<\/div>\s*\{bank\.view\}/); // (batch 35 §41: hidden while a finished press waits for the redraw)
     expect(src("components/OwedBox.tsx")).toMatch(/<\/button>\}\s*\{bank\.view\}/);
     expect(src("components/PressButton.tsx")).toMatch(/<\/button>\s*\{bank\.view\}/);
     expect(src("components/ChargebackSteps.tsx")).toContain("{bank.view}");

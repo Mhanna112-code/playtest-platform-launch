@@ -1,4 +1,5 @@
 "use client";
+import { reloadKeepingPlace } from "@/lib/keepPlace";
 import { useEffect, useRef } from "react";
 import { setPageUser, toLogin } from "@/lib/client";
 import { usePathname } from "next/navigation";
@@ -125,7 +126,7 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
       if (!alive) return;
       // (Owner, Oct 28) Backstop: a signed-in page whose main column came back empty (a redirect that landed in the middle of a refresh) is loaded again from the server.
       if (/^\/app/.test(pathRef.current) && s.state === "ok" && !document.querySelector("main")?.children.length) {
-        window.location.reload();
+        reloadKeepingPlace(); // (batch 35 §40) back at the same place, never at a stale "#…"
         return;
       }
       // (Batch 29 §28) The bell's number, live on every page.
@@ -161,7 +162,7 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
               window.scrollTo({ top: 0 });
               window.location.reload();
             } else window.location.replace("/app");
-          } else window.location.reload();
+          } else reloadKeepingPlace(); // (batch 35 §40) a restriction ended: the page comes back where it was
         }
       }
     };
@@ -173,7 +174,7 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
     const onShow = (e: PageTransitionEvent) => {
       if (e.persisted) {
         void check();
-        window.location.reload();
+        reloadKeepingPlace();
       }
     };
     // (Batch 29 §28) The tab coming back into focus checks at once (the bell's number too); so does a line opened on the Notifications page.

@@ -11,8 +11,13 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { NOTHING_CHANGED_LINE } from "@/lib/rules";
 import { fileSize } from "@/lib/format";
+import { useFinished } from "@/lib/usePress";
+import { PressDone } from "@/components/PressDone";
 
 type Rec = { id: string; filename: string; size: number; uploaded: boolean; sent?: boolean };
+
+/** (Batch 35 §41) Send's result line shows under Send; an upload's under the upload box. */
+const sending = (line: string) => line.startsWith("Sent ");
 
 const clock = (s: number) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "");
 
@@ -20,6 +25,8 @@ const clock = (s: number) => (Number.isFinite(s) ? `${Math.floor(s / 60)}:${Stri
 function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; canRemove: boolean }) {
   const [length, setLength] = useState("");
   const [err, setErr] = useState("");
+  // (Batch 35 §40, §41) Removed: the page redraws in place (the row goes); until then Remove stays greyed with its line.
+  const fin = useFinished();
   return (
     <li className="space-y-1 rounded-lg border border-white/[0.08] p-2" data-recording-row={r.id}>
       <video controls preload="metadata" className="max-h-56 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} onLoadedMetadata={(e) => setLength(clock(e.currentTarget.duration))} />
@@ -27,12 +34,13 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
         <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer" className="min-w-0 break-all">{r.filename}</a>
         <span className="text-xs text-slate-500">{length && `${length} · `}{fileSize(r.size)}{r.sent ? " · sent" : " · not sent yet"}</span>
         {canRemove && (
-          <ConfirmButton className="btn-ghost ml-auto !px-2 !py-0.5 text-xs" title="Remove this recording?" confirmLabel="Remove" body={<p>{r.sent ? "It stays with what you sent until you send again; then it's left out. Its slot is free at once." : "It's deleted and its slot is free again."}</p>}
-            onConfirm={() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: r.id }).then(() => window.location.reload()).catch((e) => setErr(errOf(e)))}>
+          <ConfirmButton disabled={fin.done} className="btn-ghost ml-auto !px-2 !py-0.5 text-xs" title="Remove this recording?" confirmLabel="Remove" body={<p>{r.sent ? "It stays with what you sent until you send again; then it's left out. Its slot is free at once." : "It's deleted and its slot is free again."}</p>}
+            onConfirm={() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: r.id }).then(() => fin.finish("Removed.")).catch((e) => setErr(errOf(e)))}>
             Remove
           </ConfirmButton>
         )}
       </p>
+      <PressDone line={fin.line} />
       <Err text={err} />
     </li>
   );
@@ -41,6 +49,8 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
 /**
  * Upload up to 5 screen recordings (500 MB each), then send them. (Owner, Oct 29, batch 13 section 7) Send sends them all together as ONE piece of work; until it's paid
  * (or rejected) recordings can be removed or added and sent again.
+ * (Owner, Oct 31, batch 35 §40, §41) An upload, a recording made here, Remove and Send redraw the page in place (the scroll stays at this part, a "#…" in the
+ * address is never jumped to); until the redraw has landed the pressed button stays greyed with its line.
  */
 export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true, removedSince = false, lines = [] }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean; /** (Batch 20 section 26) a sent recording removed since */ removedSince?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
@@ -50,6 +60,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   const [progress, setProgress] = useState<number | null>(null);
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const fin = useFinished(() => { setBusy(false); setProgress(null); setBox(null); setBoxAt(""); });
   const uploaded = recordings.filter((r) => r.uploaded);
   // (Owner, Oct 28, batch 20 section 26) Sent and nothing added or removed since: the updated Send waits.
   const unchanged = sentBefore && uploaded.every((r) => r.sent) && !removedSince;
@@ -60,7 +71,8 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
     setBusy(true);
     try {
       await uploadToSession(sessionId, file, file.name, "recording", setProgress);
-      window.location.reload();
+      setProgress(null);
+      fin.finish("Uploaded.");
     } catch (e) {
       setErr(errOf(e));
       setBusy(false);
@@ -79,7 +91,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       {canSend && uploaded.length < 5 && (
         <>
           {/* (Batch 11) Record in the page, or upload a file. */}
-          <ScreenRecorder sessionId={sessionId} part="recording" />
+          <ScreenRecorder sessionId={sessionId} part="recording" disabled={busy} />
           <label className="block text-sm">
             <span className="label">Or upload a recording (video, up to 500 MB; 5 at most)</span>
             <input type="file" id={`recording-file-${sessionId}`} accept="video/*" disabled={busy} data-match="video file|500 MB|file is empty|upload a recording first" onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ""; /* (batch 31 section 2) the same file can be picked again to retry */ if (f) upload(f); }} />
@@ -87,6 +99,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
         </>
       )}
       {progress != null && <p className="note">Uploading… {progress}%</p>}
+      {fin.done && !sending(fin.line) && <PressDone line={fin.line} />}
       {canSend && sendable && uploaded.length > 0 && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
       {canSend && sendable && uploaded.length > 0 && (
         <button
@@ -100,7 +113,8 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             setErr("");
             try {
               await api(`/api/sessions/${sessionId}/recording-send`, { seenAt, confirmed, boxAt });
-              window.location.reload();
+              setBox(null);
+              fin.finish(sentBefore ? `Sent your updated recording${uploaded.length === 1 ? "" : "s"}.` : `Sent your recording${uploaded.length === 1 ? "" : "s"}.`);
             } catch (e) {
               const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
               else setErr(errOf(e));
@@ -111,6 +125,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
           {sentBefore ? `Send my updated recording${uploaded.length === 1 ? "" : "s"}` : `Send my recording${uploaded.length === 1 ? "" : "s"}`}
         </button>
       )}
+      {sending(fin.line) && <PressDone line={fin.line} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {/* (Batch 16 section 10) A file mistake is red at the file box, and listed here. */}
       <FormMistakes text={err} press={sentBefore ? "Send my updated recording" : "Send my recording"} />

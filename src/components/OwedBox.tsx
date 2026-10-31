@@ -1,6 +1,7 @@
 "use client";
 import { Err } from "@/components/Err";
 import { useState } from "react";
+import { useFinished } from "@/lib/usePress";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError, errOf } from "@/lib/client";
 import { mergeChanges } from "@/lib/live";
@@ -24,7 +25,9 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [changes, setChanges] = useState<Change[] | null>(null);
-  const [done, setDone] = useState("");
+  // (Batch 35 §40, §41) Paid: the page redraws in place; until it has, the button stays greyed with the result line.
+  const fin = useFinished(() => setBusy(false));
+  const done = fin.line;
   const [bankNote, setBankNote] = useState("");
   // (Batch 17 §11) The bank's check opens inline, under Pay what you owe (one after another when several need it).
   const bank = useBankCheck();
@@ -80,20 +83,19 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
               setFailing(r.stillFailing);
               setBusy(false);
             } else {
-              setDone(chargeback ? reservedLine(changes ? total : seenTotal) : `Paid ${money(total)}, thank you`);
-              setTimeout(() => window.location.reload(), 1500);
+              fin.finish(chargeback ? reservedLine(changes ? total : seenTotal) : `Paid ${money(total)}, thank you`);
             }
           } catch (e) {
             if (e instanceof ApiError && e.code === "nothing_owed") {
-              // Paid meanwhile (another tab): nothing is charged; the page reloads without the box.
+              // Paid meanwhile (another tab): nothing is charged; the page redraws without the box.
               setErr(errOf(e));
-              setTimeout(() => window.location.reload(), 1500);
+              fin.finish();
             } else if (e instanceof ApiError && e.code === "stop_once") {
               setChanges((c) => (c ? mergeChanges(c, e.data.changes as Change[]) : (e.data.changes as Change[])));
               if (typeof e.data.totalCents === "number") setTotal(e.data.totalCents);
               if (Array.isArray(e.data.ids)) setShownIds(e.data.ids as string[]);
             } else setErr(errOf(e));
-            setBusy(false);
+            if (!(e instanceof ApiError && e.code === "nothing_owed")) setBusy(false);
           }
         }}
       >

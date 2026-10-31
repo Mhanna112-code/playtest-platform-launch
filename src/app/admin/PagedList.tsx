@@ -15,6 +15,8 @@ import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { adminDraftKey } from "@/lib/keptText";
 import { usePauseDraftGoes } from "./TestActions";
+import { useFinished } from "@/lib/usePress";
+import { PressDone } from "@/components/PressDone";
 
 type AnyRow = ContactVM | DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
 /** (Owner, Oct 30, batch 34 §1) A row's page time (when the server read it): its buttons send it, so a press on a row older than another admin's change stops once. */
@@ -30,15 +32,18 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const stop = useAdminStop(); // (batch 34 §1) another admin suspended the developer since the row was read: stops once
+  const fin = useFinished(); // (batch 35 §41) approved: the note goes and Approve stays greyed with "Approved." until the console has loaded again
   return (
     // (Batch 35 §36) As Suspend's box: the note the panel's full width, Approve below it.
     <div className="flex w-full flex-col items-start gap-2" data-admin-box="stacked">
+      {!fin.done && <>
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
       <input id={`lift-note-${id}`} className="input w-full max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
       {keep.restored && note !== "" && <DraftTag kind="discard" onUseSaved={() => setNote("")} />}
+      </>}
       <button
         className="btn-ghost"
-        disabled={busy}
+        disabled={busy || fin.done}
         onClick={async () => {
           setBusy(true);
           setMsg(null);
@@ -46,8 +51,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
             await api("/api/admin/approve-hold", { id, note, ...(seen ? { since: seen } : {}), ...stop.marks() });
             await keep.clear();
             stop.clear();
-            setMsg({ ok: true, text: "Approved." });
-            setTimeout(() => window.location.reload(), 600);
+            fin.finish("Approved.", { reload: true });
           } catch (e) {
             if (!stop.caught(e)) {
               stop.clear();
@@ -61,6 +65,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
         Approve
       </button>
       {msg && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+      <PressDone line={fin.line} />
       <ChangesBox changes={stop.changes} press="Approve" heading={ADMIN_STOP_HEADING} />
     </div>
   );

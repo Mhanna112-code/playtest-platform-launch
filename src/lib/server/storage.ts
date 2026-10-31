@@ -138,8 +138,37 @@ export async function saveLocal(key: string, body: ReadableStream<Uint8Array> | 
   return size;
 }
 
-export async function readLocal(key: string) {
+/**
+ * (Owner, Oct 31, batch 35 §42) A byte range asked for with "Range: bytes=…" (one range: "a-b", "a-" or "-n"), clamped to the file. "none": no usable Range
+ * header (absent, another unit, several ranges): the whole file. "bad": nothing of the file is in it (416).
+ */
+export type ByteRange = { start: number; end: number } | "none" | "bad";
+export function parseRange(header: string | null, size: number): ByteRange {
+  if (!header) return "none";
+  const m = /^\s*bytes\s*=\s*(\d*)\s*-\s*(\d*)\s*$/i.exec(header);
+  if (!m) return "none"; // another unit, or several ranges: the whole file (allowed by RFC 9110)
+  const [, a, b] = m;
+  if (!a && !b) return "none";
+  if (!a) {
+    const n = Number(b);
+    if (!n || !size) return "bad";
+    return { start: Math.max(0, size - n), end: size - 1 };
+  }
+  const start = Number(a);
+  if (start >= size) return "bad";
+  const end = b ? Math.min(Number(b), size - 1) : size - 1;
+  if (end < start) return "bad";
+  return { start, end };
+}
+
+/** Local disk: the file, or (batch 35 §42) only the bytes `start`–`end` of it (inclusive), as a stream; `size` is the whole file's. */
+export async function readLocal(key: string, range?: { start: number; end: number }) {
   const file = path.join(uploadDir(), key);
   const stat = await fs.stat(file);
-  return { stream: Readable.toWeb(createReadStream(file)) as ReadableStream, size: stat.size };
+  return { stream: Readable.toWeb(createReadStream(file, range ? { start: range.start, end: range.end } : undefined)) as ReadableStream, size: stat.size };
+}
+
+/** (Batch 35 §42) The file's size on local disk. */
+export async function localSize(key: string) {
+  return (await fs.stat(path.join(uploadDir(), key))).size;
 }

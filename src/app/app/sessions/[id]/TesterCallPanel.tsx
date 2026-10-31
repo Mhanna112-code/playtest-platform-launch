@@ -23,11 +23,11 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * loaded (box under the button).
  */
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
-  const { press, changes, error, busy, at } = usePress(p.seenAt);
+  const { press, changes, error, busy, at, finish } = usePress(p.seenAt);
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox side="tester" changes={changes} error={error} /></div> : null);
   async function go(action: string, body: Record<string, unknown>, key = action) {
     const r = await press(`/api/sessions/${p.sessionId}/${action}`, body, key);
-    if (r) window.location.reload();
+    if (r) finish(); // (batch 35 §40, §41) the page redraws in place; the buttons stay greyed until it has
   }
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const sets = p.sets ?? [];

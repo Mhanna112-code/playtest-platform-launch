@@ -1,4 +1,5 @@
 "use client";
+import { reloadKeepingPlace } from "@/lib/keepPlace";
 import Link from "next/link";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { NdaBox } from "@/components/NdaBox";
@@ -157,14 +158,16 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   }
 
   async function go(action: "join" | "apply" | "rejoin-ask" | "withdraw-application", anyway = false) {
+    let reloading = false;
     setBusy(true);
     setErr("");
     try {
       setSince([]);
       const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
       if (action !== "withdraw-application") await keep.clear(); // (batch 35 §10) Apply / Ask to rejoin / Join went through: the note's draft goes
-      if (r.sessionId) window.location.href = `/app/sessions/${r.sessionId}`;
-      else if (action === "withdraw-application") window.location.reload();
+      if (r.sessionId) { reloading = true; window.location.href = `/app/sessions/${r.sessionId}`; }
+      // (Batch 35 §40) This page keeps its load time (`seenAt`), so it loads again, keeping its place (a stale "#…" dropped first); the button stays busy until then.
+      else if (action === "withdraw-application") { reloading = true; reloadKeepingPlace(); }
       else setDone(action === "rejoin-ask" ? "Sent. You'll hear back when the developer answers." : "Application sent. You'll hear back when the developer answers.");
     } catch (e) {
       const sb = stopBox(e);
@@ -186,7 +189,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       else if (e instanceof ApiError && e.code === "invited") { setErr(e.message); router.refresh(); }
       else setErr(errOf(e));
     } finally {
-      setBusy(false);
+      if (!reloading) setBusy(false);
     }
   }
 

@@ -7,6 +7,8 @@ import { LIMITS } from "@/lib/limits";
 import { counterText, decideTickLabel, reasonTooLong } from "@/lib/rules";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { adminDraftKey } from "@/lib/keptText";
+import { useFinished } from "@/lib/usePress";
+import { PressDone } from "@/components/PressDone";
 
 const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
 
@@ -23,6 +25,7 @@ export const decideFromDraft = (d: Record<string, unknown>) => ({ total: typeof 
  * (Owner, Oct 30, batch 35 §11) The total and the note are a draft ("admin:decide:<id>", admins only): "Draft" after a reload; after a sign-in the total's "Use saved"
  * puts it back to blank (keep the pay as it is) and the note's "Discard" empties it. A restored raise needs the tick again (§1: the tick is never kept). Cleared when
  * Decide goes through; a stopped or refused Decide keeps it.
+ * (Owner, Oct 31, batch 35 §41) Decided: the total, the note and the tick are hidden and Decide stays greyed with "Done." until the console has loaded again.
  */
 export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", sideAt: sideAt0 = null, dev = "The developer" }: { id: string; minCents: number; maxCents: number; side?: string; sideAt?: string | null; dev?: string }) {
   const root = useRef<HTMLDivElement>(null);
@@ -43,6 +46,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
   const [note, setNote] = useState("");
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const fin = useFinished();
   // (Owner, Oct 30, batch 35 §1) A raise names what it charges in a tick next to Decide, for any amount; changing the amount unticks it.
   const typed = /^\s*\$?\d+(\.\d{1,2})?\s*$/.test(total) ? Math.round(parseFloat(total.replace("$", "")) * 100) : null;
   const extra = typed != null && typed > minCents && typed <= Math.max(minCents, maxCents) ? typed - minCents : 0;
@@ -57,6 +61,12 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
   return (
     <div ref={root} className="space-y-2" data-mistakes-root="">
       {side.text && <p data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}: “{side.text}”</p>}
+      {fin.done ? (
+        <div className="flex flex-wrap items-center gap-2" data-decide-done="">
+          <button className="btn-ghost" disabled>Decide</button>
+          <PressDone line={fin.line} />
+        </div>
+      ) : <>
       <div className="flex flex-wrap items-center gap-2">
         <label className="text-sm" htmlFor={`total-${id}`}>Total pay for this piece</label>
         <span>$</span>
@@ -85,8 +95,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
             try {
               await api("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
               await keep.clear();
-              setMsg({ ok: true, text: "Done." });
-              setTimeout(() => window.location.reload(), 600);
+              fin.finish("Done.", { reload: true });
             } catch (e) {
               if (e instanceof ApiError && e.code === "stop_once") {
                 setStopped(true);
@@ -108,6 +117,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
           <span>{decideTickLabel(dev, extra, typed!)}</span>
         </label>
       )}
+      </>}
       {/* (Batch 16 section 10) A mistake is red at its box and listed here. */}
       <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press="Decide" />
     </div>

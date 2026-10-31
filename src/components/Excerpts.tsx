@@ -1,4 +1,5 @@
 "use client";
+import { useFinished } from "@/lib/usePress";
 import { useState } from "react";
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -19,6 +20,8 @@ export function ExcerptPicker({ submissionId, choices }: { submissionId: string;
   const [text, setText] = useState((choices[0]?.text ?? "").slice(0, MAX));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // (Batch 35 §40, §41) A press that went through redraws the page in place; its button stays greyed until it has.
+  const fin = useFinished(() => setBusy(false));
   const pick = (i: number) => {
     setIndex(i);
     setText((choices.find((c) => c.index === i)?.text ?? "").slice(0, MAX));
@@ -29,7 +32,7 @@ export function ExcerptPicker({ submissionId, choices }: { submissionId: string;
     setErr("");
     try {
       await api("/api/excerpts", { action: "request", submissionId, index, text });
-      window.location.reload();
+      fin.finish();
     } catch (e) {
       setErr(errOf(e));
       setBusy(false);
@@ -70,12 +73,13 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [box, setBox] = useState<{ changes: Change[]; at: string } | null>(null);
+  const fin = useFinished(() => { setBusy(false); setBox(null); });
   const decide = async (decision: "allow" | "deny") => {
     setBusy(true);
     setErr("");
     try {
       await api("/api/excerpts", { action: "decide", excerptId, decision, ...(seenAt ? { seenAt } : {}), ...(box ? { confirmed: true, boxAt: box.at } : {}) });
-      window.location.reload();
+      fin.finish();
     } catch (e) {
       const stop = (e as { code?: string; data?: { changes?: Change[] } }).code === "stop_once" ? (e as { data: { changes?: Change[] } }).data.changes ?? [] : null;
       if (stop) setBox({ changes: stop, at: new Date().toISOString() });
@@ -99,10 +103,11 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
 export function ExcerptRemove({ excerptId }: { excerptId: string }) {
   const label = "Remove", body = "It leaves your profile at once.";
   const [err, setErr] = useState("");
+  const fin = useFinished();
   return (
     <span className="inline-flex flex-col gap-1">
-      <ConfirmButton className="btn-ghost !px-2 !py-0.5 text-xs" title={`${label} this excerpt?`} confirmLabel={label} body={<p>{body}</p>}
-        onConfirm={() => api("/api/excerpts", { action: "remove", excerptId }).then(() => window.location.reload()).catch((e) => setErr(errOf(e)))}>
+      <ConfirmButton disabled={fin.done} className="btn-ghost !px-2 !py-0.5 text-xs" title={`${label} this excerpt?`} confirmLabel={label} body={<p>{body}</p>}
+        onConfirm={() => api("/api/excerpts", { action: "remove", excerptId }).then(() => fin.finish()).catch((e) => setErr(errOf(e)))}>
         {label}
       </ConfirmButton>
       <Err text={err} />

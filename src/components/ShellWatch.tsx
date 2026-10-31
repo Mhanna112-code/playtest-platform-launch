@@ -1,4 +1,5 @@
 "use client";
+import { reloadKeepingPlace } from "@/lib/keepPlace";
 import { useEffect } from "react";
 import { usePathname } from "next/navigation";
 
@@ -23,7 +24,7 @@ export function ShellWatch() {
         } catch {
           // storage blocked: reload anyway
         }
-        if (recent.length < 3) window.location.reload();
+        if (recent.length < 3) reloadKeepingPlace(); // (batch 35 §40) back at the same place, never at a stale "#…"
       }
     }, 1500);
     return () => clearInterval(t);

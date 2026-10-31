@@ -3,6 +3,7 @@ import { SubscribersTag } from "@/components/SubscribeLink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ChangesBox } from "@/components/ChangesBox";
+import { PressDone } from "@/components/PressDone";
 import { MistakeList } from "@/components/FieldChecks";
 import { api } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
@@ -38,7 +39,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const router = useRouter();
   // (Batch 16 section 21) An invite from another tab for a ticked tester stops Invite once; the panel shows it at once (the row greys, "Invited <date>").
   // (Batch 32 §9) A stop carries what each ticked tester misses NOW: the Invite anyway box redraws to it, so the next Invite anyway goes through.
-  const { press, changes, setChanges, error, busy, setError, at, errData } = usePress(p.seenAt, (d) => {
+  const { press, changes, setChanges, error, busy, setError, at, errData, finish } = usePress(p.seenAt, (d) => {
     if (Array.isArray(d.lines) && d.lines.length) {
       setConfirm(d.lines.map(String));
       if (Array.isArray(d.items)) setGapItems(d.items as GapItem[]);
@@ -178,10 +179,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
       setConfirm(null);
       setMsg(r.message);
       setTicked([]);
-      setTimeout(() => {
-        window.location.hash = "invite";
-        window.location.reload();
-      }, 1500);
+      // (Batch 35 §40, §41) The page redraws in place (the scroll stays at Invite; no jump to "#invite"); Invite stays greyed until it has, the line stays after.
+      finish();
     }
   }
   // The server answers a missing need with "CONFIRM:<lines>": show it as the in-page confirm under Invite.
@@ -391,10 +390,10 @@ export function GapLinesBox({ lines, items }: { lines: string[]; items: GapItem[
 function CancelInviteButton({ testId, seenAt, row, needs }: { testId: string; seenAt: string; row: Sent; needs: Needs }) {
   const router = useRouter();
   const before = useRef(new Map<string, Needs>());
-  const { press, changes, setChanges, error, busy } = usePress(seenAt, () => router.refresh());
+  const { press, changes, setChanges, error, busy, doneLine, finish } = usePress(seenAt, () => router.refresh());
   useTesterChanges(setChanges, before, [{ id: row.testerId, name: row.name, seen: row.seen, changedAt: row.changedAt }], needs);
   return <><button className="btn-ghost" disabled={busy} onClick={async () => {
     before.current.set(row.testerId, row.seen);
-    if (await press(`/api/tests/${testId}/cancel-invite`, { inviteId: row.id, seenTesters: { [row.testerId]: row.seen } })) window.location.reload();
-  }}>Cancel invite</button><ChangesBox changes={changes} error={error} /></>;
+    if (await press(`/api/tests/${testId}/cancel-invite`, { inviteId: row.id, seenTesters: { [row.testerId]: row.seen } })) finish(`Cancelled ${row.name}'s invite.`);
+  }}>Cancel invite</button><ChangesBox changes={changes} error={error} /><PressDone line={doneLine} /></>;
 }

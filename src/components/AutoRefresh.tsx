@@ -6,6 +6,7 @@ import { bankCheckOpen } from "@/lib/bankConfirm";
 import { PRESS_REFUSED_EVENT } from "@/lib/client";
 import { publishIgnoredAlerts, publishTesterAlertsOff } from "@/lib/testerAlerts";
 import { LIVE_TICK, liveBeat, noteRedrawAsked, onBoxLines, rideLiveClock } from "@/lib/liveSync";
+import { reloadKeepingPlace } from "@/lib/keepPlace";
 
 /**
  * Keeps an open page current: polls a fingerprint every 20 s and refreshes the page's data when it changes (`refresh={false}`: only watches, e.g. on Edit, which must keep what was typed).
@@ -53,7 +54,7 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
           setTimeout(go, 5000);
           return;
         }
-        window.location.reload();
+        reloadKeepingPlace(); // (batch 35 §40) back at the same place, never at a stale "#…"
       };
       go();
     };
@@ -129,7 +130,7 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
   }, [query, router, refresh]);
   if (!waiting) return null;
   return (
-    <button type="button" className="fixed bottom-5 right-5 z-40 rounded-full border border-white/15 bg-slate-900/95 px-4 py-2 text-sm text-slate-200 shadow-xl" data-page-updates="" onClick={() => window.location.reload()}>
+    <button type="button" className="fixed bottom-5 right-5 z-40 rounded-full border border-white/15 bg-slate-900/95 px-4 py-2 text-sm text-slate-200 shadow-xl" data-page-updates="" onClick={() => reloadKeepingPlace()}>
       This page has updates · Refresh
     </button>
   );

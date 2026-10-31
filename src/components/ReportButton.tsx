@@ -1,4 +1,5 @@
 "use client";
+import { useFinished } from "@/lib/usePress";
 import { useState } from "react";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
@@ -13,6 +14,8 @@ export function ReportButton({ userId, name, reportedOn }: { userId: string; nam
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  // (Batch 35 §40, §41) Sent: the page redraws in place (then "You reported <name> on <date>."); the button stays greyed until it has.
+  const fin = useFinished(() => setBusy(false));
   if (reportedOn) return <p className="text-xs text-slate-400" data-reported="">You reported {name} on {reportedOn}.</p>;
   return (
     <div className="space-y-2" data-mistakes-root="">
@@ -33,7 +36,7 @@ export function ReportButton({ userId, name, reportedOn }: { userId: string; nam
                 setErr("");
                 try {
                   await api("/api/reports", { userId, note });
-                  window.location.reload();
+                  fin.finish();
                 } catch (e) {
                   setErr(errOf(e));
                   setBusy(false);

@@ -9,11 +9,14 @@ import { money, toCents } from "@/lib/format";
 import { CHARGE_TICK_CENTS, chargeTickLabel, letGoTickLabel } from "@/lib/rules";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
+import { PressDone } from "@/components/PressDone";
+import { useFinished } from "@/lib/usePress";
 
 /**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
  * part) or let it go. (Batch 16 section 39) Charge goes through on its own; above $200 it needs its tick. (Batch 32 §13) Let it go has its own tick instead of a pop-up. (Never shown when the part is paid in full.) (Batch 16 section 10) A mistake
  * is red at its box with the server's own line, and listed under the buttons.
+ * (Batch 35 §40, §41) Once it goes through, the page redraws in place (the scroll stays here); until it has, only the pressed button (greyed) and its line show.
  */
 export function ChoiceBox({ paused = false, sessionId, submissionId, callId, line, devName, cents, seenAt }: { paused?: boolean; sessionId: string; submissionId?: string; callId?: string; line: string; devName: string; cents: number; seenAt: string }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
@@ -22,6 +25,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
   const [box, setBox] = useStopBox();
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
+  const fin = useFinished(() => setBusy(false));
   const [ticked, setTicked] = useState(false);
   const [letGo, setLetGo] = useState(false);
   // (Batch 19 section 5) The stop box names the press that was made: "Your Let it go didn't go through." / "Your Charge didn't go through."
@@ -36,7 +40,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
     setBusy(true);
     setErr("");
     api(`/api/sessions/${sessionId}/choose`, { ...(callId ? { callId } : { submissionId }), choice, amount, tickedCents: choice === "charge" && over && ticked ? typed : undefined, seenAt, confirmed, boxAt })
-      .then(() => window.location.reload())
+      .then(() => fin.finish(choice === "letgo" ? "You let it go." : `Charged ${devName} ${money(typed ?? cents)}.`))
       .catch((e) => {
         const sb = stopBox(e); if (sb) { setBox(sb); setBoxAt(sb.now); }
         else {
@@ -52,7 +56,12 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
       <p>{line}.</p>
       {/* (Owner, Oct 28 afternoon) Charge and Let it go both work while the test is paused; a Charge then may be paid later (never says why). */}
       {paused && <p className="note" data-paused-charge="">This test is paused right now. You can still charge or let it go; payment may be delayed until the test resumes.</p>}
-      {(
+      {fin.done ? (
+        <div className="flex flex-wrap items-center gap-2" data-choice-done="">
+          <button className={pressed === "Charge" ? "btn" : "btn-secondary"} disabled>{pressed === "Charge" ? `Charge ${devName} ${typed == null ? "" : money(typed)}` : "Let it go"}</button>
+          <PressDone line={fin.line} />
+        </div>
+      ) : (
         <div className="flex flex-wrap items-center gap-2">
           <label className="inline-flex items-center gap-1">
             $ <input className="input w-24" inputMode="decimal" data-money="" aria-label="Amount to charge" id={`charge-${submissionId ?? callId}`} data-min="0.5" data-max={String(cents / 100)} data-msg="Enter an amount like 5.00." data-min-msg="The smallest card charge is $0.50." data-max-msg={`At most ${money(cents)}.`}

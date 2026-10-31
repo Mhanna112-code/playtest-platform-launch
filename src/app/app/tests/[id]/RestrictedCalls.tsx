@@ -12,7 +12,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * 24 hours, as everywhere). Cancel keeps its normal stop-once; after it the page stays on this view.
  */
 export function RestrictedCalls({ testId, seenAt, calls }: { testId: string; seenAt: string; calls: RestrictedCall[] }) {
-  const { press, changes, error, busy, at } = usePress(seenAt);
+  const { press, changes, error, busy, at, finish } = usePress(seenAt);
   return (
     <section className="card space-y-2" id="calls" data-restricted-calls="">
       <h2 className="font-semibold text-white">Booked calls</h2>
@@ -21,7 +21,7 @@ export function RestrictedCalls({ testId, seenAt, calls }: { testId: string; see
         {calls.map((c) => (
           <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
             <span className="mr-auto text-slate-200">{fmt(c.when)} · {c.who} · {c.minutes} min</span>
-            <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={async (why) => { if (await press(`/api/tests/${testId}/cancel-call`, { callId: c.id, reason: why }, c.id)) window.location.reload(); }} />
+            <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={async (why) => { if (await press(`/api/tests/${testId}/cancel-call`, { callId: c.id, reason: why }, c.id)) finish(); }} />
             {at === c.id && <div className="basis-full"><ChangesBox changes={changes} error={error} press="Cancel call" /></div>}
           </li>
         ))}

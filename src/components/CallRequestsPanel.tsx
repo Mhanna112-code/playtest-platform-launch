@@ -19,7 +19,7 @@ export type PanelReq = { id: string; contractId: string; tester: string; asker: 
 export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
 
 export function CallRequestsPanel({ side, seenAt, requests, path }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string }) {
-  const { press, changes, error, busy, at } = usePress(seenAt);
+  const { press, changes, error, busy, at, finish } = usePress(seenAt);
   // (Owner, Oct 29, batch 26 section 10) A shown request that closed meanwhile (the tester finished their part, left, a block, a stop…) or was answered elsewhere says
   // so in its row at once ("Closed: the tester finished their part") and its buttons go, without waiting for the page to refresh.
   const [gone, setGone] = useState<Record<string, string>>({});
@@ -49,7 +49,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path }: { side: "dev
     };
   }, [ids]);
   const go = async (r: PanelReq, body: Record<string, unknown>, key: string) => {
-    if (await press(`${path(r)}/answer-request`, { requestId: r.id, contractId: r.contractId, ...body }, key)) window.location.reload();
+    if (await press(`${path(r)}/answer-request`, { requestId: r.id, contractId: r.contractId, ...body }, key)) finish(); // (batch 35 §40, §41) the page redraws in place; the buttons stay greyed until it has
   };
   const first = (r: PanelReq) => Math.min(...r.rows.map((x) => new Date(x.startsAt).getTime()));
   const sorted = [...requests].sort((a, b) => first(a) - first(b));

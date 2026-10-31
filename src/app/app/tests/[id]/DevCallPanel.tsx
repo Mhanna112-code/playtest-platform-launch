@@ -20,6 +20,7 @@ import { alignedClash, describeRows, formClashInputs, madeBy, newRow, RequestRow
 import { CallRequestsPanel, type PanelReq } from "@/components/CallRequestsPanel";
 import { jumpTo } from "@/lib/markJump";
 import { CallCheck } from "@/components/CallCheck";
+import { PressDone } from "@/components/PressDone";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null; measuring?: string };
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
@@ -41,7 +42,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
 export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [], leadMinutes }: { testId: string; seenAt: string; /** (Batch 29 section 20) the server's call lead, passed down */ leadMinutes: number; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[] }) {
   const router = useRouter();
   // (Batch 16 section 21) A call request, booking or cancellation from another tab stops a press touching it once: the panel shows it at once.
-  const { press, changes, error, busy, at, errData } = usePress(seenAt, () => router.refresh());
+  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(seenAt, () => router.refresh(), { onFresh: () => { setFrozen(null); setMade(null); } });
   // Requesting the same time again is already done: said plainly, and the request shows in the panel.
   useEffect(() => {
     if (error.startsWith("You already requested this time")) router.refresh();
@@ -63,9 +64,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const box = (k: string) => (at === k ? <div className="basis-full"><ChangesBox changes={changes} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /></div> : null);
   const go = async (path: string, body: Record<string, unknown>, key: string) => {
     const r = await press<{ message?: string }>(`/api/tests/${testId}/${path}`, body, key);
-    if (r) {
-      window.location.reload();
-    }
+    if (r) finish(); // (batch 35 §40, §41) the page redraws in place; the buttons stay greyed until it has
   };
   // (Batch 20 section 7) From the Request a time press until the reload, the clash checks use the testers as they were when pressed and never what the press made
   // (its new requests, or the call it booked); the form clears as soon as it goes through.
@@ -79,7 +78,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       setRows([newRow()]);
       setMinutes("");
       await keep.clear();
-      window.location.reload();
+      finish("Request sent.");
     } else setFrozen(null);
   };
   const checked = formClashInputs(testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })), frozen ? frozen.testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })) : null, made);
@@ -162,6 +161,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           </div>
           {ticked.length === 0 && <p className="note">Tick one or more testers to request a time.</p>}
           {box("request")}
+          <PressDone line={doneLine} />
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
         </div>
       )}

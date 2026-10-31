@@ -30,7 +30,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const router = useRouter();
   // (Batch 16 section 21) End early stopped by another tab's action on the ticked testers: the pop-up's summary for them (calls, work waiting) refreshes.
-  const { press, changes, error, busy, at } = usePress(p.seenAt, () => router.refresh());
+  // (Batch 35 §40) After a press the page redraws in place: End early's ticks and reasons start empty again (as after the reload they replace).
+  const { press, changes, error, busy, at, finish } = usePress(p.seenAt, () => router.refresh(), { onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); } });
   // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
   const box = (k: string) => (at === k ? <ChangesBox changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
   const [open, setOpen] = useState<"" | "end" | "next">("");
@@ -64,7 +65,8 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
     // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
     else if (p.doneTo && (action === "stop" || action === "end-early"))
       window.location.href = `${p.doneTo}?done=${encodeURIComponent(action === "stop" ? `Done: you stopped ${p.title}.` : `Done: you ended ${picked.length === 1 ? "1 tester's" : `${picked.length} testers'`} work on ${p.title}.`)}`;
-    else window.location.reload();
+    // (Batch 35 §40, §41) Everything else redraws the page in place; the buttons stay greyed until it has.
+    else finish();
   }
 
   return (

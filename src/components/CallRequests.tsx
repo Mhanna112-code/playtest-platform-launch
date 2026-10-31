@@ -1,5 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
+import { PressDone } from "@/components/PressDone";
 import { lengthCap } from "@/lib/callMeasure";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -29,9 +30,9 @@ export function CallRequests(p: {
 }) {
   // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
   const [limitSeen, setLimitSeen] = useState("");
-  const { press, changes, error, busy, at, errData } = usePress(p.seenAt, (d) => {
+  const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(p.seenAt, (d) => {
     if (typeof d.limitSeen === "string") setLimitSeen(d.limitSeen);
-  });
+  }, { onFresh: () => { setFrozen(null); setMade(null); } });
   const [minutes, setMinutes] = useState("");
   const [rows, setRows] = useState<RowState[]>([newRow()]);
   const [ticked, setTicked] = useState<string[]>(p.targets.length === 1 ? [p.targets[0].contractId] : []);
@@ -53,12 +54,13 @@ export function CallRequests(p: {
     setFrozen({ targets: liveTargets, elsewhere: liveElsewhere });
     const r = await press<{ message?: string }>(`${p.path}/${action}`, body, key);
     if (r) {
-      // It went through: the form clears at once (its times are now the request, or the booked call), then the page loads again.
+      // It went through: the form clears at once (its times are now the request, or the booked call), then (batch 35 §40, §41) the page redraws in place, the
+      // button greyed with its line until it has.
       setMade(madeBy(r));
       setRows([newRow()]);
       setMinutes("");
       await keep.clear();
-      window.location.reload();
+      finish(action === "request-time" ? "Request sent." : "");
     } else setFrozen(null);
   };
   const all = p.targets.length > 0 && p.targets.every((t) => ticked.includes(t.contractId));
@@ -112,6 +114,7 @@ export function CallRequests(p: {
             {keep.restored && <DraftTag kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); }} />}
           </div>
           {box("request")}
+          <PressDone line={doneLine} />
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
         </div>
       )}

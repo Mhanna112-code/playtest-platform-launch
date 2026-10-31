@@ -2,6 +2,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Err } from "@/components/Err";
 import { uploadToSession } from "@/lib/upload";
+import { useFinished } from "@/lib/usePress";
+import { PressDone } from "@/components/PressDone";
+import { webmWithDuration } from "@/lib/webmDuration";
 
 type Phase = { name: "idle" } | { name: "recording"; started: number } | { name: "review"; blob: Blob; url: string } | { name: "uploading"; pct: number };
 
@@ -11,6 +14,8 @@ const clock = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2,
  * (Owner, Oct 29, batch 11) "Record" on the session page: records the screen (and the microphone if allowed) in the browser with getDisplayMedia + MediaRecorder, with a
  * timer and Stop, then a preview, then uploads through the recording upload (500 MB, 5 per session). `part`: the Recording part, or attached to the written part.
  * Modelled on the full app's recording-uploader.
+ * (Owner, Oct 31, batch 35 §42) The browser writes the WebM live, with no length in it: before the preview and the upload, its length (the time from the
+ * recorder's start to its stop) is written into the file (lib/webmDuration.ts), so the time bar can be dragged, playing or paused.
  */
 export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, onUploadProgress, onUploadError, onStart, onCancel, disabled = false }: { sessionId: string; part: "recording" | "written"; label?: string; onUploaded?: (id: string, filename: string, file: Blob, tag: string) => void; onUploadProgress?: (filename: string, pct: number) => void; onUploadError?: () => void; onStart?: () => void; onCancel?: () => void; disabled?: boolean }) {
   const [phase, setPhase] = useState<Phase>({ name: "idle" });
@@ -18,6 +23,8 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
   const [withMic, setWithMic] = useState(true);
   const [err, setErr] = useState("");
   const [now, setNow] = useState(0);
+  // (Batch 35 §40, §41) Uploaded on its own (the Recording part): the page redraws in place, the recording shows in the list; meanwhile only the line shows.
+  const fin = useFinished();
   const live = useRef<{ recorder: MediaRecorder; streams: MediaStream[]; ctx: AudioContext } | null>(null);
   useEffect(() => setCan(typeof navigator !== "undefined" && !!navigator.mediaDevices?.getDisplayMedia && typeof MediaRecorder !== "undefined"), []);
   useEffect(() => {
@@ -49,9 +56,11 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
     const mimeType = ["video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm"].find((m) => MediaRecorder.isTypeSupported(m));
     const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 2_500_000 });
     const chunks: Blob[] = [];
+    let startedAt = 0;
     recorder.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
-    recorder.onstop = () => {
-      const blob = new Blob(chunks, { type: "video/webm" });
+    recorder.onstart = () => { startedAt = performance.now(); };
+    recorder.onstop = async () => {
+      const blob = await webmWithDuration(new Blob(chunks, { type: "video/webm" }), startedAt ? performance.now() - startedAt : 0);
       setPhase({ name: "review", blob, url: URL.createObjectURL(blob) });
     };
     live.current = { recorder, streams: [screen, ...(mic ? [mic] : [])], ctx };
@@ -77,7 +86,7 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
       const filename = `recording-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.webm`;
       onUploadProgress?.(filename, 0);
       const { id, tag } = await uploadToSession(sessionId, blob, filename, part, (pct) => { setPhase({ name: "uploading", pct }); onUploadProgress?.(filename, pct); });
-      if (onUploaded) onUploaded(id, filename, blob, tag); else window.location.reload();
+      if (onUploaded) onUploaded(id, filename, blob, tag); else fin.finish("Uploaded.");
       setPhase({ name: "idle" });
     } catch (e) {
       onUploadError?.();
@@ -90,7 +99,8 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
   const elapsed = phase.name === "recording" ? Math.max(0, Math.floor((now - phase.started) / 1000)) : 0;
   return (
     <div className="space-y-2 text-sm" data-recorder={part}>
-      {phase.name === "idle" && (
+      <PressDone line={fin.line} />
+      {phase.name === "idle" && !fin.done && (
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" className="btn-secondary" disabled={disabled} onClick={start}>{label}</button>
           <label className="flex items-center gap-1.5 text-xs text-slate-400"><input type="checkbox" checked={withMic} onChange={(e) => setWithMic(e.target.checked)} /> With my microphone</label>

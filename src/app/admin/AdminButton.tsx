@@ -9,6 +9,8 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { adminDraftKey } from "@/lib/keptText";
+import { useFinished } from "@/lib/usePress";
+import { PressDone } from "@/components/PressDone";
 
 /** (Batch 35 §11) Where a draft keeps the state it was typed for (`draftFor`). */
 export const DRAFT_FOR = "_for";
@@ -36,12 +38,15 @@ export function adminDraftValues(d: Record<string, unknown>, fields: { name: str
  * only): "Draft" after a reload, after a sign-in "Draft" with "Discard" (nothing is saved for these boxes). Cleared when the press goes through; a stopped or
  * refused press keeps it. A button with no box keeps nothing. `draftFor`: the draft is kept with that state, and a draft typed for another one is never put back (the
  * box swapped in for a new state starts empty: batch 27 section 5, batch 33 §7).
+ * (Owner, Oct 31, batch 35 §41) Once the press goes through, its boxes (the side, the reason, the days) are hidden and the button stays greyed with "Done." until
+ * the console has loaded again (keeping its place, batch 35 §40); it never looks pressable in between.
  */
 export function AdminButton({ action, id, label, fields = [], danger, disabled, extra = {}, choice, onRefused, onStop, stacked = false, draftFor }: { action: string; id: string; label: string; fields?: { name: string; label: string; ph?: string }[]; danger?: boolean; disabled?: boolean; extra?: Record<string, string>; choice?: { name: string; label: string; options: { value: string; label: string }[] }; onRefused?: (e: unknown) => void; onStop?: (data: Record<string, unknown>) => void; /** (Batch 23 section 7) top to bottom, full width: the side choice, the reason box, then the button */ stacked?: boolean; /** (Batch 35 §11) the state the box belongs to (Suspend: the sides open): a draft typed for another state never comes back */ draftFor?: string }) {
   const [v, setV] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   const stop = useAdminStop();
+  const fin = useFinished();
   const typedAny = fields.some((f) => (v[f.name] ?? "").trim() !== "");
   const [put, setPut] = useState(false); // a draft was put back (one for another state never is)
   const keep = useKept<Record<string, unknown>>(adminDraftKey(action, id), draftFor === undefined ? v : { ...v, [DRAFT_FOR]: draftFor }, !typedAny, (d) => {
@@ -55,7 +60,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
   const stack = stacked || fields.length > 0;
   return (
     <span className={stack ? "flex w-full flex-col items-start gap-2" : "inline-flex flex-wrap items-center gap-2"} data-mistakes-root="" data-admin-box={stack ? "stacked" : undefined}>
-      {choice && (
+      {!fin.done && choice && (
         <span className="inline-flex flex-wrap items-center gap-2" role="radiogroup" aria-label={choice.label} data-side-choice="">
           {choice.options.map((o) => (
             <label key={o.value} className="inline-flex items-center gap-1 text-sm">
@@ -64,7 +69,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
           ))}
         </span>
       )}
-      {fields.map((f) =>
+      {!fin.done && fields.map((f) =>
         // (Owner, Oct 30, batch 15 section 20) A reason ("note") box: up to 1,000 characters with a live counter; over it is red at the field (the server refuses it too).
         f.name === "note" ? (
           <span key={f.name} className="flex w-full flex-col">
@@ -82,7 +87,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
       {keep.restored && put && typedAny && <DraftTag kind="discard" onUseSaved={() => setV({})} />}
       <button
         className={danger ? "btn-danger" : "btn-ghost"}
-        disabled={busy || disabled}
+        disabled={busy || disabled || fin.done}
         onClick={async (e) => {
           if (!checkFields(e.currentTarget.parentElement)) return;
           setBusy(true);
@@ -91,8 +96,8 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
             await api(`/api/admin/${action}`, { id, ...extra, ...v, ...stop.marks() });
             await keep.clear();
             stop.clear();
-            setMsg({ ok: true, text: "Done." });
-            setTimeout(() => window.location.reload(), 600);
+            setV({}); // gone through: nothing left to discard (its boxes are hidden until the console loads again)
+            fin.finish("Done.", { reload: true });
           } catch (e) {
             if (stop.caught(e)) onStop?.((e as { data: Record<string, unknown> }).data);
             else if (onRefused && !isFieldError(e)) { stop.clear(); onRefused(e); }
@@ -108,6 +113,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
         {label}
       </button>
       {msg && !msg.text.startsWith(FIELD) && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+      <PressDone line={fin.line} />
       <ChangesBox changes={stop.changes} press={label} heading={ADMIN_STOP_HEADING} />
       {/* (Batch 16 section 10) A mistake is red at its box and listed here. */}
       <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={label} />

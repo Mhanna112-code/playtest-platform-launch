@@ -392,7 +392,9 @@ describe("batch 20 section 7: no false \"overlaps\" flash after Request a time",
       expect(s).toContain("setMade(madeBy(r));");
       expect(s).toContain("setRows([newRow()]);");
       expect(s).toContain("formClashInputs(");
-      expect(s.indexOf("setRows([newRow()]);")).toBeLessThan(s.indexOf("window.location.reload();", s.indexOf("setMade(madeBy(r));")));
+      // (Batch 35 §40) Then the page redraws in place (finish) instead of reloading.
+      expect(s.indexOf("setRows([newRow()]);")).toBeLessThan(s.indexOf("finish(", s.indexOf("setMade(madeBy(r));")));
+      expect(s.indexOf("finish(", s.indexOf("setMade(madeBy(r));"))).toBeGreaterThan(0);
     }
     expect(src("lib/server/requests.ts")).toContain("return { requested: ok.length, batchId, ids: made };");
   });

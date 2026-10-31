@@ -18,7 +18,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * press follows the stop-once and refusal rules: its box shows right under the row.
  */
 export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; seenAt: string; restricted: boolean }) {
-  const { press, changes, error, busy, at } = usePress(seenAt);
+  const { press, changes, error, busy, at, finish } = usePress(seenAt);
   return (
     <section className="space-y-3" aria-label="Calls" id="calls-box">
       <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Calls <span className="text-sm font-normal text-slate-400">soonest first</span></h2>
@@ -34,7 +34,7 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
                     <Link href={`/app/tests/${c.testId}#call-${c.id}`} className="mr-auto min-w-0 truncate text-slate-200 no-underline hover:underline" title={`${c.who} · ${c.test}`}><b className="text-white">{c.who}</b> · {c.test} · {fmt(c.when)} · {c.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></Link>
                   )}
                   {c.joinable && <JoinCall callId={c.id} />}
-                  {restricted && <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={(reason) => void press(`/api/tests/${c.testId}/cancel-call`, { callId: c.id, reason }, c.id).then((r) => r && window.location.reload())} />}
+                  {restricted && <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={(reason) => void press(`/api/tests/${c.testId}/cancel-call`, { callId: c.id, reason }, c.id).then((r) => r && finish())} />}
                 </div>
                 <CallCheck />
                 {at === c.id && <ChangesBox changes={changes} error={error} />}

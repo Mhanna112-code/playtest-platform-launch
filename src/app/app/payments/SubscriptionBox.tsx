@@ -20,7 +20,7 @@ export function SubscriptionBox(p: {
     </ul>
   );
   const btn = (action: string, label: string, cls = "btn-secondary px-3 py-1.5 text-sm") => (
-    <PressButton seenAt={seenAt} path="/api/payments/subscription" body={{ action }} className={cls}>{label}</PressButton>
+    <PressButton reload seenAt={seenAt} path="/api/payments/subscription" body={{ action }} className={cls}>{label}</PressButton>
   );
   const subscribed = p.state === "active" || p.state === "cancelled" || p.state === "past_due" || p.state === "paused";
   return (
