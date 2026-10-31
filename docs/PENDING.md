@@ -3,6 +3,7 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
+- **Per-field drafts (after launch; owner, Oct 31).** Today a form's draft is the whole form from the tab typed in last. Per-field: each tab sends only the fields it changed, the server keeps each field's latest (related fields as one unit: Mature + why, a part's tick + price + Required, questions + required ones, live rate + length; written answers per question). About 1½–2 hours.
 - **Join page: show what changed, not just which fields.** The blue "Changed since you opened this page" box (and the stop box under Join) lists Before → Now for each changed field (short values inline; description, questions and NDA in small scroll boxes of about 8 lines), instead of "questions · See it". About 30–45 min.
 
 ## Decided, not doing (owner, Oct 30)
