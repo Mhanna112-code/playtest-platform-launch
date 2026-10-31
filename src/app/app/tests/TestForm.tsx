@@ -9,7 +9,7 @@ import { mergeChanges, useLiveAppend } from "@/lib/live";
 import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine, capQuestions } from "@/lib/questions";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
 import { BUILD_URL_LINE, BUILD_URL_PATTERN, fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
-import { Choices } from "@/components/Choices";
+import { Choices, PICK_CHIP } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
 import { DRAFT_START_LINE, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
 import { signInKeeps } from "@/lib/keptText";
@@ -680,7 +680,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           <legend className="label req">Categories{draftMark("categories")}</legend>
           <div className="flex flex-wrap gap-2">
             {CATEGORIES.map((o) => (
-              <label key={o} className="flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm text-slate-300 has-[:checked]:border-indigo-400/60 has-[:checked]:bg-indigo-500/15 has-[:checked]:text-white">
+              <label key={o} className={PICK_CHIP}>
                 <input type="checkbox" name="categories" value={o} checked={f.categories.includes(o)} onChange={(e) => set({ categories: e.target.checked ? [...f.categories, o] : f.categories.filter((x) => x !== o) })} /> {o}
               </label>
             ))}

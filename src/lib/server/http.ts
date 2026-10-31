@@ -27,6 +27,9 @@ export async function readJson(req: Request, limit = 100_000): Promise<Record<st
     // The browser tab that sent it (reason E: "You sent your written answers in another tab").
     const tab = req.headers.get("x-tab");
     if (tab && typeof v.tab !== "string") v.tab = tab.slice(0, 64);
+    // (Batch 35 §51) The page load that sent it (the tab's id plus this page's part): admins' "this page's own" changes.
+    const load = req.headers.get("x-load");
+    if (load && typeof v.load !== "string") v.load = load.slice(0, 64);
     return v as Record<string, unknown>;
   } catch {
     throw new HttpError(400, "bad_request", "Something went wrong sending that. Reload the page and try again.");

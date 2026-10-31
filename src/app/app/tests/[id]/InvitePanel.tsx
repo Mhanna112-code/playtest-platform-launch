@@ -13,6 +13,7 @@ import { UserPlus } from "lucide-react";
 import { bringInView, jumpTo, MARKABLE } from "@/lib/markJump";
 import { LongList } from "@/components/LongList";
 import { MissingNeedWords } from "@/components/MissingNeeds";
+import { PICK_CHIP } from "@/components/Choices";
 import { EVERYONE_MEETS, everyoneMeets, gapsOf, isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
 import { LiveNotices } from "@/components/LiveNotices";
 
@@ -302,9 +303,9 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const ticks =(k: keyof typeof f, label: string, opts: string[]) => opts.length > 0 && (
     <fieldset className="space-y-1">
       <legend className="label">{label}</legend>
-      <div className="flex flex-wrap gap-x-3 gap-y-1 text-sm">
+      <div className="flex flex-wrap gap-2">
         {opts.map((o) => (
-          <label key={o} className="inline-flex items-center gap-1.5">
+          <label key={o} className={PICK_CHIP}>
             <input type="checkbox" checked={f[k].includes(o)} onChange={(e) => setF({ ...f, [k]: e.target.checked ? [...f[k], o] : f[k].filter((x) => x !== o) })} /> {o}
           </label>
         ))}

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useId, useRef, useState } from "react";
-import { Languages, RefreshCw } from "lucide-react";
+import { Languages, Monitor, RefreshCw } from "lucide-react";
 import { api } from "@/lib/client";
 import { gapSources, noGaps, sameGapItems, sameGaps, TESTER_ASK, testerGapButton, testerGapText, updateLabels, type GapAsk, type Gaps, type GapTimes } from "@/lib/gaps";
 import { MissingNeedWords } from "@/components/MissingNeeds";
@@ -203,7 +203,8 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
     <dialog ref={ref} aria-labelledby={`${id}-title`} aria-describedby={`${id}-text`} onClose={p.onClose}
       className="!m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-white/15 bg-ink-900 p-5 text-slate-200 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm">
       {stop && <PopupStop lines={stop.lines} press={p.press} seeIt={p.seeIt} />}
-      <h2 id={`${id}-title`} className="flex items-center gap-2 font-semibold text-white"><Languages className="h-5 w-5 text-amber-300" /> {title}</h2>
+      <h2 id={`${id}-title`} className="flex items-center gap-2 font-semibold text-white">{/* (Batch 35 §50) Devices only: the device icon (as on the join page's badges); a language, or both: the language icon. */}
+        {shown.devices.length && !shown.languages.length ? <Monitor className="h-5 w-5 text-amber-300" data-gap-icon="device" /> : <Languages className="h-5 w-5 text-amber-300" data-gap-icon="language" />} {title}</h2>
       <p id={`${id}-text`} role="status" className="mt-2 text-sm text-slate-300">{changedAt && !stop && <UpdatedLabels at={changedAt} from={changedFrom} devName={p.devName} />}{noGaps(shown) ? testerGapText(shown, p.ask) : <>Your profile <MissingNeedWords g={shown} />. {TESTER_ASK[p.ask].question}</>}</p>
       <div className="mt-4 flex flex-wrap gap-2">
         <button type="button" className="btn px-3 py-1.5 text-sm" onClick={go} disabled={sending} autoFocus>{sending ? "Sending…" : testerGapButton(shown, p.ask)}</button>

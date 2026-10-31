@@ -17,7 +17,9 @@ const dateOf = (v: unknown) => {
   const d = typeof v === "string" ? new Date(v) : null;
   return d && !isNaN(d.getTime()) ? d : null;
 };
-const tabOf = (body: Record<string, unknown> | null | undefined) => (body && typeof body.tab === "string" ? body.tab.slice(0, 64) : "");
+/** (Batch 35 §51) The press's page load: its per-load id (x-load), else (an older page) its tab's id. */
+export const tabOf = (body: Record<string, unknown> | null | undefined) =>
+  body && typeof body.load === "string" && body.load ? body.load.slice(0, 64) : body && typeof body.tab === "string" ? body.tab.slice(0, 64) : "";
 /** The page time a press sent (`since`), with its second-press marks; null for a press without one (an API call, an older page): it goes ahead as before. */
 export function adminSeen(body: Record<string, unknown>): AdminSeen | null {
   const since = dateOf(body.since);
@@ -41,9 +43,28 @@ export const byAt = (who: string, at: Date) => `(by ${who} at ${whenText(at)})`;
 // Every admin press that goes through leaves a marker: an ActionLog row ("test" ADMIN_TABS, so no test page reads it; no new column) with the press's tab (the
 // page load's id, which every press sends as x-tab) and the time the press started, written once the press is done. Every row the press wrote (its admin
 // action, an account event) lies between the two times, so a change belongs to a page load when one of its markers spans the change's time.
+// (Owner, Oct 31, batch 35 §51) The marker's `tab` is the press's PAGE load (x-load: the tab's id plus a part for each page drawn in it), so a change made in the
+// same browser tab before a reload or before moving to another page is not "this page's own": a page that didn't show it stops once ("You … in another tab at …").
 
 /** The ActionLog "test" of the admin press markers: never a real test id. */
 export const ADMIN_TABS = "admin-tab";
+// ---------- (Batch 35 §49) each admin action's reason, kept with its own event ----------
+// A Pause's or a Stop's reason is an ActionLog row ("test" ADMIN_NOTES, so no test page reads it; no new column) keyed by the event's id (`tab`): the admin Timeline
+// quotes the event's own reason, never the test's latest note (a Stop right after a Pause no longer lends the pause its reason).
+
+/** The ActionLog "test" of the admin reasons: never a real test id. */
+export const ADMIN_NOTES = "admin-note";
+type NoteTx = { actionLog: { create: (a: { data: { userId: string; testId: string; tab: string; text: string } }) => Promise<unknown> } };
+/** Keep the reason ("" for none) with the event it belongs to. */
+export const keepNote = (tx: NoteTx, eventId: string, adminId: string | null | undefined, note: string) =>
+  tx.actionLog.create({ data: { userId: adminId ?? "", testId: ADMIN_NOTES, tab: eventId, text: note } });
+/** The reasons kept with these events (an event missing here is older: it has none of its own). */
+export async function notesOf(eventIds: string[]) {
+  if (!eventIds.length) return new Map<string, string>();
+  const rows = await db.actionLog.findMany({ where: { testId: ADMIN_NOTES, tab: { in: eventIds } }, select: { tab: true, text: true } });
+  return new Map(rows.map((r) => [r.tab, r.text]));
+}
+
 /** Who presses, from which page load ("" when the press can't say: then only other admins' changes count, as before). */
 export type Presser = { adminId: string; tab: string };
 /** The presser of a press: the admin and the tab its body (or its AdminSeen) carries. */
