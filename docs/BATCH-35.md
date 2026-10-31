@@ -95,3 +95,9 @@ gap is a second or two), so the hold starts at once; the log says "dispute arriv
      pronoun, devices, languages, bio). After a sign-in: "Draft" + "Use saved" beside Save profile, putting every field back to the saved profile. Save profile going
      through clears it. The first setup (after sign-up) keeps no draft. Per `SIGN_IN_DRAFTS` ("whole") the draft comes back whole, text and selections; under
      "written" only the name and bio would.
+
+## §12 A first rating stops once; at most 20 questions in the box (owner, Oct 30)
+- Invite, Invite anyway, Cancel invite, Accept and Decline stop once when a tester the page showed with "No ratings yet" has since got their first rating:
+  "fbbb got their first rating: 1.0". (A page that didn't say what it showed never stops for it.) The full-star rule for later changes is unchanged.
+- Post / Edit's questions box takes no 21st question: typing on a new line past 20 questions is ignored, and a paste keeps the first 20. Editing the 20
+  and empty lines are free. The server's 20-question refusal stays.

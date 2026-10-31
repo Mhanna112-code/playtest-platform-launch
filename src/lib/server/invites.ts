@@ -263,7 +263,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         if (seenP) {
           const lines = testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t);
           const currentRating = shownRatingRows.get(p.id);
-          const ratingLine = ratingChangedLine(name, seenP.rating ?? null, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null);
+          const ratingLine = ratingChangedLine(name, seenP.rating, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null);
           if (ratingLine) lines.push(ratingLine);
           if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(p.profile?.updatedAt.getTime() ?? 0, currentRating?.at?.getTime() ?? 0)), key: `needs:${p.id}` });
         }
@@ -362,7 +362,7 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   if (shown && tester) {
     const lines = testerNeedsChangedLines(displayName(tester), shown, { devices: tester.profile?.devices ?? [], languages: tester.profile?.languages ?? [] }, inv.test);
     const latest = await ratingSummary(tester.id);
-    const line = ratingChangedLine(displayName(tester), shown.rating ?? null, latest.n ? Number(latest.avg.toFixed(1)) : null);
+    const line = ratingChangedLine(displayName(tester), shown.rating, latest.n ? Number(latest.avg.toFixed(1)) : null);
     if (line) lines.push(line);
     if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, latest.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
   }

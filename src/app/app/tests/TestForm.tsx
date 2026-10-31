@@ -6,7 +6,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
-import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine } from "@/lib/questions";
+import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine, capQuestions } from "@/lib/questions";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
 import { fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices } from "@/components/Choices";
@@ -723,7 +723,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {f.written && (
           <div id="questions-group" data-locked={fieldLocked("questions") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("questions") ? "p-2 ring-1 ring-rose-400" : ""}`}>
             <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}{draftMark("questions")}</label>
-            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : undefined} value={f.questions} onChange={(e) => set({ questions: e.target.value })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : undefined} value={f.questions} onChange={(e) => set({ questions: capQuestions(e.target.value) })} placeholder={"What did you like?\nWhere did you get stuck?"} />
             {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
               <ul className="mt-2 space-y-1">
                 {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (

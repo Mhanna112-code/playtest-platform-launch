@@ -10,7 +10,7 @@ export function redrawTesterChanges(current: Change[] | null, before: Map<string
     const old = row && before.get(row.id);
     if (!row || !old || !row.changedAt || new Date(row.changedAt) < new Date(c.at)) return [c];
     const lines = testerNeedsChangedLines(row.name, old, row.seen, needs);
-    const rating = ratingChangedLine(row.name, old.rating ?? null, row.seen.rating ?? null);
+    const rating = ratingChangedLine(row.name, old.rating, row.seen.rating ?? null);
     if (rating) lines.push(rating);
     return lines.length ? [{ ...c, text: lines.join(" · "), at: row.changedAt ?? c.at }] : [];
   });
