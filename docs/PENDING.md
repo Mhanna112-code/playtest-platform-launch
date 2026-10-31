@@ -3,6 +3,8 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
+- **Bank-check stalling on Charge (owner, Oct 31).** While the developer's bank confirmation is open on a piece (up to 15 min) the tester's Charge is refused; repeated Pay attempts could stall Charge. Plan: once Charge is open on a piece, the developer gets ONE locking bank check (15 min); an unconfirmed check means the next attempt within 24 h can't lock the piece again, so the tester's Charge goes through (the developer's later Pay is refused: already charged). Charge pressed during the one check: "The developer is confirming a payment for this with their bank. Try again in a few minutes." ~20 min.
+- **Flaky tests to fix:** batch22 "two admins at once" (race), batch17-rate §12 and codex9 "resource_missing" (~1 in 3), batch34-invite-beats-application "asked to rejoin first…" (rare), batch16-account-tabs (once).
 - **Open question: drafts propagating to old tabs (owner, Oct 31).** Today unsent typing never shows in another open tab until it reloads (one shared draft per form, last typed wins). Should an old tab learn about a newer draft typed in another tab (e.g. a "You have newer unsent changes from another tab · Load them" line), or keep showing its own?
 - **"You can't join this test again." should say why** (e.g. "<Dev> rated your work on this test, so this test is finished for you."); today the generic line covers a developer's rating of the tester.
 - **A new Post form starts with "Productivity" ticked** under Categories, and a posted listing can carry categories the form didn't show ticked (seen while making the launch reels).
