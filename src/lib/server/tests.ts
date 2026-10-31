@@ -1,7 +1,7 @@
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
-import { CALL_ACTS, PAY_ACTS, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, answersIt, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
@@ -661,7 +661,9 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const found = await devChanges(t.developerId, testId, seenAt, tabOf(body), tx, { press });
   // The developer's own Stop in another tab already reads "You stopped the test in another tab": the stop moment isn't said twice.
   const own = found.some((e) => e.kind === "own" && e.text === OWN_STOP_LINE);
-  const raw = [...found, ...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Batch 35 §79) Never the line about the very thing this press answers (a piece of work: by its name in the line).
+  const answers = press.answers?.submissionId ? { ...press.answers, label: (await tx.submission.findUnique({ where: { id: press.answers.submissionId }, select: { kind: true } }))?.kind === "recording" ? "recording" : "written answers" } : press.answers;
+  const raw = [...found, ...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))].filter((e) => !answersIt(e, answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
   const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || e.kind === "stop" || keep(e)) : raw, body);
   if (changes.length) {

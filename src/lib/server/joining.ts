@@ -5,7 +5,7 @@ import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/form
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
+import { answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, needsGap, ownTest } from "./tests";
 import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
 import { ratingSummary } from "./ratings";
@@ -80,7 +80,7 @@ export async function joinPageChanges(userId: string, testId: string, seenAt: un
   const replaced = await db.invite.findMany({ where: { testId, testerId: userId, status: "replaced", updatedAt: { gt: d } } });
   if (replaced.length) {
     const fresh = await db.invite.findFirst({ where: { testId, testerId: userId, status: "sent" }, orderBy: { createdAt: "desc" } });
-    gone.push(fresh ? { kind: "invite", text: `${displayName(t.developer)} changed the listing: here's a new invite on the updated listing`, createdAt: fresh.createdAt } : { kind: "invite", text: `${displayName(t.developer)} changed the listing: your invite closed (no spots left)`, createdAt: replaced[0].updatedAt });
+    gone.push(fresh ? { kind: "invite", text: `${displayName(t.developer)} changed the listing: here's a new invite on the updated listing`, createdAt: fresh.createdAt, item: fresh.id } : { kind: "invite", text: `${displayName(t.developer)} changed the listing: your invite closed (no spots left)`, createdAt: replaced[0].updatedAt });
   }
   // (Owner) Rejoining a test they LEFT stops once for the same reasons as their in-test buttons (A-F): paid / rejected,
   // call changes, their own other-tab actions; the listing's one line covers new terms (they rejoin on the current listing, no offer).
@@ -122,7 +122,8 @@ export async function joinStopList(userId: string, testId: string, body: Record<
   const alertsOff = !!(await db.user.findUnique({ where: { id: userId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   // (Owner, Oct 31, batch 35 §61; replaces batch 29 section 13 here) Their own changes in another tab ("You applied to join in another tab") always stop once,
   // Alerts Off too, like the developer's own other-tab actions.
-  const raw = raw0;
+  // (Batch 35 §79) Join from the invite that just arrived: never the line about that invite itself.
+  const raw = raw0.filter((e) => !(typeof body.inviteId === "string" && answersIt(e, { item: body.inviteId })));
   // (Batch 17 section 4) A full test keeps the invite open: No thanks just declines it (the test filling or a spot opening doesn't stop it).
   const changes = withRenamed(verb === "decline" ? raw.filter((e) => e.kind !== "full" && e.kind !== "spot_open") : raw, body);
   if (!changes.length) return null;
@@ -318,7 +319,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, rating.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
   }
   extra.push(...(await listingChanges(testId, body.seenAt)));
-  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`] }));
+  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`], answers: { kinds: ["applied"], texts: [`${name} applied to join`, `${name} asks to rejoin`] } })); // (batch 35 §79)
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
     const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;

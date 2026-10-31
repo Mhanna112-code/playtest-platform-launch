@@ -188,7 +188,7 @@ describe("payout problems (design doc 9)", () => {
 
 describe("the Alerts menu (design doc 6)", () => {
   it("an ignored update type no longer stops the developer's presses; the live box still lists it, flagged; others still stop", async () => {
-    const { dev, testId, tester, sessionId } = await withWork();
+    const { dev, testId, tester, sessionId, sub } = await withWork();
     const { POST: alertsPOST } = await import("@/app/api/account/alerts/route");
     const { GET: liveGET } = await import("@/app/api/live/route");
     const opened = seen();
@@ -196,15 +196,16 @@ describe("the Alerts menu (design doc 6)", () => {
     await sact(sessionId, "message", tester.cookie, { body: "hi" }); // chat is not an update type
     const sub2 = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } });
     await db.testEvent.create({ data: { testId, kind: "sent", text: "Ana Silva sent her recording", contractId: sessionId } });
-    // Stops by default.
-    const stop = await pay(dev.cookie, { kind: "submission", id: sub2.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: false });
+    // Stops by default (batch 35 §79: Pay on the written answers, so the recording's line is another piece's, not the one it answers).
+    const stop = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: false });
     expect(stop.body.error.code).toBe("stop_once");
     expect(stop.body.error.changes[0].alert).toBe("work");
     // Ignore "Work sent": the same press goes through, and the live box lists the line greyed.
     expect((await json(await alertsPOST(req("/api/account/alerts", { cookie: dev.cookie, body: { testId, ignored: ["work", "nonsense"] } })))).body.ignored).toEqual(["work"]);
     const live = (await json(await liveGET(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(opened)}`, { cookie: dev.cookie })))).body.changes;
     expect(live.find((c: { text: string }) => c.text === "Ana Silva sent her recording")).toMatchObject({ ignored: true, alert: "work" });
-    expect((await pay(dev.cookie, { kind: "submission", id: sub2.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: false })).status).toBe(200);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: false })).status).toBe(200);
+    void sub2;
     // A tester leaving is another type: still stops.
     await db.testEvent.create({ data: { testId, kind: "left", text: "Ben left the test" } });
     const sub3 = await db.submission.create({ data: { contractId: sessionId, kind: "written", agreedCents: 1000, sentAt: new Date(), updatedAt: new Date() } }).catch(() => null);

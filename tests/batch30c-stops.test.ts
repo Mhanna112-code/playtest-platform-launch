@@ -184,13 +184,16 @@ describe("batch 30 (Oct 29 addition): one stop box for several sources at once",
   it("the developer's test page: their own save in another tab AND a tester sending work stop Pay once together, oldest first; the second press pays", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
+    // (Batch 35 §79) Pay is on Ben's piece (sent before the page loaded): Ana's work is another change, not the one it answers.
+    const ben = await joined(testId, "Ben Okafor");
+    expect((await sact(ben.sessionId, "written", ben.tester.cookie, { answers: LONG })).status).toBe(200);
     await later();
     const pageLoaded = seen();
     await later();
     expect((await sact(sessionId, "written", tester.cookie, { answers: LONG })).status).toBe(200);
     await later();
     expect((await edit(testId, dev.cookie, { description: "Sail faster" }, { tab: "tab-a" })).status).toBe(200);
-    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: ben.sessionId } });
     const body = { payKey: randomUUID(), kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: pageLoaded, tab: "tab-b" };
     const first = await reviewPOST(req("/api/review", { cookie: dev.cookie, body })).then(json);
     expect(first.body.error.code).toBe("stop_once");
@@ -280,13 +283,16 @@ describe("batch 30 (Oct 29 addition): one stop box for several sources at once",
   it("a stop never swallows the other changes: Pay on a page opened before the Stop lists the stop AND a tester's work sent", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
+    // (Batch 35 §79) Pay is on Ben's piece (sent before the page loaded): Ana's work is another change, not the one it answers.
+    const ben = await joined(testId, "Ben Okafor");
+    expect((await sact(ben.sessionId, "written", ben.tester.cookie, { answers: LONG })).status).toBe(200);
     await later();
     const pageLoaded = seen();
     await later();
     expect((await sact(sessionId, "written", tester.cookie, { answers: LONG })).status).toBe(200);
     await later();
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true, tab: "tab-a" })).status).toBe(200);
-    const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: ben.sessionId } });
     const body = { payKey: randomUUID(), kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: pageLoaded, tab: "tab-b" };
     const first = await reviewPOST(req("/api/review", { cookie: dev.cookie, body })).then(json);
     expect(first.body.error.code).toBe("stop_once");

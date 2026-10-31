@@ -105,6 +105,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   }));
   const shown = ticked.length ? testers.filter((t) => ticked.includes(t.contractId)) : testers.filter((t) => t.calls.length || t.sets.length || t.requests.length);
 
+  const rowsNamed = (t: DevTester) => (t.calls.length > 0 || t.sets.length > 0 || t.requests.length > 0) && t.requests.every((r) => !r.mine);
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
       <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
@@ -171,7 +172,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       <div className="max-h-[200vh] space-y-2 overflow-y-auto pr-1" data-testers-calls="">
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
-          <h3>{t.name}</h3>
+          {/* (Batch 35 §79, owner Oct 31) No name heading when every row already starts with it ("fbbb · Daily · Sat 9:46 PM (4 left) · …", "fbbb requested …"). */}
+          {!rowsNamed(t) && <h3>{t.name}</h3>}
           {!t.calls.length && !t.sets.length && !t.requests.length && <p className="note">No calls or requests</p>}
           {t.warning && <p className="text-xs text-amber-200" data-calls-warning="">{t.warning}</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}

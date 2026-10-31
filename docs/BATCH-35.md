@@ -678,3 +678,16 @@ with "Nothing has changed since you sent it." (the existing line by Send).
 An owed payment going through is the developer's own (Pay what you owe, a retry on the saved card, a new card), and it lifts their hold. Like a reinstatement (§72),
 its "Payment went through on …" line shows in the test page's top box (and on Payments) but never stops the developer's press. Other payments (a tester's Charge, a
 dispute decision, a failed payment) stop as before.
+
+## §79 A press never stops for the change it answers (owner, Oct 31)
+The developer pressed Accept on a call request that had just arrived and it stopped with "fbbb requested daily calls (4 days) from …": the one line was the very
+request being answered. Now every stop gate drops the change lines about the item the press acts on (one shared helper, `answersIt` in `live.ts`, used by the
+developer's gate, the tester's gate and the join gate): matched on the line's item id where it carries one, else on the event's kind and the contract (an
+application, which has no contract yet, by its exact line). Other unseen changes still stop as before.
+- Developer: Accept / Decline a call request (the tester's "requested …" on that contract); Accept / Decline an application or rejoin ask ("<name> applied to join",
+  "<name> asks to rejoin"); Pay, Pay more and Confirm with your bank on written answers or a recording ("sent their …" / "updated their …" on that contract, for that piece: Pay on the written answers still stops for a recording just sent). Add your
+  side never stops (batch 15 §27); there is no Reject any more (batch 15 §30).
+- Tester: Accept / Decline the developer's call request (that request's line); Switch / Keep never stopped for the terms line (they answer the offer); Join from an
+  invite just re-sent on a new listing ("here's a new invite on the updated listing", that invite's line).
+- (Same day, small) The developer's call panel no longer repeats the tester's name: a tester's card drops its name heading when every row already starts with
+  the name (booked calls, a booked set "fbbb · Daily · Sat 9:46 PM (4 left) · 39 min · …", their requests); it stays when a row reads "You requested …" or there are none.

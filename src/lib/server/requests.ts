@@ -424,8 +424,9 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   if (fresh.status !== "pending" && side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
-  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
-  else await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
+  // (Batch 35 §79) Accept / Decline never stops for the line about this request itself (the developer's: the tester's "requested …" on this contract).
+  if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`], answers: { kinds: ["requested"], contractId } }));
+  else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });
   if (action === "accept") {
     await refusals(c, side);
     // Every call books at the contract rate, fixed at acceptance (every week of a weekly); a call that isn't a listed part has none.

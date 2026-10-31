@@ -29,6 +29,25 @@ export type Press = {
   inState?: boolean;
   /** (Batch 17 section 12) Pay / Pay more on this contract: a stop (or that tester's work ended early) since the page loaded stops it once ("" = test-wide only). */
   stopCheck?: string;
+  /** (Batch 35 §79) What the press answers: the change lines about that very thing never stop it. */
+  answers?: Answers;
+};
+/**
+ * (Owner, Oct 31, batch 35 §79) A press never stops once for the line about the very thing it answers (Accept on a call request that just arrived, Pay on a piece just
+ * sent, Accept on an application just made, Join from an invite just re-sent). Matched on the line's item id where it carries one, else on its kind and the contract
+ * (or its exact text, for an application, which has no contract yet). Every other unseen change still stops.
+ */
+export type Answers = {
+  item?: string; kinds?: readonly string[]; contractId?: string | null; texts?: readonly string[];
+  /** A piece of work: its line names it ("… written answers" / "… recording"), so another piece of the same tester's still stops (devGate reads its kind). */
+  submissionId?: string; label?: string;
+};
+export const answersIt = (e: TestEventLike & { contractId?: string | null }, a?: Answers) => {
+  if (!a) return false;
+  if (a.item && e.item) return e.item === a.item;
+  if (!a.kinds?.includes(e.kind)) return false;
+  if (a.label && !e.text.includes(` ${a.label}`)) return false;
+  return (!!a.contractId && e.contractId === a.contractId) || !!a.texts?.includes(e.text);
 };
 export type OwnEvent = TestEventLike & { about?: OwnAbout; live?: string };
 export const CALL_ACTS = ["request-time", "answer-request", "cancel-call", "cancel-set", "no-show"] as const;
@@ -41,6 +60,8 @@ export const PAY_ACTS = ["pay", "pay-more"] as const;
  */
 export const payPressOf = (contractId: string, piece: { callId?: string | null; submissionId?: string | null }) => ({
   acts: [...PAY_ACTS] as string[], keys: [piece.callId ? `call:${piece.callId}` : piece.submissionId ? `sub:${piece.submissionId}` : `c:${contractId}`], stopCheck: contractId,
+  // (Batch 35 §79) Pay / Pay more on written answers or a recording: the tester's "sent their …" / "updated their …" line is what it answers.
+  ...(piece.submissionId ? { answers: { kinds: ["sent", "sentpaid"], contractId, submissionId: piece.submissionId } } : {}),
 });
 export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
 /**

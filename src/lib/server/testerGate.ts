@@ -5,7 +5,7 @@ import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { keyGivenToYouLine } from "@/lib/keys";
 import { KEY_GIVEN } from "./accessKeys";
-import { asLines, listingSaveLines, ownChanges, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
+import { answersIt, asLines, listingSaveLines, ownChanges, type Answers, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
 // Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
@@ -40,7 +40,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   const out: TestEventLike[] = [];
   for (const d of sides) out.push({ kind: "dispute", text: `${dev} added their side to your dispute`, createdAt: d.devSideAt! });
   // (Batch 35 §53) The offer is a consequence for a working tester; its fields are the listing's one line ("See it") and the offer box, never a list here.
-  for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you the new terms: Switch or Keep below`, createdAt: o.createdAt });
+  for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you the new terms: Switch or Keep below`, createdAt: o.createdAt, item: o.id });
   const owed = await db.payment.findMany({ where: { contractId, status: "failed", owedUntil: { not: null }, settledAt: null }, select: { submissionId: true, callId: true } });
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const settledLate = await db.payment.findMany({ where: { contractId, settledAt: { not: null } }, select: { submissionId: true, callId: true } });
@@ -61,7 +61,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   for (const r of devReqs) {
     const when = fmtDateTime(r.startsAt);
     const what = requestWords(r, when);
-    if (r.status === "pending" && r.createdAt > seenAt) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt });
+    if (r.status === "pending" && r.createdAt > seenAt) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt, item: r.id });
     else if (r.status === "withdrawn") out.push({ kind: "requested", text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt });
     else if (r.status === "taken") out.push({ kind: "requested", text: `The call time ${when} is no longer available: another tester took it`, createdAt: r.updatedAt });
     else if (r.status === "closed" && !CLOSED_BY_TESTER.has(r.closedReason) && !CLOSED_BY_END.has(r.closedReason)) out.push({ kind: "requested", text: `The call time ${when} is no longer available`, createdAt: r.updatedAt });
@@ -104,7 +104,7 @@ const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", 
 export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
-export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string } = {}) {
+export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers } = {}) {
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
   // these same stop-once rules (Rate has its own short list; Block never stops; batch 35 §59: Leave stops like the rest).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
@@ -132,7 +132,8 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // a dispute decision, a Charge) changes what's disputed, so it stops once even with Alerts Off, like new terms.
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || (!!opts.piece && e.piece === opts.piece)) : r.changes;
-  const list = [...terms, ...rest].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
+  const list = [...terms, ...rest].filter((e) => !answersIt(e, opts.answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0, alertsOff: !!off });
 }
