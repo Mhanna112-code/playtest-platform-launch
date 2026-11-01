@@ -725,3 +725,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §87 "You stopped this test." (owner, Oct 31)
 - The developer's own stopped test reads "You stopped this test." at the top of its red banner (was "This test is stopped."); the team's Stop still reads
   "The team stopped this test.". (§86 is kept for Codex task 11.)
+
+## §88 "has paid" counts only money that went through (owner, Oct 31)
+- The tester's line under a paid part ("<Dev> has paid $X for this. It can be paid more, up to $Y in all.") left out nothing: a dispute decision's $10.00 still
+  waiting for the developer's bank read as paid ($50.00 next to "Paid so far $40.00" and "Payment may be delayed."). Now a payment waiting for the bank or owed
+  during a hold isn't in "has paid" ($40.00); the "up to … in all" figure is unchanged.

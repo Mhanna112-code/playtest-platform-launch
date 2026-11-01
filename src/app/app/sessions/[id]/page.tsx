@@ -225,7 +225,14 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const caps = await paidAndCap([...[written, recording].filter((x) => x?.review && !x.review.rejected).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.review.rejected).map((x) => ({ callId: x.id }))]);
   const payMoreAt = await payMoreClosesAt(c.testId, now);
   const payMoreShut = closedOut(payMoreAt, now) ? fmtDate(payMoreAt!) : null;
-  const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, closedOn: payMoreShut } : null);
+  // (Owner, Oct 31, batch 35 §88) "has paid" counts only money that went through: a payment waiting for the developer's bank, or owed during a hold, is left out
+  // (the cap still counts it, so "up to … in all" doesn't move).
+  const notYetPaid = new Map<string, number>();
+  for (const p of await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: { in: ["needs_confirmation", "needs_action", "owed", "paying", "deferred"] } }, { status: "failed", settledAt: null, owedUntil: { not: null } }] }, select: { submissionId: true, callId: true, amountCents: true } })) {
+    const k = p.submissionId ?? p.callId ?? "";
+    notYetPaid.set(k, (notYetPaid.get(k) ?? 0) + p.amountCents);
+  }
+  const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, paidCents: Math.max(0, caps.get(id)!.paidCents - (notYetPaid.get(id) ?? 0)), closedOn: payMoreShut } : null);
   const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string; teamClosedById?: string | null } | null | undefined, d: unknown, id = "") => !!r && !r.teamClosedById && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null).ok;
   // (Batch 30 §2) A part can be sent again after it's paid (not an old rejection or the team's $0 closure).
   const unpaidPart = canSendAgain(written) || canSendAgain(recording);
