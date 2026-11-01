@@ -166,3 +166,24 @@ through; earlier page load in the same tab stops once with "on another page or t
 load on every side (owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier tasks). Commit on
 the branch; don't push or merge.
 ```
+
+## 7. Task 23: a tester's deadline lands a day before Open until (time zones)
+
+```
+Read AGENTS.md first and follow it. Task number: 23 (schema codex23, build folder .next-codex23, branch codex/deadline-zone,
+worktree C:/Users/march/Projects/pl-codex-23, branched from master).
+
+Bug (owner, Nov 1): on a test with Open until Nov 27 (developer in America/Chicago), a tester who joined on Nov 1 got the deadline
+"due Nov 26". In the data the tester's dueAt was exactly 6 hours before the test's openUntil: the deadline is worked out as the end
+of a day in UTC while Open until is the end of the day in the developer's zone, so the deadline crosses midnight and shows a day
+early. Also check testerDays (days per tester) is counted in the same zone as Open until (it read 25 for Nov 1 -> Nov 27).
+Find where dueAt is computed on join / accept / rejoin / invite join (search dueAt and testerDays in src/lib/server/tests.ts,
+joining.ts, terms.ts newDueAt, rules.ts testerDaysOf / openUntilDay / dayIn) and make a joiner's deadline the end of the right day
+in the SAME zone Open until uses (the developer's saved zone, as openUntilDay does), so "N days from joining" ends on the day the
+listing shows and never earlier than Open until's day for a joiner who gets the full time. Edit's "move Open until later by D days
+moves every deadline D days" must keep working.
+Tests in tests/batch35-deadline-zone.test.ts: a Chicago developer, Open until Nov 27, a join on Nov 1 -> the deadline shows Nov 27
+in Chicago (and the listing's "N days from joining" matches); a UTC developer behaves the same; Edit +2 days moves deadlines 2 days.
+Append "## §111 Deadlines and Open until use the same day (owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky
+list as in the earlier tasks). Commit on the branch; don't push or merge.
+```
