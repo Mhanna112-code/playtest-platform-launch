@@ -186,8 +186,8 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     const gone = await tx.recording.findMany({ where: { contractId, part: "removed" }, select: { storageKey: true } });
     await tx.recording.deleteMany({ where: { contractId, part: "removed" } });
     const afterPaid = paid ? await paidUpdateRoom(tx, sub.id, c.testId) : null;
-    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "recording"), false, {}, c.id);
-    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id);
+    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "recording"), false, {}, c.id, "", `part-${sub.id}`);
+    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id, "", `part-${sub.id}`);
     return { updated: !!existing, late: data.late, subId: sub.id, gone, afterPaid };
   });
   for (const g of goneFiles) await deleteStored(g.storageKey);

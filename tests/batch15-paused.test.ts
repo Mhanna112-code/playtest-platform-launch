@@ -89,7 +89,7 @@ describe("the restricted view (sections 29 and 37)", () => {
 });
 
 describe("the developer's side of a dispute (section 27)", () => {
-  it("never stops, works while suspended (from the dashboard box), is refused over 2,000; an admin's Decide stops once for a side that arrived after the page loaded", async () => {
+  it("never stops, works while suspended (from the dashboard box), is refused over 2,000; an admin's Decide answers a side that arrived after the page loaded (§86)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -107,9 +107,7 @@ describe("the developer's side of a dispute (section 27)", () => {
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Again", seenAt: seen() })).body.error.message).toMatch(/^You already/);
     const a = await admin();
     const first = await aact(a.cookie, "decide", { id: d.id, total: "", note: "", seenAt: adminLoaded });
-    expect(first.body.error.code).toBe("stop_once");
-    expect(first.body.error.changes[0].text).toMatch(/^Nora Lane added their side at .+: read it, then press Decide again\.$/);
-    expect((await aact(a.cookie, "decide", { id: d.id, total: "", note: "", seenAt: adminLoaded, confirmed: true })).status).toBe(200);
+    expect(first.status, JSON.stringify(first.body)).toBe(200);
     expect(src("app/app/page.tsx")).toContain('data-dispute-box=""');
   });
 });

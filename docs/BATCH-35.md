@@ -721,3 +721,14 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §85 A kept refusal never follows you to another page (owner, Oct 31)
 - The blue "Your <press> didn't go through: …" line kept after a refused press (batch 29 §36, batch 32 §10) belongs to the page it was pressed on: going to
   another page drops it. On the same page it still stays until your next press (in the button's section, or at the top when none is left).
+
+## §86 A change you've answered never stops a later press (owner, Oct 31)
+Once a person answers a change, its lines never stop a later press, on that page or in another tab or device. Every gate drops lines about an item they answered
+AFTER the change happened, using the same `answersIt` matching as §79 and the person's ActionLog (the answer's item id is kept in its existing metadata; no new
+table). An update made after the answer is new and still stops once, as does any unrelated unanswered change. Their own action in another tab stays its own line (§67).
+- Answers: Accept / Decline a call request, application or rejoin ask; Pay / Pay more / Confirm with your bank on a piece (its sent / updated lines); Switch / Keep
+  on the terms offer; Join from an invite; the developer's side of a dispute; the admin's Decide. Decide answers that dispute's own lines, including a side just added.
+- Applies to the developer's gates (test page and Edit), the tester's gate, Join, both Rate gates and the admin's stops. The live top box and the existing seen / second-press
+  machinery keep their rules. Exact ids distinguish requests, applications and pieces; older event lines keep §79's kind / contract / piece-name or exact-text fallback.
+
+Tests: tests/batch35-answered-seen.test.ts (§86); tests/batch15-paused.test.ts (Decide's own dispute line now answered).

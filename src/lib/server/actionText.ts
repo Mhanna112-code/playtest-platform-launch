@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/format";
 import { andList } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
-import { logAction, type OwnAbout } from "./live";
+import { logAction, type Answers, type OwnAbout } from "./live";
 
 // What a person did, in their own words, for reason E ("You sent your written answers in another tab"). Logged after the
 // action succeeded. Chat messages and the live-call Join are not logged (not stop-once buttons).
@@ -38,6 +38,7 @@ export async function logTesterAction(userId: string, contractId: string, action
   const c = await db.contract.findUnique({ where: { id: contractId } });
   if (!c) return;
   let text = "";
+  let about: OwnAbout | undefined;
   switch (action) {
     case "leave": text = "left the test"; break;
     // (Owner, Oct 29, batch 29 section 13) "You sent your updated answers in another tab" (a part sent again replaces the sent one).
@@ -74,7 +75,12 @@ export async function logTesterAction(userId: string, contractId: string, action
     // (Batch 29 section 13) Rate (and the end of the part it brings) is never a line that stops other presses: it only races with Rate itself ("You already rated …").
     default: return;
   }
-  await logAction(userId, c.testId, body, text);
+  if (action === "answer-request" && ["accept", "decline"].includes(s(body.action))) about = { a: action, k: [`req:${s(body.requestId)}`], answers: { item: s(body.requestId) } };
+  if (action === "terms") {
+    const offer = await db.termsOffer.findFirst({ where: { id: s(body.offerId), contractId, status: { in: ["switched", "kept"] } } });
+    if (offer) about = { a: action, k: [`offer:${offer.id}`], answers: { item: offer.id } };
+  }
+  await logAction(userId, c.testId, body, text, about);
 }
 
 /** The developer's test-page actions (and the tester's join-page ones on the same route). (Batch 16 section 21) Each with what it touched (OwnAbout). */
@@ -124,7 +130,7 @@ export async function logTestAction(userId: string, testId: string, action: stri
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), true)}`; about = { a: "cancel-call", k: await callKeys(s(body.callId)) }; break;
     case "cancel-set": text = `cancelled the rest of a daily / weekly set of calls with ${await contractName(s(body.contractId))}`; about = { a: "cancel-set", k: [`set:${s(body.setId)}`, `c:${s(body.contractId)}`] }; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), true)}`; about = { a: "no-show", k: await callKeys(s(body.callId)) }; break;
-    case "dispute-side": text = "added your side to a dispute"; about = { a: "dispute-side", k: [`dispute:${s(body.disputeId)}`] }; break;
+    case "dispute-side": text = "added your side to a dispute"; about = { a: "dispute-side", k: [`dispute:${s(body.disputeId)}`], answers: { item: s(body.disputeId) } }; break;
     case "pay-extra": {
       // (Batch 20 section 12) Waiting for the bank's check: nothing is paid yet (it's logged when the bank confirms: logPayMore). A repeat isn't news.
       const r = (result ?? {}) as { amountCents?: number; requiresAction?: boolean; repeated?: boolean };
@@ -134,7 +140,7 @@ export async function logTestAction(userId: string, testId: string, action: stri
       const label = body.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
       // (Batch 20 section 12) "You paid Ana Silva $5.00 more for their written answers in another tab": it stops every press on the test page once (BIG_OWN_ACTS).
       text = `paid ${await contractName(s(body.contractId))} ${money(r.amountCents ?? 0)} more for their ${label}`;
-      about = { a: "pay-more", k: [piece, `c:${s(body.contractId)}`] };
+      about = { a: "pay-more", k: [piece, `c:${s(body.contractId)}`], ...(!body.callId ? { answers: sentAnswer(s(body.submissionId), s(body.contractId), label) } : {}) };
       break;
     }
     case "invite": {
@@ -171,17 +177,17 @@ export async function logTestAction(userId: string, testId: string, action: stri
     case "answer-request": {
       const { when, name } = await requestLine(s(body.requestId));
       text = body.action === "withdraw" ? `withdrew a call request for ${when}` /* (batch 35 §74) */ : `${body.action === "accept" ? "accepted" : "declined"} ${name}'s call request for ${when}`;
-      about = { a: "answer-request", k: [`req:${s(body.requestId)}`, `c:${s(body.contractId)}`] };
+      about = { a: "answer-request", k: [`req:${s(body.requestId)}`, `c:${s(body.contractId)}`], ...(["accept", "decline"].includes(s(body.action)) ? { answers: { item: s(body.requestId), kinds: ["requested"], contractId: s(body.contractId) } } : {}) };
       break;
     }
     case "application": {
       const a = await db.application.findUnique({ where: { id: s(body.applicationId) } });
       const who = a ? await db.user.findUnique({ where: { id: a.testerId } }) : null;
       text = `${body.action === "decline" ? "declined" : "accepted"} ${who ? displayName(who) : "a tester"}'s application`;
-      about = { a: "application", k: [`app:${s(body.applicationId)}`] };
+      about = { a: "application", k: [`app:${s(body.applicationId)}`], answers: { item: s(body.applicationId), kinds: ["applied"], texts: who ? [`${displayName(who)} applied to join`, `${displayName(who)} asks to rejoin`] : [] } };
       break;
     }
-    case "join": text = "joined this test"; break;
+    case "join": text = "joined this test"; if (body.inviteId) about = { a: "join", k: [`invite:${s(body.inviteId)}`], answers: { item: s(body.inviteId) } }; break;
     case "rate": {
       const c = await db.contract.findUnique({ where: { id: s(body.contractId) }, include: { tester: true } });
       text = `rated ${c ? displayName(c.tester) : "a tester"}`;
@@ -215,5 +221,8 @@ export async function logReview(userId: string, body: B, result: { amountCents?:
   const name = displayName(piece.c.tester);
   const text = result.rejected ? `rejected ${name}'s ${piece.label}` : `paid ${name} ${money(result.amountCents ?? 0)} for the ${piece.label}`;
   // (Batch 16 section 21) It touches this piece (another Pay on it stops once) and this tester (an End early that includes them stops once).
-  await logAction(userId, piece.c.testId, body, text, { a: "pay", k: [`${body.kind === "call" ? "call" : "sub"}:${id}`, `c:${piece.c.id}`] });
+  await logAction(userId, piece.c.testId, body, text, { a: "pay", k: [`${body.kind === "call" ? "call" : "sub"}:${id}`, `c:${piece.c.id}`], ...(body.kind !== "call" ? { answers: sentAnswer(id, piece.c.id, piece.label) } : {}) });
 }
+
+/** §86: exact piece, with §79 fallback for older event lines. */
+const sentAnswer = (item: string, contractId: string, label: string): Answers => ({ item, contractId, label, kinds: ["sent", "sentpaid"] });
