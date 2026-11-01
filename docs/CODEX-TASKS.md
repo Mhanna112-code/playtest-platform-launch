@@ -423,3 +423,37 @@ batch22 "two admins at once", batch17-rate §12, codex9 resource_missing, batch3
 batch12 "a part already open to charging", batch34 outage Approve after Dismiss, batch4 "Open until heads-ups wait while the
 test is paused"). Commit on the branch; don't push or merge.
 ```
+
+## Task 19: a Pay waiting for the bank keeps the part "Waiting for review" (owner, Nov 1)
+
+```
+Read AGENTS.md first and follow it. Task number: 19 (schema codex19, build folder .next-codex19, branch codex/pending-pay-state,
+worktree C:/Users/march/Projects/pl-codex-19, branched from master).
+
+Bug (owner): when the developer presses Pay (or Pay on a call) and their bank asks to confirm, the tester's part flips to "Paid"
+straight away, then back to "Waiting for review" if the bank check fails, is closed, or times out (15 minutes). The review row is
+created with the press: src/lib/server/confirm.ts pressAction / release() deletes it again for needs_action "review" / "call"
+payments (see the comment block at the top of confirm.ts for the on-session vs away rules).
+
+Wanted: while a Pay's payment is still waiting for the developer's bank (status needs_action), everyone sees it as NOT paid yet:
+- Tester's session page: the part stays "Waiting for review" (the batch 35 §97 payment tag: src/lib/testerPaymentStatus.ts,
+  src/components/TesterPaymentTag.tsx), no "Paid $X: you get …" line, no "has paid" amount for it, no Dispute, no paid bell/email;
+  it becomes "Paid" only when the bank check succeeds (confirmFinish).
+- Developer's test page / Needs you: the piece shows "Confirming with your bank" (the inline bank check) instead of a paid row;
+  their dashboard counts don't treat it as paid.
+- Everything that reads "is this piece paid" (Charge / Let it go shown or refused, Rate's "everything reviewed", Pay more room,
+  close-out lines, Needs review counts, the tester dashboard's Waiting for review) treats needs_action as not paid, while
+  pieceLocked still locks the piece (no Charge, no admin Decide) during the 15 minutes.
+Prefer one helper (e.g. "reviewSettled(review, payments)") over scattered checks; or don't create the review until confirmFinish —
+pick whichever touches less and keeps release() simple; explain the choice in the doc section.
+Charges made while the developer is away (needs_confirmation: a tester's Charge, a dispute decision) keep today's "Payment
+delayed" behaviour.
+
+Tests in tests/batch35-pending-pay-state.test.ts: Pay needing the bank → tester sees Waiting for review (no Paid line, no Dispute)
+→ confirm succeeds → Paid; the same Pay → bank check fails or 15 minutes pass → still Waiting for review, nothing charged, Pay
+available again; the piece is locked meanwhile (Charge refused). Append "## §107 A Pay waiting for the bank isn't paid yet (owner,
+Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky, rerun alone: batch22 "two admins at once", batch17-rate §12, codex9
+resource_missing, batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open to charging", batch34
+outage Approve after Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the branch; don't push or
+merge.
+```
