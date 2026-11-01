@@ -309,3 +309,29 @@ batch17-rate §12, codex9 resource_missing, batch34-invite-beats-application, ba
 to charging", batch34 outage Approve after Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the
 branch; don't push or merge.
 ```
+
+## Task 15: a catalog of every blue notice and refusal (owner, Oct 31)
+
+```
+Read AGENTS.md first and follow it. Task number: 15 (branch codex/notice-catalog, worktree C:/Users/march/Projects/pl-codex-15,
+branched from master). Documentation only: change no app code.
+
+Write docs/BLUE-NOTICES.md: EVERY blue notice a person can see, found from the code (not from memory), each with its exact
+wording (placeholders like <dev>, <test>, $X, <date>), who sees it, what triggers it, which presses it stops, whether Alerts can
+turn it off, and where it shows. Sections:
+1. Stop-once lines ("Your <press> didn't go through. Since you opened this page: …"), developer side: every change kind from
+   src/lib/server/live.ts (devChanges, ownChanges, testerPaymentChanges…), src/lib/server/tests.ts (devGate), invites.ts extra
+   lines, src/lib/alerts.ts (alertOf: which Alerts type, or "always").
+2. Stop-once lines, tester side: src/lib/server/testerGate.ts (testerChanges, KINDS, ALERTS_OFF_KINDS), joining.ts (join gate),
+   ratings.ts (testerRateGate / devRateGate).
+3. Admin stops: src/lib/server/adminRace.ts and the admin gates.
+4. Final refusals (blue lines under a button, the kept refusal of src/components/KeptRefusal.tsx, and the tester page's jump to
+   its top banner): every HttpError message thrown by a route a press calls (src/app/api/**, src/lib/server/**) that is shown as
+   a refusal, grouped by press (Pay, Pay more, Confirm with your bank, Charge, Let it go, Dispute, Decide, Rate, Send, Join, Apply,
+   Accept / Decline, Invite, Cancel invite, call requests, Leave, Stop, End early, Next round, Edit save, admin actions…).
+5. Other blue (info) notices on pages: the live top box's "Updated …" lines, banners (paused / stopped / hold / chargeback /
+   suspended), "Payment may be delayed", bank confirm lines, the closing-soon lines, the dashboard strips.
+For each also say how it goes away (next press, reload, another page, the 20-second redraw, Dismiss).
+Finish with "Things that look odd" if you find two lines saying the same thing, a line that can't happen any more, or wording
+that contradicts another. Commit on the branch; don't push or merge.
+```
