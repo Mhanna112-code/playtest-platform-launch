@@ -730,3 +730,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - The tester's line under a paid part ("<Dev> has paid $X for this. It can be paid more, up to $Y in all.") left out nothing: a dispute decision's $10.00 still
   waiting for the developer's bank read as paid ($50.00 next to "Paid so far $40.00" and "Payment may be delayed."). Now a payment waiting for the bank or owed
   during a hold isn't in "has paid" ($40.00); the "up to … in all" figure is unchanged.
+
+## §89 Pay doesn't stop for the tester joining (owner, Oct 31)
+- A tester joined and sent written answers seconds later while the developer's page was open; Pay on those answers skipped the "sent" line (§79) but still
+  stopped for "fbbb joined · 9:05 PM". Pay, Pay more and Confirm with your bank on a tester's piece now also skip that tester's own "joined" line (paying their
+  work, you know they're in). Other testers' joins still stop as before (Alerts: Joins and applications).

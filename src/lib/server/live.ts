@@ -46,7 +46,8 @@ export const answersIt = (e: TestEventLike & { contractId?: string | null }, a?:
   if (!a) return false;
   if (a.item && e.item) return e.item === a.item;
   if (!a.kinds?.includes(e.kind)) return false;
-  if (a.label && !e.text.includes(` ${a.label}`)) return false;
+  // (Batch 35 §89) The tester's own "joined" line names no piece: paying their work answers it too.
+  if (a.label && e.kind !== "joined" && !e.text.includes(` ${a.label}`)) return false;
   return (!!a.contractId && e.contractId === a.contractId) || !!a.texts?.includes(e.text);
 };
 export type OwnEvent = TestEventLike & { about?: OwnAbout; live?: string };
@@ -61,7 +62,8 @@ export const PAY_ACTS = ["pay", "pay-more"] as const;
 export const payPressOf = (contractId: string, piece: { callId?: string | null; submissionId?: string | null }) => ({
   acts: [...PAY_ACTS] as string[], keys: [piece.callId ? `call:${piece.callId}` : piece.submissionId ? `sub:${piece.submissionId}` : `c:${contractId}`], stopCheck: contractId,
   // (Batch 35 §79) Pay / Pay more on written answers or a recording: the tester's "sent their …" / "updated their …" line is what it answers.
-  ...(piece.submissionId ? { answers: { kinds: ["sent", "sentpaid"], contractId, submissionId: piece.submissionId } } : {}),
+  // (Owner, Oct 31, batch 35 §89) …and that tester joining: paying their work, you know they're in ("fbbb joined" no longer stops Pay on fbbb's answers).
+  ...(piece.submissionId ? { answers: { kinds: ["sent", "sentpaid", "joined"], contractId, submissionId: piece.submissionId } } : { answers: { kinds: ["joined"], contractId } }),
 });
 export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
 /**
