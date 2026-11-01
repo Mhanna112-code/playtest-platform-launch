@@ -333,7 +333,14 @@ turn it off, and where it shows. Sections:
    suspended), "Payment may be delayed", bank confirm lines, the closing-soon lines, the dashboard strips.
 For each also say how it goes away (next press, reload, another page, the 20-second redraw, Dismiss).
 Finish with "Things that look odd" if you find two lines saying the same thing, a line that can't happen any more, or wording
-that contradicts another. Commit on the branch; don't push or merge.
+that contradicts another.
+(Added Nov 1) Then a section "Doesn't update until a reload": every page or panel whose shown state depends on something that
+can change ELSEWHERE (another test, another person's other tests, the tester's own other tabs, the account's limits) but that the
+page's 20-second beat (src/lib/liveSync.ts, LiveTop, AutoRefresh fingerprints `v`) doesn't watch. Known candidates to check: the
+Invite panel rows (tester at 10 tests, suspended, blocked), Find tests (spots, new / closed tests), the tester dashboard's New tests
+for you, call request clash notes (calls on other tests), the join page's Join when the tester reaches 10 tests elsewhere. For
+each: what looks stale, what a press does then (refused / stops / goes through), and a one-line fix suggestion. Commit on the
+branch; don't push or merge.
 ```
 
 ## Task 16: a "Find testers" page for developers (owner, Nov 1)
@@ -475,6 +482,8 @@ rated here, invited / in) so the page redraws when it changes, like AutoRefresh'
 bankTopV). No new timers. Ticked boxes and typed search stay as they are across the redraw; a ticked tester who became uninvitable
 is unticked with the existing greyed reason.
 
+(Added Nov 1) If task 15's "Doesn't update until a reload" list exists (docs/BLUE-NOTICES.md), fix the other real ones there the same
+way (a fingerprint on the existing beat, no new timers); list in the doc section which ones you fixed and which you left and why.
 Tests in tests/batch35-invite-rows-live.test.ts: the fingerprint changes when a shown tester's active count crosses the limit or
 they get blocked / suspended, and not for unrelated changes. Append "## §109 Invite rows update on the beat (owner, Nov 1)" to
 docs/BATCH-35.md. npm run check green (known flaky list as in the earlier tasks). Commit on the branch; don't push or merge.
