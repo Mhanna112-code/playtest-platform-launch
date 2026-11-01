@@ -210,3 +210,33 @@ saves other fields; a future Open until can still move later. Update tests that 
 until is locked once it has passed (owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier
 tasks). Commit on the branch; don't push or merge.
 ```
+
+## 9. Task 25: new charges during a hold wait until it lifts
+
+```
+Read AGENTS.md first and follow it. Task number: 25 (schema codex25, build folder .next-codex25, branch codex/charges-after-lift,
+worktree C:/Users/march/Projects/pl-codex-25, branched from master).
+
+Owner decision (Nov 1): while a developer is on a payment hold or a chargeback hold, NEW charges that arrive during the hold must
+not be added to what they owe (today they are, so "Pay what you owe" keeps changing under them and a chargeback hold's
+reservation stops covering it: see owedForBox / reservedAddedLine / the "addedCents" step in src/lib/server/chargeback.ts and
+holds.ts). New charges = a tester's Charge, a listed call charged automatically (autoChargeCalls), a team dispute decision that
+raises pay, anything else the hold code currently turns into "owed" after holdStartedAt.
+
+Wanted:
+- During the hold those charges are recorded as waiting until the hold lifts (reuse the existing "deferred" status a developer-side
+  suspension already uses for auto-charged calls, if it fits; otherwise a clear new status), NOT owed. "Pay what you owe" (and a
+  chargeback hold's amount and reservation) covers only what was owed when the hold began plus the charged-back amount, so paying
+  it can lift the hold.
+- The moment the hold lifts (paid off, the team's Approve for a chargeback hold or the 4th-hold review, or an admin lifting it),
+  each waiting charge is made automatically, oldest first, as a charge made while the developer is away: the bank may ask to
+  confirm (needs_confirmation, 3 days, "Your bank wants you to confirm"), a decline starts a NEW payment hold as today.
+- Testers read "Payment delayed" on those parts until then (the batch 35 §97 tag; never "hold", "suspended", "failed" or
+  "chargeback"); the developer's Payments shows them under "Charged once your tests resume" with amounts, not in Pay what you owe.
+- Nothing changes for charges made when no hold is on.
+Tests in tests/batch35-charges-after-lift.test.ts: a tester's Charge during a payment hold isn't added to Pay what you owe; paying
+what was owed lifts the hold and then charges the waiting Charge; the same for a chargeback hold (its reservation isn't topped up);
+a waiting charge that declines after the lift starts a new hold; no hold -> unchanged. Update tests that expected new charges to be
+added to what's owed during a hold. Append "## §113 New charges during a hold wait until it lifts (owner, Nov 1)" to
+docs/BATCH-35.md. npm run check green (known flaky list as in the earlier tasks). Commit on the branch; don't push or merge.
+```
