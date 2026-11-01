@@ -1,6 +1,7 @@
 import { hasBoth, sideFor, sideForPath, type Side } from "@/lib/sides";
 import { isAdmin } from "./session";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes } from "@/lib/tz";
 import { bellKey, groupTitle } from "@/lib/bell";
@@ -40,7 +41,7 @@ export async function testIdOfLink(path: string) {
  * account's deletion or suspension, the site's own notices). Left out, the link's page decides (lineSide); a caller whose link is a shared page (the dashboard,
  * Payments, Settings) names it.
  */
-export type Opts = { side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string };
+export type Opts = { recipientId?: string; side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string };
 
 /**
  * `reminder`: (Owner, Oct 27) names a reminder ("paused:<test>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
@@ -51,11 +52,12 @@ const flags = (o: { own?: boolean; group?: string; payment?: boolean }) => ({ ow
 /** (Batch 34 §5) A line's side: the caller's, else its link's page (your own public profile is the side it shows), else the account's (null). */
 export const lineSide = (userId: string, link: string, side: Side | null | undefined) => (side !== undefined ? side : sideForPath(link, userId));
 
-export async function notify(to: string, subject0: string, lines0: string[], path: string, opts: Opts = {}) {
-  const user = await db.user.findUnique({ where: { email: to }, select: { id: true, timeZone: true } });
+export async function notify(to: string, subject0: string, lines0: string[], path: string, opts: Opts = {}, client: Prisma.TransactionClient | typeof db = db) {
+  const user = await client.user.findUnique({ where: opts.recipientId ? { id: opts.recipientId } : { email: to }, select: { id: true, timeZone: true } });
   if (user && opts.about && !(await inReach(user.id, opts.about))) return;
   // (Batch 15 section 11) Times in the line are written in the recipient's own time zone (unknown: UTC).
   const subject = renderTimes(subject0, user?.timeZone), lines = lines0.map((l) => renderTimes(l, user?.timeZone));
+  if (!user && opts.recipientId) return; // A known account never falls back to a non-account email.
   if (!user) {
     // Not an account (nowhere for a bell or a summary to go): the one email goes at once.
     try {
@@ -68,7 +70,7 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   }
   // (Owner, Oct 27) Nothing is emailed right away: the notification waits for the person's email (the summary, or the end-of-day payment email). `always` marks the few
   // that ignore Off (account paused / active again, the team pausing / stopping / closing a test, the owed reminder): they ride in ONE end-of-day email, once.
-  await db.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
+  await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
 /** A bell notification only (no email unless the person's summary takes it, or `always`), e.g. the Open until heads-ups. */

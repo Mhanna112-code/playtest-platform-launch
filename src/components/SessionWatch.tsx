@@ -1,4 +1,5 @@
 "use client";
+import { publishMessages } from "./MessagesBadge";
 import { reloadKeepingPlace } from "@/lib/keepPlace";
 import { useEffect, useRef } from "react";
 import { setPageUser, toLogin } from "@/lib/client";
@@ -117,7 +118,7 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
   useEffect(() => {
     let alive = true;
     const check = async () => {
-      let s: { state: string; bell?: number; userId?: string; name?: string; suspended?: boolean; testerSuspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
+      let s: { state: string; bell?: number; messages?: number; userId?: string; name?: string; suspended?: boolean; testerSuspended?: boolean; held?: boolean; holdReason?: string; developer?: boolean; tester?: boolean; side?: string };
       try {
         s = await (await fetch("/api/account/status", { cache: "no-store" })).json();
       } catch {
@@ -131,6 +132,7 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
       }
       // (Batch 29 §28) The bell's number, live on every page.
       if (s.state === "ok" && typeof s.bell === "number") publishBell(s.bell);
+      if (s.state === "ok" && s.userId === userId && typeof s.messages === "number") publishMessages(s.messages);
       if (s.state === "deleted") {
         forgetTyped();
         toLogin(true); // (batch 35 §20) once, whichever gets there first (a refused request or this check)

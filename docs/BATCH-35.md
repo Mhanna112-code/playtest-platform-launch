@@ -812,3 +812,18 @@ Tests: tests/batch35-payment-tags.test.ts (§97), with the older page-wiring exp
   and the other refused presses through the same kept-refusal path.
 
 Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts (the duplicate-line check excludes kept descendants too).
+
+
+## §105 Message anyone from their profile (owner, Nov 1)
+
+Developer and tester profiles have **Message** for another regular account, whether or not they share a test. The link opens a direct conversation between the two accounts. Opening it creates nothing: only the first successful Send creates the conversation. There is one conversation for the pair, shared across both sides of either account, as the owner requested. Existing test chats between the same people stay separate.
+
+Messages lists direct conversations alongside test chats, with the other person's name and **Direct message**, newest activity first. The conversation reuses Chat, its 4,000-character limit, message press IDs and saved drafts. A direct draft is keyed by the other account, so it is the same draft from either side. The latest 300 messages are shown in chronological order. Direct reads and unread counts belong to the account too; opening the page advances its read marker only to the newest loaded message's timestamp, and an older tab cannot move it backwards.
+
+A block either way removes Message from a freshly rendered profile. An old page's Send is refused with the existing neutral Unable to chat with this developer/tester line. Deleted accounts and self-messaging cannot start a conversation. Admin views keep their existing tools. Each sender's current-side restriction uses the existing refusals and dashboard routing. The other person's current-side restriction pauses sending with the same neutral message as test chat; history remains readable and the input follows the existing page beat when that restriction lifts. A restriction on an inactive side stays on that side. Tester-facing lines never explain a developer's restriction.
+
+A sender can start at most 20 new conversations in a rolling 24 hours: **You've started 20 new conversations in the last 24 hours. Try again later.** Existing conversations and replies do not consume another start. A per-sender row lock serializes starts, and the canonical unique account pair handles simultaneous first messages. Test and direct messages share the existing 30-per-minute sending limit. Blank or overlong messages create no conversation. A retry of the same message ID returns the same message and sends no second bell.
+
+The bell says **New message from <name>**, linking to the direct conversation, on both sides. It follows the existing account email settings and summaries. The message and bell commit together, using the known recipient account ID; an email address changing cannot turn that notification into a non-account email. Messages list and direct pages use AutoRefresh on the existing beat. The global Messages count uses SessionWatch's existing status check beside the bell; no new timer is added. Raw conversation/read timestamp writes explicitly use UTC, matching Prisma even when the database's local time zone differs.
+
+The additive migration introduces DirectConversation, DirectMessage and DirectRead with foreign keys and indexes. No test ID belongs to a direct conversation. Tests in `tests/batch35-profile-messages.test.ts` cover people who never worked together, both profile types, blocks both ways, restrictions/deletion/self/admin rules, the daily limit and expiry, simultaneous first messages and lost-answer retries, mixed and same-side accounts, shared drafts/reads, separate test chats, combined rate/length limits, email Off, unread/bell/list updates, live fingerprints and UTC timestamps.

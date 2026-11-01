@@ -9,6 +9,10 @@ export async function GET(req: Request) {
     const u = await requireUser(req);
     await (await import("@/lib/server/calls")).sweepNobodyJoined(); // (NEWEST+8) minute-accurate while a page is open
     const q = new URL(req.url).searchParams;
+    if (q.has("direct") || q.has("messages")) {
+      const dm = await import("@/lib/server/directMessages");
+      return ok({ v: q.has("direct") ? await dm.directV(u.id, q.get("direct") ?? "") : await dm.messagesListV(u), restricted: dm.directRestricted(u) });
+    }
     // (Owner, Oct 29, batch 10) Payments: "Pay what you owe" updates live (a declined payment, a chargeback, a tester's Charge during the hold, or a payment from another tab).
     // (Batch 30 §8) The fingerprint comes from pulseV, which the page also renders with (AutoRefresh's baseline).
     if (q.get("owed")) {

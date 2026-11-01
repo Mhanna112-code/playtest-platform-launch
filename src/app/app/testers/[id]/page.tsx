@@ -1,3 +1,4 @@
+import { ProfileMessageButton } from "@/components/ProfileMessageButton";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, Languages, Monitor } from "lucide-react";
@@ -5,7 +6,6 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate } from "@/lib/format";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { TesterTiles } from "@/components/ProfileTiles";
-import { ChatWithButton } from "@/components/ChatWithButton";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
 import { isAdmin } from "@/lib/server/session";
 import { anySuspended, devRestricted } from "@/lib/restricted";
@@ -25,7 +25,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * A tester's profile as developers see it (the full app's tester profile): who they are, the two tiles (Accepted parts,
- * Rating) with what they count, and About. For developers (and the tester themself); not between people who blocked
+ * Rating) with what they count, and About. For developers and testers; not between people who blocked
  * each other.
  */
 export default async function TesterProfilePage({ params }: { params: Promise<{ id: string }> }) {
@@ -38,15 +38,13 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   const mine = viewer.id === p.id;
   // (Owner, Oct 27) A suspended or held developer can read this page, but Chat with, Report, Block and Edit profile are hidden.
   const off = viewer.isDeveloper && devRestricted(viewer, sideFor(viewer, "/app/testers"));
-  if (!mine && !isAdmin(viewer) && !viewer.isDeveloper) notFound();
   // (Owner, Oct 28, batch 20 section 17) They blocked you: "This profile isn't available." (never says why). You blocked them: their profile as usual, with Unblock
   // where Block was and no Chat with.
   if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } }))) return <ProfileUnavailable />;
   const iBlocked = !mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) > 0;
   const name = displayName(p);
   const pr = p.profile;
-  // (Owner, Oct 26) "Chat with <name>" for a developer: the chat of the most recent test they share; hidden when they share none.
-  const shared = !mine && viewer.isDeveloper && !off && !iBlocked ? await db.contract.findFirst({ where: { testerId: p.id, test: { developerId: viewer.id } }, orderBy: { joinedAt: "desc" }, select: { id: true } }) : null;
+  // (§105) The direct conversation is shared by the two accounts, whether they have worked together or not.
   const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
@@ -59,7 +57,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
           {mine && <p className="text-xs text-slate-500">This is how developers see your profile.</p>}
         </div>
         {mine && !off && !anySuspended(viewer) && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
-        {shared && <ChatWithButton contractId={shared.id} name={name} />}
+        <ProfileMessageButton viewer={viewer} other={p} blocked={iBlocked} />
       </section>
       <TesterTiles userId={p.id} />
       {/* (Owner, Oct 29, batch 13) Shown excerpts (never from a test that has an NDA now); the tester's own list, with Remove, on their own profile. */}

@@ -115,6 +115,11 @@ model User {
   contracts Contract[]
   messages  Message[]
   chatReads ChatRead[]
+  directFirst DirectConversation[] @relation("DirectFirst")
+  directSecond DirectConversation[] @relation("DirectSecond")
+  directStarted DirectConversation[] @relation("DirectStarter")
+  directMessages DirectMessage[]
+  directReads DirectRead[]
   keptForms KeptForm[]
   excerpts  Excerpt[]
   /// (Batch 17 §18) Join pages this tester opened while not in the test ("Tests visited")
@@ -685,6 +690,53 @@ model ChatRead {
   readAt   DateTime @default(now())
 
   @@id([userId, testId, testerId])
+}
+
+/// (§105) One account-level conversation per unordered pair, independent of tests and the side in use.
+model DirectConversation {
+  id String @id @default(cuid())
+  firstId String
+  first User @relation("DirectFirst", fields: [firstId], references: [id], onDelete: Cascade)
+  secondId String
+  second User @relation("DirectSecond", fields: [secondId], references: [id], onDelete: Cascade)
+  startedById String
+  startedBy User @relation("DirectStarter", fields: [startedById], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now()) @updatedAt
+  messages DirectMessage[]
+  reads DirectRead[]
+
+  @@unique([firstId, secondId])
+  @@index([secondId])
+  @@index([firstId, updatedAt])
+  @@index([secondId, updatedAt])
+  @@index([startedById, createdAt])
+}
+
+model DirectMessage {
+  id String @id @default(cuid())
+  conversationId String
+  conversation DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  senderId String
+  sender User @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  body String
+  clientId String?
+  createdAt DateTime @default(now())
+
+  @@unique([senderId, clientId])
+  @@index([conversationId, createdAt])
+  @@index([senderId, createdAt])
+}
+
+model DirectRead {
+  userId String
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  conversationId String
+  conversation DirectConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  readAt DateTime @default(now())
+
+  @@id([userId, conversationId])
+  @@index([conversationId])
 }
 
 /// (NEXT-UI 10) Typed but not sent: kept on the server per person and form (any device), put back with "Not sent yet"; sending clears it.

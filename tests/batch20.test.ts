@@ -751,7 +751,7 @@ describe("batch 20 section 17: a blocked profile shows a proper page", () => {
       expect(s, f).not.toMatch(/blockedId: p\.id \}\] \} \}\)\)\) notFound\(\);/);
     }
     expect(src("app/app/developers/[id]/page.tsx")).toContain("const open = iBlocked ? [] : await profileOpenTests(p, viewer, isAdmin(viewer));");
-    expect(src("app/app/testers/[id]/page.tsx")).toContain("const shared = !mine && viewer.isDeveloper && !off && !iBlocked ? await");
+    expect(src("app/app/testers/[id]/page.tsx")).toContain("<ProfileMessageButton viewer={viewer} other={p} blocked={iBlocked} />");
     expect(src("app/app/not-found.tsx")).toContain("<ProfileUnavailable line={PAGE_MISSING} />");
     expect(src("components/BlockButton.tsx")).toContain('{done && <span className="text-emerald-300" role="status">Unblocked.</span>}');
   });
