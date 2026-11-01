@@ -846,6 +846,8 @@ export const CONFIRM_DAYS = 3;
 /** (Batch 12 section 5) A press's confirmation pop-up locks the piece for at most this long. */
 export const PRESS_ACTION_MS = 15 * 60_000;
 export const BANK_NOT_CONFIRMED = "Your bank didn't confirm the payment, so nothing was charged.";
+/** (Owner, Oct 31, batch 35 §92) Confirm with your bank on a charge made while away, refused because the card on file was declined (it keeps waiting until its date). */
+export const cardDeclinedConfirmLine = (by: string) => `Your card was declined, so nothing was charged. Change your card and confirm again by ${by}.`;
 /**
  * (Batch 17 §11) The bank's check opens inline, under the button that charges. A charge made while the developer was away on a test is confirmed on that test page, under
  * the piece ("Confirm with your bank"). (Batch 29 §32) Its bell line is bankWaitingAllLine's, one across tests and renewals.

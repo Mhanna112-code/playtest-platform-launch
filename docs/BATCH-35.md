@@ -746,3 +746,7 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - The tester's "Your agreed scope" fold shows its contents (the contract, the listing information, the terms history) in one scroll box about 32rem tall.
 - "Terms history" is its own fold, shut by default (the Updated tags on the listing lines already show what changed; the history keeps the full record:
   what you joined on, each offer and what you chose, the questions and NDA then and now, stop reasons).
+
+## §92 Confirm with your bank: the card was declined (owner, Oct 31)
+- Confirm with your bank on a charge made while away re-tries it with the card on file now. When that card is declined the line reads "Your card was declined,
+  so nothing was charged. Change your card and confirm again by <date, time>." (was "Your bank didn't confirm the payment…"); the payment keeps waiting until then.

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED } from "@/lib/rules";
+import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
@@ -241,7 +241,9 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
       pi = await stripe.paymentIntents.confirm(pi.id, { payment_method: u.stripePaymentMethodId, return_url: bankReturnUrl() });
     } catch (e) {
       console.error("[stripe] confirm start:", (e as Error).message);
-      throw new HttpError(402, "not_confirmed", BANK_NOT_CONFIRMED);
+      // (Batch 35 §92) The card on file was declined: say so, and by when to confirm with another card (a charge made while away keeps waiting until then).
+      const declined = (e as { type?: string }).type === "StripeCardError";
+      throw new HttpError(402, "not_confirmed", declined && p.actionBy ? cardDeclinedConfirmLine(fmtDateTimeIn(p.actionBy, u.timeZone)) : BANK_NOT_CONFIRMED);
     }
   }
   const needs = pi.status === "succeeded" ? "none" : pi.status === "requires_action" ? "action" : "confirm";
