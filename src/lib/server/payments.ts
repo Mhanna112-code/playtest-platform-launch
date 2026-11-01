@@ -35,7 +35,7 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
   if (kind === "submission") {
     const s = await tx.submission.findUnique({ where: { id }, include: { review: true, contract: { include: { test: true, tester: true } } } });
     if (!s) return null;
-    return { contract: s.contract, review: s.review, listing: s.agreedCents, label: s.kind === "written" ? "written answers" : "recording", where: { submissionId: s.id }, kind: "submission" as const, minutes: 0 };
+    return { contract: s.contract, review: s.review, listing: s.agreedCents, label: s.kind === "written" ? "written answers" : "recording", reference: s.kind === "written" ? "written answers" : "recording", where: { submissionId: s.id }, kind: "submission" as const, minutes: 0 };
   }
   if (kind === "call") {
     const c = await tx.call.findUnique({ where: { id }, include: { review: true, contract: { include: { test: true, tester: true } } } });
@@ -45,7 +45,7 @@ async function loadPiece(tx: Prisma.TransactionClient, kind: string, id: string)
     // (Batch 15 section 40) Paid for its measured (or lowered) length, once that's final.
     const minutes = callMinutesOf(c);
     if (minutes == null) throw new HttpError(409, "measuring", (await import("./calls")).MEASURING_REFUSAL);
-    return { contract: c.contract, review: c.review, listing: callReference(c.rateCents, minutes).cents, label: "live call", where: { callId: c.id }, kind: "call" as const, minutes };
+    return { contract: c.contract, review: c.review, listing: callReference(c.rateCents, minutes).cents, label: "live call", reference: `live call on ${fmtDateTime(c.startsAt)}`, where: { callId: c.id }, kind: "call" as const, minutes };
   }
   return null;
 }
@@ -92,12 +92,12 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const payPress = payPressOf(c.id, piece.where);
     if (already) {
       await devGate(tx, c.testId, body, {}, [], undefined, payPress);
-      if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for this.`);
-      if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let this go: nothing was charged.`);
+      if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for their ${piece.reference}.`);
+      if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let their ${piece.reference} go: nothing was charged.`);
       if (already.teamClosedById) throw new HttpError(409, "reviewed", TEAM_CLOSED_NO_PAY); // (batch 30 §5)
       const owedNow = !already.rejected && (await tx.payment.findFirst({ where: { ...piece.where, status: "failed", owedUntil: { not: null }, settledAt: null } }));
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
-      throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
+      throw new HttpError(409, "reviewed", already.rejected ? `You already rejected ${name}'s ${piece.reference}.` : `You already paid ${money(already.amountCents)} for ${name}'s ${piece.reference}.`);
     }
     // (Batch 17 §19) Pay closes on the piece's own closing date (the test's close-out, or 14 days after its Charge opened if later; final: it stays unpaid).
     // Until then Pay works, also after the tester's Charge opened.

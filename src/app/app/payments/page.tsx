@@ -1,3 +1,4 @@
+import { savedCardLine } from "@/lib/server/savedCard";
 import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDateTime, money } from "@/lib/format";
@@ -122,10 +123,10 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         <>
           <section id="card" className="card scroll-mt-24 space-y-3">
             <h2 className="flex items-center gap-2 font-semibold text-white"><CreditCard className="h-5 w-5 text-indigo-300" /> Your card</h2>
-            <p className="text-sm text-slate-300">{u.stripePaymentMethodId ? "A card is saved." : "No card yet."} You&apos;re charged only when you press Pay, for exactly the amount you tick.</p>
+            <p className="text-sm text-slate-300">{await savedCardLine(u)}</p>
             {/* (Batch 15 section 41, L5) Stripe objects are made only on a POST. */}
             {on && <AccountFormButton action="/api/payments/card" seenAt={seenAt} press={u.stripePaymentMethodId ? "Change card" : "Add a card"} stop={stopFor("card")}><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</AccountFormButton>}
-            <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Card details are entered on Stripe&apos;s page and never reach this site.</p>
+            <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Your full card number and security code are entered on Stripe&apos;s page and never reach this site.</p>
           </section>
           <section className="card space-y-3">
             <div className="flex items-center justify-between">

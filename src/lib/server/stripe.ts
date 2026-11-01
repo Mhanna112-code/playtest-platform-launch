@@ -145,7 +145,7 @@ function needsActionOf(e: unknown): NeedsAction | null {
 }
 // (Batch 17 §11) A press is confirmed with return_url, so the bank's check (if it asks) is a page the developer's page can show inline, under the button.
 // (API 2026-09-30) PaymentIntents take `allowed_payment_method_types`; the old `payment_method_types` is refused by Stripe, so every press failed.
-// A card saved through Stripe's page may be a Link payment method (card-backed, instant), so both are allowed; Add a card saves only these two kinds.
+// Stripe's page can save a card or Link (which may use a card or an eligible bank account); both methods remain allowed.
 export const CARD_TYPES: ("card" | "link")[] = ["card", "link"];
 const pressParams = (mode: ChargeMode) => (mode === "away" ? { off_session: true } : { allowed_payment_method_types: CARD_TYPES, return_url: bankReturnUrl() });
 

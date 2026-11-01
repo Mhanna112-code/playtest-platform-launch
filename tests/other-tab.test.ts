@@ -39,7 +39,7 @@ describe("reason E: your own actions in another tab", () => {
     expect(r.body.error.code).toBe("stop_once");
     // (Batch 29 section 13) One voice on both sides: "You … in another tab".
     const q = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, fromSide: "tester" } });
-    expect(texts(r)).toEqual(["You sent your written answers in another tab", `You requested a call for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
+    expect(texts(r)).toEqual(["You sent your written answers in another tab", `You requested a call with Nora Lane for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
     expect((await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(314), seenAt: pageLoaded, tab: "tab-2", confirmed: true })).status).toBe(200);
   });
 
@@ -126,7 +126,7 @@ describe("Block has one stop: already blocked in another tab (owner, Oct 27)", (
     expect((await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: ra.id, action: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     const s = await sact(b.sessionId, "request-time", b.tester.cookie, { startsAt: atHours(328), seenAt: benLoaded });
     expect(texts(s)).toHaveLength(1);
-    expect(texts(s)[0]).toMatch(/^The call time .+ is no longer available: another tester took it$/);
+    expect(texts(s)[0]).toMatch(/^The call time with Nora Lane on .+ is no longer available: another tester took it$/);
     expect(JSON.stringify(s.body)).not.toContain("Ana");
   });
 
@@ -390,7 +390,7 @@ describe("payments and disputes, only for this test", () => {
     const d = await db.dispute.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.dispute.update({ where: { id: d.id }, data: { status: "decided", decidedCents: 800, decidedAt: new Date() } });
     const lines: string[] = (await live(tester.cookie, `session:${sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text);
-    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $8.00 for your written answers", "The team decided your dispute: the pay was raised to $8.00"]));
+    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $8.00 for your written answers", "The team decided your dispute about your written answers: the pay was raised to $8.00"]));
     for (const t of lines) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
     const stop = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(349), seenAt: pageLoaded });
     expect(stop.body.error.code).toBe("stop_once");

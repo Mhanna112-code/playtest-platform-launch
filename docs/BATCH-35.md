@@ -816,3 +816,16 @@ Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts 
 ## §108 Edit never blocks on an unchanged Open until (owner, Nov 1)
 - On Edit, the Open until date box's minimum is the saved date when that's earlier than tomorrow, so a test whose Open until is under a day away (or past) can
   still save other fields; the server already checks the date only when it changes. Moving it still needs a date from tomorrow on.
+
+
+## Notice wording follow-up (owner, Nov 1)
+- A tester's cancelled call says **Your call with <developer> on <date/time> was cancelled**, in the live top box and its shared stop-once lines. A system cancellation uses the same passive wording: it never falsely says the developer cancelled it. A repeated Cancel refusal names the developer and time too.
+- An unavailable requested time says **The call time with <developer> on <date/time> is no longer available**, keeping the existing “another tester took it” explanation where known. A key update names the developer instead of “The developer”.
+- A dispute decision identifies the written answers, recording or dated live call: **The team decided your dispute about your <part>: the pay was raised to $X** / **…the pay stays at $X**. The developer adding their side identifies that part too.
+- New action-log entries for the tester's requests, accept/decline/withdraw, matched booking, cancellation and call-problem report name the other person. Existing stored entries are left intact.
+- Pay's final already-paid/rejected/charged/let-go refusals identify the tester and part instead of “this”; live-call refusals include the call date/time. The existing gate order, Alerts choices, refusal lifetime and payment rules stay the same.
+
+Tests: `tests/batch35-notice-context.test.ts`, with the existing exact-wording expectations updated.
+
+## Current saved card in Payments (owner, Nov 1)
+The Your card box identifies the account’s current saved card by brand, last four digits and expiry. It reads the saved payment method from Stripe without creating or charging anything; a missing card says No card yet. Link is identified as Link instead of inventing card digits. If details cannot be read, Payments still opens with the saved-card/known-expiry fallback and Change card. Full card numbers and security codes are never displayed or stored here. Existing card-change live updates remain in use. Tests: `tests/batch35-current-card.test.ts`.

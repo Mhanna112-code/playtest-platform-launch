@@ -40,7 +40,7 @@ describe("Charge / Let it go at day 14", () => {
     // (Owner, Oct 27) A receipt follows the setting like any payment line: the daily job's email carries it (at most once).
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $10.00" }, payment: true } })).toBe(1);
     // The developer's Pay is now final, naming the tester's choice.
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva already charged $10.00 for this.");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva already charged $10.00 for their written answers.");
   });
 
   it("refused for good once the developer paid meanwhile", async () => {
@@ -55,7 +55,7 @@ describe("Charge / Let it go at day 14", () => {
     await cron();
     expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "letgo" })).status).toBe(200);
     expect(await db.payment.count({ where: { submissionId: sub.id } })).toBe(0);
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva let this go: nothing was charged.");
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva let their written answers go: nothing was charged.");
   });
 
   it("the developer can still Pay until the tester chooses; the offer is a stop-once reason", async () => {

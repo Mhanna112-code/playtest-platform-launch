@@ -89,7 +89,7 @@ describe("batch 35 §61: what the tester did in another tab always stops once (A
     await settle();
     const r = await sact(sessionId, "leave", tester.cookie, { seenAt: loaded, pageSeenAt: loaded, tab: "B" });
     expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
-    expect(texts(r)).toEqual([expect.stringMatching(/^You requested a call for .* in another tab$/)]);
+    expect(texts(r)).toEqual([expect.stringMatching(/^You requested a call with Nora Lane for .* in another tab$/)]);
     expect(r.body.error.alertsOff).toBe(true);
     expect((await sact(sessionId, "leave", tester.cookie, { seenAt: loaded, tab: "B", confirmed: true })).status).toBe(200);
   });
