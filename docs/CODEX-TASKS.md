@@ -421,6 +421,12 @@ Order inside Needs you: bank confirms first (soonest "confirm by" first), then d
 bordered rows, one scroll box (ScrollList), the count in the heading — the same look as the normal Needs you (batch 35 §96, §102).
 When NOT restricted, nothing changes (Needs you as now; the dashboard's bank box stays at the top as now).
 Keep each item's existing stop / refusal rules and live updates (AutoRefresh queries bank=1 etc.).
+(Added Nov 1, owner: yes) The same on a PAUSED TEST'S OWN PAGE (src/app/app/tests/[id]/page.tsx, the restricted branch: the sections
+data-restricted-bank "Your bank wants you to confirm", data-restricted-excerpts "Excerpts", data-restricted-rate "Rate your testers",
+and RestrictedCalls for booked calls): while the test is paused (hold, chargeback hold, suspension or the team's pause), those become
+ONE Needs you on that page holding what still works there, in this order: bank confirms (BankWaiting), booked calls you can cancel,
+excerpt requests (Allow / Deny), Rate your testers. Same look as the normal test page's Needs you (src/app/app/tests/[id]/NeedsYou.tsx).
+The red banner with "what still works" stays above it. Not restricted: unchanged. Add a test for the paused test page too.
 
 Tests in tests/batch35-restricted-needs-you.test.ts: a held developer with a bank confirm, an open dispute and an excerpt request
 sees one Needs you with all three (and no separate boxes); each press still works from there; an unrestricted developer's dashboard
