@@ -11,7 +11,8 @@ export const BANNER_TITLES: Record<BannerCause, string> = {
   // (Owner, Oct 31, batch 35 §22) Paying isn't enough after a chargeback (a 3D Secure card check and the team's approval too): "the chargeback steps" links to them.
   chargeback: "Your tests are paused until the chargeback steps are done.",
   suspended: "Your account is suspended: your tests are paused.",
-  stopped: "This test is stopped.",
+  // (Owner, Oct 31, batch 35 §87) The developer's own Stop: "You stopped this test." (the team's reads "The team stopped this test.").
+  stopped: "You stopped this test.",
 };
 
 /** The bottom line, built from the buttons actually shown, so it never lists something hidden. */

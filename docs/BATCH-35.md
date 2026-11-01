@@ -721,3 +721,7 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §85 A kept refusal never follows you to another page (owner, Oct 31)
 - The blue "Your <press> didn't go through: …" line kept after a refused press (batch 29 §36, batch 32 §10) belongs to the page it was pressed on: going to
   another page drops it. On the same page it still stays until your next press (in the button's section, or at the top when none is left).
+
+## §87 "You stopped this test." (owner, Oct 31)
+- The developer's own stopped test reads "You stopped this test." at the top of its red banner (was "This test is stopped."); the team's Stop still reads
+  "The team stopped this test.". (§86 is kept for Codex task 11.)

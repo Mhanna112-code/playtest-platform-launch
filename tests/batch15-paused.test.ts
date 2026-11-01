@@ -42,7 +42,7 @@ describe("the restricted view (sections 29 and 37)", () => {
     expect(BANNER_TITLES["team-paused"]).toBe("The team paused this test.");
     expect(BANNER_TITLES.hold).toBe("Your tests are paused until you pay what you owe.");
     expect(BANNER_TITLES.suspended).toBe("Your account is suspended: your tests are paused.");
-    expect(BANNER_TITLES.stopped).toBe("This test is stopped.");
+    expect(BANNER_TITLES.stopped).toBe("You stopped this test.");
     expect(allowedLine(true, { stop: true, endEarly: true, cancelCalls: true })).toBe("For now you can stop this test, end testers' work early, or cancel calls.");
     expect(allowedLine(true, { stop: true })).toBe("For now you can stop this test.");
     expect(allowedLine(false, { nextRound: false })).toBe("You can still pay for work testers already sent, chat with them, rate testers, and read their answers.");
