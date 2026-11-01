@@ -41,8 +41,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
   const [chargebacks, mine, myPaused, suspensions, disputes, reportsP, liftsP, noShows, contactP] = await Promise.all(
     (["chargebacks", "mine", "mypaused", "suspensions", "disputes", "reports", "lifts", "noshows", "contact"] as const).map((k) => adminPage(k, u.id, null)),
   );
-  const held = await db.user.findMany({ where: { holdStartedAt: { not: null }, holdReason: { not: "chargeback" } }, orderBy: { holdStartedAt: "asc" }, take: 100 });
-  const heldWho = await whoById(held.map((x) => x.id));
 
   // A link or a bell line can open one exact row: ?dispute=ID or ?user=ID shows it first (only when opened from such a link).
   const focusDispute: DisputeVM | null = q.dispute ? await db.dispute.findUnique({ where: { id: q.dispute } }).then((d) => (d ? disputeRow(d) : null)) : null;
@@ -137,16 +135,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
         <PagedList kind="disputes" title="Open disputes" initial={rows(disputes)} />
       </section>
 
-      {/* 7. Payment holds. (Batch 33 §1, §4) Each developer opens their profile; an empty box is its heading with (0) alone. */}
-      <section className="card space-y-3" data-console-section="holds">
-        <h2 id="holds" className="scroll-mt-24 text-lg font-semibold text-white">Payment holds ({held.length})</h2>
-        {held.map((x) => (
-          <p key={x.id} className="text-sm" data-hold-row={x.id}>
-            <AdminRich parts={person(heldWho.get(x.id))} /> {x.holdCount > 3 && <span className="badge border-amber-300/40 text-amber-200">More than 3 holds</span>} · on hold since {fmtDateTime(x.holdStartedAt!)} ({x.holdReason}){x.holdCount > 3 ? " · its lift needs an Approve (see Lifts)" : ""}. Their tests close after 7 days paused.
-          </p>
-        ))}
-      </section>
-
+      {/* (Owner, Oct 31, batch 35 §101) No Payment holds panel: a held developer shows on their profile, and holds that need the team are in Lifts. */}
       {/* 8. Reports. */}
       <section className="card scroll-mt-24 space-y-3" id="reports" data-console-section="reports">
         <p className="note">What people reported about each other from a profile (once per pair). The reported person is not told.</p>

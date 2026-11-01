@@ -286,14 +286,14 @@ describe("R, W) the 4th payment hold needs an admin's Approve (in the Lifts box)
     expect((await payOwed(dev.user)).lifted).toBe(true);
   });
 
-  it("the Payment holds list shows the hold count on every row and no Approve; the banner says the team will review; Open disputes is disputes only", () => {
+  it("(batch 35 §101: no Payment holds panel) the banner says the team will review; Open disputes is disputes only", () => {
     const page = src("app/admin/page.tsx");
-    expect(page).toContain("More than 3 holds"); // a label only when it applies; no exact count outside the profile totals
+    expect(page).not.toContain('data-console-section="holds"');
     expect(page).not.toContain("hold {x.holdCount}");
     expect(page).toContain('title="Open disputes"'); // (batch 17 §7) the scroll box's heading: "Open disputes (N)"
     expect(page).not.toContain("Open disputes and lifts");
     const at = (id: string) => page.indexOf(`id="${id}"`);
-    const order = ["chargebacks", "mine", "disputes", "holds", "lifts"].map(at); // (batch 33 §6)
+    const order = ["chargebacks", "mine", "disputes", "lifts"].map(at); // (batch 33 §6)
     expect(order.every((i) => i > 0) && [...order].sort((x, y) => x - y).join() === order.join()).toBe(true);
     expect(src("components/OwedBox.tsx")).toContain("the team will review your account before your tests resume");
   });

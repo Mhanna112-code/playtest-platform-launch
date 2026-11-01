@@ -775,7 +775,7 @@ export async function adminCases(now = new Date(), forDigest = false) {
     ...disputes.map((d) => ({ kind: "dispute", text: `Dispute: “${d.reason}”`, link: "/admin#disputes" })),
     ...noShows.map((c) => ({ kind: "no-show", text: `No-show report on “${c.contract.title}” (${fmtDateTime(c.startsAt)}), by the ${c.noShowBy}`, link: "/admin#no-shows" })),
     ...chargebacks.map((p) => ({ kind: "chargeback", text: `Open chargeback: ${money(p.amountCents)}`, link: "/admin#chargebacks" })),
-    ...holds.map((u) => ({ kind: "hold", text: `${u.email} on a ${u.holdReason === "chargeback" ? "chargeback" : "payment"} hold since ${fmtDate(u.holdStartedAt!)}`, link: "/admin#holds" })),
+    ...holds.map((u) => ({ kind: "hold", text: `${u.email} on a ${u.holdReason === "chargeback" ? "chargeback" : "payment"} hold since ${fmtDate(u.holdStartedAt!)}`, link: u.holdReason === "chargeback" ? "/admin#chargebacks" : `/app/developers/${u.id}` })),
     ...payouts.map((p) => ({ kind: "payout", text: p.transferStatus === "waiting" ? `Payout waiting for a payout account: ${money(p.testerCents)}` : `Failed charge still owed: ${money(p.amountCents)}`, link: "/admin#payouts" })),
   ];
 }

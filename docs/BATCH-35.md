@@ -777,3 +777,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - A payment hold that needs the team's review (more than HOLD_APPROVAL_AFTER holds) stays on after everything owed is paid. The strip at the top of the
   developer's pages said "Your tests are paused until you pay what you owe. Pay what you owe." next to Payments' "You've paid what you owe. The team will
   review your account…". Now the strip is gone in that state (owner: Payments already says the team will review).
+
+## §101 No Payment holds panel in the admin console (owner, Oct 31)
+- The console's "Payment holds (N)" list is gone. A held developer shows on their profile (opened from anywhere their name is a link); a hold from the 4th
+  onward still waits in Lifts for an Approve; chargeback holds stay in Chargeback holds. The admins' summary line about a payment hold now opens the
+  developer's profile (a chargeback hold: Chargeback holds).

@@ -165,8 +165,8 @@ describe("batch 33 §1: every person, test and payment the team reads is a link"
     const mine = await rowsOf<MineVM>("mine", a.user.id);
     expect(hrefsOf(mine.find((x) => x.testId === w.testId)!.parts!)).toEqual([testPage(w.testId), dev(devId)]);
     expect(hrefsOf(mine.find((x) => !x.testId && x.title === w.tester.user.email)!.parts!)).toEqual([tester(testerId)]);
-    // The page's own Payment holds name the developer as a link too.
-    expect(src("app/admin/page.tsx")).toContain("<AdminRich parts={person(heldWho.get(x.id))} />");
+    // (Batch 35 §101) No Payment holds panel any more.
+    expect(src("app/admin/page.tsx")).not.toContain("heldWho");
   });
 
   it("Stripe Dashboard links: test mode for a test key, live otherwise; built on the server and never carrying the key", () => {
@@ -241,7 +241,7 @@ describe("batch 33 §4: an empty box is its heading with (0) alone", () => {
       expect(src(f)).not.toContain(">None.<");
     }
     expect(src("app/admin/PagedList.tsx")).not.toContain('empty = "None."');
-    expect(src("app/admin/page.tsx")).toContain("Payment holds ({held.length})");
+    expect(src("app/admin/page.tsx")).not.toContain("Payment holds ({held.length})"); // (batch 35 §101) removed
   });
 });
 
@@ -249,7 +249,7 @@ describe("batch 33 §6: the console shows only its twelve sections, in order", (
   it("Chargeback holds first … Settings last; none of the removed lists", () => {
     const page = src("app/admin/page.tsx");
     const order = [...page.matchAll(/data-console-section="([a-z]+)"/g)].map((m) => m[1]);
-    expect(order).toEqual(["chargebacks", "mine", "mypaused", "suspensions", "outages", "disputes", "holds", "reports", "lifts", "noshows", "contact", "settings"]);
+    expect(order).toEqual(["chargebacks", "mine", "mypaused", "suspensions", "outages", "disputes", "reports", "lifts", "noshows", "contact", "settings"]);
     for (const title of ['title="Chargeback holds"', 'title="Your actions"', 'title="Tests you paused"', 'title="Suspensions"', 'title="Open disputes"', 'title="Reports"', 'title="Lifts"', 'title="No-show reports"', 'title="Contact us"']) expect(page).toContain(title);
     for (const gone of ['kind="decided"', 'kind="paused"', 'kind="payments"', 'kind="payouts"', 'kind="users"', 'kind="tests"', "StatTile", "Needs the team today", "Free during launch"]) expect(page, gone).not.toContain(gone);
     // Settings holds the settings to fix, emails and storage, and only shows when one of them has something.
