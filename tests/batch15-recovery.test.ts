@@ -44,7 +44,8 @@ describe("payments stuck in progress (section 9)", () => {
     expect(r).toMatchObject({ status: 502, body: { error: { code: "payment_unknown", message: PAYMENT_CHECKING } } });
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
     expect(p.status).toBe("pending");
-    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(1); // still reserved: it can't be paid twice
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0); // §107: Payment reserves it; an unfinished Pay is not a review
+    expect(p.reviewDraft).not.toBeNull();
     // Under 15 minutes: not checked yet.
     expect(await recoverPayment(p.id, later(10 * MIN))).toBeNull();
     expect(await recoverPayment(p.id, later(16 * MIN))).toBe("finished");

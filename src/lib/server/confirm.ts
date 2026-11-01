@@ -307,7 +307,11 @@ export async function release(paymentId: string) {
   if (subId && stripeOn()) await getStripe().subscriptions.cancel(subId).catch(() => null);
   else if (p.actionPi && stripeOn()) await getStripe().paymentIntents.cancel(p.actionPi).catch(() => null);
   if (p.status === "needs_action" && (p.kind === "review" || p.kind === "call")) {
-    await db.$transaction([db.review.deleteMany({ where: p.submissionId ? { submissionId: p.submissionId } : { callId: p.callId! } }), db.payment.update({ where: { id: p.id }, data: { status: "cancelled", actionPi: null, actionBy: null } })]);
+    await db.$transaction(async (tx) => {
+      const claimed = await tx.payment.updateMany({ where: { id: p.id, status: "needs_action" }, data: { status: "cancelled", actionPi: null, actionBy: null } });
+      // New Pays have only a draft to release; retain support for older reservations.
+      if (claimed.count && !p.reviewDraft) await tx.review.deleteMany({ where: p.submissionId ? { submissionId: p.submissionId } : { callId: p.callId! } });
+    });
   } else if (p.status === "needs_action" && p.kind === "chargeback") await db.payment.delete({ where: { id: p.id } });
   else if (p.status === "needs_action") await db.payment.update({ where: { id: p.id }, data: { status: "cancelled", actionPi: null, actionBy: null } });
   else if (p.status === "paying") await db.payment.update({ where: { id: p.id }, data: { status: p.owedUntil ? "failed" : "owed", actionPi: null, actionBy: null, warnedAt: null } });
@@ -317,7 +321,7 @@ export async function release(paymentId: string) {
  * The clocks: a press's pop-up left open over 15 minutes lets go (nothing charged); a charge made while away and not confirmed in 3 days counts as declined (a payment hold for
  * a charge, a lapse for a renewal); a retry of an owed payment that waited 3 days stops waiting (it stays owed). Runs from the daily job, and before any press on a piece.
  */
-export async function expireActions(now = new Date(), where: { submissionId?: string; callId?: string } = {}) {
+export async function expireActions(now = new Date(), where: { submissionId?: string; callId?: string; contractId?: string; developerId?: string } = {}) {
   for (const p of await db.payment.findMany({ where: { ...where, actionPi: { not: null }, actionBy: { lte: now } } })) {
     if (p.status === "needs_action" || p.status === "paying") await release(p.id);
     else if (p.status === "needs_confirmation" && p.kind === "chargeback") await db.payment.delete({ where: { id: p.id } }); // a retried chargeback: still owed
@@ -338,5 +342,5 @@ export async function expireActions(now = new Date(), where: { submissionId?: st
 export async function pieceLocked(where: { submissionId?: string | null; callId?: string | null }) {
   const key = where.submissionId ? { submissionId: where.submissionId } : { callId: where.callId ?? "" };
   await expireActions(new Date(), key as { submissionId?: string; callId?: string });
-  return (await db.payment.count({ where: { ...key, status: { in: ["needs_action", "needs_confirmation"] } } })) > 0;
+  return (await db.payment.count({ where: { ...key, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) > 0;
 }

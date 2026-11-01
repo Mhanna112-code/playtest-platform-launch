@@ -1,4 +1,5 @@
 "use client";
+import { BankWaiting } from "@/components/BankWaiting";
 import { useState } from "react";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -37,6 +38,7 @@ export function PayBox(p: {
   minutes?: number; rateCents?: number | null; room?: PayRoom; more?: { testId: string; contractId: string }; warning?: string;
   /** (Batch 30 §2) This Pay more answers an updated version sent after the piece was paid: $0 closes it (an optional note). */
   update?: boolean;
+  confirming?: string;
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
@@ -127,6 +129,7 @@ export function PayBox(p: {
     finish(res.status === "closed" ? "Closed at $0." : res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : more ? `Paid ${money(res.amountCents)} more to ${p.name}.` : `Paid ${money(res.amountCents)} to ${p.name}.`);
   }
 
+  if (p.confirming) return <BankWaiting paymentId={p.confirming} line="Confirming with your bank" seenAt={p.seenAt} />;
   return (
     <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-mistakes-root="">
       <p className="text-sm">

@@ -4,11 +4,13 @@ import { LET_GO_BY_TESTER, notPaidClosedLine } from "./rules";
 export type TesterPaymentFacts = {
   review?: { rejected: boolean; reason: string; teamClosedById?: string | null } | null;
   delayed?: boolean;
+  confirming?: boolean;
   closedOn?: string | null;
   developerDeleted?: string | null;
   paidCents?: number;
 };
 export function testerPaymentStatus(p: TesterPaymentFacts) {
+  if (p.confirming) return { kind: "review", text: "Waiting for review", tone: "amber" } as const;
   // A paid base plus a raise still waiting is delayed too (§82 / §88).
   if (p.delayed) return { kind: "delayed", text: "Payment delayed", tone: "amber" } as const;
   if (p.review?.rejected && !(p.paidCents && p.paidCents > 0)) return { kind: "rejected", text: "Rejected", tone: "rose" } as const;

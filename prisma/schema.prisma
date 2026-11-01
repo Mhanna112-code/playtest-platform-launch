@@ -479,6 +479,8 @@ model Payment {
   /// press on the same piece within 24 hours of an interrupted one reuses it, so nothing is charged twice. And when it was last checked (at most once a minute).
   payKey       String?
   checkedAt    DateTime?
+  /// An on-session Pay is a draft until the bank settles it; not a completed Review.
+  reviewDraft  Json?
   /// (Batch 15 section 41, C1 and M2) The press this payment came from ("press:<developer>:<uuid>", "extra:press:…"): a repeat of the same press finds it
   pressKey     String?
   createdAt    DateTime @default(now())

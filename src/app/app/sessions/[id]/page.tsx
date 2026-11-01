@@ -81,6 +81,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   await (await import("@/lib/server/recovery")).checkStuck({ contractId: id }); // (batch 15 section 9) payments stuck "in progress"
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const head = await db.contract.findUnique({ where: { id }, select: { testId: true, testerId: true } });
+  if (head?.testerId === u.id) await (await import("@/lib/server/confirm")).expireActions(new Date(), { contractId: id });
   const pageV = head && head.testerId === u.id ? await testV(u.id, head.testId, id) : "";
   const c = await db.contract.findUnique({
     where: { id },
@@ -230,12 +231,14 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (the cap still counts it, so "up to … in all" doesn't move).
   const notYetPaid = new Map<string, number>();
   const pendingBase = new Set<string>();
-  for (const p of await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: { in: ["needs_confirmation", "needs_action", "owed", "paying", "deferred"] } }, { status: "failed", settledAt: null, owedUntil: { not: null } }] }, select: { submissionId: true, callId: true, amountCents: true, kind: true } })) {
+  const confirmingBase = new Set<string>();
+  for (const p of await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: { in: ["needs_confirmation", "needs_action", "owed", "paying", "deferred"] } }, { status: "failed", settledAt: null, owedUntil: { not: null } }] }, select: { submissionId: true, callId: true, amountCents: true, kind: true, status: true } })) {
     const k = p.submissionId ?? p.callId ?? "";
+    if (p.status === "needs_action" && (p.kind === "review" || p.kind === "call")) confirmingBase.add(k);
     notYetPaid.set(k, (notYetPaid.get(k) ?? 0) + p.amountCents);
     if (p.kind === "review" || p.kind === "call") pendingBase.add(k);
   }
-  const paymentDelayed = (id: string) => notYetPaid.has(id) || delayedSubs.has(id) || chargedOwed.has(id) || disputeOwed.has(id) || owedCalls.has(id);
+  const paymentDelayed = (id: string) => (!confirmingBase.has(id) && notYetPaid.has(id)) || delayedSubs.has(id) || chargedOwed.has(id) || disputeOwed.has(id) || owedCalls.has(id);
   const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, paidCents: Math.max(0, caps.get(id)!.paidCents - (notYetPaid.get(id) ?? 0)), closedOn: payMoreShut } : null);
   const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string; teamClosedById?: string | null } | null | undefined, d: unknown, id = "") => !!r && !r.teamClosedById && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null).ok;
   // (Batch 30 §2) A part can be sent again after it's paid (not an old rejection or the team's $0 closure).
@@ -472,7 +475,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <p className="flex flex-wrap items-center gap-2 text-white">
                 {sub?.review ? (sub.review.rejected ? <XCircle className="h-4 w-4 text-rose-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />) : <CircleDot className={`h-4 w-4 ${sub ? "text-amber-300" : "text-slate-400"}`} />}
                 <strong>{name}:</strong>
-                {sub && <TesterPaymentTag review={sub.review} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
+                {sub && <TesterPaymentTag review={sub.review} confirming={confirmingBase.has(sub.id)} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
                   developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
                 <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}{sub.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
@@ -508,7 +511,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <div key={x.id} className="space-y-1">
                 <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="" data-call-length="">
                   {fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min
-                  <TesterPaymentTag review={x.review} delayed={paymentDelayed(x.id) || failedCalls.has(x.id)} paidCents={partPaid.get(x.id) ?? 0}
+                  <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id) || failedCalls.has(x.id)} paidCents={partPaid.get(x.id) ?? 0}
                     developerDeleted={devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? devRealName : null} closedOn={chargeShut(x.id) ? shutOn(x.id) : null} />
                 </p>
                 {/* A listed call is charged automatically after its review date; no Charge or Let it go. */}
@@ -520,7 +523,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <div key={x.id} className="space-y-2">
                 <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="">
                   {fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min
-                  <TesterPaymentTag review={x.review} delayed={paymentDelayed(x.id)} paidCents={partPaid.get(x.id) ?? 0} />
+                  <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id)} paidCents={partPaid.get(x.id) ?? 0} />
                 </p>
                 {!owedCalls.has(x.id) && !pendingBase.has(x.id) && <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
               </div>

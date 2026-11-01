@@ -83,6 +83,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
+  await (await import("@/lib/server/confirm")).expireActions(new Date(), { developerId: u.id });
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
   const { saved, offered, skipped, closed, resent, failed } = await searchParams;
   const seenAt = new Date().toISOString();
@@ -152,6 +153,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const cbSteps = await chargebackSteps(u.id);
   // (Batch 17 §11) Charges made while the developer was away that their bank wants confirmed: "Confirm with your bank" under the affected piece (Payments and the bell link here).
   const bankRows = await bankWaitingOnTest(u.id, t.id);
+  const confirmingPays = await db.payment.findMany({ where: { developerId: u.id, contractId: { in: t.contracts.map((c) => c.id) }, kind: { in: ["review", "call"] }, status: "needs_action" }, select: { id: true, submissionId: true, callId: true } });
+  const confirmingPay = (id: string) => confirmingPays.find((p) => (p.submissionId ?? p.callId) === id)?.id;
   // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
   // (Owner, Oct 31, batch 35 §80) Confirmed in Needs you (where the dashboard's box, Payments and the bell link); under the piece only a link up to it.
   const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>);
@@ -251,7 +254,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       ...c.submissions.filter((x) => !x.review).map((x) => ({ kind: "sub" as const, id: x.id, c, s: x, x: null, at: x.sentAt })),
       ...c.calls.filter((x) => tookPlace(x) && !x.review).map((x) => ({ kind: "call" as const, id: x.id, c, s: null, x, at: x.startsAt })),
     ])
-    .filter((x) => !payShut(x.id)) // (Batch 17 §19) its Pay closed: nothing left to pay
+    .filter((x) => confirmingPay(x.id) || !payShut(x.id)) // An already-started bank check can finish after Pay closes.
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
@@ -465,7 +468,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={x.s!.notes} attachments={x.s!.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
                     <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} />
                   </AnswersBox>
-                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box}
+                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
                     /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
                     note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
@@ -475,7 +478,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   {/* (Batch 15 section 40) The measured length: "Length: 29 min (both in the call 2:21–2:50 PM)"; a lowered one says so, with the reason. */}
                   <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
                   {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
-                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box}
+                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                     /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
                     note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
                     minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}

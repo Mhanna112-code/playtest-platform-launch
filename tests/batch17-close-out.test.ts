@@ -290,7 +290,7 @@ describe("the reminders 3 days and 1 day before close-out (DEFAULT protections)"
 describe("the pages (section 19)", () => {
   it("the developer's test page: the piece leaves Needs you, its place reads the closed line; Pay closes on <date> in the last 7 days", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain(".filter((x) => !payShut(x.id)) // (Batch 17 §19) its Pay closed");
+    expect(page).toContain(".filter((x) => confirmingPay(x.id) || !payShut(x.id))");
     expect(page).toContain("{paySoon(x.id) && <p className=\"note\" data-pay-closes=\"\">{payClosesLine(paySoon(x.id))}</p>}");
     expect(page).toContain("closedNotPaidLine(shutOn(r.sub.id))");
     expect(page).toContain("closedNotPaidLine(shutOn(x.id))");

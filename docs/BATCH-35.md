@@ -816,3 +816,14 @@ Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts 
 ## §108 Edit never blocks on an unchanged Open until (owner, Nov 1)
 - On Edit, the Open until date box's minimum is the saved date when that's earlier than tomorrow, so a test whose Open until is under a day away (or past) can
   still save other fields; the server already checks the date only when it changes. Moving it still needs a date from tomorrow on.
+
+
+## §107 A Pay waiting for the bank isn't paid yet (owner, Nov 1)
+
+A developer's Pay on written answers, a recording or a call can wait up to 15 minutes for their bank. While it waits, the tester's part stays **Waiting for review**: no Paid tag, received amount, Dispute or paid bell/email. Rate, close-out and both dashboards still count the piece as unreviewed. The developer's piece in Needs you shows **Confirming with your bank**, with the same inline bank check. Charge and Let it go are refused while that payment locks the piece.
+
+The reservation is now a `Payment.reviewDraft`, not a completed Review. This changes the single source of truth instead of teaching every Review reader a second meaning of “reviewed”. The draft preserves the amount, agreed price, note, call rate and press key. Successful payment or bank confirmation records the Review and payment together, then sends the existing paid notices. A card decline still records the owed review and follows the existing payment-hold rules. A lost Stripe answer keeps the Payment reservation for recovery, without displaying a completed review; recovery records it only after finding a successful charge.
+
+A refused, closed or expired bank check cancels the reservation, leaving no Review to undo and making Pay available again. Page loads and a later Pay release expired checks without waiting for the daily sweep; the existing page fingerprint watches each bank deadline crossing on the normal beat. A check already started can finish even if the ordinary Pay window closes meanwhile. Pending payments also lock the piece while Stripe's answer is in flight, and a second Pay cannot reserve it again. Older reservations with an existing Review remain supported when released or recovered. Away payments (`needs_confirmation`, including Charge and dispute decisions) keep their Payment delayed state and existing confirmation rules.
+
+Tests: `tests/batch35-pending-pay-state.test.ts` exercises written work and calls through successful confirmation, failure, cancellation and timeout, the tester's rendered payment tags and absent Dispute, the developer's inline confirming row, paid amounts and bell, Rate, and Charge / Let it go / duplicate Pay locks. The recovery test now checks the Payment draft reservation rather than an unfinished Review. The additive migration adds only the draft column.
