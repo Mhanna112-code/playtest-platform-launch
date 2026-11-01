@@ -303,8 +303,8 @@ describe("the pages (section 19)", () => {
   it("the tester's session page: Not paid (closed on <date>), no Charge box after, Charge closes on <date> before", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain('await pieceCloseOut(k, "tester", now)');
-    expect(page).toContain("notPaidClosedLine(shutOn(sub.id))");
-    expect(page).toContain("notPaidClosedLine(shutOn(x.id))");
+    expect(page).toContain("closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null}");
+    expect(page).toContain("closedOn={chargeShut(x.id) ? shutOn(x.id) : null}");
     expect(page.match(/!chargeShut\((sub|x)\.id\)/g)!.length).toBeGreaterThanOrEqual(3); // (batch 28 §21) no Charge for listed calls
     expect(page.match(/data-charge-closes=""/g)).toHaveLength(1);
     expect(R.notPaidClosedLine("Dec 6, 2026")).toBe("Not paid (closed on Dec 6, 2026)");

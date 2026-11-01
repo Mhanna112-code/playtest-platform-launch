@@ -64,7 +64,7 @@ describe("reasons never ride in bell lines (section 20)", () => {
 
 describe("the recorder's findings and the owner's answers (sections 32 and 38)", () => {
   it("a part whose developer deleted their account reads 'Can't be paid', not 'Under review'; a test that became invite only stays on the tester's dashboard, marked", () => {
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("Can&apos;t be paid: {devRealName} deleted their account");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("developerDeleted={devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? devRealName : null}");
     expect(src("app/app/page.tsx")).toContain("Closed to new testers (invite only)");
   });
 });

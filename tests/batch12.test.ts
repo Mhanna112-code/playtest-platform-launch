@@ -52,7 +52,7 @@ describe("batch 12 item 1: a developer can always delete their account", () => {
     await runDaily();
     expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
     expect(R.devDeletedLine("Nora Lane")).toBe("Nora Lane deleted their account, so this can't be paid.");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{devDeletedLine(devRealName)}");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null}");
     expect(tester).toBeTruthy();
   });
 

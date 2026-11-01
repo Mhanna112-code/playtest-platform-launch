@@ -234,7 +234,7 @@ describe("batch 26 sections 5 to 8", () => {
     expect(dash).toContain("const listed = (s.kind === \"recording\" ? c.recordingCents : c.writtenCents) != null;");
     expect(dash).toContain("const opens = listed && !s.late ? chargeOpensAt(s, c.test, c, now) : null;"); // (batch 30 §3) never for late work
     // (Batch 28 §21) A listed call is charged automatically instead; (batch 28 §5) the sent part's line is on the session page too.
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{x.rateCents != null && x.payBy && x.payBy > now && <p className=\"text-xs text-slate-400\" data-auto-charge=\"\">");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("{x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className=\"text-xs text-slate-400\" data-auto-charge=\"\">");
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("data-charge-opens=\"\">{chargeOpensNote(dev,");
   });
 

@@ -55,7 +55,7 @@ describe("batch 7 item 2: a stopped test shows only what still works", () => {
     const s = src("app/app/sessions/[id]/page.tsx");
     expect(s).toContain("{written && ((written.review && !canSendAgain(written)) || refusal || meOff) ? ("); // (batch 30 §2) a paid part can be sent again
     expect(s).toContain('data-sent-answers=""');
-    expect(s).toContain('data-part-status="review"');
+    expect(s).toContain('<TesterPaymentTag review={sub.review}');
     expect(s).toContain("const canRequestCall = !refusal && !blockedPair && !paused;");
     expect(s).toContain("canSend={!refusal && canSendAgain(recording) && !meOff && draftsShown}"); // (batch 30 §2)
     // A paused test keeps Send visible (refused with the batch 6 notice).
