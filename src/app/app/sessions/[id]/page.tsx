@@ -365,6 +365,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           information (always the current listing, live; a line changed since joining carries "Updated <time>": before → now). The top box's See it opens it. */}
       <details className="card scroll-mt-24" id="scope" data-scope="">
         <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><FileSignature className="h-5 w-5 text-indigo-300" /> Your agreed scope</summary>
+        {/* (Owner, Oct 31, batch 35 §91) The whole scope in one scroll box (about 32rem tall), so the page below stays close. */}
+        <div className="mt-1 max-h-[32rem] overflow-y-auto pr-1" data-scope-scroll="">
         {/* (Owner, Oct 31, batch 35 §29) Both parts list their fields as the Listing panel does (§15): the label small, muted and uppercase on its own line (with its
             "Updated" tag), the value bright below it; the questions numbered with "Required" as a small tag; long texts in their scroll boxes. */}
         <p className="mt-3 text-sm font-medium text-white">Your contract</p>
@@ -412,8 +414,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           ))}
         </ul>
         {/* (Design doc 9) The terms history: every offer and what you chose, with the questions and NDA you were on. */}
-        <div className="mt-3 space-y-2 text-sm" data-terms-history="">
-          <p className="font-medium text-white">Terms history</p>
+        {/* (Batch 35 §91) Folded shut by default: the Updated tags above already show what changed; this keeps the full record. */}
+        <details className="mt-3 space-y-2 text-sm" data-terms-history="">
+          <summary className="fold-chevron cursor-pointer font-medium text-white">Terms history</summary>
           <ul className="space-y-1.5 text-slate-300">
             <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
             {[
@@ -448,6 +451,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               ...historyPays.map((p) => ({ at: p.createdAt, key: p.id, node: <li key={p.id} data-history-line="">{`${fmtDate(p.createdAt)}: ${p.kind === "extra" ? "paid more" : p.kind === "dispute" ? "the team raised the pay by" : "paid"} ${money(p.amountCents)} for your ${p.callId ? "live call" : subKinds.get(p.submissionId ?? "") ?? "work"} (you get ${money(testerShare(p.amountCents))})`}</li> })),
             ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}
           </ul>
+        </details>
         </div>
       </details>
 

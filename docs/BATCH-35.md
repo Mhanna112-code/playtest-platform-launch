@@ -741,3 +741,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
   call changes too, so no stop notice for it afterwards. A change that happens between two checks (or on another device) still stops a press once, as before.
 - Terms of Use, section 8: "Pages update on their own about every 20 seconds. When a blue "new update" pill appears, check the update (tap the pill) before you
   press anything: once the page has shown an update, a press counts as made with it in view." (Terms are still a draft before launch: no version bump.)
+
+## §91 Your agreed scope in a scroll box; Terms history folded (owner, Oct 31)
+- The tester's "Your agreed scope" fold shows its contents (the contract, the listing information, the terms history) in one scroll box about 32rem tall.
+- "Terms history" is its own fold, shut by default (the Updated tags on the listing lines already show what changed; the history keeps the full record:
+  what you joined on, each offer and what you chose, the questions and NDA then and now, stop reasons).
