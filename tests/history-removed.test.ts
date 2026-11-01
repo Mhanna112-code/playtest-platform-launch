@@ -6,6 +6,6 @@ import { describe, expect, it } from "vitest";
 describe("the tester's History after a suspension", () => {
   it("says they were removed, not that they left", () => {
     const src = fs.readFileSync(path.resolve(__dirname, "../src/app/app/page.tsx"), "utf8");
-    expect(src).toContain('c.endKind === "suspended" ? `You were removed from this test (');
+    expect(src).toContain('c.endKind === "suspended" ? "Removed"'); // (batch 35 §98) the History tag; never "You left"
   });
 });

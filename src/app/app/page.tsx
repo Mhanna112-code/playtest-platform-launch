@@ -414,9 +414,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const byId = new Map(contracts.map((c) => [c.id, c]));
   const working = contracts.filter((c) => c.status === "working");
   const history = contracts.filter((c) => c.status !== "working");
-  // (Batch 15 sections 24, 42 and 43) Each ended test's deal history also lists its calls that are over (with their outcome) and renames.
-  const histCalls = history.length ? await db.call.findMany({ where: { contractId: { in: history.map((c) => c.id) } }, include: { review: true }, orderBy: { startsAt: "asc" } }) : [];
-  const histNotes = history.length ? await db.contractNote.findMany({ where: { contractId: { in: history.map((c) => c.id) } }, orderBy: { createdAt: "asc" } }) : [];
   const pausedTest = (t: { adminPausedAt: Date | null; developer: { holdStartedAt: Date | null; devSuspendedAt: Date | null } }) => testPaused(t.developer, t);
   const byEnd = (a: (typeof contracts)[number], b: (typeof contracts)[number]) => (b.endedAt ?? b.joinedAt).getTime() - (a.endedAt ?? a.joinedAt).getTime();
   // (Owner, Oct 28) Tests the team's suspension removed the tester from: while suspended a read-only list; after reinstatement (no automatic re-invite) they sit at the top with
@@ -725,34 +722,23 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </Link>
               </li>
             ))}
+            {/* (Owner, Oct 31, batch 35 §98) An ended test is one row like an In progress one: how it ended as a tag, and Open → its page (no fold with its history). */}
             {history.sort(byEnd).map((c) => {
-              const rejected = c.submissions.some((s) => s.review?.rejected) && !c.submissions.some((s) => s.review && !s.review.rejected);
-              const mine = allOffers.filter((o) => o.contractId === c.id);
-              const pays = payments.filter((p) => p.contractId === c.id && (p.status === "charged" || p.status === "not_set_up"));
+              const tag = c.endKind === "rated" ? "Finished" : c.endKind === "stopped" ? "Stopped" : c.endKind === "closed" ? "Closed" : c.endKind === "suspended" ? "Removed" : c.endKind === "early" ? "Ended early" : c.status === "left" ? "You left" : "Ended";
+              const inner = (
+                <>
+                  <span className="min-w-0 flex-1 font-medium text-white">
+                    <span className="block truncate" title={c.title}>{c.title}</span>
+                    <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · {tag === "You left" ? "left" : "ended"} {fmtDate(c.endedAt ?? c.joinedAt)}</span>
+                  </span>
+                  <span className="badge border-white/20 text-slate-300" data-history-tag="">{tag}</span>
+                  {!suspended && <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>}
+                </>
+              );
               return (
                 <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
-                  <details className="card p-4" data-history={c.id}>
-                    <summary className="flex cursor-pointer flex-wrap items-center gap-3">
-                      <span className="min-w-0 flex-1 font-medium text-white">
-                        <span className="block truncate" title={c.title}>{c.title}</span>
-                        <span className="block text-sm font-normal text-slate-400">{c.endKind === "stopped" ? `The test was stopped (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : c.endKind === "closed" ? `The test ended (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : c.endKind === "suspended" ? `You were removed from this test (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.`: c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.` : `Ended (${fmtDate(c.endedAt ?? c.joinedAt)}): what you sent is still reviewed and paid.`}</span>
-                      </span>
-                      <span className="flex flex-wrap gap-1.5 text-xs"><PartBadges written={c.writtenCents != null} recording={c.recordingCents != null} live={c.liveRateCents != null} /></span>
-                      {rejected && <span className="badge text-rose-300"><XCircle className="h-3.5 w-3.5" /> Not accepted</span>}
-                    </summary>
-                    {/* (Design doc 5) The deal history: the terms joined on, every offer and what was chosen, and the payments. */}
-                    <ul className="mt-3 space-y-1 border-l border-white/10 pl-3 text-sm text-slate-300" data-deal-history="">
-                      <li>{fmtDate(c.joinedAt)}: joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` · NDA accepted ${fmtDate(c.ndaAcceptedAt)}` : ""}</li>
-                      {[
-                        ...mine.map((o) => ({ at: o.createdAt, node: <li key={o.id}>{fmtDate(o.createdAt)}: new terms offered ({o.diff}): {o.status === "switched" ? "you switched" : o.status === "kept" ? "you kept yours" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}</li> })),
-                        // (Batch 17 §15) The developer's Stop reason: in italics, in its scroll box.
-                        ...histNotes.filter((n) => n.contractId === c.id).map((n) => ({ at: n.createdAt, node: n.kind === STOP_NOTE_KIND ? <li key={n.id}>{fmtDate(n.createdAt)}: Test stopped<ReasonQuote text={stopReasonOf(n.text)} /></li> : <li key={n.id}>{fmtDate(n.createdAt)}: {n.text}</li> })),
-                        ...histCalls.filter((x) => x.contractId === c.id && callIsOver(x)).map((x) => ({ at: x.startsAt, node: <li key={x.id} data-history-call="">{fmtDateTime(x.startsAt)}: call · {callOverBadge(x, { developer: displayName(c.test.developer), tester: "you" }, "tester", fmtTime, pays.filter((p) => p.callId === x.id).reduce((a, p) => a + p.amountCents, 0), callMinutesOf(x)).label}</li> })),
-                        ...pays.map((p) => ({ at: p.createdAt, node: <li key={p.id}>{fmtDate(p.createdAt)}: paid {money(testerShare(p.amountCents))} to you</li> })),
-                      ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}
-                    </ul>
-                    {!suspended && <p className="mt-2 text-sm"><Link href={`/app/sessions/${c.id}#parts`}>Open the session</Link></p>}
-                  </details>
+                  {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-history={c.id}>{inner}</div>
+                    : <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history={c.id}>{inner}</Link>}
                 </li>
               );
             })}

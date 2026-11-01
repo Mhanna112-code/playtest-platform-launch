@@ -763,3 +763,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §96 One Needs you on the developer dashboard (owner, Oct 31)
 - The "Needs review" box is gone: its rows ("<test> · N parts to pay · closes …", Review → the test's Needs you) are the first rows of Needs you, in its one
   scroll box, and counted in its number. Ratings to give already scrolls in its own box.
+
+## §98 History rows for ended tests: a tag and Open (owner, Oct 31)
+- The tester's History no longer folds open with each ended test's deal history. Each ended test is one row like an "In progress" one: "<title>", "by <dev> ·
+  ended <date>" ("left <date>"), a tag for how it ended (Finished, Stopped, Closed, Removed, Ended early, You left, Ended) and Open → its page (where the parts,
+  payments and Terms history still are). While the tester side is suspended the rows don't open (as before).
