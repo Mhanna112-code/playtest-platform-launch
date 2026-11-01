@@ -1,3 +1,5 @@
+import { discoveryV } from "@/lib/server/pageFreshness";
+import { AutoRefresh } from "@/components/AutoRefresh";
 import Link from "next/link";
 import { Languages, Monitor, SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -55,6 +57,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   const sp = await searchParams;
   const typed = findQuery(sp.q);
   const ticked = admin ? statesFrom(sp.states) : [];
+  const freshV = await discoveryV(u, typed, ticked);
   const found = admin ? await adminFindTests(typed, ticked) : null;
   const [open, profile] = await Promise.all([found ? found.tests : findTests(u, typed), admin ? null : db.testerProfile.findUnique({ where: { userId: u.id } })]);
   const devRatings = new Map(await Promise.all([...new Set(open.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id)).line] as const)));
@@ -78,6 +81,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   const params: Record<string, string | undefined> = { category: sp.category, device: sp.device, part: sp.part, sort: sp.sort, mine: admin ? undefined : sp.mine, q: typed || undefined, states: admin ? sp.states : undefined };
   return (
     <div className="space-y-6">
+      <AutoRefresh query={`fresh=discovery&q=${encodeURIComponent(typed)}&states=${encodeURIComponent(sp.states ?? "")}`} v={freshV} />
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">Find tests</h1>
         <p className="text-slate-400">{admin ? "Every test, whatever its state. A card opens the test's page with the team's boxes." : "Apps, websites and games looking for feedback. You earn the amount shown as each part of your work is accepted."}</p>

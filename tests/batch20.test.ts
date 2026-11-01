@@ -746,7 +746,7 @@ describe("batch 20 section 17: a blocked profile shows a proper page", () => {
     expect(out).toContain("This profile isn&#x27;t available.");
     for (const f of ["app/app/developers/[id]/page.tsx", "app/app/testers/[id]/page.tsx"]) {
       const s = src(f);
-      expect(s, f).toContain("return <ProfileUnavailable />;");
+      expect(s, f).toContain("return <>{watch}<ProfileUnavailable /></>;");
       expect(s, f).toContain("{iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain");
       expect(s, f).not.toMatch(/blockedId: p\.id \}\] \} \}\)\)\) notFound\(\);/);
     }

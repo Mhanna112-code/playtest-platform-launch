@@ -1,3 +1,4 @@
+import { MAX_ACTIVE_TESTS } from "@/lib/rules";
 import { revealedRatingsWhere } from "./ratings";
 import { db } from "@/lib/db";
 
@@ -26,7 +27,14 @@ export async function joinPageV(testerId: string, testId: string) {
     // (Batch 34 §16) An invite arriving while the page is open: the page redraws to the invite card and Join (Apply / Ask to rejoin go).
     db.invite.findFirst({ where: { testId, testerId, status: "sent" }, orderBy: { createdAt: "desc" }, select: { id: true } }),
   ]);
-  return [a ? `${a.id}:${a.status}:${a.decidedAt?.getTime() ?? 0}:${a.changedAt?.getTime() ?? 0}` : "", c ? `${c.id}:${c.status}` : "", i?.id ?? ""].join("|");
+  const listing = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, updatedAt: true, status: true, spots: true, openUntil: true, developer: { select: { holdStartedAt: true, devSuspendedAt: true } }, _count: { select: { contracts: { where: { status: "working" } } } } } });
+  const [capacity, blocked, profile] = await Promise.all([
+    db.contract.count({ where: { testerId, status: "working" } }),
+    db.block.count({ where: { OR: [{ blockerId: testerId, blockedId: listing?.developerId ?? "" }, { blockedId: testerId, blockerId: listing?.developerId ?? "" }] } }),
+    db.testerProfile.findUnique({ where: { userId: testerId }, select: { updatedAt: true } }),
+  ]);
+  const listingV = listing ? [listing.updatedAt.getTime(), listing.status, listing.spots, listing._count.contracts, listing.openUntil?.getTime() ?? 0, listing.developer.holdStartedAt?.getTime() ?? 0, listing.developer.devSuspendedAt?.getTime() ?? 0].join(":") : "";
+  return [capacity >= MAX_ACTIVE_TESTS, blocked, profile?.updatedAt.getTime() ?? 0, listingV, listing?.openUntil && listing.openUntil <= new Date() ? "closed" : "open", a ? `${a.id}:${a.status}:${a.decidedAt?.getTime() ?? 0}:${a.changedAt?.getTime() ?? 0}` : "", c ? `${c.id}:${c.status}` : "", i?.id ?? ""].join("|");
 }
 
 /** (Batch 30 §8) The line the join page shows once its tester is in the test (an accepted application or ask), with their session. */
@@ -83,6 +91,8 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   // (Batch 34 §12, owner's finding) The session's own key (given by the developer's Save, replaced, reported, fixed): the tester's page redraws at once and the key box shows.
   const myKeys = sessionId ? await db.accessKey.findMany({ where: { contractId: sessionId }, orderBy: { id: "asc" }, select: { id: true, status: true, fixedAt: true } }) : [];
   const myKeyV = myKeys.map((k) => `${k.id}:${k.status}:${k.fixedAt?.getTime() ?? 0}`).join(",");
+  const elsewhere = await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(Date.now() - 6 * 3_600_000) }, contract: sessionId ? { testerId: viewerId, id: { not: sessionId } } : { test: { developerId: viewerId, id: { not: testId } } } }, orderBy: { id: "asc" }, select: { id: true, startsAt: true, minutes: true, contract: { select: { tester: { select: { name: true, email: true } }, test: { select: { developer: { select: { name: true, email: true } } } } } } } });
+  const elsewhereV = JSON.stringify(elsewhere);
   const pay = { n: payCount, last: (payLast?.createdAt.getTime() ?? 0) + (payLast?.status ?? "") };
   // (Batch 17 sections 1 and 16) A Rate box opening, greying or going as things are decided: ratings given, and (a session) the tester's own Rate state.
   const ratingsN = await db.rating.count({ where: { testId } });
@@ -90,7 +100,7 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   const ratingRowsV = allRatings ? `${allRatings._count._all}:${allRatings._sum.stars ?? 0}:${allRatings._max.revealedAt?.getTime() ?? 0}:${allRatings._max.createdAt?.getTime() ?? 0}` : "";
   const rateV = sessionId ? (await (await import("./ratings")).testerRateState(sessionId)).line : "";
   // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, myKeyV].join("|");
+  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, myKeyV].join("|");
 }
 
 /** (Owner, Oct 29, batch 10) Payments'"Pay what you owe": a declined payment, a chargeback, a tester's Charge during the hold, a payment from another tab, a reservation. */

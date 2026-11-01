@@ -1,4 +1,5 @@
 "use client";
+import { LIVE_TICK, rideLiveClock } from "@/lib/liveSync";
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 
@@ -24,13 +25,13 @@ export function AccountRefresh() {
       }
     };
     void tick();
-    const t = setInterval(tick, 20_000);
+    const leave = rideLiveClock();
     const now = () => void tick();
-    window.addEventListener("live-tick", now);
+    window.addEventListener(LIVE_TICK, now);
     return () => {
       alive = false;
-      clearInterval(t);
-      window.removeEventListener("live-tick", now);
+      leave();
+      window.removeEventListener(LIVE_TICK, now);
     };
   }, [router]);
   return null;

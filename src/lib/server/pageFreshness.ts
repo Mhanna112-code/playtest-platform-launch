@@ -1,0 +1,98 @@
+import { revealedRatingsWhere } from "./ratings";
+import { createHash } from "node:crypto";
+import type { User } from "@prisma/client";
+import { db } from "@/lib/db";
+import { sideFor } from "@/lib/sides";
+import { contractsOnSide } from "./sidePage";
+import { isAdmin } from "./session";
+import { notificationScopeFor } from "./notify";
+import { findTests } from "./tests";
+import { adminFindTests } from "./findSearch";
+import type { TestState } from "@/lib/findSearch";
+
+// Return only an opaque version, never private rows. Clock boundaries refresh deadline-dependent controls too.
+export function stateV(value: unknown, now = Date.now()): string {
+  const phases: number[][] = [];
+  const visit = (v: unknown) => {
+    if (v instanceof Date) {
+      const remaining = v.getTime() - now;
+      phases.push([remaining > 0 ? 1 : 0, ...[60_000, 600_000, 3_600_000, 4 * 3_600_000, 6 * 3_600_000, 86_400_000, 7 * 86_400_000, 14 * 86_400_000].map((n) => Math.abs(remaining) < n ? 1 : 0)]);
+    } else if (Array.isArray(v)) v.forEach(visit);
+    else if (v && typeof v === "object") Object.values(v).forEach(visit);
+  };
+  visit(value);
+  return createHash("sha256").update(JSON.stringify([value, phases])).digest("hex");
+}
+
+export async function discoveryV(u: User, q = "", states: TestState[] = []) {
+  const [tests, profile] = await Promise.all([
+    isAdmin(u) ? adminFindTests(q, states) : findTests(u, q),
+    db.testerProfile.findUnique({ where: { userId: u.id } }),
+  ]);
+  return stateV([tests, profile]);
+}
+
+export async function messagesV(u: User) {
+  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, sideFor(u)), orderBy: [{ joinedAt: "desc" }, { id: "asc" }], take: 100, select: { id: true, title: true, testId: true, testerId: true, joinedAt: true, status: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { developer: { select: { name: true, email: true, deletedAt: true } } } } } });
+  const pairs = contracts.map((c) => ({ testId: c.testId, testerId: c.testerId }));
+  const [messages, reads] = await Promise.all([
+    pairs.length ? db.message.groupBy({ by: ["testId", "testerId"], where: { OR: pairs }, _count: { _all: true }, _max: { createdAt: true }, orderBy: [{ testId: "asc" }, { testerId: "asc" }] }) : [],
+    pairs.length ? db.chatRead.findMany({ where: { userId: u.id, OR: pairs }, orderBy: [{ testId: "asc" }, { testerId: "asc" }] }) : [],
+  ]);
+  return stateV([contracts, messages, reads]);
+}
+
+export async function paymentsV(u: User) {
+  const rows = await db.payment.findMany({ where: sideFor(u) === "tester" ? { testerId: u.id } : { developerId: u.id }, orderBy: { id: "asc" }, select: { id: true, status: true, amountCents: true, testerCents: true, feeCents: true, contractId: true, transferStatus: true, settledAt: true, actionBy: true, actionPi: true, chargeback: true, owedUntil: true, failure: true } });
+  const names = await db.contract.findMany({ where: { id: { in: rows.flatMap((r) => r.contractId ? [r.contractId] : []) } }, orderBy: { id: "asc" }, select: { id: true, title: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { developer: { select: { name: true, email: true, deletedAt: true } } } } } });
+  return stateV([rows, names]);
+}
+
+export async function notificationsV(u: User) {
+  const rows = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: [{ createdAt: "desc" }, { id: "asc" }], take: 200 });
+  const titles = await db.test.findMany({ where: { id: { in: rows.flatMap((r) => r.testId ? [r.testId] : []) } }, orderBy: { id: "asc" }, select: { id: true, title: true } });
+  return stateV([rows, titles, u.emailPref]);
+}
+
+export async function blockedV(u: User) {
+  const rows = await db.block.findMany({ where: { blockerId: u.id }, orderBy: { id: "asc" } });
+  const people = await db.user.findMany({ where: { id: { in: rows.map((r) => r.blockedId) } }, orderBy: { id: "asc" }, select: { id: true, name: true, email: true, deletedAt: true } });
+  return stateV([rows, people]);
+}
+
+export async function publicProfileV(viewer: User, id: string) {
+  const [person, blocks] = await Promise.all([
+    db.user.findUnique({ where: { id }, select: { id: true, name: true, email: true, deletedAt: true, isDeveloper: true, isTester: true, devSuspendedAt: true, testerSuspendedAt: true, holdStartedAt: true } }),
+    db.block.findMany({ where: { OR: [{ blockerId: viewer.id, blockedId: id }, { blockerId: id, blockedId: viewer.id }] }, orderBy: { id: "asc" } }),
+  ]);
+  if (!person || person.deletedAt || (!isAdmin(viewer) && blocks.some((b) => b.blockerId === id && b.blockedId === viewer.id))) return stateV("unavailable");
+  const [profile, ratings, contracts, excerpts, reports, payments] = await Promise.all([
+    db.testerProfile.findUnique({ where: { userId: id } }),
+    db.rating.findMany({ where: { rateeId: id, ...revealedRatingsWhere() }, orderBy: { id: "asc" } }),
+    db.contract.findMany({ where: { OR: [{ testerId: id }, { test: { developerId: id } }] }, orderBy: { id: "asc" }, select: { id: true, status: true, endKind: true, testerId: true, testId: true, submissions: { select: { id: true, updatedAt: true, review: true } }, calls: { select: { id: true, status: true, review: true, actualMinutes: true, measuredAt: true, dispute: true } } } }),
+    db.excerpt.findMany({ where: { testerId: id, status: "shown" }, orderBy: { id: "asc" } }),
+    db.report.findMany({ where: { reporterId: viewer.id, reportedId: id }, orderBy: { id: "asc" }, select: { id: true } }),
+    db.payment.findMany({ where: { OR: [{ developerId: id }, { testerId: id }] }, orderBy: { id: "asc" }, select: { id: true, status: true, amountCents: true, testerCents: true } }),
+  ]);
+  const raters = await db.user.findMany({ where: { id: { in: ratings.map((r) => r.raterId) } }, orderBy: { id: "asc" }, select: { id: true, name: true, email: true, deletedAt: true } });
+  return stateV([person, blocks, profile, ratings, contracts, excerpts, reports, payments, raters]);
+}
+
+/** Metadata of this side's dashboard, across all its tests. No work bodies or message bodies. */
+export async function dashboardV(u: User) {
+  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, sideFor(u)), orderBy: { id: "asc" }, select: { id: true, testId: true, testerId: true, title: true, status: true, endKind: true, endedAt: true, dueAt: true, submissions: { select: { id: true, kind: true, agreedCents: true, sentAt: true, updatedAt: true, choiceBy: true, choiceOfferedAt: true, review: true, dispute: true } }, calls: { select: { id: true, startsAt: true, minutes: true, status: true, cancelledAt: true, endedAt: true, actualMinutes: true, payBy: true, review: true, dispute: true } }, test: { select: { id: true, title: true, status: true, updatedAt: true, openUntil: true, adminPausedAt: true, developer: { select: { id: true, name: true, email: true, holdStartedAt: true, devSuspendedAt: true } } }, }, tester: { select: { name: true, email: true, deletedAt: true, testerSuspendedAt: true } } } });
+  const ids = contracts.map((c) => c.id), testIds = contracts.map((c) => c.testId);
+  const ownTests = sideFor(u) === "developer" ? await db.test.findMany({ where: { developerId: u.id }, orderBy: { id: "asc" }, select: { id: true, title: true, categories: true, spots: true, status: true, updatedAt: true, openUntil: true } }) : [];
+  const tests = [...new Set([...testIds, ...ownTests.map((t) => t.id)])];
+  const [apps, requests, offers, invites, excerpts, keys, money, discovery, messages] = await Promise.all([
+    db.application.findMany({ where: sideFor(u) === "tester" ? { testerId: u.id } : { testId: { in: tests } }, orderBy: { id: "asc" } }),
+    db.callRequest.findMany({ where: { contractId: { in: ids } }, orderBy: { id: "asc" }, select: { id: true, status: true, updatedAt: true, startsAt: true } }),
+    db.termsOffer.findMany({ where: { contractId: { in: ids } }, orderBy: { id: "asc" }, select: { id: true, status: true, createdAt: true } }),
+    db.invite.findMany({ where: sideFor(u) === "tester" ? { testerId: u.id } : { testId: { in: tests } }, orderBy: { id: "asc" }, select: { id: true, testId: true, status: true, updatedAt: true } }),
+    db.excerpt.findMany({ where: { testId: { in: tests } }, orderBy: { id: "asc" }, select: { id: true, status: true, decidedAt: true } }),
+    db.accessKey.groupBy({ by: ["testId", "status"], where: { testId: { in: tests } }, _count: { _all: true }, orderBy: [{ testId: "asc" }, { status: "asc" }] }),
+    paymentsV(u), sideFor(u) === "tester" ? discoveryV(u) : "", messagesV(u),
+  ]);
+  const pendingTests = await db.test.findMany({ where: { id: { in: [...new Set([...apps.map((a) => a.testId), ...invites.map((i) => i.testId)])] } }, orderBy: { id: "asc" }, select: { id: true, title: true, status: true, spots: true, openUntil: true, adminPausedAt: true, developer: { select: { name: true, email: true, holdStartedAt: true, devSuspendedAt: true } }, _count: { select: { contracts: { where: { status: "working" } } } } } });
+  return stateV([contracts, ownTests, apps, requests, offers, invites, excerpts, keys, money, discovery, messages, pendingTests]);
+}

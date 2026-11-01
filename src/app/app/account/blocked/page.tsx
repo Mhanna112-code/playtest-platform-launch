@@ -1,3 +1,5 @@
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { blockedV } from "@/lib/server/pageFreshness";
 import Link from "next/link";
 import { Ban } from "lucide-react";
 import { db } from "@/lib/db";
@@ -12,10 +14,12 @@ export const dynamic = "force-dynamic";
 /** People you've blocked, with Unblock (Account → Blocked people). */
 export default async function BlockedPage() {
   const u = await requirePageUser();
+  const freshV = await blockedV(u);
   const blocks = await db.block.findMany({ where: { blockerId: u.id }, orderBy: { createdAt: "desc" } });
   const people = new Map((await db.user.findMany({ where: { id: { in: blocks.map((b) => b.blockedId) } } })).map((x) => [x.id, x]));
   return (
     <div className="mx-auto max-w-2xl space-y-5">
+      <AutoRefresh query="fresh=blocked" v={freshV} />
       <div className="space-y-1">
         <p className="text-sm"><Link href="/app/account" className="text-slate-400 hover:text-white">← Account</Link></p>
         <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight text-white"><Ban className="h-6 w-6 text-rose-300" /> Blocked people</h1>

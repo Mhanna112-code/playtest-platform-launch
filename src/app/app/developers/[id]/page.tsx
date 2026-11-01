@@ -1,3 +1,4 @@
+import { publicProfileV } from "@/lib/server/pageFreshness";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, CalendarClock } from "lucide-react";
@@ -31,13 +32,15 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
   const viewer = await requireOpenPage("/app/developers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const otherSide = await otherSideNotice(viewer); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
+  const freshV = await publicProfileV(viewer, id);
+  const watch = <AutoRefresh query={`fresh=publicProfile&person=${encodeURIComponent(id)}`} v={freshV} />;
   const p = await db.user.findUnique({ where: { id } });
   if (!p || !p.isDeveloper) notFound();
   const mine = viewer.id === p.id;
   // (Owner, Oct 28, batch 20 section 17) They blocked you: a plain "This profile isn't available." (never says why). You blocked them: their profile as usual, with
   // Unblock where Block was, no Chat with or invite, and their Open tests hidden with a line.
   const theyBlocked = !mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } })) > 0;
-  if (theyBlocked) return <ProfileUnavailable />;
+  if (theyBlocked) return <>{watch}<ProfileUnavailable /></>;
   const iBlocked = !mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) > 0;
   // (Owner, Oct 27) Paused tests (a hold, a suspension or the team's pause) are not listed for other people; a suspended tester can't open any, and a restricted developer's own pages are closed.
   const devOff = mine && p.isDeveloper && devRestricted(viewer, sideFor(viewer, "/app/developers"));
@@ -48,6 +51,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {watch}
       <section className="card space-y-3">
         <div className="flex flex-wrap items-center gap-4">
           <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-sky-300 to-indigo-400 text-xl font-semibold text-ink-950">{name.charAt(0).toUpperCase()}</span>

@@ -1,3 +1,4 @@
+import { paymentsV } from "@/lib/server/pageFreshness";
 import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { fmtDateTime, money } from "@/lib/format";
@@ -40,6 +41,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const u = await requirePageUser();
   adminAway(u, "/app/payments"); // (batch 20 section 16) admin only
   await (await import("@/lib/server/recovery")).checkStuck({ developerId: u.id }); // (batch 15 section 9) payments stuck "in progress"
+  const freshV = await paymentsV(u);
   const q = await searchParams;
   const on = stripeOn();
   // (NEXT-UI 6 / 15) Each side has its own payments page, as in the full app (Billing / Payments): the side in use.
@@ -83,6 +85,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // The full app's billing / payouts pages: one column of cards, each with its icon heading; lists as rows.
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      <AutoRefresh query="fresh=payments" v={freshV} />
       <h1 className="text-3xl font-bold tracking-tight text-white">Payments</h1>
       {/* (Batch 16 section 27) Changes made in another tab or device update this page silently. */}
       <AccountRefresh />
