@@ -750,3 +750,12 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §92 Confirm with your bank: the card was declined (owner, Oct 31)
 - Confirm with your bank on a charge made while away re-tries it with the card on file now. When that card is declined the line reads "Your card was declined,
   so nothing was charged. Change your card and confirm again by <date, time>." (was "Your bank didn't confirm the payment…"); the payment keeps waiting until then.
+
+## §93 The Charge line names the date (owner, Oct 31)
+- "<Dev> didn't review your written answers in 7 days: charge $X or let it go" now reads "… didn't review your written answers by <date>: …": the review time
+  ends at the later of 7 days after sending and the tester's own deadline, so "in 7 days" was wrong when the deadline came later.
+
+## §94 A tester who rated a test can't be invited to it (owner, Oct 31)
+- Rating finishes a tester's part for good (they can't join that test again), but the developer could still tick and invite them. Now their row in Invite testers is
+  greyed "Rated this test: can't join it again" (with "Finished (rated this test)" instead of "Left this test"), and an old page's Invite with them ticked is
+  refused: "<name> rated this test, so they can't join it again. Untick them to invite the others."

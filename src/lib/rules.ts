@@ -1167,9 +1167,12 @@ export function checkDevSide(text: string, already: boolean): Check {
   return yes;
 }
 
-/** The review window passed on an unreviewed contract part: the tester chooses. */
-export const choiceLine = (devName: string, kind: string, cents: number) =>
-  `${devName} didn't review your ${kind === "recording" ? "recording" : "written answers"} in ${REVIEW_DAYS} days: charge ${money(cents)} or let it go`;
+/**
+ * The review window passed on an unreviewed contract part: the tester chooses. (Owner, Oct 31, batch 35 §93) With the date it opened ("by Nov 30"): the review
+ * time ends at the later of 7 days after sending and the tester's own deadline, so "in 7 days" was wrong when the deadline came later.
+ */
+export const choiceLine = (devName: string, kind: string, cents: number, by?: string) =>
+  `${devName} didn't review your ${kind === "recording" ? "recording" : "written answers"} ${by ? `by ${by}` : `in ${REVIEW_DAYS} days`}: charge ${money(cents)} or let it go`;
 /**
  * (Owner, Oct 26; batch 15 section 18) When Charge / Let it go opens for a contract part sent and left unreviewed: only once BOTH (1) REVIEW_DAYS (7; batch 12) have passed since it
  * was sent (payBy, which outages and pauses move on) and (2) the tester's own deadline (the contract's dueAt) has passed: the later of the two. Returns when it opens (null while

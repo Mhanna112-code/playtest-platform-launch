@@ -486,7 +486,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               })()}
               {sub && <p className="text-xs text-slate-500">{partLine(sub.agreedCents, partPaid.get(sub.id) ?? 0)}</p>}
               {sub && !sub.review && !sub.late && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0 && (
-                <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0))} />
+                <ChoiceBox paused={rulesPaused} seenAt={seenAt} sessionId={c.id} submissionId={sub.id} devName={dev} cents={chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0)} line={choiceLine(dev, key, chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0), (() => { const o = chargeOpensAt(sub, c.test, c, now); return o ? fmtDate(o) : undefined; })())} />
               )}
               {/* (Batch 17 §19) Its last 7 days before close-out. */}
               {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}

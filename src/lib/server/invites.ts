@@ -51,6 +51,8 @@ async function rankedTesters(devId: string, testId: string) {
   const activeOf = new Map(active.map((a) => [a.testerId, a._count._all]));
   const inviteOf = new Map(invites.map((i) => [i.testerId, i]));
   const inTestSet = new Set(inTest.map((c) => c.testerId));
+  // (Owner, Oct 31, batch 35 §94) A tester who rated this test finished their part for good (they can't join it again): greyed, never invitable.
+  const ratedHere = new Set(myTests.filter((c) => c.test.id === testId && c.endKind === "rated").map((c) => c.testerId));
   const mineOf = new Map(mine.map((m) => [m.rateeId, m._avg.stars ?? null]));
   // (Design doc 6) The algorithm. A tester MEETS the test with one required device and one required language (where any are required).
   // SCORE = (3 x the platform's average + their stars) / (3 + their ratings), so new testers start near the average.
@@ -78,7 +80,7 @@ async function rankedTesters(devId: string, testId: string) {
     const inv = inviteOf.get(t.id);
     const n = activeOf.get(t.id) ?? 0;
     // Greyed rows: already in, invited, or "Can't join this test" (suspended, or in 10 tests).
-    const grey = inTestSet.has(t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : t.testerSuspendedAt || n >= MAX_ACTIVE_TESTS ? "Can't join this test" : null;
+    const grey = inTestSet.has(t.id) ? "Already in this test" : inv ? `Invited ${fmt(inv.createdAt)}` : ratedHere.has(t.id) ? RATED_THIS_TEST : t.testerSuspendedAt || n >= MAX_ACTIVE_TESTS ? "Can't join this test" : null;
     const worked = workedWith.has(t.id);
     return {
       t, inv, grey, inTest: inTestSet.has(t.id), name: displayName(t), section: worked ? "worked" : "other",
@@ -106,7 +108,7 @@ async function rankedTesters(devId: string, testId: string) {
       id: x.t.id, name: x.name, changedAt: new Date(Math.max(x.t.profile?.updatedAt.getTime() ?? 0, ratings.get(x.t.id)?.at?.getTime() ?? 0)).toISOString(), devices: x.t.profile?.devices ?? [], languages: x.t.profile?.languages ?? [], categories: x.t.profile?.categories ?? [],
       invited: !!x.inv, inviteId: x.inv?.id ?? null, grey: x.grey, rating: ratings.get(x.t.id)?.line || "No ratings yet", ratingAvg: ratings.get(x.t.id)?.n ? Number(ratings.get(x.t.id)!.avg.toFixed(1)) : null,
       // (NEXT-UI 14) Still tickable: a re-invite is how an ended tester can come back.
-      was: ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === x.t.id)?.status),
+      was: ratedHere.has(x.t.id) ? "Finished (rated this test)" : ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === x.t.id)?.status),
       tag: doesntListTag(test, x.t.profile),
       tagItems: doesntListItems(test, x.t.profile),
       detail: withYouText(ratings.get(x.t.id)?.n ? ratings.get(x.t.id)!.avg : null, togetherCount(x.t.id), ratings.get(x.t.id)?.n),
@@ -169,6 +171,8 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
 
 /** (Batch 30 §7) Why a search match can't be invited, in the row's words ("fbbb · already invited, waiting for them to join"), or nothing when they can be. */
 export const WHY_INVITED = "already invited, waiting for them to join";
+/** (Batch 35 §94) The greyed row of a tester who rated this test. */
+export const RATED_THIS_TEST = "Rated this test: can't join it again";
 export const WHY_IN_TEST = "already in this test";
 export const whyApplied = (kind: string) => `${kind === "rejoin" ? "asked to rejoin" : "applied"}: answer them in Needs you →`;
 function whyNotInvitable(r: { invited: boolean; inviteId: string | null; grey: string | null }, app?: { id: string; kind: string }): { why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string } {
@@ -239,6 +243,12 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     if (refusal) throw new HttpError(409, "refused", refusal, { clearTicks: true });
     // In the order the developer ticked them, so the "Invited A and B." line is stable.
     const people = (await tx.user.findMany({ where: { id: { in: ids } }, include: { profile: true } })).sort((a, b) => ids.indexOf(a.id) - ids.indexOf(b.id));
+    // (Owner, Oct 31, batch 35 §94) Someone who rated this test can't join it again, so they can't be invited to it (an old page's tick is refused).
+    const rated = await tx.contract.findMany({ where: { testId, testerId: { in: ids }, endKind: "rated" }, select: { testerId: true } });
+    if (rated.length) {
+      const names = people.filter((p) => rated.some((r) => r.testerId === p.id)).map((p) => displayName(p));
+      throw new HttpError(409, "refused", `${names.join(", ")} rated this test, so they can't join it again. Untick them to invite the others.`, { clearTicks: true });
+    }
     const contracts = await tx.contract.findMany({ where: { testId, testerId: { in: ids } } });
     const invites = await tx.invite.findMany({ where: { testId, testerId: { in: ids } } });
     // Extra stop-once reasons for the ticked testers.
