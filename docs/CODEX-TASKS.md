@@ -396,3 +396,30 @@ batch17-rate §12, codex9 resource_missing, batch34-invite-beats-application, ba
 to charging", batch34 outage Approve after Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the
 branch; don't push or merge.
 ```
+
+## Task 18: one Needs you on a restricted developer's dashboard (owner, Nov 1)
+
+```
+Read AGENTS.md first and follow it. Task number: 18 (schema codex18, build folder .next-codex18, branch codex/restricted-needs-you,
+worktree C:/Users/march/Projects/pl-codex-18, branched from master).
+
+Owner decision: while the developer side is suspended or on a hold (payment or chargeback), the dashboard (src/app/app/page.tsx)
+shows ONE "Needs you" holding only what still works, each item done right there, instead of the separate boxes it shows today:
+- "Your bank wants you to confirm (N)" (src/app/app/BankToConfirm.tsx) — each waiting payment with its Confirm with your bank
+  (inline, as on the test page: BankWaiting);
+- "Disputes: add your side" (disputeBox, DisputeSide inline);
+- "Excerpt requests" (excerptBox, Allow / Deny inline);
+- Ratings to give stays its own box (it already works during a restriction where allowed).
+Order inside Needs you: bank confirms first (soonest "confirm by" first), then disputes, then excerpt requests. One box (card), plain
+bordered rows, one scroll box (ScrollList), the count in the heading — the same look as the normal Needs you (batch 35 §96, §102).
+When NOT restricted, nothing changes (Needs you as now; the dashboard's bank box stays at the top as now).
+Keep each item's existing stop / refusal rules and live updates (AutoRefresh queries bank=1 etc.).
+
+Tests in tests/batch35-restricted-needs-you.test.ts: a held developer with a bank confirm, an open dispute and an excerpt request
+sees one Needs you with all three (and no separate boxes); each press still works from there; an unrestricted developer's dashboard
+is unchanged. Update tests that expected the separate boxes (search data-dispute-box, data-excerpt-box, data-bank-top). Append
+"## §106 One Needs you while restricted (owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky, rerun alone:
+batch22 "two admins at once", batch17-rate §12, codex9 resource_missing, batch34-invite-beats-application, batch16-account-tabs,
+batch12 "a part already open to charging", batch34 outage Approve after Dismiss, batch4 "Open until heads-ups wait while the
+test is paused"). Commit on the branch; don't push or merge.
+```
