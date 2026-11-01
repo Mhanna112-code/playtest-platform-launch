@@ -187,3 +187,26 @@ in Chicago (and the listing's "N days from joining" matches); a UTC developer be
 Append "## §111 Deadlines and Open until use the same day (owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky
 list as in the earlier tasks). Commit on the branch; don't push or merge.
 ```
+
+## 8. Task 24: Open until can't change once it has passed
+
+```
+Read AGENTS.md first and follow it. Task number: 24 (schema codex24, build folder .next-codex24, branch codex/open-until-locked,
+worktree C:/Users/march/Projects/pl-codex-24, branched from master).
+
+Owner decision (Nov 1): once a test's Open until has passed (the test is closed to new testers but may still run for people
+already in), Open until can no longer be changed in Edit. Today Edit still lets the developer move it later (tomorrow or later,
+within 30 days of the test opening: rules.ts checkListing "openUntil" / openUntilCapDay, tests.ts "Moving Open until later by D
+days" which also moves every working tester's deadline D days). That reopens joining and half-revives expired deadlines (a tester
+whose deadline was 4 days back got moved 2 days forward, still past, so their next send was late).
+
+Build: server: an Edit save that changes openUntil on a test whose current Open until has passed (its day in the developer's zone,
+openUntilDay, is before today) is refused with "Open until has passed, so it can't be changed." (only when the field changes: an
+unchanged Open until never blocks a save, batch 35 §108). Edit page: the Open until box is greyed (the app's disabled style) with
+that line as its hint. Nothing else changes: pauses still move dates later by their length, outages likewise; a test whose Open
+until hasn't passed works as now.
+Tests in tests/batch35-open-until-locked.test.ts: changing a passed Open until is refused and moves no deadline; an unchanged one
+saves other fields; a future Open until can still move later. Update tests that extended a passed Open until. Append "## §112 Open
+until is locked once it has passed (owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier
+tasks). Commit on the branch; don't push or merge.
+```
