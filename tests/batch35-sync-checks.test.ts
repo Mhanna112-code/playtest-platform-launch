@@ -138,8 +138,8 @@ describe("batch 35 §37: the page redraw and the Updated box move together", () 
     expect(top).toContain("window.addEventListener(LIVE_TICK, onTick);");
     expect(top).not.toContain("setInterval");
     expect(top).not.toMatch(/everys*=|every?:/); // its own rhythm is gone
-    // The seen rule is unchanged (batch 32 §12): in view only.
-    expect(top).toContain("} else if (added.length || unseenUpTo.current) unseenUpTo.current = r.now;");
+    // (Batch 35 §90) The seen rule: shown on the page = seen.
+    expect(top).toContain("if (added.length) setShownOnPage(scope, r.now);");
     const auto = code("components/AutoRefresh.tsx");
     expect(auto).not.toContain("setInterval");
     expect(auto).toContain("window.addEventListener(LIVE_TICK, onBeat);");

@@ -735,3 +735,9 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - A tester joined and sent written answers seconds later while the developer's page was open; Pay on those answers skipped the "sent" line (§79) but still
   stopped for "fbbb joined · 9:05 PM". Pay, Pay more and Confirm with your bank on a tester's piece now also skip that tester's own "joined" line (paying their
   work, you know they're in). Other testers' joins still stop as before (Alerts: Joins and applications).
+
+## §90 An update the page has shown counts as seen (owner, Oct 31)
+- Replaces batch 32 §12 and batch 16 §38B: an update the page has shown (the 20-second redraw, the blue "new update" pill, or the top box) counts as seen at once,
+  call changes too, so no stop notice for it afterwards. A change that happens between two checks (or on another device) still stops a press once, as before.
+- Terms of Use, section 8: "Pages update on their own about every 20 seconds. When a blue "new update" pill appears, check the update (tap the pill) before you
+  press anything: once the page has shown an update, a press counts as made with it in view." (Terms are still a draft before launch: no version bump.)

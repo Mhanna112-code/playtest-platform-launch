@@ -10,6 +10,14 @@ export function setShown(s: string, at: string) {
   scope = s;
   if (!shownUpTo || at > shownUpTo) shownUpTo = at;
 }
+/**
+ * (Owner, Oct 31, batch 35 §90) An update the page has shown (redrawn, the pill up, or the top box) counts as seen at once, call changes too: no stop notice for it
+ * afterwards. Replaces batch 32 §12 (seen only once the top box was in view) and batch 16 §38B (a call change stopped until a stop box listed it).
+ */
+export function setShownOnPage(s: string, at: string) {
+  setShown(s, at);
+  if (at > boxSeenUpTo) boxSeenUpTo = at;
+}
 export function clearShown(s: string) {
   if (scope === s) {
     scope = "";

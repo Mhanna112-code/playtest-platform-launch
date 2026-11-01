@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
-import { announce, clearShown, mergeChanges, setShown, wasShownInBox } from "@/lib/live";
+import { announce, clearShown, mergeChanges, setShown, setShownOnPage, wasShownInBox } from "@/lib/live";
 import { LongList } from "@/components/LongList";
 import { ContractLink } from "@/components/ContractLink";
 import { jumpTo } from "@/lib/markJump";
@@ -128,11 +128,9 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
         // Ignored (greyed) Alerts lines count as updates too, since they still show.
         const fresh = added.filter((c) => !wasShownInBox(c));
         if (fresh.length) announceFresh(fresh.length, key(fresh[fresh.length - 1]));
-        // (Batch 32 §12) Seen only when the box is in view; otherwise kept until it comes into view (a later poll with nothing new keeps the earlier mark).
-        if (!where()) {
-          unseenUpTo.current = "";
-          setShown(scope, r.now);
-        } else if (added.length || unseenUpTo.current) unseenUpTo.current = r.now;
+        // (Owner, Oct 31, batch 35 §90) Shown on the page (the redraw, the pill up or the box in view): seen at once, so no stop notice for it afterwards.
+        unseenUpTo.current = "";
+        if (added.length) setShownOnPage(scope, r.now);
         else setShown(scope, r.now);
         whileRedrawn(redrawn, () => announce(added));
       };

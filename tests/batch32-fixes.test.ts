@@ -12,11 +12,10 @@ const src = (f: string) => fs.readFileSync(path.join(process.cwd(), "src", f), "
 
 // (Owner's findings from the Oct 30 screenshot run, batch 32 §12)
 describe("batch 32 §12: fixes from the screenshot run", () => {
-  it("another device's changes stop the next press until the top box was in view (they used to count as seen on arrival)", () => {
+  it("(replaced by batch 35 §90) an update the page has shown counts as seen on arrival, call changes too", () => {
     const top = src("components/LiveTop.tsx");
-    expect(top).toContain("if (!where()) {");
-    expect(top).toContain("} else if (added.length || unseenUpTo.current) unseenUpTo.current = r.now;");
-    expect(top).toContain("seenNowInView();");
+    expect(top).toContain("if (added.length) setShownOnPage(scope, r.now);");
+    expect(src("lib/live.ts")).toContain("if (at > boxSeenUpTo) boxSeenUpTo = at;");
     // Untouched answer boxes take what another device sent; typed text stays.
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("(cur[i] ?? \"\") === (was.answers[i] ?? \"\") ? initial[i] ?? \"\" : cur[i] ?? \"\"");
   });

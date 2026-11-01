@@ -72,6 +72,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
     points: [
       "The platform is provided as is. We aren't responsible for the products being tested, for builds, or for agreements between users beyond what these terms describe.",
       "If we have an outage, every deadline and payment date that was running moves later by the length of it.",
+      // (Owner, Oct 31, batch 35 §90)
+      "Pages update on their own about every 20 seconds. When a blue \"new update\" pill appears, check the update (tap the pill) before you press anything: once the page has shown an update, a press counts as made with it in view.",
       "When these terms change, we'll tell you on the site before the change applies. You're asked to agree to the new version the next time you post a test, or join, apply, accept an invite or ask to rejoin. Tests you're already in carry on under the terms you agreed to.",
     ],
   },
