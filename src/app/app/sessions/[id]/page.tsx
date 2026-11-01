@@ -1,7 +1,7 @@
 import { notFound, redirect } from "next/navigation";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
-import { LET_GO_BY_TESTER, chargedByTester, LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, devDeletedLine, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, chargedDelayedLine, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote, chargeOpensAt } from "@/lib/rules";
+import { LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote, chargeOpensAt } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, Languages, MessagesSquare, Monitor, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, money, stopTimeIn } from "@/lib/format";
@@ -9,14 +9,15 @@ import { LISTING_VALUES, historyRows, infoLines, parseValues } from "@/lib/listi
 import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
-import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, DELAYED_CALL_LINE, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
+import { TesterPaymentTag } from "@/components/TesterPaymentTag";
+import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarning, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { testerAutoChargeLine } from "@/lib/rules";
-import { chargeClosesLine, closeOutSoon, notPaidClosedLine } from "@/lib/rules";
+import { chargeClosesLine, closeOutSoon } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { fmtTime } from "@/lib/format";
 import { ReasonQuote } from "@/components/ScrollText";
@@ -131,7 +132,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const partPaid = new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { contractId: c.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0]));
   // (Batch 11) A charge waiting for the developer's bank confirmation reads "Payment may be delayed" too.
   const delayedSubs = new Set((await db.payment.findMany({ where: { contractId: c.id, submissionId: { not: null }, kind: { not: "dispute" }, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "needs_confirmation" }] }, select: { submissionId: true } })).map((p) => p.submissionId!));
-  // (Batch 11 / 12 section 5) A Pay whose bank confirmation is still open isn't a payment yet: the part still reads "Under review".
+  // A Pay waiting for the bank is not paid yet: hide its reserved review; §97 shows Payment delayed.
   const confirming = new Set((await db.payment.findMany({ where: { contractId: c.id, status: "needs_action", kind: { in: ["review", "call"] } }, select: { submissionId: true, callId: true } })).map((p) => p.submissionId ?? p.callId ?? ""));
   for (const x of [...c.submissions, ...c.calls]) if (confirming.has(x.id)) (x as { review: unknown }).review = null;
   // (Owner, Oct 28 afternoon) A Charge pressed (or a dispute decided for them) while the developer was on a hold: added to what the developer owes, paid when they pay it.
@@ -228,10 +229,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Owner, Oct 31, batch 35 §88) "has paid" counts only money that went through: a payment waiting for the developer's bank, or owed during a hold, is left out
   // (the cap still counts it, so "up to … in all" doesn't move).
   const notYetPaid = new Map<string, number>();
-  for (const p of await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: { in: ["needs_confirmation", "needs_action", "owed", "paying", "deferred"] } }, { status: "failed", settledAt: null, owedUntil: { not: null } }] }, select: { submissionId: true, callId: true, amountCents: true } })) {
+  const pendingBase = new Set<string>();
+  for (const p of await db.payment.findMany({ where: { contractId: c.id, OR: [{ status: { in: ["needs_confirmation", "needs_action", "owed", "paying", "deferred"] } }, { status: "failed", settledAt: null, owedUntil: { not: null } }] }, select: { submissionId: true, callId: true, amountCents: true, kind: true } })) {
     const k = p.submissionId ?? p.callId ?? "";
     notYetPaid.set(k, (notYetPaid.get(k) ?? 0) + p.amountCents);
+    if (p.kind === "review" || p.kind === "call") pendingBase.add(k);
   }
+  const paymentDelayed = (id: string) => notYetPaid.has(id) || delayedSubs.has(id) || chargedOwed.has(id) || disputeOwed.has(id) || owedCalls.has(id);
   const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, paidCents: Math.max(0, caps.get(id)!.paidCents - (notYetPaid.get(id) ?? 0)), closedOn: payMoreShut } : null);
   const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string; teamClosedById?: string | null } | null | undefined, d: unknown, id = "") => !!r && !r.teamClosedById && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null).ok;
   // (Batch 30 §2) A part can be sent again after it's paid (not an old rejection or the team's $0 closure).
@@ -468,11 +472,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <p className="flex flex-wrap items-center gap-2 text-white">
                 {sub?.review ? (sub.review.rejected ? <XCircle className="h-4 w-4 text-rose-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />) : <CircleDot className={`h-4 w-4 ${sub ? "text-amber-300" : "text-slate-400"}`} />}
                 <strong>{name}:</strong>
-                {sub && !sub.review && !chargedOwed.has(sub.id) && (devGone && !sub.choiceOfferedAt
-                  // (Batch 15 section 32) The developer deleted their account: not "Under review" any more.
-                  ? <span className="badge border-rose-300/40 text-rose-200" data-part-status="gone">Can&apos;t be paid: {devRealName} deleted their account</span>
-                  : chargeShut(sub.id) ? <span className="badge" data-part-status="closed">{notPaidClosedLine(shutOn(sub.id))}</span> // (Batch 17 §19)
-                  : <span className="badge border-amber-300/40 text-amber-200" data-part-status="review">Under review</span>)}
+                {sub && <TesterPaymentTag review={sub.review} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
+                  developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
                 <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}{sub.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
@@ -490,9 +491,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               )}
               {/* (Batch 17 §19) Its last 7 days before close-out. */}
               {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}
-              {/* (Batch 12 section 1) The developer deleted their account before Charge opened: this part can't be paid. */}
-              {sub && !sub.review && !sub.choiceOfferedAt && devGone && <p className="info" data-dev-deleted="">{devDeletedLine(devRealName)}</p>}
-              {sub && chargedOwed.has(sub.id) ? <p className="info" data-charged-delayed="">{chargedDelayedLine(chargedOwed.get(sub.id)!)}</p> : sub && delayedSubs.has(sub.id) ? <p className="info">Payment for this part may be delayed.</p> : sub?.review && <TesterReview testPaused={!!paused} update={sub.paidUpdateZeroAt ? { at: sub.paidUpdateZeroAt, note: sub.paidUpdateNote } : null} dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} delayed={disputeOwed.has(sub.id)} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
+              {sub?.review && !chargedOwed.has(sub.id) && !delayedSubs.has(sub.id) && !pendingBase.has(sub.id) && <TesterReview update={sub.paidUpdateZeroAt ? { at: sub.paidUpdateZeroAt, note: sub.paidUpdateNote } : null} dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
+
             </li>
           ))}
           <li id="part-live" data-part="live" className="scroll-mt-24 space-y-1.5 rounded-xl border border-white/[0.08] p-3 text-sm">
@@ -504,22 +504,25 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             </p>
             <p className="text-slate-400">{c.liveRateCents == null ? NOT_LISTED : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
             {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
-            {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? <p key={x.id} className="info" data-dev-deleted="">Live call on {fmtDateTime(x.startsAt)}: {devDeletedLine(devRealName)}</p> : (
+            {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => (
               <div key={x.id} className="space-y-1">
-                {/* (Owner, Oct 28, batch 16 section 40) One short grey line per call (the part line above has the rate and what's paid so far); blue only for a real notice. */}
-                <p className="text-xs text-slate-400" data-call-row="" data-call-length="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min · {chargeShut(x.id) ? notPaidClosedLine(shutOn(x.id)) : <>waiting for {dev} to pay</>}</p>
-                {/* (Owner, Oct 29, batch 28 §21) A listed call: charged automatically 7 days after the call (moved by pauses); no Charge or Let it go. */}
-                {/* (Batch 29 §37) Only while that date is ahead (a team-paused test past it shows nothing until the date moves on). */}
-                {x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}
-                {failedCalls.has(x.id) && <p className="info">{DELAYED_CALL_LINE}</p>}
+                <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="" data-call-length="">
+                  {fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min
+                  <TesterPaymentTag review={x.review} delayed={paymentDelayed(x.id) || failedCalls.has(x.id)} paidCents={partPaid.get(x.id) ?? 0}
+                    developerDeleted={devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? devRealName : null} closedOn={chargeShut(x.id) ? shutOn(x.id) : null} />
+                </p>
+                {/* A listed call is charged automatically after its review date; no Charge or Let it go. */}
+                {x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
-
               </div>
             ))}
             {c.calls.filter((x) => x.review).map((x) => (
               <div key={x.id} className="space-y-2">
-                <p className="text-xs text-slate-400" data-call-row="">{fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min · {callOutcome(x.review!)}</p>
-                {owedCalls.has(x.id) ? <p className="info">{DELAYED_CALL_LINE}</p> : <TesterReview testPaused={!!paused} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} delayed={disputeOwed.has(x.id)} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
+                <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="">
+                  {fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min
+                  <TesterPaymentTag review={x.review} delayed={paymentDelayed(x.id)} paidCents={partPaid.get(x.id) ?? 0} />
+                </p>
+                {!owedCalls.has(x.id) && !pendingBase.has(x.id) && <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
               </div>
             ))}
           </li>
@@ -651,12 +654,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
 }
 
 type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date; rateCents?: number | null; /** (batch 30 §5) */ teamClosedById?: string | null };
-/** (Batch 16 section 40) A reviewed call's word on its grey line: "paid $X", "charged", "let go" (an older rejection: "rejected"). */
-const callOutcome = (r: Rev) => (r.teamClosedById ? "closed by the team for $0" : r.rejected ? "rejected" : r.reason === LET_GO_BY_TESTER ? "let go" : chargedByTester(r.reason) ? "charged" : `paid ${money(r.amountCents)}`);
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ testPaused = false, sessionId, kind, id, review, dispute, delayed = false, off = false, dev = "The developer", extras = [], room = null, more = null, update = null }: { testPaused?: boolean; /** (Batch 30 §2) an update closed at $0 */ update?: { at: Date; note: string } | null; /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; /** A raise decided while the developer was on a hold: owed, paid when they pay it. */ delayed?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ sessionId, kind, id, review, dispute, off = false, dev = "The developer", extras = [], room = null, more = null, update = null }: { /** (Batch 30 §2) an update closed at $0 */ update?: { at: Date; note: string } | null; /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   // (Batch 10) Every part the developer reviewed can be disputed once, listed or not (not the tester's own Charge or Let it go).
   const check = canDispute(review.amountCents, review.agreedCents, !!dispute, byTesterChoice(review.reason), room);
   const may = check.ok && !review.teamClosedById;
@@ -687,8 +688,6 @@ function TesterReview({ testPaused = false, sessionId, kind, id, review, dispute
       {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
       </PayLinesBox>
       {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : "."}`}</p>}
-      {/* (Owner, Oct 31, batch 35 §82) "until the test resumes" only while the test is paused; a payment waiting for the developer's bank is just "may be delayed". */}
-      {delayed && <p className="info" data-dispute-delayed="">{testPaused ? "Payment may be delayed until the test resumes." : "Payment may be delayed."}</p>}
       {/* (Owner, Oct 29, batch 28 §14) Whether this part can still be paid more (grey; not a stop). */}
       {more && !review.rejected && !review.teamClosedById && (
         <p className="note" data-pay-more-state="">{more.allCents <= more.paidCents ? testerPaidMostLine(more.paidCents) : more.closedOn ? payClosedLine(more.closedOn, true) : testerPayMoreLine(dev, more.paidCents, more.allCents)}</p>

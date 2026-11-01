@@ -178,7 +178,8 @@ describe("batch 5 item 3: a restricted account's signed-in pages go to the dashb
     expect(dash).toContain("<Seats total={t.spots} plain={restricted}");
     expect(src("components/Ui.tsx")).toContain("data-plain-seat");
     expect(dash).toContain('data-waiting-plain=""');
-    expect(dash).toContain("{!suspended && <p className=\"mt-2 text-sm\"><Link href={`/app/sessions/${c.id}#parts`}>Open the session</Link></p>}");
+    // (Owner §98 dashboard rows) Suspended rows stay plain; active rows link directly to their parts.
+    expect(dash).toContain('data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#parts`}');
     expect(dash).toContain("const answers = suspended ? [] :");
     const box = src("components/RestrictedBox.tsx");
     expect(box).toContain("Your account is paused. You were removed from all the tests you were in.");

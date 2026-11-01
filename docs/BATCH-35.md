@@ -768,3 +768,15 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - The tester's History no longer folds open with each ended test's deal history. Each ended test is one row like an "In progress" one: "<title>", "by <dev> ·
   ended <date>" ("left <date>"), a tag for how it ended (Finished, Stopped, Closed, Removed, Ended early, You left, Ended) and Open → its page (where the parts,
   payments and Terms history still are). While the tester side is suspended the rows don't open (as before).
+
+## §97 Payment tags on the tester's parts (owner, Oct 31)
+- Written answers, screen recordings and each completed live call show their payment state in the existing small badge style: Paid, Payment delayed,
+  Waiting for review, Not paid (closed on <date>) or Rejected. Let go and the team's closure keep their own state; a deleted developer's unpaid work keeps
+  "Can't be paid". The same review, close-out and outstanding-payment facts drive the tags.
+- A payment waiting for the developer's bank, owed or deferred is Payment delayed, including a dispute raise above an already paid base. Money still waiting
+  is never added to "has paid" or Paid so far (§88). The blue payment-state paragraphs inside the parts are gone: their tag says it once. Payment amounts,
+  reasons, notes, dispute decisions and what can still be paid more stay in their existing plain text.
+- Charge / Let it go keep their own blue refusals through Err / useGoneOnNewVersion (§60) and the page-scoped, in-memory kept refusal (§85): a redraw may
+  keep the reason where its button was, but a fresh page load or navigation never restores an old refusal. The developer's pages are unchanged.
+
+Tests: tests/batch35-payment-tags.test.ts (§97), with the older page-wiring expectations updated to the tags.

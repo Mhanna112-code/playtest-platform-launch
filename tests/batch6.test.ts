@@ -250,7 +250,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect(p).toMatchObject({ status: "owed", amountCents: 1000 });
     expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual(["Ana Silva's written answers $10.00 · charged by the tester while your tests were paused"]);
     expect(await liftHoldIfClear(dev.user.id)).toBe(false); // owed first
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("chargedDelayedLine(chargedOwed.get(sub.id)!)");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("delayed={paymentDelayed(sub.id)}");
     const r = await payOwed(dev.user);
     expect(r).toMatchObject({ paid: 1, lifted: true });
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).not.toBe("owed");

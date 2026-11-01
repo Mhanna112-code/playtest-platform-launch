@@ -119,7 +119,7 @@ describe("batch 29 §37: the automatic-charge dates", () => {
     const dev = src("app/app/tests/[id]/page.tsx");
     expect(dev).toContain('autoChargeLine(pieceDay(x.x!.payBy, u.timeZone)'); // (batch 30 §20) one shared date helper
     expect(dev).not.toContain("autoChargeLine(fmtDate(");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('{x.rateCents != null && x.payBy && x.payBy > now && <p className="text-xs text-slate-400" data-auto-charge="">');
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('{x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">');
   });
 
   it("an outage gap's date is decided in the admin's zone", async () => {
