@@ -141,7 +141,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           ))}
         </fieldset>
       )}
-      {canRequest && (
+      {/* (Owner, Nov 1, batch 35 §103) Nobody working: no form (it could only be refused). */}
+      {canRequest && testers.length > 0 && (
         <div className="space-y-2 text-sm" ref={form} data-mistakes-root="">
           <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
@@ -154,7 +155,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}
-              onClick={() => checkFields(form.current) && request({ contractIds: ticked, minutes: minutes.trim() ? minutes.trim() : "", rows: filled })}
+              onClick={() => checkFields(form.current) && request({ contractIds: ticked.filter((id) => testers.some((t) => t.contractId === id)), minutes: minutes.trim() ? minutes.trim() : "", rows: filled })}
             >
               Request a time
             </button>

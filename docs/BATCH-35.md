@@ -786,3 +786,8 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §102 Needs you and Ratings to give are one box each (owner, Oct 31)
 - On the developer dashboard, Needs you is ONE box (a card) whose rows (the parts-to-pay rows first, then the rest) are plain bordered lines inside its scroll box,
   not a card each. Ratings to give (both sides) is the same: one box, plain rows, scrolling. The tester's New tests for you and History keep their cards.
+
+## §103 The call request form only with someone to request (owner, Nov 1)
+- With nobody working on the test, the developer's Live session shows only "Nobody is working on this test right now…" (no times, length or Request a time).
+- A tick for a tester whose session ended while the page was open is dropped from the request (it used to send it: "Your Request a time didn't go
+  through: fbbb's session has ended.").
