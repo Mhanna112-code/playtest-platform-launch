@@ -104,9 +104,9 @@ const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", 
 export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
-export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers } = {}) {
+export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers; /** (§93) Stop/pause moments: always stop, in the same box as the shared lines. */ moments?: TestEventLike[] } = {}) {
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
-  // these same stop-once rules (Rate has its own short list; Block never stops; batch 35 §59: Leave stops like the rest).
+  // these same stop-once rules (Block never stops; batch 35 §59: Leave stops like the rest).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
   // Block send no boxAt, so they still stop just once.
   const boxAt = seenOf(body.boxAt);
@@ -133,7 +133,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || (!!opts.piece && e.piece === opts.piece)) : r.changes;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
-  const list = [...terms, ...rest].filter((e) => !answersIt(e, opts.answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const list = [...terms, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt)].filter((e) => !answersIt(e, opts.answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0, alertsOff: !!off });
 }

@@ -750,3 +750,14 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §92 Confirm with your bank: the card was declined (owner, Oct 31)
 - Confirm with your bank on a charge made while away re-tries it with the card on file now. When that card is declined the line reads "Your card was declined,
   so nothing was charged. Change your card and confirm again by <date, time>." (was "Your bank didn't confirm the payment…"); the payment keeps waiting until then.
+
+## §93 The tester's Rate stops for every blue notice (owner, Oct 31)
+- The tester's Rate uses the shared tester gate: every unseen change that stops another tester press also stops Rate once, with the same Alerts rules.
+  New terms and a key marked working still stop with Alerts Off; their own action in another tab always stops. On a running test, Rate finishes their part,
+  closes requests and cancels calls ahead, so an unseen terms offer or listing edit must be shown before it goes through.
+- A stop, closure, early end or pause joins every other change in ONE blue box, oldest first. The second press uses the same boxAt rule; a newer change stops
+  it again. An update the page already showed never stops (§90), including terms, calls and stop/pause lines. RateBox already uses usePress and api(), which
+  send seenAt, boxAt, loadedAt and the page load (x-load); no separate client markers are needed.
+- The developer's Rate keeps its existing narrow list. Rating's availability and its close-out refusal ("Rating closed on <date>.") are unchanged.
+
+Tests: tests/batch35-rate-all-stops.test.ts (§93); tests/batch17-rate.test.ts, tests/batch5.test.ts and tests/ratings.test.ts (the older listing-edit expectations now follow §93).

@@ -225,17 +225,18 @@ describe("batch 5 item 5: Rate's stop-once lines", () => {
     expect(testClosedForRate({ status: "closed" })).toBe(true);
   });
 
-  it("tester (batch 17 section 14): a listing change never stops Rate; a payment about their work does, once", async () => {
+  it("tester (§93): a listing change and a payment share one Rate stop", async () => {
     const { dev, testId, sessionId, tester, sub } = await sentWork();
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     const pageLoaded = seen();
     await settle();
-    await db.testEvent.create({ data: { testId, kind: "info", text: "Nora Lane changed the description" } });
+    expect((await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { description: "A new sailing course" }, confirmed: true })).status).toBe(200);
+    await settle();
     const rec = await db.submission.create({ data: { contractId: sessionId, kind: "recording", agreedCents: 1000, sentAt: new Date(Date.now() - 60_000), updatedAt: new Date() } });
     await db.review.create({ data: { submissionId: rec.id, contractId: sessionId, amountCents: 1000, agreedCents: 1000, payKey: randomUUID() } });
     const r = await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: pageLoaded });
     expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane paid $10.00 for your recording"]);
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane edited the listing", "Nora Lane paid $10.00 for your recording"]);
     await settle();
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 4, seenAt: pageLoaded, confirmed: true, boxAt: seen() })).status).toBe(200);
   });
