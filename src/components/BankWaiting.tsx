@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { useBankCheck } from "@/components/BankCheck";
 import { ChangesBox } from "@/components/ChangesBox";
 import { type BankAction } from "@/lib/bankConfirm";
@@ -14,7 +14,7 @@ import { BANK_CONFIRMED, CONFIRM_WITH_BANK, bankAnchor } from "@/lib/rules";
  * (Owner, Oct 29, batch 23 section 9) On a test page the press runs the developer's stop-once check first, exactly like Pay on that piece: anything the page hasn't shown
  * stops it once in the blue box under the button; the second press opens the bank's check. Refusals (already confirmed, expired, cancelled) are plain.
  */
-export function BankWaiting({ paymentId, line, seenAt = "" }: { paymentId: string; line: string; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string }) {
+export function BankWaiting({ paymentId, line, seenAt = "", wide = false }: { paymentId: string; line: ReactNode; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string }) {
   const bank = useBankCheck();
   // (Batch 35 §40, §41) Confirmed: the page redraws in place; until it has, the button stays greyed with the confirmed line.
   const { press, changes, error, busy, doneLine, finish } = usePress(seenAt);
@@ -33,7 +33,7 @@ export function BankWaiting({ paymentId, line, seenAt = "" }: { paymentId: strin
   return (
     <div id={bankAnchor(paymentId)} className={`basis-full space-y-2 border border-sky-300/40 bg-sky-500/10 p-3 text-sm text-sky-100 ${MARKABLE}`} data-bank-waiting={paymentId}>
       <p>{line}</p>
-      <button type="button" className="btn px-3 py-1.5 text-sm" disabled={busy || bank.open} onClick={go}>{CONFIRM_WITH_BANK}</button>
+      <button type="button" className={`btn px-3 py-1.5 text-sm${wide ? " w-full sm:w-auto" : ""}`} disabled={busy || bank.open} onClick={go}>{CONFIRM_WITH_BANK}</button>
       <ChangesBox changes={changes} error={error} press={CONFIRM_WITH_BANK} />
       {bank.view}
       {err && <p className="info" data-bank-not-confirmed="">{err}</p>}

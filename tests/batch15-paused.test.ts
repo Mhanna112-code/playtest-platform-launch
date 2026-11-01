@@ -110,6 +110,6 @@ describe("the developer's side of a dispute (section 27)", () => {
     expect(first.body.error.code).toBe("stop_once");
     expect(first.body.error.changes[0].text).toMatch(/^Nora Lane added their side at .+: read it, then press Decide again\.$/);
     expect((await aact(a.cookie, "decide", { id: d.id, total: "", note: "", seenAt: adminLoaded, confirmed: true })).status).toBe(200);
-    expect(src("app/app/page.tsx")).toContain('data-dispute-box=""');
+    expect(src("app/app/page.tsx")).toContain('<DashboardActionBox id="dispute-sides"');
   });
 });

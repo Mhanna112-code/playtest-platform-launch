@@ -102,10 +102,10 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     expect(src("app/app/tests/[id]/page.tsx")).not.toContain('label="Take down"');
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("<ExcerptPicker submissionId={written.id} choices={excerptPicks} />");
     expect(src("components/Excerpts.tsx")).toContain("Show an excerpt on your profile");
-    expect(src("app/app/testers/[id]/page.tsx")).toContain("<MyExcerpts items={await myExcerpts(p.id)} />");
+    expect(src("app/app/testers/[id]/page.tsx")).toContain("<MyExcerpts items={await myExcerpts(p.id, true)} />");
     // (Batch 16 section 30) Not on Settings any more; a suspended tester side removes them from the dashboard.
     expect(src("app/app/account/page.tsx")).not.toContain("<MyExcerpts");
-    expect(src("app/app/page.tsx")).toContain("{suspended && await myExcerpts(userId).then((items) => (items.length ? <MyExcerpts items={items} /> : null))}");
+    expect(src("app/app/page.tsx")).not.toMatch(/MyExcerpts|myExcerpts/);
     // (Batch 16 section 23) Not on the hover card any more.
     expect(src("app/app/tests/[id]/TestersJoined.tsx")).not.toContain("data-hover-excerpt");
     expect(src("app/app/tests/[id]/page.tsx")).not.toContain("excerpts: (await shownExcerpts(c.testerId))");
@@ -118,7 +118,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     expect((await blocksPOST(req("/api/blocks", { cookie: s.tester.cookie, body: { userId: s.dev.user.id } })).then(json)).status).toBe(200);
     expect(await X.pendingForDeveloper(s.dev.user.id)).toHaveLength(1);
     await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
-    expect(src("app/app/page.tsx")).toContain("const excerptBox = devOff ? await pendingForDeveloper(u.id) : [];");
+    expect(src("app/app/page.tsx")).toContain('const excerptBox = side === "developer" && u.isDeveloper ? await pendingForDeveloper(u.id) : [];');
     expect((await ex(s.dev.cookie, { action: "decide", excerptId: id, decision: "allow" })).status).toBe(200);
     // A suspended tester: no new request, Remove still works.
     await db.user.update({ where: { id: s.tester.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });

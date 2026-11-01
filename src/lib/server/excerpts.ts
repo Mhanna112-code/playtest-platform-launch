@@ -138,9 +138,9 @@ export async function shownExcerpts(testerId: string) {
   return rows.map((x) => ({ id: x.id, text: x.text, question: x.question, source: excerptSource(x) }));
 }
 
-/** The tester's own list (profile and Settings): pending, shown, denied and closed, with what each one's state reads. */
-export async function myExcerpts(testerId: string) {
-  const rows = await db.excerpt.findMany({ where: { testerId }, include: withTest, orderBy: { createdAt: "desc" } });
+/** The tester's own records; the profile requests only accepted excerpts (owner, Nov 1). */
+export async function myExcerpts(testerId: string, acceptedOnly = false) {
+  const rows = await db.excerpt.findMany({ where: { testerId, ...(acceptedOnly ? { status: "shown" } : {}) }, include: withTest, orderBy: { createdAt: "desc" } });
   return rows.map((x) => ({
     id: x.id, text: x.text, question: x.question, source: excerptSource(x), testTitle: x.test.title,
     state: x.test.ndaText && x.status === "shown" ? allowedHiddenLine(x.test.title) : x.test.ndaText && x.status === "pending" ? ndaHiddenLine(x.test.title)

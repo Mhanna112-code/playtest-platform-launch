@@ -17,14 +17,14 @@ export function ExcerptQuestion({ question }: { question: string | null | undefi
   );
 }
 
-/** (Owner, Oct 29, batch 13) The tester's own excerpts (pending, shown, denied, closed) with Remove: on their profile and in Settings. */
+/** (Owner, Nov 1) Accepted excerpts with Remove, only on the tester's own profile. */
 export function MyExcerpts({ items, canRemove = true }: { items: Mine[]; canRemove?: boolean }) {
+  if (!items.length) return null;
   return (
     <section className="card space-y-3 scroll-mt-24" id="excerpts" aria-label="Your excerpts">
       <h2 className="font-semibold text-white">Your excerpts</h2>
-      <p className="text-sm text-slate-400">Short excerpts of paid written answers, shown on your profile once the developer allows them (at most 3 shown or waiting).</p>
-      {items.length === 0 ? <p className="text-sm text-slate-500">None yet. Ask from a paid written part on its session page.</p> : (
-        <ul className="space-y-2">
+      <p className="text-sm text-slate-400">Excerpts of your paid written answers accepted by the developer.</p>
+      <ul className="space-y-2">
           {items.map((x) => (
             <li key={x.id} className="flex flex-wrap items-start gap-2 rounded-lg border border-white/[0.08] p-2 text-sm" data-my-excerpt={x.state}>
               <span className="min-w-0 flex-1 space-y-0.5">
@@ -35,8 +35,7 @@ export function MyExcerpts({ items, canRemove = true }: { items: Mine[]; canRemo
               {canRemove && <ExcerptRemove excerptId={x.id} />}
             </li>
           ))}
-        </ul>
-      )}
+      </ul>
     </section>
   );
 }

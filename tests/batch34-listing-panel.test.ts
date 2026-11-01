@@ -75,7 +75,7 @@ describe("batch 34 §14: the Listing panel", () => {
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).not.toContain("ContractChanges");
     expect(fs.existsSync(path.resolve(__dirname, "../src/app/app/tests/[id]/ContractChanges.tsx"))).toBe(false);
-    const top = page.lastIndexOf("<TopPanel"), panel = page.indexOf("<ListingPanel rows={listingRows}"), needs = page.indexOf("<NeedsYou count=");
+    const top = page.lastIndexOf("<TopPanel"), panel = page.indexOf("<ListingPanel rows={listingRows}"), needs = page.indexOf("<NeedsYou count={needsCount}");
     expect(top).toBeGreaterThan(0);
     expect(panel).toBeGreaterThan(top);
     expect(panel).toBeLessThan(needs);
