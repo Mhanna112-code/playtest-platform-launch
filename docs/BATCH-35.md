@@ -768,3 +768,7 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - The tester's History no longer folds open with each ended test's deal history. Each ended test is one row like an "In progress" one: "<title>", "by <dev> ·
   ended <date>" ("left <date>"), a tag for how it ended (Finished, Stopped, Closed, Removed, Ended early, You left, Ended) and Open → its page (where the parts,
   payments and Terms history still are). While the tester side is suspended the rows don't open (as before).
+
+## §99 "Your account is active again" goes once it isn't (owner, Oct 31)
+- The green "Your developer account is active again · <time>" line on the dashboard is hidden while that side is suspended again, and (developer) while on a
+  payment or chargeback hold. It still shows for 3 days after a reinstatement otherwise.

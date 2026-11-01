@@ -128,7 +128,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       )}
       {/* (Batch 15 section 16) The side in use: its own reinstatement. */}
       {(() => {
-        const back = side === "tester" ? (!u.testerSuspendedAt ? u.testerReinstatedAt : null) : !u.devSuspendedAt ? u.devReinstatedAt : null;
+        // (Owner, Oct 31, batch 35 §99) Gone while that side is suspended again or (developer) on a hold: "active again" would be wrong.
+        const back = side === "tester" ? (!u.testerSuspendedAt ? u.testerReinstatedAt : null) : !u.devSuspendedAt && !u.holdStartedAt ? u.devReinstatedAt : null;
         return back && now.getTime() - back.getTime() < 3 * DAY ? <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-reinstated-box="">Your {u.isDeveloper && u.isTester ? `${side === "tester" ? "tester" : "developer"} account` : "account"} is active again · {fmtDateTime(back)}</p> : null;
       })()}
       <div className="flex flex-wrap items-end justify-between gap-4">
