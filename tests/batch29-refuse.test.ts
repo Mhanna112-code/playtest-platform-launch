@@ -61,7 +61,7 @@ describe("batch 29 §36: a refused press's line survives the redraw that takes i
     expect(comp).toContain('<p className="info mt-2" role="status" data-kept-refusal="">');
     expect(comp).toContain("anchor.appendChild(hostRef.current);");
     expect(comp).not.toContain('position: "absolute"');
-    expect(comp).toContain("flat(p.textContent).includes(msg)");
+    expect(comp).toContain("flat(refusalTextOutsideKept(p)).includes(msg)");
   });
 });
 

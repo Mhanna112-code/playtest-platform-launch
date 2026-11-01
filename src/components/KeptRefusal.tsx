@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { KEEP_MS, currentKept, dropKept, keptShows, notePress, onKept, type Kept, type Spot } from "@/lib/keptRefusal";
+import { KEEP_MS, currentKept, dropKept, keptAnchor, keptShows, keptOnPage, refusalTextOutsideKept, notePress, onKept, type Kept, type Spot } from "@/lib/keptRefusal";
 
 /** The things a person presses: a press on any of them clears a kept line (and is remembered, in case it's refused). */
 const PRESSABLE = "button, [role='button'], input[type='submit'], input[type='button']";
@@ -36,7 +36,7 @@ function shownElsewhere(k: Kept) {
   const msg = flat(k.message);
   if (!msg) return false;
   return [...document.querySelectorAll("p, li, [role='status'], [data-refusal], .err")].some(
-    (p) => !p.closest("[data-kept-refusal], [data-kept-host]") && (p as HTMLElement).getClientRects().length > 0 && flat(p.textContent).includes(msg),
+    (p) => !p.closest("[data-kept-refusal], [data-kept-host]") && (p as HTMLElement).getClientRects().length > 0 && flat(refusalTextOutsideKept(p)).includes(msg),
   );
 }
 
@@ -83,7 +83,7 @@ export function KeptRefusal() {
     // section still there. (Batch 32 §12) ONE notice element per kept line: when a live redraw throws its section away, the same element goes back in at once
     // (a MutationObserver runs before the screen repaints), so it never blinks.
     const place = () => {
-      const anchor = kept.anchors.map((id) => document.getElementById(id)).find((a): a is HTMLElement => !!a && a.getClientRects().length > 0) ?? null;
+      const anchor = keptAnchor(kept.anchors, (id) => { const a = document.getElementById(id); return a && a.getClientRects().length > 0 ? a : null; });
       if (!anchor) {
         if (hostRef.current) dropHost();
         return;
@@ -91,6 +91,7 @@ export function KeptRefusal() {
       if (!hostRef.current) {
         const h = document.createElement(anchor.tagName === "UL" || anchor.tagName === "OL" ? "li" : "div");
         h.setAttribute("data-kept-host", "");
+        h.className = "empty:hidden"; // no empty list item while the portal mounts its line
         h.style.listStyle = "none";
         hostRef.current = h;
         setHost(h);
@@ -99,7 +100,7 @@ export function KeptRefusal() {
     };
     const check = () => {
       // (Owner, Oct 31, batch 35 §85) It belongs to the page it was pressed on: going to another page drops it (it never follows you there).
-      if (Date.now() - kept.at >= KEEP_MS || (kept.path && location.pathname !== kept.path)) {
+      if (Date.now() - kept.at >= KEEP_MS || !keptOnPage(kept, location.pathname)) {
         setShow(false);
         dropHost();
         dropKept(kept.id);
