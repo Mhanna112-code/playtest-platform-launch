@@ -14,14 +14,14 @@ export async function RatingsToGive({ user, side }: { user: { id: string; tester
     <>
       <AutoRefresh query={`rates=${side}`} v={rows.map((r) => `${r.id}:${r.text}`).join(",")} />
       {rows.length > 0 && (
-        <section className="space-y-3" id="ratings-to-give" aria-label="Ratings to give" data-ratings-to-give="">
+        <section className="card space-y-3" id="ratings-to-give" aria-label="Ratings to give" data-ratings-to-give="">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
             <Star className="h-5 w-5 text-amber-300" /> Ratings to give <span className="text-sm font-normal text-slate-400">{rows.length}</span>
           </h2>
           <ScrollList className="space-y-2">
             {rows.map((r) => (
               <li key={r.id}>
-                <Link href={r.href} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline" data-rate-row="">
+                <Link href={r.href} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline" data-rate-row="">
                   <span className="min-w-0 flex-1 truncate text-slate-200" title={r.text}>{r.text}</span>
                 </Link>
               </li>

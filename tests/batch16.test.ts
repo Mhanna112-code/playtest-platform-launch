@@ -270,7 +270,7 @@ describe("E, F) the admin dashboard order and pages of 25", () => {
   it("sections run: chargeback holds, your actions, tests you paused, suspensions, outages, open disputes, then the rest (batch 33 §6)", () => {
     const page = src("app/admin/page.tsx");
     const at = (id: string) => page.indexOf(`id="${id}"`);
-    const order = ["chargebacks", "mine", "tests-you-paused", "suspensions", "outages", "disputes", "holds", "reports", "lifts", "no-shows", "contact", "settings"].map(at);
+    const order = ["chargebacks", "mine", "tests-you-paused", "suspensions", "outages", "disputes", "reports", "lifts", "no-shows", "contact", "settings"].map(at);
     expect(order.every((i) => i > 0)).toBe(true);
     expect([...order].sort((x, y) => x - y)).toEqual(order);
   });

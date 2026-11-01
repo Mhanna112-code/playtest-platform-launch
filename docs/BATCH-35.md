@@ -782,3 +782,7 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - The console's "Payment holds (N)" list is gone. A held developer shows on their profile (opened from anywhere their name is a link); a hold from the 4th
   onward still waits in Lifts for an Approve; chargeback holds stay in Chargeback holds. The admins' summary line about a payment hold now opens the
   developer's profile (a chargeback hold: Chargeback holds).
+
+## §102 Needs you and Ratings to give are one box each (owner, Oct 31)
+- On the developer dashboard, Needs you is ONE box (a card) whose rows (the parts-to-pay rows first, then the rest) are plain bordered lines inside its scroll box,
+  not a card each. Ratings to give (both sides) is the same: one box, plain rows, scrolling. The tester's New tests for you and History keep their cards.

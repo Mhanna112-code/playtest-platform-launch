@@ -255,7 +255,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
 
       {/* (Owner, Oct 31, batch 35 §96) ONE Needs you: the per-test "N parts to pay" rows (what was "Needs review") first, then everything else, in one scroll box. */}
       {shown.length + reviewRows.length > 0 && (
-        <section className="space-y-3" id="needs-you">
+        <section className="card space-y-3" id="needs-you">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
             <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(shown.length + reviewRows.length)}</span>
           </h2>
@@ -263,7 +263,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
           <ScrollList className="space-y-2">
             {reviewRows.map((r) => (
               <li key={`review-${r.id}`} id="needs-review" data-needs-review={r.id}>
-                <Link href={`/app/tests/${r.id}#needs-you`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
+                <Link href={`/app/tests/${r.id}#needs-you`} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">
                   <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay`}><b className="text-white">{r.title}</b> · {plural(r.n, "part")} to pay{r.closes && <span className="text-slate-400" data-pay-closes=""> · {r.closes}</span>}</p>
                   <span className="flex shrink-0 items-center gap-1 text-sm text-indigo-300">Review <ArrowRight className="h-4 w-4" /></span>
                 </Link>
@@ -279,7 +279,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               );
               return (
                 <li key={r.key}>
-                  <Link href={r.href} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>
+                  <Link href={r.href} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">{inner}</Link>
                 </li>
               );
             })}
