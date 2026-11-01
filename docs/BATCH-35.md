@@ -763,3 +763,14 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §96 One Needs you on the developer dashboard (owner, Oct 31)
 - The "Needs review" box is gone: its rows ("<test> · N parts to pay · closes …", Review → the test's Needs you) are the first rows of Needs you, in its one
   scroll box, and counted in its number. Ratings to give already scrolls in its own box.
+
+## §95 A refusal line never flashes (owner, Oct 31)
+- Charge after its window closed could flash its blue refusal every 200 ms. The kept notice excluded its own element from "shown elsewhere", but its parent
+  part (<li>) still contained that notice's words. It hid itself, then the words vanished, so it showed again. The check now reads only text OUTSIDE every kept
+  notice / host subtree, including when reading an ancestor. Another real refusal line still hides the kept copy: one steady reason, never two.
+- An empty portal host is hidden until its line mounts, and a blank reason is never shown, so no empty bullet. Mistake lists continue to drop blank lines.
+- Placement and lifetime stay the same: under the button while it remains; after the redraw removes it, in its nearest surviving section, or at the top if no
+  section remains. It stays until the next press, never follows another page (§85), and is not stored across a page reload. Applies to Charge, Let it go, Pay
+  and the other refused presses through the same kept-refusal path.
+
+Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts (the duplicate-line check excludes kept descendants too).

@@ -53,9 +53,33 @@ export function keepRefusal(label: string, message: string, now = Date.now()): K
   return kept;
 }
 
+/** (Batch 35 §95) Only other content counts as "shown elsewhere". A kept notice may be nested
+ * in a <li>; that ancestor's textContent includes the portal too. Ignore the whole kept subtree
+ * at every depth, otherwise each 200 ms check hides its own line, then shows it again.
+ * The small DOM-node shape also lets the decision be tested without a browser dependency.
+ */
+export type RefusalTextNode = { nodeType: number; nodeValue: string | null; childNodes: ArrayLike<RefusalTextNode>; matches?: (selector: string) => boolean };
+export function refusalTextOutsideKept(node: RefusalTextNode): string {
+  if (node.nodeType === 1 && node.matches?.("[data-kept-refusal], [data-kept-host]")) return "";
+  if (node.nodeType === 3 || node.nodeType === 4) return node.nodeValue ?? "";
+  return Array.from(node.childNodes, refusalTextOutsideKept).join("");
+}
+
+/** The nearest surviving visible section; null means the notice belongs at the top. */
+export function keptAnchor<T extends object>(anchors: readonly string[], visible: (id: string) => T | null): T | null {
+  for (const id of anchors) {
+    const anchor = visible(id);
+    if (anchor) return anchor;
+  }
+  return null;
+}
+
+/** A kept refusal belongs only to the page where it was pressed (§85). */
+export const keptOnPage = (k: Pick<Kept, "path">, pathname: string) => !k.path || k.path === pathname;
+
 /** Shown while it's younger than KEEP_MS and its button is gone from the page (a button still there shows the refusal itself). */
 export function keptShows(k: Kept | null, now: number, buttonStillThere: boolean) {
-  return !!k && now - k.at < KEEP_MS && !buttonStillThere;
+  return !!k && !!k.text.trim() && now - k.at < KEEP_MS && !buttonStillThere;
 }
 
 /** The kept line now (or null), and a way to follow it. */
