@@ -183,3 +183,39 @@ Tests (tests/codex10-test-listing.test.ts): the pop-up's listing line has See it
 shows every field and an Updated tag after a save; a listing line in the top box and in a stop box carries See it to the panel.
 npm run check green. Commit on the branch; don't push or merge.
 ```
+
+## Task 11: a change you've answered never stops a later press (owner, Oct 31)
+
+```
+Read AGENTS.md first and follow it. Task number: 11 (schema codex11, build folder .next-codex11, branch codex/answered-seen,
+worktree C:/Users/march/Projects/pl-codex-11, branched from master).
+
+Owner's rule: once a person has ANSWERED a change, that change never shows again in any blue stop notice ("Your … didn't go
+through. Since you opened this page: …") for any later press, on that page or in their other tabs and devices, on all three
+sides (developer, tester, admin). Changes they haven't answered still stop once exactly as today.
+
+What exists: docs/BATCH-35.md §79 added `answersIt` and the `Answers` type in src/lib/server/live.ts: the answering press itself
+passes `answers`, so its own gate drops that line (devGate / devChanges in live.ts and tests.ts, testerGate in
+src/lib/server/testerGate.ts, the join gate in joining.ts). §51 records a person's own actions in ActionLog with a per-page-load
+id (x-load). What's missing: a LATER, different press still stops for a change already answered. Example: the tester Accepts the
+developer's call request without the top box in view, then presses Request a call → it stops for "Nora Lane asked for a call…".
+
+Build: when a gate collects change lines, drop every line whose item the pressing person already answered after that change
+happened. Answering presses: Accept / Decline of a call request; Accept / Decline of an application or rejoin ask; Pay, Pay more
+or Confirm with your bank on a piece (answers that piece's "sent" / "updated" lines); Switch / Keep (the terms offer); Join from an
+invite (that invite's line); the developer adding their side to a dispute and the admin's Decide (that dispute's lines). Reuse
+ActionLog (check what it records and whether it has the item id; add the id if missing) and the existing answersIt matching rather
+than a new table. Apply it in every gate: developer (live.ts, tests.ts), tester (testerGate.ts), Join (joining.ts), Rate
+(ratings.ts testerRateGate / devRateGate) and the admin's stops (src/lib/server/adminRace.ts).
+
+Tests in tests/batch35-answered-seen.test.ts (fixtures like tests/batch35-answering-press.test.ts and
+tests/batch35-decide-tick.test.ts): tester Accepts the developer's call request, then Request a call goes straight through;
+developer Pays a just-sent piece, then another press doesn't stop for that piece's "sent" line but still stops for an unrelated
+new change; the same from another tab (a different x-load); admin Decide isn't stopped by the dispute's own lines; an unanswered
+change still stops once.
+
+Docs: append "## §86 A change you've answered never stops a later press (owner, Oct 31)" to docs/BATCH-35.md in the style of
+§79, and remove the docs/PENDING.md bullet that starts "**Answering a change counts as seen". npm run check green (known flaky,
+rerun alone: batch22 "two admins at once", batch17-rate §12, codex9 resource_missing, batch34-invite-beats-application,
+batch16-account-tabs). Commit on the branch; don't push or merge.
+```
