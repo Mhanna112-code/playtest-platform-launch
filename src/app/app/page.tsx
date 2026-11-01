@@ -252,32 +252,22 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       {/* (Batch 17 section 17) Every rating the developer can give now (hidden while suspended or on a hold). */}
       <RatingsToGive user={user} side="developer" />
 
-      {reviewRows.length > 0 && (
-        <section className="space-y-3" id="needs-review" aria-label="Needs review">
+      {/* (Owner, Oct 31, batch 35 §96) ONE Needs you: the per-test "N parts to pay" rows (what was "Needs review") first, then everything else, in one scroll box. */}
+      {shown.length + reviewRows.length > 0 && (
+        <section className="space-y-3" id="needs-you">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-            <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs review <span className="text-sm font-normal text-slate-400">{num(reviewRows.length)}</span>
+            <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(shown.length + reviewRows.length)}</span>
           </h2>
-          {/* Newest first, every row in a plain scroll box (batch 16 section 14). Each row opens that test's Needs you. */}
+          {/* Newest first, every item in a plain scroll box (batch 16 section 14). */}
           <ScrollList className="space-y-2">
             {reviewRows.map((r) => (
-              <li key={r.id}>
+              <li key={`review-${r.id}`} id="needs-review" data-needs-review={r.id}>
                 <Link href={`/app/tests/${r.id}#needs-you`} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
                   <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay`}><b className="text-white">{r.title}</b> · {plural(r.n, "part")} to pay{r.closes && <span className="text-slate-400" data-pay-closes=""> · {r.closes}</span>}</p>
                   <span className="flex shrink-0 items-center gap-1 text-sm text-indigo-300">Review <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
             ))}
-          </ScrollList>
-        </section>
-      )}
-
-      {shown.length > 0 && (
-        <section className="space-y-3" id="needs-you">
-          <h2 className="flex items-center gap-2 text-lg font-semibold text-white">
-            <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(shown.length)}</span>
-          </h2>
-          {/* Newest first, every item in a plain scroll box (batch 16 section 14). */}
-          <ScrollList className="space-y-2">
             {shown.map((r) => {
               const inner = (
                 <>

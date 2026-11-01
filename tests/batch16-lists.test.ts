@@ -19,7 +19,7 @@ describe("plain scroll boxes on the dashboards and the developer profile (sectio
     const page = src("app/app/page.tsx");
     // The developer dashboard: disputes, excerpt requests, Needs review, Needs you, Your tests; the tester dashboard: removed, Charge or cancel, To do,
     // waiting, upcoming calls, invitations, Tests you left, History.
-    expect((page.match(/<ScrollList/g) ?? []).length).toBeGreaterThanOrEqual(13);
+    expect((page.match(/<ScrollList/g) ?? []).length).toBeGreaterThanOrEqual(12) // (batch 35 §96) Needs review joined Needs you;
     expect(page).toContain('<ScrollList size="cards" className="grid gap-4 md:grid-cols-2">');
     expect(page).not.toMatch(/max-h-\[30rem\] overflow-y-auto|data-needs-list/);
     // The chips stay above the box (outside it).

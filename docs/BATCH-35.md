@@ -759,3 +759,7 @@ application, which has no contract yet, by its exact line). Other unseen changes
 - Rating finishes a tester's part for good (they can't join that test again), but the developer could still tick and invite them. Now their row in Invite testers is
   greyed "Rated this test: can't join it again" (with "Finished (rated this test)" instead of "Left this test"), and an old page's Invite with them ticked is
   refused: "<name> rated this test, so they can't join it again. Untick them to invite the others."
+
+## §96 One Needs you on the developer dashboard (owner, Oct 31)
+- The "Needs review" box is gone: its rows ("<test> · N parts to pay · closes …", Review → the test's Needs you) are the first rows of Needs you, in its one
+  scroll box, and counted in its number. Ratings to give already scrolls in its own box.

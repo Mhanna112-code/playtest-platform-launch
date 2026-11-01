@@ -280,3 +280,32 @@ npm run check green (known flaky, rerun alone: batch22 "two admins at once", bat
 batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open to charging", batch34 outage Approve after
 Dismiss). Commit on the branch; don't push or merge.
 ```
+
+## Task 14: payment tags on the tester's parts instead of blue notices (owner, Oct 31)
+
+```
+Read AGENTS.md first and follow it. Task number: 14 (schema codex14, build folder .next-codex14, branch codex/payment-tags,
+worktree C:/Users/march/Projects/pl-codex-14, branched from master).
+
+Owner decision: on the tester's session page ("Your parts": written answers, screen recording, each live call), each part shows a
+small TAG saying where its payment stands, as it used to (check git history of src/app/app/sessions/[id]/page.tsx and
+docs/BATCH-*.md for the earlier payment badges/tags, e.g. search "badge" near "Paid" / "delayed"): for example "Paid", "Payment
+delayed" (a payment waiting for the developer's bank, owed during a hold, or deferred), "Waiting for review", "Not paid (closed on
+<date>)", "Rejected". Use the same rules the page already uses for these states (delayedSubs / owedRows / disputeOwed /
+chargedOwed / payShut in that page; batch 35 §82 and §88 for what counts as paid vs delayed). Keep the tags in the existing badge
+style.
+
+Then REMOVE the blue info notices about payment state inside the parts (e.g. "Payment may be delayed.", "Payment for this part may
+be delayed.", chargedDelayedLine "Charged $X. Payment may be delayed until the test resumes.", DELAYED_CALL_LINE): the tag replaces
+them. KEEP blue notices only for refusals of the tester's own Charge / Let it go presses, and make those behave like every other
+blue refusal: gone after a reload or after going to another page/tab (batch 35 §60 useGoneOnNewVersion and §85 kept refusals).
+Don't change the developer's pages.
+
+Tests in tests/batch35-payment-tags.test.ts: a paid part shows "Paid" and no blue delay notice; a part whose dispute raise waits
+for the bank shows "Payment delayed" (no blue notice); a closed-unpaid part shows "Not paid (closed on …)"; a refused Charge shows
+its blue line, which is gone after a page reload. Append "## §97 Payment tags on the tester's parts (owner, Oct 31)" to
+docs/BATCH-35.md (§95 is Codex task 13's). npm run check green (known flaky, rerun alone: batch22 "two admins at once",
+batch17-rate §12, codex9 resource_missing, batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open
+to charging", batch34 outage Approve after Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the
+branch; don't push or merge.
+```
