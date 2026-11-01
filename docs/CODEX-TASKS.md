@@ -335,3 +335,31 @@ For each also say how it goes away (next press, reload, another page, the 20-sec
 Finish with "Things that look odd" if you find two lines saying the same thing, a line that can't happen any more, or wording
 that contradicts another. Commit on the branch; don't push or merge.
 ```
+
+## Task 16: a "Find testers" page for developers (owner, Nov 1)
+
+```
+Read AGENTS.md first and follow it. Task number: 16 (schema codex16, build folder .next-codex16, branch codex/find-testers,
+worktree C:/Users/march/Projects/pl-codex-16, branched from master).
+
+Owner request: developers can find testers without opening a test first. Today the only way is a test's "Invite testers" panel
+(src/app/app/tests/[id]/InvitePanel.tsx with src/lib/server/invites.ts rankedTesters / testerRowInfo / whyNotInvitable).
+
+Build /app/testers (developer side; tester side gets the usual other-side notice like /app/find's otherSideNotice; admins may use
+it too). Nav link "Find testers" next to "Post a test" in src/app/app/layout.tsx (developer side, hidden while restricted like
+Post a test). The page: the same search box, device / language chips and "People you've worked with" / "Suggested" sections as
+the Invite panel, reusing its ranking and row data (no new ranking), each row showing name, rating, devices / languages, tests
+with you, and opening the tester's profile (/app/testers/[id]). Blocked and deleted accounts never listed (as in rankedTesters).
+Each row has "Invite to…": a small menu of the developer's open tests that can still invite (inviteTestRefusal / inviteBlocked
+in rules.ts); choosing one sends the invite through the SAME server path as the Invite panel (sendInvites in invites.ts, with its
+stops and refusals: needs gaps -> "Invite anyway", rated this test -> refused, already in / invited -> greyed per test). No open
+test that can invite: the menu says why ("Post a test to invite testers" / "Your tests aren't taking testers right now").
+Plain scroll box for the list (ScrollList), phones fine. Restricted developer: the page shows the restricted line, no invites.
+
+Tests in tests/batch35-find-testers.test.ts: the list matches the Invite panel's ranking for a test-less view; blocked accounts
+absent; Invite to… a test sends one invite and the same refusals apply (rated this test; needs gap asks Invite anyway); tester
+side gets the other-side notice. Append "## §104 Find testers for developers (owner, Nov 1)" to docs/BATCH-35.md. npm run check
+green (known flaky, rerun alone: batch22 "two admins at once", batch17-rate §12, codex9 resource_missing,
+batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open to charging", batch34 outage Approve after
+Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the branch; don't push or merge.
+```
