@@ -6,6 +6,7 @@ import { contractsOnSide, pagePath } from "@/lib/server/sidePage";
 import { unreadCount } from "@/lib/server/messages";
 import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
+import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
 import { SignOut } from "@/components/SignOut";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { confirmSkipped } from "@/lib/server/users";
@@ -40,6 +41,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const name = u.name.trim() || u.email;
   // (Owner, Oct 28) Restricted on this side: a suspended account (both sides), or a developer on a payment or chargeback hold on their developer side.
   const off = restrictedOn(u, side);
+  // (Batch 35 §100) A payment hold past HOLD_APPROVAL_AFTER with nothing left owed waits only for the team's review.
+  const holdReviewOnly = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER) && side === "developer" && (await (await import("@/lib/server/holds")).owedForBox(u.id)).length === 0;
   // (Batch 34 §5) The Messages number counts the side in use's conversations only.
   const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, side), select: { testId: true, testerId: true } });
   const unreadChats = (await Promise.all(contracts.map((c) => unreadCount(u.id, c.testId, c.testerId)))).reduce((a, b) => a + b, 0);
@@ -103,11 +106,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       )}
       {/* A restricted account's blue box is at the top of the dashboard; other open pages (Payments, Settings) carry this one line. */}
+      {/* (Owner, Oct 31, batch 35 §100) A payment hold waiting only for the team's review (everything owed is paid): the strip says so, not "pay what you owe". */}
       {off && !/^\/app\/?(\?.*)?$/.test(path) && (
         <p className="mx-auto mt-4 max-w-6xl px-4" data-suspended-strip="">
           <span className="info block">
             {/* (Batch 15 section 16) The side in use names its own suspension. */}
-            {(side === "tester" ? u.testerSuspendedAt : u.devSuspendedAt) ? <>Your {u.isDeveloper && u.isTester ? `${side === "tester" ? "tester" : "developer"} account` : "account"} is {side === "tester" ? "paused" : "suspended"}. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</> : u.holdReason === "chargeback" ? <>Your tests are paused after a chargeback. <Link href="/app/payments#chargeback-steps" className="underline">Follow the steps in Payments</Link>.</> : <>Your tests are paused until you pay what you owe. <Link href="/app/payments#owed" className="underline">Pay what you owe</Link>.</>}
+            {(side === "tester" ? u.testerSuspendedAt : u.devSuspendedAt) ? <>Your {u.isDeveloper && u.isTester ? `${side === "tester" ? "tester" : "developer"} account` : "account"} is {side === "tester" ? "paused" : "suspended"}. To appeal, use <Link href="/app/help" className="underline">Contact us</Link> in Settings.</> : u.holdReason === "chargeback" ? <>Your tests are paused after a chargeback. <Link href="/app/payments#chargeback-steps" className="underline">Follow the steps in Payments</Link>.</> : holdReviewOnly ? <>You&apos;ve paid what you owe. Your tests stay paused until the team reviews your account.</> : <>Your tests are paused until you pay what you owe. <Link href="/app/payments#owed" className="underline">Pay what you owe</Link>.</>}
           </span>
         </p>
       )}
