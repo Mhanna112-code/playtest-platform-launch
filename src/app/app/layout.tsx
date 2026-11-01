@@ -106,8 +106,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </div>
       )}
       {/* A restricted account's blue box is at the top of the dashboard; other open pages (Payments, Settings) carry this one line. */}
-      {/* (Owner, Oct 31, batch 35 §100) A payment hold waiting only for the team's review (everything owed is paid): the strip says so, not "pay what you owe". */}
-      {off && !/^\/app\/?(\?.*)?$/.test(path) && (
+      {/* (Owner, Oct 31, batch 35 §100) A payment hold waiting only for the team's review (everything owed is paid): no strip (Payments says the team will review). */}
+      {off && !holdReviewOnly && !/^\/app\/?(\?.*)?$/.test(path) && (
         <p className="mx-auto mt-4 max-w-6xl px-4" data-suspended-strip="">
           <span className="info block">
             {/* (Batch 15 section 16) The side in use names its own suspension. */}

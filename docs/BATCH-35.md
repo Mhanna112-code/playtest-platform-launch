@@ -776,4 +776,4 @@ application, which has no contract yet, by its exact line). Other unseen changes
 ## §100 The top strip after paying what you owe (owner, Oct 31)
 - A payment hold that needs the team's review (more than HOLD_APPROVAL_AFTER holds) stays on after everything owed is paid. The strip at the top of the
   developer's pages said "Your tests are paused until you pay what you owe. Pay what you owe." next to Payments' "You've paid what you owe. The team will
-  review your account…". Now it reads "You've paid what you owe. Your tests stay paused until the team reviews your account."
+  review your account…". Now the strip is gone in that state (owner: Payments already says the team will review).
