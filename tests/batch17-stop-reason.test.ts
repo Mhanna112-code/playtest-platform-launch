@@ -109,7 +109,9 @@ describe("what testers read (section 15)", () => {
     const block = page.slice(page.indexOf('id="stopped-line"'), page.indexOf("</div>}", page.indexOf('id="stopped-line"')));
     expect(block).toContain('c.status === "ended" && c.endKind === "stopped" && c.endReason && contractNotes.some((n) => n.kind === STOP_NOTE_KIND) && <ReasonQuote text={c.endReason} />');
     expect(page).toContain("Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} />");
-    expect(src("app/app/page.tsx")).toContain("Test stopped<ReasonQuote text={stopReasonOf(n.text)} />");
+    // (Owner §98, already on master) History now links to the session with a Stopped tag; the reason stays on that session.
+    expect(src("app/app/page.tsx")).toContain('data-history-tag="">{tag}</span>');
+    expect(src("app/app/page.tsx")).toContain('c.endKind === "stopped" ? "Stopped"');
     // ReasonQuote is the italic scroll box End early's reason uses.
     expect(src("components/ScrollText.tsx")).toMatch(/export function ReasonQuote[\s\S]*overflow-y-auto[\s\S]*italic/);
   });
