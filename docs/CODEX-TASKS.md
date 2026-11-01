@@ -363,3 +363,36 @@ green (known flaky, rerun alone: batch22 "two admins at once", batch17-rate §12
 batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open to charging", batch34 outage Approve after
 Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the branch; don't push or merge.
 ```
+
+## Task 17: Message anyone from their profile (owner, Nov 1)
+
+```
+Read AGENTS.md first and follow it. Task number: 17 (schema codex17, build folder .next-codex17, branch codex/profile-messages,
+worktree C:/Users/march/Projects/pl-codex-17, branched from master).
+
+Owner request: a "Message" button on every profile (developer profile /app/developers/[id] and tester profile /app/testers/[id])
+so anyone can message anyone, not only people who share a test. Today chats exist only per test and tester
+(src/lib/server/messages.ts: chatAccess, openTesterChat, sendChat; the Messages page src/app/app/messages).
+
+Build: a direct conversation between two accounts that isn't tied to a test (new model + local migration under prisma/migrations;
+never run migrations against a hosted DB). It shows in the Messages page next to the test chats (its own row: the other person's
+name, "Direct message"), with the same message UI, unread counts, bell line and email rules as test chats, the same drafts
+(useKept) and the same length limits. "Message" on a profile opens it (creating it on the first message, not on the press).
+Rules to keep:
+- Blocks either way: no button, and an old page's send is refused with the existing neutral line ("Unable to chat with this
+  developer." / "… tester.").
+- A suspended side, a deleted account, the sender's own restriction: same as test chats (refused with the existing lines;
+  check chatRestriction / the restricted rules in src/lib/restricted.ts).
+- No messaging yourself; admins keep their existing tools (no Message button needed on the admin views).
+- Abuse guard: a simple per-sender limit on NEW conversations started per day (for example 20) with a plain refusal line; the
+  Report button on profiles stays as it is.
+- Testers never see "hold", "suspended", "failed" or "chargeback" about a developer in these lines.
+
+Tests in tests/batch35-profile-messages.test.ts: a developer messages a tester they never worked with (both see it in Messages,
+unread count and bell); blocked either way refused and no button; suspended side refused; the daily new-conversation limit
+refuses the 21st; a test chat between the same two people stays separate. Append "## §105 Message anyone from their profile
+(owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky, rerun alone: batch22 "two admins at once",
+batch17-rate §12, codex9 resource_missing, batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open
+to charging", batch34 outage Approve after Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the
+branch; don't push or merge.
+```
