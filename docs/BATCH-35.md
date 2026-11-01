@@ -812,3 +812,7 @@ Tests: tests/batch35-payment-tags.test.ts (§97), with the older page-wiring exp
   and the other refused presses through the same kept-refusal path.
 
 Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts (the duplicate-line check excludes kept descendants too).
+
+## §108 Edit never blocks on an unchanged Open until (owner, Nov 1)
+- On Edit, the Open until date box's minimum is the saved date when that's earlier than tomorrow, so a test whose Open until is under a day away (or past) can
+  still save other fields; the server already checks the date only when it changes. Moving it still needs a date from tomorrow on.

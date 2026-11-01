@@ -457,3 +457,25 @@ resource_missing, batch34-invite-beats-application, batch16-account-tabs, batch1
 outage Approve after Dismiss, batch4 "Open until heads-ups wait while the test is paused"). Commit on the branch; don't push or
 merge.
 ```
+
+## Task 20: the Invite panel re-checks testers on the 20-second beat (owner, Nov 1)
+
+```
+Read AGENTS.md first and follow it. Task number: 20 (schema codex20, build folder .next-codex20, branch codex/invite-rows-live,
+worktree C:/Users/march/Projects/pl-codex-20, branched from master).
+
+Bug (owner): a tester's row in a test's Invite testers panel (src/app/app/tests/[id]/InvitePanel.tsx, data from
+src/lib/server/invites.ts rankedTesters: greyed "Can't join this test" at MAX_ACTIVE_TESTS, suspended, blocked, rated this test,
+already invited / in) only updates when THIS test changes or on a reload. fbbb dropped under 10 tests on other tests and stayed
+greyed until the developer reloaded (and the other way round: reaching 10 leaves an invitable-looking row whose Invite then stops).
+
+Wanted: on the page's existing 20-second beat (src/lib/liveSync.ts LIVE_TICK; AutoRefresh redraws), the panel's rows re-check
+availability: a cheap fingerprint of the shown testers' invitability (active test count crossing the limit, suspension, block,
+rated here, invited / in) so the page redraws when it changes, like AutoRefresh's `v` fingerprints elsewhere (e.g. BankToConfirm's
+bankTopV). No new timers. Ticked boxes and typed search stay as they are across the redraw; a ticked tester who became uninvitable
+is unticked with the existing greyed reason.
+
+Tests in tests/batch35-invite-rows-live.test.ts: the fingerprint changes when a shown tester's active count crosses the limit or
+they get blocked / suspended, and not for unrelated changes. Append "## §109 Invite rows update on the beat (owner, Nov 1)" to
+docs/BATCH-35.md. npm run check green (known flaky list as in the earlier tasks). Commit on the branch; don't push or merge.
+```

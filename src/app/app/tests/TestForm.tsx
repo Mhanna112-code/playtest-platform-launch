@@ -641,7 +641,10 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     return items.length ? <NoteItems items={items} /> : null;
   };
   const tomorrow = useLocalMin(24 * 60, true), in3 = useLocalMin(3 * 24 * 60, true), monthOut = useLocalMin(30 * 24 * 60, true);
-  const minOpen = edit ? tomorrow : in3;
+  // (Owner, Nov 1, batch 35 §108) Edit: an Open until left as it is never blocks saving other fields, even when it's under a day away (or past): the box's minimum
+  // is the saved date when that's earlier than tomorrow (the server checks the date only when it changes).
+  const savedOpen = edit && base.openUntil ? base.openUntil.slice(0, 10) : "";
+  const minOpen = edit ? (savedOpen && savedOpen < tomorrow ? savedOpen : tomorrow) : in3;
   // (Batch 16 section 16) Edit: up to 30 days after the test opened (a date already past it stays as it is: it just can't move later).
   const capMax = edit?.capDay ? (base.openUntil && base.openUntil.slice(0, 10) > edit.capDay ? base.openUntil.slice(0, 10) : edit.capDay) : monthOut;
   // (Owner, Oct 29, batch 31) At most 10 testers per test; Edit: a test already above 10 keeps its saved spots (lower, never higher).
