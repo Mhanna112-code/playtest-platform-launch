@@ -816,3 +816,6 @@ Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts 
 ## §108 Edit never blocks on an unchanged Open until (owner, Nov 1)
 - On Edit, the Open until date box's minimum is the saved date when that's earlier than tomorrow, so a test whose Open until is under a day away (or past) can
   still save other fields; the server already checks the date only when it changes. Moving it still needs a date from tomorrow on.
+
+## An accepted rejoin opens the session (owner, Nov 1)
+When the join page’s existing watcher finds that an application or ask to rejoin was accepted, it opens the session automatically, just like Join. A focused field, a saved note or a stop box no longer strands the page on “You’re back in … Go to your session”. Accepted sessions also navigate when their fingerprint was already seen. The watcher stays on the shared page beat and focus check; a response arriving after leaving the page cannot navigate it. Waiting, declined and closed applications keep their existing redraw behavior. Tests: `tests/batch35-rejoin-refresh.test.ts`, plus the existing batch30 acceptance fixtures.

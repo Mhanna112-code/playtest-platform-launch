@@ -74,9 +74,10 @@ describe("batch 30 §8 (owner's repro): the join page follows its application or
     expect(joinBackLine("T", "Nov 12")).toBe("You're back in “T”: your deadline is Nov 12.");
   });
 
-  it("JoinWatch moves to the session unless something is being typed; the Sent line gives way when the application changes", () => {
+  it("JoinWatch moves to an accepted session directly; the Sent line gives way when the application changes", () => {
     const w = src("app/app/find/[id]/JoinWatch.tsx");
-    expect(w).toContain("if (!pageBusy()) window.location.href = j.back.href;");
+    expect(w).toContain("window.location.href = j.back.href;");
+    expect(w).not.toContain("pageBusy");
     expect(w).toContain("Go to your session →");
     expect(src("app/app/find/[id]/JoinBox.tsx")).toContain('useEffect(() => setDone(""), [appState]);');
   });
