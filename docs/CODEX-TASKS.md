@@ -219,3 +219,33 @@ Docs: append "## §86 A change you've answered never stops a later press (owner,
 rerun alone: batch22 "two admins at once", batch17-rate §12, codex9 resource_missing, batch34-invite-beats-application,
 batch16-account-tabs). Commit on the branch; don't push or merge.
 ```
+
+## Task 12: the tester's Rate stops for every blue notice (owner, Oct 31)
+
+```
+Read AGENTS.md first and follow it. Task number: 12 (schema codex12, build folder .next-codex12, branch codex/rate-all-stops,
+worktree C:/Users/march/Projects/pl-codex-12, branched from master).
+
+Owner decision: on the TESTER side, Rate stops once for everything any other tester press stops for (the same blue notices,
+the same Alerts rules, the same "your own action in another tab always stops", the same batch 35 §90 rule that an update the
+page has already shown never stops). Today Rate has its own short list (src/lib/server/ratings.ts testerRateGate: the
+developer's Pay / Pay more / Reject on their work, a dispute decided, the test stopping / closing / their work ending, and on a
+running test call changes). Why it matters: on a running test Rate ends the tester's part (calls ahead and requests close, nothing
+more can be sent), so a new terms offer or a listing change they haven't seen must stop it once, like Send or Switch / Keep.
+
+Build: make testerRateGate apply the shared tester gate (src/lib/server/testerGate.ts testerGate) in addition to, or instead of,
+its own lines, without showing two stop boxes one after the other for one press (one box listing everything; the second press
+goes ahead per the existing boxAt rule). Check the Rate press on the session page sends what testerGate needs (seenAt / boxAt /
+loadedAt / x-load, like the other tester presses in src/lib/client.ts); add what's missing. Keep the developer's Rate (devRateGate)
+exactly as it is. After a test has closed, keep Rate's current refusals ("Rating closed on <date>").
+
+Tests in tests/batch35-rate-all-stops.test.ts (fixtures like tests/batch35-answering-press.test.ts): a new terms offer stops the
+tester's Rate once and the second press rates; a listing edit stops it once (Alerts on) and not with Alerts off; the tester's own
+Send in another tab stops it once even with Alerts off; the developer's Pay on their work still stops it; an update already
+shown (seenAt after it) doesn't stop; only ONE stop box for a press that has both kinds of lines.
+
+Docs: append "## §93 The tester's Rate stops for every blue notice (owner, Oct 31)" to docs/BATCH-35.md. npm run check green
+(known flaky, rerun alone: batch22 "two admins at once", batch17-rate §12, codex9 resource_missing,
+batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open to charging", batch34 outage Approve after
+Dismiss). Commit on the branch; don't push or merge.
+```
