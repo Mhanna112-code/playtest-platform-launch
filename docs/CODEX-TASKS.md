@@ -249,3 +249,34 @@ Docs: append "## §93 The tester's Rate stops for every blue notice (owner, Oct 
 batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open to charging", batch34 outage Approve after
 Dismiss). Commit on the branch; don't push or merge.
 ```
+
+## Task 13: a refusal line flashes on and off after Charge in a closed window (owner, Oct 31)
+
+```
+Read AGENTS.md first and follow it. Task number: 13 (schema codex13, build folder .next-codex13, branch codex/refusal-flash,
+worktree C:/Users/march/Projects/pl-codex-13, branched from master).
+
+Bug (owner, local site, Oct 31): a tester's session page was left open while their written answers' Charge window closed
+(the piece's close-out passed). Pressing Charge then showed the refusal "Your Charge didn't go through: charge and Let it go
+closed on Oct 31, 2026." as a bulleted line that FLASHES ON AND OFF CONSTANTLY (several times a second), with an empty second
+bullet under it.
+
+Likely area (verify, don't assume): two things show a refused press's reason and hide when the other shows it:
+- the line under the button: src/components/Err.tsx (hidden on a new page version via useGoneOnNewVersion, batch 35 §60) inside
+  src/app/app/sessions/[id]/ChoiceBox.tsx (rendered only while !chargeShut on the session page,
+  src/app/app/sessions/[id]/page.tsx);
+- the kept refusal: src/components/KeptRefusal.tsx + src/lib/keptRefusal.ts (checks every 200 ms; hidden while the button is
+  still on the page or `shownElsewhere` finds the same words; placed in the nearest section with an id, or fixed at the top).
+Something toggles every check (e.g. the kept line counts its own copy or the Err line as "shown elsewhere" and hides, then
+shows again; or the empty-bullet list is the FormMistakes / mistakes list rendering an empty item). Reproduce in a test
+(jsdom or a Playwright-style check if the repo has one; otherwise unit-test the decision functions) and fix the root cause so the
+reason shows ONCE, steadily, in one place, and never an empty bullet. Keep the existing rules: shown under the button while it's
+there; after a redraw that removed the button, in its nearest section (or at the top), until the next press; dropped on another
+page (batch 35 §85).
+
+Also check the same flow for Let it go and for the developer's Pay after the Pay window closed.
+Tests in tests/batch35-refusal-flash.test.ts. Append "## §95 A refusal line never flashes (owner, Oct 31)" to docs/BATCH-35.md.
+npm run check green (known flaky, rerun alone: batch22 "two admins at once", batch17-rate §12, codex9 resource_missing,
+batch34-invite-beats-application, batch16-account-tabs, batch12 "a part already open to charging", batch34 outage Approve after
+Dismiss). Commit on the branch; don't push or merge.
+```
