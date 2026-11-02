@@ -19,3 +19,5 @@ next-env.d.ts
 # local build folders (any NEXT_DIST_DIR)
 .next-*/
 scripts/codex-run.log
+scripts/payments-proof/logs/
+scripts/payments-proof/serve.log

@@ -6,7 +6,7 @@ import { logEvent } from "./live";
 import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, getStripe, stripeOn, transferShare } from "./stripe";
 import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, splitFee } from "@/lib/rules";
-import { liftHoldIfClear, owed, tellArrived } from "./holds";
+import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
 // (Owner, Oct 26) A CHARGEBACK is a payment hold with extra steps. The developer's account goes on a payment hold (as for a failed payment). To lift it:
@@ -38,7 +38,8 @@ export type ChargebackSteps = {
 export async function chargebackSteps(devId: string): Promise<ChargebackSteps | null> {
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, holdReason: true, chargebackCardVerifiedAt: true, chargebackApprovedAt: true } });
   if (!u?.holdStartedAt || u.holdReason !== "chargeback") return null;
-  const owing = await owed(devId);
+  // (Owner, Nov 2, §125) The reservation covers what is owed AND the charges waiting for the lift: the team's Approve settles everything in one.
+  const owing = await payable(devId);
   const rs = await reserveState(devId);
   const owedCents = owing.reduce((a, p) => a + p.amountCents, 0);
   const uncoveredCents = owing.filter((p) => !rs.covered.has(p.id)).reduce((a, p) => a + p.amountCents, 0);
@@ -74,7 +75,14 @@ async function cancelPi(id: string | null) {
 export async function reserveOwed(u: { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean }, rows: { id: string; amountCents: number }[]) {
   const total = rows.reduce((a, p) => a + p.amountCents, 0);
   const now = new Date();
-  const r = await db.reservation.create({ data: { developerId: u.id, amountCents: total, covers: rows.map((p) => p.id), status: "pending", actionBy: new Date(now.getTime() + PRESS_ACTION_MS) } });
+  // (Nov 2, payments proof: bug found) Two presses at the same moment (two tabs) both saw no reservation and each authorized the total. The reservation is now made
+  // under the developer's row lock and only when none is open (being made, waiting for the bank, or reserved): the second press reserves nothing.
+  const r = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${u.id} FOR UPDATE`;
+    if (await tx.reservation.count({ where: { developerId: u.id, status: { in: ["pending", "needs_action", "reserved"] } } })) return null;
+    return tx.reservation.create({ data: { developerId: u.id, amountCents: total, covers: rows.map((p) => p.id), status: "pending", actionBy: new Date(now.getTime() + PRESS_ACTION_MS) } });
+  });
+  if (!r) throw new HttpError(409, "nothing_owed", (await import("./holds")).ALREADY_RESERVED);
   const reserved = (pi: string | null) => db.reservation.update({ where: { id: r.id }, data: { status: "reserved", stripePaymentIntentId: pi, actionBy: null, expiresAt: new Date(Date.now() + RESERVE_DAYS * 86_400_000) } });
   if (!stripeOn()) {
     await reserved(null);
@@ -352,7 +360,7 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   if (steps.approved) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."), p);
   // (Batch 35 §117 rule 3) A debt waiting for the bank is locked: never paid from the reservation or charged after the lift (its check pays it, or it's cancelled).
   const locks = await (await import("./owedOnce")).owedLocks(devId);
-  const owing = (await owed(devId)).filter((x) => !locks.has(x.id));
+  const owing = (await payable(devId)).filter((x) => !locks.has(x.id)); // (§125) with the charges waiting for the lift
   const rs = await reserveState(devId);
   const owedCents = owing.reduce((a, p) => a + p.amountCents, 0);
   const { plan, after } = assign(owing, rs.active);

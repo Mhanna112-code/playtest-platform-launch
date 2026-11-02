@@ -391,8 +391,11 @@ async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThr
     // they keep waiting for the lift instead, §113).
     const once = await import("./owedOnce");
     const freed = await once.releaseOwed(p.id);
+    // (§125) Its box says so plainly: "Your bank check ran out on <date>: nothing was charged. Pay again or change your card." (once.ranOutLine)
+    if (freed) await db.payment.update({ where: { id: p.id }, data: { failure: once.RAN_OUT, warnedAt: p.actionBy ?? now } });
     const held = !!(await db.user.findUnique({ where: { id: p.developerId }, select: { holdStartedAt: true } }))?.holdStartedAt;
-    if (freed?.charges.length && !held) await once.chargesDeclined(p.developerId, freed.charges);
+    // (§125) Pay what you owe's one payment also covers charges waiting for the lift: they keep waiting (never debts).
+    if (once.forCharges(p) && freed?.charges.length && !held) await once.chargesDeclined(p.developerId, freed.charges);
   }
   else if (p.status === "needs_confirmation" && p.kind === "chargeback") await db.payment.delete({ where: { id: p.id } }); // a retried chargeback: still owed
   else if (p.status === "needs_confirmation") {

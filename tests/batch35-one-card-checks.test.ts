@@ -439,7 +439,7 @@ describe("§117 with §113: new charges during a hold wait for the lift", () => 
     return { p, pi };
   }
 
-  it("a check made before the hold that runs out during it: cancelled at Stripe and waits for the lift (never added to Pay what you owe); the lift charges it on the card in use then", async () => {
+  it("a check made before the hold that runs out during it: cancelled at Stripe and waits (never a debt); (§125) a new card's retry pays it WITH what's owed as one payment", async () => {
     const w = await world();
     const st = bank();
     const { p, pi } = await awayCheck(w, st);
@@ -450,16 +450,16 @@ describe("§117 with §113: new charges during a hold wait for the lift", () => 
     expect(st.cancelled).toEqual([pi]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "deferred", actionPi: null });
     expect((await owed(w.dev.user.id)).map((x) => x.id)).toEqual([debt.id]);
-    // A new card during the hold: it keeps waiting (not charged now); what's owed is one payment on the new card; the lift then charges the waiting one on that card.
+    // A new card during the hold: (§125) what's owed and the waiting charge are ONE payment on the new card; the hold lifts with nothing left to charge.
     st.card.customer = w.customer;
     st.card.next = "pm_new";
     await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
-    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[400, "pm_new"], [1000, "pm_new"]]);
+    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1400, "pm_new"]]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
     expect(await hold(w.dev.user.id)).toBeNull();
   });
 
-  it("a new card during a hold cancels a waiting check made while away and leaves that charge waiting for the lift", async () => {
+  it("a new card during a hold cancels a waiting check made while away; declined, that charge keeps waiting (never a debt) and the debt stays owed", async () => {
     const w = await world();
     const st = bank();
     const { p, pi } = await awayCheck(w, st);
@@ -471,7 +471,8 @@ describe("§117 with §113: new charges during a hold wait for the lift", () => 
     await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
     expect(st.cancelled).toEqual([pi]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "deferred", actionPi: null });
-    expect(st.made.map((m) => m.amount)).toEqual([400]); // only what's owed was tried (declined); the waiting charge waits
+    expect(st.made.map((m) => m.amount)).toEqual([1400]); // (§125) one payment for what's owed and the waiting charge, declined: the charge keeps waiting
+    expect((await owed(w.dev.user.id)).map((x) => x.amountCents)).toEqual([400]);
     expect(await hold(w.dev.user.id)).not.toBeNull();
   });
 });
@@ -512,7 +513,11 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     for (let i = 0; i < n; i++) waiting.push(await db.payment.create({ data: { kind: "review", ...(i === 0 ? { submissionId: w.sub.id } : {}), contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 1000 + 100 * i, feeCents: 0, testerCents: 0, status: "deferred" } }));
     return { ...w, debt, waiting };
   }
-  const press = (w: { dev: { cookie: string } }, cents: number, ids: string[]) => owedPress(w.dev.cookie, { seenTotalCents: cents, seenIds: ids });
+  /** (§125) Pay what you owe now pays the waiting charges WITH the debt; the after-lift path runs only when a hold lifts another way: the debt settled elsewhere, then the lift. */
+  const liftOther = async (w: { dev: { user: { id: string } }; debt: { id: string } }) => {
+    await db.payment.update({ where: { id: w.debt.id }, data: { status: "charged", settledAt: new Date() } });
+    return (await import("@/lib/server/holds")).liftHoldIfClear(w.dev.user.id);
+  };
 
   it("the one classifier: authentication asks are never declines; real declines are", async () => {
     const { wantsAuth, isCardError } = await import("@/lib/server/stripe");
@@ -531,9 +536,8 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     const w = await waitingAfterHold(1);
     const st = bank();
     st.attempt.add("pm_old");
-    const r = await press(w, 400, [w.debt.id]);
-    expect(r.body).toMatchObject({ lifted: true });
-    expect(st.made.map((m) => m.amount)).toEqual([400, 1000]);
+    expect(await liftOther(w)).toBe(true);
+    expect(st.made.map((m) => m.amount)).toEqual([1000]);
     const p = await db.payment.findUniqueOrThrow({ where: { id: w.waiting[0].id } });
     expect(p).toMatchObject({ status: "deferred", owedUntil: null });
     const one = await db.payment.findUniqueOrThrow({ where: { id: p.coveredById! } });
@@ -552,14 +556,8 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     const w = await waitingAfterHold(2);
     const st = bank();
     st.decline.add("pm_old");
-    // Pay what you owe itself goes through on another (one-off) card, then the card declines the waiting charges.
-    const pm = await db.user.update({ where: { id: w.dev.user.id }, data: { stripePaymentMethodId: "pm_ok" } });
-    expect(pm).toBeTruthy();
-    const pis = (await import("@/lib/server/stripe")).getStripe().paymentIntents as unknown as { create: (p: Record<string, unknown>) => Promise<unknown> };
-    const create = pis.create;
-    pis.create = async (p) => (p.amount === 400 ? create(p) : create({ ...p, payment_method: "pm_old" }));
-    await press(w, 400, [w.debt.id]);
-    expect(st.made.map((m) => m.amount)).toEqual([400, 2100]);
+    await liftOther(w);
+    expect(st.made.map((m) => m.amount)).toEqual([2100]);
     for (const x of w.waiting) expect(await db.payment.findUniqueOrThrow({ where: { id: x.id } })).toMatchObject({ status: "failed", owedUntil: expect.any(Date), coveredById: null });
     expect(await hold(w.dev.user.id)).not.toBeNull();
   });
@@ -569,9 +567,9 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     const st = bank();
     const pis = (await import("@/lib/server/stripe")).getStripe().paymentIntents as unknown as { create: (p: Record<string, unknown>) => Promise<unknown> };
     const create = pis.create;
-    pis.create = async (p) => (p.amount === 400 ? create(p) : create({ ...p, payment_method: "pm_broken" }));
+    pis.create = async (p) => create({ ...p, payment_method: "pm_broken" });
     st.broken.add("pm_broken");
-    await press(w, 400, [w.debt.id]);
+    await liftOther(w);
     for (const x of w.waiting) expect(await db.payment.findUniqueOrThrow({ where: { id: x.id } })).toMatchObject({ status: "deferred", coveredById: null, owedUntil: null });
     expect(await hold(w.dev.user.id)).toBeNull();
     expect(await owed(w.dev.user.id)).toEqual([]);
@@ -592,9 +590,9 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     const create = pis.create;
     pis.create = async (p) => (p.amount === 300 ? create({ ...p, payment_method: "pm_dead" }) : create(p));
     st.decline.add("pm_dead");
-    await press(w, 400, [w.debt.id]);
+    await liftOther(w);
     expect(await hold(w.dev.user.id)).not.toBeNull();
-    expect(st.made.map((m) => m.amount)).toEqual([400, 300]);
+    expect(st.made.map((m) => m.amount)).toEqual([300]);
     for (const x of w.waiting) expect(await db.payment.findUniqueOrThrow({ where: { id: x.id } })).toMatchObject({ status: "deferred", coveredById: null });
   });
 
@@ -651,7 +649,7 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
 });
 
 describe("§122: a hold starting pauses the charges still waiting for the bank", () => {
-  it("3 confirms up; one becomes a debt (the hold starts); the other two are cancelled at Stripe and wait for the lift; an old tab's Confirm is refused; the lift makes them as one payment", async () => {
+  it("3 confirms up; one becomes a debt (the hold starts); the other two are cancelled at Stripe and wait; an old tab's Confirm is refused; (§125) Pay what you owe pays all three as one payment", async () => {
     const w = await world();
     const st = bank();
     const items = [];
@@ -680,10 +678,11 @@ describe("§122: a hold starting pauses the charges still waiting for the bank",
     const fin = await confirm(w.dev.cookie, { paymentId: items[1].p.id });
     expect(fin.body.error).toMatchObject({ code: "paused" });
     expect(st.made).toHaveLength(0);
-    // Pay what you owe ($10.00) lifts the hold; the two waiting charges are then made as ONE payment.
-    const r = await owedPress(w.dev.cookie, { seenTotalCents: 1000, seenIds: [items[0].p.id] });
+    // (§125) Pay what you owe ($33.00: the debt and the two waiting charges, all listed in its box) is ONE payment; the hold lifts with nothing left to charge.
+    expect((await owedLines(w.dev.user.id)).map((l) => l.amountCents)).toEqual([1000, 1100, 1200]);
+    const r = await owedPress(w.dev.cookie, { seenTotalCents: 3300, seenIds: items.map((x) => x.p.id) });
     expect(r.body).toMatchObject({ lifted: true });
-    expect(st.made.map((m) => m.amount)).toEqual([1000, 2300]);
+    expect(st.made.map((m) => m.amount)).toEqual([3300]);
     for (const x of items) expect(await db.payment.findUniqueOrThrow({ where: { id: x.p.id } })).toMatchObject({ status: "charged" });
   });
 
