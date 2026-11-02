@@ -21,10 +21,8 @@ Rules to build:
    each item again on the NEW card at once: goes through -> paid; the bank asks -> a new "Confirm with your bank" item on the new
    card (3 days); declined -> a debt stays owed / a new charge becomes a debt (a hold, or added to the current one). "Confirm with your
    bank" therefore always means "approve it on my current card": confirmStart never finishes a check made on another card.
-2. A FAILED CONFIRM IS FINAL AT ONCE. When the bank declines or fails the check (not when the person just closes the window), the
-   item is resolved right then: a new charge becomes a debt in Pay what you owe immediately (starts a hold or adds to it; same lines
-   as today's 3-day lapse), a debt stays owed. Its check is cancelled at Stripe. Closing the window without finishing leaves it
-   waiting until its date (or until Cancel this check, rule 3).
+2. (Owner: no change) A declined or failed Confirm keeps today's rule: the item keeps waiting until its 3-day date, then a new charge
+   becomes a debt and a debt stays owed. When that date passes, rule 4 applies.
 3. A WAITING DEBT IS LOCKED IN PAY WHAT YOU OWE. A debt with a bank check waiting shows "Waiting for your bank" and is NOT charged by
    a Pay what you owe press, a daily retry or a new-card retry (other debts are). Next to it: "Cancel this check" (cancels at Stripe,
    the debt becomes payable at once). The same during a chargeback hold's Pay what you owe (reservation).
@@ -36,7 +34,7 @@ Rules to build:
 Testers never see "hold", "failed" or "chargeback"; keep today's tags ("Payment delayed" / "Paid").
 
 Tests in tests/batch35-one-card-checks.test.ts (fake Stripe): new card cancels old checks and retries on the new card (each outcome);
-a declined Confirm makes a new charge a debt at once; a waiting debt is skipped by press and retries and payable after Cancel this
+a declined Confirm still waits until its date; a waiting debt is skipped by press and retries and payable after Cancel this
 check; an expired check is cancelled at Stripe, and one that had already succeeded is recorded as paid with no second charge; a
 press and a check finishing at the same moment charge once. Update tests that expected old behaviour. Append "## §117 One card in
 play; bank checks never double-charge (owner, Nov 2)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier
