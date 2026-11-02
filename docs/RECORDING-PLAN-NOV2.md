@@ -26,3 +26,6 @@ One summary report (artifact) with the clips, per the owner's evidence rule.
    cancel-at-Stripe-first with "already paid" recorded, the idempotency key, the piece lock during a bank check, Pay closed / already
    paid refusals) and a clip or test proving it: two attempts at the same moment -> one charge at Stripe. Present it as one table in
    the report: path | what could double it | the guard | proof.
+7. (Owner) Per-field drafts (feat/per-field-drafts, §120): tab A edits the description, tab B edits a price, a NEW tab C shows both as
+   Draft; typing in tab C's title doesn't make untouched fields show Draft; two tabs on the same field -> the later wins; Parts and
+   prices move as one unit; Discard on one field leaves the others.
