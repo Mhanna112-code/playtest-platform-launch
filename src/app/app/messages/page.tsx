@@ -10,6 +10,8 @@ import { requireOpenPage } from "@/lib/server/page-auth";
 import { contractsOnSide } from "@/lib/server/sidePage";
 import { sideFor } from "@/lib/sides";
 import { unreadCount } from "@/lib/server/messages";
+import { PersonHover } from "@/components/PersonHover";
+import { personHoverFor } from "@/lib/server/personHover";
 
 export const metadata = { title: "Messages · Playtest" };
 export const dynamic = "force-dynamic";
@@ -30,12 +32,14 @@ export default async function MessagesPage() {
   });
   const convos = await Promise.all(contracts.map(async (c) => {
     const last = await db.message.findFirst({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "desc" }, include: { sender: true } });
-    return { c, last, unread: await unreadCount(u.id, c.testId, c.testerId) };
+    const asTester = c.testerId === u.id;
+    // (Batch 35 §124) The other person's name has the profile hover the session page uses.
+    return { c, last, unread: await unreadCount(u.id, c.testId, c.testerId), hover: await personHoverFor(u.id, asTester ? "tester" : "developer", asTester ? c.test.developer : c.tester) };
   }));
-  const direct = await directConversations(u.id);
+  const direct = await Promise.all((await directConversations(u.id)).map(async (c) => ({ ...c, hover: await personHoverFor(u.id, sideFor(u), c.other) })));
   const rows = [
-    ...convos.map(({ c, last, unread }) => ({ id: `test:${c.id}`, href: `/app/chat/${c.id}`, other: c.testerId === u.id ? displayName(c.test.developer) : displayName(c.tester), title: c.title, lastBody: last?.body, mine: last?.senderId === u.id, unread, at: last?.createdAt.getTime() ?? c.joinedAt.getTime() })),
-    ...direct.map((c) => ({ id: `direct:${c.id}`, href: `/app/direct/${c.other.id}`, other: displayName(c.other), title: "Direct message", lastBody: c.last?.body, mine: c.last?.senderId === u.id, unread: c.unread, at: c.last?.createdAt.getTime() ?? 0 })),
+    ...convos.map(({ c, last, unread, hover }) => ({ hover, id: `test:${c.id}`, href: `/app/chat/${c.id}`, other: c.testerId === u.id ? displayName(c.test.developer) : displayName(c.tester), title: c.title, lastBody: last?.body, mine: last?.senderId === u.id, unread, at: last?.createdAt.getTime() ?? c.joinedAt.getTime() })),
+    ...direct.map((c) => ({ hover: c.hover, id: `direct:${c.id}`, href: `/app/direct/${c.other.id}`, other: displayName(c.other), title: "Direct message", lastBody: c.last?.body, mine: c.last?.senderId === u.id, unread: c.unread, at: c.last?.createdAt.getTime() ?? 0 })),
   ].sort((a, b) => b.at - a.at).slice(0, 100);
   return (
     <div className="mx-auto max-w-3xl space-y-4">
@@ -45,14 +49,17 @@ export default async function MessagesPage() {
       <p className="text-sm text-slate-400">Test chats and direct messages, newest first.</p>
       <ul className="space-y-2">
         {rows.map((r) => (
-          <li key={r.id}>
-            <Link href={r.href} className="card card-hover flex items-center gap-3 p-4 no-underline hover:no-underline">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-medium text-white" title={`${r.other} · ${r.title}`}>{r.other} <span className="text-sm font-normal text-slate-400">· {r.title}</span></p>
-                <p className="truncate text-sm text-slate-400">{r.lastBody ? `${r.mine ? "You" : r.other}: ${r.lastBody}` : "No messages yet."}</p>
-              </div>
-              {r.unread > 0 && <span className="rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{r.unread}</span>}
-            </Link>
+          // (Batch 35 §124) The row opens the chat through a link laid over the card, so the name's profile hover (its own link) sits above it.
+          <li key={r.id} className="card card-hover relative flex items-center gap-3 p-4 hover:z-10 focus-within:z-10">
+            <Link href={r.href} aria-label={`${r.other} · ${r.title}`} className="absolute inset-0 rounded-2xl no-underline hover:no-underline" />
+            <div className="min-w-0 flex-1">
+              <p className="flex min-w-0 items-baseline gap-1 font-medium text-white">
+                {r.hover ? <span className="relative z-10 shrink-0" data-person-hover=""><PersonHover {...r.hover} className="text-white" /></span> : <span className="shrink-0">{r.other}</span>}
+                <span className="truncate text-sm font-normal text-slate-400" title={`${r.other} · ${r.title}`}>· {r.title}</span>
+              </p>
+              <p className="truncate text-sm text-slate-400">{r.lastBody ? `${r.mine ? "You" : r.other}: ${r.lastBody}` : "No messages yet."}</p>
+            </div>
+            {r.unread > 0 && <span className="rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{r.unread}</span>}
           </li>
         ))}
         {rows.length === 0 && <li className="card text-sm text-slate-400">No conversations yet.</li>}

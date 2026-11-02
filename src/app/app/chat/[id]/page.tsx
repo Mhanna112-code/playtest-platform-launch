@@ -11,6 +11,7 @@ import { CHAT_PAUSED_NOTE } from "@/lib/rules";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
 import { otherSideNotice } from "@/components/OtherSideNotice";
+import { personHoverFor } from "@/lib/server/personHover";
 
 export const metadata = { title: "Chat · Playtest" };
 export const dynamic = "force-dynamic";
@@ -38,6 +39,9 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   const deleted = c.tester.deletedAt != null || c.test.developer.deletedAt != null;
   const blocked = deleted || (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) > 0;
   const messages = await chatMessages(c.testId, c.testerId);
+  // (Batch 35 §124) The other person's name (header and their messages) has the session page's profile hover.
+  const otherUser = dev ? c.tester : c.test.developer;
+  const otherHover = await personHoverFor(u.id, dev ? "developer" : "tester", otherUser);
   // (Owner, Oct 30, batch 15 section 1) Never closed because the test is paused: only while the OTHER person is restricted, and then it can still be read.
   // (The restricted person's own chat pages are closed: leaveIfClosed above.)
   const r = await chatRestriction(c.testId, c.testerId);
@@ -55,8 +59,9 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
         path={dev ? `/api/tests/${c.testId}/message` : `/api/sessions/${c.id}/message`}
         extra={dev ? { contractId: c.id } : {}}
         other={other}
+        otherHover={otherHover}
         title={c.title}
-        messages={messages.map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString() }))}
+        messages={messages.map((m) => ({ id: m.id, mine: m.senderId === u.id, who: m.senderId === u.id ? "You" : displayName(m.sender), body: m.body, at: m.createdAt.toISOString(), hover: m.senderId === otherUser.id ? otherHover : null }))}
       />
     </div>
   );
