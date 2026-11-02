@@ -965,3 +965,10 @@ Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including 
 - Every text box with a character limit shows the current count and its limit, including admin notes, Contact us, profile fields, chat, rating notes, reports, disputes, call cancellation and written answers. A count is red above the maximum or below an applicable minimum. An optional empty box stays neutral; the minimum applies once they type. Attachment markers do not count toward written work’s limits. Access keys show the count for each key, not a misleading limit on the whole list.
 - Post and Edit use the same rule for title, steps, mature-content explanation and NDA. An unchanged older title or steps keeps its existing minimum exception; an unchanged older NDA still saves as before. Contact us uses the server’s existing 50,000-character limit.
 - The suspended tester’s dashboard says they can still dispute payments for work they sent, by opening the test from their dashboard. The limited session view and each dispute’s eligibility rules stay the same. The box also follows §22’s existing rule that suspended testers are paid normally, without claiming the payment waits for reinstatement.
+
+## A paid hold names the approval it still needs (owner, Nov 2)
+
+- From the fourth payment hold onward, paying the balance still leaves the hold waiting for the team’s approval. The developer’s dashboard says “Your balance is paid. This hold is waiting for the team’s approval.” It no longer directs them to Pay what you owe when nothing is left to pay.
+- An outstanding owed payment, a bank confirmation or an unresolved charge keeps the payment instructions. This changes the dashboard wording; paying, approval and lifting the hold keep their existing rules.
+- A tester-only suspension also shows the tester explanation and dispute reminder: it does not depend on a developer-side suspension being present.
+- A successful password change resets the password fields and their live counts together; a refused change keeps what they typed.

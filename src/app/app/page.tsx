@@ -1,3 +1,4 @@
+import { owed } from "@/lib/server/holds";
 import { dashboardV } from "@/lib/server/pageFreshness";
 import { DashboardActionBox } from "./DashboardActionBox";
 import Link from "next/link";
@@ -85,6 +86,10 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const devOff = side === "developer" && u.isDeveloper && devRestricted(u, side);
   const testerOff = side === "tester" && u.isTester && !!u.testerSuspendedAt;
   const cbSteps = devOff && u.holdStartedAt ? await chargebackSteps(u.id) : null;
+  const holdReview = !!(devOff && u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER);
+  // A fourth-or-later hold waits for approval after its balance is paid; a bank check or an unresolved charge is still outstanding.
+  const holdBalance = holdReview ? await Promise.all([owed(u.id), db.payment.count({ where: { developerId: u.id, status: { in: ["pending", "paying", "needs_action", "needs_confirmation"] } } })]) : null;
+  const holdPaid = !!holdBalance && holdBalance[0].length === 0 && holdBalance[1] === 0;
   // (§106, revised Nov 1) The same action boxes below the name, whether restricted or active.
   const excerptBox = side === "developer" && u.isDeveloper ? await pendingForDeveloper(u.id) : [];
   // The developer's side remains optional and never stops.
@@ -93,7 +98,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
     <div className="space-y-8">
       <AutoRefresh query="fresh=dashboard" v={freshV} />
       {(devOff || testerOff) && (
-        <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />
+        <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={holdReview} paid={holdPaid} />
       )}
       {/* (Batch 15 section 29) After Stop or End early from a restricted test page. */}
       {done && /^Done: /.test(done) && <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-done-line="">{done.slice(0, 300)}</p>}
