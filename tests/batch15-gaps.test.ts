@@ -26,7 +26,7 @@ describe("rule checklist gaps (section 35)", () => {
     await expect(adminStopTest(testId, "Spam", null)).rejects.toMatchObject({ message: expect.stringMatching(new RegExp(`^That test was already stopped \\(by ${dev.user.email.replace(/[.+]/g, "\\$&")} at .+\\)\\.$`)) }); // (batch 34 §1) who and when
   });
 
-  it("a new dispute's live line opens its Needs you row; the dashboard's Needs you has excerpt requests and links applications to their own rows", async () => {
+  it("a new dispute's live line opens its Needs you row; the dashboard has inline excerpt requests and links applications to their own rows", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -36,7 +36,8 @@ describe("rule checklist gaps (section 35)", () => {
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
     expect((await db.testEvent.findFirstOrThrow({ where: { testId, kind: "dispute" } })).link).toBe(`item-dispute-${d.id}`);
     const dash = src("app/app/page.tsx");
-    expect(dash).toContain("href: `/app/tests/${x.testId}#excerpt-${x.id}`");
+    expect(dash).toContain('<DashboardActionBox id="excerpt-requests"');
+    expect(dash).toContain('<ExcerptDecision excerptId={x.id} seenAt={now.toISOString()} />');
     expect(dash).toContain("#item-app-${a.id}");
     expect(src("app/app/tests/[id]/Applications.tsx")).toContain("id={`item-app-${a.id}`}");
     expect(src("components/LiveTop.tsx")).toContain("jumpTo(l.link!)");

@@ -5,12 +5,12 @@ import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type Stripe from "stripe";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { GET as pulseGET } from "@/app/api/pulse/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { BankToConfirmBox } from "@/app/app/BankToConfirm";
-import { bankTopHeading, confirmByText } from "@/lib/bankTop";
+import { confirmByText } from "@/lib/bankTop";
 import { bankToConfirm, expireActions } from "@/lib/server/confirm";
 import { startHold } from "@/lib/server/holds";
 import { CLOSED_BY_TESTER, FINISHED_PART_REASON, testerChanges } from "@/lib/server/testerGate";
@@ -28,6 +28,8 @@ import { pay } from "./b15";
 // Batch 24 (owner, Oct 29): "Your bank wants you to confirm" at the top of the developer dashboard (section 1); a request closed by the tester's rating says they finished
 // their part (section 2).
 (globalThis as unknown as { React: typeof React }).React = React;
+vi.mock("next/navigation", () => ({ usePathname: () => "/app", useRouter: () => ({ refresh() {}, push() {}, replace() {} }), useSearchParams: () => new URLSearchParams() }));
+
 const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 const HOUR = 3_600_000, DAY = 86_400_000;
 const later = () => new Promise((r) => setTimeout(r, 30));
@@ -66,13 +68,13 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(rows[0].by).toBe(confirmByText(by, new Date()).text);
     expect(rows[0].by).toMatch(/^confirm by [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} (AM|PM)$/);
     const html = markup(rows);
-    expect(html).toContain(bankTopHeading(1));
-    expect(html).toContain("Your bank wants you to confirm (1)");
+    expect(html).toContain("Your bank wants you to confirm");
+    expect(html).toContain('class="text-sm font-normal text-slate-400">1</span>');
     expect(html).toContain(`$12.50 on “Harbor Run” · Ana Silva&#x27;s written answers · <span`);
-    expect(html).toContain(`href="/app/tests/${x.testId}#bank-${p.id}"`);
-    expect(html).toContain("Confirm with your bank →");
-    // A plain scroll box about 3 rows tall, everything in it (no "Show N more").
-    expect(html).toContain('data-scroll-list="three"');
+    expect(html).toContain(`data-bank-waiting="${p.id}"`);
+    expect(html).toContain("Confirm with your bank</button>");
+    // The same plain scroll box as Needs you, everything in it (no "Show N more").
+    expect(html).toContain('data-scroll-list="rows"');
     expect(html).not.toMatch(/Show \d+ more/);
   });
 
@@ -93,7 +95,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
       "$5.00 on “Harbor Run” · the team's decision on Ana Silva's dispute",
       "$12.50 on “Harbor Run” · Ana Silva's written answers",
     ]);
-    expect(markup(rows)).toContain("Your bank wants you to confirm (4)");
+    expect(markup(rows)).toContain('class="text-sm font-normal text-slate-400">4</span>');
   });
 
   it("a renewal (no test) links to its row on Payments: “$X for your plan · confirm by <date>”", async () => {
@@ -160,7 +162,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(await bankToConfirm(y.dev.user.id)).toEqual([]);
   });
 
-  it("shown on the restricted dashboard during a hold, above the blue box; hidden when empty", async () => {
+  it("shown below the developer name during a hold; hidden when empty", async () => {
     const x = await withWork();
     await startHold(x.dev.user.id, "unpaid");
     const p = await waiting(x.dev.user.id, x.tester.user.id, { status: "failed", submissionId: x.sub.id, contractId: x.sessionId, owedUntil: new Date(Date.now() - DAY) });
@@ -170,11 +172,11 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(src("app/app/tests/[id]/page.tsx")).toContain("{bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}");
     // The poll keeps refreshing during a hold or suspension.
     expect((await pulse(x.dev.cookie)).body).toMatchObject({ restricted: false });
-    // The page: the box comes first, before the blue box, for the developer side whatever its state.
+    // §106 revision: the same box comes below the developer name, whatever their state.
     const page = src("app/app/page.tsx");
     const box = page.indexOf('{side === "developer" && u.isDeveloper && <BankToConfirm userId={u.id} now={now} />}');
     expect(box).toBeGreaterThan(0);
-    expect(box).toBeLessThan(page.indexOf("<RestrictedBox"));
+    expect(box).toBeGreaterThan(page.indexOf("<h1"));
     expect(page.indexOf('<div className="space-y-8">')).toBeLessThan(box);
     // Nothing to confirm: no box at all.
     expect(markup([])).toBe("");
@@ -182,11 +184,11 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(await bankToConfirm(dev.user.id)).toEqual([]);
   });
 
-  it("phones: the same box, rows stacked and the link full width", () => {
+  it("phones: the same plain rows and an inline button that fills the row", () => {
     const html = markup([{ id: "p1", lead: "$1.00 for your plan", by: "confirm by Nov 2, 3:10 PM", soon: false, href: "/app/payments#bank-p1", at: 0 }]);
-    expect(html).toContain("flex flex-col gap-2");
-    expect(html).toContain("sm:flex-row");
-    expect(html).toContain("btn-secondary w-full");
+    expect(html).toContain("rounded-lg border border-white/10 p-3 text-sm");
+    expect(html).toContain('data-bank-waiting="p1"');
+    expect(html).toContain("w-full");
     expect(html).toContain("sm:w-auto");
   });
 });

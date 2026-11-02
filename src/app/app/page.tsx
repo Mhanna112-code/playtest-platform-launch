@@ -1,4 +1,5 @@
 import { dashboardV } from "@/lib/server/pageFreshness";
+import { DashboardActionBox } from "./DashboardActionBox";
 import Link from "next/link";
 import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSignature, Hourglass, Inbox, KeyRound, LayoutGrid, ListTodo, MessagesSquare, PlusCircle, RotateCcw, Users, Wallet, XCircle, AppWindow, Banknote } from "lucide-react";
 import { db } from "@/lib/db";
@@ -24,8 +25,8 @@ import { asListing, findTests } from "@/lib/server/tests";
 import { RestrictedBox } from "@/components/RestrictedBox";
 import { ClampText } from "@/components/ClampText";
 import { ExcerptDecision } from "@/components/Excerpts";
-import { myExcerpts, pendingForDeveloper } from "@/lib/server/excerpts";
-import { ExcerptQuestion, MyExcerpts } from "@/components/ExcerptList";
+import { pendingForDeveloper } from "@/lib/server/excerpts";
+import { ExcerptQuestion } from "@/components/ExcerptList";
 import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
@@ -83,52 +84,18 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const devOff = side === "developer" && u.isDeveloper && devRestricted(u, side);
   const testerOff = side === "tester" && u.isTester && !!u.testerSuspendedAt;
   const cbSteps = devOff && u.holdStartedAt ? await chargebackSteps(u.id) : null;
-  // (Owner, Oct 29, batch 13) A restricted developer can't open test pages: their excerpt requests wait here, under the blue box, with Allow and Deny.
-  const excerptBox = devOff ? await pendingForDeveloper(u.id) : [];
-  // (Owner, Oct 30, batch 15 section 27) A restricted developer's open disputes waiting for their side (optional, never stopped): their own box under the blue box.
-  const disputeBox = devOff ? await disputesForSide(u.id) : [];
+  // (§106, revised Nov 1) The same action boxes below the name, whether restricted or active.
+  const excerptBox = side === "developer" && u.isDeveloper ? await pendingForDeveloper(u.id) : [];
+  // The developer's side remains optional and never stops.
+  const disputeBox = side === "developer" && u.isDeveloper ? await disputesForSide(u.id) : [];
   return (
     <div className="space-y-8">
       <AutoRefresh query="fresh=dashboard" v={freshV} />
-      {/* (Owner, Oct 29, batch 24 section 1) Charges the developer's bank wants confirmed: the very top, above the blue box too (hidden when there are none). */}
-      {side === "developer" && u.isDeveloper && <BankToConfirm userId={u.id} now={now} />}
       {(devOff || testerOff) && (
         <RestrictedBox failed={failed} developer={devOff} tester={testerOff} kinds={restrictionsOf(u)} steps={cbSteps?.remaining} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />
       )}
       {/* (Batch 15 section 29) After Stop or End early from a restricted test page. */}
       {done && /^Done: /.test(done) && <p className="ok rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-3 py-2" role="status" data-done-line="">{done.slice(0, 300)}</p>}
-      {disputeBox.length > 0 && (
-        <section className="card space-y-3" id="dispute-sides" data-dispute-box="">
-          <h2 className="font-semibold text-white">Disputes: add your side</h2>
-          {/* (Batch 16 section 14) Every dispute, in a plain scroll box. */}
-          <ScrollList as="div" className="space-y-2">
-            {disputeBox.map((d) => (
-              <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-                <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} on “{d.testTitle}”:</p>
-                <ReasonQuote text={d.reason} />
-                <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
-              </div>
-            ))}
-          </ScrollList>
-        </section>
-      )}
-      {excerptBox.length > 0 && (
-        <section className="card space-y-3" id="excerpt-requests" data-excerpt-box="">
-          <h2 className="font-semibold text-white">Excerpt requests</h2>
-          <ScrollList as="div" className="space-y-2">
-          {excerptBox.map((x) => (
-            <div key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white">{x.tester}</b> would like to show this from “{x.testTitle}” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
-              {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
-              {/* (Batch 16 section 37) The question it answers, above the quote. */}
-              <ExcerptQuestion question={x.question} />
-              <ClampText text={`“${x.text}”`} className="text-slate-200" />
-              <ExcerptDecision excerptId={x.id} />
-            </div>
-          ))}
-          </ScrollList>
-        </section>
-      )}
       {/* (Batch 15 section 16) The side in use: its own reinstatement. */}
       {(() => {
         // (Owner, Oct 31, batch 35 §99) Gone while that side is suspended again or (developer) on a hold: "active again" would be wrong.
@@ -147,6 +114,33 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
           {side === "tester" && !u.testerSuspendedAt && <Link className="btn" href="/app/find"><Compass className="h-4 w-4" /> Find tests</Link>}
         </div>
       </div>
+      {/* (Owner, Oct 29, batch 24 section 1) Charges the developer's bank wants confirmed: below their name, in active and restricted views (hidden when there are none). */}
+      {side === "developer" && u.isDeveloper && <BankToConfirm userId={u.id} now={now} />}
+      {disputeBox.length > 0 && (
+        <DashboardActionBox id="dispute-sides" title="Disputes: add your side" count={disputeBox.length} kind="disputes">
+            {disputeBox.map((d) => (
+              <li key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
+                <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} on “{d.testTitle}”:</p>
+                <ReasonQuote text={d.reason} />
+                <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
+              </li>
+            ))}
+        </DashboardActionBox>
+      )}
+      {excerptBox.length > 0 && (
+        <DashboardActionBox id="excerpt-requests" title="Excerpt requests" count={excerptBox.length} kind="excerpts">
+          {excerptBox.map((x) => (
+            <li key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
+              <p className="text-slate-300"><b className="text-white">{x.tester}</b> would like to show this from “{x.testTitle}” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
+              {/* (Batch 16 section 37) The question it answers, above the quote. */}
+              <ExcerptQuestion question={x.question} />
+              <ClampText text={`“${x.text}”`} className="text-slate-200" />
+              <ExcerptDecision excerptId={x.id} seenAt={now.toISOString()} />
+            </li>
+          ))}
+        </DashboardActionBox>
+      )}
       {/* (NEXT-UI 6) One side at a time: the dashboard of the side in use (the header switch changes it). */}
       {side === "developer" && <DeveloperDashboard user={u} now={now} category={category} restricted={devOff} />}
       {side === "tester" && <TesterDashboard user={u} now={now} />}
@@ -203,7 +197,6 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, text: <>sent an updated version of their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b> after you paid</>, cta: "Review" });
       // (Batch 15 section 40) A call that took place, once its measured length is final: pay it.
       for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>had a live call for <b className="text-white">{t.title}</b>: pay it</>, cta: "Review" });
-      for (const s of c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide)) items.push({ key: `d-${s.id}`, at: s.dispute!.createdAt, href: `/app/tests/${t.id}#item-dispute-${s.dispute!.id}`, who, text: <>disputed what you paid on <b className="text-white">{t.title}</b>: add your side</>, cta: "Answer" });
     }
   for (const a of apps) {
     const t = allTests.find((x) => x.id === a.testId)!;
@@ -214,8 +207,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white">{t.title}</b></>, cta: "Answer" });
     } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>applied to join <b className="text-white">{t.title}</b></>, cta: "Answer" });
   }
-  // (Batch 15 section 35) Excerpt requests wait in Needs you too (Allow / Deny on the test page), not only in the restricted box.
-  if (!restricted) for (const x of await pendingForDeveloper(userId)) items.push({ key: `e-${x.id}`, at: new Date(), href: `/app/tests/${x.testId}#excerpt-${x.id}`, who: x.tester, text: <>would like to show an excerpt from <b className="text-white">{x.testTitle}</b> on their profile</>, cta: "Allow or Deny" });
+  // (§106) Excerpt requests and disputes use their own inline boxes above, in both account states.
   for (const r of reqs) {
     const x = contractTest.get(r.contractId);
     if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#req-${r.id}`, who: displayName(x.c.tester), text: <>asked for a live call · <b className="text-white">{x.t.title}</b></>, cta: "Answer in Live session →" }); // (batch 16 section 35) opens the Call requests panel at it
@@ -496,10 +488,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <StatTile icon={Award} label="Rating" value={rating.n ? `${rating.avg.toFixed(1)} ★` : "-"} hint={rating.n ? `${plural(rating.n, "rating")}` : "no ratings yet"} tone="fuchsia" />
         <StatTile icon={ListTodo} label="To do" value={compact(todoParts.length + answers.length)} hint={answers.length ? `${answers.length} waiting for your answer` : "parts to send"} tone="indigo" />
       </section>
-
-      {/* (Owner, Oct 28, batch 16 section 30) A suspended tester side can't open their profile, so their excerpts (with Remove: batch 13) are here, under
-          the blue box. Otherwise they're on their own profile. */}
-      {suspended && await myExcerpts(userId).then((items) => (items.length ? <MyExcerpts items={items} /> : null))}
 
       {/* (Owner, Oct 28, batch 16 section 13) "Search by developer" over every test this tester has been in; typing replaces the sections below with the results. */}
       <DevSearch rows={devSearchRows(contracts, !suspended)}>

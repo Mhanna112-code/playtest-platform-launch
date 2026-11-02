@@ -33,10 +33,10 @@ describe("account page (section 30)", () => {
     expect(page).toContain("<DeleteAccount ");
   });
 
-  it("no excerpts on this page; a suspended tester side removes them from the dashboard (open to them), not the profile (closed)", () => {
+  it("no excerpts on Settings or the dashboard; the profile shows accepted excerpts only", () => {
     expect(page).not.toMatch(/MyExcerpts|myExcerpts/);
-    expect(src("app/app/page.tsx")).toContain("{suspended && await myExcerpts(userId).then((items) => (items.length ? <MyExcerpts items={items} /> : null))}");
-    expect(src("app/app/testers/[id]/page.tsx")).toContain("<MyExcerpts items={await myExcerpts(p.id)} />");
+    expect(src("app/app/page.tsx")).not.toMatch(/MyExcerpts|myExcerpts/);
+    expect(src("app/app/testers/[id]/page.tsx")).toContain("<MyExcerpts items={await myExcerpts(p.id, true)} />");
     const suspendedTester = { isDeveloper: false, isTester: true, testerSuspendedAt: new Date() };
     expect(closedForSuspended("/app", suspendedTester, "tester")).toBe(false);
     expect(closedForSuspended("/app/testers/abc", suspendedTester, "tester")).toBe(true);

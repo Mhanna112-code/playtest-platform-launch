@@ -108,6 +108,6 @@ describe("the developer's side of a dispute (section 27)", () => {
     const a = await admin();
     const first = await aact(a.cookie, "decide", { id: d.id, total: "", note: "", seenAt: adminLoaded });
     expect(first.status, JSON.stringify(first.body)).toBe(200);
-    expect(src("app/app/page.tsx")).toContain('data-dispute-box=""');
+    expect(src("app/app/page.tsx")).toContain('<DashboardActionBox id="dispute-sides"');
   });
 });

@@ -283,6 +283,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open") }) : allowedLine(false, { nextRound: !t.adminStoppedAt && !next })} />
   ) : null;
   if (restricted) {
+    const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + (!accountPaused ? t.contracts.filter((c) => rateBoxOf(c)).length : 0) + disputesWaiting.length;
     return (
       <>
         <AutoRefresh query={`test=${t.id}`} v={pageV} />
@@ -305,56 +306,61 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         />
         <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
         <PageLoaded at={seenAt} />
-        <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} />
-        {/* (Batch 17 §11) A charge made while away (e.g. a retry during the pause) that the bank wants confirmed: confirmed here, each line naming its piece. */}
-        {bankRows.length > 0 && (
-          <section className="card space-y-2" data-restricted-bank="">
-            <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
-            {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
-          </section>
-        )}
-        {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always). (Batch 29 section 30) No Take down: only the tester removes an excerpt. */}
-        {(excerptReqs.length > 0 || shownEx.length > 0) && (
-          <section className="card space-y-2" data-restricted-excerpts="">
-            <h2 className="font-semibold text-white">Excerpts</h2>
-            {excerptReqs.map((x) => (
-              <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
-                <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
-              {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
-                <ExcerptQuestion question={x.question} />
-                <ClampText text={`“${x.text}”`} className="text-slate-200" />
-                <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
+        {restrictedNeeds > 0 && <NeedsYou count={restrictedNeeds}>
+          {/* (Batch 17 §11) A charge made while away (e.g. a retry during the pause) that the bank wants confirmed: confirmed here, each line naming its piece. */}
+          {bankRows.length > 0 && (
+            <section className="space-y-2" data-restricted-bank="">
+              <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
+              {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}
+            </section>
+          )}
+          {bookedAhead.length > 0 && <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} embedded />}
+          {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always). (Batch 29 section 30) No Take down: only the tester removes an excerpt. */}
+          {excerptReqs.length > 0 && (
+            <section className="space-y-2" data-restricted-excerpts="">
+              <h2 className="font-semibold text-white">Excerpts</h2>
+              {excerptReqs.map((x) => (
+                <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
+                  <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+                {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
+                  <ExcerptQuestion question={x.question} />
+                  <ClampText text={`“${x.text}”`} className="text-slate-200" />
+                  <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
+                </div>
+              ))}
+
+            </section>
+          )}
+          {/* (Batch 17 section 14) A test the team paused (nobody held or suspended): the developer still rates, straight through. */}
+          {!accountPaused && t.contracts.some((c) => rateBoxOf(c)) && (
+            <section className="space-y-2" data-restricted-rate="">
+              <h2 className="font-semibold text-white">Rate your testers</h2>
+              {t.contracts.map((c) => rateBoxOf(c))}
+            </section>
+          )}
+          {/* (Batch 15 section 27) The developer's side of a dispute: optional, never stopped, works while paused or restricted. */}
+          {disputesWaiting.length > 0 && (
+            <section className="space-y-2" data-restricted-disputes="">
+              <h2 className="font-semibold text-white">Disputes: add your side</h2>
+              <div className="space-y-2">
+                {disputesWaiting.map((d) => (
+                  <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
+                    <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
+                    <ReasonQuote text={d.reason} />
+                    <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
+                  </div>
+                ))}
               </div>
-            ))}
+            </section>
+          )}
+        </NeedsYou>}
+        {shownEx.length > 0 && <section className="card space-y-2" aria-label="Shown excerpts">
             {shownEx.map((e) => (
               <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
                 <span className="min-w-0 flex-1"><span className="text-slate-400">On a tester&apos;s profile: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
               </div>
             ))}
-          </section>
-        )}
-        {/* (Batch 17 section 14) A test the team paused (nobody held or suspended): the developer still rates, straight through. */}
-        {!accountPaused && t.contracts.some((c) => rateBoxOf(c)) && (
-          <section className="card space-y-2" data-restricted-rate="">
-            <h2 className="font-semibold text-white">Rate your testers</h2>
-            {t.contracts.map((c) => rateBoxOf(c))}
-          </section>
-        )}
-        {/* (Batch 15 section 27) The developer's side of a dispute: optional, never stopped, works while paused or restricted. */}
-        {disputesWaiting.length > 0 && (
-          <section className="card space-y-2" data-restricted-disputes="">
-            <h2 className="font-semibold text-white">Disputes: add your side</h2>
-            <div className="max-h-[36rem] space-y-2 overflow-y-auto pr-1">
-              {disputesWaiting.map((d) => (
-                <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-                  <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
-                  <ReasonQuote text={d.reason} />
-                  <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
-                </div>
-              ))}
-            </div>
-          </section>
-        )}
+        </section>}
       </>
     );
   }
