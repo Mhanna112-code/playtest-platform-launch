@@ -877,3 +877,10 @@ Tests: `tests/batch35-invite-rows-live.test.ts` covers capacity crossing in both
 - Join, accepted applications and invite joins share the corrected contract snapshot. Rejoining still restores exactly the time left on the original deadline. Switch keeps the deadline when Open until exists; legacy tests without Open until keep their existing elapsed-time rule. Edit moving Open until later by D days still adds D days to working deadlines and the tester allowance. Existing stored deadlines are not rewritten by this change.
 
 Tests: `tests/batch35-deadline-zone.test.ts` (11 cases), with the earlier listing-helper wiring assertions updated.
+
+## §112 Open until is locked once it has passed (owner, Nov 1)
+- In Edit, once the saved Open until day is before today in the developer's saved zone, changing it is refused: **Open until has passed, so it can't be changed.** The date box is disabled in the app's greyed style and shows that same line as its hint. A date that is still today is not locked just because UTC has moved into tomorrow.
+- An unchanged date still allows other fields to save (§108). Comparing calendar dates also leaves a pause-shifted timestamp intact instead of silently resetting its time to the end of that day. A genuinely changed date on a still-open joining window keeps the existing extension rules and deadline shift.
+- The lock belongs to Edit; automatic pause and outage shifts keep working. No old deadlines are revived by reopening an expired joining window.
+
+Tests: `tests/batch35-open-until-locked.test.ts`, with the older Open until refusal wording updated.

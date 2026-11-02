@@ -378,8 +378,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const current = asListing(t);
     const next = mergeEdit(current, touched);
     if (!next.mature) next.matureWhy = "";
-    const ou = checkOpenUntilChange(t.openUntil, next.openUntil ? new Date(next.openUntil) : null, new Date(), fmtDate);
+    const ou = checkOpenUntilChange(t.openUntil, next.openUntil ? new Date(next.openUntil) : null, new Date(), dev.timeZone);
     if (!ou.ok) throw new HttpError(409, "open_until_passed", ou.message);
+    if (current.openUntil && next.openUntil && openUntilDay(current.openUntil, dev.timeZone) === openUntilDay(next.openUntil, dev.timeZone)) next.openUntil = current.openUntil;
     if (next.liveRateCents == null) next.liveMinutes = null;
     const testersIn = await tx.contract.count({ where: working(testId) });
     const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));

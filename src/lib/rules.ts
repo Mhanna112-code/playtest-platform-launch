@@ -942,12 +942,18 @@ export const STILL_SUSPENDED_LINE = "Your payment went through. Your tests stay 
 /** (Owner, Oct 27) What a tester reads while the developer owes a declined payment: Dispute and Charge wait (never "failed"). */
 export const OWED_FOR_TESTERS = "Payment from this developer is delayed right now. You can try again once it's sorted.";
 
-/** Open until can be moved only before it passes; once passed, it can't be extended. */
-export function checkOpenUntilChange(current: Date | null, next: Date | null, now: Date, fmt: (d: Date) => string): Check {
-  const same = (current?.getTime() ?? null) === (next?.getTime() ?? null);
-  if (same) return yes;
-  if (current && current.getTime() < now.getTime()) return no(`Joining closed on ${fmt(current)} (Open until), so it can't be extended.`);
-  return yes;
+export const OPEN_UNTIL_PASSED = "Open until has passed, so it can't be changed.";
+/** §112: a date field is locked after its calendar day, in the developer's saved zone. */
+export function openUntilHasPassed(current: Date | string | null, now: Date, tz?: string | null) {
+  if (!current) return false;
+  const day = typeof current === "string" && /^\d{4}-\d{2}-\d{2}$/.test(current) ? current : openUntilDay(current, tz);
+  return day < dayIn(now, tz);
+}
+/** An unchanged calendar date never blocks saving another field, including after a pause shifted its time. */
+export function checkOpenUntilChange(current: Date | null, next: Date | null, now: Date, tz?: string | null): Check {
+  if ((current?.getTime() ?? null) === (next?.getTime() ?? null)) return yes;
+  if (current && next && openUntilDay(current, tz) === openUntilDay(next, tz)) return yes;
+  return openUntilHasPassed(current, now, tz) ? no(OPEN_UNTIL_PASSED) : yes;
 }
 
 /** (Design doc 5) Open until can only be extended: a red line when the new date is earlier (or a date is added to a test with no end). "" when fine. */

@@ -16,9 +16,9 @@ describe("payment hold, auto-pay and Open until rules", () => {
     expect(R.shiftForHold(null, start, lift)).toBeNull();
   });
   it("Open until can be moved only before it passes", () => {
-    expect(R.checkOpenUntilChange(new Date("2026-11-12T00:00:00Z"), new Date("2026-11-20T00:00:00Z"), now, fmt).ok).toBe(true);
-    expect(R.checkOpenUntilChange(new Date("2026-11-09T00:00:00Z"), new Date("2026-11-20T00:00:00Z"), now, fmt)).toEqual({ ok: false, message: "Joining closed on 2026-11-09 (Open until), so it can't be extended." });
-    expect(R.checkOpenUntilChange(new Date("2026-11-09T00:00:00Z"), new Date("2026-11-09T00:00:00Z"), now, fmt).ok).toBe(true);
+    expect(R.checkOpenUntilChange(new Date("2026-11-12T00:00:00Z"), new Date("2026-11-20T00:00:00Z"), now, "UTC").ok).toBe(true);
+    expect(R.checkOpenUntilChange(new Date("2026-11-09T00:00:00Z"), new Date("2026-11-20T00:00:00Z"), now, "UTC")).toEqual({ ok: false, message: "Open until has passed, so it can't be changed." });
+    expect(R.checkOpenUntilChange(new Date("2026-11-09T00:00:00Z"), new Date("2026-11-09T00:00:00Z"), now, "UTC").ok).toBe(true);
   });
   it("heads-up 3 days then 1 day before", () => {
     const at = (h: number) => new Date(now.getTime() + h * 3_600_000);
