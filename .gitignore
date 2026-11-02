@@ -18,3 +18,4 @@ next-env.d.ts
 
 # local build folders (any NEXT_DIST_DIR)
 .next-*/
+scripts/codex-run.log
