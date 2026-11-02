@@ -357,7 +357,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
       }
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "card_failed")) {
-        await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null } });
+        await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null, decidedById: null, decisionNote: "" } }); // (Nov 2, §119) no longer names who
         throw e;
       }
       const failed = await db.payment.create({ data: { ...owedRow, status: "failed", failure: e.message, owedUntil: new Date() } });

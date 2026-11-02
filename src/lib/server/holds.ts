@@ -349,18 +349,26 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
   const race = await import("./adminRace");
   const already = async () => {
     const now = await db.user.findUniqueOrThrow({ where: { id: devId } }); // (batch 34) read again: the first admin's approval names them
-    const own = now.holdApprovedAt ? await race.ownChange(race.presserOf(adminId, seen), now.holdApprovedById, now.holdApprovedAt) : null; // (batch 35 §45)
-    if (own && now.holdApprovedAt) return new HttpError(409, "decided", race.youAlready("approved this lift", own, now.holdApprovedAt));
-    const by = now.holdApprovedById ? await db.user.findUnique({ where: { id: now.holdApprovedById } }) : null;
-    return new HttpError(409, "decided", `This lift was already approved${by ? ` by ${displayName(by)}` : ""}${now.holdApprovedAt ? ` at ${fmtDateTime(now.holdApprovedAt)}` : ""}.`);
+    // (Nov 2, §119) The approval may have lifted the hold at once (which clears it from the account): then its record, committed with the claim, names them.
+    const ev = now.holdApprovedAt ? null : await db.accountEvent.findFirst({ where: { userId: devId, kind: "hold-approved", createdAt: { gte: dev.holdStartedAt ?? new Date(0) } }, orderBy: { createdAt: "desc" } });
+    const byId = now.holdApprovedAt ? now.holdApprovedById : ev?.byId ?? null, at = now.holdApprovedAt ?? ev?.createdAt ?? null;
+    const own = at ? await race.ownChange(race.presserOf(adminId, seen), byId, at) : null; // (batch 35 §45)
+    if (own && at) return new HttpError(409, "decided", race.youAlready("approved this lift", own, at));
+    const by = byId ? await db.user.findUnique({ where: { id: byId } }) : null;
+    return new HttpError(409, "decided", `This lift was already approved${by ? ` by ${displayName(by)}` : ""}${at ? ` at ${fmtDateTime(at)}` : ""}.`);
   };
   if (dev.holdApprovedAt) throw await already();
   // (Owner, Oct 30, batch 34 §1) Another admin suspended (or reinstated) this developer since the page loaded: the Approve stops once; the second press goes ahead.
   const from = race.checkFrom(seen);
   if (from) race.stopIfChanged("Approve", await race.accountChangesSince(devId, adminId, from, ["suspended", "reinstated"], seen?.tab));
-  const claimed = await db.user.updateMany({ where: { id: devId, holdApprovedAt: null, holdStartedAt: { not: null } }, data: { holdApprovedAt: new Date(), holdApprovedById: adminId } });
+  // (Nov 2, §119) The claim and its account-history record (who, when) commit together.
+  const claimed = await db.$transaction(async (tx) => {
+    const at = new Date();
+    const r = await tx.user.updateMany({ where: { id: devId, holdApprovedAt: null, holdStartedAt: { not: null } }, data: { holdApprovedAt: at, holdApprovedById: adminId } });
+    if (r.count === 1) await tx.accountEvent.create({ data: { userId: devId, kind: "hold-approved", byId: adminId, note, side: "", createdAt: at } });
+    return r;
+  });
   if (claimed.count !== 1) throw await already();
-  await accountEvent(devId, "hold-approved", adminId, note);
   const lifted = await liftHoldIfClear(devId);
   if (!lifted) await notify(dev.email, "The team approved lifting your hold", ["The team approved lifting your hold. It lifts once you have paid what you owe." + (note ? ` Their note: “${note}”` : "")], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
   else if (note) await notify(dev.email, "A note from the team about your hold", [note], "/app/payments", { side: "developer", payment: true, group: "admindecision" });

@@ -296,12 +296,17 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   if (!a || a.testId !== testId) throw new HttpError(404, "not_found", "That application doesn't exist.");
   const tester = await db.user.findUniqueOrThrow({ where: { id: a.testerId }, include: { profile: true } });
   const name = displayName(tester);
-  if (a.status === "closed" && a.closedReason === "full") throw new HttpError(409, "gone", `${name}'s application closed when the test filled up at ${fmtTime(a.decidedAt ?? new Date())}.`);
-  // (Batch 16 section 11) Closed by a block (either way): neutral, never says why.
-  if (a.status === "closed" && a.closedReason === "blocked") throw new HttpError(409, "gone", `${name}'s application was closed.`);
-  if (a.status === "closed") throw new HttpError(409, "gone", a.closedReason === "invite_only" ? `${name}'s application closed when the test became invite only at ${fmtTime(a.decidedAt ?? new Date())}.` : `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
-  // (Batch 16 section 21) Answered already (in another tab): a plain refusal naming it, no stop box.
-  if (a.status !== "pending") throw new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
+  /** Why this application can't be answered any more (read again after a lost race: Nov 2, §119). */
+  const gone = (a: { status: string; closedReason: string | null; decidedAt: Date | null }) => {
+    if (a.status === "closed" && a.closedReason === "full") return new HttpError(409, "gone", `${name}'s application closed when the test filled up at ${fmtTime(a.decidedAt ?? new Date())}.`);
+    // (Batch 16 section 11) Closed by a block (either way): neutral, never says why.
+    if (a.status === "closed" && a.closedReason === "blocked") return new HttpError(409, "gone", `${name}'s application was closed.`);
+    if (a.status === "closed") return new HttpError(409, "gone", a.closedReason === "invite_only" ? `${name}'s application closed when the test became invite only at ${fmtTime(a.decidedAt ?? new Date())}.` : `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
+    // (Batch 16 section 21) Answered already (in another tab): a plain refusal naming it, no stop box.
+    return new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
+  };
+  const goneNow = async () => gone(await db.application.findUniqueOrThrow({ where: { id: a.id } }));
+  if (a.status !== "pending") throw gone(a);
   const extra: TestEventLike[] = [];
   const shownTesters = body.seenTesters && typeof body.seenTesters === "object" ? body.seenTesters as Record<string, unknown> : {};
   const shownRaw = shownTesters[tester.id] && typeof shownTesters[tester.id] === "object" ? shownTesters[tester.id] as Record<string, unknown> : null;
@@ -321,7 +326,8 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   extra.push(...(await listingChanges(testId, body.seenAt)));
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`], answers: { item: a.id, kinds: ["applied"], texts: [`${name} applied to join`, `${name} asks to rejoin`] } })); // (batch 35 §79)
   if (body.action === "decline") {
-    await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
+    // (Nov 2, §119) Only a still-pending application is declined: a Withdraw (or an answer in another tab) a moment ago wins, and the refusal says which.
+    if ((await db.application.updateMany({ where: { id: a.id, status: "pending" }, data: { status: "declined", decidedAt: new Date() } })).count !== 1) throw await goneNow();
     const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;
     // (Batch 29 §24) In the day's "Joined" entry, across tests.
     if (a.kind === "rejoin") await notify(tester.email, `Your ask to rejoin “${title}” wasn't accepted`, ["The developer didn't accept your ask to rejoin."], `/app/find/${testId}`, { group: "joined", testId });
@@ -332,8 +338,9 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
   const refusal = await joinRefusal(tester.id, testId, { rejoin: isRejoin });
   if (refusal) throw new HttpError(409, "refused", refusal.replace("You've already joined", `${name} already joined`).replace(TEST_LIMIT_LINE, `${name} can't join more tests right now.`));
   const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true, rejoinAccepted: isRejoin, ndaAcceptedAt: a.ndaAcceptedAt?.toISOString(), ndaAccepted: !!a.ndaAcceptedAt });
-  await db.application.update({ where: { id: a.id }, data: { status: "accepted", decidedAt: new Date() } });
+  // (Nov 2, §119) The join claims the still-pending application inside its own lock (as "accepted"): a Withdraw a moment ago wins, and the refusal says so.
+  const c = await joinTest({ ...tester, isTester: true }, testId, { listingVersion: t.listingVersion, confirmed: true, anyway: true, acceptedByDeveloper: true, rejoinAccepted: isRejoin, ndaAcceptedAt: a.ndaAcceptedAt?.toISOString(), ndaAccepted: !!a.ndaAcceptedAt }, { applicationId: a.id, applicationStatus: "accepted" })
+    .catch(async (e) => { throw e instanceof HttpError && e.code === "application_gone" ? await goneNow() : e; });
   if (isRejoin) {
     const line = `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`;
     await notify(tester.email, line, [line, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: dev.id, group: "joined" });

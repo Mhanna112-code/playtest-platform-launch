@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Err } from "@/components/Err";
+import { RecordingVideo } from "@/components/RecordingVideo";
 import { uploadToSession } from "@/lib/upload";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
@@ -114,7 +115,7 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
       )}
       {phase.name === "review" && (
         <div className="space-y-2">
-          <video src={phase.url} controls className="max-h-72 w-full rounded bg-black" />
+          <RecordingVideo src={phase.url} className="max-h-72 w-full rounded bg-black" />
           <div className="flex flex-wrap gap-2">
             <button type="button" className="btn" disabled={disabled} onClick={() => upload(phase.blob)}>Upload this recording</button>
             <button type="button" className="btn-ghost" onClick={() => { onCancel?.(); setPhase({ name: "idle" }); }}>Discard</button>

@@ -7,6 +7,7 @@ import { api, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { uploadToSession } from "@/lib/upload";
 import { ScreenRecorder } from "@/components/ScreenRecorder";
+import { RecordingVideo } from "@/components/RecordingVideo";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { NOTHING_CHANGED_LINE } from "@/lib/rules";
@@ -29,7 +30,7 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
   const fin = useFinished();
   return (
     <li className="space-y-1 rounded-lg border border-white/[0.08] p-2" data-recording-row={r.id}>
-      <video controls preload="metadata" className="max-h-56 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} onLoadedMetadata={(e) => setLength(clock(e.currentTarget.duration))} />
+      <RecordingVideo className="max-h-56 w-full rounded bg-black" src={`/api/recordings/${r.id}/file`} onLength={(s) => setLength(clock(s))} />{/* (Nov 2, §119) old recordings too */}
       <p className="flex flex-wrap items-center gap-2 text-sm">
         <a href={`/api/recordings/${r.id}/file`} target="_blank" rel="noreferrer" className="min-w-0 break-all">{r.filename}</a>
         <span className="text-xs text-slate-500">{length && `${length} · `}{fileSize(r.size)}{r.sent ? " · sent" : " · not sent yet"}</span>

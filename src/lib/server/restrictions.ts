@@ -8,7 +8,7 @@ import { cancelCallsAhead, recordEvent, spotOpened, tellCancelled } from "./test
 import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
 import { accountEvent } from "./reports";
-import { accountChangesSince, adminEmail, keepNote, tabOf, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
+import { accountChangesSince, adminEmail, keepNote, recordAction, tabOf, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
 import { closeOffersOfEnded } from "./offerClose";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
@@ -256,14 +256,21 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
  * (Owner, Oct 29, batch 12 section 1) A developer can always delete their own account: parts already open to charging stay open, work under review never opens Charge,
  * open disputes are still decided, and what they owe stays owed.
  */
-export async function deleteAccount(userId: string, by: "self" | "admin", reason = "") {
+export async function deleteAccount(userId: string, by: "self" | "admin", reason = "", adminId: string | null = null) {
   const u = await db.user.findUnique({ where: { id: userId } });
   if (!u) throw new HttpError(404, "not_found", "That account doesn't exist.");
   if (u.deletedAt) throw new HttpError(409, "deleted", "That account was already deleted.");
+  // (Nov 2, §119) Two deletes at once (two admins, or an admin and the owner): the first claims it, with the admin's record (who, when) in the same commit; the
+  // second is refused and reads who did it once that is settled.
+  const claimed = await db.$transaction(async (tx) => {
+    const r = await tx.user.updateMany({ where: { id: userId, deletedAt: null }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason } });
+    if (r.count === 1 && by === "admin" && adminId) await recordAction(tx, adminId, "delete-account", userId);
+    return r.count === 1;
+  });
+  if (!claimed) throw new HttpError(409, "deleted", "That account was already deleted.");
   // (Owner, Oct 29, batch 12 section 1) A developer can always delete their account (the warning lists what is left; nothing blocks it).
   // (Batch 8) The subscription ends at once, with no refund.
   if (u.isDeveloper) await (await import("./subscription")).endOnDelete(userId);
-  await db.user.update({ where: { id: userId }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason } });
   await db.invite.updateMany({ where: { testerId: userId, status: "sent" }, data: { status: "cancelled" } });
   if (u.isDeveloper) {
     const tests = await db.test.findMany({ where: { developerId: userId, status: { not: "stopped" } } });
@@ -319,7 +326,7 @@ export async function adminDeleteAccount(adminId: string, userId: string, reason
   const from = checkFrom(seen);
   if (from) stopIfChanged("Delete account", await accountChangesSince(userId, adminId, from, ["suspended", "reinstated", "team-closed"], seen?.tab));
   try {
-    return await deleteAccount(userId, "admin", reason);
+    return await deleteAccount(userId, "admin", reason, adminId);
   } catch (e) {
     if (e instanceof HttpError && e.code === "deleted") throw await alreadyDeleted(userId, p);
     throw e;
@@ -327,8 +334,8 @@ export async function adminDeleteAccount(adminId: string, userId: string, reason
 }
 
 /** "That test's locked fields were already given 3 more changes (by bo@… at 12:19 AM)." */
-const allowedRefusal = async (testId: string, p: Presser | null = null) => {
-  const last = await db.adminAction.findFirst({ where: { targetId: testId, action: "allow-critical-changes" }, orderBy: { createdAt: "desc" } });
+const allowedRefusal = async (testId: string, p: Presser | null = null, q: Pick<typeof db, "adminAction"> = db) => {
+  const last = await q.adminAction.findFirst({ where: { targetId: testId, action: "allow-critical-changes" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
   // (Batch 35 §45) This admin's own (another tab): "You already allowed 3 more changes of this test's locked fields in another tab at 3:20 AM."
   return last ? new HttpError(409, "already", await alreadyLine(p, last.adminId, last.createdAt, (who) => `That test's locked fields were already given 3 more changes ${byAt(who, last.createdAt)}.`, "allowed 3 more changes of this test's locked fields")) : null;
 };
@@ -351,9 +358,11 @@ export async function allowLockedChanges(adminId: string, testId: string, seen: 
     const now = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     const counts = countsOf(now.criticalCounts);
     const locked = lockedFields(counts);
-    if (!locked.length && seen) throw (await allowedRefusal(testId, presserOf(adminId, seen))) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
+    // (Nov 2, §119) Read inside the lock: the first admin's record committed with their change, so this names them with their time.
+    if (!locked.length && seen) throw (await allowedRefusal(testId, presserOf(adminId, seen), tx)) ?? new HttpError(409, "not_locked", "None of that test's fields is locked.");
     for (const f of locked) counts[f] = 0;
     await tx.test.update({ where: { id: testId }, data: { criticalCounts: storedCounts(counts, countingSince(now.criticalCounts)) } }); // (batch 14) when the count started stays
+    await recordAction(tx, adminId, "allow-critical-changes", testId); // (Nov 2, §119) who and when, committed with the change
   });
   return { ok: true };
 }
@@ -407,18 +416,23 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
   if (!t.adminPausedAt || t.status === "stopped") throw await liftRefusal(testId, presserOf(adminId, seen));
   const from = checkFrom(seen);
   if (from && adminId) stopIfChanged("Lift the pause", await testChangesSince(testId, adminId, from, seen?.tab)); // (batch 34 §1)
-  const start = t.adminPausedAt, now = new Date();
+  const start = t.adminPausedAt;
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  const lifted = await db.$transaction(async (tx) => {
-    const claimed = await tx.test.updateMany({ where: { id: testId, adminPausedAt: start, status: { not: "stopped" } }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.devSuspendedAt ? {} : { pausedSince: null }) } });
-    if (claimed.count !== 1) return false;
+  // (Nov 2, §119) Two admins at once: the test row is locked around the check and the lift, and the lift's record (who, when) commits with it. The press that
+  // waited on the lock reads the winner's record inside that same transaction, so its refusal always names the admin who lifted it, with that lift's time.
+  const refused = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+    const cur = await tx.test.findUniqueOrThrow({ where: { id: testId } });
+    if (cur.status === "stopped" || cur.adminPausedAt?.getTime() !== start.getTime()) return liftRefusal(testId, presserOf(adminId, seen), tx);
+    const now = new Date();
+    await tx.test.update({ where: { id: testId }, data: { adminPausedAt: null, adminNote: "", ...(dev.holdStartedAt || dev.devSuspendedAt ? {} : { pausedSince: null }) } });
     // (Owner, Oct 28 afternoon, DEFAULT) The same clock shift as a hold lift or a reinstatement (only the part not covered by the developer's own pause, if one is still on).
-    await shiftAfterPause(tx, t, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
+    await shiftAfterPause(tx, cur, start, now, [dev.holdStartedAt, dev.devSuspendedAt]);
     await recordEvent(tx, testId, "resumed", "The team lifted the pause on this test", true);
-    if (adminId) await tx.adminAction.create({ data: { adminId, action: "unpause-test", targetId: testId, createdAt: now } });
-    return true;
+    if (adminId) await recordAction(tx, adminId, "unpause-test", testId, now);
+    return null;
   });
-  if (!lifted) throw await liftRefusal(testId, presserOf(adminId, seen));
+  if (refused) throw refused;
   await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
   return { ok: true };
 }

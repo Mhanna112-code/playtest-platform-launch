@@ -9,7 +9,7 @@ import { approveChargebackHold, declineChargebackReserve } from "@/lib/server/ch
 import { clearFailedEmails } from "@/lib/server/email";
 import { adminClosePaused, extendPauseClosure } from "@/lib/server/pauseClosure";
 import { adminDeleteAccount, adminStopTest, allowLockedChanges, pauseTest, previewSuspension, reinstateAccount, seenFromBody, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
-import { adminSeen, markPress, ownChange, presserOf, tabOf, youAlready } from "@/lib/server/adminRace";
+import { adminSeen, markPress, ownChange, presserOf, RECORDED_INSIDE, tabOf, youAlready } from "@/lib/server/adminRace";
 import { withAccountState } from "@/lib/server/accountState";
 import { previewTeamClose, teamClose, type TeamCloseScope } from "@/lib/server/teamClose";
 
@@ -33,7 +33,8 @@ export async function POST(req: Request, { params }: Ctx) {
     const res = await run(u, action, id, body);
     // (Batch 15 section 21) Every admin action is kept with the admin who did it (a preview changes nothing). (Batch 22 section 5) Lift the pause keeps its own, with
     // the lift itself, so a second admin's press names the first.
-    if (action !== "preview-suspension" && action !== "unpause-test" && action !== "preview-team-close") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id, createdAt: new Date() } }); // (batch 34 §1) this server's clock, like the page times
+    // (Nov 2, §119) Actions whose record is written inside their own claim (RECORDED_INSIDE) aren't recorded again here.
+    if (action !== "preview-suspension" && !RECORDED_INSIDE.has(action) && action !== "preview-team-close") await db.adminAction.create({ data: { adminId: u.id, action, targetId: id, createdAt: new Date() } }); // (batch 34 §1) this server's clock, like the page times
     // (Batch 35 §45) What this page load did (from the press's start to now): its own presses never stop for it; other tabs' read "You … in another tab".
     if (action !== "preview-suspension" && action !== "preview-team-close") await markPress(u.id, tabOf(body), start); // (batch 35 §51) the page load
     return res;

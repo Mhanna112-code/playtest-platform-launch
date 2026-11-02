@@ -364,7 +364,11 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   if (nothingReserved) throw new HttpError(409, "steps_missing", `Not yet: nothing is reserved (${money(owedCents)} is owed${released ? `; ${released}` : ""}).`);
   // (Batch 34 §1) Another admin's Don't approve since the page loaded (the developer reserved again since): the Approve stops once; the second press takes it.
   if (from && adminId) race.stopIfChanged("Approve", await race.holdChangesSince(devId, adminId, from, seen?.tab));
-  const claimed = await db.user.updateMany({ where: { id: devId, chargebackApprovedAt: null, holdStartedAt: { not: null }, holdReason: "chargeback" }, data: { chargebackApprovedAt: new Date() } });
+  // (Nov 2, §119) The claim and the admin's record (who, when) commit together, so a second admin's refusal always names the one who approved it.
+  const claimed = await db.$transaction(async (tx) => {
+    const r = await tx.user.updateMany({ where: { id: devId, chargebackApprovedAt: null, holdStartedAt: { not: null }, holdReason: "chargeback" }, data: { chargebackApprovedAt: new Date() } });
+    return { count: r.count, record: r.count === 1 && adminId ? await race.recordAction(tx, adminId, "approve-chargeback", devId) : null };
+  });
   if (claimed.count !== 1) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."), p);
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   let taken = 0;
@@ -381,6 +385,7 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
       } catch (e) {
         console.error("[reserve] capture:", (e as Error).message);
         await db.user.update({ where: { id: devId }, data: { chargebackApprovedAt: null } });
+        if (claimed.record) await db.adminAction.deleteMany({ where: { id: claimed.record.id } }); // (Nov 2, §119) not approved after all: no record names it
         if ((await db.reservation.updateMany({ where: { id: r.id, status: "reserved" }, data: { status: "expired", endedAt: new Date() } })).count === 1) {
           await cancelPi(r.stripePaymentIntentId);
           await bell(devId, RESERVE_EXPIRED, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });

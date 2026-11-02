@@ -239,7 +239,7 @@ describe("batch 13 section 7: the Recording part, up to 5 recordings sent togeth
     await pay(s.dev.cookie, { kind: "submission", id: subs[0].id, amount: "12.00", tickedCents: 1200 });
     expect((await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[2] })).status).toBe(200);
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain('title="Remove this recording?"');
-    expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("onLoadedMetadata");
+    expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("onLength={(s) => setLength(clock(s))}"); // (Nov 2, §119) the length from RecordingVideo (which also finds it for old recordings)
   });
 });
 
