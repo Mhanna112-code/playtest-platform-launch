@@ -1,6 +1,48 @@
 # Codex queue (Nov 1): paste each block into Codex as its own task, in this order
 Done already: 11, 12, 13, 14, 15 (catalog). Not included: 16 (Find testers).
 
+
+## 0. Task 29 (DO FIRST): one card in play; bank checks can never double-charge
+
+```
+Read AGENTS.md first and follow it. Task number: 29 (schema codex29, build folder .next-codex29, branch codex/one-card-checks,
+worktree C:/Users/march/Projects/pl-codex-29, branched from master).
+
+Owner decision (Nov 2): make bank confirmations ("Confirm with your bank", src/lib/server/confirm.ts) and "Pay what you owe"
+(src/lib/server/holds.ts payOwed / chargeOwedOne / retryOwed, owedForBox; the chargeback path in chargeback.ts) as simple as
+possible, with NO way to pay the same thing twice. Today: a Confirm may finish an old check on an OLD card or retry on the card on
+file (confirmStart); saving a card retries plain debts but leaves waiting checks alone; when a check's 3 days run out
+(expireActions) the app stops tracking it WITHOUT cancelling it at Stripe (an old bank page could still complete it later, while the
+debt is retried and charged again); a Pay what you owe press cancels a debt's waiting check right before charging (a same-second
+race with finishing that check in another tab could charge twice).
+
+Rules to build:
+1. ONE CARD IN PLAY. Saving a new card cancels every waiting bank check at Stripe (debts and new charges made while away) and tries
+   each item again on the NEW card at once: goes through -> paid; the bank asks -> a new "Confirm with your bank" item on the new
+   card (3 days); declined -> a debt stays owed / a new charge becomes a debt (a hold, or added to the current one). "Confirm with your
+   bank" therefore always means "approve it on my current card": confirmStart never finishes a check made on another card.
+2. A FAILED CONFIRM IS FINAL AT ONCE. When the bank declines or fails the check (not when the person just closes the window), the
+   item is resolved right then: a new charge becomes a debt in Pay what you owe immediately (starts a hold or adds to it; same lines
+   as today's 3-day lapse), a debt stays owed. Its check is cancelled at Stripe. Closing the window without finishing leaves it
+   waiting until its date (or until Cancel this check, rule 3).
+3. A WAITING DEBT IS LOCKED IN PAY WHAT YOU OWE. A debt with a bank check waiting shows "Waiting for your bank" and is NOT charged by
+   a Pay what you owe press, a daily retry or a new-card retry (other debts are). Next to it: "Cancel this check" (cancels at Stripe,
+   the debt becomes payable at once). The same during a chargeback hold's Pay what you owe (reservation).
+4. NEVER AN ORPHAN CHECK. Whenever the app stops tracking a check (3 days ran out, failed, cancelled, replaced by a new card, the
+   hold lifted another way), it cancels the PaymentIntent at Stripe first; if Stripe says it already SUCCEEDED, the app records that
+   payment as paid instead (and does not charge the item again).
+5. Before charging any debt (press, retry, chargeback steps), re-check that it has no waiting check and isn't paid (inside the
+   existing claim: owed -> paying in one updateMany).
+Testers never see "hold", "failed" or "chargeback"; keep today's tags ("Payment delayed" / "Paid").
+
+Tests in tests/batch35-one-card-checks.test.ts (fake Stripe): new card cancels old checks and retries on the new card (each outcome);
+a declined Confirm makes a new charge a debt at once; a waiting debt is skipped by press and retries and payable after Cancel this
+check; an expired check is cancelled at Stripe, and one that had already succeeded is recorded as paid with no second charge; a
+press and a check finishing at the same moment charge once. Update tests that expected old behaviour. Append "## §117 One card in
+play; bank checks never double-charge (owner, Nov 2)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier
+tasks). Commit on the branch; don't push or merge.
+```
+
 ## 1. Task 15b: the stale list + a short notice sheet (docs only)
 
 ```
