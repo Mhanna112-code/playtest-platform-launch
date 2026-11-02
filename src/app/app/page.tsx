@@ -29,7 +29,7 @@ import { RestrictedBox } from "@/components/RestrictedBox";
 import { ClampText } from "@/components/ClampText";
 import { ExcerptDecision } from "@/components/Excerpts";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
-import { ExcerptQuestion } from "@/components/ExcerptList";
+import { ExcerptQuestion, ExcerptReplaces } from "@/components/ExcerptList";
 import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
@@ -147,6 +147,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
               {/* (Batch 16 section 37) The question it answers, above the quote. */}
               <ExcerptQuestion question={x.question} />
               <ClampText text={`“${x.text}”`} className="text-slate-200" />
+              <ExcerptReplaces texts={x.replaces} />
               <ExcerptDecision excerptId={x.id} seenAt={now.toISOString()} />
             </li>
           ))}

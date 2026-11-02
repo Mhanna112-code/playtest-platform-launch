@@ -13,7 +13,8 @@ import { bell } from "./notify";
 //     gets an NDA can still be Allowed (or Denied): it's accepted straight into hidden ("Allowed · hidden while <test> has an NDA") and shows once the NDA is removed.
 //   - (Batch 18 section 7) No "Don't name the product" tick any more: a new excerpt always reads "From <test>". Excerpts already shown or pending with the product
 //     hidden keep their "a <category> test" wording (the tester chose that).
-//   - At most 3 shown or pending per tester, and one pending request per part.
+//   - At most 3 shown or pending per tester, and one pending request per part. (Batch 35 §126) The same text again (pending or shown, same session and question,
+//     across its submissions) is refused, one pending per session + question too; a different text for a question already shown replaces it on Allow (it doesn't count toward the 3), and Deny keeps the shown one.
 //   - Request, Allow, Deny and Remove ignore stop-once and blocks; suspensions and holds don't touch them. Only a request (or excerpt) that no longer exists is refused.
 //   - The tester hears of the decision by bell only. (Owner, Oct 29, batch 29 section 30) Only the tester removes an excerpt (Remove on their profile); the developer has no
 //     Take down any more, and the tester's Remove sends no bell line.
@@ -32,6 +33,11 @@ export const allowUnderNdaNote = (test: string) => `${test} has an NDA now: if y
 export const ALREADY_DECIDED = "This request was already decided.";
 export const ALREADY_DOWN = "This excerpt was already taken down.";
 export const ONE_PENDING = "You already asked to show an excerpt from this part. Wait for the developer's answer.";
+/** (Owner, Nov 2, batch 35 §126) The same text (after squash) as a pending or shown excerpt of this tester for the same session (contract) and question. */
+export const SAME_PENDING = "You already asked to show this excerpt.";
+export const SAME_SHOWN = "This excerpt is already on your profile.";
+/** (Batch 35 §126) One pending request per session + question too (besides one per part). */
+export const ONE_PENDING_QUESTION = "You already asked to show an excerpt for this question. Wait for the developer's answer.";
 export const excerptLength = `An excerpt is ${EXCERPT_MIN} to ${EXCERPT_MAX} characters.`;
 export const allowedLine = (test: string) => `Your excerpt from ${test} is now on your profile.`;
 export const deniedLine = (dev: string, test: string) => `${dev} prefers that work from ${test} isn't shown on profiles.`;
@@ -82,13 +88,25 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
   const x = await db.$transaction(async (tx) => {
     // One tester's requests one at a time: the count and the one-per-part rule hold under two quick presses.
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${tester.id} FOR UPDATE`;
+    // (Batch 35 §126) No duplicates: the same text as one of theirs pending or shown for this part's question is refused.
+    // (Owner, Nov 2) Matched by the session (contract) and the question's text, across all of its parts and rounds: an updated answer is a new submission.
+    const same = await tx.excerpt.findMany({ where: replacedBy({ testerId: tester.id, contractId: sub.contractId, question: pick.question }, ["pending", "shown"]), select: { id: true, text: true, status: true } });
+    const dup = same.filter((e) => squash(e.text) === text);
+    if (dup.some((e) => e.status === "pending")) throw new HttpError(409, "same_pending", SAME_PENDING);
+    if (dup.length) throw new HttpError(409, "same_shown", SAME_SHOWN);
     if (await tx.excerpt.count({ where: { submissionId: sub.id, status: "pending" } })) throw new HttpError(409, "pending", ONE_PENDING);
-    if ((await tx.excerpt.count({ where: { testerId: tester.id, status: { in: ["pending", "shown"] } } })) >= MAX_EXCERPTS) throw new HttpError(409, "too_many", TOO_MANY_EXCERPTS);
+    if (same.some((e) => e.status === "pending")) throw new HttpError(409, "pending_question", ONE_PENDING_QUESTION);
+    // (Batch 35 §126) A different text for a question already shown is a replacement: the shown one(s) go on Allow, so they don't count toward the limit.
+    const replaced = same.filter((e) => e.status === "shown").length;
+    if ((await tx.excerpt.count({ where: { testerId: tester.id, status: { in: ["pending", "shown"] } } })) - replaced >= MAX_EXCERPTS) throw new HttpError(409, "too_many", TOO_MANY_EXCERPTS);
     return tx.excerpt.create({ data: { testerId: tester.id, testId: t.id, contractId: sub.contractId, submissionId: sub.id, question: pick.question, text, hideProduct } });
   });
   await bell(t.developerId, `${displayName(tester)} asked to show an excerpt from “${t.title}” on their profile`, `/app/tests/${t.id}#excerpt-${x.id}`, undefined, { testId: t.id });
   return { id: x.id };
 }
+
+/** (Batch 35 §126) The excerpts a request replaces: the same tester's shown ones for the same session (contract) and question, from any of its submissions. */
+const replacedBy = (x: { testerId: string; contractId: string; question: string }, status: string[] = ["shown"]) => ({ testerId: x.testerId, contractId: x.contractId, question: x.question, status: { in: status } });
 
 /** The developer allows or denies a pending request (also from the dashboard box while restricted). (Batch 18 section 7) Allowed under an NDA, it's hidden until the NDA goes. */
 export async function decideExcerpt(dev: { id: string; name: string; email: string }, body: Record<string, unknown>) {
@@ -99,8 +117,12 @@ export async function decideExcerpt(dev: { id: string; name: string; email: stri
   // (Owner, Oct 28, batch 16 section 21) The same press already made (in another tab): a plain refusal, no stop box.
   if (x.status !== "pending") throw new HttpError(409, "decided", x.status === "shown" ? "You already allowed this excerpt." : x.status === "denied" ? "You already denied this excerpt." : ALREADY_DECIDED);
   // (Owner, Oct 29, batch 29 section 12) Your own changes in another tab never stop Allow / Deny (the same decision made elsewhere is the plain refusal above).
-  const done = await db.excerpt.updateMany({ where: { id: x.id, status: "pending" }, data: { status: allow ? "shown" : "denied", decidedAt: new Date() } });
-  if (done.count !== 1) throw new HttpError(409, "decided", ALREADY_DECIDED);
+  // (Batch 35 §126) Allow on a replacement: the new one is shown and the one(s) shown now for that question go, in one transaction. Deny leaves them.
+  await db.$transaction(async (tx) => {
+    const done = await tx.excerpt.updateMany({ where: { id: x.id, status: "pending" }, data: { status: allow ? "shown" : "denied", decidedAt: new Date() } });
+    if (done.count !== 1) throw new HttpError(409, "decided", ALREADY_DECIDED);
+    if (allow) await tx.excerpt.deleteMany({ where: { ...replacedBy(x), id: { not: x.id } } });
+  });
   const hidden = allow && !!x.test.ndaText;
   await bell(x.testerId, hidden ? allowedUnderNdaLine(x.test.title) : allow ? allowedLine(x.test.title) : deniedLine(displayName(dev), x.test.title), allow ? `/app/testers/${x.testerId}#excerpts` : "/app/account#excerpts", undefined, { side: "tester", testId: x.testId, group: "excerpts" }); // (batch 29 §26)
   return { status: allow ? "shown" : "denied", ...(hidden ? { hidden: true } : {}) };
@@ -155,5 +177,8 @@ export async function myExcerpts(testerId: string, acceptedOnly = false) {
  */
 export async function pendingForDeveloper(devId: string, testId?: string) {
   const rows = await db.excerpt.findMany({ where: { status: "pending", test: { developerId: devId, ...(testId ? { id: testId } : {}) } }, include: { ...withTest, tester: true }, orderBy: { createdAt: "asc" } });
-  return rows.map((x) => ({ id: x.id, contractId: x.contractId, testId: x.testId, testTitle: x.test.title, tester: displayName(x.tester), text: x.text, question: x.question, named: !x.hideProduct, source: excerptSource(x), ndaNote: x.test.ndaText ? allowUnderNdaNote(x.test.title) : "" }));
+  // (Batch 35 §126) A request for a question already shown replaces it on Allow: its row names the text shown now.
+  const shownNow = rows.length ? await db.excerpt.findMany({ where: { status: "shown", OR: rows.map((x) => ({ testerId: x.testerId, contractId: x.contractId, question: x.question })) }, orderBy: { decidedAt: "desc" }, select: { testerId: true, contractId: true, question: true, text: true } }) : [];
+  return rows.map((x) => ({
+    replaces: shownNow.filter((o) => o.testerId === x.testerId && o.contractId === x.contractId && o.question === x.question).map((o) => o.text), id: x.id, contractId: x.contractId, testId: x.testId, testTitle: x.test.title, tester: displayName(x.tester), text: x.text, question: x.question, named: !x.hideProduct, source: excerptSource(x), ndaNote: x.test.ndaText ? allowUnderNdaNote(x.test.title) : "" }));
 }

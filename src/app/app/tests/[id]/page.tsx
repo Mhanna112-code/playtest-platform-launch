@@ -70,7 +70,7 @@ import { AnswerWithAttachments, PrevSetFolds, SetView } from "@/components/Answe
 import { itemsOf, prevSetsOf } from "@/lib/answerSets";
 import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
-import { ExcerptQuestion } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
+import { ExcerptQuestion, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision } from "@/components/Excerpts";
 import { UPDATED_AT_CAP, pieceDay, teamClosedLine, updateRowLine, updateWaiting } from "@/lib/moneyLines";
 
@@ -333,6 +333,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                   <ExcerptQuestion question={x.question} />
                   <ClampText text={`“${x.text}”`} className="text-slate-200" />
+                  <ExcerptReplaces texts={x.replaces} />
                   <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
                 </div>
               ))}
@@ -447,6 +448,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               <ExcerptQuestion question={x.question} />
               <ClampText text={`“${x.text}”`} className="text-slate-200" />
+              <ExcerptReplaces texts={x.replaces} />
               <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
             </div>
           ))}

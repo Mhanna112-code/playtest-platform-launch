@@ -17,6 +17,19 @@ export function ExcerptQuestion({ question }: { question: string | null | undefi
   );
 }
 
+/** (Batch 35 §126) The developer's request row when Allow would replace the excerpt shown now for that question. */
+export const REPLACES_LINE = "Replaces the excerpt shown now";
+/** (Batch 35 §126) On the developer's request row: the excerpt(s) shown now for that question, which Allow replaces (Deny keeps them). */
+export function ExcerptReplaces({ texts }: { texts: string[] }) {
+  if (!texts.length) return null;
+  return (
+    <div className="space-y-1 rounded-md border border-amber-300/20 bg-amber-300/[0.04] p-2" data-excerpt-replaces="">
+      <p className="text-xs font-medium text-amber-200">{REPLACES_LINE}:</p>
+      {texts.map((t, i) => <ClampText key={i} text={`“${t}”`} className="text-xs text-slate-400" />)}
+    </div>
+  );
+}
+
 /** (Owner, Nov 1) Accepted excerpts with Remove, only on the tester's own profile. */
 export function MyExcerpts({ items, canRemove = true }: { items: Mine[]; canRemove?: boolean }) {
   if (!items.length) return null;
