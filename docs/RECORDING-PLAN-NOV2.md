@@ -20,3 +20,9 @@ server (not the owner's 3400). Show the Stripe side (test mode dashboard / API s
 5. Quick screenshots: restricted dashboard boxes, attachment shown once, character counters, Invite rows updating on the beat,
    Switch / Keep gone after rating, a waiting call in the tester's Waiting box, admin Your actions jumping on the same page.
 One summary report (artifact) with the clips, per the owner's evidence rule.
+6. (Owner) "Why double pay isn't possible in any case": for EVERY way money can be taken on one thing (Pay, Pay more, Confirm with your
+   bank, Pay what you owe press, daily retry, new-card retry, a tester's Charge, the team's Decide, auto-charged calls, the chargeback
+   steps, charges waiting for a lift), show the guard that stops a second charge (the one-step claim, the lock on a waiting debt, the
+   cancel-at-Stripe-first with "already paid" recorded, the idempotency key, the piece lock during a bank check, Pay closed / already
+   paid refusals) and a clip or test proving it: two attempts at the same moment -> one charge at Stripe. Present it as one table in
+   the report: path | what could double it | the guard | proof.
