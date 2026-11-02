@@ -341,7 +341,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   const owedRow = { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0 };
   const waiting = extra > 0 ? await (await import("./holds")).deferIfHeld(owedRow) : null;
   if (waiting) {
-    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
+    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     delayed = true;
   } else if (extra > 0) {
     // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.

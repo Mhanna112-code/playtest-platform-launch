@@ -70,6 +70,23 @@ export async function owed(devId: string) {
 }
 
 /**
+ * (Owner, Nov 2, batch 35 §125) What Pay what you owe charges during a hold: what is owed (owed) AND every charge waiting for the lift ("Charged once your tests
+ * resume": testers' Charges, team decisions, automatic call charges made during the hold), together as ONE payment (a press, the daily retry, a new card's retry), or
+ * in the chargeback steps' one reservation. Waiting charges ride along only while something is owed (on its own, a waiting charge never makes a payment during a hold);
+ * they never block a lift (liftHoldIfClear still counts only owed). A reversed payment's repay row waiting after a reservation (kind "chargeback") keeps its own handling.
+ */
+export async function payable(devId: string) {
+  const debts = await owed(devId);
+  if (!debts.length) return debts;
+  const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } });
+  if (!u?.holdStartedAt) return debts;
+  const waits = await db.payment.findMany({ where: { developerId: devId, status: "deferred", settledAt: null, kind: { notIn: ["chargeback", "owed"] } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  return [...debts, ...waits.map((p) => ({ ...p, reversedCents: 0 }))];
+}
+/** (§125) Waiting charges ride along only with a debt paid at the same time: a list of waiting charges alone pays nothing. */
+export const withDebt = <T extends { status: string }>(list: T[]) => (list.some((p) => p.status !== "deferred") ? list : []);
+
+/**
  * (Owner, Oct 27) A declined payment starts a payment hold AT ONCE. The payment is marked as owed (owedUntil is just the "owed" marker now: no cut-off);
  * a decline during an existing hold adds to "Pay what you owe". Returns true when this decline started the hold.
  */
@@ -242,7 +259,9 @@ async function chargeReadyDeferred() {
 
 /** Developer Payments keeps waiting charges separate from the fixed owed balance. */
 export async function deferredForBox(devId: string) {
-  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  // (Nov 2, payments proof: bug seen on video) A charge covered by a combined payment waiting for the bank is listed in that payment's "Confirm with your bank" item,
+  // not here too.
+  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", coveredById: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   return Promise.all(rows.map(async (p) => ({ id: p.id, amountCents: p.amountCents, what: await deferredWhat(p), href: p.contractId ? `/app/tests/${(await db.contract.findUniqueOrThrow({ where: { id: p.contractId }, select: { testId: true } })).testId}` : "/app/payments" })));
 }
 
@@ -390,9 +409,10 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const rs = cbHold ? await (await import("./chargeback")).reserveState(dev.id) : null;
   const covered = rs?.covered ?? null;
   const locks = await once.owedLocks(dev.id);
-  const all = (await owed(dev.id)).filter((p) => !covered?.has(p.id));
+  // (§125) What is owed and the charges waiting for the lift, as one payment.
+  const all = (await payable(dev.id)).filter((p) => !covered?.has(p.id));
   // (§117 rule 3) A debt waiting for the bank is never charged by a press (the same during a chargeback hold's reservation).
-  const list = all.filter((p) => !locks.has(p.id));
+  const list = withDebt(all.filter((p) => !locks.has(p.id)));
   const total = list.reduce((a, p) => a + p.amountCents, 0);
   // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves ONCE: with a reservation in place, what was added since is charged right after the lift (no second one).
   if (rs && rs.reservedCents > 0 && list.length) throw new HttpError(409, "nothing_owed", reservedAddedLine(rs.reservedCents, total));
@@ -404,8 +424,6 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     if (covered?.size) throw new HttpError(409, "nothing_owed", ALREADY_RESERVED);
     throw new HttpError(409, "nothing_owed", NOTHING_OWED);
   }
-  // (Owner, Oct 28, batch 16 section 41) A chargeback hold's steps go in order: a card verified with 3D Secure first, then paying (which never lifts it: the team's Approve does).
-  if (u.holdStartedAt && u.holdReason === "chargeback" && !u.chargebackCardVerifiedAt) throw new HttpError(409, "verify_first", VERIFY_FIRST);
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
   const lines = await owedLines(dev.id);
   const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
@@ -426,6 +444,9 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
         : `What you owe changed: now ${money(total)}. Press again to pay ${money(total)}.`;
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds });
   }
+  // (Owner, Oct 28, batch 16 section 41) A chargeback hold's steps go in order: a card verified with 3D Secure first, then paying (which never lifts it: the team's Approve does).
+  // (Nov 2, payments proof) After the stop-once check: a page that hadn't shown a chargeback stops once naming it first ("Your bank reversed a $10 payment…").
+  if (u.holdStartedAt && u.holdReason === "chargeback" && !u.chargebackCardVerifiedAt) throw new HttpError(409, "verify_first", VERIFY_FIRST);
   // (Owner, Oct 29, batch 23 section 6) A chargeback hold: one authorization for the total (the bank's check inline if it asks); nothing is taken until the team approves.
   if (cbHold) {
     const r = await (await import("./chargeback")).reserveOwed(u, list);
@@ -469,7 +490,7 @@ export async function retryOwed(devId: string, now = new Date(), why: "daily" | 
   const once = await import("./owedOnce");
   await once.resumeStaleOwed(devId, now);
   const locks = await once.owedLocks(devId);
-  const list = (await owed(devId)).filter((p) => !locks.has(p.id));
+  const list = withDebt((await payable(devId)).filter((p) => !locks.has(p.id)));
   if (!list.length) return null;
   await db.user.update({ where: { id: devId }, data: { holdRetryAt: now, ...(why === "daily" ? { holdRetries: { increment: 1 } } : {}) } });
   const r = await once.chargeOwedTotal(u, list, "away");
@@ -524,26 +545,34 @@ export async function tellArrived(p: { contractId: string | null; submissionId: 
   await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? "part-live" : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { side: "tester", payment: true, group: "tarrived" });
 }
 
+/** (§125) A charge that came in while the one payment is in flight. */
+export const OWED_AFTER_CHECK = "Charged right after the payment above goes through";
+
 /** One line per failed payment ("Ana Silva's written answers $8.00 · card declined Oct 20"), plus open chargebacks. */
 export async function owedLines(devId: string) {
   // (Batch 23 section 6) During a chargeback hold, what is reserved on the card already isn't listed again (Payments shows "Reserved $X" instead).
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, holdReason: true } });
   const covered = u?.holdStartedAt && u.holdReason === "chargeback" ? (await (await import("./chargeback")).reserveState(devId)).covered : null;
-  const list = (await owed(devId)).filter((p) => !covered?.has(p.id));
+  const list = (await payable(devId)).filter((p) => !covered?.has(p.id));
   // (Owner, Nov 2, batch 35 §117 rule 3) A debt waiting for the bank is locked: "Waiting for your bank" (not paid by the button), with the check to cancel.
   const locks = list.length ? await (await import("./owedOnce")).owedLocks(devId) : new Map<string, string>();
   const out = [];
+  // (Owner, Nov 2, §125) A charge that came in while Pay what you owe's one payment is in flight (being charged, or its bank check open) isn't added to it (its
+  // amount is fixed at the claim): it waits, and is charged right after that payment goes through and the hold lifts (the after-lift combined payment, §122).
+  const inFlight = new Set(locks.values()).size > 0 && (await db.payment.count({ where: { id: { in: [...new Set(locks.values())] }, kind: "owed", status: { in: ["paying", "needs_action", "needs_confirmation"] } } })) > 0;
   for (const p of list) {
     const checkId = locks.get(p.id) ?? null;
-    const lock = { retry: !checkId, waiting: !!checkId, checkId, tag: checkId ? OWED_BANK_WAITING : "" };
+    const late = !checkId && inFlight && p.status === "deferred";
+    const lock = late ? { retry: false, waiting: true, checkId: null, tag: OWED_AFTER_CHECK, after: OWED_AFTER_CHECK } : { retry: !checkId, waiting: !!checkId, checkId, tag: checkId ? OWED_BANK_WAITING : "" };
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
     const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
     const what = `${c ? displayName(c.tester) + "'s " : ""}${p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers"}`;
     // `source` (batch 10): what put it on the list, for the stop-once wording.
     out.push(p.chargeback === "open"
       ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents) }
-      : p.status === "owed" || (p.status === PAYING && !p.owedUntil)
-        // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet.
+      : p.status === "owed" || p.status === "deferred" || (p.status === PAYING && !p.owedUntil)
+        // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet. (§125) A charge waiting for the lift ("deferred") is paid with
+        // what you owe, as one payment, and reads the same.
         ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused` }
         : { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt) });
   }
@@ -1114,7 +1143,7 @@ export async function autoChargeCalls(now: Date) {
       continue;
     }
     if (!gone && await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-      await bell(dev.id, `${name}'s call on “${c.title}” (${money(amount)}) will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
+      await bell(dev.id, `${name}'s call on “${c.title}” (${money(amount)}) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
       await tellDelayed();
       await logged(`${name}'s call is waiting to be charged once your tests resume: ${money(amount)}`);
       n++;
@@ -1215,7 +1244,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   // (Batch 35 §113) During a hold the tester's choice waits separately until the hold lifts; it never grows Pay what you owe.
   // During an admin suspension with no hold, or the team's pause, it is charged at once below.
   if (await deferIfHeld({ kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”: it will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
+    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”: it's added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
@@ -1293,7 +1322,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     return { choice, amountCents: 0 };
   }
   if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their call on “${c.title}”: it will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
+    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their call on “${c.title}”: it's added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }

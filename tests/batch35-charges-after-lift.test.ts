@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { money } from "@/lib/format";
 import { setStripeForTests } from "@/lib/server/stripe";
-import { autoChargeCalls, chargeDeferred, deferredForBox, owed, payOwed, startHold } from "@/lib/server/holds";
+import { autoChargeCalls, chargeDeferred, deferredForBox, liftHoldIfClear, owed, payOwed, startHold } from "@/lib/server/holds";
 import { approveChargebackHold, reserveState } from "@/lib/server/chargeback";
 import { decideDispute } from "@/lib/server/payments";
 import { joined, sact, seen, setup } from "./fixtures";
@@ -57,7 +57,7 @@ async function fixture(hold: "payment" | "chargeback" | "none" = "payment") {
 const choose = (f: Awaited<ReturnType<typeof fixture>>, submissionId = f.sub.id) => sact(f.sessionId, "choose", f.tester.cookie, { submissionId, choice: "charge", seenAt: seen(), confirmed: true });
 
 describe("§113: new charges wait separately until a hold lifts", () => {
-  it("a tester Charge stays out of Pay what you owe and appears as Payment delayed / Charged once your tests resume", async () => {
+  it("a tester Charge waits (never a debt) as Payment delayed; (§125) during a hold it is listed IN Pay what you owe, paid with it", async () => {
     const st = bank(), f = await fixture();
     const result = await choose(f);
     expect(result.status, JSON.stringify(result.body)).toBe(200);
@@ -73,22 +73,24 @@ describe("§113: new charges wait separately until a hold lifts", () => {
     auth.user = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     const { default: Payments } = await import("@/app/app/payments/page");
     const html = renderToStaticMarkup(await Payments({ searchParams: Promise.resolve({}) }));
-    const section = html.match(/<section[^>]+id="waiting-charges"[\s\S]*?<\/section>/)?.[0];
-    expect(section).toContain("Charged once your tests resume");
-    expect(section).toContain(money(1000));
+    // (§125) No separate "Charged once your tests resume" list during the hold: the box lists it and its total includes it.
+    expect(html).not.toContain('id="waiting-charges"');
+    const box = html.match(/<div id="owed"[\s\S]*$/)?.[0] ?? "";
+    expect(box).toContain(money(1000));
+    expect(box).toContain(money(1500));
     expect((await owed(f.dev.user.id)).reduce((n, p) => n + p.amountCents, 0)).toBe(500);
   });
 
-  it("paying the original balance lifts a payment hold and then charges the waiting item once, away from the developer", async () => {
+  it("(§125) Pay what you owe pays the debt AND the waiting charge as ONE payment; the hold lifts with nothing left to charge", async () => {
     const st = bank(), f = await fixture(); await choose(f);
     expect((await payOwed(f.dev.user)).lifted).toBe(true);
-    expect(st.made.map((p) => p.amount)).toEqual([500, 1000]);
-    expect(st.made[1].off_session).toBe(true);
+    expect(st.made.map((p) => p.amount)).toEqual([1500]);
+    expect((await db.payment.findFirstOrThrow({ where: { submissionId: f.sub.id, kind: "review" } })).status).toBe("charged");
     expect((await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } })).holdStartedAt).toBeNull();
     expect(await owed(f.dev.user.id)).toEqual([]);
     expect(await deferredForBox(f.dev.user.id)).toEqual([]);
     await chargeDeferred(f.dev.user.id);
-    expect(st.made).toHaveLength(2);
+    expect(st.made).toHaveLength(1); // nothing left to charge after the lift
   });
 
   it("a chargeback reservation is not topped up by a waiting Charge; approval captures it and then charges the waiting item", async () => {
@@ -112,11 +114,13 @@ describe("§113: new charges wait separately until a hold lifts", () => {
     expect((await choose(f, rec.id)).status).toBe(200);
     const old = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     st.state.mode = "decline";
-    await payOwed(f.dev.user);
+    // (§125) Pay what you owe would pay them with the debt; this is the after-lift path: the hold lifted another way (the debt settled elsewhere).
+    await db.payment.update({ where: { id: f.base!.id }, data: { status: "charged", settledAt: new Date() } });
+    await liftHoldIfClear(f.dev.user.id);
     const current = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     expect(current.holdCount).toBe(old.holdCount + 1);
     expect(current.holdStartedAt).not.toBeNull();
-    expect(st.made.map((p) => p.amount)).toEqual([500, 1600]);
+    expect(st.made.map((p) => p.amount)).toEqual([1600]);
     expect((await owed(f.dev.user.id)).map((p) => p.amountCents)).toEqual([1000, 600]);
     expect((await db.payment.findFirstOrThrow({ where: { submissionId: rec.id } })).status).toBe("failed");
     expect(await db.notification.count({ where: { userId: f.dev.user.id, text: "Your tests are running again" } })).toBe(0);
@@ -125,7 +129,9 @@ describe("§113: new charges wait separately until a hold lifts", () => {
   it("a bank check on the lifted queue gets the existing three-day away confirmation, without a new hold", async () => {
     const st = bank(), f = await fixture(); await choose(f);
     st.state.mode = "action";
-    await payOwed(f.dev.user);
+    // (§125) Pay what you owe would pay them with the debt; this is the after-lift path: the hold lifted another way (the debt settled elsewhere).
+    await db.payment.update({ where: { id: f.base!.id }, data: { status: "charged", settledAt: new Date() } });
+    await liftHoldIfClear(f.dev.user.id);
     // (Batch 35 §122) One payment for the waiting charges: its check is the one "Confirm with your bank" item; the charge waits under it.
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: f.sub.id, kind: "review", status: "deferred" } });
     const one = await db.payment.findUniqueOrThrow({ where: { id: p.coveredById! } });

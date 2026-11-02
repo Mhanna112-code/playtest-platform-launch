@@ -1,6 +1,7 @@
 "use client";
 import { publishMessages } from "./MessagesBadge";
 import { reloadKeepingPlace } from "@/lib/keepPlace";
+import { bankCheckOpen } from "@/lib/bankConfirm";
 import { useEffect, useRef } from "react";
 import { setPageUser, toLogin } from "@/lib/client";
 import { usePathname } from "next/navigation";
@@ -154,6 +155,10 @@ export function SessionWatch({ userId, restriction, side }: { userId: string; na
         // The restriction on THIS page's side (a payment hold only restricts the developer side).
         const who = { isDeveloper: !!s.developer, isTester: !!s.tester, side: s.side, devSuspendedAt: s.suspended ? "x" : null, testerSuspendedAt: s.testerSuspended ? "x" : null, holdStartedAt: s.held ? "x" : null, holdReason: s.holdReason };
         const now = restrictionKey(who, sideFor(who, pathRef.current));
+        // (Nov 2, payments proof: bug seen on video) A bank check open on this page (e.g. Pay what you owe's 3D Secure page) is never cut off by the move or reload:
+        // a chargeback turning a payment hold into a chargeback hold mid-check reloaded the page and the check could no longer be approved. It waits until the check ends
+        // (the next check after it moves or reloads the page as usual).
+        if (now !== restrictionRef.current && bankCheckOpen()) return;
         if (now !== restrictionRef.current) {
           const before = restrictionRef.current;
           restrictionRef.current = now;

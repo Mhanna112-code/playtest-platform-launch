@@ -1,6 +1,6 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
-import { money } from "@/lib/format";
+import { money, zoneOpt } from "@/lib/format";
 import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat } from "@/lib/rules";
 import { HttpError } from "./http";
 import { PAYMENTS_PROBLEM, chargePlatform, getStripe, stripeOn, type NeedsAction } from "./stripe";
@@ -94,8 +94,9 @@ async function claimOwed(devId: string, rows: { id: string; amountCents: number;
       await tx.payment.updateMany({ where: { ...stale, owedUntil: null }, data: { status: "owed", warnedAt: null } });
       const total = rows.reduce((a, p) => a + p.amountCents, 0);
       const one = await tx.payment.create({ data: { kind: OWED_KIND, developerId: devId, testerId: devId, amountCents: total, feeCents: total, testerCents: 0, transferStatus: "none", status: "paying", note: mode, warnedAt: new Date() } });
+      // (Owner, Nov 2, §125) During a hold the charges waiting for the lift ("deferred") are paid with what is owed, in this same one payment.
       const n = debts.length
-        ? (await tx.payment.updateMany({ where: { id: { in: debts }, developerId: devId, coveredById: null, actionPi: null, settledAt: null, OR: [{ status: "failed", owedUntil: { not: null } }, { status: "owed" }] }, data: { coveredById: one.id } })).count
+        ? (await tx.payment.updateMany({ where: { id: { in: debts }, developerId: devId, coveredById: null, actionPi: null, settledAt: null, OR: [{ status: "failed", owedUntil: { not: null } }, { status: "owed" }, { status: "deferred", kind: { notIn: ["chargeback", OWED_KIND] } }] }, data: { coveredById: one.id } })).count
         : 0;
       const m = reversed.length ? (await tx.payment.updateMany({ where: { id: { in: reversed }, developerId: devId, coveredById: null, chargeback: "open" }, data: { coveredById: one.id } })).count : 0;
       if (n !== debts.length || m !== reversed.length) throw ROLLBACK;
@@ -190,7 +191,8 @@ async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payme
     if (e instanceof HttpError && (e.code === "payment_unknown" || e.code === "idempotency")) return { result: "failed" as const, why };
     const freed = await releaseOwed(one.id);
     // (§122) Waiting charges: only a real decline makes each a debt; any other problem leaves them waiting.
-    if (freed?.charges.length && e instanceof HttpError && e.code === "card_failed") await chargesDeclined(one.developerId, freed.charges);
+    // (§125) Pay what you owe's one payment (debts and charges waiting for the lift): its waiting charges just keep waiting.
+    if (forCharges(one) && freed?.charges.length && e instanceof HttpError && e.code === "card_failed") await chargesDeclined(one.developerId, freed.charges);
     return { result: "failed" as const, why };
   }
   const confirm = await import("./confirm");
@@ -267,7 +269,9 @@ export async function cancelOwedCheck(devId: string, id: string) {
  * its Confirm uses the current card.)
  */
 export async function newCardChecks(devId: string) {
-  const waiting = await db.payment.findMany({ where: { developerId: devId, actionPi: { not: null }, kind: { not: "subscription" }, status: { in: ["needs_confirmation", "failed", "owed"] } }, orderBy: { createdAt: "asc" } });
+  // (Owner, Nov 2, payments proof) Pay what you owe's own press check (15 minutes, "needs_action") too: a new card (Payments, or the chargeback steps' Verify a
+  // card) cancels it at Stripe first, so only the new card is in play.
+  const waiting = await db.payment.findMany({ where: { developerId: devId, actionPi: { not: null }, kind: { not: "subscription" }, OR: [{ status: { in: ["needs_confirmation", "failed", "owed"] } }, { kind: OWED_KIND, status: "needs_action" }] }, orderBy: { createdAt: "asc" } });
   for (const p of waiting) {
     try {
       const end = await dropCheck(p.actionPi);
@@ -281,6 +285,12 @@ export async function newCardChecks(devId: string) {
     } catch (e) {
       console.error("[card] new card checks:", (e as Error).message);
     }
+  }
+  // (Owner, Nov 2, payments proof) A chargeback hold's reservation whose bank check is still open (Pay what you owe pressed, the bank's page not finished) was made
+  // on the old card: cancelled at Stripe too, so only the new card is in play (Pay what you owe reserves again on it). A reservation already authorized stays.
+  for (const r of await db.reservation.findMany({ where: { developerId: devId, status: { in: ["pending", "needs_action"] } } })) {
+    if ((await db.reservation.updateMany({ where: { id: r.id, status: r.status }, data: { status: "cancelled", endedAt: new Date() } })).count !== 1) continue;
+    if (r.stripePaymentIntentId && stripeOn()) await getStripe().paymentIntents.cancel(r.stripePaymentIntentId).catch((e) => console.error("[card] cancel reservation check:", (e as Error).message));
   }
   // No hold or suspension: every charge waiting now is made at once on the new card, as ONE payment (chargeDeferred).
   const u = await db.user.findUniqueOrThrow({ where: { id: devId }, select: { holdStartedAt: true, devSuspendedAt: true } });
@@ -324,3 +334,19 @@ export async function deferWhileHeld(paymentId: string) {
   });
 }
 
+
+/** (Owner, Nov 2, §125) Pay what you owe's one payment whose bank check ran out (3 days for a retry's): marked so its box can say so, never as a decline. */
+export const RAN_OUT = "check_ran_out";
+export const checkRanOutLine = (on: string) => `Your bank check ran out on ${on}: nothing was charged. Pay again or change your card.`;
+/**
+ * The box's plain line when the last one payment for what's owed ran out unconfirmed: "Your bank check ran out on Nov 5: nothing was charged. Pay again or change your
+ * card." Only while nothing newer was tried and something is still owed during the hold that it was made in.
+ */
+export async function ranOutLine(devId: string, tz: string | null = null) {
+  const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, timeZone: true } });
+  if (!u?.holdStartedAt) return null;
+  const last = await db.payment.findFirst({ where: { developerId: devId, kind: OWED_KIND, createdAt: { gte: u.holdStartedAt } }, orderBy: { createdAt: "desc" } });
+  if (!last || last.status !== "cancelled" || last.failure !== RAN_OUT || forCharges(last)) return null;
+  const on = (last.warnedAt ?? last.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", ...zoneOpt(tz ?? u.timeZone) });
+  return checkRanOutLine(on);
+}

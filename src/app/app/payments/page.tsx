@@ -60,7 +60,12 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // (Batch 30 §8) The owed fingerprint as of before the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const owedFp = dev ? await owedV(u.id) : "";
   const cbSteps = dev ? await chargebackSteps(u.id) : null;
-  const waitingCharges = dev ? await deferredForBox(u.id) : [];
+  // (Owner, Nov 2, batch 35 §125) During a hold the charges waiting for the lift are listed IN Pay what you owe (they're paid with it, as one payment); the
+  // separate list stays for the rest (e.g. a suspension still on after a lift).
+  const owedNow = dev ? await owedForBox(u.id) : [];
+  const ranOut = dev ? await (await import("@/lib/server/owedOnce")).ranOutLine(u.id) : null;
+  const inBox = new Set(owedNow.map((o) => o.id));
+  const waitingCharges = dev ? (await deferredForBox(u.id)).filter((p) => !inBox.has(p.id)) : [];
   // The tester's "Everything you sent": each part by test, newest first, with where its money is.
   const sent = tester
     ? await db.contract.findMany({
@@ -98,13 +103,13 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {/* (Owner, Oct 27) "Pay what you owe" shows only during a hold (a declined payment starts one at once). Pay and Reject left this page: the dashboard has the Needs review box. */}
       {/* (Owner, Oct 29, batch 10) The box updates live (about every 20 s) and disappears when nothing is owed. */}
       {dev && <AutoRefresh query="owed=1" v={owedFp} />}
-      {dev && (await owedForBox(u.id).then((o) => {
+      {dev && (await Promise.resolve(owedNow).then((o) => {
         const review = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER);
         if (!u.holdStartedAt) return null;
         // (Owner, Oct 28, batch 16 section 41) A chargeback hold: paying never lifts it (step 2 shows ✓; the team's Approve, step 3, lifts it).
         // (Batch 23 section 6) Everything owed reserved on the card: "Reserved $X: it's taken when the team approves lifting your hold."
         if (!o.length) return cbSteps ? <p className="info" data-chargeback-paid="">{cbSteps.reservedCents > 0 ? reservedLine(cbSteps.reservedCents) : "Paid. Your tests stay paused until the team approves."}</p> : review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
-        return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={cbSteps ? "" : retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} />;
+        return <OwedBox onHold={!!u.holdStartedAt} owed={o} ranOut={ranOut} chargeback={!!cbSteps} review={review} retryLine={cbSteps ? "" : retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} />;
       }))}
       {dev && waitingCharges.length > 0 && <section className="card space-y-3" id="waiting-charges" data-waiting-charges="">
         <h2>Charged once your tests resume</h2>

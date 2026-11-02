@@ -11,7 +11,7 @@ import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OWED_BANK_WAITING, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 
 /** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
-type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; waiting?: boolean; checkId?: string | null };
+type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string };
 
 /** (Owner, Nov 2, batch 35 §117 rule 3) "Cancel this check": the bank's check is cancelled and what it covered can be paid at once (the page redraws). */
 function CancelCheck({ id }: { id: string }) {
@@ -45,7 +45,7 @@ function CancelCheck({ id }: { id: string }) {
  * (Batch 23 section 6) During a chargeback hold the box reserves rather than pays: Pay what you owe puts the amount on hold on the card ("Reserved $X: it's taken when
  * the team approves lifting your hold."), the team's Approve takes it, and it's released if they don't approve or after about 7 days.
  */
-export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "", verifyFirst = false, reservedCents = 0, reserveExpired = false }: { onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
+export function OwedBox({ onHold, owed, chargeback = false, review = false, retryLine = "", verifyFirst = false, reservedCents = 0, reserveExpired = false, ranOut = "" }: { /** (§125) "Your bank check ran out on Nov 5: nothing was charged. Pay again or change your card." */ ranOut?: string | null; onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 11) "Last try: ... · next try: ..." of the automatic retries */ retryLine?: string; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
   const [err, setErr] = useState("");
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -66,12 +66,13 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
   return (
     <div id="owed" className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       {onHold && chargeback ? (
-        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits. Testers can&apos;t send work until then (they can still charge for work you haven&apos;t reviewed: it&apos;s charged once your tests resume); their deadlines move on by the pause.</p>
+        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits. Testers can&apos;t send work until then (they can still charge for work you haven&apos;t reviewed: it&apos;s added here and paid with what you owe, as one payment); their deadlines move on by the pause.</p>
       ) : onHold ? (
-        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits, until you pay what you owe. Testers can&apos;t send work until then (they can still charge for work you haven&apos;t reviewed: it&apos;s charged once your tests resume); their deadlines move on by the pause.</p>
+        <p><b>Your tests are paused.</b> No new testers, invites or calls, and Pay waits, until you pay what you owe. Testers can&apos;t send work until then (they can still charge for work you haven&apos;t reviewed: it&apos;s added here and paid with what you owe, as one payment); their deadlines move on by the pause.</p>
       ) : (
         <p><b>A payment failed.</b> Pay {money(seenTotal)} to keep your tests running.</p>
       )}
+      {ranOut && <p data-check-ran-out="">{ranOut}</p>}
       {retryLine && <p className="text-xs" data-retry-line="">{retryLine}</p>}
       {/* (Owner, Oct 29, batch 23 section 6) A chargeback hold: Pay what you owe reserves the money; the team's Approve takes it. */}
       {chargeback && reserveExpired && <p data-reserve-expired="">{RESERVE_EXPIRED}</p>}
@@ -82,7 +83,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
           {owed.map((o, i) => (
             <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined}>
               {o.text}
-              {o.waiting && <> · <b>{OWED_BANK_WAITING}</b></>}
+              {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
+              {o.after && <> · <b data-owed-after="">{o.after}</b></>}
               {/* One check covers every debt it paid: its Cancel sits next to the first of them. */}
               {o.waiting && o.checkId && owed.findIndex((x) => x.checkId === o.checkId) === i && <> <CancelCheck id={o.checkId} /></>}
             </li>
