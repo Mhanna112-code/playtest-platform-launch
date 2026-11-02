@@ -816,3 +816,10 @@ Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts 
 ## §108 Edit never blocks on an unchanged Open until (owner, Nov 1)
 - On Edit, the Open until date box's minimum is the saved date when that's earlier than tomorrow, so a test whose Open until is under a day away (or past) can
   still save other fields; the server already checks the date only when it changes. Moving it still needs a date from tomorrow on.
+
+## §111 Deadlines and Open until use the same day (owner, Nov 1)
+- A joiner's deadline is the end of their joining day plus the listing's tester days, in the developer's saved time zone, like Open until. The day is counted as a calendar date first, then converted to its actual end in that zone; it is no longer returned as a UTC day end. Clock changes keep the deadline at the end of the correct local day. An unknown zone still uses UTC.
+- Nov 1 to Nov 27 is 26 days in that zone. Stored tester days retain that allowance; older listings without stored days now use the developer's zone in the join page, developer Listing panel, Find badges and Most time to finish ordering. Find's join-by date uses that zone too.
+- Join, accepted applications and invite joins share the corrected contract snapshot. Rejoining still restores exactly the time left on the original deadline. Switch keeps the deadline when Open until exists; legacy tests without Open until keep their existing elapsed-time rule. Edit moving Open until later by D days still adds D days to working deadlines and the tester allowance. Existing stored deadlines are not rewritten by this change.
+
+Tests: `tests/batch35-deadline-zone.test.ts` (11 cases), with the earlier listing-helper wiring assertions updated.

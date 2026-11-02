@@ -266,7 +266,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const shownEx = await db.excerpt.findMany({ where: { testId: t.id, status: "shown" }, orderBy: { decidedAt: "desc" } });
   // (Owner, Oct 30, batch 34 §14) The Listing panel (it replaces the Contract changes fold): the current listing, the fields the most recent save changed tagged.
   // (Batch 35 §32) The tester deadline as a tester joining now gets it (the same helper as the join page): an Open until moved later grows it (batch 15 §18).
-  const listingNow = { ...asListing(t), deadlineDays: joinerDays(t) };
+  const listingNow = { ...asListing(t), deadlineDays: joinerDays(t, u.timeZone) };
   const lastSave = await lastListingSave(t.id);
   const listingRows = panelRows(listingNow, lastSave);
   // (Batch 17 §15) The developer's own Stop and its reason (the team's Stop has its own): (batch 34 §14, the Contract changes fold gone) in the red banner.

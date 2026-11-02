@@ -1,3 +1,4 @@
+import { fmtIn } from "@/lib/tz";
 import Link from "next/link";
 import { Languages, Monitor, SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
@@ -172,7 +173,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                       {t.languages.length > 0 && <span className="badge" title={t.languages.join(" · ")}><Languages className="h-3.5 w-3.5" /> {t.languages.slice(0, 3).join(" · ")}{t.languages.length > 3 ? ` +${t.languages.length - 3} more` : ""}</span>}
                       {state !== "Invite only" && <span className="badge">{t.joinMode === "invite" ? "Invitation only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>}
                       {/* (Batch 15 section 18) "14 days per tester · join by Nov 20" */}
-                      {t.openUntil && <span className="badge" data-per-tester="">{perTesterLine(t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil), t.openUntil, (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }))}</span>}
+                      {t.openUntil && <span className="badge" data-per-tester="">{perTesterLine(t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil, t.developer.timeZone), t.openUntil, (d) => fmtIn(t.developer.timeZone, d, "date"))}</span>}
                       {t.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
                       {t.ndaText && <span className="badge">NDA</span>}
                       {invitedTo.has(t.id) && <span className="badge border-emerald-400/40 text-emerald-200">Invited</span>}

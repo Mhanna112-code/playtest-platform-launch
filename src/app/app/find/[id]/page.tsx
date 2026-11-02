@@ -107,7 +107,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const closed = paused || t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
   // (Owner, Oct 30, batch 15 section 18) Every tester gets the same days from when they join: "Your deadline: Dec 3 (14 days from joining)".
-  const days = joinerDays(t); // (batch 35 §32) the same helper as the developer's Listing panel
+  const days = joinerDays(t, t.developer.timeZone); // (batch 35 §32) the same helper as the developer's Listing panel
   const dueAt = t.testerDays ? dueFromJoin(new Date(), t.testerDays, t.developer.timeZone) : t.openUntil ?? new Date(Date.now() + t.deadlineDays * 86_400_000);
   const dueIfNow = yourDeadlineLine(dueAt, days, utcDay).replace(/^Your deadline: /, "");
   const joinClosed = t.openUntil && t.openUntil < new Date() ? closedToNewLine(t.openUntil, utcDay) : "";

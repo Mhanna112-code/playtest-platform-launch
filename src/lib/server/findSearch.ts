@@ -26,7 +26,7 @@ export const ADMIN_FIND_LIMIT = 500;
 export async function adminFindTests(q: unknown, states: TestState[] = [], now = new Date()) {
   const rows = await db.test.findMany({
     where: testSearchWhere(q, true),
-    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, deletedAt: true, holdStartedAt: true, devSuspendedAt: true } } },
+    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, timeZone: true, deletedAt: true, holdStartedAt: true, devSuspendedAt: true } } },
     orderBy: { createdAt: "desc" },
     take: ADMIN_FIND_LIMIT + 1,
   });

@@ -338,12 +338,12 @@ export const testerDaysOf = (openedAt: Date, openUntil: Date | string, tz?: stri
  * Open until but no stored days, the days from opening to Open until; with neither, the listing's deadline days. The developer's Listing panel and the tester's
  * join page both show this (the stored deadlineDays alone goes stale after an Open until move).
  */
-export const joinerDays = (t: { testerDays?: number | null; openUntil: Date | string | null; createdAt: Date; deadlineDays: number }) =>
-  t.testerDays ?? (t.openUntil ? testerDaysOf(t.createdAt, t.openUntil) : t.deadlineDays);
+export const joinerDays = (t: { testerDays?: number | null; openUntil: Date | string | null; createdAt: Date; deadlineDays: number }, tz?: string | null) =>
+  t.testerDays ?? (t.openUntil ? testerDaysOf(t.createdAt, t.openUntil, tz) : t.deadlineDays);
 /** A tester's deadline: the end of the day they join + tester days. Joining Nov 6 with 14 days: Nov 20; joining Nov 19: Dec 3. */
 export function dueFromJoin(joinedAt: Date, testerDays: number, tz?: string | null) {
-  const start = Date.parse(`${dayIn(joinedAt, tz)}T23:59:59.000Z`);
-  return new Date(start + testerDays * DAY);
+  const day = new Date(Date.parse(`${dayIn(joinedAt, tz)}T00:00:00Z`) + testerDays * DAY).toISOString().slice(0, 10);
+  return endOfDayIn(day, tz);
 }
 /** Joining has closed (Open until passed): the test takes no new testers. */
 export const joiningClosed = (t: { openUntil: Date | null }, now = new Date()) => !!t.openUntil && t.openUntil.getTime() < now.getTime();
@@ -354,9 +354,10 @@ export const testClosedToNewLine = (title: string, openUntil: Date, fmt: (d: Dat
 /** The developer's card and test page after Open until: "Joining closed · testers working until Dec 3" ("" when nobody is still working). */
 export const joiningClosedLine = (latestDue: Date | null, fmt: (d: Date) => string) => (latestDue ? `Joining closed · testers working until ${fmt(latestDue)}` : "Joining closed · every tester's time is up");
 /** (Owner, Oct 28, batch 16 section 3) The days a new tester gets: the number in the card's "N days per tester" (null without Open until). */
-export const daysPerTester = (t: { testerDays: number | null; createdAt: Date; openUntil: Date | null }) => (t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil) : null);
+type TesterDayListing = { testerDays: number | null; createdAt: Date; openUntil: Date | null; developer?: { timeZone?: string | null } };
+export const daysPerTester = (t: TesterDayListing) => (t.openUntil ? t.testerDays ?? testerDaysOf(t.createdAt, t.openUntil, t.developer?.timeZone) : null);
 /** Find's "Most time to finish": the most days per tester first; ties: the later Open until first (more time left to join); tests without Open until last. */
-export const byMostTimeToFinish = (a: { testerDays: number | null; createdAt: Date; openUntil: Date | null }, b: { testerDays: number | null; createdAt: Date; openUntil: Date | null }) =>
+export const byMostTimeToFinish = (a: TesterDayListing, b: TesterDayListing) =>
   (daysPerTester(b) ?? -1) - (daysPerTester(a) ?? -1) || (b.openUntil?.getTime() ?? 0) - (a.openUntil?.getTime() ?? 0);
 /** Find cards and the listing: "14 days per tester · join by Nov 20". */
 export const perTesterLine = (days: number, openUntil: Date, fmt: (d: Date) => string) => `${days} day${days === 1 ? "" : "s"} per tester · join by ${fmt(openUntil)}`;
