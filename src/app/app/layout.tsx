@@ -2,10 +2,10 @@ import Link from "next/link";
 import { AdminNav } from "@/app/admin/AdminNav";
 import { ArrowLeftRight, Compass, CreditCard, LayoutDashboard, MailCheck, MessagesSquare, PlusCircle, UserRound } from "lucide-react";
 import { hasBoth, otherSideOfPage, sideFor } from "@/lib/sides";
-import { contractsOnSide, pagePath } from "@/lib/server/sidePage";
-import { unreadCount } from "@/lib/server/messages";
+import { pagePath } from "@/lib/server/sidePage";
+import { allUnreadChats } from "@/lib/server/directMessages";
+import { MessagesBadge } from "@/components/MessagesBadge";
 import { Brand } from "@/components/Brand";
-import { db } from "@/lib/db";
 import { HOLD_APPROVAL_AFTER } from "@/lib/rules";
 import { SignOut } from "@/components/SignOut";
 import { ResendConfirm } from "@/components/ResendConfirm";
@@ -43,14 +43,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const off = restrictedOn(u, side);
   // (Batch 35 §100) A payment hold past HOLD_APPROVAL_AFTER with nothing left owed waits only for the team's review.
   const holdReviewOnly = !!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER) && side === "developer" && (await (await import("@/lib/server/holds")).owedForBox(u.id)).length === 0;
-  // (Batch 34 §5) The Messages number counts the side in use's conversations only.
-  const contracts = await db.contract.findMany({ where: contractsOnSide(u.id, side), select: { testId: true, testerId: true } });
-  const unreadChats = (await Promise.all(contracts.map((c) => unreadCount(u.id, c.testId, c.testerId)))).reduce((a, b) => a + b, 0);
+  // (§105) Test chats stay on their side; direct conversations count on both sides.
+  const unreadChats = await allUnreadChats(u);
   // (Owner, Oct 28) A restricted account keeps only the links to pages it can open: Dashboard, Payments, the bell and the account (Settings). Post a test, Find tests,
   // Profile and Messages are hidden.
   const messagesLink = off ? null : (
     <Link className="nav-link relative" href="/app/messages"><MessagesSquare className="h-4 w-4" /> Messages
-      {unreadChats > 0 && <span className="absolute -right-1 -top-1 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950">{unreadChats > 9 ? "9+" : unreadChats}</span>}
+      <MessagesBadge unread={unreadChats} />
     </Link>
   );
   return (

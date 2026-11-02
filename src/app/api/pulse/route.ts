@@ -23,6 +23,10 @@ export async function GET(req: Request) {
       if (v === null) throw new HttpError(400, "bad_request", "Unknown page.");
       return ok({ v, restricted: false });
     }
+    if (q.has("direct") || q.has("messages")) {
+      const dm = await import("@/lib/server/directMessages");
+      return ok({ v: q.has("direct") ? await dm.directV(u.id, q.get("direct") ?? "") : await dm.messagesListV(u), restricted: dm.directRestricted(u) });
+    }
     // (Owner, Oct 29, batch 10) Payments: "Pay what you owe" updates live (a declined payment, a chargeback, a tester's Charge during the hold, or a payment from another tab).
     // (Batch 30 §8) The fingerprint comes from pulseV, which the page also renders with (AutoRefresh's baseline).
     if (q.get("owed")) {

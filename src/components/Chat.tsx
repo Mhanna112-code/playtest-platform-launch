@@ -1,4 +1,5 @@
 "use client";
+import { refreshBell } from "./BellLink";
 import { FormMistakes } from "@/components/FormMistakes";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -36,6 +37,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
   useEffect(() => {
     if (messages.length > count.current) bottom.current?.scrollIntoView({ behavior: count.current ? "smooth" : "auto" });
     count.current = messages.length;
+    refreshBell();
   }, [messages.length]);
   return (
     <div className="card flex h-[70vh] flex-col p-0" data-mistakes-root="">
@@ -83,6 +85,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
                 setPausedNow(true);
                 router.refresh();
               }
+              if (e2 instanceof ApiError && e2.code === "unable") { setPausedNow(true); router.refresh(); }
               setErr(errOf(e2));
             } finally {
               setBusy(false);

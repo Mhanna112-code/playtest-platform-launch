@@ -58,10 +58,10 @@ describe("A) Chat with <name> on the hover card and the profile", () => {
     expect((await open(dev.cookie, sessionId)).body.error.message).toBe("Unable to chat with this tester.");
   });
 
-  it("the button is on the hover card and the profile (hidden with no shared test), in the full app's button look", () => {
+  it("test-chat stays on hover cards; profiles use direct Message in the same button style", () => {
     expect(src("components/Ui.tsx")).toMatch(/data-tester-card[\s\S]*ChatWithButton/);
     expect(src("app/app/page.tsx")).toMatch(/contractId: restricted \? undefined : c\.id/);
-    expect(src("app/app/testers/[id]/page.tsx")).toMatch(/shared && <ChatWithButton/);
+    expect(src("app/app/testers/[id]/page.tsx")).toContain("<ProfileMessageButton viewer={viewer} other={p} blocked={iBlocked} />");
     expect(src("components/ChatWithButton.tsx")).toMatch(/btn-secondary[\s\S]*MessagesSquare[\s\S]*Chat with/);
   });
 });

@@ -84,7 +84,9 @@ export async function sendChat(user: { id: string; name: string; email: string }
   if (iAmDev ? r.tester : r.developer) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);
   const body = typeof raw === "string" ? raw.trim() : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");
-  if ((await db.message.count({ where: { senderId: user.id, createdAt: { gt: new Date(Date.now() - 60_000) } } })) >= CHAT_PER_MINUTE) throw new HttpError(429, "too_fast", CHAT_TOO_FAST);
+  const recent = { senderId: user.id, createdAt: { gt: new Date(Date.now() - 60_000) } };
+  const counts = await Promise.all([db.message.count({ where: recent }), db.directMessage.count({ where: recent })]);
+  if (counts[0] + counts[1] >= CHAT_PER_MINUTE) throw new HttpError(429, "too_fast", CHAT_TOO_FAST);
   if (body.length > CHAT_MAX) throw new HttpError(400, "too_long", `Keep a message to ${CHAT_MAX.toLocaleString("en-US")} characters.`);
   const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body, clientId } }).catch(async (e) => {
     // Two presses of the same message at once: the first one wins.

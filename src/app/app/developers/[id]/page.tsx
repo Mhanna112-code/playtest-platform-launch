@@ -1,4 +1,5 @@
 import { publicProfileV } from "@/lib/server/pageFreshness";
+import { ProfileMessageButton } from "@/components/ProfileMessageButton";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, CalendarClock } from "lucide-react";
@@ -62,6 +63,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
             </p>
           </div>
           {mine && !devOff && !anySuspended(viewer) && <Link href="/app/profile" className="btn-secondary px-3 py-1.5 text-sm">Edit profile</Link>}
+          <ProfileMessageButton viewer={viewer} other={p} blocked={iBlocked} />
         </div>
         {mine && <p className="text-xs text-slate-500">This is how testers see your profile.</p>}
       </section>
