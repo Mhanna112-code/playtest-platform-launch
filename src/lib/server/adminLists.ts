@@ -31,7 +31,7 @@ const splitTrailingQuote = (text: string): [string, string] => {
   const m = /^([\s\S]*?): “([\s\S]*)”$/.exec(text);
   return m ? [m[1], m[2]] : [text, ""];
 };
-import { linkNames, person, personName, profileHref, stripeIds, testLink, whoById } from "./adminLinks";
+import { linkNames, person, personName, profileHref, stripeIds, testHref, testLink, whoById } from "./adminLinks";
 
 // (Owner, Oct 26) The admin dashboard's lists, 25 rows at a time (keyset by date: newest first; the lists ordered by closure date go soonest first). Rows are
 // plain, already-formatted view models so the same loaders serve the page and /api/admin/more. (Batch 17 §7) Each list is a scroll box that loads the next 25
@@ -48,7 +48,21 @@ export type DisputeVM = {
   /** (Batch 33 §1) "Ana Silva (ana@…) vs Nora Lane (nora@…)": the names open their profiles. */ people?: Rich;
   /** (Batch 33 §2) "Ana Silva's reason: “…” · Nora Lane's note when paying: “…”" (the names are links). */ saidParts?: Rich;
 };
-export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string; /** (Batch 33 §1) the test and the person as links */ parts?: Rich };
+export type MineVM = { id: string; at: string; title: string; dev: string; why: string; when: string; testId: string; /** (Batch 33 §1) the test and the person as links */ parts?: Rich;
+  /** (Owner, Nov 2, batch 35 §118) The row or box of this action on the console itself ("mypaused-<test>", "suspension-<user>"), when it is there: the line jumps to it. */
+  jump?: string;
+  /** Where the line goes when that row isn't on the page (the test's or the person's page). */
+  href?: string };
+
+/**
+ * (Owner, Nov 2, batch 35 §118) Where a "Your actions" line jumps on the console: a test this admin paused that's still paused is in "Tests you paused"; an account
+ * still suspended (or a test whose developer is) is in "Suspensions". Anything else (a stop, a deletion, a close-out, a pause or suspension lifted since) has no row
+ * here, so its line opens its own page.
+ */
+export function mineJump(x: { pausedTestId?: string | null; suspendedUserId?: string | null }) {
+  if (x.pausedTestId) return `mypaused-${x.pausedTestId}`;
+  return x.suspendedUserId ? `suspension-${x.suspendedUserId}` : undefined;
+}
 export type UserVM = { href: string; id: string; at: string; line: string; reports: number; state: "deleted" | "suspended" | "normal"; stateLine: string; devSuspended?: boolean; testerSuspended?: boolean; isDeveloper?: boolean; isTester?: boolean; acct: AccountState; /** (Batch 33 §1) "Nora Lane (nora@…) · developer + tester · …": the name opens the profile */ parts?: Rich };
 /** (Batch 17 §5) A search and ticks on the Accounts or Tests list (see lib/adminScroll.ts). */
 export type ListFilter = { q?: string; ticks?: string[] };
@@ -197,7 +211,11 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
     if (!reasons.length) continue;
     reasons.sort((a, b) => b.date.getTime() - a.date.getTime());
     const why = reasons.map((r) => r.why).join(" · ");
-    all.push({ id: t.id, testId: t.id, date: reasons[0].date, at: reasons[0].date.toISOString(), title: t.title, dev: displayName(t.developer), why, when: fmtDateTime(reasons[0].date), parts: [testLink(t), " · ", ...person(t.developer), ` · ${why} · ${fmtDateTime(reasons[0].date)}`] });
+    // (Batch 35 §118) Still paused by this admin (pausedByWhere): its row in Tests you paused; else a developer still suspended: their row in Suspensions.
+    const stillPaused = t.adminPausedById === adminId && !!t.adminPausedAt && !t.pauseClosedAt && t.status !== "stopped";
+    const devSuspended = !t.developer.deletedAt && !!t.developer.devSuspendedAt && t.developer.devSuspendedById === adminId;
+    const jump = mineJump({ pausedTestId: stillPaused ? t.id : null, suspendedUserId: devSuspended ? t.developerId : null });
+    all.push({ id: t.id, testId: t.id, href: testHref(t.id), ...(jump ? { jump } : {}), date: reasons[0].date, at: reasons[0].date.toISOString(), title: t.title, dev: displayName(t.developer), why, when: fmtDateTime(reasons[0].date), parts: [testLink(t), " · ", ...person(t.developer), ` · ${why} · ${fmtDateTime(reasons[0].date)}`] });
   }
   // (Batch 15 section 35) The accounts themselves: each side this admin suspended (still suspended), and each account this admin deleted.
   // (Batch 30 §5) and each time this admin closed a developer's open reviews at $0 (the count and the reason).
@@ -218,7 +236,9 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
     };
     const why = e.kind === "team-closed" ? `${e.note.replace(/^(\d+ open reviews?) closed/, "$1 closed by you")}` : e.kind === "deleted" ? "account deleted by you" : `suspended by you (${e.side || "developer"} side)`;
     // (Batch 33 §1) The person suspended (or deleted, or whose reviews were closed) opens their profile.
-    all.push({ id: `acct-${e.id}`, testId: "", date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt), parts: [{ t: displayName({ ...p, deletedAt: null }), href: profileHref(p) }, ...closeParts(e, p.email)] });
+    // (Batch 35 §118) A suspension still in force (checked above) is in Suspensions; a deletion or a close-out has no row here.
+    const jump = e.kind === "suspended" && !p.deletedAt ? mineJump({ suspendedUserId: p.id }) : undefined;
+    all.push({ id: `acct-${e.id}`, testId: "", href: profileHref(p), ...(jump ? { jump } : {}), date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt), parts: [{ t: displayName({ ...p, deletedAt: null }), href: profileHref(p) }, ...closeParts(e, p.email)] });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
   return slice(all, (r) => r.date, cursor);
@@ -796,7 +816,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     for (const c of contracts) rows.push(mk("contract", c.id, c.joinedAt, [...person(c.tester), ` joined on: ${termsLine(c)}`]));
     for (const o of await db.termsOffer.findMany({ where: { testId } })) {
       rows.push(mk("offer", o.id, o.createdAt, ["New terms offered to ", ...ofP(o.contractId), `: ${o.diff}`]));
-      if (o.decidedAt) rows.push(mk("offer-decided", o.id, o.decidedAt, [...ofP(o.contractId), ` ${o.status === "switched" ? "switched to" : o.status === "kept" ? "kept their terms instead of" : "did not take"} the new terms`]));
+      if (o.decidedAt) rows.push(mk("offer-decided", o.id, o.decidedAt, [...ofP(o.contractId), o.status === "closed" ? " did not answer the new terms before their part ended (the offer closed)" : ` ${o.status === "switched" ? "switched to" : o.status === "kept" ? "kept their terms instead of" : "did not take"} the new terms`]));
     }
   } else {
     for (const p of await db.payment.findMany({ where: { contractId: { in: ids } } })) rows.push(mk("payment", p.id, p.createdAt, [`${p.kind} ${money(p.amountCents)} to `, ...ofP(p.contractId), ` · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}`, ...stripeIds(p)]));

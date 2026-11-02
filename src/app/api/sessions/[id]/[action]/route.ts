@@ -4,7 +4,7 @@ import { sendMessage } from "@/lib/server/messages";
 import { abandonUpload, finishRecording, sendRecording, removeRecording, startRecording } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
 import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
-import { decideTerms } from "@/lib/server/terms";
+import { PART_ENDED_TERMS, closeOffersOfEnded, decideTerms } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
@@ -35,6 +35,12 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
   if (!FINAL_AFTER_END.has(action)) return;
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== userId || c.status === "working") return;
+  // (Owner, Nov 2, batch 35 §118; replaces batch 16 §24 for Switch / Keep) Once the part has ended (rated, left, removed, stopped, ended early, the work window
+  // ended) its terms offer is closed: an old page's Switch or Keep gets the one plain line, whatever ended it.
+  if (action === "terms") {
+    await closeOffersOfEnded(db, [contractId], c.endedAt ?? new Date());
+    throw new HttpError(409, "gone", PART_ENDED_TERMS);
+  }
   const dev = displayName(c.test.developer);
   // (Batch 26 section 3) A team Stop reads "This test was stopped at 3:10 PM" (the tester's own zone), never who.
   const tz = (await db.user.findUnique({ where: { id: userId }, select: { timeZone: true } }))?.timeZone;

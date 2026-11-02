@@ -9,6 +9,8 @@ import { testerGate } from "./testerGate";
 import { logEvent } from "./live";
 import { carryOver, itemsFor, itemsOf, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
 import { qText } from "@/lib/questions";
+import { closeOffersOfEnded } from "./offerClose";
+export { closeOffersOfEnded };
 
 const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow({ where: { id } }));
 
@@ -45,6 +47,9 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
   }
   return offered;
 }
+
+/** (Owner, Nov 2, batch 35 §118) Switch / Keep pressed after the tester's part ended (rated, left, removed, stopped, the work window ended). */
+export const PART_ENDED_TERMS = "Your part on this test has ended, so these terms no longer apply.";
 
 /** The newest open offer for a contract, if any. */
 export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where: { contractId, status: "open" }, orderBy: { createdAt: "desc" } });
@@ -88,6 +93,11 @@ export const NO_LONGER_ON_OFFER = "These terms are no longer on offer.";
 export async function decideTerms(tester: { id: string }, contractId: string, body: Record<string, unknown>) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+  // (Owner, Nov 2, batch 35 §118) A part that ended has no terms to decide: an old page's Switch / Keep is refused plainly (and any offer still open closes).
+  if (c.status !== "working") {
+    await closeOffersOfEnded(db, [contractId], c.endedAt ?? new Date());
+    throw new HttpError(409, "gone", PART_ENDED_TERMS);
+  }
   await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
   // (Owner, Oct 28, batch 16 section 38A) The press names the offer its page showed. Missing, unknown or not the newest open one: the newest open offer is decided on,
   // after the "changed the terms again" stop-once. Only with no open offer at all is it refused, and never as "doesn't exist".
@@ -166,13 +176,14 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
 export async function termsRowLines(contractIds: string[]) {
   const [offers, contracts] = await Promise.all([
     db.termsOffer.findMany({ where: { contractId: { in: contractIds } }, orderBy: { createdAt: "desc" } }),
-    db.contract.findMany({ where: { id: { in: contractIds } }, select: { id: true, termsSwitchedAt: true } }),
+    db.contract.findMany({ where: { id: { in: contractIds } }, select: { id: true, termsSwitchedAt: true, status: true } }),
   ]);
   const out = new Map<string, string>();
   for (const c of contracts) {
     const latest = offers.find((o) => o.contractId === c.id);
     if (c.termsSwitchedAt) out.set(c.id, `Switched to the ${fmtDate(c.termsSwitchedAt).replace(/, \d{4}$/, "")} terms`);
-    else if (latest) out.set(c.id, `On their original terms · offered new terms ${fmtDate(latest.createdAt).replace(/, \d{4}$/, "")}${latest.status === "kept" ? " (kept their terms)" : ""}`);
+    // (Batch 35 §118) An offer left unanswered when their part ended reads closed (an older row still "open" on an ended part too).
+    else if (latest) out.set(c.id, `On their original terms · offered new terms ${fmtDate(latest.createdAt).replace(/, \d{4}$/, "")}${latest.status === "kept" ? " (kept their terms)" : latest.status === "closed" || (latest.status === "open" && c.status !== "working") ? " (closed: their part ended)" : ""}`);
   }
   return out;
 }

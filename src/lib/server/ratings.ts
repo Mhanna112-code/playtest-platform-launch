@@ -9,6 +9,7 @@ import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerStopSince, testerPauseSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./closeOut";
+import { closeOffersOfEnded } from "./offerClose";
 
 // (Owner, Oct 22, NEWEST+5) Ratings. (Owner, Oct 28, batch 17 sections 1, 2, 14, 16 and 17: the rules below replace the earlier ones where they differ.)
 // TESTER rates the developer once some work was sent or a call took place. Rate is DISABLED (shown, with one grey line) while they can still Charge or Let it go of a
@@ -238,6 +239,7 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     if (wasWorking) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: "rated", endedAt: new Date() } });
       await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished their part.`);
+      await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118) rating ends the part: its open new-terms offer closes
       // (Owner, Oct 29, batch 24 section 2) Said in the tester's terms: they finished their part (Leave and a suspension's removal keep "the tester left").
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: FINISHED_PART_REASON, decidedAt: new Date() } });
     }

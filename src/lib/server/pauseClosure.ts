@@ -6,6 +6,7 @@ import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { cancelCallsAhead, recordEvent, tellCancelled } from "./tests";
 import { checkFrom, liftRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, type AdminSeen } from "./adminRace";
+import { closeOffersOfEnded } from "./offerClose";
 
 // (Owner, Oct 26) PAUSED TESTS AUTO-CLOSE AFTER 7 DAYS, whatever the cause. The daily job closes them; closing works like Stop. Testers are
 // told neutrally that the test ended; the developer is told why. The admin can extend a test's closure date or close it sooner.
@@ -31,6 +32,7 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: now, endReason: "The test ended." } });
     const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test ended.");
+    await closeOffersOfEnded(tx, cs.map((c) => c.id), now); // (batch 35 §118)
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: now } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });

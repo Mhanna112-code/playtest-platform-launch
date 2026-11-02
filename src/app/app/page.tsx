@@ -19,7 +19,7 @@ import { DeveloperTiles } from "@/components/ProfileTiles";
 import { StatTile } from "@/components/StatTile";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartBadges, Seats, StatusPill } from "@/components/Ui";
-import { callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
+import { callCharge, callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests } from "@/lib/server/tests";
@@ -435,7 +435,12 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const chargeCloses = new Map(await Promise.all(contracts.flatMap((c) => c.submissions.filter((s) => !s.review)).map(async (s) => [s.id, await pieceCloseOut({ submissionId: s.id }, "tester", now)] as const)));
   const chargeShut = (pieceId: string) => closedOut(chargeCloses.get(pieceId) ?? null, now);
   const waiting = contracts.flatMap((c) => c.submissions.filter((s) => !s.review && !chargeShut(s.id)).map((s) => ({ c, s }))).sort((a, b) => b.s.sentAt.getTime() - a.s.sentAt.getTime());
-  const pendingCents = waiting.reduce((n, { s }) => n + (s.agreedCents != null ? testerShare(s.agreedCents) : 0), 0);
+  // (Owner, Nov 2, batch 35 §118) A call that took place and waits for the developer's Pay counts too: measured, still booked, no review, Pay not closed. A listed
+  // call's amount is the tester's share of its rate × the measured minutes; an unlisted call shows no amount.
+  const measuredCalls = (await db.call.findMany({ where: { contractId: { in: ids }, status: "booked", review: { is: null }, startsAt: { lte: now } }, orderBy: { startsAt: "desc" } })).filter((x) => callMinutesOf(x) != null);
+  const callPayShut = new Map(await Promise.all(measuredCalls.map(async (x) => [x.id, closedOut(await pieceCloseOut({ callId: x.id }, "developer", now), now)] as const)));
+  const waitingCalls = measuredCalls.filter((x) => !callPayShut.get(x.id) && byId.has(x.contractId)).map((x) => ({ c: byId.get(x.contractId)!, x, minutes: callMinutesOf(x)!, cents: x.rateCents != null ? testerShare(callCharge(x.rateCents, callMinutesOf(x)!)) : null }));
+  const pendingCents = waiting.reduce((n, { s }) => n + (s.agreedCents != null ? testerShare(s.agreedCents) : 0), 0) + waitingCalls.reduce((n, w) => n + (w.cents ?? 0), 0);
   // "To do": every part not sent yet (newest test first), each with a Send work button that opens the part. A test can be here and in Charge or cancel at once.
   const todoParts = working.flatMap((c) => toSend(c).map((p) => ({ c, p })));
   // (Owner, Oct 31, batch 35 §84) Every open test you're in has Send work in To do: a test with every part sent gets one row of its own (opening its parts).
@@ -448,7 +453,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     .sort((a, b) => Math.max(...b.parts.map((s) => s.sentAt.getTime())) - Math.max(...a.parts.map((s) => s.sentAt.getTime())));
   // (Owner, Oct 28) A suspended tester's session pages are closed: nothing here links to them.
   const answers = suspended ? [] : [
-    ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c ? [{ key: `offer-${o.id}`, c, text: `${displayName(c.test.developer)} offered new terms: ${o.diff}`, href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),
+    // (Batch 35 §118) Only a part still working has terms to answer: an ended part's offer is closed (an old row still "open" is never shown).
+    ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c && c.status === "working" ? [{ key: `offer-${o.id}`, c, text: `${displayName(c.test.developer)} offered new terms: ${o.diff}`, href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),
     ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, text: `${displayName(c.test.developer)} asked for a live call`, href: `/app/sessions/${c.id}#req-${r.id}`, cta: "Answer in Live session →" }] : []; }), // (batch 16 section 35)
   ];
   const upcoming = suspended ? [] : contracts.flatMap((c) => c.calls.map((x) => ({ c, x }))).sort((a, b) => a.x.startsAt.getTime() - b.x.startsAt.getTime());
@@ -490,7 +496,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {user.payoutProblemAt && <PayoutBanner />}
       <section className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4" aria-label="Your numbers">
         <StatTile icon={Wallet} label="Earned" value={compactMoney(paid._sum.testerCents ?? 0)} hint="what you got for accepted work" tone="emerald" />
-        <StatTile icon={Hourglass} label="Waiting for review" value={compactMoney(pendingCents)} hint={`${plural(waiting.length, "part")}`} tone="amber" />
+        <StatTile icon={Hourglass} label="Waiting for review" value={compactMoney(pendingCents)} hint={`${plural(waiting.length + waitingCalls.length, "part")}`} tone="amber" />
         <StatTile icon={Award} label="Rating" value={rating.n ? `${rating.avg.toFixed(1)} ★` : "-"} hint={rating.n ? `${plural(rating.n, "rating")}` : "no ratings yet"} tone="fuchsia" />
         <StatTile icon={ListTodo} label="To do" value={compact(todoParts.length + answers.length)} hint={answers.length ? `${answers.length} waiting for your answer` : "parts to send"} tone="indigo" />
       </section>
@@ -571,7 +577,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         )}
       </section>
 
-      {(waiting.length > 0 || waitingApps.length > 0 || inviteOnlyApps.length > 0) && (
+      {(waiting.length > 0 || waitingCalls.length > 0 || waitingApps.length > 0 || inviteOnlyApps.length > 0) && (
         <section className="space-y-3">
           {sectionTitle(<Hourglass className="h-5 w-5 text-amber-300" />, "Waiting for the developer")}
           <ScrollList className="space-y-2">
@@ -608,6 +614,21 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <li key={s.id}>
                   {/* (Owner, Oct 28) Suspended: the session page is closed, so the row doesn't open. */}
                   {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#parts`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
+                </li>
+              );
+            })}
+            {/* (Batch 35 §118) A call that took place, waiting for the developer's Pay: it opens that call on the session page (its Call history row). */}
+            {waitingCalls.map(({ c, x, minutes, cents }) => {
+              const inner = (
+                <>
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
+                  <span className="badge text-amber-300" data-waiting-call-line=""><Clock className="h-3.5 w-3.5" /> Live call on {pieceDay(x.startsAt, user.timeZone)} · {minutes} min: waiting for review</span>
+                  {cents != null && <span className="text-sm text-slate-300" data-waiting-call-amount="">{money(cents)}</span>}
+                </>
+              );
+              return (
+                <li key={x.id} data-waiting-call={x.id}>
+                  {suspended ? <div className="card flex flex-wrap items-center gap-3 p-4" data-waiting-plain="">{inner}</div> : <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">{inner}</Link>}
                 </li>
               );
             })}

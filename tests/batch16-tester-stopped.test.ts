@@ -59,8 +59,12 @@ describe("after a stop: what's gone is refused and names the press; what still w
     await refused("recording-start", { filename: "a.webm", size: 10, contentType: "video/webm" }, "upload");
     await refused("recording-done", { recordingId: "x" }, "upload");
     await refused("recording-remove", { recordingId: "x" }, "Remove");
-    await refused("terms", { offerId: offer.id, choice: "switch" }, "Switch");
-    await refused("terms", { offerId: offer.id, choice: "keep" }, "Keep");
+    // (Batch 35 §118) Switch / Keep after the part ended: the offer closed, one plain line (not the stopped line naming the press).
+    for (const choice of ["switch", "keep"]) {
+      const t = await sact(sessionId, "terms", tester.cookie, { seenAt: opened, offerId: offer.id, choice });
+      expect(t.status).toBe(409);
+      expect(t.body.error.message).toBe("Your part on this test has ended, so these terms no longer apply.");
+    }
     await refused("request-time", { startsAt: atHours(100) }, "Request a time");
     await refused("answer-request", { requestId: reqRow.id, action: "accept" }, "Accept");
     await refused("answer-request", { requestId: reqRow.id, action: "decline" }, "Decline");
