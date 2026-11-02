@@ -133,7 +133,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {/* (Batch 16 section 32) An invite to this test: the page follows it live (closed, re-sent, the test filling). */}
       {invite && <AutoRefresh query="invites=1" v={invitesFp} />}
       {/* (Owner, Oct 30, batch 34 §14 "The join page too"; batch 35 §14) The listing information is the Listing panel, as on the developer's test page (the tester's
-          words: their share of each price, no build link before joining); its header card and "What testers said" sit inside it. Every listing line on this page
+          words: their share of each price, no build link before joining); its header card sits inside it (owner, Nov 2: no "What testers said"). Every listing line on this page
           (the top box, the stop boxes, the "… anyway?" pop-up; batch 35 §55: no live list by the button) has See it, which comes here and marks that Save's fields. */}
       <ListingSeeIt box="listing" />
       <ListingPanel side="tester" rows={panel.rows} listing={l} savedAt={panel.savedAt} when={(d) => fmtDateTimeIn(d, u.timeZone)}
@@ -166,12 +166,6 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           <span className="badge"><Users className="h-3.5 w-3.5" /> {plural(testersIn, "tester")} on this test</span>
         </div>
         </>}
-        foot={devRating.comments.length > 0 && (
-          <details className="text-sm">
-            <summary className="cursor-pointer">What testers said</summary>
-            <LongList shown={3} tall="max-h-52" className="list-disc pl-5">{devRating.comments.map((cm, i) => <li key={i}><ClampText text={`“${cm}”`} /></li>)}</LongList>
-          </details>
-        )}
       />
 
       {/* (An invitation shows here, as in the full app: who invited you, how long you'd have, No thanks.) */}

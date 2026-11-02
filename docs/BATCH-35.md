@@ -1045,3 +1045,7 @@ Draft), drafts-5-tab-c-title.png (C types the title: only the title gains Draft)
 goes, the title and the price stay), drafts-7-tab-d-after-discard.png (a new tab D: the title and price drafts only), and the clip drafts-tab-c.webm (tab C).
 
 Tests: tests/batch35-per-field-drafts.test.ts.
+
+## §121 No "What testers said" on the join page (owner, Nov 2)
+- The fold of testers' rating comments about the developer is gone from the join page; the developer's rating ("3.0 ★ (1 rating)") stays under their name and
+  links to their profile, where the ratings are.

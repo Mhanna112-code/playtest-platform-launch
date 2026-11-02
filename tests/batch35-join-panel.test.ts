@@ -153,7 +153,7 @@ describe("batch 35 §14: See it on every listing line of the join page", () => {
     // The header card's badges and the developer's comments stay, inside the panel; one #listing on the page.
     expect(page).toContain("<CategoryBadges categories={t.categories} />");
     expect(page).toContain("<PartBadges written=");
-    expect(page).toContain("What testers said");
+    expect(page).not.toContain("<summary className=\"cursor-pointer\">What testers said</summary>"); // (owner, Nov 2) removed from the join page
     expect(page.match(/id="listing"/g)).toBeNull();
     expect(src("app/app/tests/[id]/ListingPanel.tsx").match(/id="listing"/g)?.length).toBe(1);
 
