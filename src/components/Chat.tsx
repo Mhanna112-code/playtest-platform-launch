@@ -6,8 +6,11 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { api, ApiError, errOf, newPressId } from "@/lib/client";
 import { DraftTag, useKept } from "@/lib/useKept";
+import { PersonHover } from "@/components/PersonHover";
+import type { PersonHoverInfo } from "@/lib/server/personHover";
 
-type Msg = { id: string; mine: boolean; who: string; body: string; at: string };
+/** (Batch 35 §124) `hover`: the sender's profile hover (the other person's messages only; none for a deleted account or someone who blocked you). */
+type Msg = { id: string; mine: boolean; who: string; body: string; at: string; hover?: PersonHoverInfo | null };
 
 const day = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
@@ -16,7 +19,7 @@ const time = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: 
  * The chat page's conversation, as the full app's: one card (the other person's name and the test in its header), the
  * messages with a day line between days (yours on the right in the brand colour), and the message box at the bottom.
  */
-export function Chat({ path, extra = {}, messages, other, title, closed, closedNote, pausedNote, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; title: string; closed?: boolean; /** Replaces "This chat is closed." (e.g. "Messages are paused for now. You can still read this chat.") */ closedNote?: string; /** (Batch 15 section 1) The box is paused because the other person is restricted: it comes back live when that lifts. */ pausedNote?: boolean; keepKey: string }) {
+export function Chat({ path, extra = {}, messages, other, otherHover, title, closed, closedNote, pausedNote, keepKey }: { path: string; extra?: Record<string, unknown>; messages: Msg[]; other: string; /** (Batch 35 §124) The header name's profile hover. */ otherHover?: PersonHoverInfo | null; title: string; closed?: boolean; /** Replaces "This chat is closed." (e.g. "Messages are paused for now. You can still read this chat.") */ closedNote?: string; /** (Batch 15 section 1) The box is paused because the other person is restricted: it comes back live when that lifts. */ pausedNote?: boolean; keepKey: string }) {
   const router = useRouter();
   const [text, setText] = useState("");
   const [err, setErr] = useState("");
@@ -43,7 +46,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
   return (
     <div className="card flex h-[70vh] flex-col p-0" data-mistakes-root="">
       <div className="border-b border-white/10 px-5 py-3">
-        <p className="font-semibold text-white">{other}</p>
+        <p className="font-semibold text-white">{otherHover ? <span data-person-hover=""><PersonHover {...otherHover} className="text-white" /></span> : other}</p>
         <p className="text-xs text-slate-400">{title}</p>
       </div>
       <div className="relative flex-1 space-y-3 overflow-y-auto px-5 py-4" tabIndex={0} role="log" aria-label="Messages" aria-live="polite">
@@ -53,7 +56,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
             {(i === 0 || day(messages[i - 1].at) !== day(m.at)) && <p className="my-2 text-center text-xs text-slate-500">{day(m.at)}</p>}
             <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
               <div className="max-w-[78%] space-y-1">
-                {!m.mine && <p className="px-1 text-xs text-slate-400">{m.who}</p>}
+                {!m.mine && <p className="px-1 text-xs text-slate-400">{m.hover ? <span data-person-hover=""><PersonHover {...m.hover} className="text-slate-400" /></span> : m.who}</p>}
                 <div className={`rounded-2xl px-3.5 py-2 text-sm ${m.mine ? "bg-volt-300 text-ink-950" : "bg-white/[0.07] text-slate-100"}`}>
                   <div className="whitespace-pre-wrap break-words">{m.body}</div>
                   <p className={`mt-1 text-[10px] ${m.mine ? "text-ink-950/75" : "text-slate-500"}`}>{time(m.at)}</p>

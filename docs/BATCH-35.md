@@ -1101,3 +1101,22 @@ Tests: tests/batch35-per-field-drafts.test.ts.
   - a paused check that had already gone through, recorded as paid.
 
   `batch28`, `batch29` and `batch35-charges-after-lift` follow the one-payment rule.
+
+## §124 Profile hovers in Messages and chats (owner, Nov 2)
+
+- **What.** The other person's name now has the same profile hover the session page's developer name uses (`PersonHover`: their rating line or "No ratings yet", and "See their profile"). It shows:
+  - on the Messages page, for test chats and "Direct message" rows;
+  - in a chat's header, for test chats and direct conversations;
+  - on each of their messages in that chat.
+- **Never on your own name** ("You" stays plain).
+- **The profile it links to** is the one for the side in use: a developer's profile from the tester side, a tester's from the developer side. If they have only the other one, it links to that.
+- **Blocks and deleted accounts** follow the profile pages:
+  - someone who blocked you shows a plain name (their profile isn't available to you);
+  - a deleted account shows a plain name;
+  - someone you blocked keeps the hover (their profile shows as usual, with Unblock).
+- **Messages rows.** A row still opens the chat, through a link laid over the card, so the name's own link and hover sit above it.
+- **Code.** `personHoverFor` in `src/lib/server/personHover.ts` builds the hover's name, link and summary, or none. No new hover component.
+- **Tests:** `tests/batch35-messages-hover.test.ts` covers:
+  - a direct conversation's list row, header and messages;
+  - a test chat from both sides;
+  - a block either way, and a deleted account.
