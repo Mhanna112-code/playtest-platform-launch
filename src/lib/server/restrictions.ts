@@ -9,6 +9,7 @@ import { closeRequests } from "./requests";
 import { chargeDeferred, markPaused, resumeTests, shiftAfterPause } from "./holds";
 import { accountEvent } from "./reports";
 import { accountChangesSince, adminEmail, keepNote, tabOf, alreadyLine, byAt, checkFrom, liftRefusal, ownChange, pausedRefusal, presserOf, stopIfChanged, stoppedRefusal, testChangesSince, youAlready, type AdminSeen, type Presser } from "./adminRace";
+import { closeOffersOfEnded } from "./offerClose";
 
 // (Design doc 2 and 11.4; owner, Oct 27) Suspensions and deletion.
 //   Developer suspended (or on a payment / chargeback hold: ONE state, see lib/restricted.ts): all their tests are paused (testers stay in them; (owner, Oct 28 afternoon) under
@@ -71,6 +72,7 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
     const cancelled = await db.$transaction(async (tx) => {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: kind, endedAt: new Date() } });
       const list = await cancelCallsAhead(tx, [c.id], `${who} left the test.`);
+      await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118)
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: "the tester left", decidedAt: new Date() } });
       // Developers only ever see "left" (never why).
       await recordEvent(tx, c.testId, "left", `${who} left the test`, true, {}, c.id);
@@ -272,6 +274,7 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
         invitesClosed = await (await import("./invites")).openInviteIds({ testId: t.id }, tx);
         await tx.contract.updateMany({ where: { testId: t.id, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
         const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
+        await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)
         await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
         await tx.invite.updateMany({ where: { testId: t.id, status: "sent" }, data: { status: "cancelled" } });
         await tx.application.updateMany({ where: { testId: t.id, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });
@@ -438,6 +441,7 @@ export async function adminStopTest(testId: string, note: string, adminId: strin
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "stopped", endedAt: new Date(), endReason: "The test was stopped." } });
     const list = await cancelCallsAhead(tx, cs.map((c) => c.id), "The test was stopped.");
+    await closeOffersOfEnded(tx, cs.map((c) => c.id)); // (batch 35 §118)
     await tx.callRequest.updateMany({ where: { contractId: { in: cs.map((c) => c.id) }, status: "pending" }, data: { status: "closed", closedReason: "the test was stopped", decidedAt: new Date() } });
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });
     await tx.application.updateMany({ where: { testId, status: "pending" }, data: { status: "closed", closedReason: "stopped", decidedAt: new Date() } });

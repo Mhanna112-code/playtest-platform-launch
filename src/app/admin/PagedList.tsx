@@ -10,6 +10,7 @@ import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, Rep
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
 import { AdminRich } from "./AdminRich";
+import { MineLine } from "./MineLine";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
 import { DraftTag, useKept } from "@/lib/useKept";
@@ -148,7 +149,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const m = row as MineVM;
       return (
         <div className="border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-mine-row={m.testId || m.id}>
-          {m.parts ? <AdminRich parts={m.parts} /> : <>{m.testId ? <a href={`/app/find/${m.testId}`}>“{m.title}”</a> : <span>{m.title}</span>} · {m.dev} · {m.why} · {m.when}</>}
+          {/* (Batch 35 §118) The line jumps to its row on this console when it's here; otherwise it opens the test's or the person's page. */}
+          <MineLine m={m} />
         </div>
       );
     }
@@ -188,7 +190,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       // (Owner, Oct 30, batch 33 §6) A test this admin paused, still paused: its line and Lift the pause.
       const t = row as TestVM;
       return (
-        <li id={`mypaused-${t.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-mypaused-row={t.id}>
+        <li id={`mypaused-${t.id}`} className="scroll-mt-24 space-y-1 rounded py-2 text-slate-300 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-mypaused-row={t.id}>
           <p>{t.parts ? <AdminRich parts={t.parts} /> : t.line}</p>
           <div className="flex flex-wrap items-center gap-2"><PauseToggle t={t} /></div>
         </li>
@@ -198,7 +200,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       // (Owner, Oct 30, batch 33 §6) An account suspended now: the person, then each suspended side with Reinstate (the same component as the profile's admin view).
       const u = row as UserVM;
       return (
-        <li id={`suspension-${u.id}`} className="scroll-mt-24 space-y-1 py-2 text-slate-300" data-suspension-row={u.id}>
+        <li id={`suspension-${u.id}`} className="scroll-mt-24 space-y-1 rounded py-2 text-slate-300 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-suspension-row={u.id}>
           <p>{u.parts ? <AdminRich parts={u.parts} /> : u.line}</p>
           <AccountActions initial={u.acct} />
         </li>

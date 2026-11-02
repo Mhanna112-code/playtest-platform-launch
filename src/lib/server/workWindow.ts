@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { testPaused, workDeadlineOf } from "@/lib/rules";
 import { HttpError } from "./http";
+import { closeOffersOfEnded } from "./offerClose";
 
 type Reader = Pick<Prisma.TransactionClient, "test">;
 export const workEndedLine = (at: Date) => `This test ended on ${fmtDate(at)}. Work already sent can still be paid.`;
@@ -30,7 +31,7 @@ export async function finishWorkIfDue(testId: string, now = new Date()) {
     const ids = t.contracts.map((c) => c.id);
     await tx.contract.updateMany({ where: { testId, status: "working" }, data: { status: "ended", endKind: "closed", endedAt: at, endReason: "The test ended." } });
     const cancelled = await cancelCallsAhead(tx, ids, "The test ended.", at);
-    await tx.termsOffer.updateMany({ where: { contractId: { in: ids }, status: "open" }, data: { status: "superseded", decidedAt: at } });
+    await closeOffersOfEnded(tx, ids, at); // (batch 35 §118) the part ended: its offer closes
     await tx.callRequest.updateMany({ where: { contractId: { in: ids }, status: "pending" }, data: { status: "closed", closedReason: "the test ended", decidedAt: at } });
     await tx.callSlot.updateMany({ where: { testId, status: "open" }, data: { status: "removed" } });
     await tx.invite.updateMany({ where: { testId, status: "sent" }, data: { status: "cancelled" } });

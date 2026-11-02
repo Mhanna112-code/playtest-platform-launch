@@ -416,7 +416,7 @@ describe("U) admin views on profiles and on a test's own page", () => {
     expect(src("app/app/find/[id]/page.tsx")).toContain("isAdmin(u) && <AdminTestBoxes");
     expect(src("app/admin/PagedList.tsx")).not.toContain("HistoryToggle");
     expect(src("app/admin/page.tsx")).not.toContain("History of this test");
-    expect(src("app/admin/PagedList.tsx")).toContain("href={`/app/find/${m.testId}`}"); // admin rows link to the pages
+    expect(src("app/admin/MineLine.tsx")).toContain("href={`/app/find/${m.testId}`}"); // admin rows link to the pages (batch 35 §118: Your actions lines in MineLine)
     expect(sessionId).toBeTruthy();
   });
 });

@@ -7,6 +7,7 @@ import { notify } from "./notify";
 import { callClosedLine, callEndState, callLineFor, endIfClosed } from "./calls";
 import { answerTermsFirst } from "./terms";
 import { CALL_OVER_LINE, END_WARN_MS, endWarnLine } from "@/lib/callMeasure";
+import { closeOffersOfEnded } from "./offerClose";
 
 // Block (owner rule): either side can block the other. At once: their sessions together end (sent work stays payable
 // and reviewable; disputes still allowed), booked calls between them are cancelled, neither can book or join a call with
@@ -73,7 +74,7 @@ export async function blockUser(me: { id: string; email: string; name: string },
     else await notify(c.test.developer.email, `${displayName(c.tester)}'s session on ${c.title} ended.`, [`${displayName(c.tester)}'s session on ${c.title} ended.`], `/app/tests/${c.testId}#tester-${c.id}`);
   }
   await (await import("./requests")).closeRequests({ contractIds: contracts.map((c) => c.id) }, "the session ended");
-  await db.termsOffer.updateMany({ where: { status: "open", contractId: { in: contracts.map((c) => c.id) } }, data: { status: "superseded", decidedAt: now } });
+  await closeOffersOfEnded(db, contracts.map((c) => c.id), now); // (batch 35 §118) the part ended: its offer closes
   const invitesClosed = await (await import("./invites")).openInviteIds({ OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] });
   await db.invite.updateMany({ where: { id: { in: invitesClosed }, status: "sent" }, data: { status: "cancelled" } });
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) the neutral line (never "blocked")
