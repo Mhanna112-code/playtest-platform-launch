@@ -1,3 +1,4 @@
+import { markerIds } from "@/lib/answerAttachments";
 import { notFound, redirect } from "next/navigation";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
@@ -625,7 +626,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             {written.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(written.setUntil)}</p>}
             <SetView items={sentItems} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
             {written.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={written.notes} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
-            <AttachmentList items={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id)} />
+            <AttachmentList items={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id)} inlineText={sentItems.map((it) => it.answer)} inlineIds={[...markerIds(written.notes, c.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
           </div>
         ) : refusal || meOff || !draftsShown ? (
           !written ? <p className="note">Nothing sent.</p> : null

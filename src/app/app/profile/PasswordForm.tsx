@@ -15,6 +15,7 @@ export function PasswordForm({ hasPassword, seenAt: seen0 }: { hasPassword: bool
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [done, setDone] = useState(false);
+  const [resetKey, setResetKey] = useState(0);
   const [seenAt] = useState(seen0 ?? "");
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [boxAt, setBoxAt] = useState("");
@@ -30,6 +31,7 @@ export function PasswordForm({ hasPassword, seenAt: seen0 }: { hasPassword: bool
       setChanges(null);
       setDone(true);
       form.reset();
+      setResetKey((n) => n + 1); // native reset also starts fresh live counters in the uncontrolled password inputs
     } catch (e) {
       if (e instanceof ApiError && e.code === "stop_once") {
         setChanges((c) => (c ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
@@ -45,16 +47,16 @@ export function PasswordForm({ hasPassword, seenAt: seen0 }: { hasPassword: bool
       {hasPassword && (
         <div>
           <label className="label req" htmlFor="current">Current password</label>
-          <PasswordInput id="current" name="current" autoComplete="current-password" data-match="current password" />
+          <PasswordInput key={`current-${resetKey}`} id="current" name="current" autoComplete="current-password" data-match="current password" />
         </div>
       )}
       <div>
         <label className="label req" htmlFor="new-password">New password</label>
-        <PasswordInput id="new-password" name="password" autoComplete="new-password" minLength={8} data-required="" data-required-msg="Use at least 8 characters" data-min-chars="8" data-msg="Use at least 8 characters" data-match="at least 8|200 characters" />
+        <PasswordInput key={`new-password-${resetKey}`} id="new-password" name="password" autoComplete="new-password" minLength={8} data-required="" data-required-msg="Use at least 8 characters" data-min-chars="8" data-msg="Use at least 8 characters" data-match="at least 8|200 characters" />
       </div>
       <div>
         <label className="label req" htmlFor="confirm-password">Type it again</label>
-        <PasswordInput id="confirm-password" name="confirm" autoComplete="new-password" minLength={8} data-match="don't match" />
+        <PasswordInput key={`confirm-password-${resetKey}`} id="confirm-password" name="confirm" autoComplete="new-password" minLength={8} data-match="don't match" />
       </div>
       <p className="text-xs text-slate-500">At least 8 characters. Saving signs you out on your other devices.</p>
       {done && <p className="text-emerald-300">Password changed. Your other devices are signed out.</p>}

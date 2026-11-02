@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -30,6 +31,7 @@ export function ReportProblem({ path, callId, otherName, seenAt, reported }: { p
           <label className="flex items-center gap-1.5"><input type="radio" name={`kind-${callId}`} checked={kind === "late"} onChange={() => setKind("late")} /> {otherName} was late</label>
         </div>
         <textarea className="input min-h-14 text-sm" maxLength={1000} placeholder="What happened" aria-label="What happened" value={note} onChange={(e) => setNote(e.target.value)} />
+        <CharacterCount value={note} max={1000} />
         <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} onClick={async () => { if (await press(path, { callId, kind, note })) finish(); }}>Send to the team</button>
         <ChangesBox changes={changes} error={error} />
         <p className="text-xs text-slate-400">The team looks at it with the call room&apos;s join times. One report per call.</p>

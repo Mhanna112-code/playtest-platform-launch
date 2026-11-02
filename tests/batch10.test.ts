@@ -80,7 +80,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your dispute on “Harbor Run” was decided" } })).toBe(1);
   });
 
-  it("an unlisted call: the admin's max is $200/h × the logged minutes; during a hold the raise is added to what is owed", async () => {
+  it("an unlisted call: the admin's max is $200/h × the logged minutes; during a hold the raise waits outside what is owed", async () => {
     const s = await setup({ liveRateCents: null });
     const j = await joined(s.testId);
     const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie, 48);
@@ -93,8 +93,8 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     const a = await admin();
     await expect(decideDispute(a, row.id, { total: "100.01" })).rejects.toThrow("At most $100.00");
     expect(await decideDispute(a, row.id, { total: "100.00", tickCents: 9000 })).toEqual({ extraCents: 9000 });
-    expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ status: "owed", amountCents: 9000 });
-    expect((await owed(s.dev.user.id)).map((p) => p.amountCents)).toEqual([9000]);
+    expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ status: "deferred", amountCents: 9000 });
+    expect(await owed(s.dev.user.id)).toEqual([]);
   });
 
   it("a listed part paid the listing can still be disputed up to its cap (batch 28 §15); an old rejection can; the tester's own Charge can't", async () => {
@@ -244,7 +244,7 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     const a = await pulse(dev.cookie, "owed=1");
     expect(a.status).toBe(200);
     expect(a.body.restricted).toBe(false); // Payments stays open during a hold
-    // A tester's Charge during the hold is added to what is owed.
+    // A previously owed balance discovered in another tab changes the owed fingerprint.
     await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "owed" } });
     const b = await pulse(dev.cookie, "owed=1");
     expect(b.body.v).not.toBe(a.body.v);

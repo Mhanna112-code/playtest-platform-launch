@@ -382,7 +382,8 @@ async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThr
     if (p.kind === "subscription") {
       await db.payment.update({ where: { id: p.id }, data: { status: "failed" } });
       await (await import("./subscription")).lapse(p.developerId, now);
-    } else {
+    } else if (!(await (await import("./owedOnce")).deferWhileHeld(p.id))) {
+      // (Batch 35 §113 with §117) During a hold it waits for the lift instead (never added to Pay what you owe); otherwise it counts as declined.
       const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
       await (await import("./holds")).declinedPayment(p.developerId, p.id, p.amountCents, c ? `${displayName(c.tester)}'s ${p.kind === "dispute" ? "dispute decision" : "work"} on “${c.title}” (not confirmed with your bank)` : `a payment of ${money(p.amountCents)} (not confirmed with your bank)`);
     }

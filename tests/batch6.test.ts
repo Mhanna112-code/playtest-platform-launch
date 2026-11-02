@@ -239,28 +239,27 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" })).status).toBe(200);
   });
 
-  it("Charge during a payment hold: the tester's choice goes through, is added to what is owed, and the tester is paid when the developer pays it", async () => {
+  it("Charge during a payment hold waits outside what is owed and is charged when the hold lifts", async () => {
     const { dev, sub, tester, sessionId } = await chargeOpen();
     await startHold(dev.user.id, "unpaid");
     const c = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true });
     expect(c.status).toBe(200);
-    expect(c.body).toMatchObject({ status: "owed", message: "Charged $10.00. Payment may be delayed until the test resumes." });
+    expect(c.body).toMatchObject({ status: "deferred", message: "Charged $10.00. Payment may be delayed until the test resumes." });
     expect(c.body.message).not.toMatch(/hold/i);
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });
-    expect(p).toMatchObject({ status: "owed", amountCents: 1000 });
-    expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual(["Ana Silva's written answers $10.00 · charged by the tester while your tests were paused"]);
-    expect(await liftHoldIfClear(dev.user.id)).toBe(false); // owed first
+    expect(p).toMatchObject({ status: "deferred", amountCents: 1000 });
+    expect(await owedLines(dev.user.id)).toEqual([]);
+    expect(await liftHoldIfClear(dev.user.id)).toBe(true); // no original balance in this fixture; now the waiting Charge runs
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("delayed={paymentDelayed(sub.id)}");
-    const r = await payOwed(dev.user);
-    expect(r).toMatchObject({ paid: 1, lifted: true });
+
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).not.toBe("owed");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $10.00 for your written answers" } })).toBe(1);
   });
 
-  it("Charge during a chargeback hold is added to what is owed too", async () => {
+  it("Charge during a chargeback hold waits outside what is owed too", async () => {
     const { dev, sub, tester, sessionId } = await chargeOpen();
     await startHold(dev.user.id, "chargeback");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.status).toBe("owed");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.status).toBe("deferred");
   });
 
   it("Charge during an admin suspension with no hold is charged at once; a declined card starts a payment hold and the amount is owed", async () => {
@@ -287,21 +286,21 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect(["charged", "not_set_up"]).toContain(c.body.status);
   });
 
-  it("after the 7-day close, Charge carries on and stays owed during the hold", async () => {
+  it("after the 7-day close, Charge carries on and waits during the hold", async () => {
     const { dev, testId, sub, tester, sessionId } = await chargeOpen();
     await startHold(dev.user.id, "unpaid");
     await db.test.update({ where: { id: testId }, data: { status: "closed", pauseClosedAt: new Date() } });
     await db.contract.update({ where: { id: sessionId }, data: { status: "ended", endKind: "closed", endedAt: new Date() } });
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.status).toBe("owed");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).body.status).toBe("deferred");
   });
 
-  it("a dispute decided for the tester during a hold is owed (paid when it is paid); during a suspension with no hold it charges at once, and a decline starts a hold", async () => {
+  it("a dispute decided for the tester during a hold waits until it lifts; during a suspension with no hold it charges at once, and a decline starts a hold", async () => {
     const held = await disputed();
     await startHold(held.dev.user.id, "unpaid");
     await decideDispute(held.a, held.d.id, { total: "10.00", tickCents: 600 });
-    expect(await db.payment.findFirstOrThrow({ where: { disputeId: held.d.id } })).toMatchObject({ status: "owed", amountCents: 600 });
+    expect(await db.payment.findFirstOrThrow({ where: { disputeId: held.d.id } })).toMatchObject({ status: "deferred", amountCents: 600 });
     expect(await db.notification.count({ where: { userId: held.tester.user.id, text: { contains: "was decided" } } })).toBe(1);
-    expect((await payOwed(held.dev.user)).lifted).toBe(true);
+    expect(await liftHoldIfClear(held.dev.user.id)).toBe(true);
     expect((await db.payment.findFirstOrThrow({ where: { disputeId: held.d.id } })).status).not.toBe("owed");
 
     const susp = await disputed();

@@ -339,10 +339,9 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   let delayed = false;
   let heldNow = false; // (batch 35 §82) this decision's own decline started a hold: the test is paused now
   const owedRow = { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0 };
-  if (extra > 0 && c.test.developer.holdStartedAt) {
-    // (Owner, Oct 28 afternoon) During a payment or chargeback hold the raise is added to what the developer owes ("Pay what you owe"); the tester is paid when it is paid.
-    await db.payment.create({ data: { ...owedRow, status: "owed" } });
-    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) was added to what you owe`, c.test.developer.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+  const waiting = extra > 0 ? await (await import("./holds")).deferIfHeld(owedRow) : null;
+  if (waiting) {
+    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
     delayed = true;
   } else if (extra > 0) {
     // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.

@@ -960,6 +960,29 @@ Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including 
 - Leave is hidden once work ends; a stale Leave is refused without changing an ended session to Left.
 - Pay, Pay more, automatic call payments, Charge / Let it go, disputes, and ratings keep their existing windows. Normal work completion does not pay or discard a submitted part, and does not replace its review date or close-out date.
 
+## §115 An inline attachment shows once (owner, Nov 1)
+
+- A file placed in a sent answer or its notes stays where its paperclip marker was placed. The attachments list below the piece shows only files that were not placed in that text; with none left, there is no list.
+- The developer’s Needs you, updated work and paid work, the tester’s sent view and the team’s See the work all follow the same rule. Previous answer sets keep their inline files. Both the short paperclip marker and the older attachment marker resolve as before, and inline files still open or download as before.
+## Character counts at every limited text box (owner, Nov 1)
+
+- Every text box with a character limit shows the current count and its limit, including admin notes, Contact us, profile fields, chat, rating notes, reports, disputes, call cancellation and written answers. A count is red above the maximum or below an applicable minimum. An optional empty box stays neutral; the minimum applies once they type. Attachment markers do not count toward written work’s limits. Access keys show the count for each key, not a misleading limit on the whole list.
+- Post and Edit use the same rule for title, steps, mature-content explanation and NDA. An unchanged older title or steps keeps its existing minimum exception; an unchanged older NDA still saves as before. Contact us uses the server’s existing 50,000-character limit.
+- The suspended tester’s dashboard says they can still dispute payments for work they sent, by opening the test from their dashboard. The limited session view and each dispute’s eligibility rules stay the same. The box also follows §22’s existing rule that suspended testers are paid normally, without claiming the payment waits for reinstatement.
+
+## A paid hold names the approval it still needs (owner, Nov 2)
+
+- From the fourth payment hold onward, paying the balance still leaves the hold waiting for the team’s approval. The developer’s dashboard says “Your balance is paid. This hold is waiting for the team’s approval.” It no longer directs them to Pay what you owe when nothing is left to pay.
+- An outstanding owed payment, a bank confirmation or an unresolved charge keeps the payment instructions. This changes the dashboard wording; paying, approval and lifting the hold keep their existing rules.
+- A tester-only suspension also shows the tester explanation and dispute reminder: it does not depend on a developer-side suspension being present.
+- A successful password change resets the password fields and their live counts together; a refused change keeps what they typed.
+
+## §113 New charges during a hold wait until it lifts (owner, Nov 1)
+
+- During a payment or chargeback hold, a tester’s Charge, an automatic listed-call charge and a team decision’s raise wait as deferred payments. They do not grow Pay what you owe or a chargeback reservation. Existing owed money and bank reversals keep their own handling.
+- When the hold lifts, waiting charges run oldest first as away payments. The bank can ask for confirmation for three days; a decline starts a new hold, and later items stay waiting. No running-again notice is sent when a waiting charge immediately starts a new hold. A suspension that remains on keeps its waiting charges deferred.
+- The tester sees Payment delayed. Developer Payments lists waiting amounts under “Charged once your tests resume”, separately from Pay what you owe. The developer-row lock prevents a simultaneous hold lift from missing a newly waiting item, and the per-developer drain lock prevents duplicate or out-of-order drains.
+
 ## §117 One card in play; bank checks never double-charge (owner, Nov 2)
 
 - **Pay what you owe is ONE payment.** A press, the daily retry and a new card's retry charge the total of what's owed (the debts not waiting for the bank) as one PaymentIntent: one charge, one bank check if the card asks, one "Confirm with your bank" item. That payment is a Payment row of kind `owed` (status `paying`, then `needs_action` for a press's inline check or `needs_confirmation` for a retry's 3-day check, `bundled` once it went through, `cancelled` otherwise). Each debt it covers points to it (`Payment.coveredById`, additive migration `20261112090000_owed_one_payment`): while it is being charged or waits for the bank the debts are locked; once it went through every covered debt is marked paid by it (status `charged`, its PaymentIntent, the link kept for the admin's views and refunds) and each tester's share is sent from that one charge (`source_transaction`, as a chargeback reservation's capture does). The box, the confirm item ("What you owe $16.00 (Ana Silva's written answers $8.00, …)"), the receipt and the retry's bell line still name each item. Approved: everything is paid together and the hold lifts as before. The chargeback hold's reservation is unchanged.

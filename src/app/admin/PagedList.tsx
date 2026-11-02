@@ -1,4 +1,6 @@
 "use client";
+import { LIMITS } from "@/lib/limits";
+import { CharacterCount } from "@/components/CharacterCount";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
 import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf, shownWithFresh } from "@/lib/adminScroll";
@@ -39,6 +41,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
       {!fin.done && <>
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
       <input id={`lift-note-${id}`} className="input w-full max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
+      <CharacterCount value={note} max={LIMITS.reason} data-lift-note-count="" />
       {keep.restored && note !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setNote("")} />}
       </>}
       <button
@@ -465,7 +468,10 @@ export function PagedList({ kind, initial, arg = "", title, level = 2, fixed = f
       {title && <H className={level === 2 ? "text-lg font-semibold text-white" : "font-semibold text-white"} data-list-heading={kind}>{headingText(title, total, filtered)}</H>}
       {search && (
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2" data-list-filters={kind}>
-          <input type="search" className="input w-full sm:w-80" aria-label={search.label} placeholder={search.placeholder} maxLength={SEARCH_MAX} value={typed} onChange={(e) => setTyped(e.target.value)} data-list-search={kind} />
+          <span className="w-full sm:w-80">
+          <input type="search" className="input w-full" aria-label={search.label} placeholder={search.placeholder} maxLength={SEARCH_MAX} value={typed} onChange={(e) => setTyped(e.target.value)} data-list-search={kind} />
+          <CharacterCount value={typed} max={SEARCH_MAX} />
+          </span>
           <span className="flex flex-wrap items-center gap-x-3 gap-y-1" role="group" aria-label="Show only">
             {/* (Owner, Oct 31, batch 35 §35) The Developers / Testers pages list one side already: no Developer / Tester ticks there (the other ticks stay). */}
             {search.ticks.filter((t) => !(sideFilter && "group" in t && t.group === "role")).map((t) => (

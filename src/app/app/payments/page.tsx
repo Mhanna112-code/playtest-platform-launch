@@ -1,3 +1,4 @@
+import { deferredForBox } from "@/lib/server/holds";
 import { paymentsV } from "@/lib/server/pageFreshness";
 import { savedCardLine } from "@/lib/server/savedCard";
 import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
@@ -59,6 +60,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // (Batch 30 §8) The owed fingerprint as of before the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const owedFp = dev ? await owedV(u.id) : "";
   const cbSteps = dev ? await chargebackSteps(u.id) : null;
+  const waitingCharges = dev ? await deferredForBox(u.id) : [];
   // The tester's "Everything you sent": each part by test, newest first, with where its money is.
   const sent = tester
     ? await db.contract.findMany({
@@ -104,6 +106,10 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         if (!o.length) return cbSteps ? <p className="info" data-chargeback-paid="">{cbSteps.reservedCents > 0 ? reservedLine(cbSteps.reservedCents) : "Paid. Your tests stay paused until the team approves."}</p> : review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
         return <OwedBox onHold={!!u.holdStartedAt} owed={o} chargeback={!!cbSteps} review={review} retryLine={cbSteps ? "" : retryStatusLine(u, fmtDateTime)} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} />;
       }))}
+      {dev && waitingCharges.length > 0 && <section className="card space-y-3" id="waiting-charges" data-waiting-charges="">
+        <h2>Charged once your tests resume</h2>
+        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><a href={p.href}>{p.what}</a> · {money(p.amountCents)}</li>)}</LongList>
+      </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {dev && <ConfirmList items={await confirmItems(u.id)} />}
       {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}

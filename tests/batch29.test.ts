@@ -47,15 +47,15 @@ const eventsOf = async (testId: string) => (await db.testEvent.findMany({ where:
 const delayedLines = (userId: string) => db.notification.count({ where: { userId, text: "Payment for your call on “Harbor Run” may be delayed" } });
 
 describe("batch 29 §37: an automatic call charge the tester can't be paid for yet reads 'may be delayed'", () => {
-  it("during a hold: owed, the tester's call reads delayed (bell and page), never 'failed' or 'hold'; the event says it was added to what's owed", async () => {
+  it("during a hold: deferred, the tester's call reads delayed and the event says it is waiting", async () => {
     const x = await heldCall();
     await db.user.update({ where: { id: x.dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
     expect(await autoCharge()).toBe(1);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "owed", amountCents: 1500 });
+    expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
     expect(await delayedLines(x.tester.user.id)).toBe(1);
     const mine = await db.notification.findMany({ where: { userId: x.tester.user.id } });
     for (const n of mine) expect(n.text).not.toMatch(/failed|hold|chargeback|suspended/i);
-    expect(await eventsOf(x.testId)).toContain("Ana Silva's call was charged automatically: $15.00, added to what you owe");
+    expect(await eventsOf(x.testId)).toContain("Ana Silva's call is waiting to be charged once your tests resume: $15.00");
     // The session page treats owed and waiting (deferred) call payments like a declined one: the delayed line instead of "paid".
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('{ status: { in: ["needs_confirmation", "owed", "deferred"] } }');
   });
@@ -144,12 +144,13 @@ describe("batch 29 §37: a deferred payment declined after a lift names what it 
     await db.review.create({ data: { submissionId: sub.id, contractId: j.sessionId, amountCents: 1000, agreedCents: 1000, reason: R.CHARGED_BY_TESTER, payKey: randomUUID() } });
     const base = { kind: "review", contractId: j.sessionId, developerId: s.dev.user.id, testerId: j.tester.user.id, feeCents: 0, testerCents: 0, status: "deferred" };
     await db.payment.create({ data: { ...base, submissionId: sub.id, amountCents: 1000 } });
-    // A second deferred payment (a team decision), so the first decline starts the hold and the next says "Another payment was declined: … for <what>".
-    await db.payment.create({ data: { ...base, kind: "dispute", amountCents: 700, createdAt: new Date(Date.now() - 60_000) } });
+    // A later team decision stays waiting when this Charge declines and starts a new hold.
+    await db.payment.create({ data: { ...base, kind: "dispute", amountCents: 700, createdAt: new Date(Date.now() + 60_000) } });
     const { chargeDeferred } = await import("@/lib/server/holds");
     await chargeDeferred(s.dev.user.id);
-    const lines = (await db.notification.findMany({ where: { userId: s.dev.user.id, text: { startsWith: "Another payment was declined" } } })).map((n) => n.text);
-    expect(lines).toEqual(["Another payment was declined: $10.00 for Ana Silva's written answers on “Harbor Run” was added to what you owe"]);
+    const lines = await (await import("@/lib/server/holds")).owedLines(s.dev.user.id);
+    expect(lines.map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers \$10\.00 · card declined /)]);
+    expect((await db.payment.findFirstOrThrow({ where: { developerId: s.dev.user.id, kind: "dispute" } })).status).toBe("deferred");
     expect(src("lib/server/holds.ts")).not.toContain('p.kind === "dispute" ? "a team decision" : "work you paid for during the pause"');
   });
 });

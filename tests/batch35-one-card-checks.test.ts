@@ -420,3 +420,75 @@ describe("§117 rule 5: a press and a check finishing at the same moment charge 
     expect(await db.payment.count({ where: { developerId: w.dev.user.id, kind: "owed" } })).toBe(0);
   });
 });
+
+describe("§117 with §113: new charges during a hold wait for the lift", () => {
+  async function awayCheck(w: Awaited<ReturnType<typeof world>>, st: ReturnType<typeof bank>) {
+    const p = await db.payment.create({ data: { kind: "review", submissionId: w.sub.id, contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_confirmation" } });
+    const pi = "pi_" + randomUUID();
+    st.pis.set(pi, "requires_action");
+    await awayAction(p.id, { status: "requires_action", stripePaymentIntentId: pi, clientSecret: "" });
+    return { p, pi };
+  }
+
+  it("a check made before the hold that runs out during it: cancelled at Stripe and waits for the lift (never added to Pay what you owe); the lift charges it on the card in use then", async () => {
+    const w = await world();
+    const st = bank();
+    const { p, pi } = await awayCheck(w, st);
+    const debt = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 400, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
+    await startHold(w.dev.user.id, "unpaid");
+    await db.payment.update({ where: { id: p.id }, data: { actionBy: new Date(Date.now() - 1000) } });
+    await expireActions();
+    expect(st.cancelled).toEqual([pi]);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "deferred", actionPi: null });
+    expect((await owed(w.dev.user.id)).map((x) => x.id)).toEqual([debt.id]);
+    // A new card during the hold: it keeps waiting (not charged now); what's owed is one payment on the new card; the lift then charges the waiting one on that card.
+    st.card.customer = w.customer;
+    st.card.next = "pm_new";
+    await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
+    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[400, "pm_new"], [1000, "pm_new"]]);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
+    expect(await hold(w.dev.user.id)).toBeNull();
+  });
+
+  it("a new card during a hold cancels a waiting check made while away and leaves that charge waiting for the lift", async () => {
+    const w = await world();
+    const st = bank();
+    const { p, pi } = await awayCheck(w, st);
+    await startHold(w.dev.user.id, "unpaid");
+    await db.payment.create({ data: { kind: "review", contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 400, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
+    st.decline.add("pm_new");
+    st.card.customer = w.customer;
+    st.card.next = "pm_new";
+    await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
+    expect(st.cancelled).toEqual([pi]);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "deferred", actionPi: null });
+    expect(st.made.map((m) => m.amount)).toEqual([400]); // only what's owed was tried (declined); the waiting charge waits
+    expect(await hold(w.dev.user.id)).not.toBeNull();
+  });
+});
+
+describe("§117: a bank dispute on Pay what you owe's one payment", () => {
+  it("brings back the WHOLE disputed amount once, with one chargeback fee, on one chargeback hold; a second notice changes nothing", async () => {
+    const w = await threeDebts();
+    const st = bank();
+    const r = await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: w.debts.map((d) => d.id) });
+    expect(r.body).toMatchObject({ paid: 3, lifted: true });
+    const one = await oneOf(w.dev.user.id);
+    expect(one.status).toBe(OWED_PAID);
+    const { chargebackOpened } = await import("@/lib/server/holds");
+    expect(await chargebackOpened(one.stripePaymentIntentId!)).toBe(true);
+    expect(await chargebackOpened(one.stripePaymentIntentId!)).toBe(false);
+    const u = await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } });
+    expect(u.holdStartedAt).not.toBeNull();
+    expect(u.holdReason).toBe("chargeback");
+    const now = await owed(w.dev.user.id);
+    expect(now.map((x) => [x.id, x.amountCents])).toEqual([[one.id, 1600 + R.CHARGEBACK_FEE_CENTS]]);
+    expect(await db.payment.count({ where: { developerId: w.dev.user.id, chargeback: "open" } })).toBe(1);
+    // The debts it paid stay paid (the tester keeps their share); only the one payment is reversed.
+    for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: "charged", chargeback: "" });
+    // Pay what you owe (after the card check) reserves that amount once.
+    await db.user.update({ where: { id: w.dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
+    expect(await payOwed(w.dev.user, {})).toMatchObject({ reservedCents: 1600 + R.CHARGEBACK_FEE_CENTS });
+    expect(st.made.map((m) => m.amount)).toEqual([1600, 1600 + R.CHARGEBACK_FEE_CENTS]);
+  });
+});

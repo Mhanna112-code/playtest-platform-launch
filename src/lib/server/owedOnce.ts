@@ -222,12 +222,29 @@ export async function newCardChecks(devId: string) {
       const confirm = await import("./confirm");
       if (end === "succeeded") await confirm.finishConfirmed(p.id);
       else if (p.kind === OWED_KIND) await releaseOwed(p.id);
-      else if (p.status === "needs_confirmation") await chargeAgain(devId, p);
+      // (Batch 35 §113) During a hold a charge made while away waits for the lift (charged then, on the card in use then), never on the new card now.
+      else if (p.status === "needs_confirmation" && !(await deferWhileHeld(p.id))) await chargeAgain(devId, p);
       // else: a debt with a check of its own (before §117): it stays owed and goes with the retry of what's owed.
     } catch (e) {
       console.error("[card] new card checks:", (e as Error).message);
     }
   }
+}
+
+/**
+ * (Batch 35 §113 with §117) A charge made while away whose check ended (ran out, or a new card cancelled it) while the account is on a hold: it waits as "deferred" and is
+ * charged when the hold lifts (chargeDeferred, on the card in use then). Under the developer's row lock, like deferIfHeld, so a lift at the same moment can't miss it.
+ * A reversed payment's repay row (kind "chargeback") keeps its own handling. False when there is no hold.
+ */
+export async function deferWhileHeld(paymentId: string) {
+  return db.$transaction(async (tx) => {
+    const p = await tx.payment.findUniqueOrThrow({ where: { id: paymentId } });
+    if (p.kind === "chargeback" || p.kind === "subscription" || p.kind === OWED_KIND) return false;
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${p.developerId} FOR UPDATE`;
+    const dev = await tx.user.findUniqueOrThrow({ where: { id: p.developerId }, select: { holdStartedAt: true } });
+    if (!dev.holdStartedAt) return false;
+    return (await tx.payment.updateMany({ where: { id: p.id, status: "needs_confirmation" }, data: { status: "deferred", actionPi: null, actionBy: null } })).count === 1;
+  });
 }
 
 /** A charge made while away, tried again on the new card. */
