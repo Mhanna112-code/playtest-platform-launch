@@ -3,6 +3,7 @@
 Claude brings this list up when a batch lands and in summaries. Newest first.
 
 ## Waiting for the owner's go
+- **Open question: data cleanup over time (owner, Nov 2; not now).** How long to keep old messages and chats, drafts, notifications, live-box events, uploaded files and recordings (R2), finished tests and deleted accounts' data; what's needed for disputes / chargebacks / taxes (payment records must stay); a retention policy in the Privacy page and a scheduled cleanup job.
 - **Open question: "New tests for you" tailored to each tester (owner, Nov 2).** Today the tester dashboard's 4 picks come from Find tests' list (findTests in src/lib/server/tests.ts): open tests the tester can join, ranked only by how well their profile's devices and languages match, newest first. Ideas: also weigh the categories they've tested before or ticked in their profile, tests from developers they've worked with or rated well, pay level, spots left / closing soon, and hide ones they declined or left.
 - **A rated (or ended) tester still sees Switch / Keep (owner, Nov 2).** bb rated SUNDAY but still had "Switch or keep your terms". When a tester's part ends (rated, left, removed, stopped, work over), their open new-terms offer should close and Switch / Keep disappear; an old page's press refused ("Your part on this test has ended").
 - **Remove tests you rated from To do on the tester dashboard (owner, Nov 2).** Rating finishes your part, so a rated test shouldn't keep a Send work row (§84 lists every open test you're in).
