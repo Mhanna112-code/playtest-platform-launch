@@ -641,7 +641,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {invites.map((i) => (
               <li key={i.id} className="info flex flex-wrap items-center gap-2">
                 <Link href={`/app/find/${i.testId}`} className="mr-auto min-w-0 truncate" title={`${displayName(i.test.developer)} invited you to “${i.test.title}”`}>
-                  {displayName(i.test.developer)} invited you to “{i.test.title}”. Accept opens the test page. {pausedTest(i.test) && <PausedTag />}
+                  {displayName(i.test.developer)} invited you to “{i.test.title}”. {pausedTest(i.test) && <PausedTag />}
                 </Link>
                 {/* (Batch 16 section 32) Re-sent on a new listing, or the test is full: said on the card. */}
                 {resentIds.has(i.id) && <span className="badge" data-invite-resent="">Sent again on the new listing · {fmtDate(i.createdAt)}</span>}
