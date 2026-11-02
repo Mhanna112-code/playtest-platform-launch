@@ -8,7 +8,7 @@ import { POST as blocksPOST } from "@/app/api/blocks/route";
 import * as R from "@/lib/rules";
 import { invitable } from "@/lib/server/invites";
 import { decideDispute, review } from "@/lib/server/payments";
-import { liftHoldIfClear, payOwed, startHold } from "@/lib/server/holds";
+import { liftHoldIfClear, startHold } from "@/lib/server/holds";
 import { json, makeUser, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
@@ -68,7 +68,7 @@ describe("calls / hold / block refinements", () => {
     expect(await db.termsOffer.count({ where: { contractId: sessionId, status: "open" } })).toBe(0);
   });
 
-  it("(batch 6) an admin decision that charges the developer during a hold is added to what is owed and paid with Pay what you owe", async () => {
+  it("(§113) an admin decision during a hold waits outside what is owed, then charges when it lifts", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -80,10 +80,9 @@ describe("calls / hold / block refinements", () => {
     const admin = await makeUser();
     await db.user.update({ where: { id: admin.user.id }, data: { isAdmin: true } });
     await decideDispute({ ...admin.user, isAdmin: true }, d.id, { total: "10.00", tickCents: 600 });
-    expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ status: "owed", amountCents: 600 });
-    expect(await liftHoldIfClear(dev.user.id)).toBe(false); // owed first
-    expect((await payOwed(dev.user)).lifted).toBe(true);
-    expect((await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).status).not.toBe("owed");
+    expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ status: "deferred", amountCents: 600 });
+    expect(await liftHoldIfClear(dev.user.id)).toBe(true); // this fixture has no original balance
+    expect((await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).status).not.toBe("deferred");
   });
 
   it("booked after the deadline: allowed (a guide), labelled on both sides", async () => {

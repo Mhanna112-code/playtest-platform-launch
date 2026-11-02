@@ -397,8 +397,12 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   // (Batch 25 section 5) One bell line for this money: when the Approve lifts the hold, its one notice names the amount taken ("…the $8.00 reserved on your card was
   // taken…"), so there is no separate receipt line; otherwise the receipt says it.
   if (taken && !lifted) await receipt(dev.email, "what you owed (reserved on your card, taken on the team's approval)", taken, stripeOn() ? "charged" : "not_set_up", "/app/payments");
-  const still = lifted && !!(await db.user.findUnique({ where: { id: devId }, select: { devSuspendedAt: true } }))?.devSuspendedAt;
-  if (lifted) {
+  const afterLift = await db.user.findUniqueOrThrow({ where: { id: devId }, select: { devSuspendedAt: true, holdStartedAt: true } });
+  const still = lifted && !!afterLift.devSuspendedAt;
+  if (lifted && afterLift.holdStartedAt) {
+    const line = `The team approved lifting your hold${taken ? `: the ${money(taken)} reserved on your card was taken` : ""}. A waiting payment was declined, so your tests are paused again.`;
+    await notify(dev.email, line, [line], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "admindecision" });
+  } else if (lifted) {
     // Lifted while an admin suspension is still on: the same one notice says the tests stay paused (ignores Off, like "running again").
     const line = still ? approvedStillSuspendedLine(taken) : approvedLiftedLine(taken);
     await notify(dev.email, line, [line, ...(still ? [] : ["Every deadline moved on by the pause."])], "/app", { side: "developer", always: true, payment: true, group: "admindecision" });

@@ -976,3 +976,9 @@ Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including 
 - An outstanding owed payment, a bank confirmation or an unresolved charge keeps the payment instructions. This changes the dashboard wording; paying, approval and lifting the hold keep their existing rules.
 - A tester-only suspension also shows the tester explanation and dispute reminder: it does not depend on a developer-side suspension being present.
 - A successful password change resets the password fields and their live counts together; a refused change keeps what they typed.
+
+## §113 New charges during a hold wait until it lifts (owner, Nov 1)
+
+- During a payment or chargeback hold, a tester’s Charge, an automatic listed-call charge and a team decision’s raise wait as deferred payments. They do not grow Pay what you owe or a chargeback reservation. Existing owed money and bank reversals keep their own handling.
+- When the hold lifts, waiting charges run oldest first as away payments. The bank can ask for confirmation for three days; a decline starts a new hold, and later items stay waiting. No running-again notice is sent when a waiting charge immediately starts a new hold. A suspension that remains on keeps its waiting charges deferred.
+- The tester sees Payment delayed. Developer Payments lists waiting amounts under “Charged once your tests resume”, separately from Pay what you owe. The developer-row lock prevents a simultaneous hold lift from missing a newly waiting item, and the per-developer drain lock prevents duplicate or out-of-order drains.

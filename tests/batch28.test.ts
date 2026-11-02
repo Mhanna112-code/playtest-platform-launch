@@ -268,7 +268,7 @@ async function chargebackHeld() {
   await startHold(dev.user.id, "chargeback");
   await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
   const press = (seenTotalCents: number, seenIds: string[]) => owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: { seenTotalCents, seenIds } })).then(json);
-  // The tester's Charge after the reservation: added to what is owed during the hold.
+  // A legacy owed Charge saved before §113: the lift must still settle these existing rows.
   const addCharge = async () => {
     await db.review.create({ data: { submissionId: sub.id, contractId: sessionId, amountCents: 500, agreedCents: 500, reason: (await import("@/lib/rules")).CHARGED_BY_TESTER, payKey: randomUUID() } });
     return db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "owed" } });
@@ -474,7 +474,7 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     expect(st.of("pi.create")).toHaveLength(0);
   });
 
-  it("the bank asks: it waits as Your bank wants you to confirm; declined: a payment hold; during a hold: added to what's owed", async () => {
+  it("the bank asks: it waits as Your bank wants you to confirm; declined: a payment hold; during a hold: waits outside what is owed", async () => {
     strictStripe({ card: "3ds" });
     const a = await heldCall();
     expect(await run()).toBe(1);
@@ -492,7 +492,7 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     await startHold(c.dev.user.id, "unpaid");
     await run();
     expect(st.of("pi.create")).toHaveLength(0);
-    expect(await db.payment.findFirstOrThrow({ where: { callId: c.call.id } })).toMatchObject({ status: "owed", amountCents: 1500 });
+    expect(await db.payment.findFirstOrThrow({ where: { callId: c.call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
   });
 
   it("0 measured minutes: closed with nothing to pay; an unlisted call is untouched", async () => {
