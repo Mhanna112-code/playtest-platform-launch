@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, money } from "@/lib/format";
+import { displayName, fmtDateTime, money } from "@/lib/format";
 import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
 import { INFO_FIELDS, LISTING_SAVE, SAVED_ELSEWHERE_LINE, editedLine, ndaAgainLine, parseSave, saveLine } from "@/lib/listingSave";
@@ -308,7 +308,7 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
   const me = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developerId: true, developer: true } } } });
   const [pays, disputes] = await Promise.all([
     db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: onlyHere ? contractId : { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: { in: ["deferred", "owed"] }, createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
-    db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } } }),
+    db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } }, include: { submission: { select: { kind: true } }, call: { select: { startsAt: true } } } }),
   ]);
   const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
   const kinds = await subKinds(pays.map((p) => p.submissionId));
@@ -328,7 +328,8 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
   for (const d of disputes) {
     const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
     const raised = d.decidedCents != null && r && d.decidedCents > r.amountCents;
-    out.push({ kind: "admin", text: raised ? `The team decided your dispute: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt!, piece: (d.submissionId ?? d.callId) || undefined });
+    const part = d.call ? `live call on ${fmtDateTime(d.call.startsAt)}` : d.submission?.kind === "recording" ? "recording" : "written answers";
+    out.push({ kind: "admin", text: raised ? `The team decided your dispute about your ${part}: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute about your ${part}: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt!, piece: (d.submissionId ?? d.callId) || undefined });
   }
   return out;
 }

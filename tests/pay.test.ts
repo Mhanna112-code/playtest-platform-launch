@@ -64,11 +64,11 @@ describe("the one Pay box", () => {
     const a = await sent();
     await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "8.00", tickedCents: 800, reason: "Short answers" });
     const r = await payReq(a.dev.cookie, { kind: "submission", id: a.sub.id, amount: "0", reason: "Not useful", confirmed: true });
-    expect(r.body.error.message).toBe("You already paid $8.00 for this.");
+    expect(r.body.error.message).toBe("You already paid $8.00 for Ana Silva's written answers.");
     const b = await sent();
     // (Batch 15 section 30) Reject is gone; a rejection made before stays.
     await db.review.create({ data: { submissionId: b.sub.id, contractId: b.sessionId, amountCents: 0, agreedCents: 1000, reason: "Not useful at all", rejected: true, payKey: randomUUID() } });
-    expect((await payReq(b.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("You already rejected this.");
+    expect((await payReq(b.dev.cookie, { kind: "submission", id: b.sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("You already rejected Ana Silva's written answers.");
     expect((await payReq(b.dev.cookie, { kind: "submission", id: b.sub.id, action: "reject", reason: "Again" })).body.error.code).toBe("no_reject");
   });
 

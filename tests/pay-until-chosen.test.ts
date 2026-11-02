@@ -64,10 +64,10 @@ describe("Pay and Reject stay available until the tester chooses", () => {
     expect((await sact(C.sessionId, "choose", C.tester.cookie, { submissionId: charged.id, choice: "charge", tickedCents: 1000 })).status).toBe(200);
     const a = await pay(dev.cookie, payBody(letgo.id));
     expect(a.status).toBe(409);
-    expect(a.body.error.message).toBe("Ana Silva let this go: nothing was charged.");
+    expect(a.body.error.message).toBe("Ana Silva let their written answers go: nothing was charged.");
     const b = await pay(dev.cookie, rejectBody(charged.id));
     expect(b.status).toBe(409);
-    expect(b.body.error.message).toBe("Ben Carter already charged $10.00 for this.");
+    expect(b.body.error.message).toBe("Ben Carter already charged $10.00 for their written answers.");
     // A piece the tester has not chosen on is still payable (the offer alone changes nothing).
     expect((await pay(dev.cookie, payBody(open.id))).status).toBe(200);
   });

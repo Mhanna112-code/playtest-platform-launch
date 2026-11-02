@@ -80,7 +80,7 @@ describe("after the test is stopped", () => {
     await db.dispute.update({ where: { id: d1.id }, data: { devSideAt: new Date(Date.now() + 10) } });
     await later();
     const side = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: afterStop });
-    expect(side.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane added their side to your dispute"]);
+    expect(side.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane added their side to your dispute about your written answers"]);
     const go = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: afterStop, confirmed: true, boxAt: seen() });
     expect(go.status, JSON.stringify(go.body)).toBe(200);
     // Disputing the first piece again: final.

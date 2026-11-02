@@ -53,9 +53,10 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
 
 /** Call changes this tester can see since their page loaded: times offered to them, taken, removed, or their call cancelled. */
 export async function testerCallChanges(testerId: string, contractId: string, testId: string, seenAt: Date): Promise<TestEventLike[]> {
-  const [slots, calls] = await Promise.all([
+  const [slots, calls, contract] = await Promise.all([
     db.callSlot.findMany({ where: { testId, updatedAt: { gt: seenAt } } }),
     db.call.findMany({ where: { contractId, cancelledAt: { gt: seenAt }, cancelledBy: { not: "tester" } } }),
+    db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } } } }),
   ]);
   const out: TestEventLike[] = [];
   for (const s of slots.filter((s) => canSee(s, testerId))) {
@@ -63,7 +64,7 @@ export async function testerCallChanges(testerId: string, contractId: string, te
     if (s.status === "open") out.push({ kind: "offered", text: `${isNew ? "A new call time was offered" : "A call time opened up"}: ${fmtDateTime(s.startsAt)}`, createdAt: s.updatedAt });
     else if (!isNew) out.push({ kind: "removed", text: `The call time ${fmtDateTime(s.startsAt)} was ${s.status === "booked" ? "taken" : "removed"}`, createdAt: s.updatedAt });
   }
-  for (const c of calls) out.push({ kind: "cancelled", text: `Your call on ${fmtDateTime(c.startsAt)} was cancelled`, createdAt: c.cancelledAt! });
+  for (const c of calls) out.push({ kind: "cancelled", text: `Your call with ${displayName(contract.test.developer)} on ${fmtDateTime(c.startsAt)} was cancelled`, createdAt: c.cancelledAt! });
   return out;
 }
 
@@ -80,7 +81,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const call = await tx.call.findUnique({ where: { id: callId } });
     if (!call || call.contractId !== contractId) throw new HttpError(404, "not_found", "That call doesn't exist.");
-    if (call.status === "cancelled") throw new HttpError(409, "cancelled", "This call was already cancelled.");
+    if (call.status === "cancelled") throw new HttpError(409, "cancelled", `Your call with ${displayName(c0.test.developer)} on ${fmtDateTime(call.startsAt)} was already cancelled.`);
     const ok = checkCancel(call.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     await testerGate(tester, c0, body);

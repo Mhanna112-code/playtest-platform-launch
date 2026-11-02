@@ -79,7 +79,7 @@ describe("the broken-key warning (section 45)", () => {
     // Ana's next press from her older page stops once, even with Alerts Off (it's her contract); no bell.
     const r = await sact(a.sessionId, "written", a.tester.cookie, { answers: ["x", "y"], seenAt: loaded });
     expect(r.body.error?.code).toBe("stop_once");
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["The developer marked your key as working (K1)"]);
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane marked your key as working (K1)"]);
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "marked your key" } } })).toBe(0);
     // She can report it again: the warning shows again.
     await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });

@@ -238,7 +238,7 @@ describe("batch 30 (Oct 29 addition): one stop box for several sources at once",
     const first = await sact(sessionId, "request-time", tester.cookie, { seenAt: pageLoaded, startsAt: new Date(Date.now() + 100 * 3_600_000).toISOString(), tab: "tab-b" });
     expect(first.body.error.code).toBe("stop_once");
     const t = texts(first);
-    expect(t[0]).toMatch(/^You requested a call for .* in another tab$/);
+    expect(t[0]).toMatch(/^You requested a call with Nora Lane for .* in another tab$/);
     expect(t[1]).toBe("Nora Lane paid $10.00 for your written answers");
     expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: pageLoaded, startsAt: new Date(Date.now() + 100 * 3_600_000).toISOString(), tab: "tab-b", confirmed: true, boxAt: seen() })).status).toBe(200);
   });
@@ -270,7 +270,7 @@ describe("batch 30 (Oct 29 addition): one stop box for several sources at once",
     const first = await sact(sessionId, "request-time", tester.cookie, { seenAt: pageLoaded, startsAt: new Date(Date.now() + 100 * 3_600_000).toISOString(), tab: "tab-b" });
     expect(first.body.error.code).toBe("stop_once");
     const t = texts(first);
-    expect(t[0]).toMatch(/^You requested a call for .* in another tab$/);
+    expect(t[0]).toMatch(/^You requested a call with Nora Lane for .* in another tab$/);
     expect(t.slice(1)).toEqual(expect.arrayContaining(["Nora Lane gave you an access key for “Harbor Run”", expect.stringMatching(saveRe("Nora Lane", "description"))]));
     expect(t).toHaveLength(3);
     expect(ats(first)).toEqual([...ats(first)].sort((a, b) => a - b));

@@ -15,10 +15,10 @@ const contractName = async (contractId: string) => {
   return c ? displayName(c.tester) : "a tester";
 };
 
-async function callLine(callId: string, withName: boolean) {
+async function callLine(callId: string, withName: boolean, otherName?: string) {
   const call = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
   if (!call) return "a call";
-  return `the call ${withName ? `with ${displayName(call.contract.tester)} ` : ""}on ${fmtDateTime(call.startsAt)}`;
+  return `the call ${otherName ? `with ${otherName} ` : withName ? `with ${displayName(call.contract.tester)} ` : ""}on ${fmtDateTime(call.startsAt)}`;
 }
 
 async function requestLine(requestId: string) {
@@ -35,8 +35,9 @@ async function resent(contractId: string, kind: string) {
 
 /** The tester's session-page actions. */
 export async function logTesterAction(userId: string, contractId: string, action: string, body: B, result: unknown) {
-  const c = await db.contract.findUnique({ where: { id: contractId } });
+  const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c) return;
+  const devName = displayName(c.test.developer);
   let text = "";
   let about: OwnAbout | undefined;
   switch (action) {
@@ -55,22 +56,22 @@ export async function logTesterAction(userId: string, contractId: string, action
     }
     case "request-time": {
       const r = result as { booked?: boolean; message?: string };
-      if (r?.booked && r.message) text = r.message.replace(/^Booked: you both picked /, "booked a call for ").replace(/\.$/, "");
+      if (r?.booked && r.message) text = r.message.replace(/^Booked: you both picked /, `booked a call with ${devName} for `).replace(/\.$/, "");
       else {
         // (Batch 29 section 13) "You requested a call for Thu, Nov 5, 3:00 PM in another tab".
         const q = await db.callRequest.findFirst({ where: { contractId, fromSide: "tester" }, orderBy: { createdAt: "desc" } });
-        text = !q ? "sent a call request" : rowsOf(q).length > 1 ? `requested a call (pick one of ${rowsOf(q).length} times)` : `requested a call for ${fmtDateTime(q.startsAt)}`;
+        text = !q ? `sent a call request to ${devName}` : rowsOf(q).length > 1 ? `requested a call with ${devName} (pick one of ${rowsOf(q).length} times)` : `requested a call with ${devName} for ${fmtDateTime(q.startsAt)}`;
       }
       break;
     }
     case "answer-request": {
       const { when } = await requestLine(s(body.requestId));
-      text = `${body.action === "accept" ? "accepted" : body.action === "withdraw" ? "withdrew" : "declined"} ${body.action === "withdraw" ? "your" : "the"} call request for ${when}`;
+      text = `${body.action === "accept" ? "accepted" : body.action === "withdraw" ? "withdrew" : "declined"} ${body.action === "withdraw" ? "your" : devName + "'s"} call request ${body.action === "withdraw" ? "with " + devName + " " : ""}for ${when}`;
       break;
     }
-    case "cancel-call": text = `cancelled ${await callLine(s(body.callId), false)}`; break;
+    case "cancel-call": text = `cancelled ${await callLine(s(body.callId), false, devName)}`; break;
     case "cancel-set": text = "cancelled the rest of a daily / weekly set of calls"; break;
-    case "no-show": text = `reported a problem with ${await callLine(s(body.callId), false)}`; break;
+    case "no-show": text = `reported a problem with ${await callLine(s(body.callId), false, devName)}`; break;
     case "dispute": text = "opened a dispute"; break;
     // (Batch 29 section 13) Rate (and the end of the part it brings) is never a line that stops other presses: it only races with Rate itself ("You already rated …").
     default: return;

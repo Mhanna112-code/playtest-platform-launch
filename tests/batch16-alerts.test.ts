@@ -61,7 +61,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     const b = await pay(dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false, tab: "B" });
     expect(texts(b)).toEqual([PAID]);
     const b2 = await pay(dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, tab: "B", ...again() });
-    expect(b2.body.error.message).toBe("You already paid $10.00 for this.");
+    expect(b2.body.error.message).toBe("You already paid $10.00 for Ana Silva's written answers.");
     // A box that stays (Pay more) keeps what was typed (its own state); the paid total and room come from the refreshed page.
     const box = src("app/app/tests/[id]/PayBox.tsx");
     expect(box).toContain("const [amount, setAmount] = useState(");
