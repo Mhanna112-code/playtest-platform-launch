@@ -549,7 +549,10 @@ export async function owedLines(devId: string) {
 export async function chargebackOpened(paymentIntentId: string) {
   // (Batch 35 §117) Pay what you owe's ONE payment covered several debts with one PaymentIntent: the dispute is on that payment as a whole, so its WHOLE amount is
   // owed again once, with one chargeback fee (the one payment itself carries the chargeback; its debts stay paid). Otherwise the payment the PaymentIntent belongs to.
-  const p = (await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: "owed", status: "bundled" } }))
+  // When it paid a single debt, that debt carries it (the same amount, and its test page names the piece).
+  const one = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: "owed", status: "bundled" } });
+  const paid = one ? await db.payment.findMany({ where: { coveredById: one.id, kind: { not: "chargeback" } } }) : [];
+  const p = (one && paid.length === 1 ? paid[0] : one)
     ?? (await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: { not: "owed" } }, orderBy: { createdAt: "asc" } }));
   if (!p || p.chargeback === "open") return false;
   // Claimed, so a webhook delivered twice at once opens it once.
