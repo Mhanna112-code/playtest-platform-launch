@@ -51,8 +51,9 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     const row = await db.excerpt.findUniqueOrThrow({ where: { id: r.body.id } });
     expect(row).toMatchObject({ status: "pending", hideProduct: false, question: "What did you like?", text: "the second boss was far too hard" });
     expect(await db.notification.count({ where: { userId: s.dev.user.id, text: "Ana Silva asked to show an excerpt from “Harbor Run” on their profile" } })).toBe(1);
-    // One pending request per part.
-    expect((await ask(s.tester.cookie, s.sub.id)).body.error.message).toBe(X.ONE_PENDING);
+    // One pending request per part. (Batch 35 §126) The same text again is refused as a duplicate.
+    expect((await ask(s.tester.cookie, s.sub.id, { index: 1, text: "Nowhere really, it was smooth." })).body.error.message).toBe(X.ONE_PENDING);
+    expect((await ask(s.tester.cookie, s.sub.id)).body.error.message).toBe(X.SAME_PENDING);
     // Paid $0: nothing to show.
     const zero = await paidWork("0");
     expect((await ask(zero.tester.cookie, zero.sub.id)).body.error.message).toBe("Only written answers the developer paid for can be shown as excerpts.");

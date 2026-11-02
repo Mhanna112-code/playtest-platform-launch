@@ -1143,3 +1143,22 @@ Tests: tests/batch35-per-field-drafts.test.ts.
 - **Shown once** (bug seen on video, fixed): charges covered by a combined payment waiting for the bank are listed only in its "Confirm with your bank" item, no longer also under "Charged once your tests resume".
 - Bells for charges made during a hold now say "it's added to what you owe and paid with it, as one payment" (link: Pay what you owe).
 - Tests: `tests/batch35-payment-proofs.test.ts` (scenarios A–E of the payments proof, and every §125 case above); `batch35-one-card-checks` and `batch35-charges-after-lift` follow §125 (their after-lift cases lift the hold another way).
+
+## §126 Excerpt requests update live; no duplicates; the same question replaces (owner, Nov 2)
+
+- **The report.** BB asked to show an excerpt; it didn't appear on fbbb's test page until a refresh, and after fbbb allowed it, BB's side didn't show it as accepted until a refresh. BB also asked for the SAME answer three times, and all three are now shown (their rows are left as they are).
+- **Live.** Excerpt presses only send a bell and record no test event, so the beat had nothing to redraw on. The test page's and session page's poll fingerprint (`testV` in `src/lib/server/pulseV.ts`) now includes the excerpts of that test (developer) or that session (tester), each id with its status. So:
+  - a new request shows in the developer's Needs you (and the restricted overview's Excerpts) without a refresh;
+  - Allow, Deny and the tester's Remove redraw the developer's Shown excerpts and the tester's session page (its "waiting for" note, and Show an excerpt again).
+  - The developer's dashboard box (`dashboardV`) and the tester's own profile, where their excerpts are listed (`publicProfileV`'s shown excerpts), were already fingerprinted. Tests confirm both change on a request and on Allow / Remove.
+  - It's a silent redraw: no live line, no stop-once (excerpt decisions are never lines, per BIG_OWN_ACTS).
+- **No duplicates.** A request is refused when its text (after squash) equals one of that tester's excerpts for the same session (contract) and question. This covers every submission of the session, so it also holds when the text is trimmed from a newer answer:
+  - if that excerpt is still pending: "You already asked to show this excerpt.";
+  - if it is shown: "This excerpt is already on your profile."
+- **The same question replaces.** A request with a different text, for a session + question that already has a shown excerpt (from any submission of the session), is a replacement.
+  - The developer's request row (test page Needs you, the restricted overview and the dashboard box) says "Replaces the excerpt shown now:" with the shown text(s).
+  - On Allow, the new one is shown and every shown one for that session + question is removed, in one transaction. On Deny, they stay.
+  - The 3-excerpt limit doesn't count the shown ones a request would replace.
+- **Pending rules.** One pending request per part stays. There's now also one pending request per session + question: "You already asked to show an excerpt for this question. Wait for the developer's answer."
+- **Excerpts leave files out** (owner, Nov 2). The trim box and the stored excerpt text hold no file markers and no "[file]" placeholder: each marker goes with the spaces before it ("great [📎 map.png #k3f9] but" reads "great but"), and a request whose text still holds a marker (an older page) is stored without it (`withoutFiles` / `excerptPlain` in `src/lib/server/excerpts.ts`). A "[file]" typed in is no longer part of the answer, so it's refused like any added word. Excerpts stored earlier stay as they are. (The files-in-excerpts idea, §127, was dropped.)
+- **Tests:** `tests/batch35-excerpt-live.test.ts` covers the fingerprints, files left out of the trim box and the stored text (and earlier excerpts kept), both duplicate refusals (including one from another submission of the session), the per-question pending rule, the replacement line, Allow replacing and Deny keeping, and a replacement at the limit. `batch13`'s one-pending check now uses a different text.
