@@ -132,7 +132,7 @@ describe("batch 30 §18: the test's name and what testers should do are at least
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain('{ "data-min-chars": String(LISTING_MIN_CHARS), "data-min-label": label }');
     expect(form).toContain("!edit || f[k] !== base[k]");
-    expect(form).toContain("minCounter(f.description.trim().length)");
+    expect(form).toContain("min={!edit || f.description !== base.description ? LISTING_MIN_CHARS : 0} required data-steps-count");
     expect(src("components/FieldChecks.tsx")).toContain("`${el.dataset.minLabel}: at least ${min} characters (${v.length} so far).`");
   });
 });

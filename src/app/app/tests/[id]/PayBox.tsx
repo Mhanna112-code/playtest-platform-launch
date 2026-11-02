@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { BankWaiting } from "@/components/BankWaiting";
 import { useState } from "react";
 import { checkFields } from "@/components/FieldChecks";
@@ -158,7 +159,7 @@ export function PayBox(p: {
       <div className="min-w-[14rem]">
         <label className={`label ${needsReason ? "req" : ""}`} htmlFor={`why-${p.id}`}>Note to {p.name}{needsReason ? "" : " (optional)"}</label>
         <textarea id={`why-${p.id}`} className="input min-h-[2.75rem]" rows={2} data-match="why you're paying" data-red-msg={reasonMissing ? (cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`) : undefined} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={listed ? "What it's missing, or a thank-you" : "A thank-you, or what the pay is for"} />
-        <p className={`text-xs ${reason.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-note-count="">{reason.length.toLocaleString("en-US")} / {LIMITS.reason.toLocaleString("en-US")}</p>
+        <CharacterCount value={reason} min={needsReason ? 5 : 0} max={LIMITS.reason} required={needsReason} data-note-count="" />
         {reasonMissing && <p className="err-field" data-reason-needed="">{cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`}</p>}
         {keep.restored && (reason !== "" || amount !== startAmount || rate !== startRate) && <DraftTag disabled={busy} kind="discard" onUseSaved={useSaved} /> /* (batch 35 §39) nothing saved: Discard (the amount back to its start, the note emptied, the ticks off) */}
       </div>

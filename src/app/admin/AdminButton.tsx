@@ -1,10 +1,11 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useState } from "react";
 import { FIELD, api, errOf, isFieldError } from "@/lib/client";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { LIMITS } from "@/lib/limits";
-import { counterText, reasonTooLong } from "@/lib/rules";
+import { reasonTooLong } from "@/lib/rules";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
 import { DraftTag, useKept } from "@/lib/useKept";
@@ -76,7 +77,7 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
             <textarea id={`${action}-${id}-note`} aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} className={`input w-full max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`}
               {...(action === "delete-account" || action === "suspend" ? { "data-required": "", "data-required-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).`, "data-min-chars": "3", "data-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).` } : {})} data-match="record why|keep it to"
               data-red-msg={(v[f.name] ?? "").length > LIMITS.reason ? reasonTooLong() : undefined} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
-            <span className={`text-right text-xs ${(v[f.name] ?? "").length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText((v[f.name] ?? "").length, LIMITS.reason)}</span>
+            <CharacterCount value={v[f.name] ?? ""} max={LIMITS.reason} min={action === "delete-account" || action === "suspend" ? 3 : 0} required data-reason-count="" />
             {(v[f.name] ?? "").length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
           </span>
         ) : (

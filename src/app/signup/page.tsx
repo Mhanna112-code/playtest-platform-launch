@@ -1,3 +1,4 @@
+import { CountedInput } from "@/components/CountedInput";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
@@ -34,7 +35,7 @@ export default async function SignupPage() {
         </fieldset>
         <div>
           <label className="label req" htmlFor="name">Name</label>
-          <input className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
+          <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
         </div>
         <div>
           <label className="label req" htmlFor="email">Email</label>

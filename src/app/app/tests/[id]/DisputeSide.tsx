@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useState } from "react";
 import { PressButton } from "@/components/PressButton";
 import { DraftTag, useKept } from "@/lib/useKept";
@@ -15,7 +16,7 @@ export function DisputeSide({ testId, disputeId, seenAt }: { testId: string; dis
     <div className="space-y-1">
       <label className="label" htmlFor={`side-${disputeId}`}>Add your side (optional, once; the team reads both)</label>
       {!sent && <textarea id={`side-${disputeId}`} rows={2} className="input" value={text} onChange={(e) => setText(e.target.value)} />}
-      {!sent && <p className={`text-xs ${text.length > LIMITS.devSide ? "text-rose-300" : "text-slate-500"}`} data-side-count="">{text.length.toLocaleString("en-US")} / {LIMITS.devSide.toLocaleString("en-US")}</p>}
+      {!sent && <CharacterCount value={text} min={5} max={LIMITS.devSide} required data-side-count="" />}
       <PressButton disabled={!text.trim() || text.length > LIMITS.devSide} seenAt={seenAt} path={`/api/tests/${testId}/dispute-side`} body={{ disputeId, text }} doneLine="Your side is sent to the team." onDone={async () => { setSent(true); await keep.clear(); }}>Send your side</PressButton>
       {!sent && keep.restored && text !== "" && <DraftTag kind="discard" onUseSaved={() => setText("")} />}
     </div>

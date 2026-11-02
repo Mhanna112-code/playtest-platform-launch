@@ -1,4 +1,6 @@
 "use client";
+import { KeyCounts } from "@/components/KeyCounts";
+import { CharacterCount } from "@/components/CharacterCount";
 import { SubscribersTag } from "@/components/SubscribeLink";
 import { TermsAgainBox } from "@/components/TermsAgainBox";
 import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
@@ -16,7 +18,7 @@ import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -604,7 +606,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         <input id={k} type={opts.type ?? "text"} disabled={opts.disabled} className={"input " + (opts.cls ?? "") + (bad(k) ? " field-bad" : "")} placeholder={opts.ph} value={f[k] as string} maxLength={opts.max}
           onChange={(e) => set({ [k]: e.target.value } as Partial<F>)} onBlur={() => leave(k)} {...(opts.req ? { "data-required": "" } : {})} {...opts.attrs} />
         {opts.hint && <span className="text-xs text-slate-500">{opts.hint}</span>}
-        {opts.max && <span className="ml-auto text-xs text-slate-500" aria-hidden data-count={k}>{opts.min && (f[k] as string).trim().length < opts.min ? minCounter((f[k] as string).trim().length) : `${(f[k] as string).length}/${opts.max}`}</span>}
+        {opts.max && <CharacterCount value={f[k] as string} max={opts.max} min={opts.min ? (!edit || f[k] !== base[k] ? opts.min : 0) : opts.req ? 1 : 0} required={opts.req} className="ml-auto" data-count={k} />}
       </div>
       {opts.below}
       {note(k)}
@@ -669,7 +671,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         <div>
           <label className="label req" htmlFor="description">What should testers do?{left("description")}{draftMark("description")}</label>
           <textarea id="description" rows={4} disabled={fieldLocked("description")} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg={DESCRIPTION_REQUIRED} data-match={`^${STEPS_FIELD}: at least`} {...minAttrs("description", STEPS_FIELD)} onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />
-          <p className="mt-1 text-right text-xs text-slate-500" data-steps-count="">{f.description.trim().length < LISTING_MIN_CHARS ? minCounter(f.description.trim().length) : `${f.description.length.toLocaleString("en-US")} / ${LIMITS.whatToDo.toLocaleString("en-US")}`}</p>
+          <CharacterCount value={f.description} max={LIMITS.whatToDo} min={!edit || f.description !== base.description ? LISTING_MIN_CHARS : 0} required data-steps-count="" />
           {lockNote("description")}
           {note("description")}
         </div>
@@ -714,7 +716,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
               {/* (Batch 16 section 9) At least 5 characters: the red line under the box says which rule (empty, or too short), the same lines as the server. */}
               <textarea id="matureWhy" rows={2} className="input" maxLength={LIMITS.matureWhy} value={f.matureWhy} placeholder="e.g. Violence in the boss fights; testers must be 18 or older"
                 data-required="" data-required-msg={MATURE_WHY_REQUIRED} data-min-chars={String(MATURE_WHY_MIN)} data-msg={MATURE_WHY_SHORT} onBlur={() => leave("matureWhy")} onChange={(e) => set({ matureWhy: e.target.value })} />
-              <p className="mt-1 text-right text-xs text-slate-500" data-mature-count="">{f.matureWhy.length.toLocaleString("en-US")} / {LIMITS.matureWhy.toLocaleString("en-US")}</p>
+              <CharacterCount value={f.matureWhy} min={MATURE_WHY_MIN} max={LIMITS.matureWhy} required data-mature-count="" />
             </div>
           )}
           {note("mature")}{note("matureWhy")}
@@ -849,7 +851,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           </ul>
           {/* (Batch 13 section 9) 1,000 characters; an older, longer NDA stays as it is until a Save changes it. */}
           <textarea id="ndaText" rows={4} className={"input" + (f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? " field-bad" : "")} data-red-msg={f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? NDA_TOO_LONG : undefined} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave blank for no NDA. If filled, testers must accept it before joining." />
-          <p className={`text-right text-xs ${f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? "text-rose-300" : "text-slate-500"}`} data-nda-count="">{f.ndaText.length.toLocaleString("en-US")} / {LIMITS.nda.toLocaleString("en-US")}</p>
+          <CharacterCount value={f.ndaText} max={LIMITS.nda} data-nda-count="" />
           {note("ndaText")}
         </section>
         {edit ? (
@@ -858,6 +860,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
           <div>
             <label className="label" htmlFor="accessKeys">Access keys (one per line; each joining tester gets one){keysDraft}</label>
             <textarea id="accessKeys" rows={3} className={"input font-mono" + (keysBad ? " field-bad" : "")} data-red-msg={keysBad ? keyLine : undefined} value={keysText} onBlur={() => leave("keys")} onChange={(e) => setKeysText(e.target.value)} placeholder={"KEY-1111\nKEY-2222"} />
+          <KeyCounts value={keysText} />
             <p className="mt-1 text-xs text-slate-500">Optional. With keys, there must be at least as many keys as spots.</p>
             {keysBad && redLine(keyLine)}
           </div>

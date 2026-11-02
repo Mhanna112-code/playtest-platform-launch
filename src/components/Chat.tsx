@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { refreshBell } from "./BellLink";
 import { FormMistakes } from "@/components/FormMistakes";
 import { useEffect, useRef, useState } from "react";
@@ -67,7 +68,7 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
         <p className="border-t border-white/10 px-5 py-3 text-sm text-slate-400" data-chat-closed="" {...(pausedNote ? { "data-chat-paused": "" } : {})}>{closedNote || "This chat is closed."}</p>
       ) : shut || pausedNow ? null : (
         <form
-          className="flex items-end gap-2 border-t border-white/10 px-4 py-3"
+          className="flex items-start gap-2 border-t border-white/10 px-4 py-3"
           onSubmit={async (e) => {
             e.preventDefault();
             setBusy(true);
@@ -92,7 +93,10 @@ export function Chat({ path, extra = {}, messages, other, title, closed, closedN
             }
           }}
         >
+          <span className="min-w-0 flex-1">
           <input id="chat-message" className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
+          <CharacterCount value={text} min={1} max={4000} required />
+          </span>
           <button className="btn" disabled={busy || !text.trim()}>Send</button>
           {keep.restored && text !== "" && <span className="self-center"><DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} /></span>}
         </form>

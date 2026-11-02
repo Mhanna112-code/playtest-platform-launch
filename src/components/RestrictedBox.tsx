@@ -26,9 +26,9 @@ export function RestrictedBox({ failed, developer, tester, kinds, steps, review 
   }
   if (tester && suspended) {
     // (Owner, Oct 28) The suspended tester's box: their account is paused, they were removed from their tests, how to appeal, and that pay for accepted work still reaches Stripe.
-    lines.push(<li key="t1" data-restricted-tester="">Your account is paused. You were removed from all the tests you were in.</li>);
-    lines.push(<li key="t2" data-restricted-pay="">Pay for work already accepted still reaches your Stripe account. What you sent is still reviewed; pay for work accepted while your account is paused reaches it once your account is active again.</li>);
-    lines.push(<li key="t3">Only your dashboard, Payments, Settings and your notifications stay open.</li>);
+    lines.push(<li key="t1" data-restricted-tester="">Your account is paused. You were removed from all the tests you were in. You can still dispute payments for work you sent: open the test from your dashboard.</li>);
+    lines.push(<li key="t2" data-restricted-pay="">Pay for work already accepted still reaches your Stripe account. What you sent is still reviewed and paid as usual.</li>);
+    lines.push(<li key="t3">Your dashboard, Payments, Settings and your notifications stay open. The sessions you were removed from also open for payment disputes.</li>);
     lines.push(<li key="t4">To appeal, contact the team: <Link href="/app/help" className="underline">Contact us</Link> in Settings.</li>);
     lines.push(<li key="t5">When your account is active again, the tests you were removed from wait on your dashboard with Ask to rejoin.</li>);
   }

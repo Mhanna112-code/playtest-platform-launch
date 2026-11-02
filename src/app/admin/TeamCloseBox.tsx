@@ -1,9 +1,10 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useState } from "react";
 import { FIELD, api, errOf } from "@/lib/client";
 import { FormMistakes } from "@/components/FormMistakes";
 import { LIMITS } from "@/lib/limits";
-import { counterText, reasonTooLong } from "@/lib/rules";
+import { reasonTooLong } from "@/lib/rules";
 import { TEAM_CLOSE_REASON } from "@/lib/moneyLines";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
@@ -52,7 +53,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
             <textarea id={`team-close-${scope}-${id}`} aria-label="Why (the testers read it)" placeholder="Why (the testers read it)" rows={2} className={`input w-full ${long ? "field-bad" : ""}`}
               data-required="" data-required-msg={TEAM_CLOSE_REASON} data-min-chars="5" data-msg={TEAM_CLOSE_REASON} data-match="why the team closes|keep it to" data-red-msg={long ? reasonTooLong() : undefined}
               value={reason} onChange={(e) => setReason(e.target.value)} />
-            <span className={`text-right text-xs ${long ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(reason.length, LIMITS.reason)}</span>
+            <CharacterCount value={reason} min={5} max={LIMITS.reason} required data-reason-count="" />
           </span>
           <button
             type="button"

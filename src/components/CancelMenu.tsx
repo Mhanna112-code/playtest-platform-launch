@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useRef, useState } from "react";
 import { MistakeList, checkFields } from "@/components/FieldChecks";
 import { CANCEL_HOURS } from "@/lib/rules";
@@ -16,9 +17,10 @@ export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: stri
   return (
     <details className="w-full [&:not([open])]:w-auto" data-cancel-menu="">
       <summary className="btn-secondary w-fit cursor-pointer list-none px-3 py-1 text-xs">Cancel ▾</summary>
-      <div ref={root} className="mt-2 flex flex-wrap items-center gap-2" data-mistakes-root="">
+      <div ref={root} className="mt-2 flex flex-wrap items-start gap-2" data-mistakes-root="">
+        <span className="w-56">
         <input
-          className="input w-56 py-1 text-xs"
+          className="input w-full py-1 text-xs"
           placeholder={p.needsReason ? "Why? (less than 24 hours away)" : "Why (optional)"}
           aria-label="Why"
           maxLength={300}
@@ -27,6 +29,8 @@ export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: stri
           value={reason}
           onChange={(e) => setReason(e.target.value)}
         />
+        <CharacterCount value={reason} min={p.needsReason ? 3 : 0} max={300} required={p.needsReason} />
+        </span>
         <button className="btn-secondary px-3 py-1 text-xs" disabled={p.busy} onClick={() => checkFields(root.current) && p.onCancel(reason)}>{p.label ?? "Cancel this call"}</button>
         <p className="w-full text-xs text-slate-400">
           {p.rule ?? (p.needsReason
