@@ -148,11 +148,11 @@ export async function markPaused(where: { developerId?: string; id?: string }, n
  * (Owner, Oct 28 afternoon, DEFAULT) One test's clocks after one of its pauses lifted: working testers' deadlines and Open until (and the review clocks of sent work) move later by
  * the pause's length (pauseShiftMs: only the part not covered by another pause still on). The same for a hold lift, a reinstatement and the team's unpause.
  */
-export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: string; status: string; openUntil: Date | null }, start: Date, now: Date, others: (Date | null | undefined)[] = []) {
+export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: string; status: string; openUntil: Date | null; workEndedAt?: Date | null }, start: Date, now: Date, others: (Date | null | undefined)[] = []) {
   const ms = pauseShiftMs(start, now, others);
   if (ms <= 0) return 0;
   const later = <T extends Date | null>(d: T, by = ms) => (d ? (new Date(d.getTime() + by) as T) : d);
-  if (t.openUntil && t.status !== "stopped") await tx.test.update({ where: { id: t.id }, data: { openUntil: later(t.openUntil), notified3d: false, notified1d: false } });
+  if (t.openUntil && t.status !== "stopped" && !t.workEndedAt) await tx.test.update({ where: { id: t.id }, data: { openUntil: later(t.openUntil), notified3d: false, notified1d: false } });
   for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working" } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: later(c.dueAt) } });
   for (const x of await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } })) {
     const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now, others); // only the part of the pause after it was sent
@@ -643,6 +643,7 @@ export const VERIFY_FIRST = "Verify your card first.";
  * reminders. Each step records what it did, so a second run sends nothing twice; the caller holds the timers lock (withTimersLock), so two never run at once.
  */
 export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
+  await (await import("./workWindow")).closeWorkAfterDeadlines(now);
   // (Batch 23 section 1) Emails that failed are tried again when due (first: a later step's error never holds them up). (Batch 23 section 6) Reservations past their
   // days are released.
   // (Batch 26 section 1) The app's own heartbeat first (wall-clock time, never a test's `now`): a gap of 15 minutes or more since the last sweep is an outage.
@@ -670,6 +671,7 @@ export async function runDaily(now = new Date()) {
 }
 
 async function runDailyLocked(now: Date) {
+  await (await import("./workWindow")).closeWorkAfterDeadlines(now);
   const out = { autoPaid: 0, holds: 0, alerts: 0, headsUps: 0, choices: 0, retried: 0, closed: 0 };
   // (Batch 17 §19) Each piece's closing dates (the developer's Pay, the tester's Charge), looked up once per run.
   const co = closeOutMemo(now);

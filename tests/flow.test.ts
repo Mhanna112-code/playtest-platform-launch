@@ -155,7 +155,7 @@ describe("tester session", () => {
     expect(r.body.error.message).toMatch(/^Nora Lane stopped the test on .+, so your Send didn't go through\. Work you sent is still reviewed\.$/); // (batch 16 section 24)
   });
 
-  it("late work is accepted and marked; after Open until it's refused", async () => {
+  it("late work is accepted within the test work window; once the last deadline passes it is refused", async () => {
     const { testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await db.contract.update({ where: { id: sessionId }, data: { dueAt: new Date(Date.now() - 86_400_000) } });
@@ -163,7 +163,7 @@ describe("tester session", () => {
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).late).toBe(true);
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } });
     const r = await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] });
-    expect(r.body.error.message).toMatch(/^This test closed on /);
+    expect(r.body.error.message).toMatch(/^This test ended on /);
   });
 
   it("extra written work (not in the listing) can be sent and is marked extra", async () => {

@@ -34,7 +34,7 @@ async function stillRestricted() {
 /** (Batch 35 §75) The name each top press's box says ("Your End early didn't go through."). */
 export const TOP_PRESS = { "next-round": "Next round", "go-next-round": "Go to the next round", stop: "Stop the test", "end-early": "End early", open: "Accept testers again" } as const;
 
-export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
+export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const router = useRouter();
@@ -90,7 +90,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
             {p.productName && <p className="kicker">{p.productName}</p>}
             <h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>
             <div className="flex flex-wrap gap-2">
-              {p.paused && p.status !== "stopped" ? <span className="badge border-amber-300/40 text-amber-200">Paused</span> : <StatusPill status={p.status} full={p.full} />}
+              {p.paused && p.status !== "stopped" ? <span className="badge border-amber-300/40 text-amber-200">Paused</span> : <StatusPill status={p.workEnded ? "closed" : p.status} full={p.full} />}
               {p.parts && <PartBadges written={p.parts.written} recording={p.parts.recording} live={p.parts.live} />}
               {p.mature && <span className="badge border-rose-300/40 text-rose-200">Mature (18+)</span>}
               {p.nda && <span className="badge">NDA</span>}
@@ -116,12 +116,12 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
                 <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "next" ? "" : "next"); }}><Repeat className="h-4 w-4" /> Next round{p.perks === false && <SubscribersTag />}</button>
               )}
               {/* (Owner, Oct 28) A draft (a next round not opened yet) has no Next round and no End early. */}
-              {p.status !== "draft" && !stopped && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "end" ? "" : "end"); }} disabled={p.working.length === 0}>
+              {p.status !== "draft" && !stopped && !p.workEnded && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "end" ? "" : "end"); }} disabled={p.working.length === 0}>
                 End early
               </button>}
               {/* Stop the test: the full app's "Are you sure?" pop-up first; the stop-once box shows right under it. */}
               {/* (Batch 17 §15) The pop-up's "Why?" is required (also paused or restricted): its Stop stays disabled with "Say why first" until it has text. */}
-              {!stopped && <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} before={() => { if (at !== "stop") clear(); return true; }} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
+              {!stopped && !p.workEnded && <ConfirmButton live className="btn-secondary px-3 py-1.5 text-sm text-rose-200" disabled={busy} before={() => { if (at !== "stop") clear(); return true; }} title={`Are you sure you want to stop “${p.title}”?`} confirmLabel="Stop the test"
                 confirmDisabled={busy || !stopReady} confirmHint={!stopReason.trim() ? "Say why first" : undefined}
                 body={(
                   <div className="space-y-2">

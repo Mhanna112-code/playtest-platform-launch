@@ -66,6 +66,8 @@ export async function answerTermsFirst(contractId: string) {
 /** (Batch 27 section 1) Send's own stop-once, after answerTermsFirst: every other reason as before; new terms are no longer a stop-once for it (they block). */
 export async function testerSendGate(contractId: string, body: Record<string, unknown>) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
+  await (await import("./workWindow")).finishWorkIfDue(c.testId);
+  await (await import("./workWindow")).assertWorkOpen(db, c.testId);
   await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
 }
 

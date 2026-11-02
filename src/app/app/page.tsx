@@ -78,6 +78,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       </>
     );
   const now = new Date();
+  await (await import("@/lib/server/workWindow")).closeWorkAfterDeadlines(new Date(), u.id);
   const side = sideFor(u, "/app");
   const freshV = await dashboardV(u);
   // (Owner, Oct 27) A suspension, a payment hold and a chargeback hold are one state for the developer's pages: ONE blue box at the very top says what happened and how to resume.
@@ -418,7 +419,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   const removed = history.filter((c) => c.endKind === "suspended" && !c.removedDismissedAt && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin")).sort(byEnd);
   const inRemoved = new Map((await db.contract.groupBy({ by: ["testId"], where: { testId: { in: removed.map((c) => c.testId) }, status: "working" }, _count: { _all: true } })).map((g) => [g.testId, g._count._all]));
   const hasSpot = (c: (typeof contracts)[number]) => (inRemoved.get(c.testId) ?? 0) < c.test.spots && (!c.test.openUntil || c.test.openUntil > now);
-  const askable = (c: (typeof contracts)[number]) => canAskToRejoin(c, rated.has(c.id)) && c.test.status !== "stopped" && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin");
+  const askable = (c: (typeof contracts)[number]) => canAskToRejoin(c, rated.has(c.id)) && c.test.status !== "stopped" && !c.test.workEndedAt && !apps.some((a) => a.testId === c.testId && a.kind === "rejoin");
   const left = history.filter((c) => c.endKind !== "suspended" && askable(c)).sort(byEnd);
   const toSend = (c: (typeof contracts)[number]) => [
     ...(c.writtenCents != null && !c.submissions.some((s) => s.kind === "written") ? [{ key: "written", name: "Written answers", cents: c.writtenCents }] : []),

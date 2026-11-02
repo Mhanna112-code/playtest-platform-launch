@@ -190,8 +190,8 @@ export function testerRefusal(
 ) {
   if (c.status === "left") return c.endKind === "rated" ? "You rated this test, so your part is finished." : "You left this test.";
   if (c.status === "ended") return endedLine({ ...c, test: c.test ?? test }, devName, fmt);
-  const paused = !!(test.adminPausedAt || test.developer?.holdStartedAt || test.developer?.devSuspendedAt);
-  if (!paused && test.openUntil && test.openUntil.getTime() < now.getTime()) return `This test closed on ${fmt(test.openUntil)}.`;
+  // Open until closes joining; the normal end of joined work is persisted after the LAST deadline.
+  void now;
   return "";
 }
 
@@ -1516,8 +1516,15 @@ export const CLOSE_OUT_DAYS = 14;
  * null while testers can still join or work (an open test before Open until, or a working tester's deadline ahead). The close-out itself (server/closeOut) adds 14
  * days, moved later by pauses and outages after this point; each piece keeps Charge and Pay at least 14 days after its own Charge opened (pieceCloseOut).
  */
-export function closeOutBase(t: { status: string; stoppedAt: Date | null; openUntil: Date | null }, contracts: { status: string; dueAt: Date }[], now = new Date()): Date | null {
+/** The work window ends at the last tester deadline, no earlier than joining closes. */
+export function workDeadlineOf(t: { status: string; openUntil: Date | null }, contracts: { dueAt: Date }[]): Date | null {
   if (t.status === "draft") return null;
+  const times = [...contracts.map((c) => c.dueAt.getTime()), ...(t.openUntil ? [t.openUntil.getTime()] : [])];
+  return times.length ? new Date(Math.max(...times)) : null;
+}
+export function closeOutBase(t: { status: string; stoppedAt: Date | null; openUntil: Date | null; workEndedAt?: Date | null }, contracts: { status: string; dueAt: Date }[], now = new Date()): Date | null {
+  if (t.status === "draft") return null;
+  if (t.workEndedAt) return t.workEndedAt;
   const stopped = t.status === "stopped";
   if (!stopped && (!t.openUntil || t.openUntil.getTime() > now.getTime())) return null;
   if (!stopped && contracts.some((c) => c.status === "working" && c.dueAt.getTime() > now.getTime())) return null;

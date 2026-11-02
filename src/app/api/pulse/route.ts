@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/server/session";
 export async function GET(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
+    await (await import("@/lib/server/workWindow")).closeWorkAfterDeadlines(new Date(), u.id);
     await (await import("@/lib/server/calls")).sweepNobodyJoined(); // (NEWEST+8) minute-accurate while a page is open
     const q = new URL(req.url).searchParams;
     const fresh = q.get("fresh");

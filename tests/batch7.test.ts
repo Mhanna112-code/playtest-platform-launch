@@ -37,13 +37,13 @@ describe("batch 7 item 2: a stopped test shows only what still works", () => {
   it("developer: no Edit, End early, Stop, Invite or call-request tools (and no 'no calls' text); Next round stays and works", async () => {
     const top = src("app/app/tests/[id]/TopPanel.tsx");
     expect(top).toContain("{!p.restricted && !stopped && <a");
-    expect(top).toContain('{p.status !== "draft" && !stopped && <button');
-    expect(top).toContain("{!stopped && <ConfirmButton");
+    expect(top).toContain('{p.status !== "draft" && !stopped && !p.workEnded && <button');
+    expect(top).toContain("{!stopped && !p.workEnded && <ConfirmButton");
     expect(top).toContain("p.restricted || p.teamStopped || p.status === \"draft\" ? null : p.nextRoundId");
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain('noRequestReason={t.status === "stopped" ? "" :');
     expect(page).not.toContain("so no calls can be requested or booked");
-    expect(page).toContain('{t.status !== "stopped" && !restricted && (\n        <InvitePanel');
+    expect(page).toContain('{!t.workEndedAt && t.status !== "stopped" && !restricted && (\n        <InvitePanel');
     const { dev, testId } = await setup();
     await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
     const r = await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true });

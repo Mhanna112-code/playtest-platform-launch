@@ -82,6 +82,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const head = await db.contract.findUnique({ where: { id }, select: { testId: true, testerId: true } });
   if (head?.testerId === u.id) await (await import("@/lib/server/confirm")).expireActions(new Date(), { contractId: id });
+  if (head?.testerId === u.id) await (await import("@/lib/server/workWindow")).finishWorkIfDue(head.testId);
   const pageV = head && head.testerId === u.id ? await testV(u.id, head.testId, id) : "";
   const c = await db.contract.findUnique({
     where: { id },

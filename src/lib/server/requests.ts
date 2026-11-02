@@ -1,3 +1,4 @@
+import { assertWorkOpen, finishWorkIfDue } from "./workWindow";
 import { randomBytes } from "node:crypto";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
@@ -44,9 +45,10 @@ export const MAX_BOOKED = 3;
 export const MAX_REQUESTS = 3;
 
 async function ctx(userId: string, contractId: string) {
-  const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
+  let c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
   const side: Side | null = c?.testerId === userId ? "tester" : c?.test.developerId === userId ? "developer" : null;
   if (!c || !side) throw new HttpError(404, "not_found", "That session doesn't exist.");
+  if (await finishWorkIfDue(c.testId)) c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
   return { c, side, other: side === "tester" ? c.test.developer : c.tester, me: side === "tester" ? c.tester : c.test.developer };
 }
 type Ctx = Awaited<ReturnType<typeof ctx>>;
@@ -201,13 +203,30 @@ const requestLimitLine = (name: string) => `You already have ${MAX_REQUESTS} req
 const bookedLimit = (side: Side, testerName: string) =>
   side === "developer" ? `${testerName} already has ${MAX_BOOKED} booked times with you. Wait until one is over or cancel one.` : `You already have ${MAX_BOOKED} booked times in this test.`;
 
+/** A deadline crossed during the stop check cannot create a new request. */
+async function createRequest({ data }: { data: Prisma.CallRequestUncheckedCreateInput }) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${data.testId} FOR UPDATE`;
+    await assertWorkOpen(tx, data.testId);
+    const c = await tx.contract.findUniqueOrThrow({ where: { id: data.contractId } });
+    if (c.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
+    return tx.callRequest.create({ data });
+  });
+}
+
 /** Book one call at this time between the two, at the agreed rate. */
 async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null, byDeveloper = false, quiet = false) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: true, tester: true } });
-  const slot = await db.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
-  const call = await db.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
-  if (!quiet) await db.$transaction((tx) => recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${fmtDateTime(startsAt)}` : `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId));
-  return call;
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
+    await assertWorkOpen(tx, c.testId);
+    const fresh = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+    if (fresh.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
+    const slot = await tx.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
+    const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
+    if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${fmtDateTime(startsAt)}` : `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId);
+    return call;
+  });
 }
 
 /** One request = one call (or one weekly run): once a copy of a developer batch books, the other copies close. */
@@ -237,6 +256,7 @@ async function refusals(c: Ctx["c"], side: Side) {
   if (testPaused(c.test.developer, c.test)) throw new HttpError(409, "paused", side === "tester" ? `${PAUSED_RIGHT_NOW} You can request calls once it resumes.` : c.test.developer.devSuspendedAt ? DEV_SUSPENDED : c.test.developer.holdStartedAt ? "Pay what you owe first." : "The team paused this test.");
   // (Owner) "Closed" only means no NEW testers: testers already in carry on, so calls work. Only a stopped test refuses.
   if (c.test.status === "stopped") throw new HttpError(409, "closed", "This test was stopped.");
+  await assertWorkOpen(db, c.testId);
   // (Owner, Oct 28 afternoon) Calls are allowed whether or not a live call is a listed part: one that isn't reads "Not listed" and its pay is up to the developer.
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
@@ -345,7 +365,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   const made: string[] = [];
   for (const { c } of ok) {
     const minutes = reqMinutes;
-    const row = await db.callRequest.create({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
+    const row = await createRequest({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
     made.push(row.id);
   }
   await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(kind.rows)} from ${fmtDateTime(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
@@ -392,7 +412,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   if (clash) throw new HttpError(409, "clash", clash);
   if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
   await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(kind.rows), devName);
-  const r = await db.callRequest.create({
+  const r = await createRequest({
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
   });
   await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}`, false, {}, contractId, "", `req-${r.id}`));

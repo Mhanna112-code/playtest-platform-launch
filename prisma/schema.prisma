@@ -211,6 +211,8 @@ model Test {
   pausedSince       DateTime?
   pauseClosedAt     DateTime?
   pauseClosedReason String   @default("")
+  /// Normal end of work at the last tester's deadline; money and rating windows continue separately.
+  workEndedAt       DateTime?
   description String   @default("")
   buildUrl    String   @default("")
   /// The full app's categories (at least one)

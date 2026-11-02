@@ -102,7 +102,7 @@ describe("late work and when testers are refused", () => {
     expect(testerRefusal(working, { openUntil: null }, "Nora Lane", fmt, now)).toBe("");
   });
   it("refused after Open until, after being ended or stopped, or after leaving", () => {
-    expect(testerRefusal(working, { openUntil: new Date("2026-11-01T00:00:00Z") }, "Nora Lane", fmt, now)).toBe("This test closed on Oct 22.");
+    expect(testerRefusal(working, { openUntil: new Date("2026-11-01T00:00:00Z") }, "Nora Lane", fmt, now)).toBe("");
     expect(testerRefusal({ status: "ended", endKind: "early", endedAt: now }, { openUntil: null }, "Nora Lane", fmt, now)).toContain("ended your session early");
     expect(testerRefusal({ status: "ended", endKind: "stopped", endedAt: now }, { openUntil: null }, "Nora Lane", fmt, now)).toContain("stopped the test");
     expect(testerRefusal({ status: "left", endKind: "", endedAt: now }, { openUntil: null }, "Nora Lane", fmt, now)).toBe("You left this test.");

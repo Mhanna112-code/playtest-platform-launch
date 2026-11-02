@@ -54,7 +54,8 @@ export async function startRecording(tester: U, contractId: string, body: Record
 }
 
 export async function finishRecording(tester: U, contractId: string, body: Record<string, unknown>) {
-  await ownContract(tester.id, contractId);
+  const c = await ownContract(tester.id, contractId);
+  await (await import("./workWindow")).assertWorkOpen(db, c.testId);
   const rec = await db.recording.findUnique({ where: { id: String(body.recordingId ?? "") } });
   if (!rec || rec.contractId !== contractId) throw new HttpError(404, "not_found", "That upload doesn't exist.");
   // (Batch 15 section 6) On R2 the browser uploaded straight to storage: check the real object. Missing, a different size from what was claimed, or over the limit:
@@ -149,6 +150,8 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
 /** Send the uploaded recordings (or send them again with new ones, until paid). */
 export async function sendRecording(tester: U, contractId: string, body: Record<string, unknown> = {}) {
   const c0 = await ownContract(tester.id, contractId);
+  const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
+  if (ended) throw new HttpError(409, "closed", ended);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (uploads, the drafts, still work).
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep).
@@ -160,6 +163,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const t = await tx.test.findUniqueOrThrow({ where: { id: c.testId } });
+    await (await import("./workWindow")).assertWorkOpen(tx, t.id);
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
     const recs = await tx.recording.findMany({ where: { contractId, part: "recording", uploadedAt: { not: null } } });
