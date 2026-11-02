@@ -1,3 +1,4 @@
+import { inviteAvailabilityKey, inviteDetailsKey } from "@/lib/inviteAvailability";
 import { ratingChangedLine, testerNeedsChangedLines, type Needs } from "@/lib/testerState";
 export { ratingChangedLine, testerNeedsChangedLines } from "@/lib/testerState";
 import { db } from "@/lib/db";
@@ -106,6 +107,8 @@ async function rankedTesters(devId: string, testId: string) {
     };
     return xs.map((x) => ({
       id: x.t.id, name: x.name, changedAt: new Date(Math.max(x.t.profile?.updatedAt.getTime() ?? 0, ratings.get(x.t.id)?.at?.getTime() ?? 0)).toISOString(), devices: x.t.profile?.devices ?? [], languages: x.t.profile?.languages ?? [], categories: x.t.profile?.categories ?? [],
+      details: inviteDetailsKey(x.name, x.t.profile?.updatedAt.getTime() ?? 0, x.mineAvg, myTests.filter((c) => c.testerId === x.t.id)),
+      availability: inviteAvailabilityKey({ id: x.t.id, exists: true, blocked: false, suspended: !!x.t.testerSuspendedAt, atLimit: (activeOf.get(x.t.id) ?? 0) >= MAX_ACTIVE_TESTS, invited: !!x.inv, inTest: inTestSet.has(x.t.id), rated: ratedHere.has(x.t.id) }),
       invited: !!x.inv, inviteId: x.inv?.id ?? null, grey: x.grey, rating: ratings.get(x.t.id)?.line || "No ratings yet", ratingAvg: ratings.get(x.t.id)?.n ? Number(ratings.get(x.t.id)!.avg.toFixed(1)) : null,
       // (NEXT-UI 14) Still tickable: a re-invite is how an ended tester can come back.
       was: ratedHere.has(x.t.id) ? "Finished (rated this test)" : ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === x.t.id)?.status),

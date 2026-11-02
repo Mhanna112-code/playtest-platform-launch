@@ -1,3 +1,5 @@
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { notificationsV } from "@/lib/server/pageFreshness";
 import { notificationScopeFor } from "@/lib/server/notify";
 import { isAdmin } from "@/lib/server/session";
 import { Bell } from "lucide-react";
@@ -20,6 +22,7 @@ export default async function Notifications() {
   const u = await requirePageUser();
   // (Owner, Oct 30, batch 34 §5) The side in use's lines plus the account's; the settings' help names only this side's payment kinds.
   const side = isAdmin(u) ? null : sideFor(u);
+  const freshV = await notificationsV(u);
   const items = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: { createdAt: "desc" }, take: 200 });
   // (Design doc 9) Same-day lines about the same test stack into one entry, except the lines that always arrive on their own (own); opening a stack marks its lines read, a single line is read when clicked (batch 29 §28).
   const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
@@ -41,6 +44,7 @@ export default async function Notifications() {
   }));
   return (
     <div className="mx-auto max-w-2xl space-y-6">
+      <AutoRefresh query="fresh=notifications" v={freshV} />
       <AlertSettings emailPref={u.emailPref} side={side} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><Bell className="h-7 w-7 text-indigo-300" /> Notifications</h1>

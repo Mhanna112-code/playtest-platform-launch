@@ -1,3 +1,5 @@
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { messagesV } from "@/lib/server/pageFreshness";
 import Link from "next/link";
 import { MessagesSquare } from "lucide-react";
 import { db } from "@/lib/db";
@@ -14,6 +16,7 @@ export const dynamic = "force-dynamic";
 export default async function MessagesPage() {
   const u = await requireOpenPage("/app/messages"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   // (Batch 34 §5) Only the side in use's conversations (as a tester, or on your own tests).
+  const freshV = await messagesV(u);
   const contracts = await db.contract.findMany({
     where: contractsOnSide(u.id, sideFor(u)),
     include: { test: { include: { developer: true } }, tester: true },
@@ -27,6 +30,7 @@ export default async function MessagesPage() {
   convos.sort((a, b) => (b.last?.createdAt.getTime() ?? b.c.joinedAt.getTime()) - (a.last?.createdAt.getTime() ?? a.c.joinedAt.getTime()));
   return (
     <div className="mx-auto max-w-3xl space-y-4">
+      <AutoRefresh query="fresh=messages" v={freshV} />
       <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><MessagesSquare className="h-7 w-7 text-indigo-300" /> Messages</h1>
       <p className="text-sm text-slate-400">One conversation per test you&apos;re part of. It opens as soon as a tester joins.</p>
       <ul className="space-y-2">

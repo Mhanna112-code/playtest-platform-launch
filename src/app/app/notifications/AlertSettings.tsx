@@ -1,5 +1,6 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { BellRing } from "lucide-react";
 import { Err } from "@/components/Err";
 import { api, errOf } from "@/lib/client";
@@ -12,7 +13,13 @@ const FREQUENCY: [string, string][] = [
 
 /** How you're notified (the full app's fold on the notifications page): the email setting. */
 export function AlertSettings({ emailPref, side = null }: { emailPref: string; side?: "developer" | "tester" | null }) {
+  const router = useRouter();
+  const dirty = useRef(false);
   const [pref, setPref] = useState(emailPref === "off" ? "off" : ["weekly", "monthly"].includes(emailPref) ? emailPref : "daily");
+  useEffect(() => {
+    if (!dirty.current) setPref(emailPref === "off" ? "off" : ["weekly", "monthly"].includes(emailPref) ? emailPref : "daily");
+  }, [emailPref]);
+  const choose = (value: string) => { dirty.current = true; setPref(value); setSaved(false); };
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
@@ -29,6 +36,8 @@ export function AlertSettings({ emailPref, side = null }: { emailPref: string; s
           try {
             await api("/api/account/notify", { emailPref: pref });
             setSaved(true);
+            dirty.current = false;
+            router.refresh();
           } catch (x) {
             setErr(errOf(x));
           } finally {
@@ -38,12 +47,12 @@ export function AlertSettings({ emailPref, side = null }: { emailPref: string; s
       >
         <fieldset className="space-y-1.5">
           <legend className="label">Email</legend>
-          <label className="flex items-center gap-2 text-slate-300"><input type="radio" name="emailOn" checked={pref === "off"} onChange={() => { setPref("off"); setSaved(false); }} /> Off (the bell keeps everything)</label>
-          <label className="flex items-center gap-2 text-slate-300"><input type="radio" name="emailOn" checked={pref !== "off"} onChange={() => { setPref("daily"); setSaved(false); }} /> On: one email listing everything new</label>
+          <label className="flex items-center gap-2 text-slate-300"><input type="radio" name="emailOn" checked={pref === "off"} onChange={() => { choose("off"); }} /> Off (the bell keeps everything)</label>
+          <label className="flex items-center gap-2 text-slate-300"><input type="radio" name="emailOn" checked={pref !== "off"} onChange={() => { choose("daily"); }} /> On: one email listing everything new</label>
           {pref !== "off" && (
             <div className="ml-6 flex flex-wrap gap-4" role="radiogroup" aria-label="How often">
               {FREQUENCY.map(([v, l]) => (
-                <label key={v} className="flex items-center gap-2 text-slate-300"><input type="radio" name="emailPref" value={v} checked={pref === v} onChange={() => { setPref(v); setSaved(false); }} /> {l}</label>
+                <label key={v} className="flex items-center gap-2 text-slate-300"><input type="radio" name="emailPref" value={v} checked={pref === v} onChange={() => { choose(v); }} /> {l}</label>
               ))}
             </div>
           )}

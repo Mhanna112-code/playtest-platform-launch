@@ -9,6 +9,20 @@ export async function GET(req: Request) {
     const u = await requireUser(req);
     await (await import("@/lib/server/calls")).sweepNobodyJoined(); // (NEWEST+8) minute-accurate while a page is open
     const q = new URL(req.url).searchParams;
+    const fresh = q.get("fresh");
+    if (fresh) {
+      const pv = await import("@/lib/server/pageFreshness");
+      const { statesFrom } = await import("@/lib/findSearch");
+      const v = fresh === "discovery" ? await pv.discoveryV(u, q.get("q") ?? "", statesFrom(q.get("states") ?? ""))
+        : fresh === "publicProfile" ? await pv.publicProfileV(u, q.get("person") ?? "")
+        : fresh === "dashboard" ? await pv.dashboardV(u)
+        : fresh === "messages" ? await pv.messagesV(u)
+        : fresh === "payments" ? await pv.paymentsV(u)
+        : fresh === "notifications" ? await pv.notificationsV(u)
+        : fresh === "blocked" ? await pv.blockedV(u) : null;
+      if (v === null) throw new HttpError(400, "bad_request", "Unknown page.");
+      return ok({ v, restricted: false });
+    }
     // (Owner, Oct 29, batch 10) Payments: "Pay what you owe" updates live (a declined payment, a chargeback, a tester's Charge during the hold, or a payment from another tab).
     // (Batch 30 §8) The fingerprint comes from pulseV, which the page also renders with (AutoRefresh's baseline).
     if (q.get("owed")) {
@@ -73,7 +87,11 @@ export async function GET(req: Request) {
       const { inviteBlocked } = await import("@/lib/rules");
       const { fmtDate } = await import("@/lib/format");
       const testersIn = await db.contract.count({ where: { testId: t.id, status: "working" } });
-      return ok({ blocked: inviteBlocked({ ...t, testersIn, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, new Date(), fmtDate), restricted: false });
+      const ids = (q.get("testers") ?? "").split(",").filter((id) => /^[a-zA-Z0-9_-]{1,80}$/.test(id));
+      const rowVersions = await import("@/lib/server/inviteAvailability");
+      const [availability, details] = q.has("testers") ? await Promise.all([rowVersions.inviteAvailability(u.id, t.id, ids), rowVersions.inviteDetailsRows(u.id, ids)]) : [{}, []];
+      const detailsV = (await import("@/lib/inviteAvailability")).inviteAvailabilityV(details);
+      return ok({ ...availability, detailsV, details, blocked: inviteBlocked({ ...t, testersIn, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, new Date(), fmtDate), restricted: false });
     }
     // (Batch 26 section 10) The Call requests panel: each shown request that is no longer waiting, with the line its row then shows ("Closed: the tester finished
     // their part"). Only requests on this person's own sessions or tests.

@@ -1,3 +1,5 @@
+import { AutoRefresh } from "@/components/AutoRefresh";
+import { publicProfileV } from "@/lib/server/pageFreshness";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, Languages, Monitor } from "lucide-react";
@@ -33,6 +35,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   const viewer = await requireOpenPage("/app/testers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const otherSide = await otherSideNotice(viewer); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
+  const freshV = await publicProfileV(viewer, id);
+  const watch = <AutoRefresh query={`fresh=publicProfile&person=${encodeURIComponent(id)}`} v={freshV} />;
   const p = await db.user.findUnique({ where: { id }, include: { profile: true } });
   if (!p || !p.isTester) notFound();
   const mine = viewer.id === p.id;
@@ -41,7 +45,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   if (!mine && !isAdmin(viewer) && !viewer.isDeveloper) notFound();
   // (Owner, Oct 28, batch 20 section 17) They blocked you: "This profile isn't available." (never says why). You blocked them: their profile as usual, with Unblock
   // where Block was and no Chat with.
-  if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } }))) return <ProfileUnavailable />;
+  if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } }))) return <>{watch}<ProfileUnavailable /></>;
   const iBlocked = !mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) > 0;
   const name = displayName(p);
   const pr = p.profile;
@@ -51,6 +55,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
     <div className="mx-auto max-w-3xl space-y-6">
+      {watch}
       <section className="card flex flex-wrap items-center gap-4">
         <span className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-xl font-semibold text-ink-950">{name.charAt(0).toUpperCase()}</span>
         <div className="min-w-0 flex-1 space-y-2">

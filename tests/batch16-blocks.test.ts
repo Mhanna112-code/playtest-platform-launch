@@ -79,7 +79,7 @@ describe("the pages (section 11)", () => {
     expect(page).toContain("This test isn&apos;t available right now.");
     // (Batch 20 section 17) Blocked by them: "This profile isn't available."; blocked by you: the profile with Unblock and their tests hidden.
     expect(src("app/app/developers/[id]/page.tsx")).toContain("(await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } })) > 0;");
-    expect(src("app/app/developers/[id]/page.tsx")).toContain("if (theyBlocked) return <ProfileUnavailable />;");
+    expect(src("app/app/developers/[id]/page.tsx")).toContain("if (theyBlocked) return <>{watch}<ProfileUnavailable /></>;");
   });
   it("another tester (no block) still sees everything", async () => {
     const { dev, testId } = await setup();

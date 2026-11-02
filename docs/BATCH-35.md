@@ -847,3 +847,26 @@ The reservation is now a `Payment.reviewDraft`, not a completed Review. This cha
 A refused, closed or expired bank check cancels the reservation, leaving no Review to undo and making Pay available again. Page loads and a later Pay release expired checks without waiting for the daily sweep; the existing page fingerprint watches each bank deadline crossing on the normal beat. A check already started can finish even if the ordinary Pay window closes meanwhile. Pending payments also lock the piece while Stripe's answer is in flight, and a second Pay cannot reserve it again. Older reservations with an existing Review remain supported when released or recovered. Away payments (`needs_confirmation`, including Charge and dispute decisions) keep their Payment delayed state and existing confirmation rules.
 
 Tests: `tests/batch35-pending-pay-state.test.ts` exercises written work and calls through successful confirmation, failure, cancellation and timeout, the tester's rendered payment tags and absent Dispute, the developer's inline confirming row, paid amounts and bell, Rate, and Charge / Let it go / duplicate Pay locks. The recovery test now checks the Payment draft reservation rather than an unfinished Review. The additive migration adds only the draft column.
+
+
+## §109 Invite rows update on the beat (owner, Nov 1)
+
+Invite testers follows the eligibility of the people the panel actually shows, plus selected people kept from a previous search. On the page's existing twenty-second beat, a cheap version checks whether each person is a tester, blocked in either direction, suspended, at the ten-test limit, already invited, already in this test or finished/rated here. Counts below ten do not cause a redraw. Changes to people outside the watched rows do not change this version. The first check compares with the version rendered in each row, not with a newly adopted first-poll baseline.
+
+A changed version redraws the panel in place and repeats its current name search. Search text, device/language filters and available selections stay. A selected person who became unavailable is removed from the selection; their row uses its existing grey reason, or disappears under the existing block/deletion rule. Row details also follow profile/name changes, the developer's own ratings and their other shared tests. Both invite availability and Invite anyway now use the shared beat, replacing their separate eight- and fifteen-second timers.
+
+The follow-up audit in Task 15's `docs/BLUE-NOTICES.md` (commits `abbac5b2` and `40bb7bf6`) identified these other missing dependencies; all now use fingerprints on the same beat:
+
+- Find tests and the tester dashboard's recommendations: new, changed, full, paused or closed tests, matching-profile changes and current search results. URL filters stay in place. This adds no Find testers page.
+- Join / Apply / Ask to rejoin: the tester reaching or dropping below ten working tests elsewhere, profile changes, blocks and current listing availability.
+- Call request clash notes: booked calls on the viewer's other tests, including cancellation and the displayed person's name. Typed request rows stay.
+- Both dashboards: current work, review counts, terms offers, applications, invitations, requests, disputes (including calls), excerpts, payment state, keys and messages across their tests.
+- Messages: the current side's conversation membership, last-message versions and read markers.
+- Public developer/tester profile details: profile text, revealed ratings and displayed names, stats, excerpts, shared work, reports and block controls. The unavailable view watches too, so unblocking restores it. A blocked viewer receives one neutral opaque version, with no fingerprint of hidden changes.
+- Payments history and totals: new payments and existing payments settling or changing status, their displayed people/test names and bank deadlines. Existing card/subscription/payout account changes still use AccountRefresh.
+- Notifications: the current side's actual rows/read state, stack titles and email preference. Expanded stacks stay open. A changed email preference follows only while the settings form has no unsaved edit.
+- Account → Blocked people: additions/removals and displayed names/deletion state.
+
+Versions are computed before the page reads the state it displays, so a change between render and the first beat is not adopted silently. Deadline phases change versions at relevant clock boundaries without another timer. Only opaque versions leave the server for the general page fingerprints. AccountRefresh now rides the shared clock too. Existing intentionally protected forms (new/edit test, Settings and profile editor), account restrictions, bank checks, Ratings to give, Tests visited, admin pages and live call-room signaling retain their existing rules; this does not overwrite drafts or replace their authorization/refusal checks. No real missing-dependency item from the audit is left unfixed.
+
+Tests: `tests/batch35-invite-rows-live.test.ts` covers capacity crossing in both directions, suspension/block/deletion, invited/in/rated states, unrelated changes, the first-poll baseline, row details, access checks, the shared clock, and each additional page fingerprint and clock boundary. Existing presses still use their existing stop-once and final-refusal rules.

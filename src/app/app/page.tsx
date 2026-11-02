@@ -1,3 +1,4 @@
+import { dashboardV } from "@/lib/server/pageFreshness";
 import Link from "next/link";
 import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSignature, Hourglass, Inbox, KeyRound, LayoutGrid, ListTodo, MessagesSquare, PlusCircle, RotateCcw, Users, Wallet, XCircle, AppWindow, Banknote } from "lucide-react";
 import { db } from "@/lib/db";
@@ -77,6 +78,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
     );
   const now = new Date();
   const side = sideFor(u, "/app");
+  const freshV = await dashboardV(u);
   // (Owner, Oct 27) A suspension, a payment hold and a chargeback hold are one state for the developer's pages: ONE blue box at the very top says what happened and how to resume.
   const devOff = side === "developer" && u.isDeveloper && devRestricted(u, side);
   const testerOff = side === "tester" && u.isTester && !!u.testerSuspendedAt;
@@ -87,6 +89,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const disputeBox = devOff ? await disputesForSide(u.id) : [];
   return (
     <div className="space-y-8">
+      <AutoRefresh query="fresh=dashboard" v={freshV} />
       {/* (Owner, Oct 29, batch 24 section 1) Charges the developer's bank wants confirmed: the very top, above the blue box too (hidden when there are none). */}
       {side === "developer" && u.isDeveloper && <BankToConfirm userId={u.id} now={now} />}
       {(devOff || testerOff) && (

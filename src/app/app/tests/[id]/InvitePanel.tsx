@@ -1,4 +1,6 @@
 "use client";
+import { inviteAvailabilityV } from "@/lib/inviteAvailability";
+import { LIVE_TICK, rideLiveClock } from "@/lib/liveSync";
 import { SubscribersTag } from "@/components/SubscribeLink";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -17,7 +19,7 @@ import { PICK_CHIP } from "@/components/Choices";
 import { EVERYONE_MEETS, everyoneMeets, gapsOf, isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
 import { LiveNotices } from "@/components/LiveNotices";
 
-type Tester = { changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
+type Tester = { details?: string; availability?: string; changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
 type RowUpdate = { id: string; name: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
 type SeenTester = { devices: string[]; languages: string[]; rating: number | null };
 type Sent = { id: string; testerId: string; name: string; status: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
@@ -71,6 +73,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   }, [p.closes]);
   // (Owner, Oct 29, batch 26 section 7) Invite follows the test live both ways: the panel asks the server every few seconds (and on the page's poll) whether anyone can
   // be invited now (full → disabled with its line; a spot opens → enabled), so it never waits on the page's own refresh. A fresh page render resets it.
+  const availability = useRef({ ids: [] as string[], v: "", detailsV: "" });
   const [liveBlocked, setLiveBlocked] = useState<{ line: string; full: boolean } | null | undefined>(undefined);
   useEffect(() => setLiveBlocked(undefined), [p.blocked]);
   useEffect(() => {
@@ -78,24 +81,33 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     const check = async () => {
       if (document.visibilityState === "hidden") return;
       try {
-        const r = await fetch(`/api/pulse?inviteState=${encodeURIComponent(p.testId)}`, { cache: "no-store" });
+        const before = availability.current;
+        const r = await fetch(`/api/pulse?inviteState=${encodeURIComponent(p.testId)}&testers=${encodeURIComponent(before.ids.join(","))}`, { cache: "no-store" });
         if (!r.ok) return;
-        const j = (await r.json()) as { blocked?: { line: string; full: boolean } | null };
+        const j = (await r.json()) as { blocked?: { line: string; full: boolean } | null; v?: string; detailsV?: string; unavailable?: string[]; rows?: { id: string; availability: string }[]; details?: { id: string; availability: string }[] };
         if (alive && j.blocked !== undefined) setLiveBlocked(j.blocked);
+        if (alive && availability.current.v === before.v && availability.current.detailsV === before.detailsV && j.v !== undefined && (j.v !== before.v || j.detailsV !== before.detailsV)) {
+          // Selected rows from an earlier search may no longer be in the current results. Keep their keys current too.
+          for (const row of j.rows ?? []) eligibilityShown.current.set(row.id, row.availability);
+          for (const row of j.details ?? []) detailShown.current.set(row.id, row.availability);
+          const unavailable = new Set(j.unavailable ?? []);
+          setTicked((old) => old.some((id) => unavailable.has(id)) ? old.filter((id) => !unavailable.has(id)) : old);
+          router.refresh();
+        }
       } catch {
         // offline: next time
       }
     };
-    const t = setInterval(check, 8_000);
-    window.addEventListener("live-tick", check);
+    const leave = rideLiveClock();
+    window.addEventListener(LIVE_TICK, check);
     window.addEventListener("focus", check);
     return () => {
       alive = false;
-      clearInterval(t);
-      window.removeEventListener("live-tick", check);
+      leave();
+      window.removeEventListener(LIVE_TICK, check);
       window.removeEventListener("focus", check);
     };
-  }, [p.testId]);
+  }, [p.testId, router]);
   const blocked = (liveBlocked !== undefined ? liveBlocked : p.blocked) ?? (closedNow && p.closes?.line ? { line: p.closes.line, full: false } : null);
   const [confirm, setConfirm] = useState<string[] | null>(null);
   // (Batch 20 section 3) What each gap line is missing (both kinds), so a long device or language list is cut to 3 with "+N more".
@@ -158,6 +170,12 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   // as shown, so the server stops once when either changed since. A ticked tester who is now greyed is unticked when the panel refreshes.
   const shown = useRef(new Map<string, SeenTester>());
   const names = useRef(new Map<string, string>());
+  const eligibilityShown = useRef(new Map<string, string>());
+  const detailShown = useRef(new Map<string, string>());
+  for (const row of [...data.worked, ...data.suggested, ...data.found]) if (row.details) detailShown.current.set(row.id, row.details);
+  for (const row of [...data.worked, ...data.suggested, ...data.found]) if (row.availability) eligibilityShown.current.set(row.id, row.availability);
+  const watched = [...new Set([...worked, ...suggested, ...found].map((r) => r.id).concat(ticked))].filter((id) => eligibilityShown.current.has(id)).sort();
+  availability.current = { ids: watched, v: inviteAvailabilityV(watched.map((id) => ({ id, availability: eligibilityShown.current.get(id)! }))), detailsV: inviteAvailabilityV(watched.map((id) => ({ id, availability: detailShown.current.get(id) ?? "" }))) };
   const pressShown = useRef(new Map<string, Needs>());
   for (const t of [...data.worked, ...data.suggested, ...data.found]) {
     shown.current.set(t.id, { devices: t.devices, languages: t.languages, rating: t.ratingAvg ?? null });
@@ -233,7 +251,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   }, [msgNow]);
   useEffect(() => {
     if (!boxOpen) return;
-    // At once when the ticks change, then every 15 s as profiles change.
+    // At once when the ticks change, then on the page's shared beat as profiles change.
     const check = async () => {
       const r = await api<{ lines: string[]; items?: GapItem[]; now: string; testers?: { id: string; name: string; seen: SeenTester; tag: string; detail: string; changedAt: string }[] }>(`/api/tests/${p.testId}/invite-check`, { testerIds: ticked }).catch(() => null);
       if (!r) return;
@@ -252,8 +270,10 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         });
     };
     void check();
-    const t = setInterval(check, 15_000);
-    return () => clearInterval(t);
+    const leave = rideLiveClock();
+    const tick = () => void check();
+    window.addEventListener(LIVE_TICK, tick);
+    return () => { leave(); window.removeEventListener(LIVE_TICK, tick); };
   }, [boxOpen, ticked, p.testId, applyRows]);
 
   // The full app's rows, the same in every section: tick, name (their profile), the amber "Doesn't list …" pill, and on
