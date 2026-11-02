@@ -9,7 +9,7 @@ import { isChoiceKey } from "./pressKeys";
 // and when the developer's test page, Payments or the tester's session page loads (at most once a minute per payment). The PaymentIntent is found by its metadata payKey:
 //   - succeeded: finished as normal (finishReviewPay / finishExtraPay / finishChoicePay);
 //   - requires_action / processing: left for the bank-confirmation timers;
-//   - failed, cancelled or not found: cleared. The review (the press's reservation) is deleted, the payment is marked failed "interrupted", and the piece is back in
+//   - failed, cancelled or not found: cleared. A legacy review reservation is deleted (new Pays have only a Payment draft), the payment is marked failed "interrupted", and the piece is back in
 //     Needs you so Pay can be pressed again. Nobody gets a bell.
 // Never twice: a new press on the same piece within 24 hours of an interrupted one charges with the SAME idempotency key (pressKeyFor).
 

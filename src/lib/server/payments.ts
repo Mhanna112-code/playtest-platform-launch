@@ -1,3 +1,4 @@
+import { recordReviewDraft } from "./reviewDraft";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -63,6 +64,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   // (Batch 15 section 41, C1) The page's press id is a UUID, wrapped as "press:<developer>:<uuid>": it can never be a server key ("choice:", "dispute:" ...).
   const payKey = clientPressKey(dev.id, body.payKey);
   if (!payKey) throw new HttpError(400, "bad_request", "This page is out of date. Refresh to see the latest.");
+  if (id && (kind === "submission" || kind === "call")) await (await import("./confirm")).expireActions(new Date(), kind === "call" ? { callId: id } : { submissionId: id });
   const done = await db.review.findUnique({ where: { payKey } });
   if (done) return { reviewId: done.id, amountCents: done.amountCents, rejected: done.rejected, repeated: true }; // the same press again: never twice
   let amountCents = toCents(body.amount);
@@ -99,6 +101,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
       throw new HttpError(409, "reviewed", already.rejected ? "You already rejected this." : `You already paid ${money(already.amountCents)} for this.`);
     }
+    if (await tx.payment.count({ where: { ...piece.where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action"] } } })) throw new HttpError(409, "locked", "A payment for this part is being confirmed. Wait for it to finish before paying again.");
     // (Batch 17 §19) Pay closes on the piece's own closing date (the test's close-out, or 14 days after its Charge opened if later; final: it stays unpaid).
     // Until then Pay works, also after the tester's Charge opened.
     {
@@ -127,14 +130,14 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     }
     // (Batch 16 section 21) Another tab's Pay on this piece (or a lowered call length) stops it once; other actions there don't.
     await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name }, [], undefined, payPress);
-    const rev = await tx.review.create({ data: { ...piece.where, contractId: c.id, amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rejected: false, rateCents: piece.kind === "call" ? rateCents : null } });
+    const rev = { amountCents: amountCents!, agreedCents: piece.listing, reason, payKey, rateCents: piece.kind === "call" ? rateCents : null };
     // (Batch 15 section 9) The charge's key: an interrupted press on this piece in the last 24 hours lends its key, so nothing is ever charged twice.
     // (Batch 19 section 5) An earlier attempt with this press key whose bank check was cancelled (or that failed) keeps its row: this attempt gets a key of its own.
     const stripeKey = await freshPayKey(tx, ["review", "call"], await pressKeyFor(piece.where, ["review", "call"], payKey, tx));
     // (Batch 19 section 5) The cancelled (or failed) attempt hands its press key over too ((kind, pressKey) is unique): its row stays as the record of that attempt.
     await tx.payment.updateMany({ where: { kind: { in: ["review", "call"] }, pressKey: payKey, status: { in: ["cancelled", "failed"] } }, data: { pressKey: null } });
     const payment = await tx.payment.create({
-          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: payKey },
+          data: { kind: kind === "call" ? "call" : "review", submissionId: piece.where.submissionId ?? null, callId: piece.where.callId ?? null, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amountCents!, feeCents: 0, testerCents: 0, status: "pending", payKey: stripeKey, pressKey: payKey, reviewDraft: rev },
         });
     return { rev, payment, c, piece, name };
   }));
@@ -158,11 +161,14 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     if (e instanceof HttpError && e.code === "payment_unknown") throw new HttpError(502, "payment_unknown", PAYMENT_CHECKING);
     if (!(e instanceof HttpError && e.code === "card_failed")) {
       // Not a card decline (nothing was tried): free the piece so the developer can press Pay again.
-      await db.$transaction([db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message } }), db.review.delete({ where: { id: rev.id } })]);
+      await db.payment.update({ where: { id: payment!.id }, data: { status: "failed", failure: (e as Error).message } });
       throw e;
     }
-    // (Owner, Oct 27) Declined at the press: the payment is owed and the payment hold starts AT ONCE. The review stays; there's no second Pay on it.
-    await db.payment.update({ where: { id: payment!.id }, data: { failure: (e as Error).message } });
+    // (Owner, Oct 27) Declined at the press: the payment is owed and the payment hold starts AT ONCE. The owed review is recorded; there's no second Pay on it.
+    await db.$transaction(async (tx) => {
+      await recordReviewDraft(payment!, tx);
+      await tx.payment.update({ where: { id: payment!.id }, data: { failure: (e as Error).message } });
+    });
     await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, `${name}'s ${piece.label} on “${c.title}”`);
     // The tester is told at once (bell; their top box and stop-once read the owed payment): never "failed".
     await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents), `/app/sessions/${c.id}#${partAnchor(piece.label)}`, undefined, { payment: true, group: "tdelayed" });
@@ -191,15 +197,16 @@ export async function reserving<T>(run: () => Promise<T>): Promise<T> {
 /** (Batch 11) A Pay went through (at once, or once the bank confirmed it): the payment is recorded, the tester told, the receipt sent. */
 export async function finishReviewPay(paymentId: string, result: { status: string; feeCents?: number; testerCents?: number; transferStatus?: string; stripePaymentIntentId: string | null }) {
   const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
-  const rev = await db.review.findFirstOrThrow({ where: p.submissionId ? { submissionId: p.submissionId } : { callId: p.callId! } });
   const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
   const dev = c.test.developer;
   const name = displayName(c.tester);
   const piece = { label: p.callId ? "live call" : (await db.submission.findUnique({ where: { id: p.submissionId! } }))?.kind === "recording" ? "recording" : "written answers" };
   const data = { status: result.status, stripePaymentIntentId: result.stripePaymentIntentId, ...(result.feeCents != null ? { feeCents: result.feeCents, testerCents: result.testerCents, transferStatus: result.transferStatus } : {}), actionPi: null, actionBy: null };
-  await db.$transaction(async (tx) => {
+  const rev = await db.$transaction(async (tx) => {
+    const review = await recordReviewDraft(p, tx);
     await tx.payment.update({ where: { id: p.id }, data });
-    await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(rev.amountCents)} for the ${piece.label}`, false, {}, c.id);
+    await recordEvent(tx, c.testId, "paid", `You paid ${name} ${money(review.amountCents)} for the ${piece.label}`, false, {}, c.id);
+    return review;
   });
   // (Batch 9) The note rides in the bell line too; $0 reads "<dev> paid $0 for this".
   await notify(
