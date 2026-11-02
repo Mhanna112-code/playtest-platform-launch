@@ -277,8 +277,11 @@ describe("batch 11 item 4: automatic retries during a hold", () => {
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     fakeStripe({ mode: "away-action" });
     expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 0 });
-    const p = (await owed(dev.user.id))[0];
+    // (Batch 35 §117) The retry is ONE payment for what's owed; its check waits as one item, and the debt is locked under it.
+    const p = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
+    expect(p).toMatchObject({ status: "needs_confirmation" });
     expect(p.actionPi).not.toBeNull();
+    expect((await owed(dev.user.id))[0].coveredById).toBe(p.id);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $8.00 payment" } } })).toBe(1);
     fakeStripe({ after: "succeeded" });
     expect((await confirm(dev.cookie, { paymentId: p.id })).status).toBe(200);

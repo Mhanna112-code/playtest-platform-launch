@@ -8,9 +8,34 @@ import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
 import { type BankAction } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
-import { RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
+import { CANCEL_CHECK, OWED_BANK_WAITING, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 
-type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string };
+/** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
+type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; waiting?: boolean; checkId?: string | null };
+
+/** (Owner, Nov 2, batch 35 §117 rule 3) "Cancel this check": the bank's check is cancelled and what it covered can be paid at once (the page redraws). */
+function CancelCheck({ id }: { id: string }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const fin = useFinished(() => setBusy(false));
+  return (
+    <span className="inline-flex flex-wrap items-center gap-2">
+      <button type="button" className="btn-secondary px-2 py-0.5 text-xs" disabled={busy} data-cancel-check={id} onClick={async () => {
+        setBusy(true);
+        setErr("");
+        try {
+          const r = await api<{ line: string }>("/api/payments/owed", { cancelCheck: id });
+          fin.finish(r.line);
+        } catch (e) {
+          setErr(errOf(e));
+          setBusy(false);
+        }
+      }}>{CANCEL_CHECK}</button>
+      {fin.line && <span className="ok">{fin.line}</span>}
+      <Err text={err} />
+    </span>
+  );
+}
 
 /**
  * (Owner, Oct 27) Failed payments (each listed) and reversed payments (a chargeback adds its amount); one button pays them all. It stops once if the total
@@ -54,10 +79,17 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
       {onHold && review && <p data-hold-review="">After you pay what you owe, the team will review your account before your tests resume.</p>}
       {owed.length > 0 && (
         <ul className="list-disc pl-5">
-          {owed.map((o) => <li key={o.id}>{o.text}</li>)}
+          {owed.map((o, i) => (
+            <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined}>
+              {o.text}
+              {o.waiting && <> · <b>{OWED_BANK_WAITING}</b></>}
+              {/* One check covers every debt it paid: its Cancel sits next to the first of them. */}
+              {o.waiting && o.checkId && owed.findIndex((x) => x.checkId === o.checkId) === i && <> <CancelCheck id={o.checkId} /></>}
+            </li>
+          ))}
         </ul>
       )}
-      {(!chargeback || retry.length > 0) && <button
+      {retry.length > 0 && <button
         className="btn"
         disabled={busy || verifyFirst || reservedOnce}
         aria-disabled={verifyFirst || reservedOnce}

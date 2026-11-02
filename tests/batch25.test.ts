@@ -204,11 +204,13 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     const before = new Date();
     expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 0 });
     expect(await moneyLines(dev.user.id, before)).toHaveLength(0);
-    const waitingRow = await db.payment.findUniqueOrThrow({ where: { id: rows[0].id } });
+    // (Batch 35 §117) The retry is ONE payment for what's owed: its check waits (the debt is locked under it).
+    const waitingRow = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
     expect(waitingRow.actionPi).not.toBeNull();
+    expect((await db.payment.findUniqueOrThrow({ where: { id: rows[0].id } })).coveredById).toBe(waitingRow.id);
     const confirm = (body: Record<string, unknown>) => confirmPOST(req("/api/payments/confirm", { cookie: dev.cookie, body })).then(json);
-    expect((await confirm({ paymentId: rows[0].id, start: true })).status).toBe(200);
-    expect((await confirm({ paymentId: rows[0].id })).status).toBe(200);
+    expect((await confirm({ paymentId: waitingRow.id, start: true })).status).toBe(200);
+    expect((await confirm({ paymentId: waitingRow.id })).status).toBe(200);
     expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $10.00 for what you owed: Ana Silva's call on ${day}`]);
     expect(await db.notification.count({ where: { userId: dev.user.id, createdAt: { gte: before }, text: { contains: "$10.00" }, NOT: { text: { startsWith: "Your bank wants you to confirm" } } } })).toBe(1);
   });

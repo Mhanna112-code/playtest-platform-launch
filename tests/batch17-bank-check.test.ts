@@ -214,11 +214,14 @@ describe("batch 17 §11: Pay what you owe with a check", () => {
     const r = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(r.status).toBe(200);
     expect(r.body.confirm).toHaveLength(1);
-    expect(r.body.confirm[0]).toMatchObject({ requiresAction: true, paymentId: row.id, checkUrl: CHECK_URL });
+    // (Batch 35 §117) Pay what you owe is ONE payment: its check is the one payment's (the debt is locked under it, still owed).
+    const one = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
+    expect(r.body.confirm[0]).toMatchObject({ requiresAction: true, paymentId: one.id, checkUrl: CHECK_URL });
     expect(st.made[0]).toMatchObject({ return_url: RETURN_URL });
-    expect((await db.payment.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("paying");
-    st.bank((await db.payment.findUniqueOrThrow({ where: { id: row.id } })).actionPi!, true);
-    expect((await confirm(dev.cookie, { paymentId: row.id })).status).toBe(200);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: "failed", coveredById: one.id });
+    expect(one.status).toBe("needs_action");
+    st.bank(one.actionPi!, true);
+    expect((await confirm(dev.cookie, { paymentId: one.id })).status).toBe(200);
     expect(await db.payment.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: "charged", actionPi: null });
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
@@ -228,8 +231,9 @@ describe("batch 17 §11: Pay what you owe with a check", () => {
     fakeStripe({ mode: "action" });
     const r = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(r.body.confirm[0]).toMatchObject({ simulated: true, checkUrl: null });
-    expect((await confirm(dev.cookie, { paymentId: row.id, simulate: "failed" })).body.error.message).toBe(R.BANK_NOT_CONFIRMED);
-    expect(await db.payment.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: "failed", actionPi: null });
+    expect((await confirm(dev.cookie, { paymentId: r.body.confirm[0].paymentId, simulate: "failed" })).body.error.message).toBe(R.BANK_NOT_CONFIRMED);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: "failed", actionPi: null, coveredById: null });
+    expect(await db.payment.findUniqueOrThrow({ where: { id: r.body.confirm[0].paymentId } })).toMatchObject({ kind: "owed", status: "cancelled" });
     expect((await owed(dev.user.id)).map((p) => p.id)).toEqual([row.id]);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
@@ -292,18 +296,21 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
   });
 
-  it("an automatic retry during a hold: on the test page (the paused view lists it), linked from the bell; a renewal (no test) stays on Payments", async () => {
+  it("an automatic retry during a hold: (batch 35 §117) ONE payment confirmed on Payments, listing what it covers; a renewal (no test) stays on Payments too", async () => {
     const { dev, testId, sessionId, tester } = await sentWork();
     await withCard(dev.user.id);
     const row = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
     await startHold(dev.user.id, "unpaid");
     fakeStripe({ mode: "away-action" });
     await retryOwed(dev.user.id);
-    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $8.00 payment on “Harbor Run” by " } } });
+    const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $8.00 payment by " } } });
     expect(n.link).toBe("/app#bank-to-confirm"); // (batch 29 §32)
-    const rows = await bankWaitingOnTest(dev.user.id, testId);
-    expect(rows).toMatchObject([{ id: row.id, contractId: sessionId, pieceId: null }]);
-    expect(rows[0].line).toMatch(/^Your bank wants you to confirm a \$8\.00 payment for Ana Silva's work, made while you were away\./);
+    // (Batch 35 §117) What's owed is ONE payment (it can span tests): confirmed on Payments, its row naming each payment it covers; the debt is locked on the box.
+    const one = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
+    expect(await bankWaitingOnTest(dev.user.id, testId)).toEqual([]);
+    expect((await confirmItems(dev.user.id)).find((i) => i.id === one.id)).toMatchObject({ href: null, text: expect.stringMatching(/^What you owe \$8\.00 \(Ana Silva's work \$8\.00\) · confirm by /) });
+    expect((await (await import("@/lib/server/holds")).owedLines(dev.user.id)).find((l) => l.id === row.id)).toMatchObject({ retry: false, waiting: true, checkId: one.id });
+    expect(sessionId).toBeTruthy();
     expect(src("app/app/tests/[id]/page.tsx")).toContain('data-restricted-bank=""');
     // A renewal belongs to no test: Payments keeps its own "Confirm with your bank" (the same inline check), and the bell keeps "Confirm it in Payments".
     const sub = await db.payment.create({ data: { kind: "subscription", developerId: dev.user.id, testerId: dev.user.id, amountCents: 700, feeCents: 700, testerCents: 0, status: "needs_confirmation" } });

@@ -12,7 +12,8 @@ export function clientPressKey(userId: string, raw: unknown): string | null {
 /** A server-made key: "<kind>:<parts…>". */
 /** (Batch 28 §21) "autocall": a listed call charged automatically 7 days after it. */
 /** (Batch 30 §5) "teamclose": the team closed a piece for $0. */
-export type ServerKeyKind = "choice" | "dispute" | "owed" | "cbowed" | "deferred" | "sub" | "subrenew" | "extra" | "cbwon" | "autocall" | "teamclose";
+/** (Batch 35 §117) "owedall": Pay what you owe's one payment for the total; "newcard": a charge made while away, tried again on a new card. */
+export type ServerKeyKind = "choice" | "dispute" | "owed" | "cbowed" | "deferred" | "sub" | "subrenew" | "extra" | "cbwon" | "autocall" | "teamclose" | "owedall" | "newcard";
 export const serverKey = (kind: ServerKeyKind, ...parts: string[]) => `${kind}:${parts.join(":")}`;
 
 /** Is this the key of a tester's Charge (recovery finishes those differently)? */

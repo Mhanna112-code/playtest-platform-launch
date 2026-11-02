@@ -241,7 +241,7 @@ describe("newest owner rules", () => {
     expect(dev).toBeTruthy();
   });
 
-  it("several failed payments: one press retries them all; the hold lifts only when all are paid; the rest are named", async () => {
+  it("several failed payments: one press retries them all as one payment (batch 35 §117); declined, all stay owed; then the hold lifts", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
@@ -249,15 +249,15 @@ describe("newest owner rules", () => {
     await mk(800);
     await mk(2000);
     await startHold(dev.user.id, "unpaid");
-    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 2000) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 2800) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     const { payOwed, owedLines } = await import("@/lib/server/holds");
     expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual(expect.arrayContaining([expect.stringMatching(/^Ana Silva's written answers \$8\.00 · card declined /), expect.stringMatching(/\$20\.00 · card declined /)]));
     const r = await payOwed(dev.user);
-    expect(r).toMatchObject({ paid: 1, lifted: false });
-    expect(r.stillFailing).toHaveLength(1);
+    expect(r).toMatchObject({ paid: 0, lifted: false, stillFailing: ["$28.00 (Your card was declined)"] });
+    expect((await owedLines(dev.user.id))).toHaveLength(2);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     setStripeForTests({ paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }) } } as unknown as Stripe);
-    expect(await payOwed(dev.user)).toMatchObject({ paid: 1, lifted: true });
+    expect(await payOwed(dev.user)).toMatchObject({ paid: 2, lifted: true });
   });
 });
 
@@ -275,7 +275,7 @@ describe("Pay what you owe stops once when the total changed", () => {
     const first = await press({ seenTotalCents: 800, seenIds: [seenOne.id] });
     expect(first.status).toBe(409);
     expect(first.body.error.changes[0].text).toBe("Another payment failed meanwhile: Ana Silva's written answers $5.00. New total $13.00. Press again to pay $13.00.");
-    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 500) throw Object.assign(new Error("Your card has insufficient funds."), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 1600) throw Object.assign(new Error("Your card has insufficient funds."), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     // (NEXT-UI 12b) The second press names the total the box showed; something newer than the box stops it again.
     const third = await mk(300);
     const again = await press({ seenTotalCents: first.body.error.totalCents, seenIds: first.body.error.ids, confirmed: true });
@@ -284,8 +284,9 @@ describe("Pay what you owe stops once when the total changed", () => {
     expect(again.body.error.changes[0].text).not.toContain("$5.00");
     expect(third.id).toBeTruthy();
     const second = await press({ seenTotalCents: again.body.error.totalCents, seenIds: again.body.error.ids, confirmed: true });
-    expect(second.body.paid).toBe(2);
-    expect(second.body.stillFailing[0]).toMatch(/\$5\.00 · card declined .+ \(Your card was declined\.?\)$/); // (batch 15 section 41, L4) plain words, never Stripe's raw text
+    // (Batch 35 §117) One payment for the $16.00: declined, nothing is paid and all three stay owed.
+    expect(second.body.paid).toBe(0);
+    expect(second.body.stillFailing).toEqual(["$16.00 (Your card was declined)"]); // (batch 15 section 41, L4) plain words, never Stripe's raw text
     expect(second.body.lifted).toBe(false);
   });
 });

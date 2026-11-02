@@ -4,7 +4,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
 import {
-  owedReceiptWhat, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
@@ -60,7 +60,8 @@ export async function testerHoldRefusal(devId: string) {
  */
 export async function owed(devId: string) {
   // (Batch 10) "paying": claimed by a "Pay what you owe" press that is charging it right now (still owed until it goes through, so a hold can't lift under it).
-  const failed = await db.payment.findMany({ where: { developerId: devId, OR: [{ status: "failed", owedUntil: { not: null }, settledAt: null }, { status: "owed" }, { status: PAYING }] }, orderBy: { createdAt: "asc" } });
+  // (Batch 35 §117) Pay what you owe's one payment (kind "owed") is never itself owed: the debts it covers are.
+  const failed = await db.payment.findMany({ where: { developerId: devId, kind: { not: "owed" }, OR: [{ status: "failed", owedUntil: { not: null }, settledAt: null }, { status: "owed" }, { status: PAYING }] }, orderBy: { createdAt: "asc" } });
   const reversed = await db.payment.findMany({ where: { developerId: devId, chargeback: "open" }, orderBy: { createdAt: "asc" } });
   const repaid = reversed.length ? new Set((await db.payment.findMany({ where: { repaysId: { in: reversed.map((p) => p.id) }, status: { in: ["charged", "not_set_up"] } }, select: { repaysId: true } })).map((p) => p.repaysId)) : new Set<string | null>();
   // (Owner, Oct 29, batch 11) A chargeback is owed with its fee: the reversed amount + CHARGEBACK_FEE_CENTS (`reversedCents` keeps the reversed amount).
@@ -366,19 +367,24 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
   return { ok: true, lifted };
 }
 
-/** "Pay what you owe": retry every failed charge still owed; lifts the hold when all are paid. */
 /**
- * "Pay what you owe": stops once if the owed total changed since the page loaded (seenTotalCents); the second press
- * pays at once. Every failed charge is retried; any still failing is named with the card's reason and the hold stays.
+ * "Pay what you owe": stops once if the owed total changed since the page loaded (seenTotalCents); the second press pays at once. (Owner, Nov 2, batch 35 §117) What is
+ * owed is charged as ONE payment for the total (one charge, one bank check if the card asks); a debt already waiting for the bank is locked and left out (its box line
+ * says "Waiting for your bank", with "Cancel this check").
  */
 export async function payOwed(dev: { id: string }, body: Record<string, unknown> = {}) {
   await (await import("./confirm")).expireActions();
+  const once = await import("./owedOnce");
+  await once.resumeStaleOwed(dev.id);
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   // (Owner, Oct 29, batch 23 section 6) A chargeback hold: what is already reserved on the card is not asked for again (only what was added since).
   const cbHold = !!u.holdStartedAt && u.holdReason === "chargeback";
   const rs = cbHold ? await (await import("./chargeback")).reserveState(dev.id) : null;
   const covered = rs?.covered ?? null;
-  const list = (await owed(dev.id)).filter((p) => !covered?.has(p.id));
+  const locks = await once.owedLocks(dev.id);
+  const all = (await owed(dev.id)).filter((p) => !covered?.has(p.id));
+  // (§117 rule 3) A debt waiting for the bank is never charged by a press (the same during a chargeback hold's reservation).
+  const list = all.filter((p) => !locks.has(p.id));
   const total = list.reduce((a, p) => a + p.amountCents, 0);
   // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves ONCE: with a reservation in place, what was added since is charged right after the lift (no second one).
   if (rs && rs.reservedCents > 0 && list.length) throw new HttpError(409, "nothing_owed", reservedAddedLine(rs.reservedCents, total));
@@ -386,6 +392,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   // (A hold left with nothing owed still lifts here, charging nothing.)
   if (!list.length) {
     if (await liftHoldIfClear(dev.id)) return { paid: 0, stillFailing: [] as string[], lifted: true };
+    if (all.length) throw new HttpError(409, "bank_waiting", OWED_ALL_WAITING);
     if (covered?.size) throw new HttpError(409, "nothing_owed", ALREADY_RESERVED);
     throw new HttpError(409, "nothing_owed", NOTHING_OWED);
   }
@@ -395,7 +402,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const lines = await owedLines(dev.id);
   const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
   // (Owner, NEXT-UI 12b) Every press checks what the box showed (total and which payments), the second one too: if
-  // anything is new it stops again with just the new line(s).
+  // anything is new it stops again with just the new line(s). (§117) Only what the press would pay counts (a line waiting for the bank isn't).
   const nowIds = lines.filter((l) => l.retry).map((l) => l.id);
   if (seen != null && (seen !== total || (Array.isArray(body.seenIds) && (seenIds.length !== nowIds.length || nowIds.some((i) => !seenIds.includes(i)))))) {
     const freshLines = lines.filter((l) => l.retry && !seenIds.includes(l.id));
@@ -417,85 +424,22 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     if ("failed" in r) return { paid: 0, stillFailing: [`${money(total)} (${r.failed!.replace(/.$/, "")})`], lifted: false, confirm: [] };
     return { paid: 0, stillFailing: [] as string[], lifted: false, reservedCents: total, confirm: "action" in r && r.action ? [r.action] : [] };
   }
-  const stillFailing: string[] = [];
-  let paid = 0;
-  // (Batch 11) Payments the bank wants the developer to confirm in the page (its pop-up, then /api/payments/confirm).
-  const confirm: Awaited<ReturnType<typeof import("./confirm").pressAction>>[] = [];
-  // (Owner, Oct 29, batch 25 section 5) The press gets ONE receipt for what went through, naming the items.
-  const names: string[] = [];
-  let paidCents = 0, setUp = false;
-  for (const p of list) {
-    const r = await chargeOwedOne(u, p, "press");
-    if (r.result === "paid") {
-      paid++;
-      paidCents += r.cents;
-      names.push(r.name);
-      setUp ||= r.status !== "not_set_up";
-    } else if (r.result === "action") confirm.push(r.action);
-    else if (r.result === "failed") stillFailing.push(`${lines.find((l) => l.id === p.id)?.text ?? money(p.amountCents)} (${r.why.replace(/\.$/, "")})`);
+  // (§117 rule 6) ONE payment for the total: one charge, one bank check if the card asks (inline under the button), one receipt naming every item.
+  const r = await once.chargeOwedTotal(u, list, "press");
+  if (r.result === "skipped") throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: "What you owe changed meanwhile. Press again to pay what's left.", at: new Date() }] });
+  if (r.result === "action") return { paid: 0, stillFailing: [] as string[], lifted: false, confirm: [r.action] };
+  if (r.result === "failed") {
+    const what = list.length === 1 ? lines.find((l) => l.id === list[0].id)?.text ?? money(total) : money(total);
+    return { paid: 0, stillFailing: [`${what} (${r.why.replace(/\.$/, "")})`], lifted: false, confirm: [] };
   }
-  if (paidCents > 0) await receipt(u.email, owedReceiptWhat(names), paidCents, setUp ? "charged" : "not_set_up", "/app/payments");
+  if (r.result === "paid" && r.cents > 0) await receipt(u.email, owedReceiptWhat(r.names), r.cents, r.status !== "not_set_up" ? "charged" : "not_set_up", "/app/payments");
   // The hold lifts only when all are paid; a chargeback hold also needs the card check and the admin's approval.
   const lifted = await liftHoldIfClear(dev.id);
-  return { paid, stillFailing, lifted, confirm };
+  return { paid: r.result === "paid" ? r.names.length : 0, stillFailing: [] as string[], lifted, confirm: [] };
 }
 
-type OwedRow = Awaited<ReturnType<typeof owed>>[number];
-type OneResult = { result: "paid"; cents: number; status: string; name: string } | { result: "action"; action: Awaited<ReturnType<typeof import("./confirm").pressAction>> } | { result: "waiting" } | { result: "failed"; why: string } | { result: "skipped" };
-/**
- * Charge ONE owed payment on the saved card. "press": the developer's own "Pay what you owe" (on-session: the bank may ask them to confirm in the page). "away": an automatic
- * retry during the hold (batch 11 section 4; the bank's confirmation then waits 3 days for Confirm in Payments). Each payment is claimed first, so it is never charged twice.
- * (Batch 25 section 5) It sends the developer no line itself: the caller sends one for all that went through (the press's receipt, the retry's line), naming `name`.
- */
-async function chargeOwedOne(u: Parameters<typeof charge>[0] & { email: string; name: string }, p: OwedRow, mode: "press" | "away"): Promise<OneResult> {
-  const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-  const confirmMod = () => import("./confirm");
-  if (p.chargeback === "open") {
-    // (Owner, Oct 27) A reversed payment is owed again: the same amount (batch 11: with the chargeback fee) is charged on the card, to the platform (the tester already got
-    // their share). The team's Approve closes the chargeback. (Batch 10) Claimed first (a "paying" repay row, made under a lock on the reversed payment).
-    const claim = await claimChargebackRepay(p, u.id);
-    if (!claim) return { result: "skipped" };
-    try {
-      const r = await chargePlatform(u, p.amountCents, serverKey("cbowed", p.id, claim.id), "Playtest: a payment reversed by your bank, charged again", mode);
-      if (r.status === "requires_action") {
-        if (mode === "press") return { result: "action", action: await (await confirmMod()).pressAction(claim.id, r as NeedsAction) };
-        await (await confirmMod()).awayAction(claim.id, r as NeedsAction);
-        return { result: "waiting" };
-      }
-      await db.payment.update({ where: { id: claim.id }, data: { ...r, settledAt: new Date() } });
-      return { result: "paid", cents: p.amountCents, status: r.status, name: await owedItemName(p) };
-    } catch (e) {
-      await db.payment.delete({ where: { id: claim.id } });
-      return { result: "failed", why: owedWhy(e) };
-    }
-  }
-  // An automatic retry leaves alone a payment already waiting for the bank's confirmation; a press replaces it (never both).
-  if (mode === "away" && p.actionPi) return { result: "skipped" };
-  // (Batch 10) Claim the owed payment (failed or owed -> paying); a claim older than 10 minutes (a press that never finished) can be taken again. (A press whose bank
-  // pop-up is still open keeps its claim until it ends or times out.)
-  const before = p.status === PAYING ? (!p.actionPi && p.warnedAt && p.warnedAt.getTime() < Date.now() - 10 * 60_000 ? { status: PAYING, warnedAt: p.warnedAt } : null) : { status: p.status };
-  const was = p.status === PAYING ? (p.owedUntil ? "failed" : "owed") : p.status;
-  if (!before || (await db.payment.updateMany({ where: { id: p.id, settledAt: null, ...before }, data: { status: PAYING, warnedAt: new Date() } })).count !== 1) return { result: "skipped" };
-  if (p.actionPi && stripeOn()) await getStripe().paymentIntents.cancel(p.actionPi).catch(() => null);
-  try {
-    const r = await charge(u, tester, p.amountCents, serverKey("owed", p.id, String(Date.now())), was === "owed" ? "Playtest: added to what you owe while your tests were paused" : "Playtest: amount owed", mode);
-    if (r.status === "requires_action") {
-      if (mode === "press") return { result: "action", action: await (await confirmMod()).pressAction(p.id, r as NeedsAction, true) };
-      await db.payment.update({ where: { id: p.id }, data: { status: was, warnedAt: null } });
-      await (await confirmMod()).awayAction(p.id, r as NeedsAction, true);
-      return { result: "waiting" };
-    }
-    // (Batch 33 §3) A failed charge paid later keeps why it failed (the developer's Payment failures box on their admin profile reads it).
-    await db.payment.update({ where: { id: p.id }, data: { ...r, settledAt: new Date(), ...(p.owedUntil ? {} : { failure: "" }), warnedAt: null, actionPi: null, actionBy: null } });
-    await tellArrived(p, tester.email, displayName(u));
-    return { result: "paid", cents: p.amountCents, status: r.status, name: await owedItemName(p) };
-  } catch (e) {
-    await db.payment.update({ where: { id: p.id }, data: { status: was, warnedAt: null } });
-    return { result: "failed", why: owedWhy(e) };
-  }
-}
 /** (Batch 15 section 41, L4) Why one owed payment failed, in plain words (never Stripe's raw text). */
-const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? "Your card was declined." : e instanceof HttpError && e.code === "payments_problem" ? PAYMENTS_PROBLEM : "It didn't go through. Try again shortly.");
+export const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? "Your card was declined." : e instanceof HttpError && e.code === "payments_problem" ? PAYMENTS_PROBLEM : "It didn't go through. Try again shortly.");
 
 /**
  * (Owner, Oct 29, batch 11 section 4) While a payment hold lasts, what is owed is retried on the saved card: once a day, at most HOLD_RETRY_MAX tries a hold ("daily"),
@@ -504,6 +448,8 @@ const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_fail
  * once), the developer gets ONE line (batch 25 section 5), "We charged your card $X for what you owed: <the items>." (no separate receipt line; it rides the payment email
  * as the receipt), and the hold lifts as if they had pressed Pay (the 4th hold on still needs Approve; a chargeback
  * hold still needs the card check and Approve; a suspension is never lifted by a payment). A failed retry sends nothing: Payments shows the last and next try.
+ * (Owner, Nov 2, batch 35 §117) ONE payment for the total (its bank check, if the card asks, is one "Confirm with your bank" item); a debt already waiting for the
+ * bank is left out (rule 3).
  */
 export async function retryOwed(devId: string, now = new Date(), why: "daily" | "card" = "daily") {
   const u = await db.user.findUnique({ where: { id: devId } });
@@ -512,19 +458,15 @@ export async function retryOwed(devId: string, now = new Date(), why: "daily" | 
   if (why === "daily" && (u.holdRetries >= HOLD_RETRY_MAX || (u.holdRetryAt && now.getTime() - u.holdRetryAt.getTime() < 23 * 3_600_000))) return null;
   // No saved card (or payments not set up): nothing to retry on.
   if (!stripeOn() || !u.stripeCustomerId || !u.stripePaymentMethodId) return null;
-  const list = (await owed(devId)).filter((p) => !p.actionPi);
+  const once = await import("./owedOnce");
+  await once.resumeStaleOwed(devId, now);
+  const locks = await once.owedLocks(devId);
+  const list = (await owed(devId)).filter((p) => !locks.has(p.id));
   if (!list.length) return null;
   await db.user.update({ where: { id: devId }, data: { holdRetryAt: now, ...(why === "daily" ? { holdRetries: { increment: 1 } } : {}) } });
-  let cents = 0;
-  const names: string[] = [];
-  for (const p of list) {
-    const r = await chargeOwedOne(u, p, "away");
-    if (r.result === "paid") {
-      cents += r.cents;
-      names.push(r.name);
-    }
-  }
-  if (cents > 0) await bell(devId, retriedLine(cents, names), "/app/payments", undefined, { side: "developer", payment: true, group: "payhold" });
+  const r = await once.chargeOwedTotal(u, list, "away");
+  const cents = r.result === "paid" ? r.cents : 0;
+  if (r.result === "paid" && cents > 0) await bell(devId, retriedLine(cents, r.names), "/app/payments", undefined, { side: "developer", payment: true, group: "payhold" });
   const lifted = cents > 0 ? await liftHoldIfClear(devId) : false;
   return { cents, lifted };
 }
@@ -535,16 +477,6 @@ const PAYING = "paying";
 export const NOTHING_OWED = "There's nothing to pay: what you owed is already paid.";
 /** (Batch 23 section 6) Pay what you owe during a chargeback hold when everything owed is already reserved (another tab). */
 export const ALREADY_RESERVED = "There's nothing more to reserve: what you owe is already reserved on your card.";
-
-/** (Batch 10) Claim the repay of one reversed payment: one "paying" repay row at a time, made under a row lock; null when it is paid or being paid already. */
-async function claimChargebackRepay(p: { id: string; contractId: string | null; testerId: string; amountCents: number }, devId: string) {
-  return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Payment" WHERE id = ${p.id} FOR UPDATE`;
-    const busy = await tx.payment.findFirst({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up", PAYING, "needs_action", "needs_confirmation"] } } });
-    if (busy) return null;
-    return tx.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: devId, testerId: p.testerId, amountCents: p.amountCents, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", status: PAYING } });
-  });
-}
 
 /**
  * (Batch 11) A payment that waited (owed, or for the bank's confirmation) went through: the developer's receipt and the tester's paid line. (Batch 25 section 5) The one
@@ -590,18 +522,22 @@ export async function owedLines(devId: string) {
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, holdReason: true } });
   const covered = u?.holdStartedAt && u.holdReason === "chargeback" ? (await (await import("./chargeback")).reserveState(devId)).covered : null;
   const list = (await owed(devId)).filter((p) => !covered?.has(p.id));
+  // (Owner, Nov 2, batch 35 §117 rule 3) A debt waiting for the bank is locked: "Waiting for your bank" (not paid by the button), with the check to cancel.
+  const locks = list.length ? await (await import("./owedOnce")).owedLocks(devId) : new Map<string, string>();
   const out = [];
   for (const p of list) {
+    const checkId = locks.get(p.id) ?? null;
+    const lock = { retry: !checkId, waiting: !!checkId, checkId, tag: checkId ? OWED_BANK_WAITING : "" };
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
     const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
     const what = `${c ? displayName(c.tester) + "'s " : ""}${p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers"}`;
     // `source` (batch 10): what put it on the list, for the stop-once wording.
     out.push(p.chargeback === "open"
-      ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents) }
+      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents) }
       : p.status === "owed" || (p.status === PAYING && !p.owedUntil)
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet.
-        ? { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused` }
-        : { id: p.id, retry: true, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt) });
+        ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused` }
+        : { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt) });
   }
   return out;
 }
@@ -611,9 +547,16 @@ export async function owedLines(devId: string) {
  * payment hold turns it into a chargeback hold (the hold count is unchanged); every further chargeback adds to what is owed.
  */
 export async function chargebackOpened(paymentIntentId: string) {
-  const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
+  // (Batch 35 §117) Pay what you owe's ONE payment covered several debts with one PaymentIntent: the dispute is on that payment as a whole, so its WHOLE amount is
+  // owed again once, with one chargeback fee (the one payment itself carries the chargeback; its debts stay paid). Otherwise the payment the PaymentIntent belongs to.
+  // When it paid a single debt, that debt carries it (the same amount, and its test page names the piece).
+  const one = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: "owed", status: "bundled" } });
+  const paid = one ? await db.payment.findMany({ where: { coveredById: one.id, kind: { not: "chargeback" } } }) : [];
+  const p = (one && paid.length === 1 ? paid[0] : one)
+    ?? (await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: { not: "owed" } }, orderBy: { createdAt: "asc" } }));
   if (!p || p.chargeback === "open") return false;
-  await db.payment.update({ where: { id: p.id }, data: { chargeback: "open", chargebackAt: new Date() } });
+  // Claimed, so a webhook delivered twice at once opens it once.
+  if ((await db.payment.updateMany({ where: { id: p.id, chargeback: { not: "open" } }, data: { chargeback: "open", chargebackAt: new Date() } })).count !== 1) return false;
   const before = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
   // A chargeback is a hold with extra steps: a hold that is already on becomes a chargeback hold, and any earlier card check or approval no longer counts.
   await db.user.updateMany({ where: { id: p.developerId, holdStartedAt: { not: null } }, data: { holdReason: "chargeback", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
@@ -643,7 +586,8 @@ export async function chargebackOpened(paymentIntentId: string) {
  * bell and an email. Returns false when the payment is unknown or the win was already handled.
  */
 export async function chargebackWon(paymentIntentId: string) {
-  const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId } });
+  // (Batch 35 §117) The payment carrying the chargeback: Pay what you owe's one payment when the dispute was on it.
+  const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, chargeback: { in: ["open", "resolved"] } }, orderBy: { createdAt: "asc" } });
   if (!p || (p.chargeback !== "open" && p.chargeback !== "resolved")) return false;
   const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
   // Already paid back with "Pay what you owe": refund that charge (the amount and, since batch 11, the fee) to their card. Refunds come first (idempotent at Stripe), so

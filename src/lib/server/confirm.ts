@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine } from "@/lib/rules";
+import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, owedReceiptWhat } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
@@ -102,10 +102,13 @@ export async function confirmItems(devId: string) {
   const tz = waiting.length ? await zoneOf(devId) : null;
   const ids = [...new Set(waiting.map((p) => p.contractId).filter((x): x is string => !!x))];
   const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, title: true } }) : [];
+  // (Batch 35 §117 rule 6) Pay what you owe's one payment lists every payment it covers (name and amount); it's confirmed right here (no test).
+  const covers = await (await import("./owedOnce")).coveredNames(waiting.filter((p) => p.kind === "owed").map((p) => p.id));
   return waiting.map((p) => {
     const c = contracts.find((x) => x.id === p.contractId);
-    const what = p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment";
-    return { id: p.id, text: `${what} ${money(p.amountCents)}${c ? ` on “${c.title}”` : ""} · confirm by ${fmtDateTimeIn(p.actionBy!, tz)}`, href: c ? bankHref(c.testId, p.id) : null };
+    const what = p.kind === "owed" ? "What you owe" : p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment";
+    const list = p.kind === "owed" && covers.get(p.id)?.length ? ` (${covers.get(p.id)!.join(", ")})` : "";
+    return { id: p.id, text: `${what} ${money(p.amountCents)}${list}${c ? ` on “${c.title}”` : ""} · confirm by ${fmtDateTimeIn(p.actionBy!, tz)}`, href: c ? bankHref(c.testId, p.id) : null };
   });
 }
 
@@ -121,6 +124,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
   const ids = [...new Set(waiting.map((p) => p.contractId).filter((x): x is string => !!x))];
   const contracts = ids.length ? await db.contract.findMany({ where: { id: { in: ids } }, select: { id: true, testId: true, title: true, tester: true } }) : [];
   const pieceOf = await pieceIdsOf(waiting);
+  const covers = await (await import("./owedOnce")).coveredNames(waiting.filter((p) => p.kind === "owed").map((p) => p.id));
   const subIds = waiting.map((p) => pieceOf(p).submissionId).filter((x): x is string => !!x);
   const callIds = waiting.map((p) => pieceOf(p).callId).filter((x): x is string => !!x);
   const [subs, calls] = await Promise.all([
@@ -139,6 +143,8 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
       // reads as on the test page: "a payment your bank had reversed (Ana Silva's written answers)".
       const what =
         p.kind === "subscription" ? null
+        // (Batch 35 §117 rule 6) Pay what you owe's one payment: "what you owe (Ana Silva's work $8.00, Ben Okafor's call on Oct 30 $5.00)".
+        : p.kind === "owed" ? `${pieceWords.owed}${covers.get(p.id)?.length ? ` (${covers.get(p.id)!.join(", ")})` : ""}`
         : p.kind === "chargeback" ? pieceWords.reversed(c ? piece : null)
         : !c || p.status !== "needs_confirmation" ? pieceWords.owed
         : p.kind === "dispute" ? pieceWords.dispute(name)
@@ -236,7 +242,10 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   // (Batch 28 §10, checked on Stripe test mode) A renewal's invoice (or an off-session try) that the bank wants confirmed waits on Stripe.js ("use_stripe_sdk"): confirmed
   // again here with return_url, Stripe hands back the bank's check page, shown inline like a press's.
   const sdkOnly = pi.status === "requires_action" && !checkUrlOf(pi);
-  if ((pi.status === "requires_payment_method" || pi.status === "requires_confirmation" || sdkOnly) && u.stripePaymentMethodId && typeof stripe.paymentIntents.confirm === "function") {
+  // (Owner, Nov 2, batch 35 §117 rule 1) ONE CARD IN PLAY: "Confirm with your bank" always approves it on the CURRENT card, never finishes a check made on another one.
+  const pm = typeof pi.payment_method === "string" ? pi.payment_method : pi.payment_method?.id ?? null;
+  const otherCard = pi.status === "requires_action" && !!pm && !!u.stripePaymentMethodId && pm !== u.stripePaymentMethodId;
+  if ((pi.status === "requires_payment_method" || pi.status === "requires_confirmation" || sdkOnly || otherCard) && u.stripePaymentMethodId && typeof stripe.paymentIntents.confirm === "function") {
     try {
       pi = await stripe.paymentIntents.confirm(pi.id, { payment_method: u.stripePaymentMethodId, return_url: bankReturnUrl() });
     } catch (e) {
@@ -250,7 +259,8 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   return { paymentId, clientSecret: pi.client_secret, publishableKey: pk(), simulated: simulated(), paymentMethod: u.stripePaymentMethodId, needs, checkUrl: checkUrlOf(pi) ?? null };
 }
 
-const split = (p: { feeCents: number; testerCents: number; transferStatus: string; actionPi: string | null }) => ({ status: "charged", feeCents: p.feeCents, testerCents: p.testerCents, transferStatus: p.transferStatus, stripePaymentIntentId: p.actionPi });
+// (Batch 35 §117) The check's PaymentIntent: Confirm claims it (actionPi cleared) before finishing, so the one stored with it (pressAction / awayAction) is used then.
+const split = (p: { feeCents: number; testerCents: number; transferStatus: string; actionPi: string | null; stripePaymentIntentId: string | null }) => ({ status: "charged", feeCents: p.feeCents, testerCents: p.testerCents, transferStatus: p.transferStatus, stripePaymentIntentId: p.actionPi ?? p.stripePaymentIntentId });
 
 /** The page's pop-up finished (or Confirm on Payments): ask Stripe how it ended and finish the payment, or let it go with nothing charged. */
 export async function confirmFinish(dev: { id: string; email: string }, paymentId: string, body: Record<string, unknown> = {}) {
@@ -274,11 +284,22 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
   return finish(p.id);
 }
 
-/** The bank confirmed: the payment goes through as normal, whatever started it. */
+/** The bank confirmed: the payment goes through as normal, whatever started it. (Batch 35 §117) Also for a check that had already gone through when it was cancelled. */
+export async function finishConfirmed(paymentId: string) {
+  return finish(paymentId);
+}
 async function finish(paymentId: string) {
   const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const payments = await import("./payments");
   const holds = await import("./holds");
+  // (Owner, Nov 2, batch 35 §117 rule 6) Pay what you owe's ONE payment: every debt it covers is paid by it together; one receipt names them all.
+  if (p.kind === "owed") {
+    const s = await (await import("./owedOnce")).settleOwed(p.id, p.stripePaymentIntentId);
+    if (s.again) return { done: true, repeated: true };
+    const u = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
+    if (s.cents > 0) await payments.receipt(u.email, owedReceiptWhat(s.names), s.cents, stripeOn() ? "charged" : "not_set_up", "/app/payments");
+    return { done: true, lifted: await holds.liftHoldIfClear(p.developerId) };
+  }
   if (p.status === "needs_action" && (p.kind === "review" || p.kind === "call")) return { done: true, ...(await payments.finishReviewPay(p.id, split(p))) };
   if (p.status === "needs_action" && p.kind === "extra") return { done: true, ...(await payments.finishExtraPay(p.id, split(p))) };
   if ((p.status === "needs_action" || p.status === "needs_confirmation") && p.kind === "chargeback") {
@@ -305,7 +326,23 @@ export async function release(paymentId: string) {
   // invoice is voided). Every other press cancels its PaymentIntent.
   const subId = p.kind === "subscription" && p.status === "needs_action" && p.note.startsWith("sub:") && p.note !== "sub:manual" ? p.note.slice(4) : "";
   if (subId && stripeOn()) await getStripe().subscriptions.cancel(subId).catch(() => null);
-  else if (p.actionPi && stripeOn()) await getStripe().paymentIntents.cancel(p.actionPi).catch(() => null);
+  else if (p.actionPi && stripeOn() && p.kind === "subscription") await getStripe().paymentIntents.cancel(p.actionPi).catch(() => null);
+  else if (p.actionPi && stripeOn()) {
+    // (Batch 35 §117 rule 4) Never an orphan check: cancelled at Stripe first; one that had already gone through is recorded as paid (never charged again). When
+    // Stripe's answer is unclear the check stays tracked (the clock tries again).
+    let end: "cancelled" | "succeeded";
+    try {
+      end = await (await import("./owedOnce")).dropCheck(p.actionPi);
+    } catch {
+      return;
+    }
+    if (end === "succeeded") {
+      if ((await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null } })).count === 1) await finish(p.id);
+      return;
+    }
+  }
+  // (§117) Pay what you owe's one payment: what it covered is owed (and payable) again.
+  if (p.kind === "owed") return void (await (await import("./owedOnce")).releaseOwed(p.id));
   if (p.status === "needs_action" && (p.kind === "review" || p.kind === "call")) {
     await db.$transaction(async (tx) => {
       const claimed = await tx.payment.updateMany({ where: { id: p.id, status: "needs_action" }, data: { status: "cancelled", actionPi: null, actionBy: null } });
@@ -323,19 +360,35 @@ export async function release(paymentId: string) {
  */
 export async function expireActions(now = new Date(), where: { submissionId?: string; callId?: string; contractId?: string; developerId?: string } = {}) {
   for (const p of await db.payment.findMany({ where: { ...where, actionPi: { not: null }, actionBy: { lte: now } } })) {
-    if (p.status === "needs_action" || p.status === "paying") await release(p.id);
-    else if (p.status === "needs_confirmation" && p.kind === "chargeback") await db.payment.delete({ where: { id: p.id } }); // a retried chargeback: still owed
-    else if (p.status === "needs_confirmation") {
-      await db.payment.update({ where: { id: p.id }, data: { actionPi: null, actionBy: null } });
-      if (p.kind === "subscription") {
-        await db.payment.update({ where: { id: p.id }, data: { status: "failed" } });
-        await (await import("./subscription")).lapse(p.developerId, now);
-      } else {
-        const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
-        await (await import("./holds")).declinedPayment(p.developerId, p.id, p.amountCents, c ? `${displayName(c.tester)}'s ${p.kind === "dispute" ? "dispute decision" : "work"} on “${c.title}” (not confirmed with your bank)` : `a payment of ${money(p.amountCents)} (not confirmed with your bank)`);
-      }
-    } else await db.payment.update({ where: { id: p.id }, data: { actionPi: null, actionBy: null } });
+    try {
+      await expireOne(p, now);
+    } catch (e) {
+      console.error("[confirm] expire:", (e as Error).message); // tried again next time (the check stays tracked)
+    }
   }
+}
+
+async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThrow>>, now: Date) {
+  if (p.status === "needs_action" || p.status === "paying") return release(p.id);
+  // (Owner, Nov 2, batch 35 §117 rule 4) NEVER AN ORPHAN CHECK: the check is cancelled at Stripe before the app stops tracking it (else an old bank page could still
+  // complete it while the item is charged again); one that had already gone through is recorded as paid instead. (A renewal's check is its invoice's: the lapse ends it.)
+  const end = p.kind === "subscription" ? "cancelled" : await (await import("./owedOnce")).dropCheck(p.actionPi);
+  // Claimed, so a Confirm finishing at the same moment and this clock never both act on it.
+  if ((await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null, actionBy: null } })).count !== 1) return;
+  if (end === "succeeded") return void (await finish(p.id));
+  if (p.kind === "owed") await (await import("./owedOnce")).releaseOwed(p.id); // Pay what you owe's one payment: each debt stays owed
+  else if (p.status === "needs_confirmation" && p.kind === "chargeback") await db.payment.delete({ where: { id: p.id } }); // a retried chargeback: still owed
+  else if (p.status === "needs_confirmation") {
+    if (p.kind === "subscription") {
+      await db.payment.update({ where: { id: p.id }, data: { status: "failed" } });
+      await (await import("./subscription")).lapse(p.developerId, now);
+    } else if (!(await (await import("./owedOnce")).deferWhileHeld(p.id))) {
+      // (Batch 35 §113 with §117) During a hold it waits for the lift instead (never added to Pay what you owe); otherwise it counts as declined.
+      const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
+      await (await import("./holds")).declinedPayment(p.developerId, p.id, p.amountCents, c ? `${displayName(c.tester)}'s ${p.kind === "dispute" ? "dispute decision" : "work"} on “${c.title}” (not confirmed with your bank)` : `a payment of ${money(p.amountCents)} (not confirmed with your bank)`);
+    }
+  }
+  // else: a debt with a check of its own (before §117): it stays owed.
 }
 
 /** (Batch 12 section 5) Is a payment for this piece waiting for the bank's confirmation right now? */

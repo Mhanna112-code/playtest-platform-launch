@@ -308,11 +308,16 @@ describe("batch 5 item 6: deleting an account", () => {
     const owedPay = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
     await startHold(dev.user.id, "unpaid");
     expect((await del(tester.cookie)).status).toBe(200);
-    const made: { transfer_data?: { destination?: string } }[] = [];
-    setStripeForTests({ paymentIntents: { create: async (p: { transfer_data?: { destination?: string } }) => { made.push(p); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    // (Batch 35 §117) Pay what you owe is ONE payment for the total: each tester's share is sent from that charge (source_transaction) to their account.
+    const sent: { destination?: string; source_transaction?: string }[] = [];
+    setStripeForTests({
+      paymentIntents: { create: async () => ({ id: "pi_" + randomUUID(), status: "succeeded" }), retrieve: async (id: string) => ({ id, status: "succeeded", latest_charge: id.replace("pi_", "ch_") }) },
+      transfers: { create: async (p: { destination?: string; source_transaction?: string }) => { sent.push(p); return { id: "tr_" + randomUUID() }; } },
+    } as unknown as Stripe);
     const r = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(r.body).toMatchObject({ paid: 1, stillFailing: [] });
-    expect(made[0].transfer_data?.destination).toBe(acct);
+    expect(sent[0].destination).toBe(acct);
+    expect(sent[0].source_transaction).toMatch(/^ch_/);
     expect(await db.payment.findUniqueOrThrow({ where: { id: owedPay.id } })).toMatchObject({ status: "charged", transferStatus: "sent" });
   });
 

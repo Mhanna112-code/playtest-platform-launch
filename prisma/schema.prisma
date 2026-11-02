@@ -446,7 +446,7 @@ model Review {
 /// Every charge (or attempted charge). status: "pending" | "charged" | "not_set_up" (no Stripe key: recorded only) | "failed"
 model Payment {
   id           String   @id @default(cuid())
-  /// "review" | "call" | "dispute"
+  /// "review" | "call" | "dispute" | (batch 35 §117) "owed": Pay what you owe's one payment for the total (status "bundled" once it went through)
   kind         String
   submissionId String?
   callId       String?
@@ -490,6 +490,9 @@ model Payment {
   reviewDraft  Json?
   /// (Batch 15 section 41, C1 and M2) The press this payment came from ("press:<developer>:<uuid>", "extra:press:…"): a repeat of the same press finds it
   pressKey     String?
+  /// (Batch 35 §117) A debt paid with ONE "Pay what you owe" payment (a Payment of kind "owed" for the whole total): that payment's id. While it is being charged or
+  /// waits for the bank the debt is locked (no press or retry charges it again); once it went through, the payment that paid it (the admin's views, refunds).
+  coveredById  String?
   createdAt    DateTime @default(now())
 
   @@unique([kind, payKey])
@@ -497,6 +500,7 @@ model Payment {
   @@index([developerId])
   @@index([testerId])
   @@index([status, createdAt])
+  @@index([coveredById])
 }
 
 /// Only for parts in the contract paid below the listing amount; once per part.
