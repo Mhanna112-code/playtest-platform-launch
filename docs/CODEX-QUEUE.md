@@ -288,3 +288,29 @@ and lists only the other file; an answer with only inline files has no list. App
 (owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier tasks). Commit on the branch; don't push
 or merge.
 ```
+
+## 12. Task 28: a kept refusal line never outlives its situation, and never floats
+
+```
+Read AGENTS.md first and follow it. Task number: 28 (schema codex28, build folder .next-codex28, branch codex/kept-refusal-life,
+worktree C:/Users/march/Projects/pl-codex-28, branched from master).
+
+Bugs (owner, Nov 1), in the kept refusal (src/components/KeptRefusal.tsx, src/lib/keptRefusal.ts; batch 29 §36, batch 32 §10,
+batch 35 §85 and §95):
+1. A tester pressed Apply; refused "this test is invite only"; the redraw removed the join box so the line was pinned at the top.
+   Then the developer switched the test to "anyone can join": the join box came back and the kept line moved back into it, under a
+   working "Join this test", still saying "this test is invite only".
+2. When no section of the pressed button is left, the line is a FIXED box floating over the header (position: fixed, top 72px).
+
+Wanted:
+1. A kept line is dropped at the first page update AFTER the redraw its own refusal caused (a newer page version: the same signal
+   Err uses via useGoneOnNewVersion, src/lib/pageVersion.ts, batch 35 §60), as well as on the next press and on another page (as now).
+   So it explains why the button vanished, then goes once the situation changes again.
+2. With no section left, the line is placed at the top of the page CONTENT (inside <main>, first child, scrolling with the page, the
+   info style), never a fixed overlay.
+Keep: never two copies (shownElsewhere), no flashing, no empty bullet (§95).
+Tests in tests/batch35-kept-refusal-life.test.ts: the line survives the refusal's own redraw, is dropped at the next version; with no
+section left it's placed inside main (not fixed). Append "## §116 A kept refusal never outlives its situation or floats (owner,
+Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier tasks). Commit on the branch; don't push or
+merge.
+```
