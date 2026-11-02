@@ -106,7 +106,7 @@ describe("§113: new charges wait separately until a hold lifts", () => {
     expect(await owed(f.dev.user.id)).toEqual([]);
   });
 
-  it("a declined waiting charge starts a NEW hold and leaves later waiting charges untouched", async () => {
+  it("(batch 35 §122) the waiting charges are made together as one payment: declined, each becomes a debt and a NEW hold starts", async () => {
     const st = bank(), f = await fixture(); await choose(f);
     const rec = await db.submission.create({ data: { contractId: f.sessionId, kind: "recording", agreedCents: 600, payBy: ago(1), choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
     expect((await choose(f, rec.id)).status).toBe(200);
@@ -116,9 +116,9 @@ describe("§113: new charges wait separately until a hold lifts", () => {
     const current = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     expect(current.holdCount).toBe(old.holdCount + 1);
     expect(current.holdStartedAt).not.toBeNull();
-    expect(st.made.map((p) => p.amount)).toEqual([500, 1000]);
-    expect((await owed(f.dev.user.id)).map((p) => p.amountCents)).toEqual([1000]);
-    expect((await db.payment.findFirstOrThrow({ where: { submissionId: rec.id } })).status).toBe("deferred");
+    expect(st.made.map((p) => p.amount)).toEqual([500, 1600]);
+    expect((await owed(f.dev.user.id)).map((p) => p.amountCents)).toEqual([1000, 600]);
+    expect((await db.payment.findFirstOrThrow({ where: { submissionId: rec.id } })).status).toBe("failed");
     expect(await db.notification.count({ where: { userId: f.dev.user.id, text: "Your tests are running again" } })).toBe(0);
   });
 
@@ -126,9 +126,11 @@ describe("§113: new charges wait separately until a hold lifts", () => {
     const st = bank(), f = await fixture(); await choose(f);
     st.state.mode = "action";
     await payOwed(f.dev.user);
-    const p = await db.payment.findFirstOrThrow({ where: { submissionId: f.sub.id } });
-    expect(p.status).toBe("needs_confirmation");
-    expect(p.actionBy!.getTime() - Date.now()).toBeGreaterThan(3 * DAY - 5000);
+    // (Batch 35 §122) One payment for the waiting charges: its check is the one "Confirm with your bank" item; the charge waits under it.
+    const p = await db.payment.findFirstOrThrow({ where: { submissionId: f.sub.id, kind: "review", status: "deferred" } });
+    const one = await db.payment.findUniqueOrThrow({ where: { id: p.coveredById! } });
+    expect(one.status).toBe("needs_confirmation");
+    expect(one.actionBy!.getTime() - Date.now()).toBeGreaterThan(3 * DAY - 5000);
     expect((await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } })).holdStartedAt).toBeNull();
   });
 

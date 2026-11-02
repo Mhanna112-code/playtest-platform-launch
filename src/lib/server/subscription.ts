@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { HttpError } from "./http";
 import { linesFor, notify } from "./notify";
 import { T } from "@/lib/tz";
-import { PAYMENTS_PROBLEM, bankReturnUrl, chargePlatform, checkUrlOf, getStripe, isCardError, stripeOn, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, bankReturnUrl, chargePlatform, checkUrlOf, getStripe, isCardError, piWaits, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
@@ -359,7 +359,9 @@ export async function subscriptionWebhook(type: string, payload: object, now = n
   } else if (type === "invoice.payment_failed") {
     // (Batch 28 §10) A renewal waiting for the bank's check also sends payment_failed: that one waits for the developer's Confirm (payment_action_required), not past due.
     const pi = billingOn() ? await invoicePaymentIntent(o) : null;
-    const waiting = pi ? (await getStripe().paymentIntents.retrieve(pi).catch(() => null))?.status === "requires_action" : false;
+    // (Batch 35 §122) Also requires_payment_method after an authentication attempt (the one classifier).
+    const got = pi ? await getStripe().paymentIntents.retrieve(pi).catch(() => null) : null;
+    const waiting = got ? piWaits(got as Parameters<typeof piWaits>[0]) : false;
     if (!waiting) await renewalFailed(u.id, now);
   } else if (type === "invoice.payment_action_required") {
     // (Batch 11) A renewal the bank wants the developer to confirm: it waits 3 days for their Confirm in Payments, then lapses.

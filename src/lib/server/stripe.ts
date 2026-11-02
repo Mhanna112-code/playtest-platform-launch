@@ -45,6 +45,12 @@ const fakeStripe = {
       if (p.metadata?.payKey) fakeByKey.set(p.metadata.payKey, id);
       if (p.capture_method === "manual") fakeManual.add(id);
       if (!fakePis.has(id)) fakePis.set(id, "succeeded");
+      // (Batch 35 §122) Like test card 3184 off-session: the attempt fails with payment_intent_payment_attempt_failed and the PaymentIntent waits in requires_payment_method.
+      if (p.payment_method === "pm_card_authenticationAttemptFailed") {
+        fakePis.set(id, "requires_action");
+        if (p.off_session) throw Object.assign(new Error("The latest payment attempt of this PaymentIntent has failed."), { type: "StripeCardError", rawType: "card_error", code: "payment_intent_payment_attempt_failed", raw: { code: "payment_intent_payment_attempt_failed", payment_intent: { id, client_secret: `${id}_secret_fake`, status: "requires_payment_method", last_payment_error: { code: "payment_intent_payment_attempt_failed" } } } });
+        return { id, status: "requires_action", client_secret: `${id}_secret_fake`, amount: p.amount };
+      }
       // (Batch 11) pm_card_authenticationRequired: the bank wants the cardholder to confirm (off-session, Stripe refuses with authentication_required).
       if (p.payment_method === "pm_card_authenticationRequired") {
         fakePis.set(id, "requires_action");
@@ -142,12 +148,32 @@ export const bankReturnUrl = () => `${appUrl()}/api/payments/bank-return`;
 /** (Batch 17 §11) The bank's own check page, to show inline (a PaymentIntent or SetupIntent confirmed with return_url waits on "redirect_to_url"). */
 export const checkUrlOf = (x: { next_action?: { type?: string; redirect_to_url?: { url?: string | null } | null } | null }) =>
   x.next_action?.type === "redirect_to_url" ? x.next_action.redirect_to_url?.url ?? undefined : undefined;
+/** (Batch 35 §122) Stripe's codes for "the bank wants the cardholder to authenticate" (3D Secure) on a charge: never a decline. */
+const AUTH_CODES = new Set(["authentication_required", "payment_intent_authentication_failure", "payment_intent_payment_attempt_failed"]);
+type PiLike = { id?: string; client_secret?: string | null; status?: string; last_payment_error?: { code?: string; decline_code?: string } | null };
+type StripeAnswer = { code?: string; decline_code?: string; raw?: { code?: string; decline_code?: string; payment_intent?: PiLike }; payment_intent?: PiLike };
+/**
+ * (Owner, Nov 2, batch 35 §122) THE one classifier of a charge's answer, used by every charge (press and away: a tester's Charge, a team decision, a retry, Pay what you
+ * owe's one payment, a charge after a lift, a new card's retry): does the bank want the cardholder to authenticate? An off-session charge on a card that asks the bank
+ * comes back as authentication_required, or (Stripe test mode, card 3184) as payment_intent_payment_attempt_failed with the PaymentIntent left in
+ * requires_payment_method. A real decline (a decline code other than authentication_required: insufficient funds, card declined…) is not.
+ */
+export function wantsAuth(e: unknown) {
+  const x = (e ?? {}) as StripeAnswer;
+  const pi = x.raw?.payment_intent ?? x.payment_intent;
+  const lpe = pi?.last_payment_error ?? null;
+  const decline = x.decline_code ?? x.raw?.decline_code ?? lpe?.decline_code;
+  if (decline && decline !== "authentication_required") return false;
+  return AUTH_CODES.has(x.code ?? "") || AUTH_CODES.has(x.raw?.code ?? "") || AUTH_CODES.has(lpe?.code ?? "") || decline === "authentication_required";
+}
 function needsActionOf(e: unknown): NeedsAction | null {
-  const x = e as { code?: string; raw?: { payment_intent?: { id?: string; client_secret?: string } }; payment_intent?: { id?: string; client_secret?: string } };
+  const x = e as StripeAnswer;
   const pi = x?.raw?.payment_intent ?? x?.payment_intent;
-  if (x?.code === "authentication_required" && pi?.id) return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "" };
+  if (wantsAuth(e) && pi?.id) return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "" };
   return null;
 }
+/** (§122) A PaymentIntent Stripe returned (no error) that waits for the cardholder: requires_action, or requires_payment_method after an authentication attempt. */
+export const piWaits = (pi: PiLike) => pi.status === "requires_action" || (pi.status === "requires_payment_method" && wantsAuth({ payment_intent: pi }));
 // (Batch 17 §11) A press is confirmed with return_url, so the bank's check (if it asks) is a page the developer's page can show inline, under the button.
 // (API 2026-09-30) PaymentIntents take `allowed_payment_method_types`; the old `payment_method_types` is refused by Stripe, so every press failed.
 // Stripe's page can save a card or Link (which may use a card or an eligible bank account); both methods remain allowed.
@@ -184,7 +210,7 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
       },
       { idempotencyKey: `pay-${payKey}` },
     );
-    if (pi.status === "requires_action") return { ...split, transferStatus: destination ? "sent" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
+    if (piWaits(pi)) return { ...split, transferStatus: destination ? "sent" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
     if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
     return { status: "charged", ...split, transferStatus: destination ? "sent" : "waiting", stripePaymentIntentId: pi.id };
   } catch (e) {
@@ -199,7 +225,8 @@ export const PAYMENTS_PROBLEM = "Payments are having a problem right now. Nothin
 /** Only Stripe's card errors are declines (a hold, an owed payment). */
 export const isCardError = (e: unknown) => {
   const x = e as { type?: string; rawType?: string };
-  return x?.type === "StripeCardError" || x?.type === "card_error" || x?.rawType === "card_error";
+  // (Batch 35 §122) The bank asking to authenticate is a card_error at Stripe, but never a decline.
+  return (x?.type === "StripeCardError" || x?.type === "card_error" || x?.rawType === "card_error") && !wantsAuth(e);
 };
 /**
  * The error a failed charge becomes: a lost answer (connection or Stripe's own error) is "payment_unknown" (it stays pending and is checked later, section 9); a key reused
@@ -215,6 +242,8 @@ function chargeError(e: unknown, declined: string): HttpError {
   } catch (x) {
     return x as HttpError;
   }
+  // (Batch 35 §122) The bank asking to authenticate is never a decline (a debt): with no PaymentIntent to confirm, it waits and is tried again.
+  if (wantsAuth(e)) return new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
   if (isCardError(e)) return new HttpError(402, "card_failed", declined);
   const stripeError = e as { type?: string; code?: string; raw?: { code?: string; message?: string } };
   if (stripeError.type === "StripeInvalidRequestError" && (stripeError.code === "resource_missing" || stripeError.raw?.code === "resource_missing"))
@@ -244,7 +273,7 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
       { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, ...pressParams(mode), confirm: true, description, metadata: { developerId: dev.id, payKey } },
       { idempotencyKey: `pay-${payKey}` },
     );
-    if (pi.status === "requires_action") return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
+    if (piWaits(pi)) return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
     if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
     return { status: "charged", stripePaymentIntentId: pi.id as string | null };
   } catch (e) {
@@ -266,7 +295,7 @@ export async function authorize(dev: Party, amountCents: number, reservationId: 
       { idempotencyKey: `reserve-${reservationId}` },
     );
     if (pi.status === "requires_capture") return { status: "requires_capture", stripePaymentIntentId: pi.id };
-    if (pi.status === "requires_action") return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
+    if (piWaits(pi)) return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
     throw new Error(`status ${pi.status}`);
   } catch (e) {
     const na = needsActionOf(e);

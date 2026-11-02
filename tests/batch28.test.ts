@@ -338,11 +338,14 @@ describe("batch 28 §8: Pay what you owe reserves once; what's added after is ch
     };
     await approveChargebackHold(x.dev.user.id);
     expect((await userOf(x.dev.user.id)).holdStartedAt).toBeNull();
+    // (Batch 35 §122) The waiting charges are made together as ONE payment: its check waits 3 days; the charge waits under it (still "delayed" for the tester).
     const p = await db.payment.findUniqueOrThrow({ where: { id: added.id } });
-    expect(p.status).toBe("needs_confirmation");
-    expect(p.actionBy!.getTime()).toBeGreaterThan(Date.now() + 2.9 * DAY);
+    expect(p.status).toBe("deferred");
+    const one = await db.payment.findUniqueOrThrow({ where: { id: p.coveredById! } });
+    expect(one).toMatchObject({ kind: "owed", status: "needs_confirmation" });
+    expect(one.actionBy!.getTime()).toBeGreaterThan(Date.now() + 2.9 * DAY);
     const { bankToConfirm } = await import("@/lib/server/confirm");
-    expect((await bankToConfirm(x.dev.user.id)).map((b) => b.id)).toContain(added.id);
+    expect((await bankToConfirm(x.dev.user.id)).map((b) => b.id)).toContain(one.id);
   });
 });
 

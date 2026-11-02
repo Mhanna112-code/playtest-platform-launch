@@ -1070,3 +1070,34 @@ Tests: tests/batch35-per-field-drafts.test.ts.
 - Recordings uploaded before Oct 31 have no length in the file, so the player said Infinity and dragging the time bar snapped back to 0:00. Every recording player (the session's rows, sent attachments, files in written answers, the recorder's preview) is now `RecordingVideo`: when the length is missing it asks the browser for a time past the end (which reads the file's last part through the byte-range route), learns the real length and goes back to the start. Old recordings then show their length ("0:39 · 1.5 MB") and can be dragged; new ones are unchanged. No backfill or migration.
 - Tests: tests/nov2-fixes-b.test.ts (race refusals for Lift ×10, Delete, Close now, outage Approve/Dismiss, Decline vs Withdraw, Accept after Withdraw, Cancel invite vs No thanks; each event's own reason; the device icon rendered; Delete after Suspend in another tab; the missing-length player), tests/batch22.test.ts (the corrected race test), tests/batch13.test.ts (the length line).
 - Screenshots: docs/media/nov2-b1-timeline-reasons-master.png / -after.png, nov2-b2-device-icon-master.png / -after.png, nov2-b4-old-recording-seek-before.png / -after.png.
+
+## §122 After a lift, a card that asks the bank gives a confirm, not a debt (owner, Nov 2)
+
+- **The bug.** On a card that always asks the bank (Stripe test card 3184), Stripe answered the first charge made after a lift (off-session) with `payment_intent_payment_attempt_failed`, leaving the PaymentIntent in `requires_payment_method`. That answer is a card error, so the app treated it as a decline: the charge became a debt and a new hold started.
+- **One classifier for every charge** (`wantsAuth` in `stripe.ts`). Charges made at the developer's press and while they're away all use it: a tester's Charge, a team decision, an automatic call charge, Pay what you owe and its retries, charges after a lift, and a new card's retry. The bank asking the cardholder to authenticate always becomes a "Confirm with your bank" item (3 days, `awayAction`), never a debt. That covers `authentication_required`, `payment_intent_authentication_failure`, `payment_intent_payment_attempt_failed`, and a PaymentIntent left in `requires_payment_method` after such an attempt. If there is no PaymentIntent to confirm, it keeps waiting and is tried again. Only a real decline (a decline code other than `authentication_required`, e.g. insufficient funds) becomes a debt. `isCardError` follows the same rule, and a renewal whose invoice waits like this isn't marked past due. The fake Stripe has `pm_card_authenticationAttemptFailed` for this case.
+- **Waiting charges are made together as ONE payment** (owner). Charges made while the developer was away that are retried together are charged as one payment, like Pay what you owe's (§117): testers' Charges, team decisions, automatic call charges, and Pay presses that waited for the lift. This happens when a hold lifts (§113) and when a new card is saved.
+  - **One payment:** one charge on the card in use then, one bank check if the card asks, and one "Confirm with your bank" item listing each charge and its amount ("Charges made while you were away $33.00 (…)"). The charges stay "Payment delayed" for testers and are locked under it.
+  - **Approved:** every charge is paid by it, each tester's share is sent from that one payment, and one receipt names them all.
+  - **Declined:** each charge becomes a debt (a new hold). Its check running out counts as a decline, but during a hold they keep waiting instead.
+  - **Any other error:** they all keep waiting and are made on a later sweep.
+  - **Disputed:** the whole amount is owed once, with ONE chargeback fee, on one chargeback hold.
+  - A reversed payment owed again after a reservation is still charged on its own first.
+  - A single charge made at its own moment (a tester's Charge with no hold on) is still its own payment.
+- **A hold starting pauses checks still waiting** (owner). Some charges made while away may still be waiting for the bank when a payment hold or chargeback hold starts. These are "Confirm with your bank" items made before the hold, or the one combined payment for such charges.
+  - **Paused:** each check is cancelled at Stripe first (rule 4); one that had already gone through is recorded as paid.
+  - **Waiting for the lift:** each charge moves to "deferred" (§113) and shows under "Charged once your tests resume", no longer as a confirm.
+  - **Old tabs:** Confirm with your bank on one is refused with "This payment is paused until your tests resume." and nothing is charged.
+  - **After the lift:** they are made with the other waiting charges as the one combined payment. Testers keep "Payment delayed".
+- **A hold restarting mid-run.** The one payment is claimed under the developer's row lock, which re-checks for a hold or a suspension. If one started (e.g. a declined reversed payment ahead of it), every charge not yet made keeps waiting.
+- **Tests:** `tests/batch35-one-card-checks.test.ts` §122 covers:
+  - the classifier;
+  - a 3184-like card after a lift giving one confirm item and no debt;
+  - a real decline making debts;
+  - a Stripe error leaving the charges waiting, then making them later;
+  - a hold restarting mid-run leaving the rest waiting;
+  - a new card with three waiting charges giving one payment, one confirm item listing all three, and when disputed, the amount owed once plus one fee.
+
+  - a hold starting with three confirms up: one becomes a debt, the other two are cancelled at Stripe and wait, an old tab's Confirm is refused, and the lift makes them as one payment;
+  - a paused check that had already gone through, recorded as paid.
+
+  `batch28`, `batch29` and `batch35-charges-after-lift` follow the one-payment rule.

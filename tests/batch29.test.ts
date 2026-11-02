@@ -144,13 +144,13 @@ describe("batch 29 §37: a deferred payment declined after a lift names what it 
     await db.review.create({ data: { submissionId: sub.id, contractId: j.sessionId, amountCents: 1000, agreedCents: 1000, reason: R.CHARGED_BY_TESTER, payKey: randomUUID() } });
     const base = { kind: "review", contractId: j.sessionId, developerId: s.dev.user.id, testerId: j.tester.user.id, feeCents: 0, testerCents: 0, status: "deferred" };
     await db.payment.create({ data: { ...base, submissionId: sub.id, amountCents: 1000 } });
-    // A later team decision stays waiting when this Charge declines and starts a new hold.
+    // (Batch 35 §122) The waiting charges are made together as one payment: declined, each becomes a debt, named as its piece.
     await db.payment.create({ data: { ...base, kind: "dispute", amountCents: 700, createdAt: new Date(Date.now() + 60_000) } });
     const { chargeDeferred } = await import("@/lib/server/holds");
     await chargeDeferred(s.dev.user.id);
     const lines = await (await import("@/lib/server/holds")).owedLines(s.dev.user.id);
-    expect(lines.map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers \$10\.00 · card declined /)]);
-    expect((await db.payment.findFirstOrThrow({ where: { developerId: s.dev.user.id, kind: "dispute" } })).status).toBe("deferred");
+    expect(lines.map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers \$10\.00 · card declined /), expect.stringMatching(/\$7\.00 · card declined /)]);
+    expect((await db.payment.findFirstOrThrow({ where: { developerId: s.dev.user.id, kind: "dispute" } })).status).toBe("failed");
     expect(src("lib/server/holds.ts")).not.toContain('p.kind === "dispute" ? "a team decision" : "work you paid for during the pause"');
   });
 });

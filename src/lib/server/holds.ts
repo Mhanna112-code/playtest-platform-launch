@@ -91,6 +91,9 @@ export async function startHold(devId: string, reason: string) {
   const claimed = await db.user.updateMany({ where: { id: devId, holdStartedAt: null }, data: { holdStartedAt: now, holdReason: reason, holdAlertedAt: null, holdCount: { increment: 1 }, holdApprovedAt: null, holdApprovedById: null, holdRetries: 0, holdRetryAt: null } });
   if (claimed.count !== 1) return false;
   await accountEvent(devId, "hold", null, reason);
+  // (Owner, Nov 2, batch 35 §122) Charges made while away still waiting for the bank are paused: their checks are cancelled at Stripe (one that already went through is
+  // recorded as paid) and they wait for the lift with the other new charges (§113), made then as the one combined payment.
+  await (await import("./owedOnce")).pauseAwayChecks(devId).catch((e) => console.error("[hold] pause bank checks:", (e as Error).message));
   // (Batch 9) One closing clock per paused test: it starts now unless the test was already paused.
   await markPaused({ developerId: devId }, now);
   // (Batch 8) Subscription billing pauses while the hold lasts.
@@ -198,12 +201,13 @@ export async function chargeDeferred(devId: string) {
 }
 
 async function chargeDeferredLocked(devId: string) {
-  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
+  const once = await import("./owedOnce");
+  await once.resumeStaleOwed(devId);
+  // (Batch 28 §8) Reversed payments owed again after a reservation: each to the platform, as before.
+  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred", kind: "chargeback" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
     const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
     if (dev.holdStartedAt || dev.devSuspendedAt) break;
-    const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-    const testPath = p.contractId ? `/app/tests/${(await db.contract.findUnique({ where: { id: p.contractId }, select: { testId: true } }))?.testId}` : "/app/payments";
-    if (p.kind === "chargeback") {
+    {
       // (Batch 28 §8) A reversed payment owed again, added after the reservation: charged to the platform right after the lift (the tester already got their share).
       try {
         const r = await chargePlatform(dev, p.amountCents, serverKey("deferred", p.id), "Playtest: a payment reversed by your bank, charged again");
@@ -218,20 +222,16 @@ async function chargeDeferredLocked(devId: string) {
           await startHold(devId, "chargeback");
         }
       }
-      continue;
-    }
-    try {
-      const r = await charge(dev, tester, p.amountCents, serverKey("deferred", p.id), "Playtest: charged now that the account is clear");
-      if (r.status === "requires_action") { await (await import("./confirm")).awayAction(p.id, r as NeedsAction); continue; }
-      await db.payment.update({ where: { id: p.id }, data: { ...r } });
-      await receipt(dev.email, await deferredWhat(p), p.amountCents, r.status, testPath);
-      await tellArrived(p, tester.email, displayName(dev));
-    } catch (e) {
-      // (Batch 15 section 41, M1) Only a card error is a decline; any other problem leaves it waiting for the next time.
-      // (Batch 29 §37) The decline names what it was ("Ana Silva's written answers on “Harbor Run”"), not "work you paid for during the pause" for a tester's Charge.
-      if (e instanceof HttpError && e.code === "card_failed") await declinedPayment(devId, p.id, p.amountCents, await declinedWhat(p));
     }
   }
+  // (Owner, Nov 2, batch 35 §122) Every other waiting charge (testers' Charges, team decisions, auto-charged calls) is made TOGETHER as ONE payment on the card in use
+  // now: goes through -> each is paid, one receipt; the bank asks (a card like 3184) -> ONE "Confirm with your bank" item listing each, never a debt; a real decline ->
+  // each becomes a debt (a new hold); any other problem -> they all keep waiting. A hold or a suspension starting first keeps them all waiting (the claim re-checks it).
+  const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
+  if (dev.holdStartedAt || dev.devSuspendedAt) return;
+  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", kind: { notIn: ["chargeback", "owed"] }, coveredById: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  const r = await once.chargeWaitingTotal(devId, rows);
+  if (r?.result === "paid" && r.cents > 0) await receipt(dev.email, once.receiptWhat(r.names, true), r.cents, r.status !== "not_set_up" ? "charged" : "not_set_up", "/app/payments");
 }
 
 async function chargeReadyDeferred() {
@@ -250,7 +250,7 @@ export async function deferredForBox(devId: string) {
  * What a payment charged after a pause was for, in its receipt: a team decision, (batch 28 §8) a tester's Charge ("Ana Silva's written answers (charged by them after
  * 7 days)", like any Charge's receipt), or work the developer paid for during the pause.
  */
-async function deferredWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }) {
+export async function deferredWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }) {
   if (p.kind === "dispute") return "a team decision (charged after the pause)";
   const review = p.submissionId ? await db.review.findUnique({ where: { submissionId: p.submissionId } }) : p.callId ? await db.review.findUnique({ where: { callId: p.callId } }) : null;
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
@@ -267,7 +267,7 @@ async function deferredWhat(p: { kind: string; submissionId: string | null; call
 }
 
 /** (Batch 29 §37) What a deferred payment declined after a lift was: "a team decision", or the piece ("Ana Silva's written answers on “Harbor Run”", "Ana Silva's call on Nov 5 on “Harbor Run”"). */
-async function declinedWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }) {
+export async function declinedWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }) {
   if (p.kind === "dispute") return "a team decision";
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
   if (!c) return "work you paid for during the pause";

@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, owedReceiptWhat } from "@/lib/rules";
+import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
@@ -106,7 +106,8 @@ export async function confirmItems(devId: string) {
   const covers = await (await import("./owedOnce")).coveredNames(waiting.filter((p) => p.kind === "owed").map((p) => p.id));
   return waiting.map((p) => {
     const c = contracts.find((x) => x.id === p.contractId);
-    const what = p.kind === "owed" ? "What you owe" : p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment";
+    // (§122) One payment for charges made while away names them so.
+    const what = p.kind === "owed" ? (p.note.endsWith(":charges") ? "Charges made while you were away" : "What you owe") : p.kind === "subscription" ? "Your subscription" : p.kind === "dispute" ? "A team decision" : p.kind === "chargeback" ? "A payment your bank had reversed" : "A payment";
     const list = p.kind === "owed" && covers.get(p.id)?.length ? ` (${covers.get(p.id)!.join(", ")})` : "";
     return { id: p.id, text: `${what} ${money(p.amountCents)}${list}${c ? ` on “${c.title}”` : ""} · confirm by ${fmtDateTimeIn(p.actionBy!, tz)}`, href: c ? bankHref(c.testId, p.id) : null };
   });
@@ -144,7 +145,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
       const what =
         p.kind === "subscription" ? null
         // (Batch 35 §117 rule 6) Pay what you owe's one payment: "what you owe (Ana Silva's work $8.00, Ben Okafor's call on Oct 30 $5.00)".
-        : p.kind === "owed" ? `${pieceWords.owed}${covers.get(p.id)?.length ? ` (${covers.get(p.id)!.join(", ")})` : ""}`
+        : p.kind === "owed" ? `${p.note.endsWith(":charges") ? "charges made while you were away" : pieceWords.owed}${covers.get(p.id)?.length ? ` (${covers.get(p.id)!.join(", ")})` : ""}`
         : p.kind === "chargeback" ? pieceWords.reversed(c ? piece : null)
         : !c || p.status !== "needs_confirmation" ? pieceWords.owed
         : p.kind === "dispute" ? pieceWords.dispute(name)
@@ -195,6 +196,7 @@ async function startable(devId: string, paymentId: string) {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (!p || p.developerId !== devId) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   if (!p.actionPi) {
+    await refusePaused(p);
     if (p.status === "charged" || p.status === "not_set_up") throw new HttpError(409, "confirmed", ALREADY_CONFIRMED);
     if (p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
     throw new HttpError(409, "expired", CONFIRM_EXPIRED);
@@ -208,8 +210,16 @@ async function startable(devId: string, paymentId: string) {
 
 async function own(devId: string, paymentId: string) {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
+  if (p && p.developerId === devId && !p.actionPi) await refusePaused(p);
   if (!p || p.developerId !== devId || !p.actionPi) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   return p;
+}
+
+/** (Owner, Nov 2, batch 35 §122) "This payment is paused until your tests resume.": its check was cancelled when a hold started; it waits for the lift. */
+export const CONFIRM_PAUSED = "This payment is paused until your tests resume.";
+async function refusePaused(p: { status: string; kind: string; note: string; developerId: string }) {
+  const paused = p.status === "deferred" || (p.kind === "owed" && p.status === "cancelled" && p.note.endsWith(":charges") && !!(await db.user.findUnique({ where: { id: p.developerId }, select: { holdStartedAt: true } }))?.holdStartedAt);
+  if (paused) throw new HttpError(409, "paused", CONFIRM_PAUSED);
 }
 
 /**
@@ -297,7 +307,7 @@ async function finish(paymentId: string) {
     const s = await (await import("./owedOnce")).settleOwed(p.id, p.stripePaymentIntentId);
     if (s.again) return { done: true, repeated: true };
     const u = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
-    if (s.cents > 0) await payments.receipt(u.email, owedReceiptWhat(s.names), s.cents, stripeOn() ? "charged" : "not_set_up", "/app/payments");
+    if (s.cents > 0) await payments.receipt(u.email, (await import("./owedOnce")).receiptWhat(s.names, s.charges), s.cents, stripeOn() ? "charged" : "not_set_up", "/app/payments");
     return { done: true, lifted: await holds.liftHoldIfClear(p.developerId) };
   }
   if (p.status === "needs_action" && (p.kind === "review" || p.kind === "call")) return { done: true, ...(await payments.finishReviewPay(p.id, split(p))) };
@@ -376,7 +386,14 @@ async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThr
   // Claimed, so a Confirm finishing at the same moment and this clock never both act on it.
   if ((await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null, actionBy: null } })).count !== 1) return;
   if (end === "succeeded") return void (await finish(p.id));
-  if (p.kind === "owed") await (await import("./owedOnce")).releaseOwed(p.id); // Pay what you owe's one payment: each debt stays owed
+  if (p.kind === "owed") {
+    // Pay what you owe's one payment: each debt stays owed. (§122) A one payment for charges made while away counts as declined: each becomes a debt (during a hold
+    // they keep waiting for the lift instead, §113).
+    const once = await import("./owedOnce");
+    const freed = await once.releaseOwed(p.id);
+    const held = !!(await db.user.findUnique({ where: { id: p.developerId }, select: { holdStartedAt: true } }))?.holdStartedAt;
+    if (freed?.charges.length && !held) await once.chargesDeclined(p.developerId, freed.charges);
+  }
   else if (p.status === "needs_confirmation" && p.kind === "chargeback") await db.payment.delete({ where: { id: p.id } }); // a retried chargeback: still owed
   else if (p.status === "needs_confirmation") {
     if (p.kind === "subscription") {
