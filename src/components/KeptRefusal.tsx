@@ -1,7 +1,8 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { KEEP_MS, currentKept, dropKept, keptAnchor, keptShows, keptOnPage, refusalTextOutsideKept, notePress, onKept, type Kept, type Spot } from "@/lib/keptRefusal";
+import { KEEP_MS, currentKept, dropKept, keptPlacement, keptShows, keptOnPage, refusalTextOutsideKept, notePress, onKept, type Kept, type Spot } from "@/lib/keptRefusal";
+import { watchNewPageVersion } from "@/lib/pageVersion";
 
 /** The things a person presses: a press on any of them clears a kept line (and is remembered, in case it's refused). */
 const PRESSABLE = "button, [role='button'], input[type='submit'], input[type='button']";
@@ -79,11 +80,12 @@ export function KeptRefusal() {
       dropHost();
       return;
     }
+    const stopWatching = watchNewPageVersion(() => dropKept(kept.id));
     // Checked a few times a second: hidden while the button (or a line saying the same) is on the page; once the redraw took it away, placed in the nearest
     // section still there. (Batch 32 §12) ONE notice element per kept line: when a live redraw throws its section away, the same element goes back in at once
     // (a MutationObserver runs before the screen repaints), so it never blinks.
     const place = () => {
-      const anchor = keptAnchor(kept.anchors, (id) => { const a = document.getElementById(id); return a && a.getClientRects().length > 0 ? a : null; });
+      const { target: anchor, first } = keptPlacement(kept.anchors, (id) => { const a = document.getElementById(id); return a && a.getClientRects().length > 0 ? a : null; }, document.querySelector<HTMLElement>("main"));
       if (!anchor) {
         if (hostRef.current) dropHost();
         return;
@@ -96,7 +98,9 @@ export function KeptRefusal() {
         hostRef.current = h;
         setHost(h);
       }
-      if (hostRef.current.parentElement !== anchor) anchor.appendChild(hostRef.current);
+      if (first) {
+        if (anchor.firstChild !== hostRef.current) anchor.prepend(hostRef.current);
+      } else if (hostRef.current.parentElement !== anchor) anchor.appendChild(hostRef.current);
     };
     const check = () => {
       // (Owner, Oct 31, batch 35 §85) It belongs to the page it was pressed on: going to another page drops it (it never follows you there).
@@ -121,6 +125,7 @@ export function KeptRefusal() {
     });
     mo.observe(document.body, { childList: true, subtree: true });
     return () => {
+      stopWatching();
       clearInterval(t);
       mo.disconnect();
     };
@@ -134,11 +139,5 @@ export function KeptRefusal() {
       host,
     );
   }
-  // No section of the button's left on the page: a notice at the top of the screen.
-  return createPortal(
-    <p className="info shadow-lg" style={{ position: "fixed", top: 72, left: "50%", transform: "translateX(-50%)", width: "min(32rem, calc(100vw - 32px))", zIndex: 60 }} role="status" data-kept-refusal="">
-      {kept.text}
-    </p>,
-    document.body,
-  );
+  return null; // Wait for a content host if the page's main has not mounted yet.
 }

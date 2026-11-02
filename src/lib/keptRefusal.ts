@@ -74,6 +74,12 @@ export function keptAnchor<T extends object>(anchors: readonly string[], visible
   return null;
 }
 
+/** With no surviving section, use the top of the page content, never a floating overlay. */
+export function keptPlacement<T extends object>(anchors: readonly string[], visible: (id: string) => T | null, main: T | null) {
+  const section = keptAnchor(anchors, visible);
+  return { target: section ?? main, first: !section };
+}
+
 /** A kept refusal belongs only to the page where it was pressed (§85). */
 export const keptOnPage = (k: Pick<Kept, "path">, pathname: string) => !k.path || k.path === pathname;
 

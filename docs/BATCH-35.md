@@ -884,3 +884,9 @@ Tests: `tests/batch35-deadline-zone.test.ts` (11 cases), with the earlier listin
 - The lock belongs to Edit; automatic pause and outage shifts keep working. No old deadlines are revived by reopening an expired joining window.
 
 Tests: `tests/batch35-open-until-locked.test.ts`, with the older Open until refusal wording updated.
+
+## §116 A kept refusal never outlives its situation or floats (owner, Nov 1)
+
+- A kept refusal uses the same page-version signal as the line under its button (§60): its baseline is the server version at refusal time. Its own redraw keeps the explanation; the next shown version drops it. The next press and another page still drop it (§85).
+- It stays in the nearest surviving section. If none remains, it goes first inside the page’s main content, scrolling with the page in the info style; it never floats over the header.
+- The same-word check excludes the kept subtree (§95), so there is only one steady copy, with no empty bullet.
