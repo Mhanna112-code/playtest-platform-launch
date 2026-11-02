@@ -26,7 +26,7 @@ export function DisputeWork({ work }: { work: DisputedWork | null }) {
             {work.part === "written" && work.setUntil && <p className="note" data-set-until="">Sent for the questions until {new Date(work.setUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>}
             {work.part === "written" && <SetView items={work.items} attachments={work.files.map((f) => ({ id: f.id, filename: f.filename, contentType: f.contentType, size: f.sizeBytes }))} />}
             {work.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={work.notes} attachments={work.files.map((f) => ({ id: f.id, filename: f.filename, contentType: f.contentType, size: f.sizeBytes }))} /></div>}
-            <AttachmentList items={work.files} />
+            <AttachmentList items={work.files} inlineText={[work.notes, ...(work.part === "written" ? work.items.map((it) => it.answer) : [])]} />
           </AnswersBox>
         )}
       </div>

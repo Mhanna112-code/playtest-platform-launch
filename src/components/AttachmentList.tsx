@@ -1,14 +1,19 @@
+import { markerIds } from "@/lib/answerAttachments";
 import { fileSize } from "@/lib/format";
 
 /**
  * (Owner, Oct 29, batch 11) The files and recordings sent with a piece, each playable, viewable or downloadable (through the recording file route: only the tester who
  * made it and the test's developer can open it).
  */
-export function AttachmentList({ items }: { items: { id: string; filename: string; contentType: string; sizeBytes: number }[] }) {
-  if (!items.length) return null;
+export function AttachmentList({ items, inlineText = [], inlineIds = [] }: { items: { id: string; filename: string; contentType: string; sizeBytes: number }[]; inlineText?: string[]; inlineIds?: string[] }) {
+  // Resolve the same markers as AnswerWithAttachments: only the file actually shown inline is omitted here.
+  const inline = markerIds(inlineText.join("\n"), items);
+  for (const id of inlineIds) inline.add(id);
+  const remaining = items.filter((item) => !inline.has(item.id));
+  if (!remaining.length) return null;
   return (
     <ul className="space-y-2 text-sm" data-attachments="">
-      {items.map((r) => {
+      {remaining.map((r) => {
         const href = `/api/recordings/${r.id}/file`;
         const size = fileSize(r.sizeBytes);
         return (

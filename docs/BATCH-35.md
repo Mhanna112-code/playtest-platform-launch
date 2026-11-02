@@ -952,3 +952,8 @@ Tests: `tests/batch35-restricted-needs-you.test.ts` renders the full developer d
 On the paused test page, the existing Needs you fold now holds bank confirmations, booked-call cancellations, excerpt requests and available ratings in that order, with optional dispute replies retained inside the same fold. The red banner stays above it; the normal test page is unchanged. Its one scroll area replaces the nested action cards.
 
 Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including for a suspended tester. The tester’s own profile shows accepted excerpts only, with Remove; pending, denied and closed requests are absent. No accepted excerpts means no excerpt box. Public profiles retain their accepted-only and NDA rules. The developer’s Excerpt requests action box still handles waiting Allow / Deny decisions.
+
+## §115 An inline attachment shows once (owner, Nov 1)
+
+- A file placed in a sent answer or its notes stays where its paperclip marker was placed. The attachments list below the piece shows only files that were not placed in that text; with none left, there is no list.
+- The developer’s Needs you, updated work and paid work, the tester’s sent view and the team’s See the work all follow the same rule. Previous answer sets keep their inline files. Both the short paperclip marker and the older attachment marker resolve as before, and inline files still open or download as before.
