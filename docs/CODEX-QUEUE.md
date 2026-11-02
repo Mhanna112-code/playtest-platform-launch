@@ -266,3 +266,25 @@ admin finds both; deleted with money owed / on a hold / suspended / deleted by a
 docs/BATCH-35.md. A migration only if needed (local only; Vercel applies it on deploy). npm run check green (known flaky list as in
 the earlier tasks). Commit on the branch; don't push or merge.
 ```
+
+## 11. Task 27: an attachment placed in the text shows twice
+
+```
+Read AGENTS.md first and follow it. Task number: 27 (schema codex27, build folder .next-codex27, branch codex/attachment-once,
+worktree C:/Users/march/Projects/pl-codex-27, branched from master).
+
+Bug (owner, Nov 1): a tester attached an image in a written answer ("Anything else" box) and placed it in the text (the
+"[📎 name.jpg #id]" marker from the answer editor's paperclip). On the DEVELOPER's view of the sent answers the image showed twice:
+once inline where the marker is, and again in the attachments list under the answer (src/components/AttachmentList.tsx and
+wherever written answers render their attachments: search for the marker parsing, e.g. "#ux" / paperclip / AttachmentList, in
+src/components and src/app/app/tests/[id]). The tester's editor preview shows it once. Confirm this is the cause first.
+
+Wanted: a file placed inline in an answer's text is shown only there; the attachments list under that answer lists only the files
+NOT placed in its text (and is hidden when it has none). Same rule everywhere sent answers are shown (developer test page, Needs
+you, the tester's own sent view, the admin's dispute "See the work", updated-version views, history). Downloads / open-in-new-tab
+for inline files keep working.
+Tests in tests/batch35-attachment-once.test.ts: an answer with one inline image and one not-inline file shows the image once inline
+and lists only the other file; an answer with only inline files has no list. Append "## §115 An inline attachment shows once
+(owner, Nov 1)" to docs/BATCH-35.md. npm run check green (known flaky list as in the earlier tasks). Commit on the branch; don't push
+or merge.
+```
