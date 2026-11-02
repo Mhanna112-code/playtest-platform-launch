@@ -9,6 +9,7 @@ import * as X from "@/lib/server/excerpts";
 import { testV } from "@/lib/server/pulseV";
 import { dashboardV, publicProfileV } from "@/lib/server/pageFreshness";
 import { ExcerptReplaces, REPLACES_LINE } from "@/components/ExcerptList";
+import { tagMarker } from "@/lib/answerAttachments";
 import { json, makeUser, req } from "./helpers";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 
@@ -153,5 +154,44 @@ describe("§126.3 the same question replaces", () => {
     expect(r.status).toBe(200);
     expect((await decide(subs[0].dev, r.body.id, "allow")).status).toBe(200);
     expect(await db.excerpt.count({ where: { testerId: tester.user.id, status: "shown" } })).toBe(3);
+  });
+});
+
+describe("§126.4 excerpts leave files out", () => {
+  const upload = async (sessionId: string, cookie: string, filename: string, contentType: string) => {
+    const started = await sact(sessionId, "recording-start", cookie, { part: "written", filename, contentType, size: 100 });
+    expect(started.status).toBe(200);
+    expect((await sact(sessionId, "recording-done", cookie, { recordingId: started.body.recordingId })).status).toBe(200);
+    return tagMarker(started.body.tag as string, filename);
+  };
+
+  it("the trim box and the stored text have no file markers and no [file]; the spaces they leave are tidied", async () => {
+    const s = await setup();
+    const j = await joined(s.testId);
+    const img = await upload(j.sessionId, j.tester.cookie, "map*v2*.png", "image/png");
+    const pdf = await upload(j.sessionId, j.tester.cookie, "notes.pdf", "application/pdf");
+    const answer = `The harbour level felt great ${img} but the second boss ${pdf}. It was far too hard for me.\n${img}\nThe end.`;
+    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: [answer, OTHER], seenAt: seen(), confirmed: true })).status).toBe(200);
+    await settle();
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" }, include: { review: true, dispute: true } });
+    expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
+    const [first] = await X.excerptChoices(await db.submission.findUniqueOrThrow({ where: { id: sub.id }, include: { review: true, dispute: true } }));
+    expect(first.text).toBe("The harbour level felt great but the second boss. It was far too hard for me.\nThe end.");
+    expect(first.text).not.toContain("📎");
+    expect(first.text).not.toContain("[file]");
+    expect(X.withoutFiles(`a ${img} b [[attachment:abc|x.png]] c`)).toBe("a b c");
+    // A request whose text still holds a marker (an older page) is stored without it.
+    const r = await ask(j.tester.cookie, sub.id, `felt great ${img} but the second boss`);
+    expect(r.status).toBe(200);
+    expect((await db.excerpt.findUniqueOrThrow({ where: { id: r.body.id } })).text).toBe("felt great but the second boss");
+    // The old "[file]" placeholder is no longer in the answer it's trimmed from.
+    await ex(s.dev.cookie, { action: "decide", excerptId: r.body.id, decision: "deny" });
+    expect((await ask(j.tester.cookie, sub.id, "felt great [file] but the second boss")).body.error.message).toContain("Trim the excerpt from your answer");
+  });
+
+  it("excerpts stored earlier with [file] stay as they are", async () => {
+    const s = await paidWork();
+    const old = await db.excerpt.create({ data: { testerId: s.tester.user.id, testId: s.testId, contractId: s.sessionId, submissionId: s.sub.id, question: "What did you like?", text: "felt great [file] but the boss", hideProduct: false, status: "shown", decidedAt: new Date() } });
+    expect((await X.shownExcerpts(s.tester.user.id)).map((x) => x.text)).toEqual([old.text]);
   });
 });

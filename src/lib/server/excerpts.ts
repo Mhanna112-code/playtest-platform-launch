@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { itemsOf } from "@/lib/answerSets";
-import { excerptWithFiles } from "@/lib/answerAttachments";
+import { markerPattern, withoutAttachmentMarkers } from "@/lib/answerAttachments";
 import { HttpError } from "./http";
 import { bell } from "./notify";
 
@@ -58,6 +58,15 @@ export function excerptSource(x: { hideProduct: boolean; test: { productName: st
 /** Whitespace tidied, for comparing a trimmed quote with the answer it came from. */
 const squash = (s: string) => s.replace(/\s+/g, " ").trim();
 
+/**
+ * (Owner, Nov 2, batch 35 §126) Excerpts leave files out completely: no file markers and no "[file]" placeholder, in the trim box or the stored text. Each marker
+ * goes with the spaces before it ("great [📎 map.png #k3f9] but" reads "great but", "great [📎 …]." reads "great."). Excerpts stored earlier stay as they are.
+ */
+const filesOut = new RegExp(`[ \t]*(?:${markerPattern.source})`, "g");
+export const withoutFiles = (s: string) => withoutAttachmentMarkers(s.replace(filesOut, ""));
+/** The plain text an excerpt is trimmed from (and compared with): no formatting, no files. */
+export const excerptPlain = (s: string) => plainText(withoutFiles(s ?? ""));
+
 /** Paid for above $0: the developer's Pay (or the tester's Charge), a Pay more, or a dispute decided for the tester. */
 async function paidAboveZero(sub: { id: string; review: { rejected: boolean; amountCents: number } | null; dispute: { decidedCents: number | null } | null }) {
   if (sub.review && !sub.review.rejected && sub.review.amountCents > 0) return true;
@@ -68,7 +77,7 @@ async function paidAboveZero(sub: { id: string; review: { rejected: boolean; amo
 /** The answers of a part the tester could quote (plain text, at least 10 characters), or [] when the part can't be shown. */
 export async function excerptChoices(sub: { id: string; kind: string; answers: unknown; review: { rejected: boolean; amountCents: number } | null; dispute: { decidedCents: number | null } | null }) {
   if (sub.kind !== "written" || !(await paidAboveZero(sub))) return [];
-  return itemsOf(sub.answers).map((it, i) => ({ index: i, question: it.question, text: plainText(excerptWithFiles(it.answer)) })).filter((x) => x.text.length >= EXCERPT_MIN);
+  return itemsOf(sub.answers).map((it, i) => ({ index: i, question: it.question, text: excerptPlain(it.answer) })).filter((x) => x.text.length >= EXCERPT_MIN);
 }
 
 /** A tester asks to show an excerpt. No stop-once; refused only for the rules above. */
@@ -81,7 +90,7 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
   if (!choices.length) throw new HttpError(409, "not_paid", "Only written answers the developer paid for can be shown as excerpts.");
   const pick = choices.find((c) => c.index === Number(body.index));
   if (!pick) throw new HttpError(400, "bad_pick", "Pick one of your answers.");
-  const text = squash(plainText(typeof body.text === "string" ? body.text : ""));
+  const text = squash(excerptPlain(typeof body.text === "string" ? body.text : "")); // (batch 35 §126) any file marker left out
   if (text.length < EXCERPT_MIN || text.length > EXCERPT_MAX) throw new HttpError(400, "bad_length", excerptLength);
   if (!squash(pick.text).includes(text)) throw new HttpError(400, "not_from_answer", "Trim the excerpt from your answer: it can only leave words out, not add any.");
   const hideProduct = false; // (batch 18 section 7) always "From <test>"
