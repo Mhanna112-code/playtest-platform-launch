@@ -93,8 +93,8 @@ describe("batch 35 §8: Edit after signing back in", () => {
     const f = { ...base, ...(back!.f as object) } as typeof base;
     expect(f.title).toBe("First 4 levels");
     expect(f.openUntil).toBe("2026-11-25");
-    // One mark per place: the parts and prices share one, the questions and their Required ticks share one.
-    expect(draftMarks(f, base)).toEqual({ title: ["title"], description: ["description"], mature: ["mature"], matureWhy: ["matureWhy"], parts: ["writtenPrice"], questions: ["requiredQs"], openUntil: ["openUntil"] });
+    // One mark per place: the parts and prices share one, the questions and their Required ticks share one, (batch 35 §120) Mature and its reason share one.
+    expect(draftMarks(f, base)).toEqual({ title: ["title"], description: ["description"], mature: ["mature", "matureWhy"], parts: ["writtenPrice"], questions: ["requiredQs"], openUntil: ["openUntil"] });
     // Use saved on a field: the saved value back there (and its mark goes); the others stay.
     const afterUse = { ...f, title: base.title };
     expect(draftMarks(afterUse, base).title).toBeUndefined();
@@ -103,8 +103,8 @@ describe("batch 35 §8: Edit after signing back in", () => {
     expect(draftMarks(base, base)).toEqual({});
     // The form's wiring: a mark (Draft + Use saved) at each field's label, Use saved for all beside Save, (batch 35 §18) on every restored draft; the whole-form tag only when no field differs.
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain("const marks = keep.restored ? draftMarks(f, base) : {};"); // (batch 35 §18) every restored draft, not only after a sign-in
-    expect(form).toContain("const keysDraft = keep.restored && keysChanged ?");
+    expect(form).toContain("const marks = keep.restored ? draftMarks(f, base, keep.drafted) : {};"); // (batch 35 §18) every restored draft, not only after a sign-in
+    expect(form).toContain("const keysDraft = keep.restored && keysChanged && keep.isDraft(KEYS_UNIT) ?");
     expect(form).toContain('<DraftTag disabled={busy} kind={draftKind} field={where} onUseSaved={() => putSaved(ks)} />'); // (batch 35 §23) "Discard" on a new Post
     expect(form).toContain('const draftKind = isNew ? "discard" : "saved";');
     expect(form).toContain("setF((o) => ({ ...o, ...Object.fromEntries(ks.map((k) => [k, base[k]])) }));");
@@ -131,11 +131,11 @@ describe("batch 35 §8: the other forms after signing back in", () => {
     const s = src("app/app/sessions/[id]/SessionActions.tsx");
     // (Batch 35 §18) Per box: Draft + Use saved under each answer (and the notes) the draft changed; Use saved for all beside Send.
     expect(s).toContain('const answerKind = update ? "saved" : "discard";'); // (batch 35 §39) Use saved only once the answers were sent
-    expect(s).toContain('const boxDraft = (i: number) => (keep.restored && answers[i] !== sentAt(i) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);');
-    expect(s).toContain('const notesDraft = keep.restored && notes !== initialNotes ? <DraftTag disabled={busy || fin.done} kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;');
+    expect(s).toContain('const boxDraft = (i: number) => (keep.restored && keep.isDraft(answerUnit(typedFor[i] ?? questions[i])) && answers[i] !== sentAt(i) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);');
+    expect(s).toContain('const notesDraft = keep.restored && keep.isDraft(NOTES_UNIT) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;');
     expect(s).toContain("{boxDraft(i)}");
     expect(s).toContain("{notesDraft}");
-    expect(s).toContain('{keep.restored && !same && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}'); // (batch 35 §58) a DraftButton
+    expect(s).toContain('{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}'); // (batch 35 §58) a DraftButton
     // Use saved puts the boxes back to what was sent (nothing sent yet: empty), so the form is unchanged and its draft is forgotten.
     expect((await keep(cookie, t.user.id, key, null)).status).toBe(200);
     expect(await read(cookie, t.user.id, key)).toBeNull();

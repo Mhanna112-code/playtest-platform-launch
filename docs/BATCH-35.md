@@ -993,3 +993,32 @@ Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including 
 - A line opens the test's or the person's page only when that row isn't on the console. That covers stops, deletions, close-outs, pauses or suspensions lifted since, and a row not loaded in its list yet.
 
 Tests: `tests/batch35-nov2-a.test.ts`; the Switch / Keep expectations in `tests/session-end.test.ts` and `tests/batch16-tester-stopped.test.ts` follow the new line.
+
+## §120 Per-field drafts (owner, Nov 2)
+Until now a form's draft was the WHOLE form from the tab typed in last: answer 1 typed in tab A and answer 2 in tab B kept only tab B's version. Now Post / Edit
+and the written answers keep their draft **per field** (`useKeptUnits` in src/lib/useKept.tsx, the units in src/lib/draftUnits.ts, the server's merge `patchKept`
+in src/lib/server/kept.ts; `/api/kept` takes `{ key, units }`).
+- **Units.** Related fields are ONE unit, saved and restored together: Parts and prices (all three parts: written / recording / live, their prices, Required
+  ticks and the call length), Mature + Why it's mature, Questions + which are required, the access keys. Every other Post / Edit field is its own unit. Written
+  answers: one unit per question, and one for Anything else.
+- **Writing.** A tab writes only the units IT changed by its own edits (§65: a keystroke, click, paste a moment before), each with its value, or "no draft" where
+  the unit is back to its saved value. A unit the tab never touched never writes, so it never overwrites or forgets another tab's draft of it; an untouched field
+  that simply takes another tab's Save is never written either. A flush (leaving, hiding, Log out, the side switch) sends only units still unsent (§16).
+- **The server** keeps the latest value of each unit on its own (one person's writes to one form wait for each other, so two tabs writing at the same moment both
+  survive): tab A's description and tab B's price both stay; the same unit in two tabs: the later one. The stored shapes stay as before (Post / Edit
+  `{ f, touched, keysText }` holding only the drafted units' fields; written `{ answers, questions, notes? }` listing only the drafted questions), so the sign-in
+  mark and trim (§8), recordings and the terms switch read them as before (the switch now counts a question with no draft as what was sent).
+- **Restoring.** A reload, a new tab or a sign-in brings back every unit's latest draft (a unit this tab already changed itself is never replaced).
+- **Draft tags.** A field shows "Draft" only while its unit holds a draft value different from the saved value. A field with no draft never shows Draft: typing
+  in a different field in a new tab marks only the field typed in (as before, the marks show on a form that opened from a draft). Mature and its reason share one
+  mark at the tick. "Use saved" / "Discard" on one field puts that unit back and drops only its draft; the others stay. "Use saved for all" / "Start empty"
+  drop every unit this tab knows of. Edit's Save drops only the units it saved (another tab's draft of a field this Save didn't touch stays); Post drops the whole draft.
+- Unchanged: the "Started from your unsent draft (time) · Use saved for all / Start empty" line, buttons greyed while a press runs (§58), untouched Edit fields
+  changing silently when the saved listing changes (§64), and every other form's whole-form draft (`useKept`).
+
+Evidence (worktree dev server on 3470, a throwaway developer): docs/media/drafts-1-tab-a-description.png (tab A types the description),
+drafts-2-tab-b-price.png (tab B, opened before A typed, types the written price), drafts-3-tab-c-top.png and drafts-4-tab-c-price.png (a new tab C: both marked
+Draft), drafts-5-tab-c-title.png (C types the title: only the title gains Draft), drafts-6-tab-c-use-saved-description.png (Use saved on the description: its mark
+goes, the title and the price stay), drafts-7-tab-d-after-discard.png (a new tab D: the title and price drafts only), and the clip drafts-tab-c.webm (tab C).
+
+Tests: tests/batch35-per-field-drafts.test.ts.

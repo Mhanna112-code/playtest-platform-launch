@@ -8,8 +8,8 @@ import { checkFields } from "@/components/FieldChecks";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
-import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
-import { restoreDraft } from "@/lib/answerSets";
+import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept, useKeptUnits } from "@/lib/useKept";
+import { NOTES_UNIT, answerUnit, type Units } from "@/lib/draftUnits";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -103,8 +103,9 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const removeAttachment = (id: string) => {
     const refs = [...answers, notes].reduce((n, a) => n + (hasMarkerFor(a, id, attachments) ? 1 : 0), 0);
     if (refs > 1) return;
-    const data = { answers: answers.map((a) => removeAttachmentMarker(a, id, attachments)), notes: removeAttachmentMarker(notes, id, attachments), questions };
-    void api("/api/kept", { key: `written:${sessionId}`, data }).then(() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true })).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setMsg({ ok: false, text: errOf(e) }));
+    // (Batch 35 §120) The boxes that named the file are kept without its marker first (only those units), so the server sees no draft still using it.
+    const named = [...typedFor.map((q, i) => (hasMarkerFor(answers[i] ?? "", id, attachments) ? answerUnit(q) : "")), hasMarkerFor(notes, id, attachments) ? NOTES_UNIT : ""].filter(Boolean);
+    void keep.write(named).then(() => api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true })).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setMsg({ ok: false, text: errOf(e) }));
   };
   // (Owner's finding, Oct 30, batch 32 §12) Answers sent from another device or tab arrive with the page's next redraw: boxes nobody touched here take them
   // (they stayed empty while the button already read "Send my updated answers"); anything typed here is kept.
@@ -125,10 +126,13 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
   // The draft says which questions it was typed for: after a switch to changed questions, an answer never lands under a different question.
   const [typedFor] = useState(questions); // the questions the boxes were made for (a refresh after a switch doesn't re-pair them)
-  const keep = useKept(`written:${sessionId}`, { answers, notes, questions: typedFor }, same, (v) => {
-    setAnswers(restoreDraft(questions, initial, v));
-    setNotes(v.notes ?? initialNotes);
-  });
+  // (Owner, Nov 2, batch 35 §120) Per-field: one unit per question's box and one for the notes; this tab keeps only the boxes it changed, and the server keeps each
+  // box's latest (answer 1 typed in one tab and answer 2 in another both stay).
+  const answerUnits = (as: string[], n: string): Units => ({ ...Object.fromEntries(typedFor.map((q, i) => [answerUnit(q), as[i] ?? ""])), [NOTES_UNIT]: n });
+  const keep = useKeptUnits(`written:${sessionId}`, answerUnits(answers, notes), answerUnits(questions.map((_, i) => initial[i] ?? ""), initialNotes), (u) => {
+    setAnswers((cur) => questions.map((q, i) => { const v = u[answerUnit(q)]; return typeof v === "string" ? v : cur[i] ?? ""; }));
+    if (typeof u[NOTES_UNIT] === "string") setNotes(u[NOTES_UNIT] as string);
+  }, { questions: typedFor });
 
   /**
    * (Owner, Oct 31, batch 35 §18) A restored draft marks each box it changed, like Edit's fields: "Draft" with "Use saved" under every answer box (and the notes)
@@ -138,8 +142,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const sentAt = (i: number) => initial[i] ?? "";
   // (Owner, Oct 31, batch 35 §39) "Use saved" only once answers were sent (back to them); answers never sent: "Discard" (empties) and "Discard all".
   const answerKind = update ? "saved" : "discard";
-  const boxDraft = (i: number) => (keep.restored && answers[i] !== sentAt(i) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);
-  const notesDraft = keep.restored && notes !== initialNotes ? <DraftTag disabled={busy || fin.done} kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;
+  const boxDraft = (i: number) => (keep.restored && keep.isDraft(answerUnit(typedFor[i] ?? questions[i])) && answers[i] !== sentAt(i) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field={`a${i}`} onUseSaved={() => setAnswers((all) => questions.map((_, j) => (j === i ? sentAt(i) : all[j] ?? "")))} /> : null);
+  const notesDraft = keep.restored && keep.isDraft(NOTES_UNIT) ? <DraftTag disabled={busy || fin.done} kind={answerKind} field="notes" onUseSaved={() => setNotes(initialNotes)} /> : null;
   const length = writtenLength([...answers, notes]);
   // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
   const unchanged = update && sentSame && !newFiles && same;
@@ -215,7 +219,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && !same && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}

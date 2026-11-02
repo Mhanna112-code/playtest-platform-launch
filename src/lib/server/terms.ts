@@ -152,8 +152,9 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
   const draft = (kept?.data ?? null) as { answers?: unknown; notes?: unknown; questions?: unknown } | null;
   const sent = sub ? itemsOf(sub.answers, old) : [];
   const oldQs = old.length ? old : ["Your feedback"];
-  const fromDraft = Array.isArray(draft?.answers) ? restoreDraft(oldQs, [], draft!) : null;
   const byText = new Map(sent.map((x) => [x.question, x.answer]));
+  // (Batch 35 §120) A per-field draft lists only the questions typed since: the others count as what was sent.
+  const fromDraft = Array.isArray(draft?.answers) ? restoreDraft(oldQs, oldQs.map((q) => byText.get(qText(q)) ?? ""), draft!) : null;
   const items = itemsFor(oldQs, fromDraft ?? oldQs.map((q) => byText.get(qText(q)) ?? ""));
   // (Owner, Oct 30, batch 15 section 14) The set keeps what was SENT ("Sent <date>") and, when the tester edited it afterwards without sending, the draft ("Draft (not
   // sent)"). The developer only ever sees sent versions (theirs come from the submission).
