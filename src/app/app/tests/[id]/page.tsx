@@ -1,14 +1,16 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtTimeIn } from "@/lib/format";
 import { markerIds } from "@/lib/answerAttachments";
 import { hasPerks } from "@/lib/server/subscription";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, money, pronouns } from "@/lib/format";
+import { displayName, fmtDateIn, fmtDateTimeIn, money, pronouns } from "@/lib/server/dateFormat";
 import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, termsLine, paidZeroLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callsLeftWarning } from "@/lib/callMeasure";
-import { fmtTime } from "@/lib/format";
+
 import { ReasonQuote } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { PageLoaded } from "@/components/PageLoaded";
@@ -81,6 +83,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const { id } = await params;
   // First: a restricted developer may open a test page only in its restricted view (batch 15 section 29); every other page sends them to the dashboard top.
   const u = await requireOpenPage(`/app/tests/${id}`);
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
+  const fmtTime = (d: Date | string) => fmtTimeIn(d, u.timeZone);
+  const fmtDate = (d: Date | string) => fmtDateIn(d, u.timeZone);
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
@@ -217,7 +224,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       const left = cs.filter((x) => x.startsAt > now).length;
       if (!left) return [];
       const next = cs.find((x) => x.startsAt > now)!;
-      return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}${row?.count === 0 ? "" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), calls: cs.map(toCall) }];
+      return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: u.timeZone || "UTC" })}${row?.count === 0 ? "" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), calls: cs.map(toCall) }];
     });
     const booked = new Set(c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id)).size;
     return {
@@ -272,7 +279,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 35 §32) The tester deadline as a tester joining now gets it (the same helper as the join page): an Open until moved later grows it (batch 15 §18).
   const listingNow = { ...asListing(t), deadlineDays: joinerDays(t, u.timeZone) };
   const lastSave = await lastListingSave(t.id);
-  const listingRows = panelRows(listingNow, lastSave);
+  const listingRows = panelRows(listingNow, lastSave, "developer", u.timeZone);
   // (Batch 17 §15) The developer's own Stop and its reason (the team's Stop has its own): (batch 34 §14, the Contract changes fold gone) in the red banner.
   const stopEvent = t.status === "stopped" && !t.adminStoppedAt ? await db.testEvent.findFirst({ where: { testId: id, kind: "stopped" }, orderBy: { createdAt: "desc" } }) : null;
   const stopEntry = stopEvent && stopReasonOf(stopEvent.text) ? { at: stopEvent.createdAt.toISOString(), reason: stopReasonOf(stopEvent.text) } : null;
@@ -289,7 +296,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <>
         <AutoRefresh query={`test=${t.id}`} v={pageV} />
         {banner}
-        <TopPanel
+        <TopPanel timeZone={u.timeZone}
           id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={null}
           parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status} workEnded={!!t.workEndedAt}
           terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
@@ -379,7 +386,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     <SeeItTarget target="#listing">
       <AutoRefresh query={`test=${t.id}`} v={pageV} />
       {t.workEndedAt && <p className="info" data-work-ended="">This test ended on {fmtDate(t.workEndedAt)}. You can still pay for work already sent and use the remaining rating and dispute windows.</p>}
-      <TopPanel
+      <TopPanel timeZone={u.timeZone}
         id={t.id}
         title={t.title}
         productName={t.productName}
@@ -394,7 +401,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         status={t.status} workEnded={!!t.workEndedAt}
         terms={termsLine({ ...asListing(t), testerDays: t.testerDays })}
         openUntil={t.openUntil ? t.openUntil.toISOString() : null}
-        joinClosedLine={t.openUntil && t.openUntil < new Date() ? joiningClosedLine(t.contracts.filter((c) => c.status === "working" && c.dueAt > new Date()).reduce<Date | null>((m, c) => (!m || c.dueAt > m ? c.dueAt : m), null), (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })) : ""}
+        joinClosedLine={t.openUntil && t.openUntil < new Date() ? joiningClosedLine(t.contracts.filter((c) => c.status === "working" && c.dueAt > new Date()).reduce<Date | null>((m, c) => (!m || c.dueAt > m ? c.dueAt : m), null), (d) => fmtDate(d).replace(/, \d{4}$/, "")) : ""}
         version={t.version}
         seenAt={seenAt}
         nextRoundId={next?.id ?? null}
@@ -516,7 +523,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
 
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
-      <TestersJoined
+      <TestersJoined timeZone={u.timeZone}
         testId={t.id}
         spots={t.spots}
         status={t.status}
@@ -660,7 +667,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Oct 31, batch 35 §33) Only the terms line: the contract changes (renames, a Stop's note…) are still recorded for the tester's own page, never
                     listed under the developer's row. */}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
-                <PrevSetFolds developer attachments={c.submissions.flatMap((s) => s.recordings).filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
+                <PrevSetFolds timeZone={u.timeZone} developer attachments={c.submissions.flatMap((s) => s.recordings).filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
                 {/* (Batch 13) Excerpts shown from this test. (Batch 29 section 30) Only the tester removes one (Remove on their profile): no Take down here. */}
                 {shownEx.filter((e) => e.contractId === c.id).map((e) => (
                   <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
@@ -725,7 +732,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
 
       <section className="space-y-3">
-        <ByQuestion
+        <ByQuestion timeZone={u.timeZone}
           blocks={byQuestion(
             (t.questions as string[]) ?? [],
             t.contracts.flatMap((c) =>
@@ -745,4 +752,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       </section>
     </SeeItTarget>
   );
+
+  });
 }

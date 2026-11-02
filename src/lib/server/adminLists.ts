@@ -1,5 +1,6 @@
+import { dateZone } from "./dateZone";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, money } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, renderDateText, money } from "@/lib/server/dateFormat";
 import { pauseCountdownLine } from "@/lib/pause";
 import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
@@ -283,11 +284,11 @@ async function users(cursor: string | null, f?: ListFilter, only?: Prisma.UserWh
   const reports = await reportCounts(page.map((u) => u.id));
   const rows: UserVM[] = page.map((x) => {
     const acct = states.get(x.id)!;
-    const roles = `${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`;
+    const roles = `${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x, new Date(), dateZone())}` : ""}`;
     return {
       id: x.id,
       at: x.createdAt.toISOString(),
-      line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x)}` : ""}`,
+      line: `${x.email} · ${displayName(x)} · ${[x.isDeveloper && "developer", x.isTester && "tester"].filter(Boolean).join(" + ") || "no role"}${x.isDeveloper ? ` · ${adminSubLine(x, new Date(), dateZone())}` : ""}`,
       href: profileHref(x),
       // (Batch 33 §1) "Nora Lane (nora@…) · developer + tester": the name opens the profile.
       parts: [...person(x), ` · ${roles}`],
@@ -548,7 +549,7 @@ export async function adminPage(kind: Kind, adminId: string, cursor: string | nu
       case "t-timeline": case "t-contracts": case "t-payments": return testBox(kind, arg, cursor);
     }
   })();
-  return { ...p, rows: p.rows.map((r) => { const { date, ...rest } = r as Record<string, unknown>; void date; return { ...rest, seen }; }) };
+  return renderDateText({ ...p, rows: p.rows.map((r) => { const { date, ...rest } = r as Record<string, unknown>; void date; return { ...rest, seen }; }) });
 }
 
 // ---------- Lifts (owner, Oct 27) ----------
@@ -635,7 +636,7 @@ async function testsOfContracts(ids: (string | null | undefined)[]) {
   const list = [...new Set(ids.filter((x): x is string => !!x))];
   return new Map((await db.contract.findMany({ where: { id: { in: list } }, select: { id: true, testId: true, title: true } })).map((c) => [c.id, { id: c.testId, title: c.title }]));
 }
-const dayOnly = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+const dayOnly = (d: Date) => fmtDate(d).replace(/, \d{4}$/, "");
 
 /**
  * (Owner, Oct 30, batch 33 §3) A developer's payment failures, newest first: every charge that failed and was owed (owedUntil marks when), with what became of it:

@@ -39,7 +39,7 @@ describe("reason E: your own actions in another tab", () => {
     expect(r.body.error.code).toBe("stop_once");
     // (Batch 29 section 13) One voice on both sides: "You … in another tab".
     const q = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, fromSide: "tester" } });
-    expect(texts(r)).toEqual(["You sent your written answers in another tab", `You requested a call with Nora Lane for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
+    expect(texts(r)).toEqual(["You sent your written answers in another tab", `You requested a call with Nora Lane for ${(await import("@/lib/tz")).fmtIn("UTC", q.startsAt)} in another tab`]);
     expect((await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(314), seenAt: pageLoaded, tab: "tab-2", confirmed: true })).status).toBe(200);
   });
 

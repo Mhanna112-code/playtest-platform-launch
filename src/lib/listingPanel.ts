@@ -1,4 +1,4 @@
-import { money } from "@/lib/format";
+import { fmtDateIn, money } from "@/lib/format";
 import { NOT_LISTED, testerShare, type Listing } from "@/lib/rules";
 import { qRequired, qText } from "@/lib/questions";
 
@@ -65,7 +65,7 @@ const TESTER_LABELS: Partial<Record<PanelKey, string>> = { deadlineDays: "Your d
 export const rowLabel = (key: PanelKey, side: PanelSide = "developer") => (side === "tester" ? TESTER_LABELS[key] : undefined) ?? PANEL_ROWS.find((r) => r.key === key)!.label;
 
 /** How a line reads, now and in its Before (the same words for both). */
-export function rowText(key: PanelKey, l: Listing, side: PanelSide = "developer"): string {
+export function rowText(key: PanelKey, l: Listing, side: PanelSide = "developer", timeZone?: string | null): string {
   const t = side === "tester";
   const price = (c: number) => (c === 0 ? "Free" : t ? `${money(testerShare(c))} for you` : money(c));
   switch (key) {
@@ -85,7 +85,7 @@ export function rowText(key: PanelKey, l: Listing, side: PanelSide = "developer"
     ].join("\n");
     case "call": return l.liveRateCents == null ? NOT_LISTED : `${l.liveRateCents === 0 ? "Free" : `${money(t ? testerShare(l.liveRateCents) : l.liveRateCents)}/h${t ? " for you" : ""}`}${l.liveMinutes ? ` · ${l.liveMinutes}-minute calls` : ""} · ${need(l.liveRequired)}`;
     case "deadlineDays": return `${l.deadlineDays} day${l.deadlineDays === 1 ? "" : "s"} from joining`; // (batch 35 §32) the same words on both sides
-    case "openUntil": return l.openUntil ? new Date(l.openUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }) : "No end date";
+    case "openUntil": return l.openUntil ? /^\d{4}-\d{2}-\d{2}$/.test(l.openUntil) ? fmtDateIn(`${l.openUntil}T12:00:00Z`, "UTC") : fmtDateIn(l.openUntil, timeZone) : "No end date";
     case "joinMode": return (t ? TESTER_JOIN_MODES : JOIN_MODES)[l.joinMode] ?? l.joinMode;
     case "spots": return String(l.spots);
   }
@@ -97,15 +97,15 @@ export type PanelRow = { key: PanelKey; label: string; now: string; before: stri
  * Each line of the panel: its current words and, ONLY when the most recent save changed it, what it read before that save and when (a line that save didn't
  * change, or changed and that reads the same, has no tag).
  */
-export function panelRows(now: Listing, last: (SavedValues & { at: Date }) | null, side: PanelSide = "developer"): PanelRow[] {
+export function panelRows(now: Listing, last: (SavedValues & { at: Date }) | null, side: PanelSide = "developer", timeZone?: string | null): PanelRow[] {
   const before = last ? ({ ...now, ...last.before } as Listing) : null;
   return PANEL_ROWS.map((r) => {
     const label = rowLabel(r.key, side);
-    const n = rowText(r.key, now, side);
+    const n = rowText(r.key, now, side, timeZone);
     if (!last || !before || !r.fields.some((f) => last.fields.includes(f))) return { key: r.key, label, now: n, before: null, updatedAt: null };
     // (Batch 35 §14) The tester's build link changed from one link to another: said without either link.
     if (side === "tester" && r.key === "buildUrl" && before.buildUrl && now.buildUrl && before.buildUrl !== now.buildUrl) return { key: r.key, label, now: n, before: "An earlier link", updatedAt: last.at };
-    const b = rowText(r.key, before, side);
+    const b = rowText(r.key, before, side, timeZone);
     return b === n ? { key: r.key, label, now: n, before: null, updatedAt: null } : { key: r.key, label, now: n, before: b, updatedAt: last.at };
   });
 }

@@ -1,3 +1,4 @@
+import { fmtIn } from "@/lib/tz";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
@@ -16,7 +17,7 @@ describe("calls are always requests", () => {
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
     expect(call).toMatchObject({ rateCents: 3000, minutes: 30, status: "booked" });
     const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded });
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain(`Ana Silva booked a call for ${call.startsAt.toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`);
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain(`Ana Silva booked a call for ${fmtIn("UTC", call.startsAt)}`);
   });
 
   it("offered times and instant Book are gone", async () => {

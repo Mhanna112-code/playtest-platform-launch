@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDate } from "@/lib/format";
+import { displayName, fmtDate } from "@/lib/server/dateFormat";
 import { DEV_QUIET_KINDS, ratedYouLiveLine } from "@/lib/rules";
 import { handle, HttpError, ok } from "@/lib/server/http";
 import { joinPageChanges } from "@/lib/server/joining";

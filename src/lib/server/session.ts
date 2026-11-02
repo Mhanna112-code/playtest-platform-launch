@@ -1,3 +1,5 @@
+import { setDateZone } from "./dateZone";
+import { safeZone } from "@/lib/tz";
 import { createHash, randomBytes } from "node:crypto";
 import { db } from "@/lib/db";
 import { HttpError } from "./http";
@@ -45,6 +47,10 @@ export async function getUserFromRequest(req: Request) {
   // (Owner, Oct 27) A press from a page of the PREVIOUS account (another account signed in in another tab since) is refused: the page then switches.
   const page = req.headers.get("x-uid");
   if (u && page && page !== u.id) throw new HttpError(409, "account_changed", "You're signed in as someone else in another tab. This page is switching to that account.");
+  if (u) {
+    const browser = req.headers.get("x-timezone");
+    setDateZone(browser && safeZone(browser) === browser ? browser : u.timeZone);
+  }
   return u;
 }
 

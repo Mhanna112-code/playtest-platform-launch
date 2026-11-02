@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import Link from "next/link";
 import { Star } from "lucide-react";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -8,8 +9,8 @@ import { ratingsToGive } from "@/lib/server/ratings";
  * (Owner, Oct 28, batch 17 section 17) "Ratings to give": a small box on each dashboard, in a plain scroll box (batch 16 section 14), each row opening the rating box
  * (highlighted by HashJump). It updates live (its own poll) and is hidden while the viewer's own side is suspended (or a developer is on a hold).
  */
-export async function RatingsToGive({ user, side }: { user: { id: string; testerSuspendedAt: Date | null; devSuspendedAt: Date | null; holdStartedAt: Date | null }; side: "tester" | "developer" }) {
-  const rows = await ratingsToGive(user, side);
+export async function RatingsToGive({ user, side }: { user: { timeZone?: string | null; id: string; testerSuspendedAt: Date | null; devSuspendedAt: Date | null; holdStartedAt: Date | null }; side: "tester" | "developer" }) {
+  const rows = await withDateZone(user.timeZone, () => ratingsToGive(user, side));
   return (
     <>
       <AutoRefresh query={`rates=${side}`} v={rows.map((r) => `${r.id}:${r.text}`).join(",")} />

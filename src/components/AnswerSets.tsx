@@ -1,6 +1,6 @@
 import { Formatted } from "@/components/Formatted";
 import { ScrollText } from "@/components/ScrollText";
-import { fileSize, fmtDate } from "@/lib/format";
+import { fileSize, fmtDateIn } from "@/lib/format";
 import { RecordingVideo } from "@/components/RecordingVideo";
 import { versionsOf, type PrevSet, type SetItem } from "@/lib/answerSets";
 import { markerPattern, refOf, resolveMarker, type AnswerAttachment } from "@/lib/answerAttachments";
@@ -46,7 +46,7 @@ export function AnswerWithAttachments({ text, attachments, onRemove }: { text: s
 /** "Previous questions and answers (until <date>)": a read-only fold per earlier set, newest first. */
 // (Owner, Oct 30, batch 15 section 14) The tester's sets say whether each version was sent or a draft: "Sent <date>" first, then "Draft (not sent)", each a read-only
 // fold. The developer's sets (`developer`) only ever hold what was sent.
-export function PrevSetFolds({ sets, sentPart = true, developer = false, attachments = [] }: { sets: PrevSet[]; sentPart?: boolean; developer?: boolean; attachments?: AnswerAttachment[] }) {
+export function PrevSetFolds({ sets, sentPart = true, developer = false, attachments = [], timeZone }: { timeZone?: string | null; sets: PrevSet[]; sentPart?: boolean; developer?: boolean; attachments?: AnswerAttachment[] }) {
   if (!sets.length) return null;
   return (
     <div className="space-y-2" data-prev-sets="">
@@ -54,11 +54,11 @@ export function PrevSetFolds({ sets, sentPart = true, developer = false, attachm
         const versions = developer ? [{ kind: "sent" as const, items: s.items }] : versionsOf(s, sentPart);
         return (
           <details key={i} className="rounded-lg border border-white/[0.08] p-2 text-sm" data-prev-set={s.until}>
-            <summary className="cursor-pointer text-slate-300">Previous questions and answers (until {fmtDate(new Date(s.until))})</summary>
+            <summary className="cursor-pointer text-slate-300">Previous questions and answers (until {fmtDateIn(s.until, timeZone)})</summary>
             <div className="mt-2 space-y-2">
               {versions.map((v, j) => (
                 <details key={j} open={versions.length === 1} className="rounded-md border border-white/[0.06] p-2" data-prev-version={v.kind}>
-                  <summary className="cursor-pointer text-xs font-medium text-slate-300">{v.kind === "sent" ? `Sent${v.at ? ` ${fmtDate(new Date(v.at))}` : ""}` : "Draft (not sent)"}</summary>
+                  <summary className="cursor-pointer text-xs font-medium text-slate-300">{v.kind === "sent" ? `Sent${v.at ? ` ${fmtDateIn(v.at, timeZone)}` : ""}` : "Draft (not sent)"}</summary>
                   <div className="mt-2 max-h-[24rem] space-y-2 overflow-y-auto pr-1"><SetView items={v.items} attachments={attachments} /></div>
                 </details>
               ))}

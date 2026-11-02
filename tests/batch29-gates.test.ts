@@ -230,12 +230,12 @@ describe("batch 29 section 13: the tester's own changes in another tab, the same
     const B = { seenAt: loaded, pageSeenAt: loaded, tab: "B" };
     const d = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B });
     expect(d.body.error?.code).toBe("stop_once");
-    expect(texts(d)).toEqual([`You requested a call with Nora Lane for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
+    expect(texts(d)).toEqual([`You requested a call with Nora Lane for ${(await import("@/lib/tz")).fmtIn("UTC", q.startsAt)} in another tab`]);
     // (Batch 35 §61, replaces this section's Alerts rule) Alerts Off: what they did in another tab still stops once; the confirmed press goes ahead.
     await db.user.update({ where: { id: w.tester.user.id }, data: { testerAlertsOff: true } });
     const d1 = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B });
     expect(d1.body.error?.code, JSON.stringify(d1.body)).toBe("stop_once");
-    expect(texts(d1)).toEqual([`You requested a call with Nora Lane for ${(await import("@/lib/format")).fmtDateTime(q.startsAt)} in another tab`]);
+    expect(texts(d1)).toEqual([`You requested a call with Nora Lane for ${(await import("@/lib/tz")).fmtIn("UTC", q.startsAt)} in another tab`]);
     const d2 = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "I answered every question fully", ...B, confirmed: true, boxAt: seen() });
     expect(d2.status, JSON.stringify(d2.body)).toBe(200);
     // The same press again: a plain refusal.

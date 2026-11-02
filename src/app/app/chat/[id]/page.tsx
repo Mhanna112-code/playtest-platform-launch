@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
@@ -22,6 +23,8 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   const { id } = await params;
   // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top); with both sides and only a hold, the role in this chat decides.
   const u = await requireOpenPage("/app/chat");
+  return withDateZone(u.timeZone, async () => {
+
   const c = await db.contract.findUnique({ where: { id }, include: { test: { include: { developer: true } }, tester: true } });
   if (!c || (c.testerId !== u.id && c.test.developerId !== u.id)) notFound();
   const dev = c.test.developerId === u.id;
@@ -57,4 +60,6 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
       />
     </div>
   );
+
+  });
 }

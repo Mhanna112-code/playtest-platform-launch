@@ -1,9 +1,11 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateTimeIn } from "@/lib/format";
 import { deferredForBox } from "@/lib/server/holds";
 import { paymentsV } from "@/lib/server/pageFreshness";
 import { savedCardLine } from "@/lib/server/savedCard";
 import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
-import { fmtDateTime, money } from "@/lib/format";
+import { money } from "@/lib/server/dateFormat";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
@@ -41,6 +43,9 @@ const MESSAGES: Record<string, string> = {
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
   adminAway(u, "/app/payments"); // (batch 20 section 16) admin only
   await (await import("@/lib/server/recovery")).checkStuck({ developerId: u.id }); // (batch 15 section 9) payments stuck "in progress"
   const freshV = await paymentsV(u);
@@ -122,10 +127,10 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         // (Owner, Oct 28, batch 8) The subscription, before the card.
         const launch = await launchState();
         return (
-          <SubscriptionBox state={subState(u)} since={u.subscribedAt ? fmtSubDay(u.subscribedAt) : null} renews={u.subscriptionRenewsAt ? fmtSubDay(u.subscriptionRenewsAt) : null}
+          <SubscriptionBox state={subState(u)} since={u.subscribedAt ? fmtSubDay(u.subscribedAt, u.timeZone) : null} renews={u.subscriptionRenewsAt ? fmtSubDay(u.subscriptionRenewsAt, u.timeZone) : null}
             endedReason={u.subscriptionEndReason} seenAt={seenAt} hasCard={!!u.stripePaymentMethodId} needsCard={on} restricted={!!(u.holdStartedAt || u.devSuspendedAt)}
-            launch={{ free: launch.free, until: launch.until ? fmtSubDay(launch.until) : null }}
-            pastDueBy={u.subscriptionPastDueAt ? fmtSubDay(new Date(u.subscriptionPastDueAt.getTime() + RETRY_DAYS * 86_400_000)) : null} />
+            launch={{ free: launch.free, until: launch.until ? fmtSubDay(launch.until, u.timeZone) : null }}
+            pastDueBy={u.subscriptionPastDueAt ? fmtSubDay(new Date(u.subscriptionPastDueAt.getTime() + RETRY_DAYS * 86_400_000), u.timeZone) : null} />
         );
       })()}
       {dev && (
@@ -217,4 +222,6 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       )}
     </div>
   );
+
+  });
 }

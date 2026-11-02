@@ -1,6 +1,7 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import { adminPage, testRowsByIds, userTotals, type Kind, type Page } from "@/lib/server/adminLists";
 import { db } from "@/lib/db";
-import { fmtDateTime } from "@/lib/format";
+import { fmtDateTime } from "@/lib/server/dateFormat";
 import { pauseClosesAt, pauseCountdownLine } from "@/lib/pause";
 import { TestActions } from "./TestActions";
 import { accountState } from "@/lib/server/accountState";
@@ -29,6 +30,8 @@ function Box({ title, kind, arg, page }: { title: string; kind: Kind; arg: strin
  * (batch 33 §3) payment failures, payouts, disputes, chargebacks, holds and suspensions, tests posted or joined, reports against them (and, for a tester, their sent parts).
  */
 export async function AdminPersonBoxes({ userId, adminId, developer, tester }: { userId: string; adminId: string; developer: boolean; tester: boolean }) {
+  return withDateZone((await db.user.findUnique({ where: { id: adminId }, select: { timeZone: true } }))?.timeZone, async () => {
+
   // (Owner, Oct 30, batch 33 §7) The fingerprint as of BEFORE the boxes are read: another admin's suspend, reinstate, delete or $0 close-out redraws this box.
   const liveV = await adminPersonV(userId);
   const totals = await userTotals(userId);
@@ -59,10 +62,14 @@ export async function AdminPersonBoxes({ userId, adminId, developer, tester }: {
       )}
     </section>
   );
+
+  });
 }
 
 /** On a test's own page: the timeline, the contract changes (the terms each tester joined on, and offers), and the payments. */
 export async function AdminTestBoxes({ testId, adminId }: { testId: string; adminId: string }) {
+  return withDateZone((await db.user.findUnique({ where: { id: adminId }, select: { timeZone: true } }))?.timeZone, async () => {
+
   const [timeline, contracts, payments] = await Promise.all((["t-timeline", "t-contracts", "t-payments"] as const).map((k) => first(k, adminId, testId)));
   // (Batch 22 section 5; batch 34 §1) The test's own admin actions, with when they were read.
   const [row] = await testRowsByIds([testId]);
@@ -79,4 +86,6 @@ export async function AdminTestBoxes({ testId, adminId }: { testId: string; admi
       <Box title="Payments" kind="t-payments" arg={testId} page={payments} />
     </section>
   );
+
+  });
 }

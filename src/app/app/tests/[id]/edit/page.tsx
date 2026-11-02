@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import { hasPerks } from "@/lib/server/subscription";
 import { openUntilCapDay, testerDaysOf } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
@@ -18,6 +19,8 @@ export const dynamic = "force-dynamic";
 export default async function EditTest({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const u = await requireOpenDevPage();
+  return withDateZone(u.timeZone, async () => {
+
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   const t = await db.test.findUnique({ where: { id } });
@@ -54,4 +57,6 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
       )}
     </>
   );
+
+  });
 }

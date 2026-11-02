@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { messagesV } from "@/lib/server/pageFreshness";
 import { directConversations, messagesListV } from "@/lib/server/directMessages";
@@ -15,7 +16,9 @@ export const dynamic = "force-dynamic";
 
 /** Every conversation you're in, newest activity first, with unread counts (the full app's /messages). */
 export default async function MessagesPage() {
-  const u = await requireOpenPage("/app/messages"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const u = await requireOpenPage("/app/messages");
+  return withDateZone(u.timeZone, async () => {
+ // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   // (Batch 34 §5) Only the side in use's conversations (as a tester, or on your own tests).
   const freshV = await messagesV(u);
   const pageV = await messagesListV(u);
@@ -56,4 +59,6 @@ export default async function MessagesPage() {
       </ul>
     </div>
   );
+
+  });
 }

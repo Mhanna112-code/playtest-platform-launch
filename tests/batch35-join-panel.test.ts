@@ -149,7 +149,7 @@ describe("batch 35 §14: See it on every listing line of the join page", () => {
     expect(page).toContain('<SeeItTarget target="#listing">');
     expect(page).toContain('<ListingSeeIt box="listing" />');
     expect(page).toContain('<ListingPanel side="tester" rows={panel.rows} listing={l} savedAt={panel.savedAt}');
-    expect(page).toContain("const panel = await testerListingPanel(t.id, { ...asListing(t), deadlineDays: days });");
+    expect(page).toContain("const panel = await testerListingPanel(t.id, { ...asListing(t), deadlineDays: days }, u.timeZone);");
     // The header card's badges and the developer's comments stay, inside the panel; one #listing on the page.
     expect(page).toContain("<CategoryBadges categories={t.categories} />");
     expect(page).toContain("<PartBadges written=");

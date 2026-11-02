@@ -1,10 +1,12 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateTimeIn } from "@/lib/format";
 import { owed } from "@/lib/server/holds";
 import { dashboardV } from "@/lib/server/pageFreshness";
 import { DashboardActionBox } from "./DashboardActionBox";
 import Link from "next/link";
 import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSignature, Hourglass, Inbox, KeyRound, LayoutGrid, ListTodo, MessagesSquare, PlusCircle, RotateCcw, Users, Wallet, XCircle, AppWindow, Banknote } from "lucide-react";
 import { db } from "@/lib/db";
-import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/format";
+import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/server/dateFormat";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { invitesV } from "@/lib/server/pulseV";
 import { RatingsToGive } from "./RatingsToGive";
@@ -55,7 +57,7 @@ import { HistorySearch } from "./HistorySearch";
 
 export const metadata = { title: "Home · Playtest" };
 import { callIsOver, callMinutesOf, callOverBadge } from "@/lib/callMeasure";
-import { fmtTime } from "@/lib/format";
+import { fmtTime } from "@/lib/server/dateFormat";
 export const dynamic = "force-dynamic";
 
 /** A card's one link, stretched over the whole card (the full app's CARD_LINK). */
@@ -67,6 +69,9 @@ const DAY = 86_400_000;
 
 export default async function AppHome({ searchParams }: { searchParams: Promise<{ category?: string; failed?: string; done?: string }> }) {
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
   const { category, failed, done } = await searchParams;
   // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: the setup asks only Name and Pronoun (until the name is set), then /admin is home.
   adminAway(u, "/app");
@@ -152,6 +157,8 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       {side === "tester" && <TesterDashboard user={u} now={now} />}
     </div>
   );
+
+  });
 }
 
 
@@ -160,6 +167,8 @@ type Viewer = Awaited<ReturnType<typeof requirePageUser>>;
 // ---------------------------------------------------------------- developer (the full app's dev/page.tsx)
 
 async function DeveloperDashboard({ user, now, category, restricted }: { user: Viewer; now: Date; category?: string; restricted: boolean }) {
+  return withDateZone(user.timeZone, async () => {
+
   const userId = user.id;
   const allTests = await db.test.findMany({
     where: { developerId: userId },
@@ -338,7 +347,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                           <PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} />
                           <span className="badge">{t.joinMode === "invite" ? "Invite only" : t.joinMode === "apply" ? "Approved only" : "Anyone can join"}</span>
                           {/* (Batch 15 section 18) After Open until: "Joining closed · testers working until Dec 3". */}
-                          {t.openUntil && (t.openUntil < now ? <span className="badge border-amber-300/40 text-amber-200" data-joining-closed="">{joiningClosedLine(inIt.reduce<Date | null>((m, c) => (c.dueAt > now && (!m || c.dueAt > m) ? c.dueAt : m), null), (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }))}</span> : <span className="badge">Open until (last day to join) {fmtDate(t.openUntil)}</span>)}
+                          {t.openUntil && (t.openUntil < now ? <span className="badge border-amber-300/40 text-amber-200" data-joining-closed="">{joiningClosedLine(inIt.reduce<Date | null>((m, c) => (c.dueAt > now && (!m || c.dueAt > m) ? c.dueAt : m), null), (d: Date) => fmtDate(d).replace(/, \d{4}$/, ""))}</span> : <span className="badge">Open until (last day to join) {fmtDate(t.openUntil)}</span>)}
                           {t._count.accessKeys > 0 && <span className="badge"><KeyRound className="h-3.5 w-3.5" /> {plural(keysFree.get(t.id) ?? 0, "key")} left</span>}
                           {nInvited > 0 && <span className="badge">{plural(nInvited, "invite")} waiting</span>}
                           {nApps > 0 && <span className="badge border-sky-300/40 text-sky-200">{plural(nApps, "application")}</span>}
@@ -372,6 +381,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       </section>
     </>
   );
+
+  });
 }
 
 // ---------------------------------------------------------------- tester (the full app's tester/page.tsx)
@@ -380,6 +391,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
 const PausedTag = () => <span className="badge border-amber-300/40 text-amber-200" data-paused-tag="">Paused</span>;
 
 async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
+  return withDateZone(user.timeZone, async () => {
+
   const userId = user.id;
   const suspended = !!user.testerSuspendedAt;
   // (Batch 30 §8) The invitations fingerprint as of BEFORE the lists below are read: AutoRefresh starts from it, so an invite created after this render is caught.
@@ -767,4 +780,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       </DevSearch>
     </>
   );
+
+  });
 }

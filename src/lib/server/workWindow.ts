@@ -1,6 +1,6 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { fmtDate } from "@/lib/format";
+import { fmtDate } from "@/lib/server/dateFormat";
 import { testPaused, workDeadlineOf } from "@/lib/rules";
 import { HttpError } from "./http";
 import { closeOffersOfEnded } from "./offerClose";

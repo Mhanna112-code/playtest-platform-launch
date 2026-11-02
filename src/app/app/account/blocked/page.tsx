@@ -1,9 +1,11 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateIn } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { blockedV } from "@/lib/server/pageFreshness";
 import Link from "next/link";
 import { Ban } from "lucide-react";
 import { db } from "@/lib/db";
-import { displayName, fmtDate } from "@/lib/format";
+import { displayName } from "@/lib/server/dateFormat";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { UnblockButton } from "@/components/BlockButton";
 import { anySuspended } from "@/lib/restricted";
@@ -14,6 +16,9 @@ export const dynamic = "force-dynamic";
 /** People you've blocked, with Unblock (Account → Blocked people). */
 export default async function BlockedPage() {
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDate = (d: Date | string) => fmtDateIn(d, u.timeZone);
   const freshV = await blockedV(u);
   const blocks = await db.block.findMany({ where: { blockerId: u.id }, orderBy: { createdAt: "desc" } });
   const people = new Map((await db.user.findMany({ where: { id: { in: blocks.map((b) => b.blockedId) } } })).map((x) => [x.id, x]));
@@ -46,4 +51,6 @@ export default async function BlockedPage() {
       )}
     </div>
   );
+
+  });
 }

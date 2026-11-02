@@ -3,7 +3,7 @@ import { ratingChangedLine, testerNeedsChangedLines, type Needs } from "@/lib/te
 export { ratingChangedLine, testerNeedsChangedLines } from "@/lib/testerState";
 import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
-import { displayName, fmtDate, pronouns } from "@/lib/format";
+import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { andList, inviteTesterRefusal, inviteTestRefusal, MAX_ACTIVE_TESTS, TEST_LIMIT_LINE, termsLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -76,7 +76,7 @@ async function rankedTesters(devId: string, testId: string) {
   const lastTogether = new Map<string, number>();
   for (const c of myTests) if (!lastTogether.has(c.testerId)) lastTogether.set(c.testerId, c.joinedAt.getTime());
   const togetherCount = (id: string) => new Set(myTests.filter((c) => c.testerId === id).map((c) => c.test.id)).size;
-  const fmt = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  const fmt = (d: Date) => fmtDate(d).replace(/, \d{4}$/, "");
   const lean = testers.map((t) => {
     const inv = inviteOf.get(t.id);
     const n = activeOf.get(t.id) ?? 0;

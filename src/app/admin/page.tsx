@@ -1,7 +1,9 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateTimeIn } from "@/lib/format";
 import { notFound } from "next/navigation";
 import { Brand } from "@/components/Brand";
 import { db } from "@/lib/db";
-import { fmtDateTime } from "@/lib/format";
+
 import { requirePageUser } from "@/lib/server/page-auth";
 import { ADMIN_PAUSED, adminAccount, isAdmin } from "@/lib/server/session";
 import { AdminButton } from "./AdminButton";
@@ -30,6 +32,9 @@ const rows = <T,>(p: Page<unknown>) => p as unknown as Page<T>;
  */
 export default async function AdminPage({ searchParams }: { searchParams: Promise<{ dispute?: string; user?: string }> }) {
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
   // (Batch 15 section 35) A suspended admin keeps no admin access: the console says why.
   if (adminAccount(u) && !isAdmin(u)) return <main className="wrap space-y-4"><Brand /><p className="info" data-admin-paused="">{ADMIN_PAUSED} Contact the owner if you think this is a mistake.</p></main>;
   if (!isAdmin(u)) notFound();
@@ -198,4 +203,6 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
       )}
     </main>
   );
+
+  });
 }

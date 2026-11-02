@@ -1,5 +1,7 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateTimeIn } from "@/lib/format";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime } from "@/lib/format";
+import { displayName } from "@/lib/server/dateFormat";
 import { callStatus } from "@/lib/server/blocks";
 import { iceServers } from "@/lib/server/calls";
 import { adminAway, leaveIfClosed, requireOpenPage, requirePageUser } from "@/lib/server/page-auth";
@@ -15,6 +17,9 @@ export const dynamic = "force-dynamic";
 export default async function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
   adminAway(u, "/app/calls"); // (batch 20 section 16) admin only
   const call = await db.call.findUnique({ where: { id }, include: { contract: { include: { test: true } } } });
   // (Batch 21 section 1) Anyone but the call's two people: "This call isn't available."
@@ -54,4 +59,6 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
       />
     </div>
   );
+
+  });
 }

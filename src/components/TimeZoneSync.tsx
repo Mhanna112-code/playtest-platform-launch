@@ -1,4 +1,5 @@
 "use client";
+import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { api } from "@/lib/client";
 
@@ -7,6 +8,7 @@ export const savedZone = () => (typeof window !== "undefined" ? (window as unkno
 
 /** (Owner, Oct 30, batch 15 section 11) One small call from the app layout whenever the browser's time zone differs from the one stored for the account. */
 export function TimeZoneSync({ stored }: { stored: string }) {
+  const router = useRouter();
   if (typeof window !== "undefined") (window as unknown as { __savedTz?: string }).__savedTz = stored;
   useEffect(() => {
     let tz = "";
@@ -15,7 +17,7 @@ export function TimeZoneSync({ stored }: { stored: string }) {
     } catch {
       return;
     }
-    if (tz && tz !== stored) api("/api/account/timezone", { timeZone: tz }).catch(() => null);
-  }, [stored]);
+    if (tz && tz !== stored) api("/api/account/timezone", { timeZone: tz }).then(() => router.refresh()).catch(() => null);
+  }, [stored, router]);
   return null;
 }

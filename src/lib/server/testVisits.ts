@@ -1,3 +1,4 @@
+import { fmtDate } from "./dateFormat";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import { testState } from "@/lib/findSearch";
@@ -10,7 +11,7 @@ import { blockPartners } from "./blocks";
  * are left out (batch 16 §11).
  */
 
-const utcDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+const localDay = (d: Date) => fmtDate(d).replace(/, \d{4}$/, "");
 
 export type VisitState = "Open" | "Full" | "Joining closed" | "Paused" | "Stopped" | "Closed" | "Applied" | "Invited" | "Invite only";
 
@@ -32,7 +33,7 @@ export function visitState(
   if (mine.invited) return { state: "Invited", label: "Invited" };
   if (mine.applied) return { state: "Applied", label: "Applied (waiting)" };
   if (t.joinMode === "invite") return { state: "Invite only", label: "Invite only" };
-  if (s === "Joining closed") return { state: s, label: `Closed to new testers on ${utcDay(t.openUntil!)}` };
+  if (s === "Joining closed") return { state: s, label: `Closed to new testers on ${localDay(t.openUntil!)}` };
   if (s === "Full") return { state: s, label: "Full" };
   return { state: "Open", label: "Accepting testers" };
 }

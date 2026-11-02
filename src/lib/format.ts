@@ -92,3 +92,6 @@ export const fmtTimeIn = (d: Date | string, tz?: string | null) => new Date(d).t
 export const stopTimeIn = (d: Date, tz?: string | null, now = new Date()) => (now.getTime() - d.getTime() < 12 * 3_600_000 ? fmtTimeIn(d, tz) : fmtDateTimeIn(d, tz));
 export const fmtTime = (d: Date | string) => new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 export const fmtDate = (d: Date | string) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+
+/** Calendar date in the viewer's saved browser zone; never the server's zone. */
+export const fmtDateIn = (d: Date | string, tz?: string | null) => new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: zoneOpt(tz).timeZone ?? "UTC" });

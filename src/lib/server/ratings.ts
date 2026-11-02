@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
-import { displayName, fmtDate, money, pronouns } from "@/lib/format";
+import { displayName, fmtDateIn, money, pronouns } from "@/lib/format";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
@@ -52,7 +52,7 @@ export async function testerRateState(contractId: string, now = new Date()): Pro
   if (!c.submissions.length && !done.length) return { kind: "hidden", line: "Rating opens once some work was sent or a call took place." };
   // (Batch 17 section 19) The test's close-out ends the tester's Rate: "Rating closed on <date>." (shown as a note, refused on the server).
   const closeOut = await closeOutOf(c.testId, now);
-  if (closedOut(closeOut, now)) return { kind: "closed", line: ratingClosedLine(fmtDate(closeOut!)) };
+  if (closedOut(closeOut, now)) return { kind: "closed", line: ratingClosedLine(fmtDateIn(closeOut!, c.tester.timeZone)) };
   // A part or listed call they can still Charge or Let it go (Charge never happens on its own: they settle it first).
   // (Batch 30 §3) Late work never has a Charge to settle.
   if ([...c.submissions, ...done].some((x) => !x.review && x.choiceOfferedAt && !("late" in x && x.late))) return { kind: "disabled", line: RATE_CHARGE_FIRST };
@@ -64,7 +64,7 @@ export async function testerRateState(contractId: string, now = new Date()): Pro
     const dev = displayName(c.test.developer);
     const dates = [...waitSubs, ...waitCalls].map((x) => chargeOpensAt(x, c.test, c, now));
     if (dates.some((d) => !d)) return { kind: "disabled", line: rateOpensReviewLine(dev) };
-    return { kind: "disabled", line: rateOpensOnLine(fmtDate(new Date(Math.max(...dates.map((d) => d!.getTime())))), dev) };
+    return { kind: "disabled", line: rateOpensOnLine(fmtDateIn(new Date(Math.max(...dates.map((d) => d!.getTime()))), c.tester.timeZone), dev) };
   }
   return { kind: "open", line: "" };
 }

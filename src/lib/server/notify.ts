@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes } from "@/lib/tz";
-import { bellKey, groupTitle } from "@/lib/bell";
+import { bellKeyIn, groupTitle } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 
@@ -182,5 +182,6 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
  */
 export async function unreadEntryCount(userId: string) {
   const unread = await db.notification.findMany({ where: { userId, readAt: null, ...await notificationScopeFor(userId) }, orderBy: { createdAt: "desc" }, take: 500, select: { id: true, testId: true, own: true, groupKey: true, createdAt: true } });
-  return new Set(unread.map(bellKey)).size;
+  const zone = (await db.user.findUnique({ where: { id: userId }, select: { timeZone: true } }))?.timeZone;
+  return new Set(unread.map((n) => bellKeyIn(n, zone))).size;
 }

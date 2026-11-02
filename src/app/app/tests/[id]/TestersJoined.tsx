@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Users } from "lucide-react";
-import { fmtDate } from "@/lib/format";
+import { fmtDateIn } from "@/lib/format";
 import { PlusMore } from "@/components/PlusMore";
 import { LongList } from "@/components/LongList";
 
@@ -43,7 +43,7 @@ export function seatsOverflow(joined: number, spots: number, shown: number) {
   return [more ? `+${more} more joined` : "", open ? `${open} open` : ""].filter(Boolean).join(" · ");
 }
 
-export function TestersJoined({ testId, spots, seats, gone, status, children }: { testId: string; spots: number; seats: Seat[]; gone: Gone[]; status: string; children?: ReactNode }) {
+export function TestersJoined({ testId, spots, seats, gone, status, children, timeZone }: { timeZone?: string | null; testId: string; spots: number; seats: Seat[]; gone: Gone[]; status: string; children?: ReactNode }) {
   const joined = seats.length;
   const shown = Math.min(spots, 12);
   const stopped = status === "stopped";
@@ -63,7 +63,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children }: 
           <summary className="cursor-pointer">No longer working ({gone.length})</summary>
           <LongList shown={5} tall="max-h-56" className="mt-1.5 space-y-0.5 pl-4">
             {gone.map((g) => (
-              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline"><span className="inline-block max-w-[16rem] truncate align-bottom" title={g.name}>{g.name}</span></a> <span className="badge ml-1" data-gone-tag={g.how}>{g.how}</span>{g.at && <> · {fmtDate(g.at)}</>}</li>
+              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline"><span className="inline-block max-w-[16rem] truncate align-bottom" title={g.name}>{g.name}</span></a> <span className="badge ml-1" data-gone-tag={g.how}>{g.how}</span>{g.at && <> · {fmtDateIn(g.at, timeZone)}</>}</li>
             ))}
           </LongList>
         </details>

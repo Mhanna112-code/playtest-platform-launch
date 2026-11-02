@@ -46,9 +46,9 @@ export async function lastListingSave(testId: string, opts: { /** (Batch 35 §14
  * each price, their deadline from joining, no build link before joining), the fields of the most recent listing Save tagged "Updated <time>" (Before / Now), and
  * that Save's time (`savedAt`, the panel's data-saved-at: See it marks a line's fields only when the panel shows that line's Save).
  */
-export async function testerListingPanel(testId: string, now: Listing): Promise<{ rows: PanelRow[]; savedAt: string }> {
+export async function testerListingPanel(testId: string, now: Listing, timeZone?: string | null): Promise<{ rows: PanelRow[]; savedAt: string }> {
   const last = await lastListingSave(testId, { skipEmpty: true });
-  return { rows: panelRows(now, last, "tester"), savedAt: last?.at.toISOString() ?? "" };
+  return { rows: panelRows(now, last, "tester", timeZone), savedAt: last?.at.toISOString() ?? "" };
 }
 
 /**

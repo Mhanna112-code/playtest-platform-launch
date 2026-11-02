@@ -1,4 +1,5 @@
 "use client";
+import { fmtDateIn } from "@/lib/format";
 import { SubscribersTag } from "@/components/SubscribeLink";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -34,7 +35,7 @@ async function stillRestricted() {
 /** (Batch 35 §75) The name each top press's box says ("Your End early didn't go through."). */
 export const TOP_PRESS = { "next-round": "Next round", "go-next-round": "Go to the next round", stop: "Stop the test", "end-early": "End early", open: "Accept testers again" } as const;
 
-export function TopPanel(p: { joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
+export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const router = useRouter();
@@ -165,7 +166,7 @@ export function TopPanel(p: { joinClosedLine?: string; id: string; title: string
           )}
           {/* (Owner, Oct 26) Open until is shown here as a date only; it changes through Edit. */}
           {/* (Batch 15 section 18) Open until is the last day to join; after it: "Joining closed · testers working until Dec 3". */}
-          {p.openUntil && (p.joinClosedLine ? <p className="text-xs text-amber-200" data-joining-closed="">{p.joinClosedLine}</p> : <p className="text-xs text-slate-400" data-open-until="">Open until (last day to join) {new Date(p.openUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" })}</p>)}
+          {p.openUntil && (p.joinClosedLine ? <p className="text-xs text-amber-200" data-joining-closed="">{p.joinClosedLine}</p> : <p className="text-xs text-slate-400" data-open-until="">Open until (last day to join) {fmtDateIn(p.openUntil, p.timeZone)}</p>)}
         </div>
         {openErr && <p className="err">{openErr}</p>}
         {open === "end" && (

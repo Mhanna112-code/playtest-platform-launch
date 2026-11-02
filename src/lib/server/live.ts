@@ -1,6 +1,8 @@
+import { renderTimes } from "@/lib/tz";
+import { dateZone } from "./dateZone";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, money } from "@/lib/format";
+import { displayName, fmtDateTime, money } from "@/lib/server/dateFormat";
 import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
 import { INFO_FIELDS, LISTING_SAVE, SAVED_ELSEWHERE_LINE, editedLine, ndaAgainLine, parseSave, saveLine } from "@/lib/listingSave";
@@ -136,7 +138,7 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
     const { text, about } = parseLog(r.text);
     // (Batch 16 section 21; batch 29 sections 12 and 13) One wording on both sides, in the stop box and the live box: "You invited Ana Silva in another tab".
     const own = text.startsWith("You ") ? text : `You ${text} in another tab`;
-    return { kind: "own", text: own, createdAt: r.createdAt, ...(about ? { about } : {}), live: own };
+    return { kind: "own", text: renderTimes(own, dateZone()), createdAt: r.createdAt, ...(about ? { about } : {}), live: renderTimes(own, dateZone()) };
   });
 }
 
@@ -376,4 +378,4 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
   return side === "join" ? withSaveAt(testId, lines, tx) : lines;
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: e.text, at: e.createdAt, ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: renderTimes(e.text, dateZone()), at: e.createdAt, ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

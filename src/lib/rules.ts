@@ -751,10 +751,10 @@ export type JoinState = { status: string; listingVersion: number; spots: number;
  * Join sends the listing version the tester saw. Closed/stopped/full tests refuse for good; a changed listing stops once
  * (the page shows the new terms); the second press joins on the new terms.
  */
-export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: boolean, now = new Date()): { result: "go" } | { result: "refused"; message: string } | { result: "changed" } {
+export function joinCheck(t: JoinState, seenListingVersion: number, confirmed: boolean, now = new Date(), date: (d: Date) => string = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })): { result: "go" } | { result: "refused"; message: string } | { result: "changed" } {
   if (t.status === "stopped") return { result: "refused", message: "This test was stopped." };
   // (Batch 15 section 18) Open until is the last day to join.
-  if (t.openUntil && t.openUntil.getTime() < now.getTime()) return { result: "refused", message: closedToNewLine(t.openUntil, (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })) };
+  if (t.openUntil && t.openUntil.getTime() < now.getTime()) return { result: "refused", message: closedToNewLine(t.openUntil, date) };
   if (t.status !== "open") return { result: "refused", message: "This test isn't taking new testers any more." };
   if (t.testersIn >= t.spots) return { result: "refused", message: "This test is full." };
   if (seenListingVersion !== t.listingVersion && !confirmed) return { result: "changed" };
@@ -1166,8 +1166,8 @@ export function summaryDue(pref: string, last: Date | null, now: Date) {
 }
 
 /** One line per failed payment in the hold box. */
-export const failedLine = (what: string, cents: number, failedAt: Date) =>
-  `${what} ${money(cents)} · card declined ${failedAt.toLocaleDateString("en-US", { month: "short", day: "numeric" })}`;
+export const failedLine = (what: string, cents: number, failedAt: Date, date: (d: Date) => string = (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric" })) =>
+  `${what} ${money(cents)} · card declined ${date(failedAt)}`;
 
 /** "Paid so far: written answers $10.00 · recording $0.00 · live calls $12.50 (25 min)" for one tester on a test. */
 export function paidByKind(parts: { kind: "written" | "recording" | "call"; amountCents: number; minutes?: number | null }[]) {

@@ -1,3 +1,5 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateIn } from "@/lib/format";
 import { discoveryV } from "@/lib/server/pageFreshness";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { fmtIn } from "@/lib/tz";
@@ -7,7 +9,7 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryChips, CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
-import { displayName, fmtDate, money } from "@/lib/format";
+import { displayName, money } from "@/lib/server/dateFormat";
 import { DEVICES } from "@/lib/options";
 import { ratingSummary } from "@/lib/server/ratings";
 import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
@@ -49,7 +51,10 @@ function fromText(t: { writtenCents: number | null; recordingCents: number | nul
 const topPrice = (t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) => Math.max(t.writtenCents ?? 0, t.recordingCents ?? 0, t.liveRateCents ?? 0);
 
 export default async function FindPage({ searchParams }: { searchParams: Promise<Sp> }) {
-  const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const u = await requireOpenPage("/app/find");
+  return withDateZone(u.timeZone, async () => {
+ // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const fmtDate = (d: Date | string) => fmtDateIn(d, u.timeZone);
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   // (Owner, Oct 28, batch 17 section 8) Admins get Find tests too: every test, each card with its state, tick boxes for the states; never Join / Apply.
@@ -195,4 +200,6 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
       )}
     </div>
   );
+
+  });
 }

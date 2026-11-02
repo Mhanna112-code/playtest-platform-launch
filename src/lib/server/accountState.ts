@@ -1,6 +1,6 @@
 import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
-import { fmtDateTime } from "@/lib/format";
+import { fmtDateTime } from "@/lib/server/dateFormat";
 import { HttpError } from "./http";
 
 // (Batch 17 §6) An account's suspension and deletion state as the admin's Suspend / Reinstate / Delete see it, on the Accounts list and on a profile's admin view.

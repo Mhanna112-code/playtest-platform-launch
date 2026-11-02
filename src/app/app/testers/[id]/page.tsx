@@ -1,3 +1,5 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateIn } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { publicProfileV } from "@/lib/server/pageFreshness";
 import { ProfileMessageButton } from "@/components/ProfileMessageButton";
@@ -5,7 +7,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, Languages, Monitor } from "lucide-react";
 import { db } from "@/lib/db";
-import { displayName, fmtDate } from "@/lib/format";
+import { displayName } from "@/lib/server/dateFormat";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { TesterTiles } from "@/components/ProfileTiles";
 import { AdminPersonBoxes, AdminTestBoxes } from "@/app/admin/AdminBoxes";
@@ -32,7 +34,10 @@ export const dynamic = "force-dynamic";
  */
 export default async function TesterProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const viewer = await requireOpenPage("/app/testers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const viewer = await requireOpenPage("/app/testers");
+  return withDateZone(viewer.timeZone, async () => {
+ // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const fmtDate = (d: Date | string) => fmtDateIn(d, viewer.timeZone);
   const otherSide = await otherSideNotice(viewer); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   const freshV = await publicProfileV(viewer, id);
@@ -89,4 +94,6 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       )}
     </div>
   );
+
+  });
 }
