@@ -195,3 +195,13 @@ describe("§126.4 excerpts leave files out", () => {
     expect((await X.shownExcerpts(s.tester.user.id)).map((x) => x.text)).toEqual([old.text]);
   });
 });
+
+describe("Deny's bell links to the session (owner, Nov 2)", () => {
+  it("the tester's 'not allowed' line opens their session page, where Show an excerpt is", async () => {
+    const s = await paidWork();
+    const id = (await ask(s.tester.cookie, s.sub.id, "the second boss was far too hard")).body.id as string;
+    expect((await decide(s.dev.cookie, id, "deny")).status).toBe(200);
+    const n = await db.notification.findFirstOrThrow({ where: { userId: s.tester.user.id }, orderBy: { createdAt: "desc" } });
+    expect(n.link).toBe(`/app/sessions/${s.sessionId}`);
+  });
+});
