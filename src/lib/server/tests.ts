@@ -862,7 +862,7 @@ export async function findTests(tester: U, q?: unknown) {
       // (Batch 15 section 18) After Open until the test is closed to everyone who hasn't joined: out of Find.
       OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }],
     },
-    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true } }, contracts: { where: { testerId: tester.id }, select: { status: true } } },
+    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, timeZone: true } }, contracts: { where: { testerId: tester.id }, select: { status: true } } },
     orderBy: { createdAt: "desc" },
     take: 100,
   });

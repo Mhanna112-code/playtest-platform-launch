@@ -262,8 +262,8 @@ describe("batch 35 §32: the tester deadline a tester joining now gets, on both 
     expect(joinerDays({ testerDays: 14, openUntil: new Date("2026-11-20T23:59:00Z"), createdAt, deadlineDays: 7 })).toBe(14);
     expect(joinerDays({ testerDays: null, openUntil: new Date("2026-11-20T23:59:00Z"), createdAt, deadlineDays: 7 })).toBe(14);
     expect(joinerDays({ testerDays: null, openUntil: null, createdAt, deadlineDays: 7 })).toBe(7);
-    expect(src("app/app/find/[id]/page.tsx")).toContain("const days = joinerDays(t);");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("const listingNow = { ...asListing(t), deadlineDays: joinerDays(t) };");
+    expect(src("app/app/find/[id]/page.tsx")).toContain("const days = joinerDays(t, t.developer.timeZone);");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("const listingNow = { ...asListing(t), deadlineDays: joinerDays(t, u.timeZone) };");
   });
 
   it("the same words on both panels: “14 days from joining”", () => {
