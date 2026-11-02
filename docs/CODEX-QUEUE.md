@@ -273,6 +273,8 @@ Wanted:
   confirm (needs_confirmation, 3 days, "Your bank wants you to confirm"), a decline starts a NEW payment hold as today.
 - Testers read "Payment delayed" on those parts until then (the batch 35 §97 tag; never "hold", "suspended", "failed" or
   "chargeback"); the developer's Payments shows them under "Charged once your tests resume" with amounts, not in Pay what you owe.
+- (Added Nov 2) A charge whose bank check started BEFORE the hold and whose 3 days run out DURING the hold also joins "Charged once
+  your tests resume" (it is not added to Pay what you owe). Pay what you owe only ever holds what was owed when the hold began.
 - Nothing changes for charges made when no hold is on.
 Tests in tests/batch35-charges-after-lift.test.ts: a tester's Charge during a payment hold isn't added to Pay what you owe; paying
 what was owed lifts the hold and then charges the waiting Charge; the same for a chargeback hold (its reservation isn't topped up);
