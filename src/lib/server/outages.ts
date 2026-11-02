@@ -142,7 +142,7 @@ export async function approveGap(adminId: string, id: string, p: import("./admin
   const row = id.startsWith(GAP_PREFIX) ? await db.appState.findUnique({ where: { key: id } }) : null;
   const g = row ? gapOf(row) : null;
   const HttpError = (await import("./http")).HttpError;
-  if (!g || (await db.appState.deleteMany({ where: { key: id, value: row!.value } })).count !== 1) throw await gapDone(id, p);
+  if (!g || !(await claimGap(id, "approve-gap", p ?? { adminId, tab: "" }, row!.value))) throw await gapDone(id, p);
   const long = g.ms > OUTAGE_APPROVE_OVER_MS;
   let o;
   try {
@@ -156,8 +156,21 @@ export async function approveGap(adminId: string, id: string, p: import("./admin
 
 /** (Batch 28 §1) An admin dismisses a listed gap: nothing moves, and it leaves the list. */
 export async function dismissGap(id: string, p: import("./adminRace").Presser | null = null) {
-  if (!id.startsWith(GAP_PREFIX) || (await db.appState.deleteMany({ where: { key: id } })).count !== 1) throw await gapDone(id, p);
+  if (!id.startsWith(GAP_PREFIX) || !(await claimGap(id, "dismiss-gap", p))) throw await gapDone(id, p);
   return { ok: true };
+}
+
+/**
+ * (Nov 2, §119) Take a listed gap off the list (only while it's still the same gap: `value`) together with the admin's record of the decision, in one commit, so a
+ * second admin's refusal always finds who decided it and when.
+ */
+async function claimGap(id: string, action: "approve-gap" | "dismiss-gap", p: import("./adminRace").Presser | null, value?: string) {
+  const race = await import("./adminRace");
+  return db.$transaction(async (tx) => {
+    const r = await tx.appState.deleteMany({ where: { key: id, ...(value !== undefined ? { value } : {}) } });
+    if (r.count === 1 && p?.adminId) await race.recordAction(tx, p.adminId, action, id);
+    return r.count === 1;
+  });
 }
 
 /**

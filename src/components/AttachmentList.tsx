@@ -1,4 +1,5 @@
 import { fileSize } from "@/lib/format";
+import { RecordingVideo } from "@/components/RecordingVideo";
 
 /**
  * (Owner, Oct 29, batch 11) The files and recordings sent with a piece, each playable, viewable or downloadable (through the recording file route: only the tester who
@@ -13,7 +14,7 @@ export function AttachmentList({ items }: { items: { id: string; filename: strin
         const size = fileSize(r.sizeBytes);
         return (
           <li key={r.id} className="space-y-1">
-            {r.contentType.startsWith("video/") && <video controls preload="metadata" className="max-h-72 w-full rounded bg-black" src={href} />}
+            {r.contentType.startsWith("video/") && <RecordingVideo className="max-h-72 w-full rounded bg-black" src={href} />}
             {r.contentType.startsWith("image/") && (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={href} alt={r.filename} className="max-h-72 rounded border border-white/10" />

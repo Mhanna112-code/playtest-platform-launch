@@ -380,8 +380,10 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   }
   // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] }));
-  if (inv.status !== "sent") throw new HttpError(409, "gone", inv.status === "joined" ? "They already joined." : inv.status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
-  await db.invite.update({ where: { id: inv.id }, data: { status: "cancelled" } });
+  const gone = (status: string) => new HttpError(409, "gone", status === "joined" ? "They already joined." : status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
+  if (inv.status !== "sent") throw gone(inv.status);
+  // (Nov 2, §119) Only a still-open invite is cancelled: a tester who joined (or a re-send) a moment ago wins, and the refusal says what happened.
+  if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "cancelled" } })).count !== 1) throw gone((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status);
   await tellInvitesClosed([inv.id]); // (batch 30 §6)
   return { ok: true };
 }

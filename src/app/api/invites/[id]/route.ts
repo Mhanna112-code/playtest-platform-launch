@@ -39,11 +39,12 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       inv = fresh;
     }
     // (Batch 16 section 32) Closed meanwhile: refused with the reason (never "hold" or "suspended"); the card goes.
-    if (inv.status === "cancelled") throw new HttpError(409, "invite_closed", await inviteClosedLine(inv.testId));
-    if (inv.status === "joined") throw new HttpError(409, "gone", "You already joined.");
-    if (inv.status !== "sent") throw new HttpError(409, "invite_closed", INVITE_NOT_OPEN);
+    const closed = async (status: string, testId: string) =>
+      status === "cancelled" ? new HttpError(409, "invite_closed", await inviteClosedLine(testId)) : status === "joined" ? new HttpError(409, "gone", "You already joined.") : new HttpError(409, "invite_closed", INVITE_NOT_OPEN);
+    if (inv.status !== "sent") throw await closed(inv.status, inv.testId);
     await listingGate(u.id, inv.testId, body, "decline");
-    await db.invite.update({ where: { id: inv.id }, data: { status: "declined" } });
+    // (Nov 2, §119) Only a still-open invite is declined: a Cancel (or a join) a moment ago wins, and the refusal says what happened.
+    if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "declined" } })).count !== 1) throw await closed((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status, inv.testId);
     await logAction(u.id, inv.testId, body, "said no thanks to the invite");
     await logEvent(inv.testId, "invite", `${displayName(u)} said no thanks to your invite`);
     return ok({ ok: true, ...(typeof body.__note === "string" ? { note: body.__note } : {}) });

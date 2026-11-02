@@ -26,6 +26,8 @@ export async function closePausedTest(testId: string, by: "daily" | "admin", now
   const cs = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
   let invitesClosed: string[] = [];
   const cancelled = await db.$transaction(async (tx) => {
+    // (Nov 2, §119) The same test lock as Stop: two Close nows (or a Close now and a Stop) at once can't both close it; the second reads who did it once settled.
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     const fresh = await tx.test.findUniqueOrThrow({ where: { id: testId } });
     if (fresh.status === "stopped") return null; // somebody stopped it a moment ago: nothing to do
     invitesClosed = await (await import("./invites")).openInviteIds({ testId }, tx);

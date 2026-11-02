@@ -1,6 +1,7 @@
 import { Formatted } from "@/components/Formatted";
 import { ScrollText } from "@/components/ScrollText";
 import { fileSize, fmtDate } from "@/lib/format";
+import { RecordingVideo } from "@/components/RecordingVideo";
 import { versionsOf, type PrevSet, type SetItem } from "@/lib/answerSets";
 import { markerPattern, refOf, resolveMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import React, { type ReactNode } from "react";
@@ -34,7 +35,7 @@ export function AnswerWithAttachments({ text, attachments, onRemove }: { text: s
     const index = match.index ?? 0;
     if (index > last) parts.push(<Formatted key={`text-${last}`} text={text.slice(last, index)} className="text-slate-200" />);
     const a = resolveMarker(refOf(match), attachments);
-    if (a) parts.push(<span key={`file-${index}`} className="inline-flex max-w-full items-center align-middle gap-1">{a.contentType.startsWith("image/") ? <a href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer"><img src={`/api/recordings/${a.id}/file`} alt={a.filename} className="max-h-48 max-w-full rounded object-contain" /></a> : a.contentType.startsWith("video/") ? <video controls className="max-h-48 max-w-full" src={`/api/recordings/${a.id}/file`} /> : <a className="rounded border border-white/15 px-2 py-1 text-xs" href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer">{a.filename} · {fileSize(a.size)}</a>}{onRemove && <button type="button" aria-label={`Remove ${a.filename}`} className="btn-ghost px-1" onClick={() => onRemove(a.id)}>×</button>}</span>);
+    if (a) parts.push(<span key={`file-${index}`} className="inline-flex max-w-full items-center align-middle gap-1">{a.contentType.startsWith("image/") ? <a href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer"><img src={`/api/recordings/${a.id}/file`} alt={a.filename} className="max-h-48 max-w-full rounded object-contain" /></a> : a.contentType.startsWith("video/") ? <RecordingVideo className="max-h-48 max-w-full" src={`/api/recordings/${a.id}/file`} /> : <a className="rounded border border-white/15 px-2 py-1 text-xs" href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer">{a.filename} · {fileSize(a.size)}</a>}{onRemove && <button type="button" aria-label={`Remove ${a.filename}`} className="btn-ghost px-1" onClick={() => onRemove(a.id)}>×</button>}</span>);
     else parts.push(<span key={`missing-${index}`} className="text-slate-400">[file]</span>);
     last = index + match[0].length;
   }

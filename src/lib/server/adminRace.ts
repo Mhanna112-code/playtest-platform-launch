@@ -209,14 +209,25 @@ export async function pausedRefusal(t: { adminPausedAt: Date | null; adminPaused
  * when), the test was stopped or closed (by whom and when: batch 34), or the test is paused only by the developer's account state (a hold or a suspension, which admins
  * don't lift here). (Batch 35 §45) The presser's own lift: "You already lifted the pause on this test in another tab at 3:20 AM."
  */
-export async function liftRefusal(testId: string, p: Presser | null = null) {
-  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
+// (Nov 2, §119) `q`: the transaction that holds the test's lock, so a press that lost the race reads who won (and when) inside that same lock.
+export async function liftRefusal(testId: string, p: Presser | null = null, q: Pick<typeof db, "test" | "adminAction"> = db) {
+  const t = await q.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   if (t.status === "stopped") return stoppedRefusal(t, p);
-  const last = await db.adminAction.findFirst({ where: { targetId: testId, action: "unpause-test" }, orderBy: { createdAt: "desc" } });
+  const last = await q.adminAction.findFirst({ where: { targetId: testId, action: "unpause-test" }, orderBy: [{ createdAt: "desc" }, { id: "desc" }] });
   if (last) return new HttpError(409, "pause_lifted", await alreadyLine(p, last.adminId, last.createdAt, (who) => `That test's pause was already lifted ${byAt(who, last.createdAt)}.`, "lifted the pause on this test", "an admin (deleted)"));
   if (t.developer.holdStartedAt || t.developer.devSuspendedAt) return new HttpError(409, "pause_lifted", "That test isn't paused by the team: it's paused by the developer's account state.");
   return new HttpError(409, "pause_lifted", "That test isn't paused.");
 }
+
+/**
+ * (Nov 2 fixes B, §119) An admin action recorded INSIDE the transaction that claims the change, so a press that loses the race (and reads who did it once the
+ * claim is settled) always finds the winner's record with the right time. The admin route skips its own after-the-fact record for these actions
+ * (RECORDED_INSIDE).
+ */
+export const recordAction = (tx: { adminAction: { create: (a: { data: { adminId: string; action: string; targetId: string; createdAt: Date } }) => Promise<{ id: string }> } }, adminId: string, action: string, targetId: string, at = new Date()) =>
+  tx.adminAction.create({ data: { adminId, action, targetId, createdAt: at } });
+/** The admin route's actions whose record is written inside their own claim (recordAction), never by the route afterwards. */
+export const RECORDED_INSIDE = new Set(["unpause-test", "allow-critical-changes", "delete-account", "approve-chargeback", "approve-gap", "dismiss-gap"]);
 
 /** The last admin action of these kinds on this target (who and when), or null. */
 export const lastAction = (targetId: string, actions: string[]) => db.adminAction.findFirst({ where: { targetId, action: { in: actions } }, orderBy: { createdAt: "desc" } });

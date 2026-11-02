@@ -206,12 +206,19 @@ describe("batch 22 section 5: Lift the pause on a test that isn't paused any mor
     const ok = [r1, r2].filter((r) => r.status === 200);
     const refused = [r1, r2].find((r) => r.status !== 200)!;
     expect(ok).toHaveLength(1);
-    const winner = r1.status === 200 ? a : b;
-    expect(refused.body.error.message).toMatch(new RegExp(`^That test's pause was already lifted \\(by ${winner.user.email.replace(/[.]/g, "\\.")} at .+\\)\\.$`));
+    const winner = r1.status === 200 ? a : b, loser = winner === a ? b : a;
+    // (Nov 2, §119) The lift's record commits with the lift (inside the test's lock), so the refusal names the admin who lifted it, with that lift's time.
+    const lift = await db.adminAction.findFirstOrThrow({ where: { targetId: s.testId, action: "unpause-test" } });
+    expect(lift.adminId).toBe(winner.user.id);
+    const { whenText } = await import("@/lib/server/adminRace");
+    const line = `That test's pause was already lifted (by ${winner.user.email} at ${whenText(lift.createdAt)}).`;
+    expect(refused.body.error.message).toBe(line);
     expect(await db.adminAction.count({ where: { targetId: s.testId, action: "unpause-test" } })).toBe(1);
     expect((await testRow(await db.test.findUniqueOrThrow({ where: { id: s.testId }, include: { developer: true, _count: { select: { contracts: true } } } }))).adminPaused).toBe(false);
-    // A stale row pressed later: the same refusal.
-    expect((await aact(b.cookie, "unpause-test", { id: s.testId })).body.error.message).toMatch(/^That test's pause was already lifted \(by .+ at .+\)\.$/);
+    // A stale row pressed later: the same refusal for the other admin. The admin who lifted it reads their own (batch 35 §45: "You already …"), never another name.
+    // (Before Nov 2 this line pressed as admin b whoever won, so it failed whenever b had won: that was the "two admins at once" flake.)
+    expect((await aact(loser.cookie, "unpause-test", { id: s.testId })).body.error.message).toBe(line);
+    expect((await aact(winner.cookie, "unpause-test", { id: s.testId })).body.error.message).toBe(`You already lifted the pause on this test at ${whenText(lift.createdAt)}.`);
     expect(src("app/admin/PagedList.tsx")).toContain("refreshRows");
   });
 
