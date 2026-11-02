@@ -952,3 +952,9 @@ Tests: `tests/batch35-restricted-needs-you.test.ts` renders the full developer d
 On the paused test page, the existing Needs you fold now holds bank confirmations, booked-call cancellations, excerpt requests and available ratings in that order, with optional dispute replies retained inside the same fold. The red banner stays above it; the normal test page is unchanged. Its one scroll area replaces the nested action cards.
 
 Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including for a suspended tester. The tester’s own profile shows accepted excerpts only, with Remove; pending, denied and closed requests are absent. No accepted excerpts means no excerpt box. Public profiles retain their accepted-only and NDA rules. The developer’s Excerpt requests action box still handles waiting Allow / Deny decisions.
+
+## §113 New charges during a hold wait until it lifts (owner, Nov 1)
+
+- During a payment or chargeback hold, a tester’s Charge, an automatic listed-call charge and a team decision’s raise wait as deferred payments. They do not grow Pay what you owe or a chargeback reservation. Existing owed money and bank reversals keep their own handling.
+- When the hold lifts, waiting charges run oldest first as away payments. The bank can ask for confirmation for three days; a decline starts a new hold, and later items stay waiting. No running-again notice is sent when a waiting charge immediately starts a new hold. A suspension that remains on keeps its waiting charges deferred.
+- The tester sees Payment delayed. Developer Payments lists waiting amounts under “Charged once your tests resume”, separately from Pay what you owe. The developer-row lock prevents a simultaneous hold lift from missing a newly waiting item, and the per-developer drain lock prevents duplicate or out-of-order drains.

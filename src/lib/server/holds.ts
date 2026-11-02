@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
@@ -171,9 +172,34 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
  * Payments that waited for the account to be clear (a Pay pressed during a hold, or from Payments during a suspension; an admin decision that
  * raised pay) are charged now. The tester is told when each goes through.
  */
+/** Queue under the developer row lock, so a simultaneous lift cannot miss a newly waiting charge. */
+export async function deferIfHeld(data: Omit<Prisma.PaymentUncheckedCreateInput, "status">) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${data.developerId} FOR UPDATE`;
+    const dev = await tx.user.findUniqueOrThrow({ where: { id: data.developerId }, select: { holdStartedAt: true } });
+    if (!dev.holdStartedAt) return null;
+    return tx.payment.create({ data: { ...data, status: "deferred" } });
+  });
+}
+
+/** One drain per developer; the durable AppState lock follows the timers lock's stale-run protection. */
 export async function chargeDeferred(devId: string) {
-  const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
-  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred" }, orderBy: { createdAt: "asc" } })) {
+  const key = `deferred-charges:${devId}`, value = `${Date.now()}:${randomUUID()}`;
+  try {
+    await db.appState.create({ data: { key, value } });
+  } catch {
+    const old = await db.appState.findUnique({ where: { key } });
+    if (!old || Date.now() - Number(old.value.split(":")[0]) < 4 * 60000) return;
+    if (!(await db.appState.updateMany({ where: { key, value: old.value }, data: { value } })).count) return;
+  }
+  try { await chargeDeferredLocked(devId); }
+  finally { await db.appState.deleteMany({ where: { key, value } }); }
+}
+
+async function chargeDeferredLocked(devId: string) {
+  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
+    const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
+    if (dev.holdStartedAt || dev.devSuspendedAt) break;
     const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
     const testPath = p.contractId ? `/app/tests/${(await db.contract.findUnique({ where: { id: p.contractId }, select: { testId: true } }))?.testId}` : "/app/payments";
     if (p.kind === "chargeback") {
@@ -205,6 +231,18 @@ export async function chargeDeferred(devId: string) {
       if (e instanceof HttpError && e.code === "card_failed") await declinedPayment(devId, p.id, p.amountCents, await declinedWhat(p));
     }
   }
+}
+
+async function chargeReadyDeferred() {
+  const waiting = await db.payment.findMany({ where: { status: "deferred" }, select: { developerId: true }, distinct: ["developerId"] });
+  const devs = await db.user.findMany({ where: { id: { in: waiting.map((p) => p.developerId) }, holdStartedAt: null, devSuspendedAt: null }, select: { id: true }, take: 100 });
+  for (const dev of devs) await chargeDeferred(dev.id);
+}
+
+/** Developer Payments keeps waiting charges separate from the fixed owed balance. */
+export async function deferredForBox(devId: string) {
+  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  return Promise.all(rows.map(async (p) => ({ id: p.id, amountCents: p.amountCents, what: await deferredWhat(p), href: p.contractId ? `/app/tests/${(await db.contract.findUniqueOrThrow({ where: { id: p.contractId }, select: { testId: true } })).testId}` : "/app/payments" })));
 }
 
 /**
@@ -268,6 +306,8 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   // (Batch 8) The subscription's paid days left resume (unless a suspension is still on).
   await (await import("./subscription")).resumeBilling(devId, now);
   await chargeDeferred(devId);
+  // A waiting charge may have declined and started a NEW hold: do not announce running tests then.
+  if ((await db.user.findUniqueOrThrow({ where: { id: devId }, select: { holdStartedAt: true } })).holdStartedAt) return true;
   // (Owner, Oct 29, batch 10) "Your tests are running again" only when nothing pauses them any more: with an admin suspension still on, the payment line instead (both ignore Off).
   if (opts.quietDev) {
     // (Batch 24, a batch 23 leftover) The team's Approve tells the developer in its own single notice.
@@ -651,6 +691,7 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);
   if (stripeOn()) await (await import("./stripe")).cardExpiryReminders(now).catch((e) => console.error("[card expiry]", (e as Error).message));
+  await chargeReadyDeferred();
   const choices = (await openCharges(now, co)) + (await autoChargeCalls(now));
   // (Batch 29 §22, §31) The one-a-day money lines across tests: the tester's "Charge or let go", the developer's "Pay now".
   await testerChargeLines(now, co);
@@ -678,6 +719,7 @@ async function runDailyLocked(now: Date) {
   await (await import("./calls")).sweepNobodyJoined(now);
   // (Batch 11) Bank confirmations that timed out, then the automatic retries of what is owed during a hold.
   await (await import("./confirm")).expireActions(now);
+  await chargeReadyDeferred();
   if (stripeOn()) for (const u of await db.user.findMany({ where: { holdStartedAt: { not: null }, holdReason: { not: "chargeback" }, deletedAt: null, stripePaymentMethodId: { not: null } }, select: { id: true } })) await retryOwed(u.id, now).catch((e) => console.error("[retry]", (e as Error).message));
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
   out.choices += await openCharges(now, co);
@@ -1117,12 +1159,10 @@ export async function autoChargeCalls(now: Date) {
       n++;
       continue;
     }
-    if (!gone && dev.holdStartedAt) {
-      // During a hold: added to what's owed (as a tester's Charge is); the tester is paid when the developer pays it.
-      await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
-      await bell(dev.id, `${name}'s call on “${c.title}” was charged automatically (${money(amount)}): it was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+    if (!gone && await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
+      await bell(dev.id, `${name}'s call on “${c.title}” (${money(amount)}) will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
       await tellDelayed();
-      await logged(`${name}'s call was charged automatically: ${money(amount)}, added to what you owe`);
+      await logged(`${name}'s call is waiting to be charged once your tests resume: ${money(amount)}`);
       n++;
       continue;
     }
@@ -1218,14 +1258,12 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their ${label} go: nothing charged`, false, {}, c.id));
     return { choice, amountCents: 0 };
   }
-  // (Owner, Oct 28 afternoon) During a payment or chargeback hold the Charge goes through as the tester's choice but isn't charged yet: it is added to the developer's
-  // "Pay what you owe", and the tester is paid when the developer pays it. (During an admin suspension with no hold, or the team's pause, it is charged at once below.)
-  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, holdReason: true } });
-  if (devNow.holdStartedAt) {
-    await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
-    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”: it was added to what you owe`, devNow.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+  // (Batch 35 §113) During a hold the tester's choice waits separately until the hold lifts; it never grows Pay what you owe.
+  // During an admin suspension with no hold, or the team's pause, it is charged at once below.
+  if (await deferIfHeld({ kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
+    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their ${label} on “${c.title}”: it will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
-    return { choice, amountCents: amount, status: "owed", message: chargedDelayedLine(amount) };
+    return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   // (Batch 15 section 9) The payment row is reserved (pending) before the charge, so a lost answer from Stripe can be found and finished or cleared later.
   const row = await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
@@ -1300,12 +1338,10 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id));
     return { choice, amountCents: 0 };
   }
-  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, holdReason: true } });
-  if (devNow.holdStartedAt) {
-    await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "owed" } });
-    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their call on “${c.title}”: it was added to what you owe`, devNow.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+  if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
+    await bell(dev.id, `${displayName(tester)} charged ${money(amount)} for their call on “${c.title}”: it will be charged once your tests resume`, "/app/payments#waiting-charges", undefined, { side: "developer", payment: true, group: "payhold" });
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
-    return { choice, amountCents: amount, status: "owed", message: chargedDelayedLine(amount) };
+    return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
   let status = "charged";
