@@ -29,11 +29,18 @@ Rules to build:
 4. NEVER AN ORPHAN CHECK. Whenever the app stops tracking a check (3 days ran out, failed, cancelled, replaced by a new card, the
    hold lifted another way), it cancels the PaymentIntent at Stripe first; if Stripe says it already SUCCEEDED, the app records that
    payment as paid instead (and does not charge the item again).
+6. (Added Nov 2) PAY WHAT YOU OWE IS ONE PAYMENT. A Pay what you owe press and every retry (daily / new card) charge the TOTAL of what's
+   owed as ONE payment: one charge, one bank check if the card asks, one "Confirm with your bank" item and one lock on the whole
+   box (rule 3 then always covers every debt at once; "Cancel this check" cancels the one check and the whole box is payable again).
+   Approved: every debt in it is paid together and the hold lifts as today. The box, the confirm item, the receipt and the email still
+   LIST the payments it covers (each item's name and amount, as owedItemName / the box lines do today), and each covered debt is
+   marked paid by that one payment (keep a link from each debt to the payment that paid it, for the admin's views and refunds).
+   The chargeback hold's reservation already works this way; keep it.
 5. Before charging any debt (press, retry, chargeback steps), re-check that it has no waiting check and isn't paid (inside the
    existing claim: owed -> paying in one updateMany).
 Testers never see "hold", "failed" or "chargeback"; keep today's tags ("Payment delayed" / "Paid").
 
-Tests in tests/batch35-one-card-checks.test.ts (fake Stripe): new card cancels old checks and retries on the new card (each outcome);
+Tests in tests/batch35-one-card-checks.test.ts (fake Stripe): Pay what you owe with three debts makes one charge / one check, lists all three, and marks all three paid on approval; new card cancels old checks and retries on the new card (each outcome);
 a declined Confirm still waits until its date; a waiting debt is skipped by press and retries and payable after Cancel this
 check; an expired check is cancelled at Stripe, and one that had already succeeded is recorded as paid with no second charge; a
 press and a check finishing at the same moment charge once. Update tests that expected old behaviour. Append "## §117 One card in
