@@ -266,12 +266,12 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     // Tab A pays.
     const paid = await press({ seenTotalCents: 1300, seenIds: stop.body.error.ids, confirmed: true });
     expect(paid.body).toMatchObject({ paid: 2, lifted: true });
-    expect(charges).toBe(2);
+    expect(charges).toBe(1); // (batch 35 §117) one payment for the total
     // Tab B presses with the old page: refused, nothing charged.
     const again = await press({ seenTotalCents: 1300, seenIds: stop.body.error.ids, confirmed: true });
     expect(again.status).toBe(409);
     expect(again.body.error).toMatchObject({ code: "nothing_owed", message: "There's nothing to pay: what you owed is already paid." });
-    expect(charges).toBe(2);
+    expect(charges).toBe(1);
   });
 
   it("two presses at the same moment charge each owed payment once", async () => {
@@ -281,7 +281,7 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     const u = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
     const body = { seenTotalCents: 1100, seenIds: rows.map((r) => r.id) };
     const results = await Promise.allSettled([payOwed(u, body), payOwed(u, body)]);
-    expect(charges).toBe(2);
+    expect(charges).toBe(1); // (batch 35 §117) one payment for both, made once
     expect(results.filter((r) => r.status === "fulfilled").length).toBeGreaterThanOrEqual(1);
     for (const r of rows) expect(await db.payment.findUniqueOrThrow({ where: { id: r.id } })).toMatchObject({ status: "charged" });
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();

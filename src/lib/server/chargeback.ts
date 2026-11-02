@@ -220,6 +220,9 @@ export async function finishCardVerification(userId: string, setupIntentId: stri
   if (!pm) throw new HttpError(400, "no_card", "The card wasn't saved. Try again.");
   if (user.stripeCustomerId) await stripe.customers.update(user.stripeCustomerId, { invoice_settings: { default_payment_method: pm } });
   await db.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm, chargebackCardVerifiedAt: new Date() } });
+  // (Batch 35 §117 rule 1) One card in play: checks still waiting on the old card are cancelled (what they covered is payable again; a charge made while away is
+  // tried again on this card).
+  if (user.stripePaymentMethodId !== pm) await (await import("./owedOnce")).newCardChecks(userId).catch((e) => console.error("[card] new card checks:", (e as Error).message));
   // (Batch 22 section 1) No automatic charge on it: during a chargeback hold what is owed is paid only through Pay what you owe (open once the card is verified).
   return { verified: true };
 }
@@ -273,19 +276,22 @@ async function deferAfterLift(devId: string, rows: OwedRow[]) {
  * One owed payment, paid by a captured reservation: a reversed payment gets its repay row (the money stays with the platform); a failed or owed payment is charged and the
  * tester's share goes to their payout account (or waits for its setup), and the tester reads that it arrived.
  */
-async function settleOwedRow(dev: { id: string; name: string; email: string }, p: OwedRow, pi: string | null) {
-  const status = pi ? "charged" : "not_set_up";
+export async function settleOwedRow(dev: { id: string; name: string; email: string }, p: OwedRow, pi: string | null, /** (batch 35 §117) Pay what you owe's one payment that paid it */ coveredById: string | null = null) {
+  const status = pi || (coveredById && stripeOn()) ? "charged" : "not_set_up";
   if (p.chargeback === "open") {
     const busy = await db.payment.findFirst({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up", "paying", "needs_action", "needs_confirmation"] } } });
-    if (!busy) await db.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: dev.id, testerId: p.testerId, amountCents: p.amountCents, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", status, stripePaymentIntentId: pi, settledAt: new Date() } });
+    if (!busy) await db.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: dev.id, testerId: p.testerId, amountCents: p.amountCents, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", status, stripePaymentIntentId: pi, settledAt: new Date(), coveredById } });
+    // (§117) The repay row keeps the link; the reversed payment is free again (should its chargeback ever reopen).
+    if (coveredById) await db.payment.updateMany({ where: { id: p.id, coveredById }, data: { coveredById: null } });
     return;
   }
   if (p.actionPi) await cancelPi(p.actionPi);
   const split = splitFee(p.amountCents);
   const tester = await db.user.findUnique({ where: { id: p.testerId } });
   const ready = !!(pi && tester?.stripeAccountId && tester.payoutsReady && split.testerCents > 0);
+  // (Batch 35 §117 rule 5) Claimed only while still unpaid and not covered by another payment (a reservation pays only what no one payment covers).
   const claimed = await db.payment.updateMany({
-    where: { id: p.id, settledAt: null, status: p.status },
+    where: { id: p.id, settledAt: null, status: p.status, coveredById },
     // (Batch 33 §3) A failed charge settled from the reservation keeps why it failed (the Payment failures box: "settled by the team").
     data: { status, settledAt: new Date(), ...(p.owedUntil ? {} : { failure: "" }), actionPi: null, actionBy: null, warnedAt: null, stripePaymentIntentId: pi, ...split, transferStatus: pi ? (ready ? "sending" : "waiting") : "none" },
   });
@@ -344,7 +350,9 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   const steps = await chargebackSteps(devId);
   if (!steps) throw await approvedRefusal(devId, new HttpError(409, "no_chargeback_hold", "That account isn't on a chargeback hold."), p);
   if (steps.approved) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."), p);
-  const owing = await owed(devId);
+  // (Batch 35 §117 rule 3) A debt waiting for the bank is locked: never paid from the reservation or charged after the lift (its check pays it, or it's cancelled).
+  const locks = await (await import("./owedOnce")).owedLocks(devId);
+  const owing = (await owed(devId)).filter((x) => !locks.has(x.id));
   const rs = await reserveState(devId);
   const owedCents = owing.reduce((a, p) => a + p.amountCents, 0);
   const { plan, after } = assign(owing, rs.active);

@@ -110,11 +110,12 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
 export async function owedV(developerId: string) {
   const { owedLines } = await import("./holds");
   const me = await db.user.findUniqueOrThrow({ where: { id: developerId }, select: { holdStartedAt: true, holdReason: true, chargebackCardVerifiedAt: true, chargebackApprovedAt: true, holdApprovedAt: true } });
+  // (Batch 35 §117) A line locked by a bank check, or unlocked by Cancel this check, redraws too.
   const lines = await owedLines(developerId);
   const paid = await db.payment.count({ where: { developerId } });
   // (Batch 23 section 6) A reservation made, taken, released or lapsed (another tab, the team, the clock).
   const reserves = (await db.reservation.findMany({ where: { developerId }, orderBy: { createdAt: "desc" }, take: 5, select: { id: true, status: true } })).map((r) => `${r.id}:${r.status}`).join(",");
-  return [lines.map((l) => `${l.id}:${l.amountCents}`).join(","), me.holdStartedAt?.getTime() ?? 0, me.holdReason, me.chargebackCardVerifiedAt?.getTime() ?? 0, me.chargebackApprovedAt?.getTime() ?? 0, me.holdApprovedAt?.getTime() ?? 0, paid, reserves].join("|");
+  return [lines.map((l) => `${l.id}:${l.amountCents}${l.checkId ? `:${l.checkId}` : ""}`).join(","), me.holdStartedAt?.getTime() ?? 0, me.holdReason, me.chargebackCardVerifiedAt?.getTime() ?? 0, me.chargebackApprovedAt?.getTime() ?? 0, me.holdApprovedAt?.getTime() ?? 0, paid, reserves].join("|");
 }
 
 /**

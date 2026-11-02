@@ -848,6 +848,14 @@ export const CONFIRM_DAYS = 3;
 /** (Batch 12 section 5) A press's confirmation pop-up locks the piece for at most this long. */
 export const PRESS_ACTION_MS = 15 * 60_000;
 export const BANK_NOT_CONFIRMED = "Your bank didn't confirm the payment, so nothing was charged.";
+/** (Owner, Nov 2, batch 35 §117) A debt whose one payment waits for the bank: locked in Pay what you owe until it's confirmed or its check is cancelled. */
+export const OWED_BANK_WAITING = "Waiting for your bank";
+export const CANCEL_CHECK = "Cancel this check";
+/** Pay what you owe pressed when everything owed waits for the bank. */
+export const OWED_ALL_WAITING = "What you owe is waiting for your bank: confirm it with your bank, or press Cancel this check to pay it now.";
+export const CHECK_CANCELLED = "Check cancelled: nothing was charged. You can pay it now.";
+export const CHECK_ALREADY_PAID = "Your bank already confirmed this payment: it's paid.";
+export const NO_CHECK_WAITING = "There's no bank check waiting here.";
 /** (Owner, Oct 31, batch 35 §92) Confirm with your bank on a charge made while away, refused because the card on file was declined (it keeps waiting until its date). */
 export const cardDeclinedConfirmLine = (by: string) => `Your card was declined, so nothing was charged. Change your card and confirm again by ${by}.`;
 /**

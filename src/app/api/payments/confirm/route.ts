@@ -25,6 +25,13 @@ export async function POST(req: Request) {
       if (p.kind === "extra") await logPayMore(u.id, body, p);
       else await logReview(u.id, { ...body, kind: "submission", id: p.submissionId }, { amountCents: p.amountCents });
     }
+    // (Batch 35 §117) Pay what you owe's one payment confirmed: each sent part it paid is answered the same way.
+    if (p?.kind === "owed" && !("repeated" in r && r.repeated)) {
+      for (const d of await db.payment.findMany({ where: { coveredById: paymentId, submissionId: { not: null } }, select: { kind: true, submissionId: true, callId: true, status: true, contractId: true, amountCents: true } })) {
+        if (d.kind === "extra") await logPayMore(u.id, body, d);
+        else await logReview(u.id, { ...body, kind: "submission", id: d.submissionId! }, { amountCents: d.amountCents });
+      }
+    }
     return ok(r);
   });
 }

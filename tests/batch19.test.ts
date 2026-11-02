@@ -305,13 +305,14 @@ describe("batch 19 section 5: Pay after a cancelled bank check", () => {
     const owed = () => owedPOST(req("/api/payments/owed", { cookie: s.dev.cookie, body: {} })).then(json);
     const a = await owed();
     expect(a.body.confirm).toHaveLength(1);
-    expect((await confirm(s.dev.cookie, { paymentId: row.id, simulate: "failed" })).status).toBe(402);
+    // (Batch 35 §117) Each press is ONE payment for what's owed: its check is that payment's.
+    expect((await confirm(s.dev.cookie, { paymentId: a.body.confirm[0].paymentId, simulate: "failed" })).status).toBe(402);
     const b = await owed();
     expect(b.status).toBe(200);
     expect(b.body.confirm).toHaveLength(1);
     expect(new Set(st.keys).size).toBe(2);
-    st.bank((await db.payment.findUniqueOrThrow({ where: { id: row.id } })).actionPi!, true);
-    expect((await confirm(s.dev.cookie, { paymentId: row.id })).status).toBe(200);
+    st.bank((await db.payment.findUniqueOrThrow({ where: { id: b.body.confirm[0].paymentId } })).actionPi!, true);
+    expect((await confirm(s.dev.cookie, { paymentId: b.body.confirm[0].paymentId })).status).toBe(200);
     expect(await db.payment.findUniqueOrThrow({ where: { id: row.id } })).toMatchObject({ status: "charged" });
   });
 

@@ -959,3 +959,25 @@ Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including 
 - Pauses protect remaining work time. No deadline closure occurs while paused; lifting it moves the dates before closure is checked. A later pause of an already-finished test moves its financial windows without reviving or moving the ended work window.
 - Leave is hidden once work ends; a stale Leave is refused without changing an ended session to Left.
 - Pay, Pay more, automatic call payments, Charge / Let it go, disputes, and ratings keep their existing windows. Normal work completion does not pay or discard a submitted part, and does not replace its review date or close-out date.
+
+## §117 One card in play; bank checks never double-charge (owner, Nov 2)
+
+- **Pay what you owe is ONE payment.** A press, the daily retry and a new card's retry charge the total of what's owed (the debts not waiting for the bank) as one PaymentIntent: one charge, one bank check if the card asks, one "Confirm with your bank" item. That payment is a Payment row of kind `owed` (status `paying`, then `needs_action` for a press's inline check or `needs_confirmation` for a retry's 3-day check, `bundled` once it went through, `cancelled` otherwise). Each debt it covers points to it (`Payment.coveredById`, additive migration `20261112090000_owed_one_payment`): while it is being charged or waits for the bank the debts are locked; once it went through every covered debt is marked paid by it (status `charged`, its PaymentIntent, the link kept for the admin's views and refunds) and each tester's share is sent from that one charge (`source_transaction`, as a chargeback reservation's capture does). The box, the confirm item ("What you owe $16.00 (Ana Silva's written answers $8.00, …)"), the receipt and the retry's bell line still name each item. Approved: everything is paid together and the hold lifts as before. The chargeback hold's reservation is unchanged.
+- **A waiting debt is locked.** Its box line says "Waiting for your bank", with **Cancel this check** next to the first line of that check. A press, the daily retry and the reservation (chargeback hold) leave it out; other debts are paid. A press with only waiting debts says what to do and charges nothing. Cancel this check cancels the PaymentIntent at Stripe and the debts are payable at once. The claim (`owed → covered` in one update, under the developer's row lock) re-checks that each debt is still unpaid, has no check of its own and isn't covered by another payment; if anything changed, nothing is charged.
+- **Never an orphan check.** Whenever the app stops tracking a check (the 3 days or 15 minutes ran out, a refused check, Cancel this check, a new card), it cancels the PaymentIntent at Stripe first. If Stripe says it already went through, it's recorded as paid (the normal Confirm path) and nothing is charged again. If Stripe's answer is unclear, the check stays tracked and is tried again later. A renewal's check belongs to its invoice, so its lapse ends it as before.
+- **One card in play.** Saving a new card (Payments' card setup, or a chargeback hold's card check) cancels every waiting check at Stripe. Each charge made while away is then tried again on the new card: goes through → paid; the bank asks → a new 3-day "Confirm with your bank" item on the new card; declined → a debt (a hold, or added to it). What's owed is retried as one payment on the new card (not during a chargeback hold, as before). Confirm with your bank always approves on the current card: a check made on another card is confirmed again with the current one.
+- **A declined Confirm keeps today's wait** (owner): the item waits until its date; then a new charge becomes a debt and a debt stays owed (with the check cancelled at Stripe first).
+- **A lost answer never charges twice.** If Stripe's answer to the one payment is lost, its debts stay locked. After 10 minutes the next press or retry asks again with the same idempotency key and finishes it however it actually ended.
+- Testers' wording is unchanged ("Payment delayed" / "Paid"); nothing new mentions a hold, a failure or a chargeback.
+
+Tests: `tests/batch35-one-card-checks.test.ts` (fake Stripe that remembers each PaymentIntent and refuses to cancel one that succeeded) covers:
+- three debts as one charge and one check, listed and all paid on approval;
+- a retry's one confirm item listing all three;
+- a new card in each outcome (paid, asked again on the new card, declined into a debt, an old check already paid), plus waiting debts recharged as one payment;
+- Confirm on another card;
+- a declined Confirm waiting until its date;
+- press, retry and reservation skipping a waiting debt, and Cancel this check (including one already paid);
+- an expired check cancelled at Stripe, and one that had succeeded recorded as paid with no second charge;
+- press + Confirm and clock + Confirm at the same moment charging once, and the claim's re-check.
+
+Earlier tests that expected one charge per debt or a check on the debt itself now follow this rule: batch3, batch5, batch10, batch11, batch17-bank-check, batch19, batch25 and choice.

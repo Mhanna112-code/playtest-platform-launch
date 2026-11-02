@@ -69,7 +69,12 @@ const fakeStripe = {
       const id = fakeByKey.get(key);
       return { data: id ? [{ id, status: fakePis.get(id) ?? "succeeded" }] : [] };
     },
-    cancel: async (id: string) => { fakePis.set(id, "canceled"); return { id, status: "canceled" }; },
+    // (Batch 35 §117) As on Stripe: a PaymentIntent that already went through can't be cancelled.
+    cancel: async (id: string) => {
+      if (fakePis.get(id) === "succeeded") throw Object.assign(new Error("You cannot cancel this PaymentIntent because it has a status of succeeded."), { type: "StripeInvalidRequestError", code: "payment_intent_unexpected_state" });
+      fakePis.set(id, "canceled");
+      return { id, status: "canceled" };
+    },
   },
   refunds: { create: async () => ({ id: `re_fake_${++fakeN}` }) },
   // (Batch 28 §17) A transfer made after the charge names that charge (source_transaction), as on Stripe: no platform balance is needed.
@@ -358,7 +363,10 @@ export async function saveCardFromCheckout(userId: string, sessionId: string) {
     const label = async (id: string | null) => (id ? cardLabel(await stripe.paymentMethods.retrieve(id).then((x) => x.card ?? {}, () => ({}))) : "no card");
     await logAccountChange(userId, "", { scopes: ["payments"], field: "card", label: "Card", before: await label(user.stripePaymentMethodId), after: await label(pm) });
   }
-  // (Owner, Oct 29, batch 11 section 4) A new card during a hold: what is owed is retried on it at once.
+  // (Owner, Nov 2, batch 35 §117 rule 1) ONE CARD IN PLAY: every bank check still waiting (made on the old card) is cancelled at Stripe and each charge made while
+  // away is tried again on the new card at once.
+  if (user.stripePaymentMethodId !== pm) await (await import("./owedOnce")).newCardChecks(userId).catch((e) => console.error("[card] new card checks:", (e as Error).message));
+  // (Owner, Oct 29, batch 11 section 4) A new card during a hold: what is owed is retried on it at once (one payment for the total, batch 35 §117).
   await (await import("./holds")).retryOwed(userId, new Date(), "card").catch((e) => console.error("[retry] card saved:", (e as Error).message));
 }
 

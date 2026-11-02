@@ -653,7 +653,8 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
       const t = p.contractId ? tests.get(p.contractId) : undefined;
       const on: Rich = t ? [" on ", testLink(t)] : [];
       rows.push(mk("pay", p.id, p.createdAt, dev
-        ? [`${p.kind} ${money(p.amountCents)} to `, ...(p.kind === "subscription" ? ["the platform"] : person(people.get(p.testerId))), ...on, ` · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}`, ...stripeIds(p)]
+        // (Batch 35 §117) Pay what you owe's one payment, and each debt it paid (the link kept for refunds).
+        ? [`${p.kind} ${money(p.amountCents)} to `, ...(p.kind === "subscription" ? ["the platform"] : p.kind === "owed" ? ["the payments it covers"] : person(people.get(p.testerId))), ...on, ` · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}${p.coveredById ? ` · paid in one payment (${p.coveredById})` : ""}`, ...stripeIds(p)]
         : [`${money(p.testerCents)} from `, ...person(people.get(p.developerId)), ` (${p.kind})`, ...on, ` · payout ${p.transferStatus}`, ...stripeIds(p)]));
     }
   } else if (kind === "u-failures") {
