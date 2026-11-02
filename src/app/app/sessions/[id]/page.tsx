@@ -335,7 +335,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {/* (Batch 15 section 17) The steps in a scroll box about 6 lines tall. */}
         {/* (Batch 30 §15) The current steps and build link. */}
         {c.test.description && <ScrollText text={c.test.description} className="text-slate-300" label="What to do" />}
-        <p className="text-sm text-slate-400">Due {fmtDate(c.dueAt)}{c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 24 * 3_600_000 ? ` · ${leftText(c.dueAt.getTime() - now.getTime())} left` : ""}{isLate(c.dueAt, now) && !refusal ? ": your deadline has passed, late work is still accepted and marked late." : ""}</p>
+        <p className="text-sm text-slate-400">Due {fmtDate(c.dueAt)}{c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 24 * 3_600_000 ? ` · ${leftText(c.dueAt.getTime() - now.getTime())} left` : ""}{isLate(c.dueAt, now) && !refusal ? ": your deadline has passed. You can still send work; the developer decides what to pay." : ""}</p>
         {c.test.buildUrl && (
           <a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="btn w-fit no-underline hover:no-underline">
             Open the product <ExternalLink className="h-4 w-4" />

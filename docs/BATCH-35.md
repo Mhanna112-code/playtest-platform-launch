@@ -831,3 +831,8 @@ When the join page’s existing watcher finds that an application or ask to rejo
 - Paid written answers and recordings stay visible in the tester panel, in the existing scroll box above Pay more, including sent parts no longer listed. The same question snapshots, notes and attachments remain readable.
 - Sent parts no longer carry a “Sent late” badge. Work sent after its deadline still has the dated payment explanation and the same payment rules; removing a label does not open Charge for it.
 - Clock reproduction: first send Nov 2; extend Open until from Nov 10 to Nov 15 on Nov 3; resend Nov 12. No Charge before Nov 19 at the resend time; the daily job opens Charge / Let it go after that time, without paying automatically.
+
+## A paused session does not claim Open until ended the test (owner, Nov 1)
+
+- While the team’s pause, a payment or chargeback hold, or the developer’s suspension is still pausing the test, a working tester does not see “This test closed on …” merely because the stored Open until passed. The pause explanation stays; an actual ended or left session still says so.
+- The deadline explanation no longer promises a “late” badge after those badges were removed. Sending and payment eligibility keep their existing rules.
