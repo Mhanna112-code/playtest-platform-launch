@@ -33,6 +33,7 @@ Claude brings this list up when a batch lands and in summaries. Newest first.
 - The admin's Suspend "Why" box cleared by a live update: the owner will test; fix only if it happens.
 
 ## Being built (Codex)
+- **Signing up again with a deleted account's email (owner, Nov 1; Codex queue #10, task 26).** Today a deleted account keeps its email, so sign-up says "An account with that email already exists" (misleading). Wanted: a CLEAN deleted account (nothing owed, no hold, no open chargeback, no suspension, not deleted by an admin) can sign up again as a brand-new account (old history stays with the old one); otherwise "This email belonged to an account that was closed. Contact us to use it again.". Open question: should an admin's deletion count as clean?
 - Task 3: the paperclip (files placed at the cursor in written answers).
 - Task 4: the admin top bar (Dashboard, Developers, Testers, Tests).
 - Task 5: Accept / Decline, Invite and Cancel invite stop only for needed devices/languages and a 1-star rating change, named.
