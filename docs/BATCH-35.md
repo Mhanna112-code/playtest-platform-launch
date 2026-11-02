@@ -1162,3 +1162,18 @@ Tests: tests/batch35-per-field-drafts.test.ts.
 - **Pending rules.** One pending request per part stays. There's now also one pending request per session + question: "You already asked to show an excerpt for this question. Wait for the developer's answer."
 - **Excerpts leave files out** (owner, Nov 2). The trim box and the stored excerpt text hold no file markers and no "[file]" placeholder: each marker goes with the spaces before it ("great [📎 map.png #k3f9] but" reads "great but"), and a request whose text still holds a marker (an older page) is stored without it (`withoutFiles` / `excerptPlain` in `src/lib/server/excerpts.ts`). A "[file]" typed in is no longer part of the answer, so it's refused like any added word. Excerpts stored earlier stay as they are. (The files-in-excerpts idea, §127, was dropped.)
 - **Tests:** `tests/batch35-excerpt-live.test.ts` covers the fingerprints, files left out of the trim box and the stored text (and earlier excerpts kept), both duplicate refusals (including one from another submission of the session), the per-question pending rule, the replacement line, Allow replacing and Deny keeping, and a replacement at the limit. `batch13`'s one-pending check now uses a different text.
+
+## §127 Card attempts are limited (owner, Nov 2)
+
+Against card testing (someone running stolen cards through "save a card" one after another). (The number was free: the earlier files-in-excerpts idea under §127 was dropped.)
+
+- **The limits.** At most 5 card attempts per account and 15 per network in a rolling 24 hours (`cardAttempt` in `src/lib/server/cardLimits.ts`). On a local dev server there's no network (`clientIp`'s ""), so the network cap is skipped there, as for sign-in; the account limit still applies.
+- **What counts as an attempt:**
+  - starting a card save: Add a card / Change card on the Payments page (`POST /api/payments/card`, before the Stripe Checkout setup session is made);
+  - starting Verify a card in the chargeback steps, and each card typed into it (`POST /api/payments/verify-card` without `finish`).
+- **What doesn't:** paying with the saved card, Pay what you owe, the end of a check (the bank's answer, or the stand-in's Cancel this check: `finish`), and a press that stopped once for a change in another tab.
+- **Over the limit:** refused with HTTP 429 and "Too many card attempts today. Try again tomorrow, or contact us." Nothing goes to Stripe.
+  - Verify a card shows the line under its button (the steps' own error line).
+  - Add a card / Change card is a form post, so it goes back to Payments (`?error=card_limit#card`) with the line under that button, not in the line at the top.
+- **Storage.** No migration: each attempt is a `LoginAttempt` row with kind "card", the account's id in its `email` field and the network in `ip`. The daily job's clean-up of attempts older than a day keeps the table small.
+- **Tests:** `tests/card-limits.test.ts` covers 5 allowed and the 6th refused (Add a card, and Verify a card's start and typed card), another account on the same network stopped by the network cap, a day later working again, paying not counted, and no network cap on a local dev server.

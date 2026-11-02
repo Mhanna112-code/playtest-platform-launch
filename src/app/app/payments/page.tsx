@@ -28,6 +28,7 @@ import { launchState } from "@/lib/server/subscription";
 import { RETRY_DAYS, fmtSubDay, subState } from "@/lib/subscription";
 import { AccountRefresh } from "@/components/AccountRefresh";
 import { accountChangesSince } from "@/lib/server/accountChanges";
+import { TOO_MANY_CARD_ATTEMPTS } from "@/lib/server/cardLimits";
 import { AccountFormButton } from "./AccountFormButton";
 
 export const metadata = { title: "Payments · Playtest" };
@@ -39,6 +40,7 @@ const MESSAGES: Record<string, string> = {
   payout: "We couldn't open the payout setup. Try again.",
   verify: "We couldn't verify the card. Try again or use another card.",
   confirm: "Confirm your email first: payouts go only to a confirmed account. We sent you a link.",
+  card_limit: TOO_MANY_CARD_ATTEMPTS, // (batch 35 §127) shown under Add a card / Change card, not up here
 };
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
@@ -56,7 +58,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // (card saved or verified: the developer's; payout setup: the tester's) shows the switch notice, so nothing of the other side is said here.
   const side = sideFor(u);
   const dev = side === "developer", tester = side === "tester";
-  const returnSide = q.saved === "card" || q.saved === "verified" || q.error === "card" || q.error === "verify" ? "developer"
+  const returnSide = q.saved === "card" || q.saved === "verified" || q.error === "card" || q.error === "card_limit" || q.error === "verify" ? "developer"
     : q.saved === "payout" || q.pending === "payout" || q.error === "payout" || q.error === "confirm" ? "tester" : null;
   if (hasBoth(u) && returnSide && returnSide !== side) {
     const again = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === "string")).toString();
@@ -122,7 +124,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {dev && <ConfirmList items={await confirmItems(u.id)} />}
-      {q.error && q.error !== "off" && <p className="err">{MESSAGES[q.error]}</p>}
+      {q.error && q.error !== "off" && q.error !== "card_limit" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
       {q.saved === "payout" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Your payout account is connected.</p>}
@@ -145,6 +147,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <p className="text-sm text-slate-300">{await savedCardLine(u)}</p>
             {/* (Batch 15 section 41, L5) Stripe objects are made only on a POST. */}
             {on && <AccountFormButton action="/api/payments/card" seenAt={seenAt} press={u.stripePaymentMethodId ? "Change card" : "Add a card"} stop={stopFor("card")}><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</AccountFormButton>}
+            {/* (Owner, Nov 2, batch 35 §127) Too many card attempts: the refusal under the button that was pressed. */}
+            {q.error === "card_limit" && <p className="err" data-card-limit="">{MESSAGES.card_limit}</p>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Your full card number and security code are entered on Stripe&apos;s page and never reach this site.</p>
           </section>
           <section className="card space-y-3">
