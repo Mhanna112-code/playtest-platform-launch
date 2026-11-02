@@ -129,7 +129,7 @@ describe("Mature (18+): say why the box is red (section 9)", () => {
     expect(R.checkListing(listing({ mature: true, matureWhy: "Gore!" }), 0, now).some((m) => fieldOfMistake(m) === "matureWhy")).toBe(false);
     const form = src("app/app/tests/TestForm.tsx");
     expect(form).toContain("data-required-msg={MATURE_WHY_REQUIRED} data-min-chars={String(MATURE_WHY_MIN)} data-msg={MATURE_WHY_SHORT}");
-    expect(form).toContain('data-mature-count="">{f.matureWhy.length.toLocaleString("en-US")} / {LIMITS.matureWhy.toLocaleString("en-US")}');
+    expect(form).toContain('min={MATURE_WHY_MIN} max={LIMITS.matureWhy} required data-mature-count=""');
     expect(form).toContain("Tick this if your test has mature content, and say why. Never allowed: sexual content involving minors, illegal content, real-world gore. Other graphic content must be marked Mature.");
     expect(form).not.toContain("No graphic content");
   });

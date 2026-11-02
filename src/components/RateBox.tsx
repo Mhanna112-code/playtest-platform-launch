@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useRef, useState } from "react";
 import { Star } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -37,12 +38,13 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
     <div ref={box} className="space-y-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.04] p-3 text-sm text-ink-200" id={p.anchor ?? "rate"} data-mistakes-root="">
       <p className="flex items-center gap-1.5 font-medium text-white"><Star className="h-4 w-4 text-amber-300" /> Rate {p.name}</p>
       <p className="text-xs text-ink-400">1 to 5, and a note if you like (shown without your name).{p.working ? ` ${p.headline}` : ""}</p>
-      <div className="flex flex-wrap items-end gap-2">
+      <div className="flex flex-wrap items-start gap-2">
         {!done && <select id={`stars-${p.path.replace(/[^A-Za-z0-9]+/g, "-")}`} className="input w-44" value={stars} onChange={(e) => setStars(e.target.value)} aria-label="Your rating, 1 to 5" data-required="" data-required-msg="Choose 1 to 5 stars." data-match="stars">
           <option value="" disabled>Choose…</option>
           <option value="5">5 - excellent</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1 - poor</option>
         </select>}
-        {!done && <input className="input min-w-0 flex-1" maxLength={500} data-match="comment" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />}
+        {!done && <span className="min-w-0 flex-1"><input className="input w-full" maxLength={500} data-match="comment" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />
+        <CharacterCount value={comment} max={500} /></span>}
         {p.working ? (
           <ConfirmButton live className="btn-secondary" disabled={busy || !!p.disabledLine} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
             body={<>{[p.headline, ...p.lines].map((l) => <p key={l}>{l}</p>)}</>}>

@@ -128,7 +128,7 @@ describe("the developer's Stop pop-up (section 15)", () => {
     expect(top).toContain('go("stop", { reason: stopReason })');
     expect(top).toContain('<WhyBox id="reason" label="Why? (each tester you tick reads it)"'); // End early uses the same box
     const why = src("components/WhyBox.tsx");
-    expect(why).toContain('{value.length.toLocaleString("en-US")} / {max.toLocaleString("en-US")}');
+    expect(why).toContain('<CharacterCount value={value} min={WHY_MIN_CHARS} max={max} required');
     const confirm = src("components/ConfirmButton.tsx");
     expect(confirm).toContain("disabled={confirmDisabled}");
     expect(confirm).toContain('{confirmDisabled && confirmHint && <p className="mt-3 text-right text-xs text-slate-400" data-say-why="">{confirmHint}</p>}');

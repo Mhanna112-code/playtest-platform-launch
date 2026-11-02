@@ -1,4 +1,6 @@
 "use client";
+import { LIMITS } from "@/lib/limits";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useState } from "react";
 import { Send } from "lucide-react";
 import { api, errOf } from "@/lib/client";
@@ -44,8 +46,9 @@ export function ContactForm({ topics }: { topics: readonly string[] }) {
         </select>
       </label>
       <label className="block space-y-1"><span className="label req">Your message</span>
-        <textarea id="message" required minLength={10} maxLength={3000} data-required="" data-required-msg="Write a few words about what happened (at least 10 characters)." data-min-chars="10" data-msg="Write a few words about what happened (at least 10 characters)." data-match="few words|keep it to" className="input min-h-32" value={message} onChange={(e) => setMessage(e.target.value)}
+        <textarea id="message" required minLength={10} maxLength={LIMITS.contact.max} data-required="" data-required-msg="Write a few words about what happened (at least 10 characters)." data-min-chars="10" data-msg="Write a few words about what happened (at least 10 characters)." data-match="few words|keep it to" className="input min-h-32" value={message} onChange={(e) => setMessage(e.target.value)}
           placeholder="What happened, and what you'd like us to do. Include amounts and dates if it's about a payment." />
+        <CharacterCount value={message} min={LIMITS.contact.min} max={LIMITS.contact.max} required />
       </label>
       <div className="flex flex-wrap items-center"><button className="btn" disabled={busy}><Send className="h-4 w-4" /> {busy ? "Sending…" : "Send to the team"}</button>{keep.restored && (message !== "" || topic !== "") && <DraftTag disabled={busy} kind="discard" onUseSaved={() => { setMessage(""); setTopic(""); }} />}</div>
       <FormMistakes text={err} press="Send to the team" />

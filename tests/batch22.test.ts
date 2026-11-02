@@ -207,11 +207,12 @@ describe("batch 22 section 5: Lift the pause on a test that isn't paused any mor
     const refused = [r1, r2].find((r) => r.status !== 200)!;
     expect(ok).toHaveLength(1);
     const winner = r1.status === 200 ? a : b;
+    const loser = r1.status === 200 ? b : a;
     expect(refused.body.error.message).toMatch(new RegExp(`^That test's pause was already lifted \\(by ${winner.user.email.replace(/[.]/g, "\\.")} at .+\\)\\.$`));
     expect(await db.adminAction.count({ where: { targetId: s.testId, action: "unpause-test" } })).toBe(1);
     expect((await testRow(await db.test.findUniqueOrThrow({ where: { id: s.testId }, include: { developer: true, _count: { select: { contracts: true } } } }))).adminPaused).toBe(false);
-    // A stale row pressed later: the same refusal.
-    expect((await aact(b.cookie, "unpause-test", { id: s.testId })).body.error.message).toMatch(/^That test's pause was already lifted \(by .+ at .+\)\.$/);
+    // The losing admin presses their stale row again: the same refusal, regardless of who won.
+    expect((await aact(loser.cookie, "unpause-test", { id: s.testId })).body.error.message).toMatch(/^That test's pause was already lifted \(by .+ at .+\)\.$/);
     expect(src("app/admin/PagedList.tsx")).toContain("refreshRows");
   });
 

@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
@@ -34,9 +35,12 @@ export function FindSearch({ params }: { params: Record<string, string | undefin
   return (
     <div className="flex w-full items-center gap-2 sm:max-w-md" data-find-search="">
       <label htmlFor="findSearch" className="sr-only">{FIND_SEARCH_LABEL}</label>
-      <span className="relative w-full">
+      <span className="w-full">
+        <span className="relative block">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" aria-hidden />
         <input id="findSearch" type="search" className="input w-full pl-9" placeholder={FIND_SEARCH_LABEL} value={q} maxLength={FIND_SEARCH_MAX} onChange={(e) => setQ(e.target.value)} autoComplete="off" />
+        </span>
+        <CharacterCount value={q} max={FIND_SEARCH_MAX} />
       </span>
     </div>
   );

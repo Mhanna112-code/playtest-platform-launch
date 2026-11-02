@@ -1,4 +1,5 @@
 "use client";
+import { CharacterCount } from "@/components/CharacterCount";
 import { useEffect, useRef, useState } from "react";
 import { Choices } from "@/components/Choices";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -89,6 +90,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
       <div>
         <label className="label req" htmlFor="name">Name</label>
         <input id="name" className="input" data-required="" data-required-msg="Enter your name (others see it)." data-match="your name" value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ana Silva" />
+        <CharacterCount value={v.name} min={1} max={80} required />
       </div>
       <div>
         <label className="label" htmlFor="pronoun">Pronoun</label>
@@ -114,6 +116,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
             <label className="label" htmlFor="bio">Bio (shown to developers)</label>
             <textarea id="bio" className="input min-h-24" maxLength={1000} value={v.bio} onChange={(e) => set({ bio: e.target.value })}
               placeholder="e.g. Gameplay-experience QA for 5 years; Castilian Spanish LQA; I play a lot of roguelikes on PC." />
+            <CharacterCount value={v.bio} max={1000} />
           </div>
         </>
       )}

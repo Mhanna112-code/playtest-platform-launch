@@ -1,4 +1,6 @@
 "use client";
+import { withoutAttachmentMarkers } from "@/lib/answerAttachments";
+import { CharacterCount } from "@/components/CharacterCount";
 import { refusalLine } from "@/lib/pressLabels";
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -9,7 +11,7 @@ import { stopBox, useStopBox } from "@/lib/topStop";
 import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
 import { restoreDraft } from "@/lib/answerSets";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerCounter, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
+import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ScrollText } from "@/components/ScrollText";
 import { NOTHING_CHANGED_LINE } from "@/lib/rules";
@@ -60,7 +62,7 @@ const isShortLine = (m: string) => /^\W?Write at least \d+ characters \(\d+ so f
 export { ANSWER_REQUIRED };
 function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
-  const chars = min ? answerChars(value) : 0;
+  const chars = answerChars(value);
   return (
     <div className="space-y-1">
       <FormatBar target={ref} onChange={onChange} sessionId={sessionId} onAttach={onAttach} known={attachments} />
@@ -69,8 +71,7 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
       <div className="max-h-72 overflow-y-auto rounded-lg border border-white/10 p-2" tabIndex={0} data-answer-preview="">
         <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
       </div>
-      {/* (Batch 30 §14) While an answer is below the minimum: "12 / 50 characters minimum" (grey; red once Send found it short). An empty optional answer shows nothing. */}
-      {min && chars < ANSWER_MIN_CHARS && (!!value.trim() || required || short) && <p className={`text-xs ${short ? "text-rose-300" : "text-slate-500"}`} data-answer-count={chars}>{answerCounter(chars)}</p>}
+      <CharacterCount value={value} count={withoutAttachmentMarkers(value).length} minCount={chars} min={min ? ANSWER_MIN_CHARS : 0} max={WRITTEN_MAX_CHARS} required={required || short} data-answer-count={chars} />
     </div>
   );
 }
@@ -278,7 +279,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       {!fin.done && <>
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
       <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-required="" data-required-msg="Say why you think the pay should be higher (at least a sentence)." data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." data-match="pay should be higher" value={reason} onChange={(e) => setReason(e.target.value)} />
-      <p className="text-xs text-slate-500">10–2,000 characters</p>
+      <CharacterCount value={reason} min={10} max={2000} required />
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, {limit}.</p>
       </>}
       <button
