@@ -220,3 +220,10 @@ export async function liftRefusal(testId: string, p: Presser | null = null) {
 
 /** The last admin action of these kinds on this target (who and when), or null. */
 export const lastAction = (targetId: string, actions: string[]) => db.adminAction.findFirst({ where: { targetId, action: { in: actions } }, orderBy: { createdAt: "desc" } });
+
+/** (Batch 35 §86) The admin's stop lines use the same answered-item history as both other sides. */
+export async function stopForUnanswered(adminId: string, testId: string, press: string, lines: (RaceLine & { item?: string })[], answers?: import("./live").Answers) {
+  const { answersIt, unanswered } = await import("./live");
+  const pending = await unanswered(adminId, testId, lines.map((e) => ({ ...e, kind: "dispute", createdAt: e.at })));
+  stopIfChanged(press, pending.filter((e) => !answersIt(e, answers)));
+}

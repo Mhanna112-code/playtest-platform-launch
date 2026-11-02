@@ -19,6 +19,12 @@ export async function POST(req: Request) {
     if (p && p.status === "needs_action" && (p.kind === "review" || p.kind === "call") && "reviewId" in r) await logReview(u.id, { ...body, action: "pay", kind: p.callId ? "call" : "submission", id: p.callId ?? p.submissionId ?? "" }, r as { amountCents?: number });
     // (Batch 20 section 12) A Pay more the bank confirmed: another tab's presses stop once for it, as for one that went through at once.
     if (p && p.status === "needs_action" && p.kind === "extra" && (r as { paid?: boolean }).paid) await logPayMore(u.id, body, p);
+    // (§86) Confirm of a Charge / dispute payment made while away also answers the piece.
+    // The ordinary Pay / Pay more paths above already log their answer; a repeated finish is not another action.
+    if (p?.submissionId && ["needs_confirmation", "failed", "owed", "paying"].includes(p.status) && !("repeated" in r && r.repeated)) {
+      if (p.kind === "extra") await logPayMore(u.id, body, p);
+      else await logReview(u.id, { ...body, kind: "submission", id: p.submissionId }, { amountCents: p.amountCents });
+    }
     return ok(r);
   });
 }

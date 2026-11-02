@@ -18,7 +18,7 @@ export const tabOf = (body: Record<string, unknown>) => (typeof body.tab === "st
  * (Owner, Oct 28, batch 16 section 21) What an action was about, kept with its log line (after META, so no new column): the press (`a`, e.g. "pay")
  * and the things it touched (`k`: "c:<contract>", "sub:<id>", "call:<id>", "req:<id>", "t:<tester>", "set:<id>", "app:<id>", "test").
  */
-export type OwnAbout = { a: string; k: string[]; /** (Batch 35 §34) a listing Save's consequences ("re-sent fbbb's invite"): each its own line */ x?: string[] };
+export type OwnAbout = { a: string; k: string[]; /** (Batch 35 §34) a listing Save's consequences ("re-sent fbbb's invite"): each its own line */ x?: string[]; answers?: Answers };
 const META = "\u001f";
 /**
  * A press on the developer's side. (Owner, Oct 31, batch 35 §67) Every action of theirs made in another tab stops EVERY press on the test page and on Edit once.
@@ -63,7 +63,7 @@ export const payPressOf = (contractId: string, piece: { callId?: string | null; 
   acts: [...PAY_ACTS] as string[], keys: [piece.callId ? `call:${piece.callId}` : piece.submissionId ? `sub:${piece.submissionId}` : `c:${contractId}`], stopCheck: contractId,
   // (Batch 35 §79) Pay / Pay more on written answers or a recording: the tester's "sent their …" / "updated their …" line is what it answers.
   // (Owner, Oct 31, batch 35 §89) …and that tester joining: paying their work, you know they're in ("fbbb joined" no longer stops Pay on fbbb's answers).
-  ...(piece.submissionId ? { answers: { kinds: ["sent", "sentpaid", "joined"], contractId, submissionId: piece.submissionId } } : { answers: { kinds: ["joined"], contractId } }),
+  ...(piece.submissionId ? { answers: { item: piece.submissionId, kinds: ["sent", "sentpaid", "joined"], contractId, submissionId: piece.submissionId } } : { answers: { kinds: ["joined"], contractId } }),
 });
 export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
 /**
@@ -101,6 +101,34 @@ export function seenOf(v: unknown): Date | null {
   return d && !isNaN(d.getTime()) ? d : null;
 }
 
+/** (Batch 35 §86) Answers persist across page loads and devices. Never cap the history.
+ * Only changes before the answer are seen; own other-tab actions still stop (§67).
+ */
+export async function unanswered<T extends TestEventLike & { contractId?: string | null }>(userId: string, testId: string, lines: T[], tx: Tx | typeof db = db): Promise<T[]> {
+  if (!lines.length) return lines;
+  const since = new Date(Math.min(...lines.map((e) => e.createdAt.getTime())));
+  const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since } }, select: { text: true, createdAt: true } });
+  const logs = rows.map((r) => ({ ...parseLog(r.text), at: r.createdAt }));
+  // Existing developer logs already have item keys. Reuse them too; older tester logs
+  // had no keys, so new tester answers now retain the exact id in the same metadata.
+  const oldPieces = logs.flatMap(({ about }) => !about?.answers && about && (about.a === "pay" || about.a === "pay-more") ? about.k.filter((k) => k.startsWith("sub:")).map((k) => k.slice(4)) : []);
+  const kinds = oldPieces.length ? await subKinds(oldPieces, tx) : new Map<string, string>();
+  const answers = logs.flatMap(({ about, text, at }) => {
+    const key = (prefix: string) => about?.k.find((k) => k.startsWith(prefix))?.slice(prefix.length);
+    let a = about?.answers;
+    const sub = key("sub:"), request = key("req:"), app = key("app:"), dispute = key("dispute:");
+    if (!a && sub && (about?.a === "pay" || about?.a === "pay-more")) a = { item: sub, kinds: ["sent", "sentpaid"], contractId: key("c:"), label: kinds.get(sub) === "recording" ? "recording" : "written answers" };
+    if (!a && request && about?.a === "answer-request" && /^(accepted|declined) /.test(text)) a = { item: request, kinds: ["requested"], contractId: key("c:") };
+    if (!a && app && about?.a === "application") {
+      const name = /^(?:accepted|declined) (.*)'s application$/.exec(text)?.[1];
+      a = { item: app, kinds: ["applied"], texts: name ? [`${name} applied to join`, `${name} asks to rejoin`] : [] };
+    }
+    if (!a && dispute && about?.a === "dispute-side") a = { item: dispute };
+    return a ? [{ a, at }] : [];
+  });
+  return lines.filter((e) => e.kind === "own" || !answers.some(({ a, at }) => at > e.createdAt && answersIt(e, a)));
+}
+
 /** This person's own actions on the test since `since`, from other tabs. */
 export async function ownChanges(userId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<OwnEvent[]> {
   const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : { tab: { not: "" } }) }, orderBy: { createdAt: "asc" }, take: 50 });
@@ -126,7 +154,7 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   const mine = await ownChanges(devId, testId, since, tab, tx);
   const ownRenames = events.filter((e) => e.kind === "renamed" && e.text.startsWith(`${me} `));
   const saves = ownRenames.length ? await savesUpTo(testId, ownRenames[ownRenames.length - 1].createdAt, tx) : [];
-  const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e) => {
+  const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e): (typeof e & { listing?: boolean; item?: string })[] => {
     if (e.kind === "info" && e.text.startsWith(`${me} `)) return [];
     if (e.kind === "renamed" && e.text.startsWith(`${me} `)) {
       // (Batch 30, Oct 29 addition) One line per save: a rename saved in another tab with other fields is already in that save's line ("title (now “X”)").
@@ -141,7 +169,7 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
       if (tab && sv?.tab === tab) return [];
       return [{ ...e, text: e.text.replace(`${me} `, "You "), listing: true }];
     }
-    return [e];
+    return [{ ...e, ...(/^(?:req|part|item-app|item-dispute)-/.test(e.link) ? { item: e.link.replace(/^(?:req|part|item-app|item-dispute)-/, "") } : {}) }];
   });
   // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box;
   // (batch 35 §67) every action of theirs in another tab stops every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines). A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
@@ -160,7 +188,7 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   const all = await withSaveAt(testId, [...listing, ...(await devPaymentChanges(devId, testId, since, tx))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()), tx);
   // (Design doc 6) Update types the developer ignores in the Alerts menu no longer stop a press (the live box still lists them, greyed).
   if (opts.all) return all;
-  const loud = all.filter((c) => !c.quiet);
+  const loud = await unanswered(devId, testId, all.filter((c) => !c.quiet), tx);
   // (Batch 35 §73) The ticks of this test's own Alerts menu.
   const ignored = new Set((await tx.test.findUnique({ where: { id: testId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
   return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : loud;

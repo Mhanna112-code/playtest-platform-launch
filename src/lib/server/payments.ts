@@ -302,11 +302,11 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (!d) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
   // (Batch 15 section 21) The two-admin refusal names the other admin by email: "ben@… already decided this dispute at 3:10 PM."
   if (d.status !== "open") throw new HttpError(409, "decided", await decidedByLine(d.decidedById, d.decidedAt));
-  // (Owner, Oct 30, batch 15 section 27) The developer added their side after this admin's page loaded: Decide stops once so they can read it.
+  // (§86) Decide answers this dispute, including its developer-side line.
   const seen = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
-  if (seen && !isNaN(seen.getTime()) && body.confirmed !== true && d.devSideAt && d.devSideAt > seen) {
-    const dev = (await db.contract.findUnique({ where: { id: d.contractId }, include: { test: { include: { developer: true } } } }))?.test.developer;
-    throw new HttpError(409, "stop_once", "Press Decide again to go ahead.", { changes: [{ text: `${dev ? displayName(dev) : "The developer"} added their side at ${fmtTime(d.devSideAt)}: read it, then press Decide again.`, at: d.devSideAt }], devSide: d.devSide });
+  if (seen && !isNaN(seen.getTime()) && d.devSideAt && d.devSideAt > seen) {
+    const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, select: { testId: true } });
+    await (await import("./adminRace")).stopForUnanswered(admin.id, c.testId, "Decide", [{ item: d.id, text: "The developer added their side", at: d.devSideAt }], { item: d.id });
   }
   // (Owner, Oct 31, batch 35 §70) The developer's own payment on this piece waiting for their bank (up to 15 minutes) would be charged on top of the decision: refused until
   // it's confirmed or fails, so the piece is never paid more than decided.
@@ -369,6 +369,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   await (await import("./ratings")).maybePromptRating(c.id);
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(delayed ? [heldNow || testPaused(c.test.developer, c.test) ? "Payment may be delayed until the test resumes." : "Payment may be delayed."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
   await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}#tester-${c.id}`, { group: "disputedecided" });
+  await (await import("./live")).logAction(admin.id, c.testId, body, "decided a dispute", { a: "decide", k: [`dispute:${d.id}`], answers: { item: d.id } });
   return { extraCents: extra };
 }
 

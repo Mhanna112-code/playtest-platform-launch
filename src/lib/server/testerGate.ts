@@ -5,7 +5,7 @@ import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { keyGivenToYouLine } from "@/lib/keys";
 import { KEY_GIVEN } from "./accessKeys";
-import { answersIt, asLines, listingSaveLines, ownChanges, type Answers, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
+import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answers, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
 // Switch / Keep, Send written, Send recording, Charge / Let it go, Dispute, Leave, Block, Request a time, Accept /
@@ -133,7 +133,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
   const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || (!!opts.piece && e.piece === opts.piece)) : r.changes;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
-  const list = [...terms, ...rest].filter((e) => !answersIt(e, opts.answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const list = withRenamed((await unanswered(testerId, testId, [...terms, ...rest])).filter((e) => !answersIt(e, opts.answers)), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list), tail, top: terms.length > 0, alertsOff: !!off });
 }

@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, TESTER_CHOICE_REASONS, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
-import { tabOf, testerPaymentChanges } from "./live";
+import { unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./closeOut";
@@ -223,20 +223,21 @@ async function testerRateGate(testerId: string, contractId: string, devName: str
   // since the page loaded stops it once too (a request, a booking, a decline, a withdraw, a cancel); other testers' calls never do. Alerts Off: they don't stop.
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { status: true, testId: true, tester: { select: { testerAlertsOff: true } }, test: { select: { status: true } } } });
   if (c.status === "working" && c.test.status === "open" && !c.tester.testerAlertsOff) lines.push(...(await testerChanges(testerId, contractId, c.testId, since, tabOf(body))).filter((e) => TESTER_CALL_KINDS.has(e.kind)));
-  if (lines.length) stopBox(lines.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
+  const pending = await unanswered(testerId, c.testId, lines);
+  if (pending.length) stopBox(pending.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
 async function devRateGate(testId: string, contractId: string, body: Record<string, unknown>, devId = "") {
   const since = loadedOf(body);
   if (!since) return;
   const lines: TestEventLike[] = [];
   // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab (a Pay more, a call change…) never stop Rate: it only races with Rate itself.
-  void devId;
   const stop = await devStopSince(testId, contractId, since);
   if (stop) lines.push(stop);
   lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })));
   // (Owner, Oct 29, batch 30 §4) No call changes here: the developer's Rate only opens after the tester rated (which ends their part) or at close-out, so "call changes
   // between the two of them while that tester is still working" could never apply.
-  if (lines.length) stopBox(lines.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
+  const pending = await unanswered(devId, testId, lines);
+  if (pending.length) stopBox(pending.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
 function refuse(s: RateState, already: string): never {
   if (s.kind === "rated") throw new HttpError(409, "rated", already);

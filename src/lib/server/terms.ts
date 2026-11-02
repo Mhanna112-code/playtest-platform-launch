@@ -101,6 +101,7 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { top: true, changes: [{ text: `${displayName(c.test.developer)} changed the terms again: ${newest.diff}`, at: newest.createdAt }], offerId: newest.id, tail: "Press again to decide on these newest terms.", alertsOff: !!(await db.user.findUnique({ where: { id: tester.id }, select: { testerAlertsOff: true } }))?.testerAlertsOff }); // (batch 17 section 13)
   }
   const target = newest;
+  body.offerId = target.id;
   const now = new Date();
   if (body.choice === "switch") {
     const sets = await questionSetsOnSwitch(c, (target.questions as string[]) ?? [], now);

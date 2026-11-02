@@ -1,7 +1,7 @@
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
-import { CALL_ACTS, PAY_ACTS, answersIt, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
@@ -149,13 +149,13 @@ export async function lockTest(tx: Tx, id: string) {
 }
 
 /** Record what happened. bump=true moves the test's version on (Edit's Save will notice). */
-export async function recordEvent(tx: Tx, testId: string, kind: string, text: string, bump: boolean, extra: Prisma.TestUpdateInput = {}, contractId: string | null = null, /** (Batch 34 §9) the tab that saved the listing */ tab = "") {
+export async function recordEvent(tx: Tx, testId: string, kind: string, text: string, bump: boolean, extra: Prisma.TestUpdateInput = {}, contractId: string | null = null, /** (Batch 34 §9) the tab that saved the listing */ tab = "", link = "") {
   let version: number | null = null;
   if (bump || Object.keys(extra).length) {
     const t = await tx.test.update({ where: { id: testId }, data: { ...(bump ? { version: { increment: 1 } } : {}), ...extra } });
     if (bump) version = t.version;
   }
-  return tx.testEvent.create({ data: { testId, kind, text, version, contractId, ...(tab ? { tab } : {}) } }); // (batch 35 §49) the event, for a reason kept with it
+  return tx.testEvent.create({ data: { testId, kind, text, version, contractId, ...(link ? { link } : {}), ...(tab ? { tab } : {}) } }); // (batch 35 §49) the event, for a reason kept with it
 }
 
 const working = (testId: string) => ({ testId, status: "working" });
@@ -663,7 +663,8 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const own = found.some((e) => e.kind === "own" && e.text === OWN_STOP_LINE);
   // (Batch 35 §79) Never the line about the very thing this press answers (a piece of work: by its name in the line).
   const answers = press.answers?.submissionId ? { ...press.answers, label: (await tx.submission.findUnique({ where: { id: press.answers.submissionId }, select: { kind: true } }))?.kind === "recording" ? "recording" : "written answers" } : press.answers;
-  const raw = [...found, ...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))].filter((e) => !answersIt(e, answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const additional = await unanswered(t.developerId, testId, [...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))], tx);
+  const raw = [...found, ...additional].filter((e) => !answersIt(e, answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
   const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || e.kind === "stop" || keep(e)) : raw, body);
   if (changes.length) {
@@ -1069,8 +1070,8 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     await tx.recording.updateMany({ where: { contractId, part: "written", uploadedAt: { not: null } }, data: { submissionId: sub.id } });
     // (Batch 30 §2) An update after it was paid: below the cap it waits in Needs you (a "sent" line); at the cap a quiet line only.
     const afterPaid = paid ? await paidUpdateRoom(tx, sub.id, c.testId) : null;
-    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "written answers"), false, {}, c.id);
-    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id);
+    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "written answers"), false, {}, c.id, "", `part-${sub.id}`);
+    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id, "", `part-${sub.id}`);
     return { sub, updated: !!existing, afterPaid };
   });
   await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-written`);

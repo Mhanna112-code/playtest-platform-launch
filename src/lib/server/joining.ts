@@ -5,7 +5,7 @@ import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/form
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
-import { answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
+import { unanswered, answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, needsGap, ownTest } from "./tests";
 import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
 import { ratingSummary } from "./ratings";
@@ -123,7 +123,7 @@ export async function joinStopList(userId: string, testId: string, body: Record<
   // (Owner, Oct 31, batch 35 §61; replaces batch 29 section 13 here) Their own changes in another tab ("You applied to join in another tab") always stop once,
   // Alerts Off too, like the developer's own other-tab actions.
   // (Batch 35 §79) Join from the invite that just arrived: never the line about that invite itself.
-  const raw = raw0.filter((e) => !(typeof body.inviteId === "string" && answersIt(e, { item: body.inviteId })));
+  const raw = (await unanswered(userId, testId, raw0)).filter((e) => !(typeof body.inviteId === "string" && answersIt(e, { item: body.inviteId })));
   // (Batch 17 section 4) A full test keeps the invite open: No thanks just declines it (the test filling or a spot opening doesn't stop it).
   const changes = withRenamed(verb === "decline" ? raw.filter((e) => e.kind !== "full" && e.kind !== "spot_open") : raw, body);
   if (!changes.length) return null;
@@ -248,12 +248,12 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   // (7.3) The NDA is accepted when applying; the developer's Accept joins them on it.
   if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to apply.");
   const ndaAcceptedAt = t.ndaText ? new Date() : null;
-  await db.application.upsert({
+  const application = await db.application.upsert({
     where: { testId_testerId: { testId, testerId: tester.id } },
     update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "apply", ndaAcceptedAt, createdAt: new Date() }, // (batch 34 §16) applied now
     create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
-  await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", text: `${displayName(tester)} applied to join` } }));
+  await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${displayName(tester)} applied to join` } }));
   await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`Their note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`);
   return { applied: true };
 }
@@ -319,7 +319,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, rating.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
   }
   extra.push(...(await listingChanges(testId, body.seenAt)));
-  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`], answers: { kinds: ["applied"], texts: [`${name} applied to join`, `${name} asks to rejoin`] } })); // (batch 35 §79)
+  await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: ["application"], keys: [`app:${a.id}`], answers: { item: a.id, kinds: ["applied"], texts: [`${name} applied to join`, `${name} asks to rejoin`] } })); // (batch 35 §79)
   if (body.action === "decline") {
     await db.application.update({ where: { id: a.id }, data: { status: "declined", decidedAt: new Date() } });
     const title = (await db.test.findUniqueOrThrow({ where: { id: testId } })).title;
@@ -439,7 +439,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   const ndaAcceptedAt = t.ndaText ? new Date() : null;
   const snap = listingSnapshot(t) as Prisma.InputJsonValue;
   const invited = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } });
-  await db.application.upsert({
+  const application = await db.application.upsert({
     where: { testId_testerId: { testId, testerId: tester.id } },
     update: { note, listing: snap, status: "pending", changedAt: null, decidedAt: null, kind: "rejoin", ndaAcceptedAt, createdAt: new Date() }, // (batch 34 §16) asked now
     create: { testId, testerId: tester.id, note, listing: snap, kind: "rejoin", ndaAcceptedAt },
@@ -452,7 +452,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
     if (c) return { joined: true, sessionId: c.id };
   }
   const name = displayName(tester);
-  await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", text: `${name} asks to rejoin` } }));
+  await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${name} asks to rejoin` } }));
   const line = rejoinAskLine(name, pronouns(tester.pronoun), old);
   await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id });
   return { asked: true };
