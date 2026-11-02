@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { pageBusy, watchTyping } from "@/lib/pageBusy";
 import { useRouter } from "next/navigation";
 import { bankCheckOpen } from "@/lib/bankConfirm";
@@ -48,17 +48,15 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
   }, [query, refresh, v === undefined]); // eslint-disable-line react-hooks/exhaustive-deps
   const stopped = useRef<boolean | null>(null);
   const restrictedNow = useRef(false);
-  // (Owner, Oct 28, batch 20 section 18) A last-resort reload never happens under someone's typing or an open box: it waits (a quiet "This page has updates ·
-  // Refresh" shows meanwhile), and goes ahead only once nothing would be lost and the page still needs it.
-  const [waiting, setWaiting] = useState(false);
+  // A last-resort reload waits quietly while someone is typing or has a box open,
+  // and goes ahead only once nothing would be lost and the page still needs it.
   useEffect(() => {
     let alive = true;
     watchTyping();
     const reloadWhenFree = (still: () => boolean) => {
       const go = () => {
-        if (!alive || !still()) return setWaiting(false);
+        if (!alive || !still()) return;
         if (pageBusy()) {
-          setWaiting(true);
           setTimeout(go, 5000);
           return;
         }
@@ -136,10 +134,5 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
       window.removeEventListener(PRESS_REFUSED_EVENT, onRefused);
     };
   }, [query, router, refresh]);
-  if (!waiting) return null;
-  return (
-    <button type="button" className="fixed bottom-5 right-5 z-40 rounded-full border border-white/15 bg-slate-900/95 px-4 py-2 text-sm text-slate-200 shadow-xl" data-page-updates="" onClick={() => reloadKeepingPlace()}>
-      This page has updates · Refresh
-    </button>
-  );
+  return null;
 }

@@ -10,7 +10,7 @@ import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
-import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -474,7 +474,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 <strong>{name}:</strong>
                 {sub && <TesterPaymentTag review={sub.review} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
                   developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
-                <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}{sub.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}</> : "Not sent yet"}</span>
+                <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
               <p className="text-slate-400">{cents == null ? NOT_LISTED : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>

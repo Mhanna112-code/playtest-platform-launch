@@ -758,12 +758,14 @@ describe("batch 20 section 17: a blocked profile shows a proper page", () => {
 });
 
 describe("batch 20 section 18: never reload a page under someone's typing", () => {
-  it("the last-resort reloads wait while a field has focus or typed text or a box is open (a quiet Refresh line meanwhile); the poll still re-renders", () => {
+  it("the last-resort reloads wait while a field has focus or typed text or a box is open without a Refresh prompt; the poll still re-renders", () => {
     const a = src("components/AutoRefresh.tsx");
     expect(a).toContain("if (pageBusy()) {");
     expect(a).toContain("setTimeout(() => reloadWhenFree(() => !document.querySelector(\"main\")?.children.length), 6000);");
     expect(a).toContain("reloadWhenFree(() => shown.current !== null && shown.current !== v && !bankCheckOpen())");
-    expect(a).toContain("This page has updates · Refresh");
+    expect(a).not.toContain("This page has updates · Refresh");
+    expect(a).not.toContain("data-page-updates");
+    expect(a).toContain("setTimeout(go, 5000);");
     expect(a).toContain("router.refresh();");
     expect(a).not.toMatch(/\) window\.location\.reload\(\); \}, [56]000\)/);
     const b = src("lib/pageBusy.ts");

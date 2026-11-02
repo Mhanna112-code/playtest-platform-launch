@@ -10,7 +10,7 @@ export const LATE_REMINDER_TAIL = " (it was sent late: any amount, $0 included)"
 /** The tester, above Send once their own deadline passed (a listed part). */
 export const lateBeforeSendLine = (date: string, dev: string) => `Your deadline passed on ${date}. You can still send this: ${dev} decides what to pay for late work, and you can't charge for it.`;
 /** The tester, after sending late (while it's unpaid). */
-export const lateSentLine = (date: string, dev: string) => `Sent late (deadline was ${date}): ${dev} decides what to pay. You can't charge for late work.`;
+export const lateSentLine = (date: string, dev: string) => `Sent after the ${date} deadline: ${dev} decides what to pay. You can't charge for this part.`;
 
 // ---------- (Batch 30 §2) Sending a part again after it's paid ----------
 
