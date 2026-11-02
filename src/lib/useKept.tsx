@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { pageUser } from "@/lib/client";
 import { SIGNED_IN_MARK } from "@/lib/keptText";
+import { unitIsDraft, unitPatch, unitWrites, unitsOf, type Units } from "@/lib/draftUnits";
 
 /** (Batch 35 §6) Sent before the tab reloads to the other side: every mounted form sends its draft at once (each adds its request to `waits`). */
 export const KEPT_FLUSH_EVENT = "kept-flush";
@@ -184,6 +185,194 @@ export function useKept<T>(key: string, value: T, pristine: boolean, restore: (v
   }, [send, forget, off]);
 
   return { restored, signedIn, restoredAt, clear };
+}
+
+/**
+ * (Owner, Nov 2, batch 35 §120) Per-field drafts (Post / Edit, written answers): like useKept, but the form is a set of units (lib/draftUnits.ts) and this tab
+ * writes only the units IT changed (since that unit's draft or saved value), each unit on its own; the server keeps every unit's latest value. A unit this tab
+ * never touched never writes, so it never overwrites (or forgets) another tab's draft of it. Everything else is useKept's: writes only for this tab's own edits
+ * (§65), a moment after typing stops; a flush sends only what is still unsent (§16); the draft comes back on a reload, a new tab or after a sign-in.
+ * - `units`: each unit's value now; `saved`: each unit's saved value (Edit: the listing; written answers: what was sent; a new Post: the empty start).
+ * - `restore(units)`: puts the kept units back (only units this tab hasn't changed itself).
+ * - `drafted`: the units holding a draft (kept on the server, or typed here); `isDraft(u)`: it holds one AND differs from the saved value (the Draft tag shows
+ *   only there: a unit with no draft never shows Draft, whatever else was typed).
+ * - `clear(units?)`: sent: forget those units' drafts (none given: the whole draft); `write(units)`: send these units now (and wait).
+ * - `questions`: written answers' questions (an older draft with no questions list pairs its answers by place).
+ */
+export function useKeptUnits(key: string, units: Units, saved: Units, restore: (u: Units) => void, opts: { off?: boolean; questions?: string[] } = {}) {
+  const off = !!opts.off;
+  const [restored, setRestored] = useState(false);
+  const [signedIn, setSignedIn] = useState(false);
+  const [restoredAt, setRestoredAt] = useState("");
+  const [drafted, setDrafted] = useState<ReadonlySet<string>>(new Set());
+  const draftedRef = useRef<Set<string>>(new Set());
+  const signedInRef = useRef(false);
+  const ready = useRef(false);
+  const cleared = useRef(false);
+  const pending = useRef<Set<string>>(new Set()); // (§16) units this tab changed and hasn't sent yet
+  const edited = useRef<Set<string>>(new Set()); // units this tab changed itself (a kept copy never replaces them)
+  const restoring = useRef<Map<string, string>>(new Map()); // units being put back from the server, with their value (that change is never this tab's edit)
+  const latest = useRef({ units, saved });
+  latest.current = { units, saved };
+  const prev = useRef({ units, saved });
+  const restoreRef = useRef(restore);
+  restoreRef.current = restore;
+  const questionsRef = useRef(opts.questions);
+  questionsRef.current = opts.questions;
+
+  const setDraftedUnits = useCallback((next: Set<string>) => {
+    draftedRef.current = next;
+    setDrafted(new Set(next));
+    if (!next.size) {
+      setRestored(false);
+      signedInRef.current = false;
+      setSignedIn(false);
+    }
+  }, []);
+  const post = useCallback(
+    (patch: Record<string, unknown>) =>
+      fetch("/api/kept", {
+        method: "POST",
+        headers: { "content-type": "application/json", ...uidHeader() },
+        body: JSON.stringify({ key, units: patch, ...(signedInRef.current ? { mark: true } : {}), ...(questionsRef.current ? { questions: questionsRef.current } : {}) }),
+        keepalive: true,
+      }).catch(() => null),
+    [key],
+  );
+  /** Send these units now: their value, or null where back to the saved value (that unit's draft goes). */
+  const sendUnits = useCallback(
+    (us: Iterable<string>) => {
+      const list = [...us];
+      if (!list.length) return null;
+      const patch = unitPatch(list, latest.current.units, latest.current.saved);
+      const next = new Set(draftedRef.current);
+      for (const [u, v] of Object.entries(patch)) {
+        if (v === null) next.delete(u);
+        else next.add(u);
+      }
+      setDraftedUnits(next);
+      return post(patch);
+    },
+    [post, setDraftedUnits],
+  );
+  const sendPending = useCallback(() => {
+    const us = [...pending.current];
+    pending.current.clear();
+    return sendUnits(us);
+  }, [sendUnits]);
+
+  useEffect(() => {
+    if (off) return;
+    let alive = true;
+    fetch(`/api/kept?key=${encodeURIComponent(key)}`, { cache: "no-store", headers: uidHeader() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((r: { data: unknown; at?: string } | null) => {
+        if (!alive) return;
+        ready.current = true;
+        const kept = unitsOf(key, r?.data ?? null, questionsRef.current ?? []);
+        const names = Object.keys(kept);
+        if (names.length && !cleared.current) {
+          const after = !!(r?.data && typeof r.data === "object" && (r.data as Record<string, unknown>)[SIGNED_IN_MARK]);
+          signedInRef.current = after;
+          setSignedIn(after);
+          setDraftedUnits(new Set([...draftedRef.current, ...names]));
+          const back = Object.fromEntries(Object.entries(kept).filter(([u]) => !edited.current.has(u)));
+          if (Object.keys(back).length) {
+            restoring.current = new Map(Object.entries(back).map(([u, v]) => [u, JSON.stringify(v)]));
+            restoreRef.current(back);
+            setRestored(true);
+            setRestoredAt(r?.at ?? "");
+          }
+        }
+        if (pending.current.size) void sendPending(); // typed before the server's copy was looked at
+      })
+      .catch(() => {
+        ready.current = true;
+      });
+    return () => {
+      alive = false;
+    };
+  }, [key, off, sendPending, setDraftedUnits]);
+
+  // Save a moment after typing stops: only the units this tab changed by its own edits (§65).
+  const json = JSON.stringify(units) + "|" + JSON.stringify(saved);
+  useEffect(() => watchGestures(), []);
+  useEffect(() => {
+    const was = prev.current;
+    prev.current = latest.current;
+    if (off) return;
+    const back = restoring.current;
+    restoring.current = new Map();
+    const now = latest.current.units;
+    const changed = unitWrites({ prev: was.units, next: now, prevSaved: was.saved, nextSaved: latest.current.saved, own: ownEdit(lastGesture) }).filter((u) => back.get(u) !== JSON.stringify(now[u]));
+    if (!changed.length) return;
+    cleared.current = false; // typing again after a send
+    for (const u of changed) {
+      pending.current.add(u);
+      edited.current.add(u);
+    }
+    if (!ready.current) return; // sent once the server's copy has been looked at
+    const t = setTimeout(() => {
+      if (cleared.current) return; // (batch 34 §9) sent meanwhile: never written back
+      void sendPending();
+    }, 700);
+    return () => clearTimeout(t);
+  }, [json, off, sendPending]);
+
+  // Leaving the page with something unsent: send it now (only what this tab changed and hasn't sent: §16).
+  useEffect(() => {
+    const flush = () => {
+      if (off || !ready.current || cleared.current || !pending.current.size) return null;
+      return sendPending();
+    };
+    const onHide = () => document.visibilityState === "hidden" && void flush();
+    const onLeave = () => void flush();
+    const onFlush = (e: Event) => {
+      const p = flush();
+      if (p) (e as CustomEvent<{ waits: Promise<unknown>[] }>).detail?.waits.push(p);
+    };
+    document.addEventListener("visibilitychange", onHide);
+    window.addEventListener("pagehide", onLeave);
+    window.addEventListener(KEPT_FLUSH_EVENT, onFlush);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("pagehide", onLeave);
+      window.removeEventListener(KEPT_FLUSH_EVENT, onFlush);
+    };
+  }, [off, sendPending]);
+
+  /** Sent: forget the draft (wait for this before the page moves on). `only`: just these units (Edit's Save: the units it saved; other tabs' drafts of other fields stay). */
+  const clear = useCallback(
+    async (only?: Iterable<string>) => {
+      cleared.current = true;
+      pending.current.clear();
+      if (off) return;
+      if (only) {
+        const list = [...only];
+        const next = new Set(draftedRef.current);
+        for (const u of list) next.delete(u);
+        setDraftedUnits(next);
+        if (list.length) await post(Object.fromEntries(list.map((u) => [u, null])));
+        return;
+      }
+      setDraftedUnits(new Set());
+      await fetch("/api/kept", { method: "POST", headers: { "content-type": "application/json", ...uidHeader() }, body: JSON.stringify({ key, data: null }), keepalive: true }).catch(() => null);
+    },
+    [key, off, post, setDraftedUnits],
+  );
+  /** Send these units now and wait (a file's marker removed from the answers before the file goes). */
+  const write = useCallback(
+    async (us: Iterable<string>) => {
+      if (off) return;
+      const list = [...us];
+      for (const u of list) pending.current.delete(u);
+      await sendUnits(list);
+    },
+    [off, sendUnits],
+  );
+  const isDraft = (u: string) => unitIsDraft(drafted, u, units, saved);
+
+  return { restored, signedIn, restoredAt, drafted, isDraft, clear, write };
 }
 
 /** (Batch 35 §8) The tag on a restored draft. */

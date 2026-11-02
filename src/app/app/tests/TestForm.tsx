@@ -13,7 +13,8 @@ import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from 
 import { BUILD_URL_LINE, BUILD_URL_PATTERN, fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices, PICK_CHIP } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
-import { DRAFT_START_LINE, DraftButton, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKept } from "@/lib/useKept";
+import { DRAFT_START_LINE, DraftButton, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKeptUnits } from "@/lib/useKept";
+import { KEYS_UNIT, testFieldsOf, testUnitOf, type Units } from "@/lib/draftUnits";
 import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
@@ -101,15 +102,30 @@ const wasText = (v: string | string[] | null) => (v == null ? null : Array.isArr
 // Where each form field's note shows (parts and prices share one place).
 const NOTE_AT: Partial<Record<keyof F, string>> = { written: "parts", writtenPrice: "parts", recording: "parts", recordingPrice: "parts", live: "parts", liveRate: "parts", writtenRequired: "parts", recordingRequired: "parts", liveRequired: "parts", questions: "questions", requiredQs: "questions" };
 
+/** (Batch 35 §120) Where each field's Draft mark shows: one per unit (the parts and prices; Mature with its reason, at the tick; the questions and their Required ticks). */
+const DRAFT_AT: Partial<Record<keyof F, string>> = { ...NOTE_AT, mature: "mature", matureWhy: "mature" };
+/** (Batch 35 §120) The form as per-field draft units (lib/draftUnits.ts): each unit's fields, and the access keys' text. */
+export function formUnits(f: F, keysText: string): Units {
+  const out: Units = {};
+  for (const k of Object.keys(f) as (keyof F)[]) {
+    const u = testUnitOf(k);
+    if (!(u in out)) out[u] = Object.fromEntries(testFieldsOf(u).map((x) => [x, f[x as keyof F]]));
+  }
+  out[KEYS_UNIT] = keysText;
+  return out;
+}
+
 /**
  * (Owner, Oct 30, batch 35 §8) After signing in, where the form marks "Draft" (with "Use saved"): every field that came back (SIGN_IN_DRAFTS, lib/keptText.ts) and
  * still differs from the saved value, by the place its mark shows (the parts and prices share one; the questions and their Required ticks share one).
  */
-export function draftMarks(f: F, base: F): Record<string, (keyof F)[]> {
+export function draftMarks(f: F, base: F, drafted?: ReadonlySet<string>): Record<string, (keyof F)[]> {
   const out: Record<string, (keyof F)[]> = {};
   for (const k of Object.keys(f) as (keyof F)[]) {
     if (!signInKeeps(k) || same(f[k], base[k])) continue;
-    const where = NOTE_AT[k] ?? k;
+    // (Batch 35 §120) Only a field whose unit holds a draft: a field with no draft never shows "Draft" (whatever else was typed, or another tab saved).
+    if (drafted && !drafted.has(testUnitOf(k))) continue;
+    const where = DRAFT_AT[k] ?? k;
     (out[where] ??= []).push(k);
   }
   return out;
@@ -199,10 +215,18 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // each changed field marked "Draft" with "Use saved" (whether selections come back too: SIGN_IN_DRAFTS, lib/keptText.ts).
   const fb = freeBoxCheck(keysText, freeLoaded, keysData);
   const keysChanged = edit ? fb.added.length > 0 || fb.removed.length > 0 : parseKeys(keysText).length > 0;
-  const keep = useKept(edit ? `test:edit:${edit.id}` : draft ? `test:draft:${draft.id}` : "test:new", { f, touched: [...touched], keysText }, touched.size === 0 && !keysChanged, (v) => {
-    setF({ ...toForm(init, tz), ...v.f });
-    setTouched(new Set(v.touched));
-    if (v.keysText) setKeysText(v.keysText);
+  // (Owner, Nov 2, batch 35 §120) Per-field: this tab keeps only the units it changed; the server keeps each unit's latest (another tab's description and this
+  // tab's price both stay). The parts and prices are ONE unit, Mature with its reason one, the questions with their Required ticks one, the keys one.
+  const savedKeysText = edit ? freeLoaded.join("\n") : "";
+  const keep = useKeptUnits(edit ? `test:edit:${edit.id}` : draft ? `test:draft:${draft.id}` : "test:new", formUnits(f, keysText), formUnits(base, savedKeysText), (u) => {
+    const fields: Partial<F> = {};
+    for (const [unit, v] of Object.entries(u)) {
+      if (unit === KEYS_UNIT || !v || typeof v !== "object") continue;
+      for (const k of testFieldsOf(unit)) if (k in v) (fields as Record<string, unknown>)[k] = (v as Record<string, unknown>)[k];
+    }
+    setF((o) => ({ ...o, ...fields }));
+    setTouched((t) => new Set([...t, ...(Object.keys(fields) as (keyof F)[])]));
+    if (typeof u[KEYS_UNIT] === "string") setKeysText(u[KEYS_UNIT] as string);
   });
   const set = (p: Partial<F>) => {
     setF((o) => ({ ...o, ...p }));
@@ -224,11 +248,10 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
    * value back). Fields that share one place (the parts and prices; the questions and their Required ticks) share one mark; "Use saved for all" at Save puts the
    * whole form back. Which fields come back at all: SIGN_IN_DRAFTS (lib/keptText.ts).
    */
-  const savedKeysText = edit ? freeLoaded.join("\n") : "";
   // (Owner, Oct 31, batch 35 §18) Not only after a sign-in: whenever the form opened from a restored draft (a reload, a new tab, another tab's draft), every field
   // that differs from the saved listing (Edit) / the empty start (Post) carries its mark, until the draft is saved, posted or emptied (a field typed here after
   // opening keeps its mark too: the marks follow the draft, not who typed it).
-  const marks = keep.restored ? draftMarks(f, base) : {};
+  const marks = keep.restored ? draftMarks(f, base, keep.drafted) : {};
   /**
    * (Owner, Oct 31, batch 35 §23) Post a test for a NEW test ("test:new") has nothing saved: each field's mark reads "Discard" (that field back to the empty start)
    * and the whole form's button "Start empty"; never "Use saved". A saved draft opened from the drafts list and Edit keep "Use saved" / "Use saved for all".
@@ -246,10 +269,11 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     const ks = marks[where] ?? [];
     return ks.length ? <DraftTag disabled={busy} kind={draftKind} field={where} onUseSaved={() => putSaved(ks)} /> : null;
   };
-  const keysDraft = keep.restored && keysChanged ? <DraftTag disabled={busy} kind={draftKind} field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
+  const keysDraft = keep.restored && keysChanged && keep.isDraft(KEYS_UNIT) ? <DraftTag disabled={busy} kind={draftKind} field="keys" onUseSaved={() => setKeysText(savedKeysText)} /> : null;
   const putAllSaved = () => {
     putSaved(draftKeys);
     setKeysText(savedKeysText);
+    void keep.clear(keep.drafted); // (batch 35 §18) the draft goes (§120: every unit this tab knows of)
   };
   /**
    * (Owner, Oct 31, batch 35 §18) The form opened with a restored draft (a reload, a new tab, a sign-in): a line at the top says so, with a way out. Post a test
@@ -265,7 +289,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     setKeysText(savedKeysText);
     setBlurred(new Set());
     dropWas("all");
-    void keep.clear();
+    void keep.clear(keep.drafted); // (batch 35 §120) every unit this tab knows of
   };
   const leave = (k: string) => setBlurred((b) => (b.has(k) ? b : new Set([...b, k])));
 
@@ -541,7 +565,8 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       });
       if (r.listing && typeof r.version === "number") savedHere(r.listing, r.version, r.keys);
       else leaving.current = true;
-      await keep.clear();
+      // (Batch 35 §120) The units this Save sent go; another tab's draft of a field this Save didn't touch stays.
+      await keep.clear(new Set([...[...touched].map((k) => testUnitOf(k)), ...(keysChanged ? [KEYS_UNIT] : [])]));
       const q = (k: string, v?: string[]) => (v?.length ? `&${k}=${encodeURIComponent(v.join(", "))}` : "");
       window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}${q("closed", r.closedApps)}${q("resent", r.resent)}${q("skipped", r.notReinvited)}${r.spotClosed?.length ? `${q("spotclosed", r.spotClosed)}&spots=${r.spots}` : ""}`;
     } catch (err) {

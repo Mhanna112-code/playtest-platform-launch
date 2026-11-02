@@ -44,7 +44,7 @@ describe("batch 35 §18 / §23: a restored draft can always be discarded", () =>
     expect(form).toContain("{DRAFT_START_LINE(keep.restoredAt ? fmtDateTime(keep.restoredAt) : \"\")}");
     expect(form).toContain('data-discard-draft="" disabled={busy} onPress={discardAll}>{isNew ? START_EMPTY_LABEL : USE_SAVED_ALL_LABEL}</DraftButton>'); // (batch 35 §58)
     // Start empty: every field to the empty start (Edit / a saved draft: what is saved), the keys too, and the draft goes.
-    const discard = form.slice(form.indexOf("const discardAll = () => {"), form.indexOf("void keep.clear();", form.indexOf("const discardAll")) + 20);
+    const discard = form.slice(form.indexOf("const discardAll = () => {"), form.indexOf("void keep.clear(keep.drafted);", form.indexOf("const discardAll")) + 30);
     expect(discard).toContain("setF(edit || draft ? base : toForm(init, tz));");
     expect(discard).toContain("setTouched(new Set());");
     expect(discard).toContain("setKeysText(savedKeysText);");
@@ -283,8 +283,8 @@ describe("batch 35 §24: turning the written part back on checks its questions",
 describe("batch 35 §18 (extended): Post / Edit mark every field a restored draft changed, not only after a sign-in", () => {
   it("marks on keep.restored (reload, new tab, another tab's draft), until the draft is saved, posted or emptied", () => {
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain("const marks = keep.restored ? draftMarks(f, base) : {};");
-    expect(form).toContain("const keysDraft = keep.restored && keysChanged ?");
+    expect(form).toContain("const marks = keep.restored ? draftMarks(f, base, keep.drafted) : {};"); // (batch 35 §120) only fields holding a draft
+    expect(form).toContain("const keysDraft = keep.restored && keysChanged && keep.isDraft(KEYS_UNIT) ?");
     expect(form).not.toMatch(/keep\.signedIn \? draftMarks|keep\.signedIn && keysChanged/);
   });
 });

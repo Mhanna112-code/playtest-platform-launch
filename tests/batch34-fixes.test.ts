@@ -97,7 +97,7 @@ describe("batch 34 §9: Edit after its own Save", () => {
     expect(form).toContain("if (r.listing && typeof r.version === \"number\") savedHere(r.listing, r.version, r.keys);");
     const saved = form.slice(form.indexOf("function savedHere("), form.indexOf("async function rebaseKeys"));
     for (const s of ["setF(now);", "setBase(now);", "seenBase.current = now;", "setVersion(v);", "setTouched(new Set());", "setTheirs({});", "keysSeen.current = free;"]) expect(saved).toContain(s);
-    expect(form.indexOf("savedHere(r.listing, r.version, r.keys)")).toBeLessThan(form.indexOf("await keep.clear();\n      const q = "));
+    expect(form.indexOf("savedHere(r.listing, r.version, r.keys)")).toBeLessThan(form.indexOf("await keep.clear(new Set("));
     // bfcache: pageshow with persisted refreshes the data.
     expect(form).toContain('window.addEventListener("pageshow", onShow);');
     expect(form).toMatch(/if \(!e\.persisted\) return;\s+leaving\.current = false;\s+setBusy\(false\);\s+void tick\(\);/);

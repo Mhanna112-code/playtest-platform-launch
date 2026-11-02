@@ -1,7 +1,8 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { HttpError } from "./http";
-import { ADMIN_DRAFT_PREFIX, trimAtSignIn } from "@/lib/keptText";
+import { ADMIN_DRAFT_PREFIX, SIGNED_IN_MARK, trimAtSignIn } from "@/lib/keptText";
+import { keptByUnit, mergeUnits, unitsOf } from "@/lib/draftUnits";
 import { isAdmin } from "./session";
 
 // (NEXT-UI 10) Typed but not sent: kept per person and form on the server (so it follows them to any device and survives
@@ -58,6 +59,47 @@ export async function setKept(userId: string, key: unknown, data: unknown) {
     create: { userId, key: k, data: data as Prisma.InputJsonValue },
   });
   return { kept: true };
+}
+
+/** (Batch 15 section 41, L2) A new kept form drops the person's oldest once they have 50. */
+async function makeRoom(tx: Prisma.TransactionClient, userId: string) {
+  const extra = (await tx.keptForm.count({ where: { userId } })) - (MAX_KEPT - 1);
+  if (extra > 0) {
+    const oldest = await tx.keptForm.findMany({ where: { userId }, orderBy: { updatedAt: "asc" }, take: extra, select: { key: true } });
+    await tx.keptForm.deleteMany({ where: { userId, key: { in: oldest.map((o) => o.key) } } });
+  }
+}
+
+/**
+ * (Owner, Nov 2, batch 35 §120) Per-field drafts: keep only the units this tab changed (`units`: each unit's value, null = that unit's draft goes), every other
+ * unit of the kept draft staying as it is (lib/draftUnits.ts). One person's writes to one form wait for each other (a lock per person and form), so two tabs
+ * writing different units at the same moment both survive. `mark`: the form came back through a sign-in (the mark stays on the draft). `questions`: the boxes'
+ * questions (an older written draft with no questions list pairs its answers by place). Returns the units the draft now holds.
+ */
+export async function patchKept(userId: string, key: unknown, units: unknown, opts: { mark?: unknown; questions?: unknown } = {}) {
+  const k = checkKey(key);
+  await checkAdminKey(userId, k);
+  if (!keptByUnit(k)) throw new HttpError(400, "bad_key", "That form isn't kept by field.");
+  if (!units || typeof units !== "object" || Array.isArray(units)) throw new HttpError(400, "bad_units", "Nothing to keep.");
+  const questions = Array.isArray(opts.questions) ? opts.questions.filter((q): q is string => typeof q === "string") : [];
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtext(${userId}), hashtext(${k}))::text AS locked`;
+    const row = await tx.keptForm.findUnique({ where: { userId_key: { userId, key: k } } });
+    const next = mergeUnits(k, row?.data ?? null, units as Record<string, unknown>, questions);
+    if (!next) {
+      if (row) await tx.keptForm.delete({ where: { userId_key: { userId, key: k } } });
+      return { kept: false, units: [] as string[] };
+    }
+    if (opts.mark === true) next[SIGNED_IN_MARK] = true;
+    if (JSON.stringify(next).length > MAX_BYTES) throw new HttpError(413, "too_big", "That's too much to keep.");
+    if (!row) await makeRoom(tx, userId);
+    await tx.keptForm.upsert({
+      where: { userId_key: { userId, key: k } },
+      update: { data: next as Prisma.InputJsonValue },
+      create: { userId, key: k, data: next as Prisma.InputJsonValue },
+    });
+    return { kept: true, units: Object.keys(unitsOf(k, next, questions)) };
+  });
 }
 
 /**
