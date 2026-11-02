@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/server/dateFormat";
 import {
   owedReceiptWhat, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, HOLD_RETRY_MAX, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
@@ -545,7 +545,7 @@ export async function owedLines(devId: string) {
       : p.status === "owed" || (p.status === PAYING && !p.owedUntil)
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet.
         ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what} ${money(p.amountCents)} · ${p.kind === "dispute" ? "the team's dispute decision" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused` }
-        : { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt) });
+        : { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) });
   }
   return out;
 }

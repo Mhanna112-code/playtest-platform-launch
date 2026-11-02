@@ -1,3 +1,4 @@
+import { fmtDateIn } from "@/lib/format";
 import { db } from "@/lib/db";
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
@@ -5,7 +6,7 @@ import { cancelSubscription, keepSubscription, subscribe } from "@/lib/server/su
 import { accountGate, logAccountChange } from "@/lib/server/accountChanges";
 import { subscribed } from "@/lib/subscription";
 
-const day = (d: Date | null) => (d ? d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" }) : "");
+const day = (d: Date | null, timeZone?: string | null) => d ? fmtDateIn(d, timeZone).replace(/, \d{4}$/, "") : "";
 
 // (Owner, Oct 28, batch 8) The developer subscription on Payments: subscribe, cancel, keep. Payments stays open during a hold or a suspension
 // (Cancel and Keep work then; Subscribe is refused with its own line).
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
     const r = body.action === "subscribe" ? await subscribe(u) : body.action === "cancel" ? await cancelSubscription(u) : await keepSubscription(u);
     // Logged once it's done (a Subscribe still waiting for the bank isn't active yet: nothing to log).
     const now = await db.user.findUniqueOrThrow({ where: { id: u.id } });
-    const line = body.action === "cancel" ? `Subscription: cancelled, ends ${day(now.subscriptionRenewsAt)}` : now.subscriptionStatus === "active" && !now.subscriptionCanceling ? `Subscription: ${body.action === "keep" ? "kept" : "active"}, renews ${day(now.subscriptionRenewsAt)}` : "";
+    const line = body.action === "cancel" ? `Subscription: cancelled, ends ${day(now.subscriptionRenewsAt, u.timeZone)}` : now.subscriptionStatus === "active" && !now.subscriptionCanceling ? `Subscription: ${body.action === "keep" ? "kept" : "active"}, renews ${day(now.subscriptionRenewsAt, u.timeZone)}` : "";
     if (line) await logAccountChange(u.id, typeof body.tab === "string" ? body.tab : "", { scopes: ["payments"], field: "subscription", label: "Subscription", line });
     return ok(r);
   });

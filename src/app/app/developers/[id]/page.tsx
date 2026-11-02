@@ -1,10 +1,12 @@
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtDateIn } from "@/lib/format";
 import { publicProfileV } from "@/lib/server/pageFreshness";
 import { ProfileMessageButton } from "@/components/ProfileMessageButton";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { CalendarDays, CalendarClock } from "lucide-react";
 import { db } from "@/lib/db";
-import { displayName, fmtDate } from "@/lib/format";
+import { displayName } from "@/lib/server/dateFormat";
 import { termsLine } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { DeveloperTiles } from "@/components/ProfileTiles";
@@ -30,7 +32,10 @@ export const dynamic = "force-dynamic";
  */
 export default async function DeveloperProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const viewer = await requireOpenPage("/app/developers"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const viewer = await requireOpenPage("/app/developers");
+  return withDateZone(viewer.timeZone, async () => {
+ // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const fmtDate = (d: Date | string) => fmtDateIn(d, viewer.timeZone);
   const otherSide = await otherSideNotice(viewer); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   const freshV = await publicProfileV(viewer, id);
@@ -104,4 +109,6 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
       )}
     </div>
   );
+
+  });
 }

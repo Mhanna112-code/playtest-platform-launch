@@ -9,7 +9,7 @@ import { receipt } from "./payments";
 import { recordEvent } from "./tests";
 import {
   DELETE_ENDS_SUBSCRIPTION, FREE_NOTICE_DAYS, MAX_OPEN_TESTS, TOO_MANY_OPEN_LINE, RETRY_DAYS, SECOND_TEST_LINE, SUBSCRIBE_WAITS, SUBSCRIPTION_CENTS, SUBSCRIPTION_ENDED, SUBSCRIPTION_PRICE,
-  fmtSubDay, launchFrom, perkLine, periodEnd, subscribed, type Launch, type Perk,
+  launchFrom, perkLine, periodEnd, subscribed, type Launch, type Perk,
 } from "@/lib/subscription";
 
 // (Owner, Oct 28, batch 8) The developer subscription, $7/month.
@@ -192,7 +192,7 @@ async function activate(u: Dev, now: Date, id: string, startsCharging: Date) {
     where: { id: u.id },
     data: { subscriptionStatus: "active", subscriptionId: id, subscribedAt: now, subscriptionAnchorAt: startsCharging, subscriptionRenewsAt: renews, subscriptionCanceling: false, subscriptionEndedAt: null, subscriptionEndReason: "", subscriptionPastDueAt: null, subscriptionPausedAt: null },
   });
-  await tell(u, startsCharging > now ? `You're subscribed (${SUBSCRIPTION_PRICE}): the first charge is on ${T(startsCharging, "dateYear")}` : `You're subscribed (${SUBSCRIPTION_PRICE}), renewing ${fmtSubDay(renews)}`);
+  await tell(u, startsCharging > now ? `You're subscribed (${SUBSCRIPTION_PRICE}): the first charge is on ${T(startsCharging, "dateYear")}` : `You're subscribed (${SUBSCRIPTION_PRICE}), renewing ${T(renews, "dateYear")}`);
   return { subscribed: true, renewsAt: renews };
 }
 

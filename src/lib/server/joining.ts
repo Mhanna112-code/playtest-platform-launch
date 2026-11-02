@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/server/dateFormat";
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -35,7 +35,7 @@ const sameListingIgnoringMode = (saved: unknown, current: Parameters<typeof list
 export async function joinRefusal(testerId: string, testId: string, opts: { rejoin?: boolean } = {}) {
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true } });
   if (t.status === "stopped") return "This test was stopped.";
-  if (t.openUntil && t.openUntil < new Date()) return closedToNewLine(t.openUntil, (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })); // (batch 15 section 18)
+  if (t.openUntil && t.openUntil < new Date()) return closedToNewLine(t.openUntil, (d) => fmtDate(d).replace(/, \d{4}$/, "")); // (batch 15 section 18)
   if (t.status !== "open") return "This test isn't taking new testers any more.";
   // (Owner, Oct 28 afternoon) Invites and applications wait while the test is paused; the join page says only this.
   if (testPaused(t.developer, t)) return PAUSED_RIGHT_NOW;

@@ -2,7 +2,7 @@ import { assertWorkOpen, finishWorkIfDue } from "./workWindow";
 import { randomBytes } from "node:crypto";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/format";
+import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/server/dateFormat";
 import { andList, checkCallMinutes, checkCancel } from "@/lib/rules";
 import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
@@ -224,7 +224,7 @@ async function bookAt(contractId: string, startsAt: Date, minutes: number, rateC
     if (fresh.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
     const slot = await tx.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
     const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
-    if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${fmtDateTime(startsAt)}` : `${displayName(c.tester)} booked a call for ${fmtDateTime(startsAt)}`, false, {}, contractId);
+    if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${T(startsAt)}` : `${displayName(c.tester)} booked a call for ${T(startsAt)}`, false, {}, contractId);
     return call;
   });
 }
@@ -368,7 +368,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const row = await createRequest({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
     made.push(row.id);
   }
-  await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(kind.rows)} from ${fmtDateTime(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
+  await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(kind.rows)} from ${T(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
   // (Batch 20 section 7) The new requests' ids: the form never counts them as a clash with itself.
   return { requested: ok.length, batchId, ids: made };
 }
@@ -415,7 +415,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   const r = await createRequest({
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
   });
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${fmtDateTime(kind.startsAt)}`, false, {}, contractId, "", `req-${r.id}`));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${T(kind.startsAt)}`, false, {}, contractId, "", `req-${r.id}`));
   // (Batch 15 section 35) The developer's bell: "<name> asked for a call: <time(s)>", stacked with the day's other request lines; each time in the reader's own zone.
   // (Batch 17 section 4) It opens the Live session's Call requests panel with this request highlighted, like the Needs you row (batch 16 section 35).
   const when = kind.rows.map((x) => `${T(x.startsAt)}${x.repeat === "once" ? "" : x.repeat === "daily" ? " (daily)" : " (weekly)"}`).join(" or ");
@@ -489,7 +489,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     }
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
-    const what = row.repeat === "once" ? fmtDateTime(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])}` : `${unitOf(row.repeat)} calls from ${fmtDateTime(times[0])} (until cancelled)`;
+    const what = row.repeat === "once" ? T(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${T(times[0])}` : `${unitOf(row.repeat)} calls from ${T(times[0])} (until cancelled)`;
     await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
     return { booked: true, callId: first!.id, calls: times.length };
   }
@@ -498,7 +498,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // (Owner bug, Oct 31, batch 35 §74) The developer's own withdraw / decline is theirs ("You …": never a stop from the same page; another tab's is the action log's
   // "You withdrew a call request for … in another tab"), and the past tense is "withdrew" (it read "dev withdrawn a call request").
   const verb = status === "withdrawn" ? "withdrew" : "declined";
-  const when = fmtDateTime(r.startsAt);
+  const when = T(r.startsAt);
   const text = side === "developer" ? `You ${verb} ${status === "withdrawn" ? "a" : `${displayName(other)}'s`} call request for ${when}` : `${displayName(user)} ${verb} a call request for ${when}`;
   await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId));
   return { [status]: true };
@@ -532,7 +532,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
     await tx.call.updateMany({ where: { id: { in: calls.map((x) => x.id) } }, data: { status: "cancelled", cancelledBy: side, cancelledAt: now, cancelNote: reason } });
     await tx.callSlot.updateMany({ where: { id: { in: calls.map((x) => x.slotId) } }, data: { status: "removed" } });
     if (set) await tx.callSet.update({ where: { id: set.id }, data: { status: "cancelled" } });
-    await recordEvent(tx, c.testId, "cancelled", `${side === "developer" ? "You" : displayName(user)} cancelled the ${unit} calls from ${fmtDateTime(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
+    await recordEvent(tx, c.testId, "cancelled", `${side === "developer" ? "You" : displayName(user)} cancelled the ${unit} calls from ${T(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
   });
   // (Batch 15 sections 11 and 20) The time in the reader's own zone; the reason only in the email, never in the bell line.
   const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${T(calls[0].startsAt)}.`;

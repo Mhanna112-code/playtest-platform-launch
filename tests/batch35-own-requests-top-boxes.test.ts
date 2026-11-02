@@ -1,8 +1,9 @@
+import { renderTimes } from "@/lib/tz";
 import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { fmtDateTime } from "@/lib/format";
+import { fmtIn } from "@/lib/tz";
 import { makeUser } from "./helpers";
 import { act, joined, seen, settle, setup } from "./fixtures";
 
@@ -24,14 +25,14 @@ describe("batch 35 §74: the developer's own call-request actions never stop tha
     await later();
     expect((await act(testId, "answer-request", dev.cookie, { contractId: w.sessionId, requestId: r.id, action: "withdraw", seenAt: loaded, tab: "A" })).status).toBe(200);
     const ev = await db.testEvent.findFirstOrThrow({ where: { testId, kind: "withdrew_req" } });
-    expect(ev.text).toBe(`You withdrew a call request for ${fmtDateTime(startsAt)}`);
+    expect(renderTimes(ev.text, "UTC")).toBe(`You withdrew a call request for ${fmtIn("UTC", startsAt)}`);
     const third = await makeUser({ tester: true, name: "Ivo" });
     // Another tab (B), drawn before the withdraw: it stops once, in the developer's own voice (no Alerts chip: "own" is no alert type).
     const stop = await act(testId, "invite", dev.cookie, { testerIds: [third.user.id], seenAt: loaded, tab: "B" });
     expect(stop.status).toBe(409);
     expect(stop.body.error.code).toBe("stop_once");
     const lines = stop.body.error.changes as { text: string; alert?: string }[];
-    expect(lines.map((c) => c.text)).toEqual([`You withdrew a call request for ${fmtDateTime(startsAt)} in another tab`]);
+    expect(lines.map((c) => c.text)).toEqual([`You withdrew a call request for ${fmtIn("UTC", startsAt)} in another tab`]);
     expect(lines[0].alert).toBeUndefined();
     // The same page (A): nothing stops.
     expect((await act(testId, "invite", dev.cookie, { testerIds: [third.user.id], seenAt: loaded, tab: "A" })).status).toBe(200);

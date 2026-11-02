@@ -1,11 +1,11 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import { notFound, redirect } from "next/navigation";
 import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, HelpCircle, Languages, Lock, Monitor, Radio, Timer, Users, Video } from "lucide-react";
 import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTimeIn, money } from "@/lib/format";
+import { displayName, fmtDateIn, fmtDateTimeIn, money } from "@/lib/format";
 import { REVIEW_DAYS, closedToNewLine, dueFromJoin, joinerDays, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
-const utcDay = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
 import { ScrollText } from "@/components/ScrollText";
 import { QUESTION_BOX_AFTER, QuestionBox } from "@/components/QuestionBox";
 import { requireOpenPage } from "@/lib/server/page-auth";
@@ -50,7 +50,9 @@ const STEPS = {
 export default async function ListingPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ from?: string }> }) {
   const { id } = await params;
   const from = (await searchParams)?.from;
-  const u = await requireOpenPage("/app/find"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const u = await requireOpenPage("/app/find");
+  return withDateZone(u.timeZone, async () => {
+ // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   // (Batch 30 §8) The invitations fingerprint as of BEFORE the page reads the test and the invite: AutoRefresh starts from it.
@@ -107,10 +109,11 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const closed = paused || t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
   // (Owner, Oct 30, batch 15 section 18) Every tester gets the same days from when they join: "Your deadline: Dec 3 (14 days from joining)".
+  const localDay = (d: Date) => fmtDateIn(d, u.timeZone).replace(/, \d{4}$/, "");
   const days = joinerDays(t, t.developer.timeZone); // (batch 35 §32) the same helper as the developer's Listing panel
   const dueAt = t.testerDays ? dueFromJoin(new Date(), t.testerDays, t.developer.timeZone) : t.openUntil ?? new Date(Date.now() + t.deadlineDays * 86_400_000);
-  const dueIfNow = yourDeadlineLine(dueAt, days, utcDay).replace(/^Your deadline: /, "");
-  const joinClosed = t.openUntil && t.openUntil < new Date() ? closedToNewLine(t.openUntil, utcDay) : "";
+  const dueIfNow = yourDeadlineLine(dueAt, days, localDay).replace(/^Your deadline: /, "");
+  const joinClosed = t.openUntil && t.openUntil < new Date() ? closedToNewLine(t.openUntil, localDay) : "";
   const parts = [
     { key: "written" as const, on: t.writtenCents != null, cents: t.writtenCents, required: t.writtenRequired, title: "Written answers", icon: <FileText className="h-4 w-4" /> },
     { key: "recording" as const, on: t.recordingCents != null, cents: t.recordingCents, required: t.recordingRequired, title: "Screen recording", icon: <Video className="h-4 w-4" /> },
@@ -121,7 +124,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   // The full app's test page: the header card (tile, title, by, price, badges, description), the invitation, how it works and
   // what the developer wants to know, "Your deal", how the developer reviews, then the Join box.
   // (Batch 35 §14) The Listing panel's rows: the current listing in the tester's words (their deadline from joining), the most recent Save's fields tagged.
-  const panel = await testerListingPanel(t.id, { ...asListing(t), deadlineDays: days });
+  const panel = await testerListingPanel(t.id, { ...asListing(t), deadlineDays: days }, u.timeZone);
   return (
     <SeeItTarget target="#listing">
     <div className="mx-auto max-w-3xl space-y-6">
@@ -232,7 +235,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           <b>What you get:</b> {termsLine(l, true)}. You&apos;re paid for each part you deliver.
         </p>
         <div className="flex flex-wrap gap-2 text-xs text-slate-300">
-          {t.status === "open" && !joinClosed && <span className="chip" title="Every tester gets the same number of days from when they join"><Clock className="h-3.5 w-3.5" /> {t.openUntil ? perTesterLine(days, t.openUntil, utcDay) : `Your deadline: ${dueIfNow}`}</span>}
+          {t.status === "open" && !joinClosed && <span className="chip" title="Every tester gets the same number of days from when they join"><Clock className="h-3.5 w-3.5" /> {t.openUntil ? perTesterLine(days, t.openUntil, localDay) : `Your deadline: ${dueIfNow}`}</span>}
           {joinClosed && <span className="chip" data-join-closed=""><Clock className="h-3.5 w-3.5" /> {joinClosed}</span>}
           <span className="chip" title="If the developer doesn't review it in time, you choose: charge them, or let it go"><Timer className="h-3.5 w-3.5" /> Not reviewed in {REVIEW_DAYS} days? You choose</span>
           <span className="chip" title="Later edits to the test come to you as a request: switch to the new terms or keep yours"><Lock className="h-3.5 w-3.5" /> Locked in when you join</span>
@@ -304,4 +307,6 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
     </div>
     </SeeItTarget>
   );
+
+  });
 }

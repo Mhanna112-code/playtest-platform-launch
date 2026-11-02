@@ -259,8 +259,8 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const kept = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `written:${j.sessionId}` } } });
     expect((kept.data as { answers: string[] }).answers).toEqual(["My Q1 draft", "", ""]);
     expect(carryOver(prev[0].items, ["Q1?", "Q2 changed?", "Q3?"])).toEqual(["My Q1 draft", "", ""]);
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds sets={prevSets} sentPart={!!written} attachments=");
-    expect(src("components/AnswerSets.tsx")).toContain("Previous questions and answers (until {fmtDate(new Date(s.until))})");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments=");
+    expect(src("components/AnswerSets.tsx")).toContain("Previous questions and answers (until {fmtDateIn(s.until, timeZone)})");
   });
 
   it("sent, then switched: the developer sees it under its own questions, labelled, at its price; sending the new set replaces it and keeps the earlier one in a fold", async () => {

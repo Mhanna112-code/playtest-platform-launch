@@ -90,7 +90,7 @@ export async function GET(req: Request) {
       const t = await db.test.findUnique({ where: { id: inviteTest } });
       if (!t || t.developerId !== u.id) throw new HttpError(404, "not_found", "Not found.");
       const { inviteBlocked } = await import("@/lib/rules");
-      const { fmtDate } = await import("@/lib/format");
+      const { fmtDate } = await import("@/lib/server/dateFormat");
       const testersIn = await db.contract.count({ where: { testId: t.id, status: "working" } });
       const ids = (q.get("testers") ?? "").split(",").filter((id) => /^[a-zA-Z0-9_-]{1,80}$/.test(id));
       const rowVersions = await import("@/lib/server/inviteAvailability");

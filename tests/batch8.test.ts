@@ -353,7 +353,7 @@ describe("batch 8 item 7: admin", () => {
     expect(S.adminSubLine({ ...base, subscriptionStatus: "active", subscriptionCanceling: true }, now)).toBe("cancelled until Dec 1, 2026");
     expect(S.adminSubLine({ ...base, subscriptionStatus: "ended", subscriptionEndReason: "lapsed" }, now)).toBe("lapsed");
     expect(S.adminSubLine({ ...base, subscriptionStatus: "active", subscriptionPausedAt: now }, now)).toBe("paused (hold or suspension)");
-    expect(src("lib/server/adminLists.ts")).toContain("adminSubLine(x)");
+    expect(src("lib/server/adminLists.ts")).toContain("adminSubLine(x, new Date(), dateZone())");
     const a = await makeUser({ name: "Admin" });
     await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
     expect((await adm("set-free-until", a.cookie, { id: "free-until", date: new Date(Date.now() + 45 * DAY).toISOString().slice(0, 10) })).status).not.toBe(200);

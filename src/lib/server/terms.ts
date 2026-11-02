@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, fmtDate } from "@/lib/format";
+import { displayName, fmtDate } from "@/lib/server/dateFormat";
 import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms } from "@/lib/rules";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { HttpError } from "./http";

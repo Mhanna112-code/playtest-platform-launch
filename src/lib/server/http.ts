@@ -1,3 +1,4 @@
+import { withDateZone } from "./dateZone";
 // Small helpers for the JSON API: plain-word errors, size-limited bodies, same-origin checks.
 
 export class HttpError extends Error {
@@ -50,15 +51,17 @@ function sameOrigin(req: Request, origin: string) {
 export async function handle(fn: () => Promise<Response>): Promise<Response> {
   // (Batch 28 §1) Every API call is a heartbeat (at most one check a minute; only with OUTAGE_CHECKS=1). Never in the way of the call.
   void import("./outages").then((m) => m.touchHeartbeat()).catch(() => null);
-  try {
-    return await fn();
-  } catch (e) {
-    // (Owner) A stop says when the box was made: the next press sends it back as "boxAt" and goes ahead only if nothing
-    // new happened since (else it stops again with the new lines).
-    if (e instanceof HttpError) return fail(e.status, e.code, e.message, e.code === "stop_once" || e.code === "changed" || e.code === "needs_confirm" ? { ...(e.data ?? {}), now: new Date().toISOString() } : e.data);
-    console.error(e);
-    return fail(500, "server", "Something went wrong on our side. Try again in a moment.");
-  }
+  return withDateZone(null, async () => {
+    try {
+      return await fn();
+    } catch (e) {
+      // (Owner) A stop says when the box was made: the next press sends it back as "boxAt" and goes ahead only if nothing
+      // new happened since (else it stops again with the new lines).
+      if (e instanceof HttpError) return fail(e.status, e.code, e.message, e.code === "stop_once" || e.code === "changed" || e.code === "needs_confirm" ? { ...(e.data ?? {}), now: new Date().toISOString() } : e.data);
+      console.error(e);
+      return fail(500, "server", "Something went wrong on our side. Try again in a moment.");
+    }
+  });
 }
 
 /**

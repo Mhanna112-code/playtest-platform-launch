@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import Link from "next/link";
 import { db } from "@/lib/db";
 import { requireOpenPage } from "@/lib/server/page-auth";
@@ -16,7 +17,9 @@ export const dynamic = "force-dynamic";
  * then your ratings. (Owner, Oct 27: "Change your password" moved to Account, which stays open to a suspended or held account.)
  */
 export default async function ProfilePage() {
-  const u = await requireOpenPage("/app/profile"); // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
+  const u = await requireOpenPage("/app/profile");
+  return withDateZone(u.timeZone, async () => {
+ // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
   const side = sideFor(u, "/app/profile");
   const p = await db.testerProfile.findUnique({ where: { userId: u.id } });
   const rating = await ratingSummary(u.id);
@@ -48,4 +51,6 @@ export default async function ProfilePage() {
       </div>
     </div>
   );
+
+  });
 }

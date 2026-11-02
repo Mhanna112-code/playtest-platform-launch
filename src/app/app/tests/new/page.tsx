@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import { hasPerks } from "@/lib/server/subscription";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -14,6 +15,8 @@ export const dynamic = "force-dynamic";
 /** Post a test. (Owner, Oct 28 evening) ?draft=<id>: a draft (a next round not opened yet) opens here, filled in with its saved details. */
 export default async function NewTest({ searchParams }: { searchParams: Promise<{ draft?: string }> }) {
   const u = await requireOpenDevPage();
+  return withDateZone(u.timeZone, async () => {
+
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
   if (!u.isDeveloper) redirect("/app/profile");
@@ -35,4 +38,6 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
       />
     </>
   );
+
+  });
 }

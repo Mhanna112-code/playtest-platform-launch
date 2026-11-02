@@ -1,3 +1,4 @@
+import { fmtDateIn } from "./format";
 // (Owner, Oct 28, batch 8) The developer subscription: $7/month. Pure rules shared by the server and the pages. Testers never pay and never see any of this.
 
 import { money } from "./format";
@@ -76,13 +77,13 @@ export function subState(u: SubUser, now = new Date()): SubState {
   return u.subscriptionCanceling ? "cancelled" : "active";
 }
 
-const day = (d: Date) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
+const day = (d: Date, timeZone?: string | null) => fmtDateIn(d, timeZone);
 /** The admin user row's subscription line. */
-export function adminSubLine(u: SubUser, now = new Date()) {
+export function adminSubLine(u: SubUser, now = new Date(), timeZone?: string | null) {
   const s = subState(u, now);
   if (s === "free") return "free plan";
-  if (s === "active") return `subscribed${u.subscriptionRenewsAt ? `, renews ${day(u.subscriptionRenewsAt)}` : ""}`;
-  if (s === "cancelled") return `cancelled until ${u.subscriptionRenewsAt ? day(u.subscriptionRenewsAt) : "the end of the month"}`;
+  if (s === "active") return `subscribed${u.subscriptionRenewsAt ? `, renews ${day(u.subscriptionRenewsAt, timeZone)}` : ""}`;
+  if (s === "cancelled") return `cancelled until ${u.subscriptionRenewsAt ? day(u.subscriptionRenewsAt, timeZone) : "the end of the month"}`;
   if (s === "past_due") return "renewal declined (retrying)";
   if (s === "lapsed") return "lapsed";
   if (s === "paused") return "paused (hold or suspension)";

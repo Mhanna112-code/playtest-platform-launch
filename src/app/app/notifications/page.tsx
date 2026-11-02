@@ -1,16 +1,17 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { notificationsV } from "@/lib/server/pageFreshness";
 import { notificationScopeFor } from "@/lib/server/notify";
 import { isAdmin } from "@/lib/server/session";
 import { Bell } from "lucide-react";
 import { db } from "@/lib/db";
-import { fmtDate } from "@/lib/format";
+import { fmtDateIn } from "@/lib/format";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { sideFor, sideForPath, sideLink } from "@/lib/sides";
 import { closedForSuspended } from "@/lib/closedPages";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
-import { GROUP_COUNT_TITLES, bellKey, dayKey, groupTitle } from "@/lib/bell";
+import { GROUP_COUNT_TITLES, bellKeyIn, dayKey, groupTitle } from "@/lib/bell";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -20,6 +21,9 @@ export const dynamic = "force-dynamic";
 // it's clicked, a stack when it's expanded or one of its lines is clicked. No "mark all as read".
 export default async function Notifications() {
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDate = (d: Date | string) => fmtDateIn(d, u.timeZone);
   // (Owner, Oct 30, batch 34 §5) The side in use's lines plus the account's; the settings' help names only this side's payment kinds.
   const side = isAdmin(u) ? null : sideFor(u);
   const freshV = await notificationsV(u);
@@ -28,10 +32,10 @@ export default async function Notifications() {
   const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
   const groups = new Map<string, typeof items>();
   for (const n of items) {
-    const k = bellKey(n);
+    const k = bellKeyIn(n, u.timeZone);
     groups.set(k, [...(groups.get(k) ?? []), n]);
   }
-  const todayKey = dayKey(new Date());
+  const todayKey = dayKey(new Date(), u.timeZone);
   // (Owner, Oct 28) A restricted account: a line whose page is closed to it lands on the dashboard top.
   // (Batch 34 §5) Straight to the page (one of the other side shows the switch notice; the line's own side decides what's closed).
   const hrefFor = (link: string) => (closedForSuspended(link, u, sideForPath(link, u.id) ?? sideFor(u)) ? "/app" : sideLink(u, link));
@@ -39,8 +43,8 @@ export default async function Notifications() {
     key,
     title: g[0].groupKey ? groupTitle(g[0].groupKey, new Set(g.map((n) => n.testId ?? n.id)).size, g.length) : g[0].testId ? titles.get(g[0].testId) : undefined,
     counted: !!(g[0].groupKey && GROUP_COUNT_TITLES[g[0].groupKey]),
-    day: dayKey(g[0].createdAt) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
-    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt) })),
+    day: dayKey(g[0].createdAt, u.timeZone) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
+    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone) })),
   }));
   return (
     <div className="mx-auto max-w-2xl space-y-6">
@@ -56,12 +60,14 @@ export default async function Notifications() {
       )}
     </div>
   );
+
+  });
 }
 
-function timeAgo(d: Date) {
+function timeAgo(d: Date, timeZone?: string | null) {
   const s = Math.floor((Date.now() - d.getTime()) / 1000);
   if (s < 60) return "just now";
   if (s < 3600) return `${Math.floor(s / 60)}m ago`;
   if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
-  return fmtDate(d);
+  return fmtDateIn(d, timeZone);
 }

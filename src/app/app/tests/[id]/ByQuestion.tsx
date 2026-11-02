@@ -1,5 +1,5 @@
 import { HelpCircle, MessageSquareText } from "lucide-react";
-import { fmtDateTime, money } from "@/lib/format";
+import { fmtDateTimeIn, money } from "@/lib/format";
 import type { QuestionBlock } from "@/lib/byQuestion";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { ScrollText } from "@/components/ScrollText";
@@ -7,7 +7,7 @@ import { ScrollText } from "@/components/ScrollText";
 const STATUS = { paid: "border-emerald-400/40 text-emerald-200", rejected: "border-rose-400/40 text-rose-200", waiting: "border-amber-300/40 text-amber-200" } as const;
 
 /** The full app's "By question" fold under the testers: each question with everyone's answer, side by side. */
-export function ByQuestion({ blocks }: { blocks: QuestionBlock[] }) {
+export function ByQuestion({ blocks, timeZone }: { timeZone?: string | null; blocks: QuestionBlock[] }) {
   return (
     <details id="by-question" className="scroll-mt-24 rounded-xl border border-white/[0.08] p-3">
       <summary className="fold-chevron cursor-pointer font-medium text-white">By question</summary>
@@ -28,7 +28,7 @@ export function ByQuestion({ blocks }: { blocks: QuestionBlock[] }) {
                   <li key={a.contractId} className="flex gap-3 py-2.5 text-sm">
                     <span className="w-32 shrink-0 space-y-1">
                       <a href={`#tester-${a.contractId}`} className="block text-slate-400 no-underline hover:text-white">{a.tester}</a>
-                      <span className="block text-xs text-slate-500">{fmtDateTime(a.sentAt)}</span>
+                      <span className="block text-xs text-slate-500">{fmtDateTimeIn(a.sentAt, timeZone)}</span>
                       <span className={`badge text-xs ${STATUS[a.status]}`}>{a.status === "paid" ? `Paid ${money(a.paidCents)}` : a.status === "rejected" ? "Rejected" : "Not reviewed yet"}</span>
                     </span>
                     <AnswerWithAttachments text={a.text} attachments={a.attachments ?? []} />

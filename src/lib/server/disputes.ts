@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime } from "@/lib/format";
+import { displayName, fmtDateTime } from "@/lib/server/dateFormat";
 
 /** (Owner, Oct 30, batch 15 section 27) A developer's open disputes still waiting for their (optional) side, newest first: the dashboard box while restricted. */
 export async function disputesForSide(devId: string) {

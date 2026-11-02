@@ -1,3 +1,6 @@
+import { renderTimes } from "@/lib/tz";
+import { withDateZone } from "@/lib/server/dateZone";
+import { fmtTimeIn } from "@/lib/format";
 import { markerIds } from "@/lib/answerAttachments";
 import { notFound, redirect } from "next/navigation";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
@@ -5,7 +8,7 @@ import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote, chargeOpensAt } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, Languages, MessagesSquare, Monitor, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, money, stopTimeIn } from "@/lib/format";
+import { displayName, fmtDateIn, fmtDateTimeIn, money, stopTimeIn } from "@/lib/server/dateFormat";
 import { LISTING_VALUES, historyRows, infoLines, parseValues } from "@/lib/listingInfo";
 import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
@@ -20,7 +23,7 @@ import { callsLeftCents } from "@/lib/server/callMoney";
 import { testerAutoChargeLine } from "@/lib/rules";
 import { chargeClosesLine, closeOutSoon } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
-import { fmtTime } from "@/lib/format";
+
 import { ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
@@ -76,6 +79,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const { id } = await params;
   // (Owner, Oct 28) Closed to a restricted account (it moves to the dashboard top), except (batch 16 section 28) the limited view of a test a suspended tester was removed from.
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
+  const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
+  const fmtTime = (d: Date | string) => fmtTimeIn(d, u.timeZone);
+  const fmtDate = (d: Date | string) => fmtDateIn(d, u.timeZone);
   adminAway(u, "/app/sessions"); // (batch 20 section 16) admin only
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
@@ -217,7 +225,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     const left = cs.filter((x) => x.startsAt > now).length;
     if (!left) return [];
     const next = cs.find((x) => x.startsAt > now)!;
-    return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit" })}${row?.count === 0 ? "" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), callIds: cs.map((x) => x.id) }];
+    return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: u.timeZone || "UTC" })}${row?.count === 0 ? "" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), callIds: cs.map((x) => x.id) }];
   });
   // (Owner, Oct 29, batch 10) A paused test hides what doesn't work right now (Send, the call-request tools, Join call, chat's message box) and says at the top what still
   // works, built from what is actually on the page (the server refusals stay as a backstop).
@@ -445,7 +453,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               </li>) })),
               ...contractNotes.map((n) => ({ at: n.createdAt, key: n.id, node: n.kind === STOP_NOTE_KIND
                 ? <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} /></li> // (Batch 17 §15) the reason in its scroll box
-                : <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: ${n.text}`}</li> })),
+                : <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: ${renderTimes(n.text, u.timeZone)}`}</li> })),
               // (Batch 30 §15) Older versions of the listing information: each save's changes, before → after (renames have their own "Renamed" line).
               ...infoChanges.flatMap((ch) => {
                 const rows = historyRows(ch);
@@ -496,7 +504,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               )}
               {/* (Batch 17 §19) Its last 7 days before close-out. */}
               {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}
-              {sub?.review && !chargedOwed.has(sub.id) && !delayedSubs.has(sub.id) && !pendingBase.has(sub.id) && <TesterReview update={sub.paidUpdateZeroAt ? { at: sub.paidUpdateZeroAt, note: sub.paidUpdateNote } : null} dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
+              {sub?.review && !chargedOwed.has(sub.id) && !delayedSubs.has(sub.id) && !pendingBase.has(sub.id) && <TesterReview timeZone={u.timeZone} update={sub.paidUpdateZeroAt ? { at: sub.paidUpdateZeroAt, note: sub.paidUpdateNote } : null} dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
 
             </li>
           ))}
@@ -527,7 +535,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   {fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min
                   <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id)} paidCents={partPaid.get(x.id) ?? 0} />
                 </p>
-                {!owedCalls.has(x.id) && !pendingBase.has(x.id) && <TesterReview dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
+                {!owedCalls.has(x.id) && !pendingBase.has(x.id) && <TesterReview timeZone={u.timeZone} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
               </div>
             ))}
           </li>
@@ -639,7 +647,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           </>
         )}
         {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. */}
-        <PrevSetFolds sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+        <PrevSetFolds timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
         {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for {dev}.</p>}
@@ -656,13 +664,16 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
 
     </div>
   );
+
+  });
 }
 
 type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean; reason: string; createdAt: Date; rateCents?: number | null; /** (batch 30 §5) */ teamClosedById?: string | null };
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ sessionId, kind, id, review, dispute, off = false, dev = "The developer", extras = [], room = null, more = null, update = null }: { /** (Batch 30 §2) an update closed at $0 */ update?: { at: Date; note: string } | null; /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ timeZone, sessionId, kind, id, review, dispute, off = false, dev = "The developer", extras = [], room = null, more = null, update = null }: { timeZone?: string | null; /** (Batch 30 §2) an update closed at $0 */ update?: { at: Date; note: string } | null; /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+  const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, timeZone);
   // (Batch 10) Every part the developer reviewed can be disputed once, listed or not (not the tester's own Charge or Let it go).
   const check = canDispute(review.amountCents, review.agreedCents, !!dispute, byTesterChoice(review.reason), room);
   const may = check.ok && !review.teamClosedById;

@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import { owedForBox } from "@/lib/server/holds";
 import { DELETE_ENDS_SUBSCRIPTION, subscribed } from "@/lib/subscription";
 import Link from "next/link";
@@ -24,6 +25,8 @@ export const dynamic = "force-dynamic";
  */
 export default async function AccountPage() {
   const u = await requirePageUser();
+  return withDateZone(u.timeZone, async () => {
+
   const dev = hasSide(u, "developer"), tester = hasSide(u, "tester");
   // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: no side (one it already has is ignored), so no "Start … too" here.
   const side = isAdmin(u) ? null : sideFor(u, "/app/account");
@@ -89,4 +92,6 @@ export default async function AccountPage() {
       <DeleteAccount both={dev && tester} sides={dev && !tester ? "developer" : tester && !dev ? "tester" : "both"} owes={dev && (!!u.holdStartedAt || (await owedForBox(u.id)).length > 0)} testerLines={tester ? testerDeleteLines(await testerDeleteFacts(u.id)) : undefined} devLines={dev ? await devDeleteLines(u.id) : []} subscriptionLine={subscribed(u) ? DELETE_ENDS_SUBSCRIPTION : ""} />
     </div>
   );
+
+  });
 }

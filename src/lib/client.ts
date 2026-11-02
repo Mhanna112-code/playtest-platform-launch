@@ -96,7 +96,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   try {
     res = await fetch(path, {
       method: method ?? (body === undefined ? "GET" : "POST"),
-      headers: { ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}) },
+      headers: { "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(body === undefined ? {} : { "content-type": "application/json" }), "x-tab": TAB, ...(PAGE_LOAD ? { "x-load": PAGE_LOAD } : {}), ...(PAGE_USER ? { "x-uid": PAGE_USER } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
     });
   } catch {

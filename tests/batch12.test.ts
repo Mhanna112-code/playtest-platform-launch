@@ -155,7 +155,7 @@ describe("batch 12 item 6: Open until is required and is every tester's deadline
     expect(src("app/app/tests/TestForm.tsx")).not.toContain("How long do new testers have?");
     expect(R.termsLine({ writtenCents: 1000, recordingCents: null, liveRateCents: null, liveMinutes: null, deadlineDays: 7 })).toBe("Written $10.00");
     expect(src("app/app/find/[id]/page.tsx")).toContain("Your deadline: {dueIfNow}");
-    expect(src("app/app/find/[id]/page.tsx")).toContain("yourDeadlineLine(dueAt, days, utcDay)"); // (batch 15 section 18) "Dec 3 (14 days from joining)"
+    expect(src("app/app/find/[id]/page.tsx")).toContain("yourDeadlineLine(dueAt, days, localDay)"); // (batch 15 section 18) "Dec 3 (14 days from joining)"
   });
 
   it("every tester's deadline is Open until, late joiners too; moving it later in Edit moves the working testers' deadlines; at most 30 days", async () => {

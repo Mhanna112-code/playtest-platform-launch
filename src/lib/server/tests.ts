@@ -1,3 +1,4 @@
+import { dateZone } from "./dateZone";
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
@@ -12,9 +13,9 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
 import { BUILD_URL_LINE, buildUrlOk } from "@/lib/listingFields";
-import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, pronouns, stopTimeIn, toCents } from "@/lib/format";
+import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, pronouns, stopTimeIn, toCents } from "@/lib/server/dateFormat";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
-import { T, safeZone } from "@/lib/tz";
+import { T, safeZone, renderTimes } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
@@ -433,7 +434,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       if (lines.length) dcN = [...dcN, ...lines];
     }
     dcN = [...dcN].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}), ...(c.kind === "yours" ? { kind: "yours" } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: c.text, at: c.createdAt })) : null;
+    const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}), ...(c.kind === "yours" ? { kind: "yours" } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: renderTimes(c.text, dateZone()), at: c.createdAt })) : null;
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
       throw new HttpError(409, "changed", dcN.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
@@ -619,7 +620,7 @@ export async function editNews(tx: Tx, testId: string, body: Record<string, unkn
  * One line of a developer's stop-once box. (Owner, Oct 28) A tester's Switch / Keep line carries its contract, so the box under the button shows "See their contract" like the top box.
  */
 export const devLine = (c: TestEventLike & { contractId?: string | null }, withAlert = true) => ({
-  text: c.text, at: c.createdAt, ...(c.kind === "terms" && c.contractId ? { kind: "terms", contract: c.contractId } : {}), ...(withAlert && alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}),
+  text: renderTimes(c.text, dateZone()), at: c.createdAt, ...(c.kind === "terms" && c.contractId ? { kind: "terms", contract: c.contractId } : {}), ...(withAlert && alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}),
   // (Batch 26 section 4) A stop line says its own time: the box doesn't add it again.
   ...(c.kind === "stop" ? { kind: "stop" } : {}),
   // (Batch 20 section 4) A line that stands for one thing (a ticked tester's needs): a later stop's line with the same key replaces it in the box.
@@ -932,7 +933,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     const dev = await tx.user.findUniqueOrThrow({ where: { id: t.developerId } });
     if (testPaused(dev, t)) throw new HttpError(409, "paused", PAUSED_RIGHT_NOW);
     const testersIn = await tx.contract.count({ where: working(testId) });
-    const r = joinCheck({ status: t.status, listingVersion: t.listingVersion, spots: t.spots, testersIn, openUntil: t.openUntil }, seen, body.confirmed === true);
+    const r = joinCheck({ status: t.status, listingVersion: t.listingVersion, spots: t.spots, testersIn, openUntil: t.openUntil }, seen, body.confirmed === true, new Date(), (d) => fmtDate(d).replace(/, \d{4}$/, ""));
     if (r.result === "refused") throw new HttpError(409, "refused", r.message);
     if (r.result === "changed") {
       throw new HttpError(409, "listing_changed", "The developer changed this test since you opened it. Check the new terms, then press Join again to join on them.", {

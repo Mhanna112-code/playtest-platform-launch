@@ -1,3 +1,4 @@
+import { withDateZone } from "@/lib/server/dateZone";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { Chat } from "@/components/Chat";
@@ -12,6 +13,8 @@ export const dynamic = "force-dynamic";
 
 export default async function DirectPage({ params }: { params: Promise<{ id: string }> }) {
   const u = await requireOpenPage("/app/direct");
+  return withDateZone(u.timeZone, async () => {
+
   const { id } = await params;
   const v = await directV(u.id, id);
   const a = await directAccess(u.id, id);
@@ -30,4 +33,6 @@ export default async function DirectPage({ params }: { params: Promise<{ id: str
       )}
     </div>
   );
+
+  });
 }

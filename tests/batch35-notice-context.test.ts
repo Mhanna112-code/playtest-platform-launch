@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { fmtDateTime } from "@/lib/format";
+import { fmtDateTimeIn } from "@/lib/format";
 import { testerChanges } from "@/lib/server/testerGate";
 import { testerPaymentChanges } from "@/lib/server/live";
 import { POST as reviewPOST } from "@/app/api/review/route";
@@ -18,9 +18,9 @@ describe("blue notices identify the person and work they describe", () => {
     await settle();
     expect((await act(f.testId, "cancel-call", f.dev.cookie, { callId: call.id, seenAt: seen(), confirmed: true })).status).toBe(200);
     const lines = await testerChanges(j.tester.user.id, j.sessionId, f.testId, new Date(loaded));
-    expect(lines.filter((x) => x.kind === "cancelled").map((x) => x.text)).toEqual([`Your call with Nora Lane on ${fmtDateTime(call.startsAt)} was cancelled`]);
+    expect(lines.filter((x) => x.kind === "cancelled").map((x) => x.text)).toEqual([`Your call with Nora Lane on ${fmtDateTimeIn(call.startsAt, "UTC")} was cancelled`]);
     const refused = await sact(j.sessionId, "cancel-call", j.tester.cookie, { callId: call.id, seenAt: seen() });
-    expect(refused.body.error).toMatchObject({ code: "cancelled", message: `Your call with Nora Lane on ${fmtDateTime(call.startsAt)} was already cancelled.` });
+    expect(refused.body.error).toMatchObject({ code: "cancelled", message: `Your call with Nora Lane on ${fmtDateTimeIn(call.startsAt, "UTC")} was already cancelled.` });
   });
 
   it("a system cancellation names the other person without attributing the cancellation to them", async () => {
@@ -30,7 +30,7 @@ describe("blue notices identify the person and work they describe", () => {
     const at = new Date();
     await db.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: at } });
     const lines = await testerChanges(j.tester.user.id, j.sessionId, f.testId, new Date(at.getTime() - 1));
-    expect(lines.find((x) => x.kind === "cancelled")?.text).toBe(`Your call with Nora Lane on ${fmtDateTime(call.startsAt)} was cancelled`);
+    expect(lines.find((x) => x.kind === "cancelled")?.text).toBe(`Your call with Nora Lane on ${fmtDateTimeIn(call.startsAt, "UTC")} was cancelled`);
   });
 
   it("a dispute decision identifies the written part", async () => {
@@ -53,7 +53,7 @@ describe("blue notices identify the person and work they describe", () => {
     const at = new Date();
     await db.dispute.create({ data: { contractId: j.sessionId, callId: call.id, testerId: j.tester.user.id, reason: "Full call attended", status: "decided", decidedAt: at, decidedCents: 400 } });
     const lines = await testerPaymentChanges(j.tester.user.id, j.sessionId, new Date(at.getTime() - 1));
-    expect(lines.find((x) => x.kind === "admin")?.text).toBe(`The team decided your dispute about your live call on ${fmtDateTime(call.startsAt)}: the pay stays at $4.00`);
+    expect(lines.find((x) => x.kind === "admin")?.text).toBe(`The team decided your dispute about your live call on ${fmtDateTimeIn(call.startsAt, "UTC")}: the pay stays at $4.00`);
   });
 
   it("another tab's request names the developer", async () => {
@@ -85,7 +85,7 @@ describe("blue notices identify the person and work they describe", () => {
       await db.call.update({ where: { id: calls[index].id }, data: { startsAt, measuredMinutes: 30, measuredAt: new Date() } });
       await db.review.create({ data: { contractId: j.sessionId, callId: calls[index].id, amountCents: 800, agreedCents: 1500, payKey: randomUUID() } });
       const response = await json(await reviewPOST(req("/api/review", { cookie: f.dev.cookie, body: { kind: "call", id: calls[index].id, amount: "15.00", tickedCents: 1500, payKey: randomUUID(), seenAt: seen(), confirmed: true } })));
-      expect(response.body.error).toMatchObject({ code: "reviewed", message: `You already paid $8.00 for Ana Silva's live call on ${fmtDateTime(startsAt)}.` });
+      expect(response.body.error).toMatchObject({ code: "reviewed", message: `You already paid $8.00 for Ana Silva's live call on ${fmtDateTimeIn(startsAt, "UTC")}.` });
       reasons.push(response.body.error.message);
     }
     expect(reasons[0]).not.toBe(reasons[1]);
