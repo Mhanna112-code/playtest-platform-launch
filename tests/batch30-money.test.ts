@@ -167,7 +167,7 @@ describe("batch 30 §3: late listed work never opens Charge", () => {
   it("the lines", () => {
     expect(M.NO_CHARGE_LATE).toBe("You can't charge for work sent after your deadline.");
     expect(M.lateBeforeSendLine("Nov 3, 2026", "Nora Lane")).toBe("Your deadline passed on Nov 3, 2026. You can still send this: Nora Lane decides what to pay for late work, and you can't charge for it.");
-    expect(M.lateSentLine("Nov 3, 2026", "Nora Lane")).toBe("Sent late (deadline was Nov 3, 2026): Nora Lane decides what to pay. You can't charge for late work.");
+    expect(M.lateSentLine("Nov 3, 2026", "Nora Lane")).toBe("Sent after the Nov 3, 2026 deadline: Nora Lane decides what to pay. You can't charge for this part.");
     expect(R.PAY_RULES_TICK).toContain("for work they sent by their own deadline");
     const terms = src("lib/termsOfUse.ts");
     expect(terms).toContain("Work sent after the tester's own deadline never opens Charge or Let it go");

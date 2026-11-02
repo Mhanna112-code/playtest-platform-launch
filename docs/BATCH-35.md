@@ -903,3 +903,23 @@ Tests: `tests/batch35-notice-context.test.ts`, with the existing exact-wording e
 
 ## Current saved card in Payments (owner, Nov 1)
 The Your card box identifies the account’s current saved card by brand, last four digits and expiry. It reads the saved payment method from Stripe without creating or charging anything; a missing card says No card yet. Link is identified as Link instead of inventing card digits. If details cannot be read, Payments still opens with the saved-card/known-expiry fallback and Change card. Full card numbers and security codes are never displayed or stored here. Existing card-change live updates remain in use. Tests: `tests/batch35-current-card.test.ts`.
+
+## An accepted rejoin opens the session (owner, Nov 1)
+When the join page’s existing watcher finds that an application or ask to rejoin was accepted, it opens the session automatically, just like Join. A focused field, a saved note or a stop box no longer strands the page on “You’re back in … Go to your session”. Accepted sessions also navigate when their fingerprint was already seen. The watcher stays on the shared page beat and focus check; a response arriving after leaving the page cannot navigate it. Waiting, declined and closed applications keep their existing redraw behavior. Tests: `tests/batch35-rejoin-refresh.test.ts`, plus the existing batch30 acceptance fixtures.
+
+## Remove the page Refresh prompt (owner, Nov 1)
+
+- Remove “This page has updates · Refresh”. The list’s new-update pills remain.
+- Background refresh still works. A fallback reload waits quietly while someone is typing or has a confirmation or stop box open, then retries once it is safe.
+
+## Listing folds and paid work stay readable (owner, Nov 1)
+
+- Listing opens as a dropdown on both the developer’s test page and the tester’s join page. Its fields scroll inside it; the title and reviews remain outside the fold. See it still opens the listing at its matching field.
+- Paid written answers and recordings stay visible in the tester panel, in the existing scroll box above Pay more, including sent parts no longer listed. The same question snapshots, notes and attachments remain readable.
+- Sent parts no longer carry a “Sent late” badge. Work sent after its deadline still has the dated payment explanation and the same payment rules; removing a label does not open Charge for it.
+- Clock reproduction: first send Nov 2; extend Open until from Nov 10 to Nov 15 on Nov 3; resend Nov 12. No Charge before Nov 19 at the resend time; the daily job opens Charge / Let it go after that time, without paying automatically.
+
+## A paused session does not claim Open until ended the test (owner, Nov 1)
+
+- While the team’s pause, a payment or chargeback hold, or the developer’s suspension is still pausing the test, a working tester does not see “This test closed on …” merely because the stored Open until passed. The pause explanation stays; an actual ended or left session still says so.
+- The deadline explanation no longer promises a “late” badge after those badges were removed. Sending and payment eligibility keep their existing rules.

@@ -183,14 +183,15 @@ export const lateLabel = (dueAt: Date, fmt: (d: Date) => string) => `Sent late (
  */
 export function testerRefusal(
   c: StopCtx & { status: string },
-  test: { openUntil: Date | null; adminStoppedAt?: Date | null },
+  test: { openUntil: Date | null; adminStoppedAt?: Date | null; adminPausedAt?: Date | null; developer?: { holdStartedAt?: Date | null; devSuspendedAt?: Date | null } },
   devName: string,
   fmt: (d: Date) => string,
   now: Date,
 ) {
   if (c.status === "left") return c.endKind === "rated" ? "You rated this test, so your part is finished." : "You left this test.";
   if (c.status === "ended") return endedLine({ ...c, test: c.test ?? test }, devName, fmt);
-  if (test.openUntil && test.openUntil.getTime() < now.getTime()) return `This test closed on ${fmt(test.openUntil)}.`;
+  const paused = !!(test.adminPausedAt || test.developer?.holdStartedAt || test.developer?.devSuspendedAt);
+  if (!paused && test.openUntil && test.openUntil.getTime() < now.getTime()) return `This test closed on ${fmt(test.openUntil)}.`;
   return "";
 }
 

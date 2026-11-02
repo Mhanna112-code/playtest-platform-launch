@@ -24,10 +24,11 @@ export function ListingPanel({ rows, listing, when, savedAt, side = "developer",
   const tag = (l: PanelRow) => (l.before != null ? <UpdatedTag when={l.updatedAt ? when(l.updatedAt) : ""} before={l.before} now={l.now} /> : null);
   const link = side === "developer" && listing.buildUrl; // (batch 35 §14) a tester gets the build link when they join
   return (
-    <section className={`card scroll-mt-24${head ? " space-y-4" : ""}`} id="listing" data-listing-panel={side === "tester" ? "tester" : ""} data-saved-at={savedAt}>
+    <section className={`card scroll-mt-24${head ? " space-y-4" : ""}`} data-listing-panel={side === "tester" ? "tester" : ""}>
       {head}
-      <div>
-        <h2 className="flex items-center gap-2 font-semibold text-white"><ClipboardList className="h-5 w-5 text-indigo-300" /> Listing</h2>
+      <details id="listing" data-saved-at={savedAt} className="scroll-mt-24">
+        <summary className="fold-chevron flex cursor-pointer items-center gap-2 font-semibold text-white"><ClipboardList className="h-5 w-5 text-indigo-300" /> Listing</summary>
+        <div className="mt-3 max-h-[32rem] overflow-y-auto overscroll-contain pr-2" data-listing-scroll="">
         <p className="text-xs text-slate-400">{intro ?? "What testers see now. A field your last save changed shows when: tap it for before and now."}</p>
         <ul className="mt-3 space-y-2.5 text-sm" data-listing-fields="">
           {rows.map((l) => (
@@ -50,7 +51,8 @@ export function ListingPanel({ rows, listing, when, savedAt, side = "developer",
             </li>
           ))}
         </ul>
-      </div>
+        </div>
+      </details>
       {foot}
     </section>
   );

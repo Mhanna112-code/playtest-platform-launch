@@ -1,13 +1,11 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { pageBusy, watchTyping } from "@/lib/pageBusy";
 import { LIVE_TICK, noteRedrawAsked, onBoxLines, rideLiveClock } from "@/lib/liveSync";
 
 /**
  * (Owner's repro, Oct 29, batch 30 §8) The join page follows the tester's own application or ask to rejoin, starting from the fingerprint the server rendered (`v`):
- * accepted → "You're back in “Harbor Run”: your deadline is …" (or "You're in: “Harbor Run”.") with "Go to your session →", and the page moves there unless something
- * is being typed; declined, closed or withdrawn → the page redraws with its line (the top box names a closing). Polled every 20 s, on the page's live tick and on focus.
+ * accepted → "You're back in “Harbor Run”: your deadline is …" (or "You're in: “Harbor Run”.") with "Go to your session →", and the page moves there like a successful Join; declined, closed or withdrawn → the page redraws with its line (the top box names a closing). Polled every 20 s, on the page's live tick and on focus.
  * (Owner, Oct 31, batch 35 §37) The 20 s are the page's one beat (lib/liveSync.ts), shared with the top box; JoinWatch is the join page's redraw driver: a new line
  * in the top box (a listing save, a closing) redraws the page at once.
  */
@@ -20,22 +18,22 @@ export function JoinWatch({ testId, v }: { testId: string; v: string }) {
   const [back, setBack] = useState<{ line: string; href: string } | null>(null);
   useEffect(() => {
     let alive = true;
-    watchTyping();
     const check = async () => {
       if (document.visibilityState === "hidden") return;
       try {
         const r = await fetch(`/api/pulse?join=${encodeURIComponent(testId)}`, { cache: "no-store" });
         if (!r.ok || !alive) return;
         const j = (await r.json()) as { v: string; back: { line: string; href: string } | null };
-        if (j.v === last.current) return;
-        last.current = j.v;
+        if (!alive) return;
         if (j.back) {
           setBack(j.back);
-          if (!pageBusy()) window.location.href = j.back.href;
-        } else {
-          noteRedrawAsked();
-          router.refresh();
+          window.location.href = j.back.href;
+          return;
         }
+        if (j.v === last.current) return;
+        last.current = j.v;
+        noteRedrawAsked();
+        router.refresh();
       } catch {
         // offline: next time
       }

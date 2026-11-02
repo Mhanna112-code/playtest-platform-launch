@@ -10,7 +10,7 @@ import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
-import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, lateLabel, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -338,7 +338,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {/* (Batch 15 section 17) The steps in a scroll box about 6 lines tall. */}
         {/* (Batch 30 §15) The current steps and build link. */}
         {c.test.description && <ScrollText text={c.test.description} className="text-slate-300" label="What to do" />}
-        <p className="text-sm text-slate-400">Due {fmtDate(c.dueAt)}{c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 24 * 3_600_000 ? ` · ${leftText(c.dueAt.getTime() - now.getTime())} left` : ""}{isLate(c.dueAt, now) && !refusal ? ": your deadline has passed, late work is still accepted and marked late." : ""}</p>
+        <p className="text-sm text-slate-400">Due {fmtDate(c.dueAt)}{c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 24 * 3_600_000 ? ` · ${leftText(c.dueAt.getTime() - now.getTime())} left` : ""}{isLate(c.dueAt, now) && !refusal ? ": your deadline has passed. You can still send work; the developer decides what to pay." : ""}</p>
         {c.test.buildUrl && (
           <a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="btn w-fit no-underline hover:no-underline">
             Open the product <ExternalLink className="h-4 w-4" />
@@ -477,7 +477,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 <strong>{name}:</strong>
                 {sub && <TesterPaymentTag review={sub.review} confirming={confirmingBase.has(sub.id)} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
                   developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
-                <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}{sub.late && <span className="ml-2 badge">{lateLabel(c.dueAt, fmtDate)}</span>}</> : "Not sent yet"}</span>
+                <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
               <p className="text-slate-400">{cents == null ? NOT_LISTED : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>

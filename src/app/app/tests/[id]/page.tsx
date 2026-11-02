@@ -3,7 +3,7 @@ import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, money, pronouns } from "@/lib/format";
-import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, lateLabel, termsLine, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, termsLine, paidZeroLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callsLeftWarning } from "@/lib/callMeasure";
@@ -453,7 +453,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
               <p className="text-sm font-medium">
                 <a href={`/app/testers/${x.c.testerId}`}>{displayName(x.c.tester)}</a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
-                {x.kind === "sub" && x.s!.late && <span className="ml-2 badge">{lateLabel(x.c.dueAt, fmtDate)}</span>}
               </p>
               {/* (Batch 17 §19) The last 7 days before close-out. */}
               {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
@@ -557,7 +556,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </div>
                 <p className="note">Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
                 <ul className="space-y-1 text-sm" data-parts-sent="">
-                  {partRows.filter((r) => r.on).map((r) => (
+                  {partRows.filter((r) => r.on || r.sub).map((r) => (
                     // (Batch 35 §7) A bell or email link to a piece ("#piece-<id>") that has left Needs you (paid) lands on this line (HashJump's fallback).
                     <li key={r.name} className="flex flex-wrap items-center gap-2 scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" {...(r.sub ? { id: `part-${r.sub.id}` } : {})}>
                       <b className="text-white">{r.name}</b>
@@ -566,6 +565,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
                       {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
+                      {r.sub?.review && <div className="w-full" data-paid-part-content="">
+                        <AnswersBox>
+                          {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
+                          {r.sub.kind === "written" && <SetView items={itemsOf(r.sub.answers, writtenQuestions(c))} attachments={r.sub.recordings.filter((a) => a.uploadedAt).map((a) => ({ id: a.id, filename: a.filename, size: a.sizeBytes, contentType: a.contentType }))} />}
+                          {r.sub.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={r.sub.notes} attachments={r.sub.recordings.filter((a) => a.part === "written" && a.uploadedAt).map((a) => ({ id: a.id, filename: a.filename, size: a.sizeBytes, contentType: a.contentType }))} /></div>}
+                          <AttachmentList items={r.sub.recordings.filter((a) => a.uploadedAt)} />
+                        </AnswersBox>
+                      </div>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
