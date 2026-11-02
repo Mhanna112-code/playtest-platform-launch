@@ -816,3 +816,9 @@ Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts 
 ## §108 Edit never blocks on an unchanged Open until (owner, Nov 1)
 - On Edit, the Open until date box's minimum is the saved date when that's earlier than tomorrow, so a test whose Open until is under a day away (or past) can
   still save other fields; the server already checks the date only when it changes. Moving it still needs a date from tomorrow on.
+
+## §116 A kept refusal never outlives its situation or floats (owner, Nov 1)
+
+- A kept refusal uses the same page-version signal as the line under its button (§60): its baseline is the server version at refusal time. Its own redraw keeps the explanation; the next shown version drops it. The next press and another page still drop it (§85).
+- It stays in the nearest surviving section. If none remains, it goes first inside the page’s main content, scrolling with the page in the info style; it never floats over the header.
+- The same-word check excludes the kept subtree (§95), so there is only one steady copy, with no empty bullet.

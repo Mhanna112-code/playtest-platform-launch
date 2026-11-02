@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { PRESS_ERROR_EVENT } from "./client";
 
 /**
@@ -44,31 +44,35 @@ export async function serverVersion() {
   return versionOf(m);
 }
 
+/** The refusal's own redraw brings this server version; only a later shown version clears it. */
+export function watchNewPageVersion(onNew: () => void) {
+  let alive = true;
+  let base: string | undefined;
+  void serverVersion().then((v) => { if (alive) base = v; });
+  const onShown = () => { if (isNewVersion(base, shownVersion())) onNew(); };
+  subs.add(onShown);
+  return () => { alive = false; subs.delete(onShown); };
+}
+
 /** True once the page redrew with a new version after `what` (a line, a stop list) appeared. `text`: the line's words (the same refusal again shows again). */
 export function useGoneOnNewVersion(what: unknown, text = ""): boolean {
   const [gone, setGone] = useState(false);
-  const base = useRef<string | undefined>(undefined);
   useEffect(() => {
     setGone(false);
-    base.current = undefined;
     if (!what) return;
-    let turn = 0;
+    let stopWatching = () => {};
     const arm = () => {
-      const t = ++turn;
-      base.current = undefined;
-      void serverVersion().then((v) => { if (t === turn) base.current = v; });
+      stopWatching();
+      stopWatching = watchNewPageVersion(() => setGone(true));
     };
     arm();
-    const onShown = () => { if (isNewVersion(base.current, shownVersion())) setGone(true); };
     const onErr = (e: Event) => {
       const m = (e as CustomEvent<string>).detail;
       if (text && m && text.includes(m)) { setGone(false); arm(); }
     };
-    subs.add(onShown);
     window.addEventListener(PRESS_ERROR_EVENT, onErr);
     return () => {
-      turn++;
-      subs.delete(onShown);
+      stopWatching();
       window.removeEventListener(PRESS_ERROR_EVENT, onErr);
     };
   }, [what, text]);
