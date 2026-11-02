@@ -959,3 +959,8 @@ Owner follow-up (Nov 1): **Your excerpts** is never on the dashboard, including 
 - Pauses protect remaining work time. No deadline closure occurs while paused; lifting it moves the dates before closure is checked. A later pause of an already-finished test moves its financial windows without reviving or moving the ended work window.
 - Leave is hidden once work ends; a stale Leave is refused without changing an ended session to Left.
 - Pay, Pay more, automatic call payments, Charge / Let it go, disputes, and ratings keep their existing windows. Normal work completion does not pay or discard a submitted part, and does not replace its review date or close-out date.
+
+## §115 An inline attachment shows once (owner, Nov 1)
+
+- A file placed in a sent answer or its notes stays where its paperclip marker was placed. The attachments list below the piece shows only files that were not placed in that text; with none left, there is no list.
+- The developer’s Needs you, updated work and paid work, the tester’s sent view and the team’s See the work all follow the same rule. Previous answer sets keep their inline files. Both the short paperclip marker and the older attachment marker resolve as before, and inline files still open or download as before.

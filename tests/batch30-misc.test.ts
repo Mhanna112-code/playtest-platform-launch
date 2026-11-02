@@ -109,7 +109,7 @@ describe("batch 30 §35: storage running out tells the admins, inside and outsid
     await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "a.mp4", sizeBytes: 1234, contentType: "video/mp4", uploadedAt: new Date() } });
     await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "b.mp4", sizeBytes: 999, contentType: "video/mp4" } });
     expect((await measureStorage()).uploads - before.uploads).toBe(1234);
-  });
+  }, 120_000); // pg_database_size scans the whole local database, including other tasks’ isolated schemas.
 
   it("the daily job runs it; the admin console's red box", () => {
     expect(src("lib/server/holds.ts")).toContain('(await import("./storageAlerts")).checkStorage(now)');
