@@ -1,3 +1,4 @@
+import { ownChanges } from "@/lib/server/live";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
@@ -215,7 +216,10 @@ describe("batch 29 section 13: the tester's own changes in another tab, the same
     expect(c2.status, JSON.stringify(c2.body)).toBe(200);
     // The Charge, as another tab reads it.
     const later2 = await sact(w.sessionId, "request-time", w.tester.cookie, { startsAt: atHours(60), seenAt: loaded, tab: "C" });
-    expect(texts(later2)).toContain("You charged Nora Lane $10.00 for your written answers in another tab");
+    // Normal deadline closure now forbids new call requests; the own-action line remains recorded.
+    expect(later2.status).toBe(409);
+    expect(later2.body.error.code).toBe("closed");
+    expect((await ownChanges(w.tester.user.id, w.testId, new Date(loaded), "C")).map((e) => e.text)).toContain("You charged Nora Lane $10.00 for your written answers in another tab");
   });
 
   it("a call request in A stops Dispute in B once; with Alerts Off too (batch 35 §61)", async () => {

@@ -836,3 +836,11 @@ When the join page’s existing watcher finds that an application or ask to rejo
 
 - While the team’s pause, a payment or chargeback hold, or the developer’s suspension is still pausing the test, a working tester does not see “This test closed on …” merely because the stored Open until passed. The pause explanation stays; an actual ended or left session still says so.
 - The deadline explanation no longer promises a “late” badge after those badges were removed. Sending and payment eligibility keep their existing rules.
+
+## A test’s work ends at the last tester deadline (owner, Nov 1)
+
+- Open until closes joining. The last tester’s deadline, no earlier than Open until, closes the whole test to new work and call activity. This replaces the old indefinite late-work rule: an earlier tester can still send after their own deadline while another tester has time, but nothing new is sent or requested once the last deadline passes. Such late work still cannot be charged.
+- Normal completion is recorded separately from a developer or team Stop. Working sessions end at the actual deadline, pending call requests close, future booked calls are cancelled, and an ongoing call’s measured time ends at that deadline. Old pages are checked again on the server, including inside the send and booking locks. Pages and the live/daily check use the same closure.
+- Pauses protect remaining work time. No deadline closure occurs while paused; lifting it moves the dates before closure is checked. A later pause of an already-finished test moves its financial windows without reviving or moving the ended work window.
+- Leave is hidden once work ends; a stale Leave is refused without changing an ended session to Left.
+- Pay, Pay more, automatic call payments, Charge / Let it go, disputes, and ratings keep their existing windows. Normal work completion does not pay or discard a submitted part, and does not replace its review date or close-out date.

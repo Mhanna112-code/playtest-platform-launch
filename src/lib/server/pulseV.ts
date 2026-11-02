@@ -50,6 +50,7 @@ export const applyDeclinedLine = (title: string) => `Your application to “${ti
  * the developer's own presses, call requests and calls, profiles, suspensions, ratings, ended sessions and blocks. "" when there's no such test (the caller checks access).
  */
 export async function testV(viewerId: string, testId: string, sessionId = "") {
+  await (await import("./workWindow")).finishWorkIfDue(testId);
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
   if (!t) return "";
   const cons = await db.contract.findMany({ where: { testId }, select: { id: true, status: true, endedAt: true, testerId: true } });

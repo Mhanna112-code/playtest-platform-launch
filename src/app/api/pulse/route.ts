@@ -7,6 +7,7 @@ import { requireUser } from "@/lib/server/session";
 export async function GET(req: Request) {
   return handle(async () => {
     const u = await requireUser(req);
+    await (await import("@/lib/server/workWindow")).closeWorkAfterDeadlines(new Date(), u.id);
     await (await import("@/lib/server/calls")).sweepNobodyJoined(); // (NEWEST+8) minute-accurate while a page is open
     const q = new URL(req.url).searchParams;
     // (Owner, Oct 29, batch 10) Payments: "Pay what you owe" updates live (a declined payment, a chargeback, a tester's Charge during the hold, or a payment from another tab).

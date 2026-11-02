@@ -1,0 +1,1 @@
+ALTER TABLE "Test" ADD COLUMN "workEndedAt" TIMESTAMP(3);

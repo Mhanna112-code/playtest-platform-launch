@@ -286,7 +286,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         {banner}
         <TopPanel
           id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={null}
-          parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status}
+          parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status} workEnded={!!t.workEndedAt}
           terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
           nextRoundId={null} teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}
           joinMode={t.joinMode} deadlineDays={t.deadlineDays} categories={t.categories}
@@ -368,6 +368,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     // (Batch 34 §14) Every stop box under any button on this page: a listing line's See it goes to the Listing panel.
     <SeeItTarget target="#listing">
       <AutoRefresh query={`test=${t.id}`} v={pageV} />
+      {t.workEndedAt && <p className="info" data-work-ended="">This test ended on {fmtDate(t.workEndedAt)}. You can still pay for work already sent and use the remaining rating and dispute windows.</p>}
       <TopPanel
         id={t.id}
         title={t.title}
@@ -380,7 +381,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         keysLeft={keysLeft}
         parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }}
         paused={!!(u.holdStartedAt || t.adminPausedAt)}
-        status={t.status}
+        status={t.status} workEnded={!!t.workEndedAt}
         terms={termsLine({ ...asListing(t), testerDays: t.testerDays })}
         openUntil={t.openUntil ? t.openUntil.toISOString() : null}
         joinClosedLine={t.openUntil && t.openUntil < new Date() ? joiningClosedLine(t.contracts.filter((c) => c.status === "working" && c.dueAt > new Date()).reduce<Date | null>((m, c) => (!m || c.dueAt > m ? c.dueAt : m), null), (d) => d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })) : ""}
@@ -690,7 +691,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         })}
         elsewhere={otherCalls}
       />
-      {t.status !== "stopped" && !restricted && (
+      {!t.workEndedAt && t.status !== "stopped" && !restricted && (
         <InvitePanel
           testId={t.id}
           seenAt={seenAt}

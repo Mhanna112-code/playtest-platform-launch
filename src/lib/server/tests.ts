@@ -690,8 +690,8 @@ export async function devGateIfSeen(testId: string, body: Record<string, unknown
 }
 
 /** Calls ahead are cancelled (no charge) when a tester's work ends. Their offered times open again for others. */
-export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string) {
-  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: new Date() } }, include: { contract: { include: { tester: true } } } });
+export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: string, after = new Date()) {
+  const ahead = await tx.call.findMany({ where: { contractId: { in: contractIds }, status: "booked", startsAt: { gt: after } }, include: { contract: { include: { tester: true } } } });
   for (const c of ahead) {
     await tx.call.update({ where: { id: c.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: note } });
     await tx.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } });
@@ -969,6 +969,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
 export async function ownContract(testerId: string, contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } }, tester: true } });
   if (!c || c.testerId !== testerId) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+  if (await (await import("./workWindow")).finishWorkIfDue(c.testId)) return db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: { include: { developer: true } }, tester: true } });
   return c;
 }
 
@@ -1013,6 +1014,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
  */
 export async function sendWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
+  const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
+  if (ended) throw new HttpError(409, "closed", ended);
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
   await answerTermsFirst(contractId);
   const qs = writtenQuestions(c0);
@@ -1035,6 +1038,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+    await (await import("./workWindow")).assertWorkOpen(tx, t.id);
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
     const now = new Date();

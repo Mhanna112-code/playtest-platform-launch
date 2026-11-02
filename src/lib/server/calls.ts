@@ -124,7 +124,11 @@ export const MEASURING_REFUSAL = "This call is still being measured: you can pay
 
 const roomInclude = { presences: true, contract: { include: { test: { include: { developer: true } } } } } as const;
 type RoomCall = Prisma.CallGetPayload<{ include: typeof roomInclude }>;
-const loadRoomCall = (id: string) => db.call.findUnique({ where: { id }, include: roomInclude });
+const loadRoomCall = async (id: string) => {
+  let call = await db.call.findUnique({ where: { id }, include: roomInclude });
+  if (call && await (await import("./workWindow")).finishWorkIfDue(call.contract.testId)) call = await db.call.findUnique({ where: { id }, include: roomInclude });
+  return call;
+};
 const sideIn = (call: { contract: { testerId: string; test: { developerId: string } } }, userId: string) =>
   call.contract.testerId === userId ? ("tester" as const) : call.contract.test.developerId === userId ? ("developer" as const) : null;
 
@@ -466,4 +470,10 @@ export async function finishMeasuring(now = new Date()) {
     n++;
   }
   return n;
+}
+
+/** Clip a call already in progress to the actual work deadline, even if the next poll is late. */
+export async function endCallsAtWorkDeadline(testId: string, at: Date, now = new Date()) {
+  const calls = await db.call.findMany({ where: { contract: { testId }, status: "booked", startsAt: { lte: at }, measuredAt: null, actualMinutes: null, endedAt: null, cappedAt: null }, include: { presences: true } });
+  for (const call of calls) await endCall(call, "ended", at, now);
 }

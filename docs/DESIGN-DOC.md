@@ -2126,7 +2126,7 @@ Local admin QA uses a throwaway account with both sides and nonempty examples fo
 - After a stop, End early, Leave, a block or a removal, a sent piece's review date stays the later of 7 days after sending and the tester's original deadline: Charge doesn't open 7 days after the work ended (Rules: Test lifecycle; BATCH-29).
 - Charge / Let it go stays for listed written answers and recordings: listed work isn't charged automatically at its review date; only listed calls are (Rules: Money; BATCH-30).
 - The tester's Rate still closes at the test's close-out, not at their own pieces' closing date (Rules: Ratings; BATCH-30).
-- Late sending stays: a tester can still send after their own deadline ("Sent late (deadline was <date>)"), and work isn't closed at the deadline; only Charge changed for late work (Rules: Test lifecycle; BATCH-30).
+- A tester can send after their own deadline only while the test still has a later tester deadline. At the last deadline (no earlier than Open until), the work and call activity end; existing financial and rating windows continue separately (BATCH-35, owner Nov 1).
 
 **Waiting for the owner (tonight's list)**
 
