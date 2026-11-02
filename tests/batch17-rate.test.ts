@@ -227,7 +227,7 @@ describe("section 12: a stop while a page is open", () => {
 });
 
 describe("section 14: Rate stops only for changes about that person", () => {
-  it("a listing edit and another tester joining go straight through; a Pay on their work stops it once", async () => {
+  it("a listing edit stops the tester’s Rate once (§93); another tester joining adds no line", async () => {
     const s = await setup({ recordingCents: "15.00" });
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
@@ -237,7 +237,10 @@ describe("section 14: Rate stops only for changes about that person", () => {
     await settle();
     await act(s.testId, "edit", s.dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: s.testId } })).version, fields: { description: "New words" }, seenAt: seen(), confirmed: true });
     await joined(s.testId, "Ben Carter", "he");
-    expect((await sact(j.sessionId, "rate", j.tester.cookie, { stars: 5, seenAt: old, pageSeenAt: old })).status).toBe(200);
+    const stopped = await sact(j.sessionId, "rate", j.tester.cookie, { stars: 5, seenAt: old, pageSeenAt: old });
+    expect(stopped.body.error?.code).toBe("stop_once");
+    expect(stopped.body.error.changes.map((e: { text: string }) => e.text)).toEqual(["Nora Lane edited the listing"]);
+    expect((await sact(j.sessionId, "rate", j.tester.cookie, { stars: 5, seenAt: old, pageSeenAt: old, confirmed: true, boxAt: stopped.body.error.now })).status).toBe(200);
   });
 
   it("the developer's Pay on their work since the page loaded stops the tester's Rate once", async () => {

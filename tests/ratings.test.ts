@@ -57,11 +57,14 @@ describe("the tester rates the developer", () => {
     await bookCall(testId, dev.cookie, sessionId, tester.cookie, 72);
     const w = await rateWarning(sessionId);
     expect(w).toEqual({ working: true, lines: ["Not sent yet from your contract: recording ($12) — it won't be paid.", "All your upcoming calls will be cancelled."] });
-    // (Batch 17 section 14) Rate stops only for changes about this person's work: a listing edit goes straight through.
+    // (§93) An unseen listing edit stops Rate once before rating finishes their part.
     const pageLoaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     await act(testId, "edit", dev.cookie, { version: (await db.test.findUniqueOrThrow({ where: { id: testId } })).version, fields: { description: "New words" } });
-    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded })).status).toBe(200);
+    const stopped = await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded });
+    expect(stopped.body.error?.code).toBe("stop_once");
+    expect(stopped.body.error.changes.map((e: { text: string }) => e.text)).toEqual(["Nora Lane edited the listing"]);
+    expect((await sact(sessionId, "rate", tester.cookie, { stars: 5, seenAt: pageLoaded, confirmed: true, boxAt: stopped.body.error.now })).status).toBe(200);
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(c).toMatchObject({ status: "left", endKind: "rated" });
     expect(await db.call.count({ where: { contractId: sessionId, status: "booked", startsAt: { gt: new Date() } } })).toBe(0);
