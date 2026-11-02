@@ -259,3 +259,10 @@ describe("batch 35 §105: account-level direct conversations from profiles", () 
     expect(fs.readFileSync("src/components/MessagesBadge.tsx", "utf8")).not.toContain("setInterval");
   });
 });
+
+describe("Messages rows cap the unread number (owner, Nov 2)", () => {
+  it("shows 9+ above 9, like the top bar", () => {
+    const src = fs.readFileSync("src/app/app/messages/page.tsx", "utf8");
+    expect(src).toContain('{r.unread > 9 ? "9+" : r.unread}');
+  });
+});

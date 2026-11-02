@@ -59,7 +59,7 @@ export default async function MessagesPage() {
               </p>
               <p className="truncate text-sm text-slate-400">{r.lastBody ? `${r.mine ? "You" : r.other}: ${r.lastBody}` : "No messages yet."}</p>
             </div>
-            {r.unread > 0 && <span className="rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{r.unread}</span>}
+            {r.unread > 0 && <span className="rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{r.unread > 9 ? "9+" : r.unread}</span>}
           </li>
         ))}
         {rows.length === 0 && <li className="card text-sm text-slate-400">No conversations yet.</li>}
