@@ -816,3 +816,10 @@ Tests: tests/batch35-refusal-flash.test.ts (§95); tests/batch29-refuse.test.ts 
 ## §108 Edit never blocks on an unchanged Open until (owner, Nov 1)
 - On Edit, the Open until date box's minimum is the saved date when that's earlier than tomorrow, so a test whose Open until is under a day away (or past) can
   still save other fields; the server already checks the date only when it changes. Moving it still needs a date from tomorrow on.
+
+## §112 Open until is locked once it has passed (owner, Nov 1)
+- In Edit, once the saved Open until day is before today in the developer's saved zone, changing it is refused: **Open until has passed, so it can't be changed.** The date box is disabled in the app's greyed style and shows that same line as its hint. A date that is still today is not locked just because UTC has moved into tomorrow.
+- An unchanged date still allows other fields to save (§108). Comparing calendar dates also leaves a pause-shifted timestamp intact instead of silently resetting its time to the end of that day. A genuinely changed date on a still-open joining window keeps the existing extension rules and deadline shift.
+- The lock belongs to Edit; automatic pause and outage shifts keep working. No old deadlines are revived by reopening an expired joining window.
+
+Tests: `tests/batch35-open-until-locked.test.ts`, with the older Open until refusal wording updated.

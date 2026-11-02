@@ -16,7 +16,7 @@ import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, minCounter, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -644,6 +644,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // (Owner, Nov 1, batch 35 §108) Edit: an Open until left as it is never blocks saving other fields, even when it's under a day away (or past): the box's minimum
   // is the saved date when that's earlier than tomorrow (the server checks the date only when it changes).
   const savedOpen = edit && base.openUntil ? base.openUntil.slice(0, 10) : "";
+  const openUntilLocked = !!edit && openUntilHasPassed(savedOpen, new Date(), tz);
   const minOpen = edit ? (savedOpen && savedOpen < tomorrow ? savedOpen : tomorrow) : in3;
   // (Batch 16 section 16) Edit: up to 30 days after the test opened (a date already past it stays as it is: it just can't move later).
   const capMax = edit?.capDay ? (base.openUntil && base.openUntil.slice(0, 10) > edit.capDay ? base.openUntil.slice(0, 10) : edit.capDay) : monthOut;
@@ -816,7 +817,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
             <p className="mt-1 text-xs text-slate-500" data-spots-line="">{spotsLine}</p>
           </div>
           <div>
-            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", cls: "max-w-[12rem]", hint: edit?.capDay ? openUntilCapHint(edit.capDay, base.openUntil) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) }, below: showOn("openUntil") ? redLine(ouLine) : null /* (batch 35 §30) once, at the box */ })}
+            {text("openUntil", "Open until (last day to join)", { req: true, type: "date", disabled: openUntilLocked, cls: "max-w-[12rem] disabled:cursor-not-allowed disabled:opacity-50", hint: openUntilLocked ? OPEN_UNTIL_PASSED : edit?.capDay ? openUntilCapHint(edit.capDay, base.openUntil) : edit ? "only later, up to 30 days from today" : "3 to 30 days from today", attrs: { min: minOpen, max: capMax, "data-msg": edit ? "Open until must be a date in the future." : OPEN_UNTIL_RANGE, "data-max-msg": edit?.capDay ? openUntilCapLine(edit.capDay) : OPEN_UNTIL_MAX_LINE, "data-required-msg": OPEN_UNTIL_RANGE, ...(showOn("openUntil") && ouLine ? { "data-red-msg": ouLine } : {}) }, below: showOn("openUntil") ? redLine(ouLine) : null /* (batch 35 §30) once, at the box */ })}
             {/* (Owner, Oct 28, batch 19 section 8) Live: testers join until this date, each gets N days from joining (Edit: their days now + the extension, batch 16
                 section 16; Post: today to this date), so the last work can arrive Open until + N; then the 7 days to pay. */}
             {f.openUntil && /^\d{4}-\d{2}-\d{2}$/.test(f.openUntil) && (edit?.testerDays != null

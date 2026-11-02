@@ -225,6 +225,6 @@ describe("Open until", () => {
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - DAY) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - DAY) } }); // (batch 15 section 18: the tester's own deadline)
     v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     const r = await act(testId, "edit", dev.cookie, { version: v, fields: { openUntil: new Date(Date.now() + 9 * DAY).toISOString().slice(0, 10) } });
-    expect(r.body.error.message).toMatch(/^Joining closed on .+ \(Open until\), so it can't be extended\.$/);
+    expect(r.body.error.message).toBe("Open until has passed, so it can't be changed.");
   });
 });
