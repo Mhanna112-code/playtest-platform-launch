@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { money, zoneOpt } from "@/lib/format";
 import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat } from "@/lib/rules";
 import { HttpError } from "./http";
-import { PAYMENTS_PROBLEM, chargePlatform, getStripe, stripeOn, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 
@@ -37,16 +37,19 @@ export async function owedLocks(devId: string) {
  * (Rule 4) Stop tracking a bank check only once Stripe cancelled it. "succeeded": it had already gone through (record it as paid; never charge the item again).
  * Throws when Stripe's answer is unclear: the check stays tracked and is tried again later.
  */
-export async function dropCheck(pi: string | null | undefined): Promise<"cancelled" | "succeeded"> {
+export async function dropCheck(pi: string | null | undefined): Promise<"cancelled" | "succeeded" | "missing"> {
   if (!pi || !stripeOn()) return "cancelled";
   const stripe = getStripe();
   try {
     const r = await stripe.paymentIntents.cancel(pi);
     return r?.status === "succeeded" ? "succeeded" : "cancelled";
   } catch (e) {
+    // (§130) A check Stripe doesn't know (made in test mode): nothing was charged on it, so it's as good as cancelled (never paid). "missing" lets a clock tell
+    // it from a check that ran out (never a decline).
+    if (isMissing(e)) return "missing";
     const now = await Promise.resolve()
       .then(() => stripe.paymentIntents.retrieve(pi))
-      .catch(() => null);
+      .catch((x) => (isMissing(x) ? { status: "canceled" } : null));
     if (now?.status === "succeeded") return "succeeded";
     if (now?.status === "canceled") return "cancelled";
     console.error("[stripe] cancel check:", (e as Error).message);
@@ -187,13 +190,15 @@ async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payme
     r = await chargePlatform(u, one.amountCents, serverKey("owedall", one.id), forCharges(one) ? "Playtest: charges made while you were away" : "Playtest: what you owe", mode);
   } catch (e) {
     const why = (await import("./holds")).owedWhy(e);
+    // (§130) Not a try on the card: its customer or card is unknown to Stripe (cleared: "Add a card"), or payments are switched off. No decline, no retry counted.
+    const notTried = e instanceof HttpError && (e.code === "no_card" || e.code === "payments_off");
     // Stripe's answer was lost (it may have been charged): what it covers stays locked until the same charge is asked again (resumeStaleOwed), never charged twice.
-    if (e instanceof HttpError && (e.code === "payment_unknown" || e.code === "idempotency")) return { result: "failed" as const, why };
+    if (e instanceof HttpError && (e.code === "payment_unknown" || e.code === "idempotency")) return { result: "failed" as const, why, notTried };
     const freed = await releaseOwed(one.id);
     // (§122) Waiting charges: only a real decline makes each a debt; any other problem leaves them waiting.
     // (§125) Pay what you owe's one payment (debts and charges waiting for the lift): its waiting charges just keep waiting.
     if (forCharges(one) && freed?.charges.length && e instanceof HttpError && e.code === "card_failed") await chargesDeclined(one.developerId, freed.charges);
-    return { result: "failed" as const, why };
+    return { result: "failed" as const, why, notTried };
   }
   const confirm = await import("./confirm");
   if (r.status === "requires_action") {

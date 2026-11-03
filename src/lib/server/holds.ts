@@ -468,7 +468,8 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
 }
 
 /** (Batch 15 section 41, L4) Why one owed payment failed, in plain words (never Stripe's raw text). */
-export const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? "Your card was declined." : e instanceof HttpError && e.code === "payments_problem" ? PAYMENTS_PROBLEM : "It didn't go through. Try again shortly.");
+// (§130) A card Stripe doesn't know ("no_card": cleared, add a card) and payments switched off ("payments_off") say so in their own words; neither is a decline.
+export const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? "Your card was declined." : e instanceof HttpError && (e.code === "payments_problem" || e.code === "no_card" || e.code === "payments_off") ? e.code === "payments_problem" ? PAYMENTS_PROBLEM : e.message : "It didn't go through. Try again shortly.");
 
 /**
  * (Owner, Oct 29, batch 11 section 4) While a payment hold lasts, what is owed is retried on the saved card: once a day, at most HOLD_RETRY_MAX tries a hold ("daily"),
@@ -494,6 +495,8 @@ export async function retryOwed(devId: string, now = new Date(), why: "daily" | 
   if (!list.length) return null;
   await db.user.update({ where: { id: devId }, data: { holdRetryAt: now, ...(why === "daily" ? { holdRetries: { increment: 1 } } : {}) } });
   const r = await once.chargeOwedTotal(u, list, "away");
+  // (§130) Not a try on the card (it's unknown to Stripe, or payments are switched off): the try isn't counted.
+  if (r.result === "failed" && r.notTried) await db.user.update({ where: { id: devId }, data: { holdRetryAt: u.holdRetryAt, ...(why === "daily" ? { holdRetries: { decrement: 1 } } : {}) } });
   const cents = r.result === "paid" ? r.cents : 0;
   if (r.result === "paid" && cents > 0) await bell(devId, retriedLine(cents, r.names), "/app/payments", undefined, { side: "developer", payment: true, group: "payhold" });
   const lifted = cents > 0 ? await liftHoldIfClear(devId) : false;
@@ -1268,7 +1271,8 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
       // (Batch 15 section 41, M1) Not the card: nothing was charged, no hold. The Charge can be pressed again.
       await db.payment.delete({ where: { id: row.id } });
       await db.review.delete({ where: { id: review.id } });
-      throw e instanceof HttpError ? e : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
+      // (§130) The developer's card unknown to Stripe (cleared): the tester reads the plain problem line, never the developer's "Add a card".
+      throw e instanceof HttpError && e.code !== "no_card" ? e : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
     }
     status = "failed";
     // (Owner, Oct 27) A declined Charge starts the payment hold at once (the tester reads only "delayed").
@@ -1343,7 +1347,8 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     if (!(e instanceof HttpError && e.code === "card_failed")) {
       await db.payment.delete({ where: { id: row.id } });
       await db.review.delete({ where: { id: review.id } });
-      throw e instanceof HttpError ? e : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
+      // (§130) The developer's card unknown to Stripe (cleared): the tester reads the plain problem line, never the developer's "Add a card".
+      throw e instanceof HttpError && e.code !== "no_card" ? e : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
     }
     status = "failed";
     const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });

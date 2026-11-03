@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { HttpError } from "./http";
 import { linesFor, notify } from "./notify";
 import { T } from "@/lib/tz";
-import { PAYMENTS_PROBLEM, bankReturnUrl, chargePlatform, checkUrlOf, getStripe, isCardError, piWaits, stripeOn, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, bankReturnUrl, chargePlatform, checkUrlOf, forgetCard, getStripe, isCardError, isMissing, piWaits, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
@@ -104,11 +104,13 @@ export async function invoicePaymentIntent(o: InvoiceLike): Promise<string | nul
 }
 
 let productId: string | null = null;
+/** (§130) The AppState key of the subscription's Stripe product (made once; the live switch forgets a test-mode one). */
+export const SUB_PRODUCT_KEY = "stripe-sub-product";
 async function stripeProduct(stripe: Stripe) {
-  productId = productId ?? (await appState("stripe-sub-product"));
+  productId = productId ?? (await appState(SUB_PRODUCT_KEY));
   if (!productId) {
     productId = (await stripe.products.create({ name: "Playtest developer subscription" })).id;
-    await setState("stripe-sub-product", productId);
+    await setState(SUB_PRODUCT_KEY, productId);
   }
   return productId;
 }
@@ -167,11 +169,22 @@ export async function subscribe(dev: Dev, now = new Date()) {
       // (Batch 15 section 41, M1) Only the card is a decline; anything else says payments have a problem (nothing charged).
       if (e instanceof HttpError) throw e;
       console.error("[stripe] subscribe failed:", (e as Error).message);
+      // (§130) An id Stripe doesn't know (made in test mode): the stored product is forgotten (made again next time), else the card is cleared ("Add a card").
+      if (isMissing(e)) {
+        if (/product|prod_/i.test(`${(e as { param?: string }).param ?? ""} ${(e as Error).message}`)) {
+          productId = null;
+          await db.appState.deleteMany({ where: { key: SUB_PRODUCT_KEY } });
+          throw new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
+        }
+        await forgetCard(u.id);
+        throw new HttpError(409, "no_card", "Add a card first, then subscribe.");
+      }
       throw (e as Error).message === "incomplete" || isCardError(e) ? new HttpError(402, "card_failed", "Your card was declined, so you're not subscribed. Update your card and try again.") : new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
     }
   } else if (startsCharging <= now) {
     // (Section 4) A declined subscription payment never starts a hold. (Batch 11) The developer's own press: on-session, so the bank may ask them to confirm.
     const r = await chargePlatform(u, SUBSCRIPTION_CENTS, subKey, `Playtest subscription (${SUBSCRIPTION_PRICE})`, "press").catch((e) => {
+      if (e instanceof HttpError && e.code === "no_card") throw new HttpError(409, "no_card", "Add a card first, then subscribe."); // (§130)
       if (e instanceof HttpError && e.code !== "card_failed") throw e;
       return null;
     });
@@ -217,7 +230,13 @@ export async function cancelSubscription(dev: Dev, now = new Date()) {
   // (Batch 16 section 27) A repeat (cancelled in another tab or device) is a plain refusal.
   if (subscribed(u, now) && u.subscriptionCanceling) throw new HttpError(409, "already", "Your subscription is already cancelled.");
   if (!subscribed(u, now)) throw new HttpError(409, "none", "There's no subscription to cancel.");
-  if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: true });
+  if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") {
+    const gone = await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: true }).then(() => false, (e) => { if (isMissing(e)) return true; throw e; });
+    if (gone) {
+      await subscriptionGone(u.id, now);
+      return { cancelled: true, until: null };
+    }
+  }
   await db.user.update({ where: { id: u.id }, data: { subscriptionCanceling: true } });
   if (u.subscriptionRenewsAt) await tell(u, `Subscription cancelled: you can use the perks until ${T(u.subscriptionRenewsAt, "dateYear")}`);
   return { cancelled: true, until: u.subscriptionRenewsAt };
@@ -228,7 +247,13 @@ export async function keepSubscription(dev: Dev, now = new Date()) {
   const u = await userOf(dev.id);
   if (subscribed(u, now) && !u.subscriptionCanceling) throw new HttpError(409, "already", "You're already subscribed."); // (batch 16 section 27) kept elsewhere
   if (!u.subscriptionCanceling || !subscribed(u, now)) throw new HttpError(409, "none", "There's nothing to keep.");
-  if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: false });
+  if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") {
+    const gone = await getStripe().subscriptions.update(u.subscriptionId, { cancel_at_period_end: false }).then(() => false, (e) => { if (isMissing(e)) return true; throw e; });
+    if (gone) {
+      await subscriptionGone(u.id, now);
+      throw new HttpError(409, "none", SUBSCRIPTION_GONE);
+    }
+  }
   await db.user.update({ where: { id: u.id }, data: { subscriptionCanceling: false } });
   return { kept: true };
 }
@@ -241,6 +266,19 @@ export async function endSubscription(devId: string, reason: "cancelled" | "laps
     await db.$transaction((tx) => recordEvent(tx, t.id, "subscription", SUBSCRIPTION_ENDED, false));
   }
   return true;
+}
+
+/** (§130) "Your subscription has ended." (Keep my subscription on one Stripe doesn't know.) */
+export const SUBSCRIPTION_GONE = "Your subscription has ended.";
+/**
+ * (Owner, Nov 2, batch 35 §130) The Stripe subscription is unknown to Stripe (made in test mode): it ended, exactly as when Stripe deletes one
+ * (customer.subscription.deleted: past due lapses, otherwise it ends as cancelled). Nothing is charged; the stale id is cleared.
+ */
+export async function subscriptionGone(devId: string, now = new Date()) {
+  const u = await userOf(devId);
+  if (u.subscriptionStatus === "past_due") await lapse(devId, now);
+  else await endSubscription(devId, "cancelled", now);
+  await db.user.update({ where: { id: devId }, data: { subscriptionId: null } });
 }
 
 /** (Section 5) Deleting the account (or the team deleting it) ends the subscription at once, with no refund. */
@@ -256,7 +294,10 @@ export { DELETE_ENDS_SUBSCRIPTION };
 export async function pauseBilling(devId: string, now = new Date()) {
   const u = await userOf(devId);
   if (!subscribed(u, now) || u.subscriptionPausedAt) return false;
-  if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") await getStripe().subscriptions.update(u.subscriptionId, { pause_collection: { behavior: "void" } }).catch((e) => console.error("[stripe] pause:", e.message));
+  if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") {
+    const gone = await getStripe().subscriptions.update(u.subscriptionId, { pause_collection: { behavior: "void" } }).then(() => false, (e) => (console.error("[stripe] pause:", e.message), isMissing(e)));
+    if (gone) return subscriptionGone(devId, now).then(() => false); // (§130)
+  }
   await db.user.update({ where: { id: devId }, data: { subscriptionPausedAt: now } });
   return true;
 }
@@ -269,7 +310,12 @@ export async function resumeBilling(devId: string, now = new Date()) {
   const later = (d: Date | null) => (d ? new Date(d.getTime() + gap) : d);
   const renews = later(u.subscriptionRenewsAt);
   if (billingOn() && u.subscriptionId && u.subscriptionId !== "manual") {
-    await getStripe().subscriptions.update(u.subscriptionId, { pause_collection: null, ...(renews ? { trial_end: Math.floor(renews.getTime() / 1000) } : {}), proration_behavior: "none" }).catch((e) => console.error("[stripe] resume:", e.message));
+    const gone = await getStripe().subscriptions.update(u.subscriptionId, { pause_collection: null, ...(renews ? { trial_end: Math.floor(renews.getTime() / 1000) } : {}), proration_behavior: "none" }).then(() => false, (e) => (console.error("[stripe] resume:", e.message), isMissing(e)));
+    if (gone) {
+      await db.user.update({ where: { id: devId }, data: { subscriptionPausedAt: null } });
+      await subscriptionGone(devId, now); // (§130)
+      return true;
+    }
   }
   await db.user.update({ where: { id: devId }, data: { subscriptionPausedAt: null, subscriptionRenewsAt: renews, subscriptionAnchorAt: later(u.subscriptionAnchorAt), subscriptionPastDueAt: later(u.subscriptionPastDueAt) } });
   return true;

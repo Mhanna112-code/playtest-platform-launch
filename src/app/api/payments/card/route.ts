@@ -1,6 +1,6 @@
 import { appUrl } from "@/lib/server/auth";
 import { requireUser } from "@/lib/server/session";
-import { cardSetupUrl, stripeOn } from "@/lib/server/stripe";
+import { cardSetupUrl, isPaymentsOff, paymentsOff, stripeOn } from "@/lib/server/stripe";
 import { sameOriginForm } from "@/lib/server/http";
 import { formGate } from "@/lib/server/accountChanges";
 import { cardAttempt } from "@/lib/server/cardLimits";
@@ -21,11 +21,14 @@ export async function POST(req: Request) {
     // (Owner, Oct 28, batch 16 section 27) Changed in another tab or device since the page opened: back to Payments with the box under this button.
     const back = await formGate(u.id, await req.formData().catch(() => new FormData()), "card", base);
     if (back) return Response.redirect(back, 303);
+    // (§130) Live keys while payments are switched off: its own line, and not a card attempt.
+    if (paymentsOff()) return Response.redirect(`${base}/app/payments?error=paused#card`, 303);
     // (Owner, Nov 2, batch 35 §127) Starting a card save is a card attempt (5 per account, 15 per network a day): over it, back to Payments with the line under this button.
     await cardAttempt(u.id, clientIp(req));
     return Response.redirect(await cardSetupUrl(u, base), 303);
   } catch (e) {
     if (e instanceof HttpError && e.status === 429) return Response.redirect(`${base}/app/payments?error=card_limit#card`, 303);
+    if (isPaymentsOff(e)) return Response.redirect(`${base}/app/payments?error=paused#card`, 303);
     console.error("[payments] card setup:", (e as Error).message);
     return Response.redirect(`${base}/app/payments?error=card`, 303);
   }

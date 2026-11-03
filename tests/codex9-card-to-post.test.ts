@@ -25,7 +25,8 @@ describe("Batch 34 §6: a card before posting, expiry warnings, Get started", ()
     expect((await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })).then(json)).status).toBe(200);
   });
 
-  it("treats Stripe resource_missing as the usual declined-card hold with the amount owed", async () => {
+  // (Owner, Nov 2, batch 35 §130, replacing the earlier rule) A card Stripe doesn't know (an id from the other mode) is "no card saved", never a decline.
+  it("treats Stripe resource_missing as no card saved: cleared, nothing owed, no hold (§130)", async () => {
     const { POST: reviewPOST } = await import("@/app/api/review/route");
     const { joined, sact, seen } = await import("./fixtures");
     const { dev, testId } = await setup();
@@ -36,9 +37,10 @@ describe("Batch 34 §6: a card before posting, expiry warnings, Get started", ()
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: `cus_${randomUUID()}`, stripePaymentMethodId: "pm_gone" } });
     setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("No such payment_method: pm_gone"), { type: "StripeInvalidRequestError", code: "resource_missing" }); } } } as unknown as Stripe);
     const result = await reviewPOST(req("/api/review", { cookie: dev.cookie, body: { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, payKey: randomUUID(), seenAt: seen() } })).then(json);
-    expect(result.status).toBe(402);
-    expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ status: "failed", amountCents: 1000, failure: "No card is saved on this account." });
-    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    expect(result.status).toBe(409);
+    expect(result.body.error).toMatchObject({ code: "no_card", message: "Add a card in Payments first, then press Pay again." });
+    expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } })).toMatchObject({ status: "failed", amountCents: 1000, owedUntil: null });
+    expect(await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).toMatchObject({ holdStartedAt: null, stripeCustomerId: null, stripePaymentMethodId: null });
   });
 
   it("sends the 30-day, 7-day and expiry-day lines once each and refreshes expiry from Stripe", async () => {

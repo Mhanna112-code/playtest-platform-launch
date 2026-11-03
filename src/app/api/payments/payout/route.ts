@@ -1,6 +1,6 @@
 import { appUrl } from "@/lib/server/auth";
 import { requireUser } from "@/lib/server/session";
-import { payoutSetupUrl, stripeOn } from "@/lib/server/stripe";
+import { isPaymentsOff, payoutSetupUrl, stripeOn } from "@/lib/server/stripe";
 import { confirmSkipped } from "@/lib/server/users";
 import { sameOriginForm } from "@/lib/server/http";
 import { formGate } from "@/lib/server/accountChanges";
@@ -23,6 +23,7 @@ export async function POST(req: Request) {
     if (!u.emailVerifiedAt && !confirmSkipped()) return Response.redirect(`${base}/app/payments?error=confirm`, 303);
     return Response.redirect(await payoutSetupUrl(u, base), 303);
   } catch (e) {
+    if (isPaymentsOff(e)) return Response.redirect(`${base}/app/payments?error=paused#payout`, 303); // (§130)
     console.error("[payments] payout setup:", (e as Error).message);
     return Response.redirect(`${base}/app/payments?error=payout`, 303);
   }
