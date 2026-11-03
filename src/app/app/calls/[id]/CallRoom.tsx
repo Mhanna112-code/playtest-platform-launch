@@ -73,9 +73,11 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
       void send("state", { connected: now });
     };
     let pc: RTCPeerConnection | null = null;
+    // (Batch 35 §135) The page's ICE servers until the room's join answers with them again (the relay's short-lived credentials, fresh for a rejoin).
+    let ice = iceServers;
     /** A fresh connection carrying this browser's camera and microphone (and the shared screen): at the start, and whenever the other person comes (back) into the room. */
     const connect = () => {
-      const next = new RTCPeerConnection({ iceServers, ...(relayOnly ? { iceTransportPolicy: "relay" as const } : {}) });
+      const next = new RTCPeerConnection({ iceServers: ice, ...(relayOnly ? { iceTransportPolicy: "relay" as const } : {}) });
       pc = next;
       pcRef.current = next;
       screenSender.current = null;
@@ -130,7 +132,9 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
 
     (async () => {
       // Coming into the room clears the old connection messages and asks the other browser (if it's there) for a fresh connection with this one.
-      await post(callId, { kind: "join" }).catch(() => null);
+      // (Batch 35 §135) Its answer carries the ICE servers to connect with (on a Rejoin, the relay's credentials again).
+      const joined = await post(callId, { kind: "join" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+      if (Array.isArray(joined?.iceServers) && joined.iceServers.length) ice = joined.iceServers;
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true }).catch(() => navigator.mediaDevices.getUserMedia({ audio: true }));
         if (stopped) return stream.getTracks().forEach((t) => t.stop());

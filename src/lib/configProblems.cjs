@@ -6,10 +6,22 @@
 
 const DAY = 86_400_000;
 const R2_KEYS = ["R2_ACCOUNT_ID", "R2_ACCESS_KEY_ID", "R2_SECRET_ACCESS_KEY", "R2_BUCKET"];
+/** (Batch 35 §135) A Cloudflare Realtime TURN key: its ID and its API token, both needed. */
+const CF_TURN_KEYS = ["CLOUDFLARE_TURN_KEY_ID", "CLOUDFLARE_TURN_API_TOKEN"];
 
 /** Is this the live site? On Vercel its own VERCEL_ENV says (a preview build isn't); elsewhere NODE_ENV. */
 function isProduction(env) {
   return env.VERCEL_ENV ? env.VERCEL_ENV === "production" : env.NODE_ENV === "production";
+}
+
+/**
+ * (Batch 35 §135) Whether the call relay is set up: a Cloudflare TURN key (both settings) or a fixed TURN relay (TURN_URL).
+ * @param {Record<string, string | undefined>} env
+ * @returns {boolean}
+ */
+function turnRelaySetUp(env) {
+  const v = (k) => (env[k] ?? "").trim();
+  return CF_TURN_KEYS.every((k) => v(k)) || !!v("TURN_URL");
 }
 
 /**
@@ -42,6 +54,9 @@ function configProblems(env, now = new Date()) {
   const r2 = R2_KEYS.filter((k) => v(k));
   if (r2.length > 0 && r2.length < R2_KEYS.length)
     add(`Only some R2 settings are set (missing ${R2_KEYS.filter((k) => !v(k)).join(", ")}): set all four, or uploads go to the server's own disk.`, true);
+  // (Batch 35 §135) Only half of the Cloudflare TURN key: the room can't ask Cloudflare for credentials.
+  const cfTurn = CF_TURN_KEYS.filter((k) => v(k));
+  if (cfTurn.length === 1) add(`${cfTurn[0]} is set without ${CF_TURN_KEYS.find((k) => k !== cfTurn[0])}: set both (from the same Cloudflare TURN key), or calls don't use the Cloudflare relay.`);
   if (prod) {
     if (!v("CRON_SECRET")) add("CRON_SECRET is missing: the daily job can't run (reminders, Charge, retries).");
     if (!v("ADMIN_EMAILS")) add("ADMIN_EMAILS is missing: nobody can open the admin console.");
@@ -52,7 +67,9 @@ function configProblems(env, now = new Date()) {
     if (v("ALLOW_DEV_OUTBOX") === "1") add("ALLOW_DEV_OUTBOX=1 on the live site: /dev/outbox would show reset links. Remove it.", true);
     if (v("STRIPE_FAKE") === "1") add("STRIPE_FAKE=1 on the live site: remove it.", true);
     // (Owner, Nov 2) Calls are browser to browser: without a TURN relay they can't connect on some strict networks (some offices, mobile carriers, VPNs).
-    if (!v("TURN_URL")) add("TURN_URL is missing: calls can't connect on some strict networks (some offices, mobile carriers, VPNs). Set TURN_URL, TURN_USERNAME and TURN_CREDENTIAL from a TURN provider.");
+    // (Batch 35 §135) Either a Cloudflare TURN key or a fixed TURN_URL relay sets it up.
+    if (!turnRelaySetUp(env))
+      add("No TURN relay is set up: calls can't connect on some strict networks (some offices, mobile carriers, VPNs). Set CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN (a Cloudflare Realtime TURN key), or TURN_URL, TURN_USERNAME and TURN_CREDENTIAL from another TURN provider.");
     // (Nov 2) Testing-only settings left on the live site: each is ignored there, but shouldn't be set.
     for (const k of ["SKIP_EMAIL_CONFIRM", "ANSWER_MIN_CHARS", "LISTING_MIN_CHARS", "CALL_MIN_AHEAD_MINUTES", "DISPUTE_WAIT_MS", "UPLOAD_DIR"]) if (v(k)) add(`${k} is a testing setting: remove it from the live site.`);
     if (placeholder(v("ADMIN_EMAILS"))) add(`ADMIN_EMAILS still has a placeholder ("${v("ADMIN_EMAILS")}"): put the real admins' emails.`, true);
@@ -69,4 +86,4 @@ function placeholder(s) {
 }
 const weakKey = (s) => s.length < 24 || /change-?me|placeholder|secret$|^test/i.test(s);
 
-module.exports = { configProblems, isProduction };
+module.exports = { configProblems, isProduction, turnRelaySetUp };
