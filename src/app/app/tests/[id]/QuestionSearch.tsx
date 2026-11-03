@@ -2,6 +2,7 @@
 import { useRef, useState, type ReactNode } from "react";
 import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL } from "@/components/ScrollList";
+import { FIND_SEARCH_MAX } from "@/lib/findSearch";
 
 /** (§152) Whether a question matches what was typed: anywhere in its text, any case ("STUCK" finds "Where did you get stuck?"); an empty search shows all. */
 export const questionMatches = (title: string, query: string) => !query.trim() || title.toLowerCase().includes(query.trim().toLowerCase());
@@ -21,7 +22,7 @@ export function QuestionSearch({ testId, items }: { testId: string; items: { key
   return (
     <div className="space-y-2" data-by-question-list="">
       <div className="flex flex-wrap items-center gap-2">
-        <input type="search" className="input min-w-[14rem] flex-1" placeholder="Search questions" aria-label="Search questions" value={query} onChange={(e) => setQuery(e.target.value)} data-question-search="" />
+        <input type="search" className="input min-w-[14rem] flex-1" placeholder="Search questions" aria-label="Search questions" maxLength={FIND_SEARCH_MAX} value={query} onChange={(e) => setQuery(e.target.value)} data-question-search="" />
         <button type="button" className="btn-ghost text-xs" onClick={() => all(true)}>Open all</button>
         <button type="button" className="btn-ghost text-xs" onClick={() => all(false)}>Close all</button>
       </div>
