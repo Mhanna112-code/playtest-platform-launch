@@ -184,12 +184,10 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
 });
 
 describe("batch 10 item 3: long written answers scroll on the developer's side", () => {
-  it("one piece's answers sit in a scroll box about 16 lines tall; the Pay box stays outside it", () => {
-    const box = src("components/AnswersBox.tsx");
-    expect(box).toContain("max-h-[20rem]"); // 16 lines of text-sm (1.25rem each)
-    expect(box).toContain("overflow-y-auto");
+  // (Batch 35 §139) The 16-line box became a small panel that drags taller or shorter (tests/batch35-sent-panels.test.ts); the Pay box still sits outside it.
+  it("one piece's answers sit in their own scrolling panel; the Pay box stays outside it", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    const open = page.indexOf("<AnswersBox>"), close = page.indexOf("</AnswersBox>");
+    const open = page.indexOf("<ResizeBox id={`needs-${x.s!.id}`}"), close = page.indexOf("</ResizeBox>", open);
     expect(open).toBeGreaterThan(0);
     // The question labels are inside; the Pay box comes after the box closes.
     expect(page.slice(open, close)).toContain("<SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} attachments="); // (batch 13) each answer under its own question

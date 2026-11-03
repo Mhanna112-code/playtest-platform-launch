@@ -1369,3 +1369,23 @@ Calls are browser to browser (WebRTC): on a strict network (some offices, mobile
 - **Deleting an account clears both bios** (the Privacy page: "Deleting an account removes your profile and content"); the profile then reads "No bio yet." Before, the tester's bio stayed.
 - **Live:** an open developer profile redraws when their bio changes (`publicProfileV` includes `devBio`; the tester's was already in its profile row).
 - **Tests:** `tests/batch35-signup-bio.test.ts` covers the email sign-up refused without a role (and with every part missing at once), the page's choice red for its line; each role's sides, both landing on the developer side (its Get started) and the tester side's gate after the switch (Get started, Join refused with "Save your tester profile first…"); Google's step refused without a role or a name, its page with the choice and the Name box, then made with its sides (both on the developer side); an older account with no side sent to Profile, where the side is required, and the admin's own setup; a developer adding the tester side (name and pronoun shown, its bio and fields empty, a pronoun changed there shown on the developer side, the two bios apart) and a tester adding the developer side; both bios cut at 2,000 with "x / 2,000"; the developer-side Save without the tester's devices, and another tab's changes stopping only their own side; each profile showing only its side's bio (testers, developers and admins), the live redraw and "No bio yet."; deletion clearing both; the migration (the column empty for everyone, nothing copied, the tester's bio where it was). The suites that signed up without a role now give one and a name (auth, batch15-signin, sides, batch20, batch26: Google's step refusals list the role and name lines first).
+
+
+## §139 Sent work in small panels, with folds for the body and Pay (owner, Nov 3)
+
+Replaces batch 10's 16-line scroll box (`AnswersBox`, `max-h-[20rem]`) for the developer's view of sent work on the test page. (The admin's "See the work" keeps it.)
+
+- **Where:** a piece in Needs you (written answers, a recording), an update row in Needs you (sent after the piece was paid), and a paid part on the tester's row (Testers joined).
+- **Two folds under each part, each with its own toggle, both open at first:**
+  - the body ("Their written answers" / "Their recording"): the answers, notes, files and recordings, in a panel;
+  - the Pay box ("Pay" in Needs you, "Pay more" on an update row and on a paid part; a call's Pay box in Needs you and its Pay more under the tester's Calls fold too).
+  - Opened or closed, a fold stays that way while the page redraws (live refresh), and in the tab's sessionStorage (`fold:<id>`, wrapped in try/catch).
+  - A link straight to a part (a bell or email link to `#piece-…`, `#update-…`, `#part-…`) opens the folds it lands in and the folds under it (`jumpTo` in `src/lib/markJump.ts`).
+- **The panel** (`ResizeBox` in `src/components/Panel.tsx`):
+  - starts small: at most `min(12rem, 40vh)` (6–8 lines, never more than 40% of a phone's screen), so the Pay / Pay more box under a long written answer is in view without dragging; a shorter piece is only as tall as it is;
+  - a grip at its bottom-right corner drags it taller or shorter: at least 5rem (about 3 lines), at most 60% of the screen; the grip is also a keyboard control (arrow keys, Home / End);
+  - the content scrolls inside at any height;
+  - a dragged height stays while the page redraws, and in the tab's sessionStorage (`panel-h:<id>`).
+  - A custom grip rather than CSS `resize`, so the panel can always be dragged shorter than where it starts and stays within its limits.
+- **Tests:** `tests/batch35-sent-panels.test.ts` (the small default, dragging below it, the limits, the kept height and fold state with storage blocked too, both folds in each place with the body in the panel and the Pay box after it, a link opening the folds). `batch10`'s scroll-box check now looks for the panel.
+- **Pictures:** `docs/media/sent-locked/panel-*` (README there).
