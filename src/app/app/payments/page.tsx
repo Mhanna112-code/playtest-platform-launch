@@ -32,6 +32,7 @@ import { AccountRefresh } from "@/components/AccountRefresh";
 import { accountChangesSince } from "@/lib/server/accountChanges";
 import { TOO_MANY_CARD_ATTEMPTS } from "@/lib/server/cardLimits";
 import { AccountFormButton } from "./AccountFormButton";
+import { refusalLine } from "@/lib/pressLabels";
 
 export const metadata = { title: "Payments · Playtest" };
 export const dynamic = "force-dynamic";
@@ -106,6 +107,12 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const since = q.since ? new Date(q.since) : null;
   const stopLines = (q.stop === "card" || q.stop === "payout") && since && !isNaN(since.getTime()) ? await accountChangesSince(u.id, since, "payments", q.tab ?? "") : [];
   const stopFor = (press: string) => (q.stop === press && stopLines.length ? { changes: stopLines.map((c) => ({ ...c, at: c.at.toISOString() })), at: seenAt } : null);
+  // (Owner, Nov 3, §156) A refused card or payout press names its button, like every refusal: "Your Add a card didn't go through: We couldn't save the card. …".
+  // The card belongs to the developer side, the payout setup to the tester side: "paused" (§130) is the press of the side shown.
+  const cardPress = u.stripePaymentMethodId ? "Change card" : "Add a card";
+  const payoutPress = u.payoutProblemAt ? "Update payout details" : u.stripeAccountId ? "Continue setup" : "Connect a payout account";
+  const refusedPress = (code: string) => (code === "verify" ? "Verify this card" : code === "payout" || code === "confirm" || (code === "paused" && tester) ? payoutPress : cardPress);
+  const refused = (code: string) => refusalLine(refusedPress(code), MESSAGES[code] ?? "");
   // The full app's billing / payouts pages: one column of cards, each with its icon heading; lists as rows.
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -134,7 +141,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {/* (Owner, Nov 3, §147) Confirm all above the list (its state first: a Confirm all check that ran out lets go before the list is read). */}
       {dev && await (async () => { const all = await confirmAllState(u.id); return <ConfirmList items={await confirmItems(u.id)} all={all} />; })()}
-      {q.error && q.error !== "off" && q.error !== "card_limit" && <p className="err">{MESSAGES[q.error]}</p>}
+      {q.error && q.error !== "off" && q.error !== "card_limit" && MESSAGES[q.error] && <p className="err" data-refusal="">{refused(q.error)}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
       {q.saved === "payout" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Your payout account is connected.</p>}
@@ -158,7 +165,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             {/* (Batch 15 section 41, L5) Stripe objects are made only on a POST. */}
             {on && <AccountFormButton action="/api/payments/card" seenAt={seenAt} press={u.stripePaymentMethodId ? "Change card" : "Add a card"} stop={stopFor("card")}><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</AccountFormButton>}
             {/* (Owner, Nov 2, batch 35 §127) Too many card attempts: the refusal under the button that was pressed. */}
-            {q.error === "card_limit" && <p className="err" data-card-limit="">{MESSAGES.card_limit}</p>}
+            {q.error === "card_limit" && <p className="err" data-card-limit="">{refused("card_limit")}</p>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Your full card number and security code are entered on Stripe&apos;s page and never reach this site.</p>
           </section>
           <section className="card space-y-3">

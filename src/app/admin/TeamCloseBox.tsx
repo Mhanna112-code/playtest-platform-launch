@@ -2,6 +2,7 @@
 import { CharacterCount } from "@/components/CharacterCount";
 import { useState } from "react";
 import { FIELD, api, errOf } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 import { FormMistakes } from "@/components/FormMistakes";
 import { LIMITS } from "@/lib/limits";
 import { reasonTooLong } from "@/lib/rules";
@@ -33,7 +34,9 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
   const keep = useKept<{ reason?: unknown }>(adminDraftKey(`team-close-${scope}`, id), { reason }, reason.trim() === "", (d) => setReason(typeof d.reason === "string" ? d.reason : ""));
   const boxShown = !!preview && preview.pieces.length > 0;
   const tag = keep.restored && reason !== "" ? <DraftTag disabled={busy} kind="discard" onUseSaved={() => setReason("")} /> : null;
-  const load = () => api<Preview>("/api/admin/preview-team-close", { id, scope }).then((r) => { setMsg(null); setPreview(r); }).catch((e) => setMsg({ ok: false, text: errOf(e) }));
+  // (§156) A refusal names the button pressed: the Preview, or the close itself.
+  const [pressed, setPressed] = useState("");
+  const load = () => { setPressed(`Preview: ${label.replace(/^Close/, "close")}`); return api<Preview>("/api/admin/preview-team-close", { id, scope }).then((r) => { setMsg(null); setPreview(r); }).catch((e) => setMsg({ ok: false, text: errOf(e) })); };
   return (
     <div className="flex w-full flex-col items-start gap-2" data-team-close={scope} data-mistakes-root="" data-admin-box="stacked">
       <span className="inline-flex flex-wrap items-center gap-2">
@@ -62,6 +65,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
             onClick={async () => {
               setBusy(true);
               setMsg(null);
+              setPressed(label);
               try {
                 const r = await api<{ line: string }>("/api/admin/team-close", { id, scope, reason, pieces: preview.pieces, at: preview.at, since: preview.at, ...stop.marks() });
                 await keep.clear();
@@ -84,7 +88,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
           <ChangesBox changes={stop.changes} press={label} heading={ADMIN_STOP_HEADING} />
         </>
       )}
-      {msg && !msg.text.startsWith(FIELD) && <p className={msg.ok ? "ok" : "err"} data-team-close-result="">{msg.text}</p>}
+      {msg && !msg.text.startsWith(FIELD) && <p className={msg.ok ? "ok" : "err"} data-team-close-result="">{msg.ok ? msg.text : refusalLine(pressed, msg.text)}</p>}
       <FormMistakes text={msg && !msg.ok && msg.text.startsWith(FIELD) ? msg.text : ""} press={label} />
     </div>
   );

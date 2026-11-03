@@ -23,6 +23,8 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
   const [can, setCan] = useState(false);
   const [withMic, setWithMic] = useState(true);
   const [err, setErr] = useState("");
+  // (§156) An upload refused names its press ("Your Upload this recording didn't go through: …"); the browser's own lines (sharing cancelled, no microphone) read as they are.
+  const [errPress, setErrPress] = useState("");
   const [now, setNow] = useState(0);
   // (Batch 35 §40, §41) Uploaded on its own (the Recording part): the page redraws in place, the recording shows in the list; meanwhile only the line shows.
   const fin = useFinished();
@@ -38,6 +40,7 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
   async function start() {
     onStart?.();
     setErr("");
+    setErrPress("");
     let screen: MediaStream;
     try {
       screen = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
@@ -91,6 +94,7 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
       setPhase({ name: "idle" });
     } catch (e) {
       onUploadError?.();
+      setErrPress("Upload this recording");
       setErr((e as Error).message);
       setPhase({ name: "review", blob, url: URL.createObjectURL(blob) });
     }
@@ -123,7 +127,7 @@ export function ScreenRecorder({ sessionId, part, label = "Record", onUploaded, 
         </div>
       )}
       {phase.name === "uploading" && <p className="note">Uploading… {phase.pct}%</p>}
-      <Err text={err} />
+      <Err text={err} press={errPress} />
     </div>
   );
 }

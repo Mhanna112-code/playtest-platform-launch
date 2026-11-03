@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { BellOff, Bell } from "lucide-react";
 import { api } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 import { publishTesterAlertsOff, setTesterAlertsOff, useTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
@@ -23,8 +24,9 @@ export function TesterAlertsToggle({ off: start }: { off: boolean }) {
       // (Owner, Nov 3, batch 35 §157) The state this button offers ("Alerts: On" offers Off), never a flip on the server.
       const r = await api<{ off: boolean }>("/api/account/tester-alerts", { alerts: off ? "on" : "off" });
       publishTesterAlertsOff(typeof r.off === "boolean" ? r.off : !off);
-    } catch {
-      setErr("Couldn't save. Try again.");
+    } catch (e) {
+      // (§156) Named like every refusal: "Your Alerts didn't go through: …".
+      setErr(refusalLine("Alerts", (e as Error)?.message || "Couldn't save. Try again."));
     }
   }
   return (

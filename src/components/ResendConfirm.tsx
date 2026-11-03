@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 
 /** "Resend" the email confirmation link, answered in place. */
 export function ResendConfirm({ label = "Resend" }: { label?: string }) {
@@ -14,7 +15,8 @@ export function ResendConfirm({ label = "Resend" }: { label?: string }) {
           await api("/api/auth/resend", {});
           setMsg("Sent: check your inbox (and spam).");
         } catch (e) {
-          setMsg(e instanceof ApiError ? e.message : "Try again in a moment.");
+          // (§156) Named like every refusal: "Your Resend the link didn't go through: …".
+          setMsg(refusalLine(label, e instanceof ApiError ? e.message : "Try again in a moment."));
         } finally {
           setBusy(false);
         }

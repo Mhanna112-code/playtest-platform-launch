@@ -7,7 +7,7 @@ import { api, errOf } from "@/lib/client";
 import { stepsLine } from "@/lib/pause";
 import { useBankCheck } from "@/components/BankCheck";
 import { CARD_NOT_VERIFIED } from "@/lib/rules";
-import type { Simulate } from "@/lib/bankConfirm";
+import { peekBank, type Simulate } from "@/lib/bankConfirm";
 
 type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[] };
 
@@ -36,6 +36,8 @@ function loadStripe(): Promise<(pk: string) => StripeJs> {
  */
 export function ChargebackSteps({ steps }: { steps: Steps }) {
   const [err, setErr] = useState("");
+  // (§156) A refusal names the button pressed: "Verify a card" (starts the check) or the card form's "Verify this card".
+  const [errPress, setErrPress] = useState("");
   const [busy, setBusy] = useState(false);
   const [form, setForm] = useState<{ stripe: StripeJs; elements: Elements; setupIntentId: string } | null>(null);
   // (Batch 35 §40, §41) Verified: the page redraws in place (the step ticks); until it has, the button stays greyed with "Card verified.".
@@ -45,7 +47,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   const bank = useBankCheck();
   const finish = (setupIntent: string) => (simulate?: Simulate) => api<{ verified: boolean }>("/api/payments/verify-card", { finish: true, setupIntent, ...(simulate ? { simulate } : {}) });
   const check = async (setupIntent: string, checkUrl: string | null, simulated: boolean) => {
-    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent));
+    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent), () => peekBank({ setupIntent })); // (§158)
     fin.finish("Card verified.");
   };
   const mount = useRef<HTMLDivElement>(null);
@@ -70,6 +72,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   async function start() {
     setBusy(true);
     setErr("");
+    setErrPress("Verify a card");
     try {
       const r = await api<{ simulated: boolean; verified?: boolean; standIn?: boolean; clientSecret?: string; setupIntentId?: string; publishableKey?: string }>("/api/payments/verify-card", { check: true });
       if (r.simulated && r.standIn) {
@@ -95,6 +98,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
     if (!form || !ready) return;
     setBusy(true);
     setErr("");
+    setErrPress("Verify this card");
     try {
       const sub = await form.elements.submit();
       if (sub.error) throw new Error(sub.error.message ?? CARD_NOT_VERIFIED);
@@ -135,7 +139,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
       )}
       {bank.view}
       {fin.line && <p className="ok" data-card-verified="">{fin.line}</p>}
-      <Err text={err} />
+      <Err text={err} press={errPress} />
     </div>
   );
 }

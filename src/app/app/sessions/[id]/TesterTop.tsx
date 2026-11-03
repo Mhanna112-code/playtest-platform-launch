@@ -9,6 +9,7 @@ import { NdaBox } from "@/components/NdaBox";
 import { QuestionList } from "@/components/QuestionList";
 import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { api, errOf } from "@/lib/client";
+import { pressLabelOf } from "@/lib/pressLabels";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 import { useFinished } from "@/lib/usePress";
 import { reloadKeepingPlace } from "@/lib/keepPlace";
@@ -33,6 +34,8 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [err, setErr] = useState("");
+  // (§156) Named by the button pressed: "Switch to the new terms" or "Keep my current terms".
+  const [errPress, setErrPress] = useState("");
   const fin = useFinished();
   useEffect(() => {
     const on = (e: Event) => setBox((e as CustomEvent).detail as StopBox);
@@ -67,8 +70,9 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         <button className="btn-ghost" onClick={() => reloadKeepingPlace()}>See the new terms</button>
       </div>
     ) : null;
-  const decide = (choice: string) =>
-    api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed, boxAt })
+  const decide = (choice: string) => {
+    setErrPress(pressLabelOf(`/api/sessions/${sessionId}/terms`, { choice }));
+    return api(`/api/sessions/${sessionId}/terms`, { offerId, choice, seenAt, confirmed, boxAt })
       .then(() => { setBox(null); fin.finish(choice === "switch" ? "Switched to the new terms." : "Kept your current terms.", { reload: true }); })
       .catch((e) => {
         const sb = stopBox(e);
@@ -79,6 +83,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
           if (next) setOfferId(next);
         } else setErr(errOf(e));
       });
+  };
   return (
     <div id="terms-offer" className="info scroll-mt-24 space-y-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
       <p>
@@ -110,8 +115,8 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         <button className="btn-ghost" disabled={fin.done} onClick={() => decide("keep")}>Keep my current terms</button>
       </div>
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} />
-      <Err text={err} />
+      <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} press={errPress || undefined} />
+      <Err text={err} press={errPress} />
     </div>
   );
 }

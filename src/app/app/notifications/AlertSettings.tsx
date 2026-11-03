@@ -76,7 +76,7 @@ export function AlertSettings({ emailPref, side = null, seenAt: seen0 }: { email
           {saved && <span className="text-emerald-300" role="status">Your alert settings are saved.</span>}
         </div>
         <ChangesBox changes={changes} press="Save" />
-        <Err text={err} />
+        <Err text={err} press="Save" />
       </form>
     </details>
   );

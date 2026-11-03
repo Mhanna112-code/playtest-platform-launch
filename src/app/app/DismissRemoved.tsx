@@ -12,7 +12,7 @@ export function DismissRemoved({ contractId, all = false }: { contractId: string
   return (
     <span className="inline-flex flex-col gap-1">
       <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={fin.done} onClick={async () => { setErr(""); try { await api(`/api/sessions/${contractId}/dismiss-removed`, all ? { all: true } : {}); fin.finish(); } catch (e) { setErr(errOf(e)); } }} {...(all ? { "data-dismiss-all": "" } : {})}>{all ? "Dismiss all" : "Dismiss"}</button>
-      <Err text={err} />
+      <Err text={err} press={all ? "Dismiss all" : "Dismiss"} />
     </span>
   );
 }

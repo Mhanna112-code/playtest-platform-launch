@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 import type { AccountState } from "@/lib/server/accountState";
 import { AdminButton } from "./AdminButton";
 import { PreviewButton } from "./PreviewButton";
@@ -28,13 +29,14 @@ export function AccountActions({ initial }: { initial: AccountState }) {
   const [previewAt, setPreviewAt] = useState<string | null>(null);
   const [msg, setMsg] = useState("");
   const seen = { since: previewAt ?? acct.at, from: previewAt ? "preview" : "page" };
-  const refused = (e: unknown) => {
+  // (§156) The refused button's label comes with it: the line names it ("Your Reinstate didn't go through: …").
+  const refused = (e: unknown, press = "") => {
     const now = e instanceof ApiError ? (e.data as { account?: AccountState | null }).account : undefined;
     if (now) {
       setAcct(now);
       setPreviewAt(null); // the Preview described the old state
     }
-    setMsg((e as Error).message);
+    setMsg(refusalLine(press, (e as Error).message));
   };
   // (Owner, Oct 30, batch 34 §1) Delete stopped once (another admin changed this account since the page loaded): the box is under Delete, and the state shown here
   // updates from the stop.

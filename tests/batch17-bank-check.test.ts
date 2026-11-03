@@ -93,7 +93,7 @@ async function sentWork(over: Record<string, unknown> = {}) {
 const chargeOpen = (subId: string) => db.submission.update({ where: { id: subId }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
 
 describe("batch 17 §11: the bank's check opens inline, under the button", () => {
-  it("the fake draws a clearly-marked stand-in (Confirm / Cancel); a real check is the bank's page in a frame with Cancel; no pop-up anywhere", () => {
+  it("the fake draws a clearly-marked stand-in (Confirm / Cancel); a real check is the bank's page in a frame with Close; no pop-up anywhere", () => {
     const action = { requiresAction: true as const, paymentId: "p1", clientSecret: "", publishableKey: "", simulated: true, checkUrl: null };
     const standIn = renderToStaticMarkup(createElement(BankCheckView, { action, finish: async () => ({}), onEnd: () => {} }));
     expect(standIn).toContain('data-bank-check="stand-in"');
@@ -102,7 +102,7 @@ describe("batch 17 §11: the bank's check opens inline, under the button", () =>
     const real = renderToStaticMarkup(createElement(BankCheckView, { action: { ...action, simulated: false, checkUrl: CHECK_URL }, finish: async () => ({}), onEnd: () => {} }));
     expect(real).toContain('data-bank-check="bank"');
     expect(real).toContain(`<iframe src="${CHECK_URL.replace(/&/g, "&amp;")}" title="Your bank&#x27;s check"`);
-    expect(real).toContain(">Cancel</button>");
+    expect(real).toContain(">Close</button>"); // (batch 35 §158) "Close" under the bank's frame (it may end by itself), the stand-in keeps Cancel
     // Under the button that was pressed: Pay / Pay more, Pay what you owe, Subscribe (PressButton) and Verify a card each render the check right after their button.
     expect(src("app/app/tests/[id]/PayBox.tsx")).toMatch(/at least \$0\.50 \(or 0\)<\/span>\}?\s*<\/div>\s*\{bank\.view\}/); // (batch 35 §41: hidden while a finished press waits for the redraw)
     expect(src("components/OwedBox.tsx")).toMatch(/<\/button>(<\/div>)?\}\s*\{bank\.view\}/); // (§150) the button sits in a row with its over-$200 tick

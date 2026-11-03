@@ -73,8 +73,11 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [box, setBox] = useState<{ changes: Change[]; at: string } | null>(null);
+  // (§156) The box and a refusal name the button pressed: Allow or Deny.
+  const [pressed, setPressed] = useState<"Allow" | "Deny">("Allow");
   const fin = useFinished(() => { setBusy(false); setBox(null); });
   const decide = async (decision: "allow" | "deny") => {
+    setPressed(decision === "deny" ? "Deny" : "Allow");
     setBusy(true);
     setErr("");
     try {
@@ -93,8 +96,8 @@ export function ExcerptDecision({ excerptId, seenAt }: { excerptId: string; /** 
         <button type="button" className="btn px-3 py-1 text-sm" disabled={busy} onClick={() => decide("allow")}>Allow</button>
         <button type="button" className="btn-secondary px-3 py-1 text-sm" disabled={busy} onClick={() => decide("deny")}>Deny</button>
       </div>
-      {box && <ChangesBox changes={box.changes} press="Allow / Deny" />}
-      <Err text={err} />
+      {box && <ChangesBox changes={box.changes} press={pressed} />}
+      <Err text={err} press={pressed} />
     </div>
   );
 }
@@ -110,7 +113,7 @@ export function ExcerptRemove({ excerptId }: { excerptId: string }) {
         onConfirm={() => api("/api/excerpts", { action: "remove", excerptId }).then(() => fin.finish()).catch((e) => setErr(errOf(e)))}>
         {label}
       </ConfirmButton>
-      <Err text={err} />
+      <Err text={err} press={label} />
     </span>
   );
 }

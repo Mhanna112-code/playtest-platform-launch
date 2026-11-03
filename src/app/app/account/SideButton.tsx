@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { api, ApiError, errOf } from "@/lib/client";
 import { Err } from "@/components/Err";
+import { pressLabelOf } from "@/lib/pressLabels";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { mergeChanges } from "@/lib/live";
 
@@ -37,8 +38,9 @@ export function SideButton({ side, add, seenAt: seen0, children }: { side: "deve
       >
         {children}
       </button>
-      <ChangesBox changes={changes} />
-      <Err text={err} />
+      {/* (§156) Both name the press: "Switch to your tester side", "Start testing too" … */}
+      <ChangesBox changes={changes} press={pressLabelOf("/api/account/side", { side, add })} />
+      <Err text={err} press={pressLabelOf("/api/account/side", { side, add })} />
     </div>
   );
 }

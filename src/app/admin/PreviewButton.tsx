@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { api, errOf } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 
 /**
  * (Design doc 10) "Preview a suspension's effects": what suspending this account would do right now. (Batch 17 §6) `onLoaded` gets the Preview's time: Suspend and
@@ -18,7 +19,7 @@ export function PreviewButton({ id, onLoaded }: { id: string; onLoaded?: (at: st
           {lines.map((l) => <li key={l} className="break-words">{l}</li>)}
         </ul>
       )}
-      {err && <p className="err">{err}</p>}
+      {err && <p className="err">{refusalLine("Preview suspension", err)}</p>}
     </div>
   );
 }
