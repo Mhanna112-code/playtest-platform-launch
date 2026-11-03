@@ -131,14 +131,15 @@ function itemLine(ctx: Ctx, p: PayingRow) {
 }
 
 /** What a charge pays for: one payment, Pay what you owe's one payment (its items; `charges`: the charges made while away), or a chargeback hold's reservation. */
-export type Paying = { payment: PayingRow } | { owed: PayingRow[]; charges?: boolean } | { reserve: PayingRow[] };
+export type Paying = { payment: PayingRow } | { owed: PayingRow[]; charges?: boolean; /** (§147) Confirm all's one payment */ all?: boolean } | { reserve: PayingRow[] };
 /**
  * (Owner, Nov 3) THE Stripe description of a payment, built from what is being paid: the payment's line in Payments' "What you've paid" (developer side, `devLine`)
  * with the names in full, after "Playtest: ".
  * - One payment: "Playtest: Marc Hanna's written answers on “chargechargecharge”", "Playtest: Pay more for …", "Playtest: The team's dispute decision on …",
  *   "Playtest: Marc Hanna's written answers on “…”, charged by Marc Hanna after 7 days without a review", "Playtest: Marc Hanna's live call on “…”, charged
  *   automatically after 7 days", "Playtest: Repaid the reversed $39.00 Pay more for … ($39.00 + $15.00 chargeback fee)".
- * - Pay what you owe's one payment: "Playtest: What you owe (<each item as on the page> $8.00, …)" ("Charges made while you were away (…)" for those).
+ * - Pay what you owe's one payment: "Playtest: What you owe (<each item as on the page> $8.00, …)" ("Charges made while you were away (…)" for those;
+ *   "Confirm all (…)" for Confirm all's, §147).
  * - A chargeback hold's reservation: "Playtest: Reserved for the team's review: <each item> $8.00, …".
  * At most 1,000 characters (Stripe's limit): a longer list ends "… and N more". A subscription keeps its own ("Playtest subscription ($7/month)").
  */
@@ -150,7 +151,8 @@ export async function stripeDescription(x: Paying): Promise<string> {
   const rows = "owed" in x ? x.owed : x.reserve;
   const ctx = await lineContext(rows);
   const items = rows.map((p) => itemLine(ctx, p));
-  if ("owed" in x) return listWithin(`${PREFIX}${x.charges ? "Charges made while you were away" : "What you owe"} (`, items, ")");
+  // (Owner, Nov 3, §147) Confirm all's one payment: "Playtest: Confirm all (Ana Silva's written answers on “Harbor Run” $10.00, …)".
+  if ("owed" in x) return listWithin(`${PREFIX}${x.all ? "Confirm all" : x.charges ? "Charges made while you were away" : "What you owe"} (`, items, ")");
   return listWithin(`${PREFIX}Reserved for the team's review: `, items);
 }
 

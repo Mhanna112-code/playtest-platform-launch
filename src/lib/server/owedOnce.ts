@@ -21,6 +21,9 @@ export const OWED_KIND = "owed";
 export const OWED_ACTIVE = ["paying", "needs_action", "needs_confirmation"];
 /** The one payment went through: each covered debt is "charged" (or "not_set_up") itself, so this row is never counted as paid again. */
 export const OWED_PAID = "bundled";
+/** (Owner, Nov 3, §147) Confirm all's one payment: a one payment (kind "owed") made by the Confirm all press, covering charges that waited for the bank. */
+export const ALL_NOTE = "press:all";
+export const isAll = (p: { kind: string; note: string }) => p.kind === OWED_KIND && p.note === ALL_NOTE;
 
 /**
  * (Rule 3) The debts locked by a bank check: debt id -> the check to cancel ("Cancel this check"): the one payment covering it, or (a check made before §117) the
@@ -28,7 +31,8 @@ export const OWED_PAID = "bundled";
  */
 export async function owedLocks(devId: string) {
   const out = new Map<string, string>();
-  const active = await db.payment.findMany({ where: { developerId: devId, kind: OWED_KIND, status: { in: OWED_ACTIVE } }, select: { id: true } });
+  // (Owner, Nov 3, §147) Confirm all's one payment covers charges waiting for the bank, never debts: it locks nothing here.
+  const active = await db.payment.findMany({ where: { developerId: devId, kind: OWED_KIND, status: { in: OWED_ACTIVE }, note: { not: ALL_NOTE } }, select: { id: true } });
   if (active.length) for (const d of await db.payment.findMany({ where: { coveredById: { in: active.map((a) => a.id) } }, select: { id: true, coveredById: true } })) out.set(d.id, d.coveredById!);
   for (const d of await db.payment.findMany({ where: { developerId: devId, kind: { not: OWED_KIND }, actionPi: { not: null }, status: { in: ["failed", "owed", "paying"] } }, select: { id: true } })) out.set(d.id, d.id);
   return out;
@@ -120,6 +124,9 @@ async function claimOwed(devId: string, rows: { id: string; amountCents: number;
 
 /** The one payment was cancelled, declined or ran out of time: what it covered is owed (and payable) again. */
 export async function releaseOwed(id: string) {
+  // (Owner, Nov 3, §147) Confirm all's one payment: each charge it covered goes back to its own "Confirm with your bank" with its original deadline.
+  const row = await db.payment.findUnique({ where: { id }, select: { kind: true, note: true } });
+  if (row && isAll(row)) return (await import("./confirmAll")).releaseAll(id, "back");
   const ended = await db.payment.updateMany({ where: { id, kind: OWED_KIND, status: { in: OWED_ACTIVE } }, data: { status: "cancelled", actionPi: null, actionBy: null } });
   if (ended.count !== 1) return null;
   // (§122) Charges made while away that it covered wait again ("deferred"); the caller decides when they count as declined.
@@ -161,20 +168,24 @@ export async function chargeWaitingTotal(devId: string, rows: Payment[]) {
 export async function settleOwed(id: string, pi: string | null) {
   const one = await db.payment.findUniqueOrThrow({ where: { id } });
   const claimed = await db.payment.updateMany({ where: { id, kind: OWED_KIND, status: { in: OWED_ACTIVE } }, data: { status: OWED_PAID, settledAt: new Date(), stripePaymentIntentId: pi, actionPi: null, actionBy: null } });
-  if (claimed.count !== 1) return { again: true, cents: 0, names: [] as string[], charges: forCharges(one) };
+  if (claimed.count !== 1) return { again: true, cents: 0, names: [] as string[], parts: [] as { name: string; cents: number }[], charges: forCharges(one) };
   const holds = await import("./holds");
   const { settleOwedRow } = await import("./chargeback");
   const dev = await db.user.findUniqueOrThrow({ where: { id: one.developerId } });
-  const rows = [...(await holds.owed(one.developerId)).filter((p) => p.coveredById === id), ...(await db.payment.findMany({ where: { coveredById: id, status: "deferred", settledAt: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })).map((p) => ({ ...p, reversedCents: 0, paidCents: p.amountCents }))];
+  // (Owner, Nov 3, §147) Confirm all's one payment covers charges waiting for the bank ("needs_confirmation").
+  const waiting = { coveredById: id, settledAt: null, status: isAll(one) ? "needs_confirmation" : "deferred" };
+  const rows = [...(await holds.owed(one.developerId)).filter((p) => p.coveredById === id), ...(await db.payment.findMany({ where: waiting, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })).map((p) => ({ ...p, reversedCents: 0, paidCents: p.amountCents }))];
   const names: string[] = [];
+  const parts: { name: string; cents: number }[] = [];
   let cents = 0;
   for (const p of rows) {
     await settleOwedRow(dev, p, pi && stripeOn() ? pi : null, id);
     // (§122) Charges made while away keep the names their own receipts had ("… (charged by them after 7 days)").
     names.push(forCharges(one) ? await holds.deferredWhat(p) : await holds.owedItemName(p));
+    parts.push({ name: names[names.length - 1], cents: p.amountCents });
     cents += p.amountCents;
   }
-  return { again: false, cents, names, charges: forCharges(one) };
+  return { again: false, cents, names, parts, charges: forCharges(one) };
 }
 
 /**
@@ -188,7 +199,7 @@ export async function chargeOwedTotal(u: Parameters<typeof chargePlatform>[0], r
   return chargeClaimed(u, one, mode);
 }
 
-async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payment, mode: "press" | "away") {
+export async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payment, mode: "press" | "away") {
   let r: Awaited<ReturnType<typeof chargePlatform>>;
   try {
     // (Batch 32 §15) No saved card: handled as a declined card, never sent to Stripe with an empty card.
@@ -196,7 +207,7 @@ async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payme
     // One key per payment: charged again with it (resumeStaleOwed), Stripe answers with what happened the first time. (Owner, Nov 3) Its description lists what it
     // covers as on the page, names in full: "Playtest: What you owe (Ana Silva's written answers on “Harbor Run” $8.00, …)"; fixed at the first try, so the same
     // key always carries the same one.
-    const description = await describedOnce(one.id, async () => stripeDescription({ owed: await db.payment.findMany({ where: { coveredById: one.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }), charges: forCharges(one) }));
+    const description = await describedOnce(one.id, async () => stripeDescription({ owed: await db.payment.findMany({ where: { coveredById: one.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }), charges: forCharges(one), all: isAll(one) }));
     r = await chargePlatform(u, one.amountCents, serverKey("owedall", one.id), description, mode);
   } catch (e) {
     const why = (await import("./holds")).owedWhy(e);
@@ -212,12 +223,17 @@ async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payme
   }
   const confirm = await import("./confirm");
   if (r.status === "requires_action") {
-    if (mode === "press") return { result: "action" as const, action: await confirm.pressAction(one.id, r as NeedsAction) };
+    if (mode === "press") {
+      const action = await confirm.pressAction(one.id, r as NeedsAction);
+      // (§147) Confirm all's check ends by the earliest date of what it covers, when that comes before its 15 minutes.
+      if (isAll(one)) await (await import("./confirmAll")).clampToEarliest(one.id);
+      return { result: "action" as const, action };
+    }
     await confirm.awayAction(one.id, r as NeedsAction);
     return { result: "waiting" as const };
   }
   const s = await settleOwed(one.id, r.stripePaymentIntentId);
-  return { result: "paid" as const, cents: s.cents, names: s.names, status: r.status };
+  return { result: "paid" as const, cents: s.cents, names: s.names, parts: s.parts, status: r.status };
 }
 
 /**
@@ -231,9 +247,11 @@ export async function resumeStaleOwed(devId: string, now = new Date()) {
   const holds = await import("./holds");
   for (const one of stale) {
     if ((await db.payment.updateMany({ where: { id: one.id, status: "paying", warnedAt: one.warnedAt }, data: { warnedAt: now } })).count !== 1) continue;
-    const r = await chargeClaimed(u, one, one.note === "press" ? "press" : "away");
+    // (§147) Confirm all's one payment is a press too: asked again exactly as it was first made.
+    const r = await chargeClaimed(u, one, one.note === "press" || isAll(one) ? "press" : "away");
     if (r.result !== "paid") continue;
-    if (r.cents > 0) await receipt(u.email, receiptWhat(r.names, forCharges(one)), r.cents, r.status !== "not_set_up" ? "charged" : "not_set_up", "/app/payments");
+    if (isAll(one)) await (await import("./confirmAll")).allReceipt(u.email, r.parts, r.status);
+    else if (r.cents > 0) await receipt(u.email, receiptWhat(r.names, forCharges(one)), r.cents, r.status !== "not_set_up" ? "charged" : "not_set_up", "/app/payments");
     await holds.liftHoldIfClear(devId);
   }
 }
@@ -293,6 +311,8 @@ export async function newCardChecks(devId: string) {
       if (!(await claimCheck(p))) continue; // confirmed meanwhile
       const confirm = await import("./confirm");
       if (end === "succeeded") await confirm.finishConfirmed(p.id);
+      // (§147) Confirm all's one payment: the charges it covered wait again, and are made together on the new card (below).
+      else if (isAll(p)) await (await import("./confirmAll")).releaseAll(p.id, "defer");
       else if (p.kind === OWED_KIND) await releaseOwed(p.id); // its debts go with the retry of what's owed; its charges wait again (below)
       // (§122) A charge made while away waits again ("deferred"); all of them are then made TOGETHER as one payment (below, or after the lift during a hold, §113).
       else if (p.status === "needs_confirmation") await db.payment.updateMany({ where: { id: p.id, status: "needs_confirmation" }, data: { status: "deferred" } });

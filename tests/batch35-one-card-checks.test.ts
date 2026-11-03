@@ -154,7 +154,7 @@ describe("§117 rule 6: Pay what you owe is ONE payment", () => {
     expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 1600 });
     const items = await confirmItems(w.dev.user.id);
     const listed = /^What you owe \$16\.00 \(Ana Silva's written answers on “Harbor Run” \$8\.00, the team's dispute decision on Ana Silva's work on “Harbor Run” \$3\.00, Ana Silva's work on “Harbor Run” \$5\.00\) · confirm by /;
-    expect(items).toEqual([{ id: one.id, href: null, text: expect.stringMatching(listed), full: expect.stringMatching(listed), tests: expect.any(Array) }]);
+    expect(items).toEqual([{ id: one.id, href: null, text: expect.stringMatching(listed), full: expect.stringMatching(listed), tests: expect.any(Array), cents: 1600 }]);
     expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { startsWith: "Your bank wants you to confirm a $16.00 payment by " } } })).toBe(1);
   });
 });
@@ -623,7 +623,7 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 3300 });
     for (const x of items) expect(await db.payment.findUniqueOrThrow({ where: { id: x.p.id } })).toMatchObject({ status: "deferred", coveredById: one.id });
     const listed = /^Charges made while you were away \$33\.00 \(Ana Silva's written answers on “Harbor Run” \$10\.00, the team's dispute decision on Ana Silva's work on “Harbor Run” \$11\.00, Ana Silva's work on “Harbor Run” \$12\.00\) · confirm by /;
-    expect(await confirmItems(w.dev.user.id)).toEqual([{ id: one.id, href: null, text: expect.stringMatching(listed), full: expect.stringMatching(listed), tests: expect.any(Array) }]);
+    expect(await confirmItems(w.dev.user.id)).toEqual([{ id: one.id, href: null, text: expect.stringMatching(listed), full: expect.stringMatching(listed), tests: expect.any(Array), cents: 3300 }]);
     expect(await hold(w.dev.user.id)).toBeNull();
     // Approved: all three paid by it, each tester's share sent from that one payment, one receipt.
     st.approve(one.actionPi!);
