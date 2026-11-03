@@ -127,7 +127,8 @@ describe("batch 18 section 2: the Terms' content rule matches the Mature line", 
     expect(terms).not.toContain("No graphic content");
     expect(terms).toContain("\"Never allowed: sexual content involving minors, illegal content, real-world gore. Other graphic or mature content must be marked Mature (18+), with a reason.\"");
     expect(terms).toContain("Version {TERMS_VERSION} · DRAFT");
-    expect(terms).toContain("<section id={WHAT_CHANGED_ID}");
+    expect(terms).toContain("<details id={WHAT_CHANGED_ID}"); // (owner, Nov 2) a dropdown, latest version only; #what-changed opens it
+    expect(terms).toContain("<HashJump />");
     expect(WHAT_CHANGED_ID).toBe("what-changed");
     expect(WHAT_CHANGED[0].version).toBe(TERMS_VERSION);
     expect(WHAT_CHANGED[0].points[0]).toContain("Never allowed: sexual content involving minors, illegal content, real-world gore.");

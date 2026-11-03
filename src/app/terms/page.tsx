@@ -1,8 +1,10 @@
+import { HashJump } from "@/components/HashJump";
 import { PublicShell } from "@/components/PublicShell";
 import { MAX_ACTIVE_TESTS, MAX_SPOTS, PAYMENTS_TERMS_ID } from "@/lib/rules";
 import { PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Terms of Use · Playtest" };
+const LATEST = WHAT_CHANGED.reduce((a, b) => (b.version > a.version ? b : a));
 
 // Copied from the full app's Terms of Use and adapted to the lean rules. DRAFT: the owner reviews the wording (and a lawyer
 // should) before launch. It is a plain-language description of the rules the site enforces, not legal advice.
@@ -87,15 +89,12 @@ export default function TermsPage() {
         <p className="text-slate-400">The rules both sides agree to. They&apos;re written plainly, and the site enforces them.</p>
         <p className="font-mono text-xs text-slate-500">Version {TERMS_VERSION} · DRAFT, wording to be reviewed before launch</p>
         {/* (Batch 18 section 1) "Read what changed" in the box under Post / Join / Apply / Ask to rejoin opens here. */}
-        <section id={WHAT_CHANGED_ID} className="info scroll-mt-24 space-y-1 text-sm" data-what-changed="">
-          <h2 className="font-semibold text-white">What changed</h2>
-          {WHAT_CHANGED.map((w) => (
-            <div key={w.version}>
-              <p>Version {w.version}, {w.date}:</p>
-              <ul className="list-disc space-y-0.5 pl-5">{w.points.map((p) => <li key={p}>{p}</li>)}</ul>
-            </div>
-          ))}
-        </section>
+        {/* (Owner, Nov 2) A dropdown with only the latest version's changes; "Read what changed" (#what-changed) opens it (HashJump opens the fold it lands on). */}
+        <details id={WHAT_CHANGED_ID} className="info scroll-mt-24 text-sm" data-what-changed="">
+          <summary className="cursor-pointer font-semibold text-white">What changed in version {LATEST.version} ({LATEST.date})</summary>
+          <ul className="mt-1 list-disc space-y-0.5 pl-5">{LATEST.points.map((p) => <li key={p}>{p}</li>)}</ul>
+        </details>
+        <HashJump />
         {SECTIONS.map((s) => (
           <section key={s.title} className={`card space-y-2${s.payments ? " scroll-mt-24" : ""}`} {...(s.payments ? { id: PAYMENTS_TERMS_ID } : {})}>
             <h2 className="font-semibold text-white">{s.title}</h2>
