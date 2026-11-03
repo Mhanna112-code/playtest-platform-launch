@@ -44,7 +44,11 @@ export default async function Home() {
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             {u ? (
-              <Link href="/app" className="btn px-6 py-3 text-base no-underline hover:no-underline">Go to your dashboard <ArrowRight className="h-4 w-4" /></Link>
+              // (Owner, Nov 2) Signed in: the same two buttons, each opening that side of the account (the side switch's POST; a side they don't have opens the app as it is).
+              <>
+                <form method="post" action="/app/switch"><input type="hidden" name="to" value="developer" /><input type="hidden" name="next" value="/app" /><button className="btn px-6 py-3 text-base">Get feedback on my build <ArrowRight className="h-4 w-4" /></button></form>
+                <form method="post" action="/app/switch"><input type="hidden" name="to" value="tester" /><input type="hidden" name="next" value="/app" /><button className="btn-secondary px-6 py-3 text-base">Earn as a tester</button></form>
+              </>
             ) : (
               <>
                 <Link href="/signup" className="btn px-6 py-3 text-base no-underline hover:no-underline">Get feedback on my build <ArrowRight className="h-4 w-4" /></Link>
