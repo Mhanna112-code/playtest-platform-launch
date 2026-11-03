@@ -93,7 +93,7 @@ describe("two folds under each part", () => {
 
   it("a link straight to a part (or into it) opens its folds", () => {
     const jump = src("lib/markJump.ts");
-    expect(jump).toContain('el.querySelectorAll<HTMLDetailsElement>("details[data-jump-open]").forEach((d) => { d.open = true; });');
+    expect(jump).toContain('el.querySelectorAll?.<HTMLDetailsElement>("details[data-jump-open]").forEach((d) => { d.open = true; });');
     expect(jump).toContain("if (p instanceof HTMLDetailsElement && !p.open) p.open = true;");
     expect(src("components/Panel.tsx")).toContain('data-jump-open=""');
   });
