@@ -93,7 +93,7 @@ describe("<Cut>", () => {
 describe("names listed on pages use <Cut>", () => {
   it("the dashboards, the test page, Find, Messages, the bell, the call header and the admin lines", () => {
     const page = src("app/app/page.tsx");
-    expect(page).toContain('<span className="font-medium text-white"><Cut text={r.who} /></span>');
+    expect(page).toContain('<span className="font-medium text-white"><NameLink text={r.who} href={r.whoHref} /></span>'); // (batch 35 §137) a link to their profile
     expect(page).toContain('<b className="text-white"><Cut text={r.title} kind="test" /></b>');
     expect(page).toContain('<p className="kicker"><Cut text={t.productName} kind="product" /></p>');
     const test = src("app/app/tests/[id]/page.tsx");

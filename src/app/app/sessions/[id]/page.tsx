@@ -1,4 +1,5 @@
 import { renderTimes } from "@/lib/tz";
+import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
 import { notFound, redirect } from "next/navigation";
@@ -113,6 +114,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 12 section 1) A developer who deleted their account.
   const devGone = !!c.test.developer.deletedAt;
   const devRealName = displayName({ ...c.test.developer, deletedAt: null });
+  // (Batch 35 §137) The developer's name in a sentence links to their profile (cut, with its hover and tap pop-up); a deleted account stays plain.
+  const devHref = devGone ? null : `/app/developers/${c.test.developerId}`;
   // (Batch 28 §3) A team Stop reads "This test was stopped at 3:10 PM." here too (the reader's saved zone).
   const refusal = sessionRefusal(c, c.test, dev, new Date(), u.timeZone);
   // (Owner, Oct 28, batch 16 section 24) The test stopped (the developer or the team), closed, or this tester's work was ended early: the work is over. What's gone
@@ -364,9 +367,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
 
       </section>
 
-      {myRating && !rated.testerRevealed && <p className="note">You rated {dev}.</p>}
-      {myRating && rated.testerRevealed && <p className="note">You rated {dev}: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
-      {rated.developer && <p className="note">{dev} rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
+      {myRating && !rated.testerRevealed && <p className="note">You rated <NameLink text={dev} href={devHref} />.</p>}
+      {myRating && rated.testerRevealed && <p className="note">You rated <NameLink text={dev} href={devHref} />: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
+      {rated.developer && <p className="note"><NameLink text={dev} href={devHref} /> rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
       {rateState.kind === "closed" && !meOff && <p className="note" data-rating-closed="">{rateState.line}</p>}
       {(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && (
         <RateBox
@@ -417,10 +420,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             </li>
           ) : <li><FieldLabel>NDA</FieldLabel><FieldValue>None</FieldValue></li>}
           <li data-scope-due=""><FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue></li>
-          <li className="text-slate-400">Agreed {fmtDate(c.joinedAt)}. Your contract stays as it is: if {dev} changes these terms later, you choose Switch or Keep.</li>
+          <li className="text-slate-400">Agreed {fmtDate(c.joinedAt)}. Your contract stays as it is: if <NameLink text={dev} href={devHref} /> changes these terms later, you choose Switch or Keep.</li>
         </ul>
         <p className="mt-3 text-sm font-medium text-white">The listing information</p>
-        <p className="text-xs text-slate-400">Always the current listing: it follows {dev}&apos;s changes as they&apos;re made.</p>
+        <p className="text-xs text-slate-400">Always the current listing: it follows <NameLink text={dev} href={devHref} />&apos;s changes as they&apos;re made.</p>
         <ul className="mt-1 space-y-2.5 text-sm" data-scope-info="">
           {info.filter((l) => l.key !== "productName" || l.now !== "(none)" || l.before != null).filter((l) => l.key !== "mature" || c.test.mature || l.before != null).map((l) => (
             <li key={l.key} className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line={l.key} {...(l.before != null ? { "data-updated-at": l.updatedAt?.toISOString() ?? "" } : {})}>
@@ -445,7 +448,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
             {[
               ...offers.map((o) => ({ at: o.createdAt, key: o.id, node: (<li key={o.id}>
-                {fmtDate(o.createdAt)}: {dev} offered new terms ({o.diff}) · {o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}
+                {fmtDate(o.createdAt)}: <NameLink text={dev} href={devHref} /> offered new terms ({o.diff}) · {o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}
                 {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
@@ -664,7 +667,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <PrevSetFolds draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
-        {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for {dev}.</p>}
+        {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for <NameLink text={dev} href={devHref} />.</p>}
       </section>
 
       {/* (NEXT-UI 4) Leaving, in its own card as in the full app. */}

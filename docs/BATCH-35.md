@@ -1411,6 +1411,28 @@ design doc's "Recordings can be removed or added and sent again. Written answers
   earlier page had marked for removal at the next send stay with their piece. `src/lib/additions.ts`, `src/components/SentWork.tsx`.
 - **Tests:** `tests/batch35-sent-locked.test.ts`.
 
+## §137 Names in sentences link, through Cut (owner, Nov 3)
+
+Replaces the Nov 3 cut rule's "sentences about a person stay whole" (docs/media/long-text/README.md): a person's or a test's name inside a sentence is now cut
+like a listed name and links to their profile or to the test.
+
+- **One helper:** `NameLink` in `src/components/Cut.tsx`: `<a href><Cut/></a>` (the hover / title, the tap pop-up with "Open profile →" / "Open test →" and
+  Copy). With no profile to link (a deleted account) it's the cut name alone.
+- **Where:**
+  - the developer dashboard's Excerpt requests ("fbbb would like to show this from “<test>” on their profile": the tester → their profile, the test → the test)
+    and Disputes ("… disputed what you paid for … on “<test>”");
+  - the dashboard's Needs you rows (who → profile, the test → the test). Each row was one big link; its link now lies over the card (as Messages rows, §124), so
+    the names' own links sit above it and the rest of the row still opens the item;
+  - the test page's Needs you: excerpt requests, disputes, call requests (the row still jumps to the request);
+  - the tester rows' sentences: "<name>: 1.0 ★ (1 rating)", "<name> rated you …", "You rated <name> …", "You blocked <name>. …", "On <name>'s profile …";
+  - the tester's invitations ("<dev> invited you to “<test>”": the developer's profile and the test's page; the card no longer is one link);
+  - the session page's lines naming the developer ("You rated …", "… rated you", "if <dev> changes these terms later", "it follows <dev>'s changes",
+    "<dev> offered new terms", "Your excerpt request is waiting for <dev>").
+- **Unchanged:** server-built plain text (bells, emails, the live box's and stop boxes' lines, which come from the server as text); buttons that carry a name
+  ("Charge <dev> $X", "Chat with <name>": a link can't sit inside a button); rows that are one link to their item (History, To do, Find cards), where the name is
+  already cut with its hover.
+- **Tests:** `tests/batch35-name-links.test.ts`; `long-text-cut` follows the dashboard row. **Pictures:** `docs/media/sent-locked/names-*`.
+
 ## §138 Text boxes stop growing at 60% of the screen (owner, Nov 3)
 
 - Every text box that can be dragged taller (written answers and Add more, the steps, questions, notes, reasons, the bio, chat…) stops at

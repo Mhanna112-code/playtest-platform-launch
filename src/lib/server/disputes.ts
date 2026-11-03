@@ -12,6 +12,6 @@ export async function disputesForSide(devId: string) {
     const c = byId.get(d.contractId);
     if (!c) return [];
     const at = d.callId ? calls.get(d.callId) : null;
-    return [{ id: d.id, testId: c.testId, testTitle: c.title, name: displayName(c.tester), reason: d.reason, what: at ? `the call on ${fmtDateTime(at)}` : subs.get(d.submissionId ?? "") === "recording" ? "their recording" : "their written answers" }];
+    return [{ id: d.id, testId: c.testId, testTitle: c.title, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.tester.id}`, reason: d.reason, what: at ? `the call on ${fmtDateTime(at)}` : subs.get(d.submissionId ?? "") === "recording" ? "their recording" : "their written answers" }];
   });
 }

@@ -1,4 +1,4 @@
-import { Cut } from "@/components/Cut";
+import { Cut, NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { owed } from "@/lib/server/holds";
@@ -137,7 +137,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         <DashboardActionBox id="dispute-sides" title="Disputes: add your side" count={disputeBox.length} kind="disputes">
             {disputeBox.map((d) => (
               <li key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-                <p className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} on “<Cut text={d.testTitle} kind="test" />”:</p>
+                <p className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} on “<NameLink text={d.testTitle} kind="test" href={`/app/tests/${d.testId}`} />”:</p>
                 <ReasonQuote text={d.reason} />
                 <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
               </li>
@@ -148,7 +148,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         <DashboardActionBox id="excerpt-requests" title="Excerpt requests" count={excerptBox.length} kind="excerpts">
           {excerptBox.map((x) => (
             <li key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white"><Cut text={x.tester} /></b> would like to show this from “<Cut text={x.testTitle} kind="test" />” on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
+              <p className="text-slate-300"><b className="text-white"><NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               {/* (Batch 16 section 37) The question it answers, above the quote. */}
               <ExcerptQuestion question={x.question} />
@@ -207,18 +207,19 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
   const oldOf = async (a: (typeof apps)[number]) => (a.kind === "rejoin" ? await db.contract.findUnique({ where: { testId_testerId: { testId: a.testId, testerId: a.testerId } } }) : null);
   // Each part sent and waiting for review (written answers, a recording, a held live call), a dispute waiting for the developer's side, an
   // application, a rejoin ask, a call request: every test's, newest first.
-  type Item = { key: string; at: Date; href: string; who: string; text: React.ReactNode; cta: string };
+  type Item = { key: string; at: Date; href: string; who: string; /** (batch 35 §137) their profile */ whoHref?: string | null; text: React.ReactNode; cta: string };
   const items: Item[] = [];
   for (const t of allTests)
     for (const c of t.contracts) {
       const who = displayName(c.tester);
+      const whoHref = c.tester.deletedAt ? null : `/app/testers/${c.testerId}`;
       // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work still waits for review when their payout account was connected.
       if (!testerPayable(c.tester)) continue;
-      for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><Cut text={t.title} kind="test" /></b></>, cta: "Review" });
+      for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, whoHref, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Review" });
       // (Batch 30 §2; batch 35 §136) Something added to a piece after it was paid, while it can still be paid more: in Needs review too (it opens its row).
-      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, text: <>{s.kind === "recording" ? "added to their recording" : "added to their written answers"} for <b className="text-white"><Cut text={t.title} kind="test" /></b> after you paid</>, cta: "Review" });
+      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, whoHref, text: <>{s.kind === "recording" ? "added to their recording" : "added to their written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b> after you paid</>, cta: "Review" });
       // (Batch 15 section 40) A call that took place, once its measured length is final: pay it.
-      for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>had a live call for <b className="text-white"><Cut text={t.title} kind="test" /></b>: pay it</>, cta: "Review" });
+      for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, whoHref, text: <>had a live call for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b>: pay it</>, cta: "Review" });
     }
   for (const a of apps) {
     const t = allTests.find((x) => x.id === a.testId)!;
@@ -226,13 +227,13 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     const name = x ? displayName(x) : "A tester";
     if (a.kind === "rejoin") {
       const old = await oldOf(a);
-      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white"><Cut text={t.title} kind="test" /></b></>, cta: "Answer" });
-    } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>applied to join <b className="text-white"><Cut text={t.title} kind="test" /></b></>, cta: "Answer" });
+      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, whoHref: x && !x.deletedAt ? `/app/testers/${x.id}` : null, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Answer" });
+    } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, whoHref: x && !x.deletedAt ? `/app/testers/${x.id}` : null, text: <>applied to join <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Answer" });
   }
   // (§106) Excerpt requests and disputes use their own inline boxes above, in both account states.
   for (const r of reqs) {
     const x = contractTest.get(r.contractId);
-    if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#req-${r.id}`, who: displayName(x.c.tester), text: <>asked for a live call · <b className="text-white"><Cut text={x.t.title} kind="test" /></b></>, cta: "Answer in Live session →" }); // (batch 16 section 35) opens the Call requests panel at it
+    if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#req-${r.id}`, who: displayName(x.c.tester), whoHref: x.c.tester.deletedAt ? null : `/app/testers/${x.c.testerId}`, text: <>asked for a live call · <b className="text-white"><NameLink text={x.t.title} kind="test" href={`/app/tests/${x.t.id}`} /></b></>, cta: "Answer in Live session →" }); // (batch 16 section 35) opens the Call requests panel at it
   }
   items.sort((a, b) => b.at.getTime() - a.at.getTime());
   const toReview = items.filter((i) => i.key.startsWith("s-") || i.key.startsWith("c-")).length;
@@ -292,13 +293,14 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950">{initial(r.who)}</span>
                   {/* (Owner, Nov 3, long text) The words keep at least 12rem: with a long name the action drops onto its own line (right-aligned) instead of
                       squeezing them into a narrow column. */}
-                  <p className="min-w-[min(100%,12rem)] flex-1 text-slate-300"><span className="font-medium text-white"><Cut text={r.who} /></span> {r.text}</p>
-                  <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300">{r.cta} <ArrowRight className="h-4 w-4" /></span>
+                  <p className="min-w-[min(100%,12rem)] flex-1 text-slate-300"><span className="font-medium text-white"><NameLink text={r.who} href={r.whoHref} /></span> {r.text}</p>
+                  {/* (Batch 35 §137) The row's link lies over the card; the names' own links sit above it. */}
+                  <Link href={r.href} className={`ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300 no-underline hover:no-underline ${CARD_LINK}`}>{r.cta} <ArrowRight className="h-4 w-4" /></Link>
                 </>
               );
               return (
                 <li key={r.key}>
-                  <Link href={r.href} className="rounded-lg border border-white/10 flex flex-wrap items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">{inner}</Link>
+                  <div className="relative flex flex-wrap items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-needs-row="">{inner}</div>
                 </li>
               );
             })}
@@ -692,9 +694,10 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           <ScrollList className="space-y-2">
             {invites.map((i) => (
               <li key={i.id} className="info flex flex-wrap items-center gap-2">
-                <Link href={`/app/find/${i.testId}`} className="mr-auto min-w-0 truncate" title={`${displayName(i.test.developer)} invited you to “${i.test.title}”`}>
-                  <Cut text={displayName(i.test.developer)} /> invited you to “<Cut text={i.test.title} kind="test" />”. {pausedTest(i.test) && <PausedTag />}
-                </Link>
+                {/* (Batch 35 §137) The names in the sentence link: the developer's profile, the test's page. */}
+                <span className="mr-auto min-w-0" title={`${displayName(i.test.developer)} invited you to “${i.test.title}”`}>
+                  <NameLink text={displayName(i.test.developer)} href={i.test.developer.deletedAt ? null : `/app/developers/${i.test.developerId}`} /> invited you to “<NameLink text={i.test.title} kind="test" href={`/app/find/${i.testId}`} />”. {pausedTest(i.test) && <PausedTag />}
+                </span>
                 {/* (Batch 16 section 32) Re-sent on a new listing, or the test is full: said on the card. */}
                 {resentIds.has(i.id) && <span className="badge" data-invite-resent="">Sent again on the new listing · {fmtDate(i.createdAt)}</span>}
                 {i.test._count.contracts >= i.test.spots && <span className="badge" data-invite-full="">Full right now: your invite stays open</span>}

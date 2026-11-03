@@ -1,0 +1,68 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import * as React from "react";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { NameLink } from "@/components/Cut";
+import { db } from "@/lib/db";
+import { pendingForDeveloper } from "@/lib/server/excerpts";
+import { disputesForSide } from "@/lib/server/disputes";
+
+// (Owner, Nov 3, batch 35 §137) Names and test names in SENTENCES link (a person to their profile, a test to the test) through <Cut>: cut, the full name on hover,
+// and on a tap the pop-up with "Open profile →" / "Open test →" and Copy. Server-built text (bells, emails) stays as it is.
+(globalThis as unknown as { React: typeof React }).React = React;
+const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
+
+describe("<NameLink>", () => {
+  it("a person's name: a link to their profile around the cut name (title, hidden full copy)", () => {
+    const h = renderToStaticMarkup(createElement(NameLink, { text: "Alexandria Montgomery-Wellington", href: "/app/testers/t1" }));
+    expect(h).toMatch(/^<a href="\/app\/testers\/t1" class="relative z-10 " data-name-link="person"><span title="Alexandria Montgomery-Wellington"/);
+    expect(h).toContain('data-cut-full="">Alexandria Montgomery-Wellington</span>');
+    // The tap pop-up offers the link the name sits in (Cut reads the closest a[href]).
+    expect(src("components/Cut.tsx")).toContain('const link = e.currentTarget.closest("a[href]") as HTMLAnchorElement | null;');
+  });
+
+  it("a test's name links to the test; no link (a deleted account) leaves the cut name", () => {
+    expect(renderToStaticMarkup(createElement(NameLink, { text: "Harbor Run", kind: "test", href: "/app/tests/x" }))).toBe('<a href="/app/tests/x" class="relative z-10 " data-name-link="test">Harbor Run</a>');
+    expect(renderToStaticMarkup(createElement(NameLink, { text: "Ana Silva", href: null }))).toBe("Ana Silva");
+  });
+});
+
+describe("the sentences that name someone link them", () => {
+  it("the developer's Excerpt requests row: the tester to their profile and the test to the test", () => {
+    const dash = src("app/app/page.tsx");
+    expect(dash).toContain('<NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on their profile');
+    expect(dash).toContain('<NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} on “<NameLink text={d.testTitle} kind="test" href={`/app/tests/${d.testId}`} />”');
+    const page = src("app/app/tests/[id]/page.tsx");
+    expect(page).toContain("<NameLink text={x.tester} href={x.testerHref} /> would like to show this on their profile");
+    expect(page).toContain("<NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for");
+  });
+
+  it("Needs you rows: the row's own link lies over the card, so the names' links sit above it", () => {
+    const dash = src("app/app/page.tsx");
+    expect(dash).toContain("<NameLink text={r.who} href={r.whoHref} />");
+    expect(dash).toContain("${CARD_LINK}`}>{r.cta} <ArrowRight");
+    expect(dash).toContain('<div className="relative flex flex-wrap items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-needs-row="">');
+    expect(dash).toContain('<NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} />');
+    expect(src("app/app/tests/[id]/NeedsRequests.tsx")).toContain("<NameLink text={r.name} href={r.testerHref} />");
+  });
+
+  it("tester rows, the tester's invitations and the session page's lines", () => {
+    const page = src("app/app/tests/[id]/page.tsx");
+    for (const s of ["<NameLink text={name} href={personHref} />: {ri.avg}", "<NameLink text={name} href={personHref} /> rated you:", "You rated <NameLink text={name} href={personHref} />", "You blocked <NameLink text={name} href={personHref} />", "On <NameLink text={name} href={personHref} />&apos;s profile"]) expect(page).toContain(s);
+    expect(src("app/app/page.tsx")).toContain("invited you to “<NameLink text={i.test.title} kind=\"test\" href={`/app/find/${i.testId}`} />”");
+    const session = src("app/app/sessions/[id]/page.tsx");
+    expect(session).toContain("const devHref = devGone ? null : `/app/developers/${c.test.developerId}`;");
+    expect(session.match(/<NameLink text=\{dev\} href=\{devHref\} \/>/g)!.length).toBeGreaterThanOrEqual(7);
+  });
+
+  it("the excerpt and dispute rows carry the tester's profile link (none for a deleted account)", async () => {
+    const both = src("lib/server/excerpts.ts") + src("lib/server/disputes.ts");
+    expect(both).toContain("testerHref: x.tester.deletedAt ? null : `/app/testers/${x.testerId}`");
+    expect(both).toContain("testerHref: c.tester.deletedAt ? null : `/app/testers/${c.tester.id}`");
+    const u = await db.user.create({ data: { email: `names-${Date.now()}@playtest.test`, name: "Nora", isDeveloper: true } });
+    expect(await pendingForDeveloper(u.id)).toEqual([]);
+    expect(Array.isArray(await disputesForSide(u.id))).toBe(true);
+  });
+});
