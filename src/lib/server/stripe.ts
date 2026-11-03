@@ -121,20 +121,56 @@ export function getStripe(): Stripe {
   if (fakeOn()) return fakeStripe;
   const key = process.env.STRIPE_SECRET_KEY?.trim();
   if (!key) throw new HttpError(503, "payments_off", "Payments aren't set up yet.");
-  if (key.startsWith("sk_live_") && process.env.STRIPE_ALLOW_LIVE !== "1") throw new HttpError(503, "payments_off", "Payments are switched off right now. Try again later.");
+  if (paymentsOff()) throw new HttpError(503, "payments_off", PAYMENTS_OFF);
   return new Stripe(key);
 }
+/** (§130 addition) A live key without STRIPE_ALLOW_LIVE=1: every Stripe call is refused (payments_off). Routes check it before counting a card attempt. */
+export const paymentsOff = () => !override && !fakeOn() && !!process.env.STRIPE_SECRET_KEY?.trim().startsWith("sk_live_") && process.env.STRIPE_ALLOW_LIVE !== "1";
 
 type Party = { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean; testerSuspendedAt?: Date | null };
 
 /** (Batch 32 §15) A charge on a developer with no saved card: the failure recorded with it (the developer's Payments asks for a card and Pay what you owe). */
 export const NO_CARD_SAVED = "No card is saved on this account.";
+/** The press's line when there's no card to charge (none saved, or the saved one is gone at Stripe: §130). */
+export const ADD_CARD_FIRST = "Add a card in Payments first, then press Pay again.";
 /** Before charging: the developer needs a saved card (only when Stripe is on). */
 export function cardRefusal(dev: Party) {
   if (!stripeOn()) return "";
-  if (!dev.stripeCustomerId || !dev.stripePaymentMethodId) return "Add a card in Payments first, then press Pay again.";
+  if (!dev.stripeCustomerId || !dev.stripePaymentMethodId) return ADD_CARD_FIRST;
   return "";
 }
+
+// ---------- (Owner, Nov 2, batch 35 §130) Ids Stripe doesn't know ----------
+// Every Stripe id stored before the live switch was made in TEST mode; in live mode Stripe answers "No such customer / payment_method / account / payment_intent"
+// (resource_missing). A stale id is never a decline: no hold, no debt, no retry counted, nothing charged twice, no record lost.
+
+type StripeMissing = { code?: string; param?: string; message?: string; raw?: { code?: string; param?: string; message?: string } };
+/** Stripe doesn't know the id it was given (resource_missing). */
+export const isMissing = (e: unknown) => {
+  const x = (e ?? {}) as StripeMissing;
+  return x.code === "resource_missing" || x.raw?.code === "resource_missing";
+};
+const missingText = (e: unknown) => {
+  const x = (e ?? {}) as StripeMissing;
+  return `${x.param ?? x.raw?.param ?? ""} ${x.message ?? x.raw?.message ?? ""}`.toLowerCase();
+};
+/** The missing id is a Connect account (a charge's destination, a transfer's, an onboarding link's account). */
+export const missingAccount = (e: unknown) => isMissing(e) && /destination|account|acct_/.test(missingText(e));
+/** The developer's saved card is gone at Stripe: the customer and card fields are cleared, so Payments shows "Add a card" (§130). */
+export async function forgetCard(userId: string) {
+  await db.user.updateMany({ where: { id: userId }, data: { stripeCustomerId: null, stripePaymentMethodId: null, cardExpMonth: null, cardExpYear: null } });
+  console.error("[stripe] saved card unknown to Stripe: cleared for", userId);
+}
+/** The tester's Connect account is gone at Stripe: cleared, so payouts wait for "Connect a payout account" (§130). */
+export async function forgetPayout(userId: string) {
+  await db.user.updateMany({ where: { id: userId }, data: { stripeAccountId: null, payoutsReady: false } });
+  console.error("[stripe] payout account unknown to Stripe: cleared for", userId);
+}
+/** (§130) A charge on a card Stripe doesn't know: NOT a decline (its own code, "no_card", like a press with no card saved). */
+export const cardGone = () => new HttpError(409, "no_card", ADD_CARD_FIRST);
+/** (§130 addition) Live keys without STRIPE_ALLOW_LIVE: getStripe's refusal. Never a decline, a hold, a debt or a counted card attempt. */
+export const PAYMENTS_OFF = "Payments are switched off right now. Try again later.";
+export const isPaymentsOff = (e: unknown) => e instanceof HttpError && e.code === "payments_off";
 
 /**
  * (Owner, Oct 29, batch 11) How a charge is made: "press" = the developer's own press, on-session (no off_session), so the bank may ask them to confirm in the page;
@@ -194,28 +230,49 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
   // card (the payment hold and Pay what you owe; the tester reads only "delayed"), never sent to Stripe with an empty card ("Payments are having a problem").
   if (!dev.stripeCustomerId || !dev.stripePaymentMethodId) throw new HttpError(402, "card_failed", NO_CARD_SAVED);
   const stripe = getStripe();
+  type Charged = ReturnType<typeof splitFee> & { status: string; transferStatus: string; stripePaymentIntentId: string | null; clientSecret?: string; checkUrl?: string };
+  const attempt = async (destination: string | null, key: string): Promise<Charged> => {
+    try {
+      const pi = await stripe.paymentIntents.create(
+        {
+          amount: amountCents,
+          currency: "usd",
+          customer: dev.stripeCustomerId!,
+          payment_method: dev.stripePaymentMethodId!,
+          ...pressParams(mode),
+          confirm: true,
+          description,
+          metadata: { developerId: dev.id, testerId: tester.id, payKey },
+          ...(destination ? { application_fee_amount: split.feeCents, transfer_data: { destination } } : {}),
+        },
+        { idempotencyKey: key },
+      );
+      if (piWaits(pi)) return { ...split, transferStatus: destination ? "sent" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
+      if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
+      return { status: "charged", ...split, transferStatus: destination ? "sent" : "waiting", stripePaymentIntentId: pi.id };
+    } catch (e) {
+      const na = needsActionOf(e);
+      if (na) return { ...split, transferStatus: destination ? "sent" : "waiting", ...na };
+      throw e;
+    }
+  };
   const destination = tester.stripeAccountId && tester.payoutsReady ? tester.stripeAccountId : null;
   try {
-    const pi = await stripe.paymentIntents.create(
-      {
-        amount: amountCents,
-        currency: "usd",
-        customer: dev.stripeCustomerId!,
-        payment_method: dev.stripePaymentMethodId!,
-        ...pressParams(mode),
-        confirm: true,
-        description,
-        metadata: { developerId: dev.id, testerId: tester.id, payKey },
-        ...(destination ? { application_fee_amount: split.feeCents, transfer_data: { destination } } : {}),
-      },
-      { idempotencyKey: `pay-${payKey}` },
-    );
-    if (piWaits(pi)) return { ...split, transferStatus: destination ? "sent" : "waiting", status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
-    if (pi.status !== "succeeded") throw new Error(`status ${pi.status}`);
-    return { status: "charged", ...split, transferStatus: destination ? "sent" : "waiting", stripePaymentIntentId: pi.id };
+    try {
+      return await attempt(destination, `pay-${payKey}`);
+    } catch (e) {
+      // (§130) The tester's payout account is unknown to Stripe: it's cleared and the charge is made without it (the share waits for a new payout setup). Its own
+      // key, the same every time, so a repeat of this press meets this same charge, never a second one.
+      if (!missingAccount(e)) throw e;
+      if (tester.stripeAccountId) await forgetPayout(tester.id);
+      return await attempt(null, `pay-${payKey}-nodest`);
+    }
   } catch (e) {
-    const na = needsActionOf(e);
-    if (na) return { ...split, transferStatus: destination ? "sent" : "waiting", ...na };
+    // (§130) The developer's customer or card is unknown to Stripe: cleared, and it's "no card saved", never a decline.
+    if (isMissing(e)) {
+      await forgetCard(dev.id);
+      throw cardGone();
+    }
     throw chargeError(e, "Your card couldn't be charged. Update your card in Payments and press Pay again.");
   }
 }
@@ -245,9 +302,8 @@ function chargeError(e: unknown, declined: string): HttpError {
   // (Batch 35 §122) The bank asking to authenticate is never a decline (a debt): with no PaymentIntent to confirm, it waits and is tried again.
   if (wantsAuth(e)) return new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
   if (isCardError(e)) return new HttpError(402, "card_failed", declined);
-  const stripeError = e as { type?: string; code?: string; raw?: { code?: string; message?: string } };
-  if (stripeError.type === "StripeInvalidRequestError" && (stripeError.code === "resource_missing" || stripeError.raw?.code === "resource_missing"))
-    return new HttpError(402, "card_failed", NO_CARD_SAVED);
+  // (§130) An id Stripe doesn't know is never a decline (the callers clear the stale card first).
+  if (isMissing(e)) return cardGone();
   return new HttpError(503, "payments_problem", PAYMENTS_PROBLEM);
 }
 
@@ -279,6 +335,7 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
   } catch (e) {
     const na = needsActionOf(e);
     if (na) return na;
+    if (isMissing(e)) { await forgetCard(dev.id); throw cardGone(); } // (§130) never a decline
     throw chargeError(e, "Your card couldn't be charged. Update your card in Payments and try again.");
   }
 }
@@ -300,6 +357,7 @@ export async function authorize(dev: Party, amountCents: number, reservationId: 
   } catch (e) {
     const na = needsActionOf(e);
     if (na) return na;
+    if (isMissing(e)) { await forgetCard(dev.id); throw cardGone(); } // (§130) never a decline
     throw chargeError(e, "Your card couldn't be charged. Update your card in Payments and try again.");
   }
 }
@@ -323,6 +381,11 @@ export async function sendWaitingShares(testerId: string) {
     } catch (e) {
       console.error("[payouts] waiting share:", (e as Error).message);
       await db.payment.update({ where: { id: p.id }, data: { transferStatus: "waiting" } });
+      // (§130) The payout account is unknown to Stripe: cleared, so the shares wait for "Connect a payout account" (the not-ready path).
+      if (missingAccount(e)) {
+        await forgetPayout(testerId);
+        break;
+      }
     }
   }
   if (cents > 0) {
@@ -338,7 +401,8 @@ export async function sendWaitingShares(testerId: string) {
  */
 export async function transferShare(p: { id: string; stripePaymentIntentId: string | null }, cents: number, destination: string) {
   const stripe = getStripe();
-  const pi = p.stripePaymentIntentId ? await stripe.paymentIntents.retrieve(p.stripePaymentIntentId) : null;
+  // (§130) A charge Stripe doesn't know (made in test mode): there's nothing to send from (it stays waiting), and it's not the payout account's fault.
+  const pi = p.stripePaymentIntentId ? await stripe.paymentIntents.retrieve(p.stripePaymentIntentId).catch((e) => { if (isMissing(e)) return null; throw e; }) : null;
   const source = typeof pi?.latest_charge === "string" ? pi.latest_charge : pi?.latest_charge?.id;
   if (!source) throw new Error(`no charge to send payment ${p.id}'s share from`);
   return stripe.transfers.create({ amount: cents, currency: "usd", destination, source_transaction: source, metadata: { paymentId: p.id } }, { idempotencyKey: `share-${p.id}` });
@@ -360,12 +424,12 @@ export const payoutDoneLine = (cents: number) => `Your payout setup is done: ${m
 /** Developer: Stripe Checkout in setup mode to save a card. */
 export async function cardSetupUrl(user: Party, base: string) {
   const stripe = getStripe();
-  let customer = user.stripeCustomerId;
-  if (!customer) {
-    customer = (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
-    await db.user.update({ where: { id: user.id }, data: { stripeCustomerId: customer } });
-  }
-  const s = await stripe.checkout.sessions.create({
+  const newCustomer = async () => {
+    const id = (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
+    await db.user.update({ where: { id: user.id }, data: { stripeCustomerId: id } });
+    return id;
+  };
+  const session = (customer: string) => stripe.checkout.sessions.create({
     mode: "setup",
     customer,
     currency: "usd",
@@ -373,7 +437,15 @@ export async function cardSetupUrl(user: Party, base: string) {
     success_url: `${base}/api/payments/card-saved?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${base}/app/payments`,
   });
-  return s.url!;
+  const customer = user.stripeCustomerId ?? (await newCustomer());
+  try {
+    return (await session(customer)).url!;
+  } catch (e) {
+    // (§130) The saved customer is unknown to Stripe: the stale card is cleared and the card is saved on a new customer.
+    if (!isMissing(e) || !user.stripeCustomerId) throw e;
+    await forgetCard(user.id);
+    return (await session(await newCustomer())).url!;
+  }
 }
 
 export async function saveCardFromCheckout(userId: string, sessionId: string) {
@@ -407,7 +479,11 @@ export async function cardExpiryReminders(now = new Date()) {
   for (const user of users) {
     let pm: Stripe.PaymentMethod;
     try { pm = await stripe.paymentMethods.retrieve(user.stripePaymentMethodId!); }
-    catch (e) { console.error("[card expiry] refresh failed:", (e as Error).message); continue; }
+    catch (e) {
+      console.error("[card expiry] refresh failed:", (e as Error).message);
+      if (isMissing(e)) await forgetCard(user.id); // (§130) no card any more: no reminder; Payments shows "Add a card"
+      continue;
+    }
     const month = pm.card?.exp_month, year = pm.card?.exp_year;
     if (!month || !year) continue;
     if (month !== user.cardExpMonth || year !== user.cardExpYear) await db.user.update({ where: { id: user.id }, data: { cardExpMonth: month, cardExpYear: year } });
@@ -431,13 +507,21 @@ export async function cardExpiryReminders(now = new Date()) {
 /** Tester: Stripe Connect Express onboarding link. */
 export async function payoutSetupUrl(user: Party, base: string) {
   const stripe = getStripe();
-  let account = user.stripeAccountId;
-  if (!account) {
-    account = (await stripe.accounts.create({ type: "express", email: user.email, capabilities: { transfers: { requested: true } }, metadata: { userId: user.id } })).id;
-    await db.user.update({ where: { id: user.id }, data: { stripeAccountId: account } });
+  const newAccount = async () => {
+    const id = (await stripe.accounts.create({ type: "express", email: user.email, capabilities: { transfers: { requested: true } }, metadata: { userId: user.id } })).id;
+    await db.user.update({ where: { id: user.id }, data: { stripeAccountId: id, payoutsReady: false } });
+    return id;
+  };
+  const link = (account: string) => stripe.accountLinks.create({ account, type: "account_onboarding", refresh_url: `${base}/app/payments`, return_url: `${base}/api/payments/payout-return` });
+  const account = user.stripeAccountId ?? (await newAccount());
+  try {
+    return (await link(account)).url;
+  } catch (e) {
+    // (§130) The saved account is unknown to Stripe: cleared, and onboarding starts on a new account.
+    if (!isMissing(e) || !user.stripeAccountId) throw e;
+    await forgetPayout(user.id);
+    return (await link(await newAccount())).url;
   }
-  const link = await stripe.accountLinks.create({ account, type: "account_onboarding", refresh_url: `${base}/app/payments`, return_url: `${base}/api/payments/payout-return` });
-  return link.url;
 }
 
 /**
@@ -449,7 +533,16 @@ export const payoutReadyOf = (a: { payouts_enabled?: boolean | null; capabilitie
 export async function refreshPayoutStatus(userId: string) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   if (!user.stripeAccountId) return false;
-  const a = await getStripe().accounts.retrieve(user.stripeAccountId);
+  let a: Stripe.Account;
+  try {
+    a = await getStripe().accounts.retrieve(user.stripeAccountId);
+  } catch (e) {
+    // (§130) The account is unknown to Stripe: cleared (not ready), so the tester sees "Connect a payout account" again.
+    if (!isMissing(e)) throw e;
+    await forgetPayout(userId);
+    if (user.payoutsReady) await logAccountChange(userId, "", { scopes: ["payments"], field: "payout", label: "Payout account", before: "connected", after: "not connected" });
+    return false;
+  }
   const ready = payoutReadyOf(a);
   await db.user.update({ where: { id: userId }, data: { payoutsReady: ready } });
   // (Batch 16 section 27) For a Payments page open in another tab or device.

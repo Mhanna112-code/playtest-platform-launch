@@ -5,7 +5,7 @@ import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } fro
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
 import { notify, renderFor } from "./notify";
-import { bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, getStripe, stripeOn, type NeedsAction } from "./stripe";
+import { ADD_CARD_FIRST, bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, forgetCard, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 
 // (Owner, Oct 29, batch 11) "Your bank wants to confirm this payment": Stripe's requires_action is NOT a decline.
 //
@@ -182,7 +182,8 @@ export async function bankWaitingOnTest(devId: string, testId: string) {
 async function piStatus(id: string, simulate?: unknown) {
   if (fakeOn() && (simulate === "succeeded" || simulate === "failed")) fakeConfirm(id, simulate === "succeeded");
   if (!stripeOn()) return simulate === "succeeded" ? "succeeded" : "canceled";
-  const pi = await getStripe().paymentIntents.retrieve(id);
+  // (§130) A check Stripe doesn't know (made in test mode) was never charged: as good as cancelled, never paid.
+  const pi = await getStripe().paymentIntents.retrieve(id).catch((e) => { if (isMissing(e)) return { status: "canceled" as const }; throw e; });
   return pi.status;
 }
 
@@ -248,7 +249,15 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   if (!stripeOn() || fakeOn()) return { paymentId, clientSecret: `${p.actionPi}_secret_fake`, publishableKey: pk(), simulated: true, paymentMethod: u.stripePaymentMethodId, checkUrl: null };
   const stripe = getStripe();
-  let pi = await stripe.paymentIntents.retrieve(p.actionPi!);
+  let pi: Awaited<ReturnType<typeof stripe.paymentIntents.retrieve>>;
+  try {
+    pi = await stripe.paymentIntents.retrieve(p.actionPi!);
+  } catch (e) {
+    if (!isMissing(e)) throw e;
+    // (§130) Stripe doesn't know this check (made in test mode): nothing was charged on it. It's closed as cancelled (never paid, never a decline).
+    if ((await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null, actionBy: null } })).count === 1) await closeStaleCheck(p);
+    throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
+  }
   // (Batch 28 §10, checked on Stripe test mode) A renewal's invoice (or an off-session try) that the bank wants confirmed waits on Stripe.js ("use_stripe_sdk"): confirmed
   // again here with return_url, Stripe hands back the bank's check page, shown inline like a press's.
   const sdkOnly = pi.status === "requires_action" && !checkUrlOf(pi);
@@ -260,6 +269,11 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
       pi = await stripe.paymentIntents.confirm(pi.id, { payment_method: u.stripePaymentMethodId, return_url: bankReturnUrl() });
     } catch (e) {
       console.error("[stripe] confirm start:", (e as Error).message);
+      // (§130) The card on file is unknown to Stripe: cleared, and the developer adds a card (not a decline; the check keeps waiting until its time).
+      if (isMissing(e)) {
+        await forgetCard(u.id);
+        throw new HttpError(409, "no_card", ADD_CARD_FIRST);
+      }
       // (Batch 35 §92) The card on file was declined: say so, and by when to confirm with another card (a charge made while away keeps waiting until then).
       const declined = (e as { type?: string }).type === "StripeCardError";
       throw new HttpError(402, "not_confirmed", declined && p.actionBy ? cardDeclinedConfirmLine(fmtDateTimeIn(p.actionBy, u.timeZone)) : BANK_NOT_CONFIRMED);
@@ -340,7 +354,7 @@ export async function release(paymentId: string) {
   else if (p.actionPi && stripeOn()) {
     // (Batch 35 §117 rule 4) Never an orphan check: cancelled at Stripe first; one that had already gone through is recorded as paid (never charged again). When
     // Stripe's answer is unclear the check stays tracked (the clock tries again).
-    let end: "cancelled" | "succeeded";
+    let end: "cancelled" | "succeeded" | "missing";
     try {
       end = await (await import("./owedOnce")).dropCheck(p.actionPi);
     } catch {
@@ -386,6 +400,8 @@ async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThr
   // Claimed, so a Confirm finishing at the same moment and this clock never both act on it.
   if ((await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null, actionBy: null } })).count !== 1) return;
   if (end === "succeeded") return void (await finish(p.id));
+  // (§130) A check Stripe doesn't know (made in test mode) didn't run out: it's closed with nothing charged, never counted as declined.
+  if (end === "missing") return closeStaleCheck(p);
   if (p.kind === "owed") {
     // Pay what you owe's one payment: each debt stays owed. (§122) A one payment for charges made while away counts as declined: each becomes a debt (during a hold
     // they keep waiting for the lift instead, §113).
@@ -409,6 +425,30 @@ async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThr
     }
   }
   // else: a debt with a check of its own (before §117): it stays owed.
+}
+
+/** (§130) Why a check closed by the live switch, or found unknown to Stripe, was closed (kept on the payment as its failure). */
+export const STALE_CHECK = "Closed: this check was made in Stripe's other mode (test or live). Nothing was charged.";
+/**
+ * (Owner, Nov 2, batch 35 §130) A bank check whose PaymentIntent Stripe doesn't know (made in test mode; already unclaimed: actionPi cleared): closed with NOTHING
+ * charged, never paid and never a decline. A press's check is released as a cancelled press; Pay what you owe's one payment lets what it covered be owed again (charges
+ * it covered wait again, never declined); a retried chargeback's row goes (the reversal stays owed); a debt with a check of its own stays owed; a renewal's check is
+ * cancelled; a charge made while away (a tester's Charge, an automatic call charge, a dispute decision) is cancelled and its part is unpaid again (the review the charge
+ * made goes, a dispute is open again; the row stays as the record, its keys freed), as when Stripe failed for a reason that isn't the card. scripts/stripe-mode-switch.mjs closes them the same way.
+ */
+export async function closeStaleCheck(p: { id: string }) {
+  const row = await db.payment.findUnique({ where: { id: p.id } });
+  if (!row) return;
+  if (row.status === "needs_action" || row.status === "paying") return release(row.id);
+  if (row.kind === "owed") return void (await (await import("./owedOnce")).releaseOwed(row.id));
+  if (row.status !== "needs_confirmation") return; // a debt with a check of its own: it stays owed
+  if (row.kind === "chargeback") return void (await db.payment.delete({ where: { id: row.id } }));
+  await db.$transaction(async (tx) => {
+    const claimed = await tx.payment.updateMany({ where: { id: row.id, status: "needs_confirmation" }, data: { status: "cancelled", failure: STALE_CHECK, actionPi: null, actionBy: null, payKey: null, pressKey: null } }); // keys freed: the part can be charged again
+    if (!claimed.count || row.kind === "subscription") return;
+    if (row.kind === "dispute" && row.disputeId) await tx.dispute.updateMany({ where: { id: row.disputeId, status: "decided" }, data: { status: "open", decidedCents: null, decidedAt: null, decidedById: null, decisionNote: "" } });
+    else if ((row.kind === "review" || row.kind === "call") && (row.submissionId || row.callId)) await tx.review.deleteMany({ where: row.submissionId ? { submissionId: row.submissionId } : { callId: row.callId! } });
+  });
 }
 
 /** (Batch 12 section 5) Is a payment for this piece waiting for the bank's confirmation right now? */

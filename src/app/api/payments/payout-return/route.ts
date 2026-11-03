@@ -1,6 +1,6 @@
 import { appUrl } from "@/lib/server/auth";
 import { requireUser } from "@/lib/server/session";
-import { refreshPayoutStatus } from "@/lib/server/stripe";
+import { isPaymentsOff, refreshPayoutStatus } from "@/lib/server/stripe";
 
 export async function GET(req: Request) {
   const base = appUrl(req);
@@ -10,6 +10,7 @@ export async function GET(req: Request) {
     const ready = await refreshPayoutStatus(u.id);
     return Response.redirect(`${base}/app/payments?${ready ? "saved=payout" : "pending=payout"}`, 303);
   } catch (e) {
+    if (isPaymentsOff(e)) return Response.redirect(`${base}/app/payments?error=paused#payout`, 303); // (§130)
     console.error("[payments] payout return:", (e as Error).message);
     return Response.redirect(`${base}/app/payments?error=payout`, 303);
   }

@@ -4,7 +4,7 @@ import { displayName, money } from "@/lib/format";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { bell, notify } from "./notify";
-import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, getStripe, stripeOn, transferShare } from "./stripe";
+import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
 import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
@@ -100,6 +100,7 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
     await db.reservation.update({ where: { id: r.id }, data: { status: "failed", endedAt: new Date() } });
     if (e instanceof HttpError && e.code === "card_failed") return { failed: "Your card was declined." };
     if (e instanceof HttpError && e.code === "payments_problem") return { failed: PAYMENTS_PROBLEM };
+    if (e instanceof HttpError && (e.code === "no_card" || e.code === "payments_off")) return { failed: e.message }; // (§130) never a decline
     return { failed: "It didn't go through. Try again shortly." };
   }
 }
@@ -165,17 +166,23 @@ export async function startCardVerification(user: { id: string; email: string; s
     return { simulated: true as const, verified: true };
   }
   const stripe = getStripe();
-  let customer = user.stripeCustomerId;
-  if (!customer) {
-    customer = (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
-    await db.user.update({ where: { id: user.id }, data: { stripeCustomerId: customer } });
-  }
-  const si = await stripe.setupIntents.create({
+  const newCustomer = async () => {
+    const id = (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
+    await db.user.update({ where: { id: user.id }, data: { stripeCustomerId: id } });
+    return id;
+  };
+  const setup = (customer: string) => stripe.setupIntents.create({
     customer,
     usage: "off_session",
     allowed_payment_method_types: ["card"],
     payment_method_options: { card: { request_three_d_secure: "any" } },
     metadata: { userId: user.id, purpose: "chargeback-verify" },
+  });
+  // (§130) The saved customer is unknown to Stripe (made in test mode): the stale card is cleared and the check runs on a new customer.
+  const si = await setup(user.stripeCustomerId ?? (await newCustomer())).catch(async (e) => {
+    if (!isMissing(e) || !user.stripeCustomerId) throw e;
+    await forgetCard(user.id);
+    return setup(await newCustomer());
   });
   return { simulated: false as const, clientSecret: si.client_secret!, setupIntentId: si.id, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY?.trim() ?? "" };
 }
@@ -187,7 +194,8 @@ export async function startCardVerification(user: { id: string; email: string; s
 export async function confirmCardCheck(userId: string, setupIntentId: string, paymentMethodId: string) {
   if (simulated()) throw new HttpError(409, "simulated", "There's no card form to confirm here.");
   const stripe = getStripe();
-  const si = await stripe.setupIntents.retrieve(setupIntentId);
+  // (§130) A check Stripe doesn't know (an old page's, from test mode): not verified, start again.
+  const si = await stripe.setupIntents.retrieve(setupIntentId).catch((e) => { if (isMissing(e)) throw new HttpError(409, "not_verified", CARD_NOT_VERIFIED); throw e; });
   if (si.metadata?.userId !== userId || si.metadata?.purpose !== "chargeback-verify") throw new HttpError(403, "bad_setup", "That card check belongs to another account.");
   try {
     const done = await stripe.setupIntents.confirm(setupIntentId, { payment_method: paymentMethodId, return_url: bankReturnUrl() });
@@ -216,7 +224,7 @@ export async function finishCardVerification(userId: string, setupIntentId: stri
     return { verified: true };
   }
   const stripe = getStripe();
-  const si = (await stripe.setupIntents.retrieve(setupIntentId, { expand: ["latest_attempt"] })) as Stripe.SetupIntent;
+  const si = (await stripe.setupIntents.retrieve(setupIntentId, { expand: ["latest_attempt"] }).catch((e) => { if (isMissing(e)) throw new HttpError(409, "not_verified", CARD_NOT_VERIFIED); throw e; })) as Stripe.SetupIntent; // (§130)
   if (si.metadata?.userId !== userId || si.metadata?.purpose !== "chargeback-verify" || (user.stripeCustomerId && si.customer !== user.stripeCustomerId))
     throw new HttpError(403, "bad_setup", "That card check belongs to another account.");
   if (si.created * 1000 < user.holdStartedAt.getTime() - 60_000) throw new HttpError(409, "old_setup", "That card check is from before the hold. Verify a card again.");

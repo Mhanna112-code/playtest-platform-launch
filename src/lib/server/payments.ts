@@ -358,6 +358,8 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "card_failed")) {
         await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null, decidedById: null, decisionNote: "" } }); // (Nov 2, §119) no longer names who
+        // (§130) The developer's card was unknown to Stripe (cleared): the team reads why, not the developer's "Add a card".
+        if (e instanceof HttpError && e.code === "no_card") throw new HttpError(409, "no_card", "The developer's saved card is no longer available, so nothing was charged and the dispute stays open. Decide again once they add a card.");
         throw e;
       }
       const failed = await db.payment.create({ data: { ...owedRow, status: "failed", failure: e.message, owedUntil: new Date() } });

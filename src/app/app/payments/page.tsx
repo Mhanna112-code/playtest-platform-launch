@@ -7,7 +7,7 @@ import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { money } from "@/lib/server/dateFormat";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
-import { stripeOn } from "@/lib/server/stripe";
+import { PAYMENTS_OFF, stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -41,6 +41,7 @@ const MESSAGES: Record<string, string> = {
   verify: "We couldn't verify the card. Try again or use another card.",
   confirm: "Confirm your email first: payouts go only to a confirmed account. We sent you a link.",
   card_limit: TOO_MANY_CARD_ATTEMPTS, // (batch 35 §127) shown under Add a card / Change card, not up here
+  paused: PAYMENTS_OFF, // (§130) live keys while payments are switched off (STRIPE_ALLOW_LIVE not set): Add a card / payout setup
 };
 
 export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
@@ -64,6 +65,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
     const again = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === "string")).toString();
     return <OtherSidePage side={returnSide} next={`/app/payments${again ? `?${again}` : ""}`} />;
   }
+  // (§130) Read first: a card Stripe doesn't know is cleared here (on `u` too), so this same page offers "Add a card".
+  const cardLine = dev ? await savedCardLine(u) : "";
   // (Batch 30 §8) The owed fingerprint as of before the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const owedFp = dev ? await owedV(u.id) : "";
   const cbSteps = dev ? await chargebackSteps(u.id) : null;
@@ -144,7 +147,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         <>
           <section id="card" className="card scroll-mt-24 space-y-3">
             <h2 className="flex items-center gap-2 font-semibold text-white"><CreditCard className="h-5 w-5 text-indigo-300" /> Your card</h2>
-            <p className="text-sm text-slate-300">{await savedCardLine(u)}</p>
+            <p className="text-sm text-slate-300">{cardLine}</p>
             {/* (Batch 15 section 41, L5) Stripe objects are made only on a POST. */}
             {on && <AccountFormButton action="/api/payments/card" seenAt={seenAt} press={u.stripePaymentMethodId ? "Change card" : "Add a card"} stop={stopFor("card")}><CreditCard className="h-4 w-4" /> {u.stripePaymentMethodId ? "Change card" : "Add a card"}</AccountFormButton>}
             {/* (Owner, Nov 2, batch 35 §127) Too many card attempts: the refusal under the button that was pressed. */}
