@@ -12,7 +12,7 @@ import { ALL_BACK, CONFIRM_ALL, allConfirmedLine, allWaitingLine, confirmAllLabe
 import { refusalLine } from "@/lib/pressLabels";
 
 /** What the server says Confirm all would cover now (src/lib/server/confirmAll.ts confirmAllState). */
-export type ConfirmAllProps = { ids: string[]; totalCents: number; leftOut: string | null; open: { id: string; cents: number; n: number } | null };
+export type ConfirmAllProps = { ids: string[]; totalCents: number; leftOut: string | null; open: { id: string; cents: number; n: number } | null; /** (§159) the page's render time: each item's own stops count from it */ seenAt?: string };
 
 /**
  * (Owner, Nov 3, batch 35 §147) "Confirm all (3) · $42.00" on the dashboard's "Your bank wants you to confirm" box and on Payments' confirm list, when 2 or more
@@ -20,12 +20,14 @@ export type ConfirmAllProps = { ids: string[]; totalCents: number; leftOut: stri
  * when the page showed other payments or another total; the second press goes ahead. A renewal keeps its own Confirm (the small line says so). While a Confirm all
  * check is open (another tab, or one left open), the box says so, with "Cancel this check".
  */
-export function ConfirmAll({ ids, totalCents, leftOut, open }: ConfirmAllProps) {
+export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt = "" }: ConfirmAllProps) {
   const bank = useBankCheck();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
   const [changes, setChanges] = useState<Change[] | null>(null);
+  // (§159) When the stop box last updated: the second press goes ahead only if nothing new happened on any item since.
+  const [boxAt, setBoxAt] = useState("");
   // What the page (or the stop box) showed last: every press is checked against it.
   const [shown, setShown] = useState({ ids, totalCents });
   const key = `${ids.join(",")}:${totalCents}`;
@@ -48,7 +50,7 @@ export function ConfirmAll({ ids, totalCents, leftOut, open }: ConfirmAllProps) 
     setNote("");
     setPressed(label);
     try {
-      const r = await api<{ confirm?: BankAction; n?: number; cents?: number; already?: string; line?: string }>("/api/payments/confirm-all", { seenTotalCents: shown.totalCents, seenIds: shown.ids, confirmed: changes != null, ...(over ? { over200 } : {}) });
+      const r = await api<{ confirm?: BankAction; n?: number; cents?: number; already?: string; line?: string }>("/api/payments/confirm-all", { seenTotalCents: shown.totalCents, seenIds: shown.ids, confirmed: changes != null, ...(seenAt ? { seenAt } : {}), ...(changes != null && boxAt ? { boxAt } : {}), ...(over ? { over200 } : {}) });
       setChanges(null);
       if (!r.confirm) return fin.finish(r.line ?? "");
       try {
@@ -64,6 +66,7 @@ export function ConfirmAll({ ids, totalCents, leftOut, open }: ConfirmAllProps) 
       if (e instanceof ApiError && e.code === "stop_once") {
         setChanges((c) => (c ? mergeChanges(c, (e.data.changes as Change[]) ?? []) : ((e.data.changes as Change[]) ?? [])));
         if (typeof e.data.totalCents === "number" && Array.isArray(e.data.ids)) setShown({ ids: e.data.ids as string[], totalCents: e.data.totalCents });
+        if (typeof e.data.now === "string") setBoxAt(e.data.now);
       } else setErr(errOf(e));
       setBusy(false);
     }

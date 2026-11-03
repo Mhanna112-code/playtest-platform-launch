@@ -188,6 +188,12 @@ export async function suspendAccount(adminId: string, userId: string, note: stri
   if (side === "developer" && u.isDeveloper) {
     await markPaused({ developerId: userId }); // (batch 9) one clock per paused test
     await pauseDeveloper(u);
+    // (Owner, Nov 3, §159 rule 4a) The developer's own Pay / Pay more whose bank page is still open is cancelled (at Stripe first; one the bank already approved is
+    // recorded as paid once), like a hold does: nothing is charged by it, and the part is payable again after the lift. A tester's waiting charge being confirmed
+    // (needs_confirmation: Confirm with your bank, Confirm all) is NOT cancelled: its Complete goes through and is recorded normally (rule 4b).
+    const { release } = await import("./confirm");
+    for (const p of await db.payment.findMany({ where: { developerId: userId, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
+      await release(p.id).catch((e) => console.error("[suspend] cancel open Pay check:", (e as Error).message));
     await (await import("./subscription")).pauseBilling(userId);
   }
   if (side === "tester" && u.isTester) await removeTester(u, "suspended");

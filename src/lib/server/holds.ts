@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/server/dateFormat";
@@ -452,8 +452,8 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   if (!list.length) {
     if (await liftHoldIfClear(dev.id)) return { paid: 0, stillFailing: [] as string[], lifted: true };
     if (all.length) throw new HttpError(409, "bank_waiting", OWED_ALL_WAITING);
-    if (covered?.size) throw new HttpError(409, "nothing_owed", ALREADY_RESERVED);
-    throw new HttpError(409, "nothing_owed", NOTHING_OWED);
+    if (covered?.size) throw new HttpError(409, "nothing_owed", (await reservedBefore(dev.id)) ?? ALREADY_RESERVED);
+    throw new HttpError(409, "nothing_owed", (await paidBefore(dev.id, body)) ?? NOTHING_OWED);
   }
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
   const lines = await owedLines(dev.id);
@@ -522,6 +522,26 @@ export const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "ca
 
 // (Owner, Nov 3, batch 35 §148) No automatic charge of what's owed at all: not daily (§145) and not when a new card is saved (that charge is gone). What is owed
 // during a payment hold is charged only when the developer presses Pay what you owe (payOwed, above).
+
+/**
+ * (Owner, Nov 3, §159) Pay what you owe pressed on a page from before it was paid (another tab, or the same page not redrawn): the line names what happened, with its
+ * amount and time: "You already paid what you owe ($27.00) in another tab at 3:20 PM." Read from the one payment that covered what the page showed.
+ */
+async function paidBefore(devId: string, body: Record<string, unknown>) {
+  const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
+  const cover = seenIds.length ? await db.payment.findFirst({ where: { id: { in: seenIds }, developerId: devId, coveredById: { not: null } }, select: { coveredById: true } }) : null;
+  const one = cover?.coveredById ? await db.payment.findUnique({ where: { id: cover.coveredById } }) : await db.payment.findFirst({ where: { developerId: devId, kind: "owed", status: { in: ["charged", "not_set_up", "bundled"] }, settledAt: { gt: new Date(Date.now() - 86_400_000) } }, orderBy: { settledAt: "desc" } });
+  if (!one || one.developerId !== devId || !["charged", "not_set_up", "bundled"].includes(one.status)) return null;
+  const { fmtTime } = await import("./dateFormat");
+  return `You already paid what you owe (${money(one.amountCents)}) in another tab at ${fmtTime(one.settledAt ?? one.createdAt)}.`;
+}
+/** (Owner, Nov 3, §159) The same during a chargeback hold: "You already reserved what you owe ($46.00) on your card in another tab at 3:20 PM." */
+async function reservedBefore(devId: string) {
+  const r = await db.reservation.findFirst({ where: { developerId: devId, status: { in: ["authorized", "reserved", "requires_capture", "held"] } }, orderBy: { createdAt: "desc" } });
+  if (!r) return null;
+  const { fmtTime } = await import("./dateFormat");
+  return `You already reserved what you owe (${money(r.amountCents)}) on your card in another tab at ${fmtTime(r.createdAt)}.`;
+}
 
 /** (Batch 11) An owed payment a "Pay what you owe" press is charging right now. */
 const PAYING = "paying";
@@ -1375,7 +1395,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   // (Batch 16 section 39) The tick only above $200, naming the typed amount.
   if (choice === "charge" && amount > CHARGE_TICK_CENTS && body.tickedCents !== amount) throw new HttpError(400, "tick", chargeTickLine(displayName(dev), amount));
   const payKey = serverKey("choice", s.id);
-  const review = await db.review.create({ data: { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);
+  const review = await claimChoice(c.testId, { submissionId: s.id }, displayName(dev), { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
     await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their ${label} go: nothing charged`, false, {}, c.id));
@@ -1422,6 +1442,28 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
+/**
+ * (Owner, Nov 3, §159; found by the same-moment race: a Pay and a Charge on one part both charged) The tester's Charge / Let it go claims the part under the test's
+ * row lock, the lock Pay takes to reserve it: a Pay whose payment is on its way, at the bank or paid wins (refused here, naming it); else the review is made, and a
+ * Pay pressed after that sees it. Null when the part was already settled.
+ */
+async function claimChoice(testId: string, where: { submissionId: string } | { callId: string }, devName: string, data: Prisma.ReviewUncheckedCreateInput) {
+  try {
+    return await db.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
+      if (await tx.review.findFirst({ where })) return null;
+      const busy = await tx.payment.findFirst({ where: { ...where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action", "needs_confirmation", "charged", "not_set_up"] } }, orderBy: { createdAt: "desc" } });
+      if (busy && (busy.status === "charged" || busy.status === "not_set_up")) throw new HttpError(409, "done", `${devName} paid ${money(busy.amountCents)} for this meanwhile.`);
+      if (busy) throw new HttpError(409, "locked", PIECE_LOCKED);
+      return tx.review.create({ data });
+    });
+  } catch (e) {
+    if (e instanceof HttpError) throw e;
+    if (e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002") return null; // made by a finishing Pay meanwhile
+    throw e;
+  }
+}
+
 /** (Batch 17 §19) Charge and Let it go close on the piece's own closing date for the tester (final: the piece stays unpaid). */
 async function chargeCloseOutGate(where: { submissionId: string } | { callId: string }) {
   const at = await pieceCloseOut(where, "tester");
@@ -1457,7 +1499,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   if (choice === "charge" && amount > CHARGE_TICK_CENTS && body.tickedCents !== amount) throw new HttpError(400, "tick", chargeTickLine(displayName(dev), amount));
   const payKey = serverKey("choice", x.id);
   const minutes = callMinutesOf(x);
-  const review = await db.review.create({ data: { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey } }).catch(() => null);
+  const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
     await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id));

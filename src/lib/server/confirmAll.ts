@@ -70,11 +70,51 @@ async function goneWhy(p: Payment | null) {
 
 const ROLLBACK = new Error("confirm all changed");
 
+/** (§159) The items' own stops, gathered across every item (thrown out of the claim's transaction, which rolls back). */
+class ItemStops extends Error { constructor(public changes: { text: string; at: Date | string }[]) { super("confirm all item stops"); } }
+
+/**
+ * (Owner, Nov 3, §159) Confirm all stops for exactly what each item's own Confirm with your bank stops for: each covered item's pay-press gate (its contract and part:
+ * payPressOf, the same Alerts filter and the always-stop rules: the team's decision about that tester, their work on that part, that tester leaving), run in the claim's
+ * locked step. Every change is listed once, naming the items it is about ("… · for Ana Silva's recording on “Harbor Run” $10.00"); the second press (its box's time)
+ * goes ahead. A page without a seen time (an old one) skips it, as the single Confirm does.
+ */
+async function itemStops(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0], rows: Payment[], body: Record<string, unknown>) {
+  const { seenOf, payPressOf } = await import("./live");
+  if (!seenOf(body.seenAt) || (body.confirmed === true && !seenOf(body.boxAt))) return;
+  const { devGate } = await import("./tests");
+  const found = new Map<string, { text: string; at: Date | string; items: string[] }>();
+  for (const p of rows) {
+    const c = p.contractId ? await tx.contract.findUnique({ where: { id: p.contractId }, select: { id: true, testId: true } }) : null;
+    if (!c) continue;
+    const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await tx.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
+    try {
+      await devGate(tx, c.testId, body, {}, [], undefined, payPressOf(c.id, { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null }));
+    } catch (e) {
+      if (!(e instanceof HttpError && e.code === "stop_once")) throw e;
+      const name = await nameOf(p);
+      for (const l of ((e.data?.changes ?? []) as { text: string; at: Date | string }[])) {
+        const k = `${l.text}|${new Date(l.at).getTime()}`;
+        const had = found.get(k);
+        if (had) had.items.push(name);
+        else found.set(k, { ...l, items: [name] });
+      }
+    }
+  }
+  if (!found.size) return;
+  const list = [...found.values()].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  throw new ItemStops(list.map(({ items, ...l }) => ({ ...l, text: `${l.text} · for ${items.join(", ")}` })));
+}
+
 /** Claim every charge at once under the developer's row lock: each must still wait with the check the list read (else nothing is claimed: null). */
-async function claim(devId: string, rows: Payment[]) {
+async function claim(devId: string, rows: Payment[], body: Record<string, unknown> = {}) {
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${devId} FOR UPDATE`;
+      // (Owner, Nov 3, §159) Pressed while suspended: refused like Pay (the suspension's own write waits for this lock, or landed first and is read here).
+      const [me] = await tx.$queryRaw<{ devSuspendedAt: Date | null }[]>`SELECT "suspendedAt" AS "devSuspendedAt" FROM "User" WHERE id = ${devId}`;
+      if (me?.devSuspendedAt) throw new HttpError(403, "suspended", (await import("./payments")).suspendedLine("Confirm all"));
+      await itemStops(tx, rows, body);
       if (await tx.payment.count({ where: { developerId: devId, kind: OWED_KIND, note: ALL_NOTE, status: { in: OWED_ACTIVE } } })) throw ROLLBACK;
       const total = sum(rows);
       const one = await tx.payment.create({ data: { kind: OWED_KIND, developerId: devId, testerId: devId, amountCents: total, feeCents: total, testerCents: 0, transferStatus: "none", status: "paying", note: ALL_NOTE, warnedAt: new Date() } });
@@ -87,6 +127,7 @@ async function claim(devId: string, rows: Payment[]) {
     });
   } catch (e) {
     if (e === ROLLBACK) return null;
+    if (e instanceof ItemStops) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: e.changes, totalCents: sum(rows), ids: rows.map((p) => p.id) });
     throw e;
   }
 }
@@ -109,7 +150,7 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
   if (!waiting.length) throw new HttpError(409, "nothing", T.NOTHING_TO_CONFIRM);
   // (Owner, Nov 3) Over $200 in all: only with the tick "I confirm this payment is over $200." (as Pay's).
   if (sum(waiting) > PAY_TICK_CENTS && body.over200 !== true) throw new HttpError(400, "needs_tick", `Tick “${OVER_PAY_TICK_LINE}” to pay.`);
-  const one = await claim(dev.id, waiting);
+  const one = await claim(dev.id, waiting, body);
   if (!one) {
     if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
     // Changed between the list and the claim (a single Confirm finished, a date passed): stops once on what's waiting now.

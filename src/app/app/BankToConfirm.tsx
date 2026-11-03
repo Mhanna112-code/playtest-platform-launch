@@ -26,7 +26,7 @@ export async function BankToConfirm({ userId, now }: { userId: string; now: Date
 
 export function BankToConfirmBox({ rows, seenAt = "", all }: { rows: BankTopRow[]; seenAt?: string; /** (Owner, Nov 3, §147) Confirm all, above the rows */ all?: ConfirmAllState }) {
   return (
-    <DashboardActionBox id="bank-to-confirm" title="Your bank wants you to confirm" count={rows.length} kind="bank" top={all && <ConfirmAll {...all} />}>
+    <DashboardActionBox id="bank-to-confirm" title="Your bank wants you to confirm" count={rows.length} kind="bank" top={all && <ConfirmAll {...all} seenAt={seenAt} />}>
       {/* (§147) An open Confirm all check is a row too (the count, the poll), drawn by Confirm all above the list. */}
       {rows.filter((r) => !r.all).map((r) => (
         <li key={r.id} className="rounded-lg border border-white/10 p-3 text-sm" data-bank-top-row={r.id}>

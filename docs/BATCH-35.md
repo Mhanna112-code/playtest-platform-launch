@@ -1948,6 +1948,39 @@ bank's page (Stripe's own 3D Secure page, inline under the button) the only butt
    bank changing a disputed amount ("What you owe changed: now $46.00."). Already so (§146 fix 3; `holds.payOwed` compares the total and the items the page
    showed); verified, no change.
 
+**Later decisions the same day (owner, Nov 3).**
+
+6. **That tester leaving always stops** Pay, Pay more, Confirm with your bank and Confirm all items on that tester's parts once, whatever the Alerts ticks (a
+   suspension or deletion removes a tester the same way: "Ana Silva left the test"). Another tester leaving follows "Testers leaving".
+7. **Confirm all stops like each single Confirm.** In the claim's locked step every covered item runs its own pay-press gate (its contract and part, the same Alerts
+   filter, the always-stop rules above). Any unseen change on any item stops Confirm all once, listing each change once with the items it is about ("The team decided
+   Ana Silva's dispute: … · for Ana Silva's recording on “Harbor Run” $10.00"); the second press (the box's time) goes ahead. The "what's waiting changed" stop and
+   the over-$200 tick are unchanged. The page now sends its render time and the box's time.
+8. **A suspended developer's payment presses are refused like Pay**: "Your account is suspended: Pay waits until it is lifted." (Pay more: "extra pay"; "Confirm
+   with your bank"; "Confirm all"). Each is read under the developer's row lock inside the press's own locked step (Pay and Pay more were checked before it), so a
+   suspension at the same moment either lands first (refused) or waits for the press. Pay what you owe and a renewal's Confirm stay open (unchanged).
+9. **Suspended while a bank page is open.** The developer's own Pay / Pay more check is cancelled at Stripe at the suspension, like a hold does (one the bank had
+   already approved is recorded as paid once): Complete charges nothing ("This payment was cancelled: nothing was charged.") and the part is payable again after the
+   lift. A Pay whose check comes back just as the suspension lands is cancelled the same way. A tester's waiting charge being confirmed (Confirm with your bank,
+   Confirm all) is NOT cancelled: its Complete goes through and is recorded normally.
+10. **Pay and Pay more wait while a payment on that part waits for the bank.** The tester's Charge (or an automatic call charge, a team decision) waiting for
+    "Confirm with your bank": the part's box is the greyed Pay more box with "Confirm Ana Silva's $10.00 charge with your bank first."; the developer's own Pay or
+    earlier Pay more whose check is open: "Your $5.00 payment for this part is waiting for your bank: finish or cancel it first.". A press from a page that hadn't
+    redrawn is refused with the same line (never a stop-once: it can't go ahead), read in the locked step; a charge still on its way to the bank refuses with "A
+    payment for this part is being confirmed. Wait for it to finish before paying again.". After the Confirm the box enables ("up to $990 more").
+11. **Pay and the tester's Charge on one part at the same moment charge once.** The same-moment test found both charging ($20 on a $10 part): the Charge / Let it go
+    now claims the part under the test's row lock, the lock Pay reserves under; a Pay on its way, at the bank or paid wins (the Charge is refused naming it).
+12. **Dispute when nothing is left to dispute.** Whether anything is left is decided before the stop-once: a Pay more since the page loaded that took the part to its
+    most reads as ONE refusal, "Nora Lane paid $996.00 more meanwhile (3:20 PM): this part is now paid the most it can be ($1,000.00), so there's nothing to
+    dispute." (never a stop whose second press could only be refused). The dispute is made under the test's row lock after checking again, so Dispute and Pay more
+    at the same moment are decided in one place. (Audit of the tester's other presses: Charge and Let it go already refuse "… paid $X for this meanwhile" before
+    their stop; no other tester press stops for something that leaves it nothing to do.)
+13. **Already done in another tab.** Pay what you owe pressed on a page from before it was paid: "You already paid what you owe ($27.00) in another tab at 3:20 PM.";
+    during a chargeback hold: "You already reserved what you owe ($46.00) on your card in another tab at 3:20 PM.". A bank check completed elsewhere keeps "You
+    already confirmed this payment.". A new card saved while a Pay's bank page completes: Complete first → Stripe's answer to the save's cancel is "already
+    succeeded", recorded paid once, and the page's finish now reports it paid (it read "You already confirmed this payment." as a refusal); the save first →
+    cancelled, Complete reads "This payment was cancelled: nothing was charged." and the part is payable again.
+
 - **Code.** `live.devChanges`: for a payment press (`payPressOf`: its contract is `stopCheck`, its part is `keys`), a team decision whose `contractId` is the
   press's contract, and a "sent" line whose item is the press's part, pass the Alerts filter. `testerGate`'s `owedPiece` (Charge / Let it go on that part:
   `terms.testerTermsGate`, and the route's stop-moment box for `choose`) keeps, with Alerts Off, a "paid" line on that part and any team decision line
@@ -1956,3 +1989,9 @@ bank's page (Stripe's own 3D Secure page, inline under the button) the only butt
   ticked off vs another part on and off; leaving on and off; Charge / Let it go for a payment on the same part (the refusal) and on another part with Alerts
   Off and On, an automatic call charge, a decision with Alerts Off; Pay what you owe after a new chargeback and a changed amount).
   `tests/decision-stops-pay.test.ts` follows the narrowed rule (same tester: stops; another tester with Decisions ticked off: goes through).
+- **Code (6–13).** `live.devChanges` (a "left" line on the press's contract always passes); `confirmAll.itemStops` in `claim` (plus the suspension read);
+  `payments.refuseSuspendedLocked`, `suspendedAfterCheck`, `bankWaitsLine` (Pay's reviewed branch and Pay more's locked step), `paidMostMeanwhileLine` and the
+  locked dispute claim in `openDispute`; `restrictions.suspendAccount` releases the developer's own `needs_action` checks; `confirm.confirmStart` refuses while
+  suspended and `confirmFinish` reports an own press already paid; `holds.claimChoice` (Charge / Let it go under the test lock), `paidBefore` / `reservedBefore`;
+  `PayBox` `bankWaits`; `ConfirmAll` sends `seenAt` / `boxAt`. No migration.
+- **Tests (6–13):** `tests/pay-matrix-2.test.ts`.

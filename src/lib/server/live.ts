@@ -201,8 +201,10 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // (§159 rule 2) Likewise the tester's sent, updated or added work on the SAME part being paid ("sent" lines carry the part as their item) always stops once,
   // even with "Work sent" ticked; work on their other parts, and other testers' work, follows the tick.
   const payContract = opts.press?.stopCheck && opts.press.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x)) ? opts.press.stopCheck : null;
+  // (§159) And that tester leaving the test (or being removed: a suspension or deletion reads "left") always stops a payment press on THEIR parts; another tester
+  // leaving follows "Testers leaving".
   const always = (c: TestEventLike & { contractId?: string | null; item?: string }) => !!payContract && (
-    (isTeamDecision(c) && c.contractId === payContract) || (c.kind === "sent" && !!c.item && !!opts.press?.keys.includes(`sub:${c.item}`)));
+    ((isTeamDecision(c) || c.kind === "left") && c.contractId === payContract) || (c.kind === "sent" && !!c.item && !!opts.press?.keys.includes(`sub:${c.item}`)));
   return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a) || always(c); }) : loud;
 }
 
