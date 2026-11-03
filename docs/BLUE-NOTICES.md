@@ -15,7 +15,7 @@ Snapshot: `master` at `d1882f7b`, with the completed Task 12–14 behavior read 
 
 ## 1. Stop-once lines: developer
 
-The shared developer set applies test-wide to Pay / Reject, Pay more, Confirm with your bank on a piece, Stop, End early, Next round, call requests / answers / cancellations, Invite / Cancel invite, application / rejoin answers, and Edit Save when those presses remain allowed. Final state checks can refuse a press before/after the gate. Developer Rate is the narrower exception in section 2. A press answering the very item in a line drops that line through `answersIt` (§79 and Pay's joined line §89); this does not make a later different press permanently aware of that item.
+The shared developer set applies test-wide to Pay / Reject, Pay more, Confirm with your bank on a piece, Stop, End early, Next round, call requests / answers / cancellations, Invite / Cancel invite, application / rejoin answers, and Edit Save when those presses remain allowed. Final state checks can refuse a press before/after the gate. Developer Rate is the narrower exception in section 2. A press answering the very item in a line drops that line through `answersIt` (§79 and Pay's joined line §89; since §155 Pay, Pay more and Confirm on a piece no longer drop that piece's own work lines: an unseen one stops them once); this does not make a later different press permanently aware of that item.
 
 Source: [live.ts](../src/lib/server/live.ts), [tests.ts devGate](../src/lib/server/tests.ts), [alerts.ts](../src/lib/alerts.ts).
 

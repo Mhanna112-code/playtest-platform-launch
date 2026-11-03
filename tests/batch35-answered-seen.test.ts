@@ -41,7 +41,10 @@ describe("batch 35 §86: answered changes never stop a later press", () => {
     const loaded = seen(); await settle();
     await sact(a.sessionId, "written", a.tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: a.sessionId } });
-    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded })).status).toBe(200);
+    // (§155) The piece's own unseen send stops Pay once; the second press pays (and the line stays answered, §86).
+    const first = await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded });
+    expect(texts(first)).toEqual(["Ana Silva sent their written answers"]);
+    expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: true, boxAt: first.body.error?.now })).status).toBe(200);
     const requestBody = { seenAt: loaded, contractIds: [b.sessionId], startsAt: atHours(48), minutes: 30 };
     expect((await press(testId, dev.cookie, requestBody)).status).toBe(200);
     // Other-load own actions stop, but the sent line never comes back.
@@ -145,14 +148,18 @@ describe("batch 35 §86: answered changes never stop a later press", () => {
     expect((await devChanges(dev.user.id, testId, new Date(loaded), "", db, { press: { acts: [], keys: [] } })).filter((e) => e.kind === "applied")).toEqual([]);
   });
 
-  it("Pay more answers a piece added to after a Pay without hiding an addition after it", async () => {
+  it("Pay more on a piece added to after a Pay stops once for the addition (§155), then pays and keeps it answered", async () => {
     const { dev, testId } = await setup(); const { tester, sessionId } = await joined(testId, "Ana Silva", "they");
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
     const loaded = seen(); await settle();
     expect((await sact(sessionId, "written-add", tester.cookie, { text: "changed", confirmed: true })).status).toBe(200);
-    expect((await act(testId, "pay-extra", dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded, tab: "page-a" })).status).toBe(200);
+    const more = { contractId: sessionId, submissionId: sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded, tab: "page-a" };
+    const first = await act(testId, "pay-extra", dev.cookie, more);
+    expect(first.body.error?.code).toBe("stop_once");
+    expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to their written answers/)]);
+    expect((await act(testId, "pay-extra", dev.cookie, { ...more, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
     expect((await devChanges(dev.user.id, testId, new Date(loaded), "page-a", db, { press: { acts: [], keys: [] } })).filter((e) => e.kind === "sent")).toEqual([]);
   });
 

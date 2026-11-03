@@ -35,14 +35,15 @@ export type Press = {
   answers?: Answers;
 };
 /**
- * (Owner, Oct 31, batch 35 §79) A press never stops once for the line about the very thing it answers (Accept on a call request that just arrived, Pay on a piece just
- * sent, Accept on an application just made, Join from an invite just re-sent). Matched on the line's item id where it carries one, else on its kind and the contract
- * (or its exact text, for an application, which has no contract yet). Every other unseen change still stops.
+ * (Owner, Oct 31, batch 35 §79) A press never stops once for the line about the very thing it answers (Accept on a call request that just arrived, Accept on an
+ * application just made, Join from an invite just re-sent). Matched on the line's item id where it carries one, else on its kind and the contract (or its exact
+ * text, for an application, which has no contract yet). Every other unseen change still stops.
+ * (Owner, Nov 3, batch 35 §155) Narrowed: Pay, Pay more and Confirm with your bank on a piece no longer answer that piece's own work lines (payPressOf).
  */
 export type Answers = {
   item?: string; kinds?: readonly string[]; contractId?: string | null; texts?: readonly string[];
-  /** A piece of work: its line names it ("… written answers" / "… recording"), so another piece of the same tester's still stops (devGate reads its kind). */
-  submissionId?: string; label?: string;
+  /** A piece of work: its line names it ("… written answers" / "… recording"), so another piece of the same tester's still stops (§86: a Pay's logged answer). */
+  label?: string;
 };
 export const answersIt = (e: TestEventLike & { contractId?: string | null }, a?: Answers) => {
   if (!a) return false;
@@ -63,9 +64,10 @@ export const PAY_ACTS = ["pay", "pay-more"] as const;
  */
 export const payPressOf = (contractId: string, piece: { callId?: string | null; submissionId?: string | null }) => ({
   acts: [...PAY_ACTS] as string[], keys: [piece.callId ? `call:${piece.callId}` : piece.submissionId ? `sub:${piece.submissionId}` : `c:${contractId}`], stopCheck: contractId,
-  // (Batch 35 §79) Pay / Pay more on written answers or a recording: the tester's "sent their …" / "updated their …" line is what it answers.
-  // (Owner, Oct 31, batch 35 §89) …and that tester joining: paying their work, you know they're in ("fbbb joined" no longer stops Pay on fbbb's answers).
-  ...(piece.submissionId ? { answers: { item: piece.submissionId, kinds: ["sent", "sentpaid", "joined"], contractId, submissionId: piece.submissionId } } : { answers: { kinds: ["joined"], contractId } }),
+  // (Owner, Nov 3, batch 35 §155; narrows §79) The piece's own work lines ("sent their …", "updated their …", "added to …") are changes like any other: one the
+  // page hasn't shown yet stops the press once, naming it; one it already showed (redrawn, the pill, the top box) is before its seen time and never stops.
+  // (Owner, Oct 31, batch 35 §89) Kept: that tester joining. Paying their work, you know they're in ("fbbb joined" doesn't stop Pay on fbbb's answers).
+  answers: { kinds: ["joined"], contractId },
 });
 export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
 /**

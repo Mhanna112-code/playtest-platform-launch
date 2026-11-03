@@ -6,6 +6,7 @@ import { req, json } from "./helpers";
 import { act, atHours, joined, sact, seen, settle, setup } from "./fixtures";
 
 // Batch 35 §79 (owner, Oct 31): a press never stops once for the line about the very thing it answers; every other unseen change still stops.
+// (Owner, Nov 3, §155) Narrowed: Pay, Pay more and Confirm on a piece stop once for that piece's own unseen work lines (tests/batch35-pay-stops-own.test.ts).
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), ...body } })).then(json);
 const texts = (r: { body: { error?: { changes?: { text: string }[] } } }) => (r.body.error?.changes ?? []).map((c) => c.text);
 
@@ -33,7 +34,7 @@ describe("batch 35 §79: a press never stops for the change it answers", () => {
     expect(texts(stop)).toEqual([expect.stringMatching(/^Ana Silva requested/)]);
   });
 
-  it("Pay on a piece just sent goes through; another change since still stops it once", async () => {
+  it("(narrowed by §155) Pay on a piece just sent stops once naming it, then pays; with another change, both are in the one stop", async () => {
     const { dev, testId } = await setup();
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Okafor");
@@ -42,18 +43,21 @@ describe("batch 35 §79: a press never stops for the change it answers", () => {
     await settle();
     await sact(a.sessionId, "written", a.tester.cookie, { answers: ["a", "b"] });
     const sa = await db.submission.findFirstOrThrow({ where: { contractId: a.sessionId } });
-    const ok = await pay(dev.cookie, { kind: "submission", id: sa.id, amount: "10.00", tickedCents: 1000, seenAt: loaded });
+    const first = await pay(dev.cookie, { kind: "submission", id: sa.id, amount: "10.00", tickedCents: 1000, seenAt: loaded });
+    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+    expect(texts(first)).toEqual(["Ana Silva sent her written answers"]);
+    const ok = await pay(dev.cookie, { kind: "submission", id: sa.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: true, boxAt: first.body.error.now });
     expect(ok.status, JSON.stringify(ok.body)).toBe(200);
     await settle();
     const loaded2 = seen();
     await settle();
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
     const sb = await db.submission.findFirstOrThrow({ where: { contractId: b.sessionId } });
-    // Pay on Ben's piece: his "sent their written answers" is what it answers; Ana's new call request is another change and still stops it once.
+    // Pay on Ben's piece: his "sent their written answers" (unseen) and Ana's new call request both stop it, once.
     expect((await sact(a.sessionId, "request-time", a.tester.cookie, { seenAt: seen(), confirmed: true, startsAt: atHours(48), minutes: 30 })).status).toBe(200);
     const stop = await pay(dev.cookie, { kind: "submission", id: sb.id, amount: "10.00", tickedCents: 1000, seenAt: loaded2 });
     expect(stop.body.error?.code, JSON.stringify(stop.body)).toBe("stop_once");
-    expect(texts(stop)).toEqual([expect.stringMatching(/^Ana Silva requested/)]);
+    expect(texts(stop)).toEqual([expect.stringMatching(/^Ben Okafor sent (her|his|their) written answers$/), expect.stringMatching(/^Ana Silva requested/)]);
   });
 
   it("the tester's Accept on the developer's call request that just arrived goes through", async () => {

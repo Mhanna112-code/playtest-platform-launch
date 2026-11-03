@@ -675,10 +675,10 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const found = await devChanges(t.developerId, testId, seenAt, tabOf(body), tx, { press });
   // The developer's own Stop in another tab already reads "You stopped the test in another tab": the stop moment isn't said twice.
   const own = found.some((e) => e.kind === "own" && e.text === OWN_STOP_LINE);
-  // (Batch 35 §79) Never the line about the very thing this press answers (a piece of work: by its name in the line).
-  const answers = press.answers?.submissionId ? { ...press.answers, label: (await tx.submission.findUnique({ where: { id: press.answers.submissionId }, select: { kind: true } }))?.kind === "recording" ? "recording" : "written answers" } : press.answers;
   const additional = await unanswered(t.developerId, testId, [...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))], tx);
-  const raw = [...found, ...additional].filter((e) => !answersIt(e, answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Batch 35 §79) Never the line about the very thing this press answers (a call request, an application). (§155) Pay, Pay more and Confirm on a piece answer
+  // none of the piece's own work lines: an unseen one stops them once.
+  const raw = [...found, ...additional].filter((e) => !answersIt(e, press.answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
   const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || e.kind === "stop" || keep(e)) : raw, body);
   if (changes.length) {

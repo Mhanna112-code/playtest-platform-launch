@@ -685,7 +685,7 @@ request being answered. Now every stop gate drops the change lines about the ite
 developer's gate, the tester's gate and the join gate): matched on the line's item id where it carries one, else on the event's kind and the contract (an
 application, which has no contract yet, by its exact line). Other unseen changes still stop as before.
 - Developer: Accept / Decline a call request (the tester's "requested …" on that contract); Accept / Decline an application or rejoin ask ("<name> applied to join",
-  "<name> asks to rejoin"); Pay, Pay more and Confirm with your bank on written answers or a recording ("sent their …" / "updated their …" on that contract, for that piece: Pay on the written answers still stops for a recording just sent). Add your
+  "<name> asks to rejoin"); Pay, Pay more and Confirm with your bank on written answers or a recording ("sent their …" / "updated their …" on that contract, for that piece: Pay on the written answers still stops for a recording just sent) (**narrowed by §155, Nov 3:** these payment presses now stop once for their own piece's unseen lines; the rest of §79 stays). Add your
   side never stops (batch 15 §27); there is no Reject any more (batch 15 §30).
 - Tester: Accept / Decline the developer's call request (that request's line); Switch / Keep never stopped for the terms line (they answer the offer); Join from an
   invite just re-sent on a new listing ("here's a new invite on the updated listing", that invite's line).
@@ -1771,3 +1771,26 @@ sits in the §139 panel (`ResizeBox`): the content scrolls inside, the grip at t
 - **New: paid now MORE than the decision** (a Pay more since the admin's page loaded): Decide stops once in the admin console's stop style, naming it: "Ana Silva's pay changed since you opened this: the developer paid $8.00 more, now $12.00 paid, more than your $10.00 decision. A decision can only raise the pay: decide $12.00 or more." Nothing is charged and the dispute stays open. The decision box's range line and its minimum move up to what's paid ("$12.00 paid · can raise up to $X more"; the box's own "$12.00-$Y" hint and its red check). The stop also moves the box's page time on, so it stops once: the same $10.00 again is the plain refusal "A decision can only raise pay: at least the $12.00 paid for this piece.", and $12.00 or more goes through. A Pay more landing between Decide's first read and its claim (under the test's lock) gives the same stop, and the claim rolls back.
 - **Code.** `payments.decideDispute` (the Pay mores on the piece after the page's `seenAt`; the stop's data carries `minCents`, `maxCents`, `range`, `seenAt`); `rules.decidePayChangedLine`; `admin/DisputeDecision.tsx` keeps the range, min and max in state and draws the range line (moved from `PagedList.tsx`) so a stop can update them.
 - **Tests:** `tests/batch35-decide-paid-above.test.ts`: paid < decided (charges the difference), paid == decided (goes through, nothing charged), paid > decided (stops once, nothing charged, dispute open, range moved; then the plain refusal, then $12.00 goes through), the same stop through the admin route, and Decide while a Pay more waits at the bank (§70's refusal). `races-nov3` and `batch35-decide-tick` keep passing.
+
+## §155 Pay, Pay more and Confirm stop once for their own part's unseen changes (owner, Nov 3)
+
+- **The decision.** "Remove the §79 exception for payments and rely on the page-update (pill) rule instead." This **narrows §79**: Pay, Pay more and Confirm with
+  your bank on written answers or a recording no longer count as answering that piece's own work lines. Seen on the Nov 3 recordings: Nora pressed Pay on
+  Ana's written answers as Ana pressed "Add to my answers"; Pay went through for what was shown and the addition became "added after you paid" (§146 fix 4),
+  without the press ever naming it.
+- **Now.** A change to THAT piece by the tester that the page hasn't shown yet ("Ana Silva sent their written answers", "Ana Silva updated their recording",
+  "Ana Silva added to their written answers") stops the press once, naming it, like any other unseen change, in the same box as the rest. The second press
+  goes through and pays for the piece as it now is: an addition made before the Pay is paid with it; one made after it (or while the Pay was at the bank)
+  is still §136/§146's "added after you paid" row with Pay more.
+- **Already shown never stops** (the existing seen rule, unchanged): a change the page redrew in place on its live check, or counted in the "N new updates ↑"
+  pill, or listed in the top box, is before the press's seen time, so it doesn't stop. Only a change made between two live checks (before the page showed it)
+  stops, once.
+- **§79 kept for presses that answer a request or offer:** the developer's Accept / Decline of a call request, Accept / Decline of an application or rejoin
+  ask; the tester's Accept / Decline of the developer's call request, Switch / Keep, Join from an invite just re-sent. §89 kept too: the tester's own "joined"
+  line never stops Pay on their work. §86 kept: a Pay that went through still marks the piece's earlier work lines answered for later presses on any page.
+- **Code.** `live.payPressOf` answers only the tester's "joined" line on that contract (it no longer answers the piece's `sent` / `sentpaid` lines by item);
+  `devGate` no longer looks up the piece's label (`Answers.submissionId` removed). No migration.
+- **Tests:** `tests/batch35-pay-stops-own.test.ts` (an unseen send stops Pay once, then pays; an unseen addition stops Pay once, then pays for the whole piece
+  with no "added after you paid"; an addition the live check already showed doesn't stop; Pay more after an unseen addition stops once, a shown one goes
+  straight through; Confirm with your bank stops once for an unseen addition; Accept on a call request that just arrived still goes through). §79's and §86's
+  tests (`batch35-answering-press`, `batch35-answered-seen`) now expect Pay / Pay more to stop once for their own piece's unseen line.
