@@ -75,8 +75,8 @@ async function claimOwed(devId: string, rows: { id: string; amountCents: number;
     try {
       return await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${devId} FOR UPDATE`;
-        const dev = await tx.user.findUniqueOrThrow({ where: { id: devId }, select: { holdStartedAt: true, devSuspendedAt: true } });
-        if (dev.holdStartedAt || dev.devSuspendedAt) throw ROLLBACK;
+        const dev = await tx.user.findUniqueOrThrow({ where: { id: devId }, select: { holdStartedAt: true, devSuspendedAt: true, deletedAt: true } });
+        if (!dev.deletedAt && (dev.holdStartedAt || dev.devSuspendedAt)) throw ROLLBACK; // (Owner, Nov 3) a deleted developer's charges are made anyway
         const total = rows.reduce((a, p) => a + p.amountCents, 0);
         const one = await tx.payment.create({ data: { kind: OWED_KIND, developerId: devId, testerId: devId, amountCents: total, feeCents: total, testerCents: 0, transferStatus: "none", status: "paying", note: `${mode}:charges`, warnedAt: new Date() } });
         const n = (await tx.payment.updateMany({ where: { id: { in: debts }, developerId: devId, coveredById: null, actionPi: null, settledAt: null, status: "deferred", kind: { notIn: ["chargeback", OWED_KIND] } }, data: { coveredById: one.id } })).count;

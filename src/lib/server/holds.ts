@@ -217,8 +217,9 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
 export async function deferIfHeld(data: Omit<Prisma.PaymentUncheckedCreateInput, "status">) {
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${data.developerId} FOR UPDATE`;
-    const dev = await tx.user.findUniqueOrThrow({ where: { id: data.developerId }, select: { holdStartedAt: true } });
-    if (!dev.holdStartedAt) return null;
+    const dev = await tx.user.findUniqueOrThrow({ where: { id: data.developerId }, select: { holdStartedAt: true, deletedAt: true } });
+    // (Owner, Nov 3) A deleted developer's hold can never lift: a tester's Charge or the team's decision is charged to their saved card at once instead of waiting.
+    if (!dev.holdStartedAt || dev.deletedAt) return null;
     return tx.payment.create({ data: { ...data, status: "deferred" } });
   });
 }
@@ -267,7 +268,8 @@ async function chargeDeferredLocked(devId: string) {
   // now: goes through -> each is paid, one receipt; the bank asks (a card like 3184) -> ONE "Confirm with your bank" item listing each, never a debt; a real decline ->
   // each becomes a debt (a new hold); any other problem -> they all keep waiting. A hold or a suspension starting first keeps them all waiting (the claim re-checks it).
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
-  if (dev.holdStartedAt || dev.devSuspendedAt) return;
+  // (Owner, Nov 3) A deleted developer's waiting charges go to their saved card even on a hold or a suspension (neither can ever clear).
+  if (!dev.deletedAt && (dev.holdStartedAt || dev.devSuspendedAt)) return;
   const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", kind: { notIn: ["chargeback", "owed"] }, coveredById: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   const r = await once.chargeWaitingTotal(devId, rows);
   if (r?.result === "paid" && r.cents > 0) await receipt(dev.email, once.receiptWhat(r.names, true), r.cents, r.status !== "not_set_up" ? "charged" : "not_set_up", "/app/payments");
@@ -275,7 +277,8 @@ async function chargeDeferredLocked(devId: string) {
 
 async function chargeReadyDeferred() {
   const waiting = await db.payment.findMany({ where: { status: "deferred" }, select: { developerId: true }, distinct: ["developerId"] });
-  const devs = await db.user.findMany({ where: { id: { in: waiting.map((p) => p.developerId) }, holdStartedAt: null, devSuspendedAt: null }, select: { id: true }, take: 100 });
+  // (Owner, Nov 3) A deleted developer's waiting charges are made too, hold or not.
+  const devs = await db.user.findMany({ where: { id: { in: waiting.map((p) => p.developerId) }, OR: [{ holdStartedAt: null, devSuspendedAt: null }, { deletedAt: { not: null } }] }, select: { id: true }, take: 100 });
   for (const dev of devs) await chargeDeferred(dev.id);
 }
 

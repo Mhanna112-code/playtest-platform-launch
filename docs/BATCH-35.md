@@ -1624,3 +1624,10 @@ Owner: "Tick for when Pay what you owe is over $200 (and stop for when it does, 
 - **Not covered:** the rare race where a chargeback hold's reservation re-reads the rows and the bank changed the disputed part meanwhile (§146 item 3) still stops with "Press again to reserve $X"; if that new total is over $200 without the tick, the next press stops once more naming the tick.
 - **Code.** `rules.pressAgainLine(cents, chargeback, tick)` (the tick's wording), `rules.OWED_OVER_TICK`; `holds.payOwed` checks `total > PAY_TICK_CENTS && body.over200 !== true` after leaving out a late tester's Charge; `components/OwedBox.tsx` shows the tick, disables the button and sends `over200`.
 - **Tests:** `tests/owed-over200.test.ts`: $200.00 needs no tick; $230 refused without the tick (nothing charged), paid with it; the total crossing $200 since the page drew stops once naming the tick, the press again without the tick is refused, with it pays $230 once; an already-ticked page gets the plain line; a late tester's Charge doesn't count; a chargeback hold's reservation the same (direct and crossing); the box renders the tick and the disabled button over $200, none at $200.00 or once reserved. `batch16-chargeback-order`, `batch17-bank-check`, `batch28` (the button's source) and `partial-dispute` (its $444.67 press now carries the tick) follow.
+
+## §151 A deleted developer's charges never wait for a hold (owner, Nov 3)
+A deleted account's payment hold (or suspension) can never lift, so nothing waits for it: a tester's Charge and the team's dispute decision are charged to the deleted
+developer's saved card at once, hold or not (deferIfHeld never defers for a deleted developer), as a listed call's automatic charge already was. Charges already
+waiting for the lift when they delete are made at the delete, as one payment (chargeDeferred; the daily drain also picks up deleted accounts). Declined, or a bank
+check nobody can approve running out after 3 days: no hold (there's no account), the payment stays delayed for the tester and is listed for the admins. Repayments of
+reversed payments (chargebacks) still wait.

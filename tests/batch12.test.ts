@@ -86,6 +86,34 @@ describe("batch 12 item 1: a developer can always delete their account", () => {
     expect(made).toHaveLength(1);
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 600 });
   });
+
+  // (Owner, Nov 3) A deleted developer's hold can never lift, so nothing waits for it: Charges and team decisions go to the saved card, hold or not.
+  it("on a payment hold: a tester's Charge after the delete is charged to the saved card at once, not left waiting", async () => {
+    const { dev, sessionId, tester, sub } = await sentWork();
+    await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x", holdStartedAt: new Date(), holdReason: "unpaid" } });
+    await deleteAccount(dev.user.id, "self");
+    const made: unknown[] = [];
+    setStripeForTests({ paymentIntents: { create: async (p: unknown) => { made.push(p); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(made).toHaveLength(1);
+    expect(await db.payment.count({ where: { submissionId: sub.id, status: "deferred" } })).toBe(0);
+    expect(await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "review" } })).toMatchObject({ status: "charged" });
+  });
+
+  it("on a payment hold: a Charge already waiting for the lift when they delete is charged to the saved card by the delete", async () => {
+    const { dev, sessionId, tester, sub } = await sentWork();
+    await db.submission.update({ where: { id: sub.id }, data: { choiceOfferedAt: new Date(), choiceBy: new Date(Date.now() + 7 * DAY) } });
+    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x", holdStartedAt: new Date(), holdReason: "unpaid" } });
+    setStripeForTests({ paymentIntents: { create: async () => { throw new Error("not charged during the hold"); } } } as unknown as Stripe);
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", tickedCents: 1000, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(await db.payment.count({ where: { submissionId: sub.id, status: "deferred" } })).toBe(1); // waits for the lift while the account exists
+    const made: unknown[] = [];
+    setStripeForTests({ paymentIntents: { create: async (p: unknown) => { made.push(p); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    await deleteAccount(dev.user.id, "self");
+    expect(made).toHaveLength(1);
+    expect(await db.payment.count({ where: { submissionId: sub.id, status: "deferred" } })).toBe(0);
+  });
 });
 
 describe("batch 12 item 3: Pay more on every paid piece", () => {

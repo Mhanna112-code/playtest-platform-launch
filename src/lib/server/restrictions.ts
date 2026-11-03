@@ -295,6 +295,9 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
       for (const c of cs) await notify(c.tester.email, `“${c.title}” was stopped`, [`“${c.title}” was stopped. Work you already sent is still reviewed and paid. Calls ahead are cancelled.`], `/app/sessions/${c.id}`, { group: "tstopped" });
     }
   }
+  // (Owner, Nov 3) Testers' Charges and team decisions that were waiting for a hold (or a suspension) to end are charged to the saved card now: a deleted
+  // account's hold never lifts.
+  if (u.isDeveloper) await (await import("./holds")).chargeDeferred(userId).catch((e) => console.error("[delete] waiting charges:", (e as Error).message));
   if (u.isTester) {
     await removeTester(u, "deleted");
     // (Owner, Oct 28) Open disputes are withdrawn.
