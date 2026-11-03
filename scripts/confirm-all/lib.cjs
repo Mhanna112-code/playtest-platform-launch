@@ -69,9 +69,13 @@ async function newPage({ from, video = false, opts = V } = {}) {
 }
 const post = async (page, p, data = {}) => {
   if (p === "/api/tests" || /\/(edit|post-draft)$/.test(p)) data = { payRulesOk: true, ...data };
-  const r = await page.context().request.post(BASE + p, { data, headers: { "content-type": "application/json" }, timeout: 120000 });
-  const body = await r.json().catch(() => ({}));
-  return { status: r.status(), ok: r.ok(), body };
+  // (This machine is slow now and then: a press the server rolled back (500, its transaction timed out) is sent again.)
+  for (let i = 0; ; i++) {
+    const r = await page.context().request.post(BASE + p, { data, headers: { "content-type": "application/json" }, timeout: 180000 });
+    const body = await r.json().catch(() => ({}));
+    if (r.status() === 500 && i < 3) { console.log("   ! 500 on", p, "- again"); await sleep(4000); continue; }
+    return { status: r.status(), ok: r.ok(), body };
+  }
 };
 const ok = (r, what) => { if (!r.ok) throw new Error(`${what} failed: ${JSON.stringify(r.body).slice(0, 400)}`); return r.body; };
 
