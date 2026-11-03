@@ -87,6 +87,38 @@ export const cleanLoginAttempts = (now = new Date()) => db.loginAttempt.deleteMa
 /** (Batch 20 section 5) A tick sent by a form ("yes", "on") or as JSON (true). */
 export const isTicked = (v: unknown) => v === true || v === "yes" || v === "on" || v === "true";
 
+// ---------- (Owner, Nov 3, batch 35 §134) Who you are is required when the account is made ----------
+
+/** No developer, tester or both picked: red at that choice, on the email form and on Google's step. */
+export const ROLE_MISSING = "Choose developer, tester or both.";
+export const NAME_MISSING = "Enter your name";
+export const TERMS_MISSING = "Agree to the Terms of Use to sign up";
+export type SignupRole = "developer" | "tester" | "both";
+/** The "I am a…" picked, or "" when none was. */
+export const readRole = (v: unknown): SignupRole | "" => (v === "developer" || v === "tester" || v === "both" ? v : "");
+
+/**
+ * The new account's sides. With both it starts on the developer side (its Get started asks for a card before posting); the tester side's own gate (a saved tester
+ * profile before joining) applies once they switch to it. A tester side gets its profile row, empty: devices, languages and its own bio are filled in there.
+ */
+export function sidesOf(role: SignupRole) {
+  const isDeveloper = role !== "tester", isTester = role !== "developer";
+  return { isDeveloper, isTester, side: isDeveloper ? "developer" : "tester", ...(isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) };
+}
+
+/**
+ * What a new account must give, on the email form and on Google's step alike: who you are (developer, tester or both), a name (at least 1 character, no other
+ * rules: owner, Oct 27), the Terms (batch 18 section 1: the version accepted is recorded) and "I'm 18 or older." (batch 20 section 5). Every missing part is red at
+ * once, each at its own field (batch 26 section 11: one line each).
+ */
+export function readNewAccount(body: Record<string, unknown>): { role: SignupRole; name: string } {
+  const role = readRole(body.role);
+  const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
+  const missing = [...(!role ? [ROLE_MISSING] : []), ...(name.length < 1 ? [NAME_MISSING] : []), ...(!isTicked(body.acceptTerms) ? [TERMS_MISSING] : []), ...(!isTicked(body.over18) ? [AGE_LINE] : [])];
+  if (!role || missing.length) throw field(missing.join("\n"));
+  return { role, name };
+}
+
 /** Sign up: email + password. Signed in at once; a confirmation link is emailed. (Batch 15 section 7) At most 10 new accounts per network an hour. */
 export async function signUp(body: Record<string, unknown>, base: string, ip = "", now = new Date()) {
   const email = readEmail(body.email);
@@ -95,21 +127,11 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
     throw new HttpError(429, "too_many", TOO_MANY_SIGNUPS);
   // (Owner, Oct 30) Sign-up keeps "An account with that email already exists".
   if (await db.user.findUnique({ where: { email } })) throw field("An account with that email already exists");
-  // (NEXT-UI 15) The full app's sign-up form also asks who you are (developer, tester or both), your name and the Terms.
-  const role = body.role === "developer" || body.role === "tester" || body.role === "both" ? body.role : "";
-  let who: { name: string; isDeveloper: boolean; isTester: boolean; termsVersion: number; termsAcceptedAt: Date } | null = null;
-  if (role) {
-    const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
-    if (name.length < 1) throw field("Enter your name"); // (Owner, Oct 27) at least 1 character, no other rules
-    // (Batch 26 section 11) Every missing tick is red at once (the Terms and 18 or older), each at its own tick.
-    const ticks = [...(!body.acceptTerms ? ["Agree to the Terms of Use to sign up"] : []), ...(!isTicked(body.over18) ? [AGE_LINE] : [])];
-    if (ticks.length) throw field(ticks.join("\n"));
-    who = { name, isDeveloper: role !== "tester", isTester: role !== "developer", termsVersion: TERMS_VERSION, termsAcceptedAt: now }; // (batch 18 section 1) the version they accepted
-  }
-  // (Owner, Oct 28, batch 20 section 5) The required "I'm 18 or older." tick: no account without it (red at the tick).
-  if (!isTicked(body.over18)) throw field(AGE_LINE);
+  // (NEXT-UI 15) The full app's sign-up form also asks who you are, your name and the Terms. (Batch 35 §134) All required: no account is made without its sides,
+  // so the old "Welcome to Playtest · Tell us who you are" step never comes.
+  const { role, name } = readNewAccount(body);
   const user = await db.user.create({
-    data: { email, passwordHash: await hashPassword(password), timeZone: readTimeZone(body.timeZone), ageConfirmedAt: now, ...(who ?? {}), ...(who?.isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) },
+    data: { email, passwordHash: await hashPassword(password), name, timeZone: readTimeZone(body.timeZone), termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, ...sidesOf(role) },
   });
   await db.loginAttempt.create({ data: { email, ip, kind: "signup", ok: true, at: now } });
   await sendVerification(user.id, base);

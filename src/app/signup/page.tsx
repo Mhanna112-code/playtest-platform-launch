@@ -5,15 +5,17 @@ import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
 import { AuthShell } from "@/components/AuthShell";
 import { PasswordInput } from "@/components/PasswordInput";
+import { RoleChoice } from "@/components/RoleChoice";
 import { googleConfigured } from "@/lib/server/google";
 import { getPageUser } from "@/lib/server/page-auth";
 import { AGE_TICK } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Create an account · Playtest" };
 
-const ROLE = "flex cursor-pointer items-center gap-2 rounded-lg border border-slate-600 p-3 has-[:checked]:border-indigo-400";
-
-/** Sign up, as the full app's: I am a... (developer, tester or both), name, email, password and the Terms of Use. */
+/**
+ * Sign up, as the full app's: I am a... (developer, tester or both), name, email, password and the Terms of Use. (Batch 35 §134) Every one is required: the
+ * account is made with its sides, and with both it lands on the developer side.
+ */
 export default async function SignupPage() {
   if (await getPageUser()) redirect("/app");
   return (
@@ -25,15 +27,7 @@ export default async function SignupPage() {
             <p className="note text-center">or</p>
           </>
         )}
-        <fieldset>
-          <legend className="label req">I am a…</legend>
-          <div className="grid gap-3 sm:grid-cols-3">
-            <label className={ROLE}><input type="radio" name="role" value="developer" required /> Developer or maker</label>
-            <label className={ROLE}><input type="radio" name="role" value="tester" required /> Tester</label>
-            <label className={ROLE}><input type="radio" name="role" value="both" required /> Both</label>
-          </div>
-          <p className="mt-1.5 text-xs text-slate-500">One account either way: with both, switch sides from the button next to your name.</p>
-        </fieldset>
+        <RoleChoice />
         <div>
           <label className="label req" htmlFor="name">Name</label>
           <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />

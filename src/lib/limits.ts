@@ -37,7 +37,7 @@ export const LIMITS = {
   recordingsPerSession: 5,
   ratingComment: 500,
   disputeText: 2000,
-  bio: 1000,
+  bio: 2000, // (Owner, Nov 3, batch 35 §134; was 1,000) each side's own bio: the developer's (User.devBio) and the tester's (TesterProfile.bio)
   contact: { min: 10, max: 50_000 }, // (Owner, Oct 30, batch 15 section 21; was 3,000)
   criticalChanges: 3, // (Owner, Oct 28 afternoon) per field: saves that change the steps (What to do), questions, required languages or required devices, each counted from the first join
   contactPerDay: 5, // (Owner, Oct 27) Contact us messages per account per day

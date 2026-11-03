@@ -5,6 +5,7 @@ import { owed } from "@/lib/server/holds";
 import { dashboardV } from "@/lib/server/pageFreshness";
 import { DashboardActionBox } from "./DashboardActionBox";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { ArrowRight, Award, CalendarClock, CheckCircle2, Clock, Compass, FileSignature, Hourglass, Inbox, KeyRound, LayoutGrid, ListTodo, MessagesSquare, PlusCircle, RotateCcw, Users, Wallet, XCircle, AppWindow, Banknote } from "lucide-react";
 import { db } from "@/lib/db";
 import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } from "@/lib/server/dateFormat";
@@ -77,7 +78,10 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
   const { category, failed, done } = await searchParams;
   // (Owner, Oct 28, batch 20 section 16) An admin account is only an admin: the setup asks only Name and Pronoun (until the name is set), then /admin is home.
   adminAway(u, "/app");
-  if ((!u.isDeveloper && !u.isTester) || isAdmin(u))
+  // (Owner, Nov 3, batch 35 §134) Every other account gets its sides when it's made (email or Google sign-up), so this setup is the admin's only. An account that
+  // somehow has no side chooses one in Profile, where it's required, instead of a separate Welcome screen.
+  if (!isAdmin(u) && !u.isDeveloper && !u.isTester) redirect("/app/profile");
+  if (isAdmin(u))
     return (
       <>
         <h1>Welcome to Playtest</h1>

@@ -263,7 +263,9 @@ export async function deleteAccount(userId: string, by: "self" | "admin", reason
   // (Nov 2, §119) Two deletes at once (two admins, or an admin and the owner): the first claims it, with the admin's record (who, when) in the same commit; the
   // second is refused and reads who did it once that is settled.
   const claimed = await db.$transaction(async (tx) => {
-    const r = await tx.user.updateMany({ where: { id: userId, deletedAt: null }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason } });
+    // (Batch 35 §134) Both bios (the developer side's and the tester side's) go with the account: the profile shows "No bio yet." from then on.
+    const r = await tx.user.updateMany({ where: { id: userId, deletedAt: null }, data: { deletedAt: new Date(), deletedBy: by, deleteReason: reason, devBio: "" } });
+    if (r.count === 1) await tx.testerProfile.updateMany({ where: { userId, bio: { not: "" } }, data: { bio: "" } });
     if (r.count === 1 && by === "admin" && adminId) await recordAction(tx, adminId, "delete-account", userId);
     return r.count === 1;
   });

@@ -1,5 +1,7 @@
 import { db } from "@/lib/db";
+import { LIMITS } from "@/lib/limits";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
+import { sideFor, type Side } from "@/lib/sides";
 import { HttpError } from "./http";
 import { isAdmin, requireUser } from "./session";
 import { accountGate, listLabel, logAccountChange, sidesLabel } from "./accountChanges";
@@ -94,7 +96,16 @@ export function requireConfirmed(u: { emailVerifiedAt: Date | null; email?: stri
 const pick = (v: unknown, allowed: string[]) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && allowed.includes(x)))] : []);
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
-/** Save name, pronoun, roles and (for testers) the tester profile. */
+/** (Batch 35 §134) The side a side-only profile field belongs to: its change stops only that side's profile Save. Name, pronoun and sides are the account's. */
+const PROFILE_FIELD_SIDE: Record<string, Side> = { devices: "tester", languages: "tester", bio: "tester", devBio: "developer" };
+
+/**
+ * Save name, pronoun, roles and the profile of one side. (Owner, Nov 3, batch 35 §134) The name and pronoun are the account's: saved on either side's profile,
+ * both sides show them. Everything else belongs to one side, and a Save changes only the side its form is for (`side`, which the form sends; without it, the side
+ * in use): the developer's bio (User.devBio), or the tester's devices, languages, interests and bio (TesterProfile). Each bio is optional, up to 2,000
+ * characters; the other side's is never read or changed. The first setup (an account with no side yet) picks the sides, with the tester's fields when tester is
+ * picked.
+ */
 export async function saveProfile(userId: string, body: Record<string, unknown>) {
   const name = str(body.name, 80);
   // (Owner, Oct 27) A name is at least 1 character, with no other rules.
@@ -111,33 +122,47 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
     return user;
   }
   if (!isDeveloper && !isTester) throw new HttpError(400, "bad_role", "Choose developer, tester, or both.");
+  // (Batch 35 §134) Which side's profile this Save is for. The developer's bio is saved only by the developer form, which names its side (an older page never
+  // showed it). A developer-side Save of an account with both sides no longer asks for the tester's devices and languages.
+  const first = !me?.isDeveloper && !me?.isTester;
+  const asked: Side | null = body.side === "developer" && isDeveloper ? "developer" : body.side === "tester" && isTester ? "tester" : null;
+  const side = asked ?? sideFor({ isDeveloper, isTester, side: me?.side });
+  const testerPart = isTester && (first || side === "tester");
+  const devPart = isDeveloper && !first && asked === "developer";
   const devices = pick(body.devices, DEVICES), categories = pick(body.categories, CATEGORIES), languages = pick(body.languages, LANGUAGES);
-  if (isTester && devices.length === 0) throw new HttpError(400, "bad_devices", "Pick at least one device you play on.");
-  if (isTester && languages.length === 0) throw new HttpError(400, "bad_languages", "Pick at least one language you can test in.");
-  const bio = str(body.bio, 1000);
+  if (testerPart && devices.length === 0) throw new HttpError(400, "bad_devices", "Pick at least one device you play on.");
+  if (testerPart && languages.length === 0) throw new HttpError(400, "bad_languages", "Pick at least one language you can test in.");
+  const bio = str(body.bio, LIMITS.bio);
   const emailPref = ["daily", "weekly", "monthly", "off"].includes(body.emailPref as string) ? (body.emailPref as string) : undefined;
   // (Owner, Oct 28, batch 16 section 27) What this press sends, in the short form the stop box and the change log use (lists in the options' order).
   const inOrder = (xs: string[], all: string[]) => listLabel(all.filter((x) => xs.includes(x)));
-  const sent: Record<string, string> = { name, pronoun: pronoun || "not set", sides: sidesLabel(isDeveloper, isTester), ...(isTester ? { devices: inOrder(devices, DEVICES), languages: inOrder(languages, LANGUAGES), bio } : {}) };
-  // A change made in another tab or device since this page opened stops the first Save once (a field changed to exactly this value isn't listed).
-  await accountGate(userId, body, "profile", sent);
+  const sent: Record<string, string> = {
+    name, pronoun: pronoun || "not set", sides: sidesLabel(isDeveloper, isTester),
+    ...(testerPart ? { devices: inOrder(devices, DEVICES), languages: inOrder(languages, LANGUAGES), bio } : {}),
+    ...(devPart ? { devBio: bio } : {}),
+  };
+  // A change made in another tab or device since this page opened stops the first Save once (a field changed to exactly this value isn't listed). (Batch 35 §134)
+  // The other side's own fields aren't on this page, so their changes don't stop it.
+  await accountGate(userId, body, "profile", sent, first ? null : side);
   const before = await db.user.findUniqueOrThrow({ where: { id: userId }, include: { profile: true } });
   const saved = await db.$transaction(async (tx) => {
-    const user = await tx.user.update({ where: { id: userId }, data: { name, pronoun, isDeveloper, isTester, ...(emailPref ? { emailPref } : {}) } });
-    if (isTester) await tx.testerProfile.upsert({ where: { userId }, update: { devices, categories, languages, bio }, create: { userId, devices, categories, languages, bio } });
+    const user = await tx.user.update({ where: { id: userId }, data: { name, pronoun, isDeveloper, isTester, ...(emailPref ? { emailPref } : {}), ...(devPart ? { devBio: bio } : {}) } });
+    if (testerPart) await tx.testerProfile.upsert({ where: { userId }, update: { devices, categories, languages, bio }, create: { userId, devices, categories, languages, bio } });
     return user;
   });
   const tab = typeof body.tab === "string" ? body.tab : "";
   const was: Record<string, string> = {
     name: before.name, pronoun: before.pronoun || "not set", sides: sidesLabel(before.isDeveloper, before.isTester),
-    devices: inOrder(before.profile?.devices ?? [], DEVICES), languages: inOrder(before.profile?.languages ?? [], LANGUAGES), bio: before.profile?.bio ?? "",
+    devices: inOrder(before.profile?.devices ?? [], DEVICES), languages: inOrder(before.profile?.languages ?? [], LANGUAGES), bio: before.profile?.bio ?? "", devBio: before.devBio,
   };
-  const LABELS: Record<string, string> = { name: "Name", pronoun: "Pronoun", sides: "Sides", devices: "Devices", languages: "Languages", bio: "Bio" };
+  // Each side's page reads its own bio's change as "Bio".
+  const LABELS: Record<string, string> = { name: "Name", pronoun: "Pronoun", sides: "Sides", devices: "Devices", languages: "Languages", bio: "Bio", devBio: "Bio" };
   for (const [field, after] of Object.entries(sent)) {
     if (was[field] === after) continue;
     // A long value (the bio) reads "Bio changed"; the values are kept for the same-value rule.
     const long = was[field].length > 60 || after.length > 60;
-    await logAccountChange(userId, tab, { scopes: field === "sides" || field === "name" ? ["profile", "settings"] : ["profile"], field, label: LABELS[field], before: was[field], after, ...(long ? { line: `${LABELS[field]} changed` } : {}) });
+    const own = PROFILE_FIELD_SIDE[field];
+    await logAccountChange(userId, tab, { scopes: field === "sides" || field === "name" ? ["profile", "settings"] : ["profile"], field, label: LABELS[field], before: was[field], after, ...(long ? { line: `${LABELS[field]} changed` } : {}), ...(own ? { side: own } : {}) });
   }
   return saved;
 }

@@ -266,7 +266,8 @@ describe("batch 20 section 5: 18 or older", () => {
     expect(await db.user.count({ where: { email } })).toBe(0);
     const token = (done as { pending: string }).pending;
     expect((await pendingGoogleSignup(token))?.email).toBe(email);
-    const finish = (body: Record<string, unknown>, t = token) => googleFinishPOST(req("/api/auth/google/finish", { body, headers: { cookie: `${GOOGLE_SIGNUP_COOKIE}=${t}` } }));
+    // (Batch 35 §134) The step also asks who you are and a name (required): given here, so each tick's own line shows.
+    const finish = (body: Record<string, unknown>, t = token) => googleFinishPOST(req("/api/auth/google/finish", { body: { role: "tester", name: "Ana Silva", ...body }, headers: { cookie: `${GOOGLE_SIGNUP_COOKIE}=${t}` } }));
     expect((await json(await finish({ over18: "yes" }))).body.error.message).toBe("Agree to the Terms of Use to sign up");
     expect((await json(await finish({ acceptTerms: "yes" }))).body.error.message).toBe(AGE_LINE);
     expect(await db.user.count({ where: { email } })).toBe(0);
@@ -277,6 +278,7 @@ describe("batch 20 section 5: 18 or older", () => {
     expect(u.ageConfirmedAt).not.toBeNull();
     expect(u.termsVersion).toBe(TERMS_VERSION);
     expect(u.emailVerifiedAt).not.toBeNull();
+    expect(u).toMatchObject({ name: "Ana Silva", isTester: true, isDeveloper: false }); // (batch 35 §134) made with its side
     // The step is used up.
     expect((await json(await finish({ acceptTerms: "yes", over18: "yes" }))).body.error.message).toBe(GOOGLE_STEP_EXPIRED);
     expect((await json(await finish({ acceptTerms: "yes", over18: "yes" }, await startGoogleSignup(mail(), new Date(Date.now() - 3_600_000))))).body.error.message).toBe(GOOGLE_STEP_EXPIRED);

@@ -5,8 +5,8 @@ import { isEmail, normEmail } from "@/lib/format";
 import { appUrl } from "./auth";
 import { createSession, readCookie, sessionCookie } from "./session";
 import { HttpError } from "./http";
-import { isTicked, readTimeZone } from "./passwords";
-import { AGE_LINE, TERMS_VERSION } from "@/lib/termsOfUse";
+import { readNewAccount, readTimeZone, sidesOf } from "./passwords";
+import { TERMS_VERSION } from "@/lib/termsOfUse";
 
 // Sign in with Google: plain OAuth 2.0 authorization-code flow with PKCE, no auth library.
 
@@ -115,8 +115,8 @@ export async function finishGoogle(req: Request): Promise<{ pending: string } | 
       db.user.update({ where: { id: existing.id }, data: { passwordHash: "", stripeAccountId: null, payoutsReady: false, payoutProblemAt: null, payoutRemindedAt: null, emailVerifiedAt: new Date() } }),
     ]);
   }
-  // (Owner, Oct 28, batch 20 section 5) A NEW account isn't made here: the browser goes to one short step (the "I'm 18 or older." tick and the Terms agreement,
-  // then Continue), and the account is created only once both are ticked.
+  // (Owner, Oct 28, batch 20 section 5) A NEW account isn't made here: the browser goes to one short step (batch 35 §134: who you are and your name, then the
+  // "I'm 18 or older." tick and the Terms agreement, then Continue), and the account is created only once all of them are given.
   if (!existing) return { pending: await startGoogleSignup(email) };
   const user = await db.user.findUniqueOrThrow({ where: { id: existing.id } });
   const session = await createSession(user.id);
@@ -152,20 +152,21 @@ export async function pendingGoogleSignup(token: string | null | undefined, now 
   return { email: v.email };
 }
 /**
- * Continue on the step: both ticks required (red at each: "Agree to the Terms of Use to sign up", "You must be 18 or older to use Playtest."); then the account is
- * created (email confirmed by Google, the Terms version and the age confirmation recorded) and signed in.
+ * Continue on the step: who you are (developer, tester or both), a name and both ticks are required, each red at its own field ("Choose developer, tester or
+ * both.", "Enter your name", "Agree to the Terms of Use to sign up", "You must be 18 or older to use Playtest."); then the account is created with its sides (email
+ * confirmed by Google, the Terms version and the age confirmation recorded) and signed in. (Owner, Nov 3, batch 35 §134) The same as the email form: with both it
+ * lands on the developer side, and the old "Welcome to Playtest · Tell us who you are" step never comes.
  */
 export async function finishGoogleSignup(token: string | null | undefined, body: Record<string, unknown>) {
-  // (Batch 26 section 11) Every missing tick is red at once, each at its own tick (one line per tick).
-  const missing = [...(!isTicked(body.acceptTerms) ? ["Agree to the Terms of Use to sign up"] : []), ...(!isTicked(body.over18) ? [AGE_LINE] : [])];
-  if (missing.length) throw new HttpError(400, "bad_field", missing.join("\n"));
+  // (Batch 26 section 11) Every missing part is red at once, each at its own field (one line each).
+  const { role, name } = readNewAccount(body);
   const step = await pendingGoogleSignup(token);
   if (!step || !token) throw new HttpError(409, "expired", GOOGLE_STEP_EXPIRED);
   await db.appState.deleteMany({ where: { key: stepKey(token) } });
   const now = new Date();
   const existing = await db.user.findUnique({ where: { email: step.email } });
   // Made meanwhile (another tab's sign-up): signed into it, as Google's sign-in would.
-  const user = existing ?? await db.user.create({ data: { email: step.email, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone) } });
+  const user = existing ?? await db.user.create({ data: { email: step.email, name, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone), ...sidesOf(role) } });
   if (existing && !existing.ageConfirmedAt) await db.user.update({ where: { id: existing.id }, data: { ageConfirmedAt: now } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };
