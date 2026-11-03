@@ -60,6 +60,8 @@ body {
   :focus-visible { outline: 2px solid #d8fc52; outline-offset: 2px; }
   * { scrollbar-width: thin; scrollbar-color: rgba(168, 179, 204, 0.25) transparent; }
   select option { background: #0a0d18; }
+  /* (Owner, Nov 3) The chosen option in an open list stays readable (it showed as a blank row). */
+  select option:checked { background: #2a3352; color: #fff; }
 }
 
 @layer components {
