@@ -1,12 +1,15 @@
 "use client";
 import { api } from "@/lib/client";
+import { videoTypeOf } from "@/lib/videoFormats";
 
 /**
  * Upload one file to a session through the recording upload (start -> PUT to storage -> done). (Owner, Oct 29, batch 11) `part: "written"` attaches it to the written
  * part (a file, or a screen recording); otherwise it is a recording for the Recording part. The server checks the type, the size and the counts.
  */
 export async function uploadToSession(sessionId: string, file: Blob, filename: string, part: "recording" | "written", onProgress?: (pct: number) => void): Promise<{ id: string; tag: string }> {
-  const contentType = (file.type || (part === "recording" ? "video/mp4" : "application/octet-stream")).split(";")[0];
+  // (Owner, Nov 3) A video's type comes from its name when the browser gives none (the server checks the same way); nothing is guessed as MP4 any more.
+  const given = file.type.split(";")[0];
+  const contentType = videoTypeOf(filename, given) ?? (given || "application/octet-stream");
   // (Batch 35 §4) `tag`: the short tag of a written answer's marker ("[📎 map.png #k3f9]"), unique among the contract's uploads.
   const { recordingId, tag, uploadUrl } = await api<{ recordingId: string; tag: string; uploadUrl: string }>(`/api/sessions/${sessionId}/recording-start`, { filename, size: file.size, contentType, part });
   try {
