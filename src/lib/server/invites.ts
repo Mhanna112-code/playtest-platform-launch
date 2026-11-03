@@ -224,10 +224,21 @@ export function requirementsChangedLine(seen: Needs, now: Needs) {
  * Windows PC but no longer lists Chinese (this test needs Chinese or Portuguese)." Edits that cancel out (added, then removed again) give no line.
  */
 
+// (Owner, Nov 2, batch 35 §128) Invite limits, in a rolling 24 hours (counted from the Invite rows' createdAt, so re-sends after a listing change count too): 100 per
+// developer across all their tests, and 3 to the same tester on the same test. Cancel invite is never limited.
+export const INVITE_WINDOW_MS = 24 * 3_600_000;
+export const INVITES_PER_DAY = 100;
+export const INVITES_PER_TESTER_PER_TEST = 3;
+/** The whole press refused: "You can send up to 100 invites a day. You have 2 left today." / "You've sent 100 invites today. You can invite more tomorrow." */
+export const invitesLeftLine = (left: number) =>
+  left > 0 ? `You can send up to ${INVITES_PER_DAY} invites a day. You have ${left} left today.` : `You've sent ${INVITES_PER_DAY} invites today. You can invite more tomorrow.`;
+/** One tester skipped (the others in the press are invited). */
+export const sameTesterLimitLine = (name: string) => `${name}: you've invited them to this test ${INVITES_PER_TESTER_PER_TEST} times today. You can invite them again tomorrow.`;
+
 /**
  * Invite ticked testers. Refused for good when the test is full, stopped, past Open until or paused. Stops once for the
  * developer stop-once reasons plus: a ticked tester's profile no longer fits, a ticked tester joined, or was already
- * invited in another tab. Then invites those who can be invited and names the others with reasons.
+ * invited in another tab. Then invites those who can be invited and names the others with reasons. (Batch 35 §128) Daily limits: see INVITES_PER_DAY.
  */
 export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, testId: string, body: Record<string, unknown>) {
   await ownTest(dev.id, testId);
@@ -332,10 +343,20 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         others.push(why);
         continue;
       }
-      // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
-      await tx.invite.create({ data: { testId, testerId: p.id } });
+      // (Owner, Nov 2, batch 35 §128) At most 3 invites to the same tester on this test a day (a cancel and re-invite counts each time): over it, only they're skipped.
+      if ((await tx.invite.count({ where: { testId, testerId: p.id, createdAt: { gt: new Date(now.getTime() - INVITE_WINDOW_MS) } } })) >= INVITES_PER_TESTER_PER_TEST) {
+        others.push(sameTesterLimitLine(name));
+        continue;
+      }
       invited.push({ id: p.id, name, email: p.email, pronoun: p.pronoun });
     }
+    // (Owner, Nov 2, batch 35 §128) At most 100 invites a day per developer, across all their tests: a press that would go over sends nothing.
+    if (invited.length) {
+      const sent = await tx.invite.count({ where: { test: { developerId: dev.id }, createdAt: { gt: new Date(now.getTime() - INVITE_WINDOW_MS) } } });
+      if (sent + invited.length > INVITES_PER_DAY) throw new HttpError(429, "too_many_invites", invitesLeftLine(INVITES_PER_DAY - sent));
+    }
+    // (Correction 5) Invites never hold spots: any number can be open; the first to join gets a spot.
+    for (const i of invited) await tx.invite.create({ data: { testId, testerId: i.id } });
     if (invited.length) await recordEvent(tx, testId, "invited", `You invited ${andList(invited.map((i) => i.name))}`, false);
     return { t, invited, others };
   });

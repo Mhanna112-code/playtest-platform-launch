@@ -1177,3 +1177,12 @@ Against card testing (someone running stolen cards through "save a card" one aft
   - Add a card / Change card is a form post, so it goes back to Payments (`?error=card_limit#card`) with the line under that button, not in the line at the top.
 - **Storage.** No migration: each attempt is a `LoginAttempt` row with kind "card", the account's id in its `email` field and the network in `ip`. The daily job's clean-up of attempts older than a day keeps the table small.
 - **Tests:** `tests/card-limits.test.ts` covers 5 allowed and the 6th refused (Add a card, and Verify a card's start and typed card), another account on the same network stopped by the network cap, a day later working again, paying not counted, and no network cap on a local dev server.
+
+## §128 Invites are limited (owner, Nov 2)
+
+- **100 a day per developer**, across all their tests, in a rolling 24 hours (`INVITES_PER_DAY` in `src/lib/server/invites.ts`), counted from the Invite rows' `createdAt`. Every invite sent counts: inviting the same tester again after a cancel, each of the per-test 3 below, and the re-sends a listing change makes (`reinviteAfterEdit`; those are never refused, a Save always re-sends).
+  - A press that would go over is refused whole (HTTP 429), with nothing sent, under Invite: "You can send up to 100 invites a day. You have N left today." When none are left: "You've sent 100 invites today. You can invite more tomorrow."
+  - Only the testers the press would really invite count toward it (not the ones skipped for another reason).
+- **3 a day to the same tester on the same test** (`INVITES_PER_TESTER_PER_TEST`; a cancel and re-invite counts each time; another test has its own 3). Over it, only that tester is skipped, with a line in the press's result like the other skip reasons: "<name>: you've invited them to this test 3 times today. You can invite them again tomorrow." The others in the press are invited.
+- **Cancel invite is never limited**: it works at 100.
+- **Tests:** `tests/invite-limits.test.ts` covers 100 then refused (and a day later working), a press of 3 with 2 left refused whole and naming 2, cancel and re-invite counting (the per-test 3 counted toward the 100), the skip line with the others invited, another test's own 3, cancel at the limit, and another developer unaffected.
