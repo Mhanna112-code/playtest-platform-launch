@@ -429,8 +429,8 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   // (§125) What is owed and the charges waiting for the lift, as one payment.
   const all = (await payable(dev.id)).filter((p) => !covered?.has(p.id));
   // (§117 rule 3) A debt waiting for the bank is never charged by a press (the same during a chargeback hold's reservation).
-  const list = withDebt(all.filter((p) => !locks.has(p.id)));
-  const total = list.reduce((a, p) => a + p.amountCents, 0);
+  let list = withDebt(all.filter((p) => !locks.has(p.id)));
+  let total = list.reduce((a, p) => a + p.amountCents, 0);
   // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves ONCE: with a reservation in place, what was added since is charged right after the lift (no second one).
   if (rs && rs.reservedCents > 0 && list.length) throw new HttpError(409, "nothing_owed", reservedAddedLine(rs.reservedCents, total));
   // (Owner, Oct 29, batch 10) Paid meanwhile (another tab, or a won chargeback): nothing is charged, ever twice.
@@ -446,7 +446,18 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
   // (Owner, NEXT-UI 12b) Every press checks what the box showed (total and which payments), the second one too: if
   // anything is new it stops again with just the new line(s). (§117) Only what the press would pay counts (a line waiting for the bank isn't).
-  const nowIds = lines.filter((l) => l.retry).map((l) => l.id);
+  let nowIds = lines.filter((l) => l.retry).map((l) => l.id);
+  // (Owner, Nov 2) A tester's Charge that came in after the page drew its total never stops the press: it's left out of this payment (which is what the page
+  // showed) and waits, charged right after it goes through (§125's after-lift payment). New debts (a chargeback, a failed payment) still stop once.
+  if (seen != null && seenIds.length && seenIds.every((i) => nowIds.includes(i))) {
+    const fresh = nowIds.filter((i) => !seenIds.includes(i));
+    const waiting = new Set(fresh.length ? (await db.payment.findMany({ where: { id: { in: fresh }, status: "deferred" }, select: { id: true } })).map((p) => p.id) : []);
+    if (fresh.length && fresh.every((i) => waiting.has(i))) {
+      list = list.filter((p) => !waiting.has(p.id));
+      total = list.reduce((a, p) => a + p.amountCents, 0);
+      nowIds = nowIds.filter((i) => !waiting.has(i));
+    }
+  }
   if (seen != null && (seen !== total || (Array.isArray(body.seenIds) && (seenIds.length !== nowIds.length || nowIds.some((i) => !seenIds.includes(i)))))) {
     const freshLines = lines.filter((l) => l.retry && !seenIds.includes(l.id));
     const fresh = freshLines.map((l) => l.text.replace(/ · card declined .*$/, ""));

@@ -274,6 +274,18 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     expect(charges).toBe(1);
   });
 
+  // (Owner, Nov 2) A tester's Charge waiting for the lift never stops Pay what you owe.
+  it("one that came in after the page drew is left out of the payment and waits; no stop box", async () => {
+    const { dev, tester, sessionId, rows } = await heldWithFailed([800]);
+    const amounts: number[] = [];
+    setStripeForTests({ paymentIntents: { create: async (a: { amount: number }) => { amounts.push(a.amount); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
+    const late = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "deferred" } });
+    const r = await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: { seenTotalCents: 800, seenIds: [rows[0].id] } })).then(json);
+    expect(r.status).toBe(200);
+    expect(amounts[0]).toBe(800); // what the page showed, not $13
+    expect((await db.payment.findUniqueOrThrow({ where: { id: late.id } })).status).not.toBe("owed");
+  });
+
   it("two presses at the same moment charge each owed payment once", async () => {
     const { dev, rows } = await heldWithFailed([800, 300]);
     let charges = 0;
@@ -370,3 +382,4 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
   });
 });
+
