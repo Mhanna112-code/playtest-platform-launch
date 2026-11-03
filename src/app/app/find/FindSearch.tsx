@@ -5,20 +5,13 @@ import { useRouter } from "next/navigation";
 import { Search } from "lucide-react";
 import { FIND_SEARCH_LABEL, FIND_SEARCH_MAX, TEST_STATES, stateKey, type TestState } from "@/lib/findSearch";
 import { PICK_CHIP } from "@/components/Choices";
-
-/** The page's address with `changes` applied (empty values dropped), keeping the chips' and filters' other params. */
-function hrefWith(params: Record<string, string | undefined>, changes: Record<string, string>) {
-  const q = new URLSearchParams();
-  for (const [k, v] of Object.entries({ ...params, ...changes })) if (v) q.set(k, v);
-  const s = q.toString();
-  return s ? `/app/find?${s}` : "/app/find";
-}
+import { findHref, type FindLink } from "@/lib/findFilters";
 
 /**
  * (Owner, Oct 28, batch 17 section 8) "Search tests or developers" at the top of Find tests: the list is searched on the server as you type (after a short
  * pause), together with the category chips and the filters below. Clearing the box brings the full list back. Full width on phones.
  */
-export function FindSearch({ params }: { params: Record<string, string | undefined> }) {
+export function FindSearch({ params }: { params: FindLink }) {
   const router = useRouter();
   const [q, setQ] = useState(params.q ?? "");
   const first = useRef(true);
@@ -27,7 +20,7 @@ export function FindSearch({ params }: { params: Record<string, string | undefin
       first.current = false;
       return;
     }
-    const t = setTimeout(() => router.replace(hrefWith(params, { q: q.trim() }), { scroll: false }), 300);
+    const t = setTimeout(() => router.replace(findHref({ ...params, q: q.trim() }), { scroll: false }), 300);
     return () => clearTimeout(t);
     // Only typing reloads the list (the params arrive with that reload).
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -47,11 +40,11 @@ export function FindSearch({ params }: { params: Record<string, string | undefin
 }
 
 /** (Batch 17 section 8) The admin's tick boxes for the tests' states, above the list (none ticked = every state). */
-export function StateTicks({ params, ticked }: { params: Record<string, string | undefined>; ticked: TestState[] }) {
+export function StateTicks({ params, ticked }: { params: FindLink; ticked: TestState[] }) {
   const router = useRouter();
   const flip = (s: TestState) => {
     const next = ticked.includes(s) ? ticked.filter((x) => x !== s) : [...ticked, s];
-    router.replace(hrefWith(params, { states: TEST_STATES.filter((x) => next.includes(x)).map(stateKey).join(",") }), { scroll: false });
+    router.replace(findHref({ ...params, states: TEST_STATES.filter((x) => next.includes(x)).map(stateKey).join(",") }), { scroll: false });
   };
   return (
     <fieldset className="flex flex-wrap items-center gap-2" data-state-ticks="">

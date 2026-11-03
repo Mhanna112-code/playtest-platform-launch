@@ -1553,3 +1553,38 @@ Not limited (no counter, nothing checked): the page's own name filters (Search b
 - `tests/batch35-hard-limits.test.ts`: the per-line limiter (blocked at the line's limit, Enter allowed, typing in the middle, pasted lines cut one by one, trimmed counting, an older over-long line kept, no half emoji, the cursor's place, the 21st question), the whole-box limiter (the answers' shared 50,000 without markers, an over-long value only shrinking), `lineRange` / `linesOf` with blank lines and "\r\n", both lists rendered (lines, counts, "Typed twice", Required ticks), a source check that the questions and both key boxes (Post and Edit) use `LineList` and with it `focusLine`, a source scan that every text box in `src` has `maxLength` or the shared limiter (and every counter's max is its box's maxLength), and the paste note in `FieldChecks`.
 - Checked in Edge against a separate server and database (port 3471, a throwaway schema): on Post, a key stops at 200 and Enter starts the next; a pasted block is cut line by line with the grey note; Product's paste is cut at 60 with its note; clicking key 2 / question 2 (after a blank line) puts the cursor at the end of that line. On Edit: the Free box holds only the free keys and lists them, a key stops at 200, Enter works, clicking key 1 goes to line 1, In use is its own list (not clickable), a pasted question is cut at 20,000, clicking question 3 goes to line 3; an older 1,500-character NDA loads whole, typing adds nothing, Backspace works.
 - **Pictures:** `docs/media/hard-limits/` (`post-keys-list.png`, `post-questions-list.png`, `post-product-cut-note.png`, `edit-keys-lists.png`, `edit-questions-list.png`).
+
+## §144 Find: tick-box filters; Matching my profile ticks your devices and languages (owner, Nov 3)
+
+"Make devices, parts and (add) languages tick based filters instead? And matching my profile auto ticks languages and devices (anything ticked differently with tech + languages will change matching my profile to everything) and ... let the categories stay selectable too (so it's all filters that match tests with all the categories selected? Keeping the All one)."
+
+### The filters (`src/lib/findFilters.ts`, `src/app/app/find/FindFilters.tsx`)
+
+- **Categories:** the chips above the filters tick on and off, several at once; **All** clears them. With several ticked, a test shows only if it has **every** ticked category (AND). Each chip keeps its count (open tests in that category). The chips are links, so they work without JavaScript, and keep the other filters, the sort and the search.
+- **Devices:** a tick box for every device the profile and Post / Edit know (`DEVICES`). A test shows if it needs no device or needs **one** of the ticked devices (the same rule as `needsLines`). None ticked = no device filter.
+- **Languages (new):** the same with the profile's languages (`LANGUAGES`): a test that needs no language, or one of the ticked ones.
+- **Parts:** Written answers / Screen recording / Live call. A test shows if it offers **any** ticked part. None ticked = all.
+- **Across the groups: AND.** A test must pass the categories, the devices, the languages and the parts. One pure helper decides: `passesTicks(test, ticks)`.
+- The ticks, Sort by and Show are one GET form with **Apply** (works without JavaScript). The address repeats a param per tick: `?category=Game&category=Education&device=Mac&device=iPhone&lang=English&part=written&sort=pay`. Old links with one `category=` or `device=` still work; unknown values are ignored (a device that isn't in the list never filters).
+- Every tick is the one pick-list chip (§52, `PICK_CHIP`); the groups wrap on a phone (no sideways scroll).
+
+### Show: Matching my profile / Everything
+
+- **Matching my profile** ticks exactly the profile's devices and languages (and unticks the others). **Everything** clears the device and language ticks. Show never touches the categories or the parts.
+- Ticking a device or language so the ticks are no longer exactly the profile's turns Show to **Everything** at once (before Apply); ticking them back to exactly the profile's turns it to **Matching my profile** again (`showFor`). An empty profile never reads "Matching my profile" by itself.
+- On the server, `mine=1` means the profile's devices and languages **are** the device and language filter, whatever device / language params the link carries (so an old `?mine=1` link works). Without `mine=1` the ticks in the address are used. "Everything" stays the default.
+- A link that changes the ticks (a chip, Clear filters, Show them) starts the form afresh; typing in the search box keeps unapplied ticks.
+
+### Empty states (the profile never hides tests by itself; it only orders them)
+
+- **Dashboard, New tests for you, nothing to show:** "No open tests to join right now. New ones show up here as soon as developers post them." with a **See all tests** link to Find. No mention of devices or languages.
+- **Find, nothing open to this account:** "No open tests right now" / "New tests show up here as soon as developers post them."
+- **Find, the filters hid them:** "No open tests match your filters" / "N open tests don't match." (singular "1 open test doesn't match.") and **Clear filters** (keeps the search and the sort; Show goes back to Everything).
+- **Find, Matching my profile alone hid them** (the categories and parts on their own leave N tests): "No open tests match your profile" / "N open tests need a device or language that isn't on your profile." (singular "1 open test needs …") and **Show them** (Everything, keeping the categories, parts, sort and search). One helper picks the state: `findEmpty(open, ticks, mine)`.
+- **A typed search that finds nothing:** unchanged ("No open tests match “…”."). When the search finds tests but the ticks hide them, the filters' or profile's state shows instead (its link keeps the search).
+- **Admin's Find:** unchanged (the state tick boxes, "No tests match these ticks"); an admin gets the same category, device, language and part ticks, without Show.
+
+### Tests and pictures
+
+- `tests/find-ticks.test.ts`: the rules (AND for categories, OR within devices / languages / parts, AND across, the profile's ticks equal `needsLines`), the address (repeated params, old single params, unknown values, `mine=1` overriding), Show following the ticks (`showFor`, any order, an empty profile), the form rendered from the address (Show, ticks, parts, hidden search and categories; no Show for an admin), the chips' links and counts, `findEmpty` and its counts, singular / plural lines, and source checks for every empty state and the dashboard's line. `tests/batch17-find.test.ts`, `tests/batch16-oct28.test.ts` and `tests/batch35-reasons-page-load.test.ts` follow the move.
+- Checked in a separate server (port 3480, a throwaway schema, `@playtest.test` accounts) at 1280 and 390 wide. **Pictures:** `docs/media/find-ticks/`.

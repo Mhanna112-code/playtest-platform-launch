@@ -146,7 +146,8 @@ describe("batch 35 §52: one pick-list chip", () => {
     expect(src("app/app/profile/ProfileForm.tsx")).toMatch(/<Choices label="Devices you use"[\s\S]*<Choices label="Languages you can test in"/);
     expect(src("app/app/find/FindSearch.tsx")).toContain("<label key={s} className={PICK_CHIP}>");
     expect(src("app/app/tests/[id]/InvitePanel.tsx")).toContain("<label key={o} className={PICK_CHIP}>");
+    expect(src("app/app/find/FindFilters.tsx")).toContain("<label key={o} className={PICK_CHIP}>"); // (§144) Find's device, language and part ticks
     // No other pick list keeps its own chip classes.
-    for (const f of ["app/app/tests/TestForm.tsx", "app/app/find/FindSearch.tsx", "app/app/tests/[id]/InvitePanel.tsx", "app/app/profile/ProfileForm.tsx"]) expect(src(f)).not.toContain("has-[:checked]");
+    for (const f of ["app/app/tests/TestForm.tsx", "app/app/find/FindSearch.tsx", "app/app/find/FindFilters.tsx", "app/app/tests/[id]/InvitePanel.tsx", "app/app/profile/ProfileForm.tsx"]) expect(src(f)).not.toContain("has-[:checked]");
   });
 });

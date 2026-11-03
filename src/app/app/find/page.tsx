@@ -10,9 +10,8 @@ import { Languages, Monitor, SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { CategoryBadges } from "@/components/Category";
-import { CategoryChips, CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
+import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { displayName, money } from "@/lib/server/dateFormat";
-import { DEVICES } from "@/lib/options";
 import { ratingSummary } from "@/lib/server/ratings";
 import { byMostTimeToFinish, perTesterLine, termsLine, testerDaysOf, testerShare } from "@/lib/rules";
 import { requireOpenPage } from "@/lib/server/page-auth";
@@ -22,15 +21,14 @@ import { isAdmin } from "@/lib/server/session";
 import { adminFindTests, ADMIN_FIND_LIMIT } from "@/lib/server/findSearch";
 import { findQuery, noFindMatchLine, statesFrom, type TestState } from "@/lib/findSearch";
 import { FindSearch, StateTicks } from "./FindSearch";
+import { CategoryTicks, FindFilters } from "./FindFilters";
+import { filtersHidLine, findEmpty, findHref, oneOf, passesTicks, profileHidLine, profileTicks, ticksFrom, type FindLink, type FindSp } from "@/lib/findFilters";
 import { otherSideNotice } from "@/components/OtherSideNotice";
 
 export const metadata = { title: "Find tests · Playtest" };
 export const dynamic = "force-dynamic";
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
-const PARTS = { written: "Written answers", recording: "Screen recording", live: "Live call" } as const;
-
-type Sp = { category?: string; device?: string; part?: string; sort?: string; mine?: string; q?: string; states?: string };
 
 /** (Batch 17 section 8) The state badge on an admin's card. */
 const STATE_TONE: Record<TestState, string> = {
@@ -52,7 +50,7 @@ function fromText(t: { writtenCents: number | null; recordingCents: number | nul
 }
 const topPrice = (t: { writtenCents: number | null; recordingCents: number | null; liveRateCents: number | null }) => Math.max(t.writtenCents ?? 0, t.recordingCents ?? 0, t.liveRateCents ?? 0);
 
-export default async function FindPage({ searchParams }: { searchParams: Promise<Sp> }) {
+export default async function FindPage({ searchParams }: { searchParams: Promise<FindSp> }) {
   const u = await requireOpenPage("/app/find");
   return withDateZone(u.timeZone, async () => {
  // (Owner, Oct 28) closed to a restricted account: it moves to the dashboard top before anything renders
@@ -63,33 +61,36 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   const admin = isAdmin(u);
   if (!u.isTester && !admin) redirect("/app/profile");
   const sp = await searchParams;
-  const typed = findQuery(sp.q);
-  const ticked = admin ? statesFrom(sp.states) : [];
+  const typed = findQuery(oneOf(sp.q));
+  const states = admin ? oneOf(sp.states) : undefined;
+  const ticked = admin ? statesFrom(states) : [];
   const freshV = await discoveryV(u, typed, ticked);
   const found = admin ? await adminFindTests(typed, ticked) : null;
   const [open, profile] = await Promise.all([found ? found.tests : findTests(u, typed), admin ? null : db.testerProfile.findUnique({ where: { userId: u.id } })]);
   const devRatings = new Map(await Promise.all([...new Set(open.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id)).line] as const)));
   const invitedTo = admin ? new Set<string>() : new Set((await db.invite.findMany({ where: { testerId: u.id, status: "sent", testId: { in: open.map((t) => t.id) } } })).map((i) => i.testId));
-  // The full app's filters: category chips, then Device / Part / Sort by / Show. "Everything" is the default (a test the
-  // profile doesn't fit is listed with what it needs).
-  const matchMine = !admin && sp.mine === "1";
+  // (Owner, Nov 3, batch 35 §144) Tick-box filters: every ticked category (AND); one of the ticked devices, languages, parts (OR within a group);
+  // the groups together (AND). "Everything" is the default; "Matching my profile" (mine=1) ticks the profile's devices and languages. Old links
+  // with one category= or device= still work.
+  const matchMine = !admin && oneOf(sp.mine) === "1";
+  const ticks = ticksFrom(sp, matchMine, profile);
+  const sort = oneOf(sp.sort);
   const counts: Record<string, number> = {};
   for (const t of open) for (const c of t.categories) counts[c] = (counts[c] ?? 0) + 1;
-  const shown = open
-    .filter((t) => (!sp.category || t.categories.includes(sp.category)) && (!sp.device || t.devices.length === 0 || t.devices.includes(sp.device)))
-    .filter((t) => !sp.part || (sp.part === "written" ? t.writtenCents != null : sp.part === "recording" ? t.recordingCents != null : sp.part === "live" ? t.liveRateCents != null : true))
-    .filter((t) => !matchMine || needsLines(t, profile).length === 0);
-  if (sp.sort === "pay") shown.sort((a, b) => topPrice(b) - topPrice(a));
+  const shown = open.filter((t) => passesTicks(t, ticks));
+  if (sort === "pay") shown.sort((a, b) => topPrice(b) - topPrice(a));
   // (Owner, Oct 28, batch 16 section 3) "Most time to finish": the days each new tester gets (the card's "N days per tester"), most first; ties: the later Open until
   // first (more time left to join); tests without Open until last.
-  else if (sp.sort === "deadline") shown.sort(byMostTimeToFinish);
+  else if (sort === "deadline") shown.sort(byMostTimeToFinish);
   // (Batch 20 section 9) An exact match (the test's name, its product or the developer's name) comes first.
   if (typed) shown.splice(0, shown.length, ...exactFirst(shown, typed, (t) => [t.title, t.productName ?? "", displayName(t.developer)]));
   // What the search box, the tick boxes and the chips keep from each other.
-  const params: Record<string, string | undefined> = { category: sp.category, device: sp.device, part: sp.part, sort: sp.sort, mine: admin ? undefined : sp.mine, q: typed || undefined, states: admin ? sp.states : undefined };
+  const params: FindLink = { ...ticks, sort, mine: matchMine, q: typed || undefined, states };
+  // (Owner, Nov 3) Why the list is empty: nothing open, the ticks, or Matching my profile alone (its N tests are one "Show them" away).
+  const empty = !admin && shown.length === 0 ? findEmpty(open, ticks, matchMine) : null;
   return (
     <div className="space-y-6">
-      <AutoRefresh query={`fresh=discovery&q=${encodeURIComponent(typed)}&states=${encodeURIComponent(sp.states ?? "")}`} v={freshV} />
+      <AutoRefresh query={`fresh=discovery&q=${encodeURIComponent(typed)}&states=${encodeURIComponent(oneOf(sp.states) ?? "")}`} v={freshV} />
       <div>
         <h1 className="text-3xl font-bold tracking-tight text-white">Find tests</h1>
         <p className="text-slate-400">{admin ? "Every test, whatever its state. A card opens the test's page with the team's boxes." : "Apps, websites and games looking for feedback. You earn the amount shown as each part of your work is accepted."}</p>
@@ -99,59 +100,36 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
       <FindSearch params={params} />
       {admin && <StateTicks params={params} ticked={ticked} />}
 
-      <CategoryChips basePath="/app/find" params={params} counts={counts} total={open.length} />
-
-      <form className="card flex flex-wrap items-end gap-3 p-4">
-        {sp.category && <input type="hidden" name="category" value={sp.category} />}
-        {typed && <input type="hidden" name="q" value={typed} />}
-        {admin && sp.states && <input type="hidden" name="states" value={sp.states} />}
-        <div>
-          <label className="label" htmlFor="device">Device</label>
-          <select className="input w-44" id="device" name="device" defaultValue={sp.device ?? ""}>
-            <option value="">Any</option>
-            {DEVICES.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="part">Part</label>
-          <select className="input w-44" id="part" name="part" defaultValue={sp.part ?? ""}>
-            <option value="">Any</option>
-            {Object.entries(PARTS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="label" htmlFor="sort">Sort by</label>
-          <select className="input w-40" id="sort" name="sort" defaultValue={sp.sort ?? ""}>
-            <option value="">Newest</option>
-            <option value="pay">Highest pay</option>
-            <option value="deadline">Most time to finish</option>
-          </select>
-        </div>
-        {!admin && (
-          <div>
-            <label className="label" htmlFor="mine">Show</label>
-            <select className="input w-52" id="mine" name="mine" defaultValue={matchMine ? "1" : "0"}>
-              <option value="1">Matching my profile</option>
-              <option value="0">Everything</option>
-            </select>
-          </div>
-        )}
-        <button className="btn">Apply</button>
-      </form>
+      <CategoryTicks params={params} counts={counts} total={open.length} />
+      {/* A new set of ticks from a link (Clear filters, Show them, a chip) starts the form afresh; typing in the search box doesn't. */}
+      <FindFilters key={findHref({ ...params, q: undefined })} params={params} profile={admin ? null : profileTicks(profile)} />
 
       {found?.more && <p className="text-xs text-slate-500" data-find-cap="">Showing the newest {ADMIN_FIND_LIMIT} tests: search to narrow.</p>}
-      {shown.length === 0 && typed ? (
+      {shown.length === 0 && typed && (admin || open.length === 0) ? (
         <p className="card text-sm text-slate-400" data-find-none="">{noFindMatchLine(typed, admin)}</p>
       ) : shown.length === 0 ? (
-        <div className="card flex flex-col items-center gap-2 py-12 text-center">
+        <div className="card flex flex-col items-center gap-2 py-12 text-center" data-find-empty={empty?.kind ?? "admin"}>
           <SearchX className="h-10 w-10 text-slate-600" />
-          {/* (Owner, Nov 2) "match" only when the filters hid some: with nothing open to this account at all, it says so. */}
-          <p className="font-medium text-slate-300" data-find-empty="">{admin ? "No tests match these ticks" : open.length === 0 ? "No open tests are available right now" : "No open tests match your filters"}</p>
-          {!admin && (
-            <p className="text-sm text-slate-500">
-              {matchMine ? <>Try <Link href="/app/find?mine=0">showing everything</Link>, or </> : "Try "}
-              <Link href="/app/profile">adding more devices and languages</Link>.
-            </p>
+          {/* (Owner, Nov 3) The profile never hides tests by itself (it only orders them): each empty state says what did, and the one way back. */}
+          {!empty ? (
+            <p className="font-medium text-slate-300">No tests match these ticks</p>
+          ) : empty.kind === "nothing" ? (
+            <>
+              <p className="font-medium text-slate-300">No open tests right now</p>
+              <p className="text-sm text-slate-500">New tests show up here as soon as developers post them.</p>
+            </>
+          ) : empty.kind === "profile" ? (
+            <>
+              <p className="font-medium text-slate-300">No open tests match your profile</p>
+              <p className="text-sm text-slate-500">{profileHidLine(empty.n)}</p>
+              <Link href={findHref({ ...params, devices: [], languages: [], mine: false })} data-find-show-all="">Show them</Link>
+            </>
+          ) : (
+            <>
+              <p className="font-medium text-slate-300">No open tests match your filters</p>
+              <p className="text-sm text-slate-500">{filtersHidLine(empty.n)}</p>
+              <Link href={findHref({ sort, q: typed || undefined })} data-find-clear="">Clear filters</Link>
+            </>
           )}
         </div>
       ) : (

@@ -111,6 +111,9 @@ export function daysLeft(deadline: Date | null): string | null {
   return days === 1 ? "1 day left" : `${days} days left`;
 }
 
+/** A category chip (a link): the dashboard's one-at-a-time chips and Find's tick-on-and-off ones (batch 35 §144). */
+export const categoryChip = (on: boolean) =>
+  `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition no-underline hover:no-underline ${on ? "border-indigo-400/60 bg-indigo-500/15 text-white" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"}`;
 /** Clickable filter chips ("All", then one per category with a count); each is a link that sets ?category=… */
 export function CategoryChips({ basePath, params, counts, total }: { basePath: string; params: Record<string, string | undefined>; counts: Record<string, number>; total: number }) {
   const href = (category?: string) => {
@@ -121,13 +124,11 @@ export function CategoryChips({ basePath, params, counts, total }: { basePath: s
     return s ? `${basePath}?${s}` : basePath;
   };
   const active = params.category;
-  const chip = (on: boolean) =>
-    `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm transition no-underline hover:no-underline ${on ? "border-indigo-400/60 bg-indigo-500/15 text-white" : "border-white/10 bg-white/[0.03] text-slate-300 hover:bg-white/[0.07]"}`;
   return (
     <div className="flex flex-wrap gap-2">
-      <Link href={href()} className={chip(!active)}>All <span className="text-slate-500">{total}</span></Link>
+      <Link href={href()} className={categoryChip(!active)}>All <span className="text-slate-500">{total}</span></Link>
       {Object.entries(counts).filter(([, n]) => n > 0).map(([category, n]) => (
-        <Link key={category} href={href(active === category ? undefined : category)} aria-current={active === category ? "true" : undefined} className={chip(active === category)}>
+        <Link key={category} href={href(active === category ? undefined : category)} aria-current={active === category ? "true" : undefined} className={categoryChip(active === category)}>
           <CategoryIcon category={category} className="h-3.5 w-3.5" /> {category} <span className="text-slate-500">{n}</span>
         </Link>
       ))}

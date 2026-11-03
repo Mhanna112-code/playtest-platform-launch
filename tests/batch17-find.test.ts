@@ -134,8 +134,10 @@ describe("Find tests: the search box, for testers and admins (section 8)", () =>
     // The box is at the top and works together with the chips and filters (they keep q; the filters' form sends it).
     const page = src("app/app/find/page.tsx");
     expect(FIND_SEARCH_LABEL).toBe("Search tests or developers");
-    expect(page.indexOf("<FindSearch params={params} />")).toBeLessThan(page.indexOf("<CategoryChips"));
-    expect(page).toContain('{typed && <input type="hidden" name="q" value={typed} />}');
+    expect(page.indexOf("<FindSearch params={params} />")).toBeLessThan(page.indexOf("<CategoryTicks"));
+    // (Batch 35 §144) The filters' form keeps the search (params.q is the typed text).
+    expect(page).toContain("const params: FindLink = { ...ticks, sort, mine: matchMine, q: typed || undefined, states };");
+    expect(src("app/app/find/FindFilters.tsx")).toContain('{params.q && <input type="hidden" name="q" value={params.q} />}');
     expect(page).toContain("findTests(u, typed)");
     expect(page).toContain("noFindMatchLine(typed, admin)");
   });
@@ -321,11 +323,13 @@ describe("small things (section 13)", () => {
   });
 });
 
-describe("Find's empty state (owner, Nov 2)", () => {
-  it("says nothing is available when nothing is open, and 'match your filters' only when filters hid some", async () => {
+describe("Find's empty state (owner, Nov 2; wording Nov 3, batch 35 §144)", () => {
+  it("says nothing is open when nothing is, and 'match your filters' only when filters hid some (tests/find-ticks.test.ts has the rest)", async () => {
     const fs = await import("node:fs");
     const page = fs.readFileSync("src/app/app/find/page.tsx", "utf8");
-    expect(page).toContain('open.length === 0 ? "No open tests are available right now" : "No open tests match your filters"');
-    expect(page).toContain('<Link href="/app/profile">adding more devices and languages</Link>');
+    expect(page).toContain('<p className="font-medium text-slate-300">No open tests right now</p>');
+    expect(page).toContain('<p className="font-medium text-slate-300">No open tests match your filters</p>');
+    // The profile never hides tests by itself: no "add more devices and languages" line.
+    expect(page).not.toContain("adding more devices and languages");
   });
 });
