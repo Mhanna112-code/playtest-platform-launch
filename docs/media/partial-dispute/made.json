@@ -1,0 +1,212 @@
+[
+  {
+    "file": "A1-paid-0259.png",
+    "caption": "Fred's Payments right after paying Eve $50.00 with card 0259 (before Stripe's dispute reaches the app).",
+    "step": "A full dispute (card 0259)"
+  },
+  {
+    "file": "A1-paid-0259.stripe.json",
+    "caption": "Stripe: 1 PaymentIntents · the $50.00 payment and the dispute Stripe opened on it by itself",
+    "step": "A full dispute (card 0259)"
+  },
+  {
+    "file": "A1-paid-0259.stripe.md",
+    "caption": "the same, as a table",
+    "step": "A full dispute (card 0259)"
+  },
+  {
+    "file": "A2-full-owed.png",
+    "caption": "Fred's Payments after the real dispute: the chargeback steps and the owed line for the WHOLE $50 (+ $15 fee), worded as before.",
+    "step": "A full dispute (card 0259)"
+  },
+  {
+    "file": "A2-full-owed.stripe.json",
+    "caption": "Stripe: 1 PaymentIntents · the same objects: the dispute at Stripe is the whole $50.00",
+    "step": "A full dispute (card 0259)"
+  },
+  {
+    "file": "A2-full-owed.stripe.md",
+    "caption": "the same, as a table",
+    "step": "A full dispute (card 0259)"
+  },
+  {
+    "file": "A3-admin-row-full.png",
+    "caption": "The admin's chargeback-hold row for Fred: the whole $50.00, with the PaymentIntent id.",
+    "step": "A full dispute (card 0259)"
+  },
+  {
+    "file": "B1-two-paid.png",
+    "caption": "Dana's What you've paid: Ana's and Ben's written answers, $244.67 each (card 4242).",
+    "step": "B two pieces paid"
+  },
+  {
+    "file": "B1-two-paid.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents · two PaymentIntents, $244.67 each, succeeded",
+    "step": "B two pieces paid"
+  },
+  {
+    "file": "B1-two-paid.stripe.md",
+    "caption": "the same, as a table",
+    "step": "B two pieces paid"
+  },
+  {
+    "file": "C1-hold-owed.png",
+    "caption": "Dana's payment hold: Pay what you owe lists Cid's declined charge and Dee's charge waiting for the lift, $444.67 in all.",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "C1-hold-owed.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents · Cid's charge waited for the bank and was cancelled when its 3 days ran out; nothing was taken",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "C1-hold-owed.stripe.md",
+    "caption": "the same, as a table",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "C2-one-payment.png",
+    "caption": "After Pay what you owe ($444.67, the bank's 3D Secure test page completed): the hold lifted; Cid's and Dee's pieces are paid by that one payment.",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "C2-one-payment.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents · ONE PaymentIntent for $444.67 (Pay what you owe) covering Cid's and Dee's pieces",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "C2-one-payment.stripe.md",
+    "caption": "the same, as a table",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "C3-tester-cid.png",
+    "caption": "Cid Moreau's Payments: what they earn from Dana's payment.",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "C3-tester-dee.png",
+    "caption": "Dee Lin's Payments: what they earn from Dana's payment.",
+    "step": "C one combined payment during a hold"
+  },
+  {
+    "file": "D1-partial-owed.png",
+    "caption": "Dana's Payments: the chargeback steps and the owed line for $96 of the $444.67 (+ ONE $15 fee), with what that payment covered listed under it.",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D1-partial-owed-box.png",
+    "caption": "The owed box up close.",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D2-partial-paid-list.png",
+    "caption": "Dana's What you've paid while the chargeback is open: the pieces stay paid; the total takes off the $96 the bank reversed.",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D3-admin-row-partial.png",
+    "caption": "The admin's chargeback-hold row for Dana: $96.00 of a $444.67 payment, with the PaymentIntent id.",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D4-admin-email.png",
+    "caption": "The chargeback email to the admins (dev outbox, nothing is really sent): “Playtest: new chargeback of $96.00”.",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D5-tester-cid.png",
+    "caption": "Cid Moreau's Payments after the dispute: unchanged (testers never see chargebacks).",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D5-tester-dee.png",
+    "caption": "Dee Lin's Payments after the dispute: unchanged (testers never see chargebacks).",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D6-partial.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents · Stripe test mode can't open a PARTIAL dispute, so Stripe itself shows no dispute on this PaymentIntent: the event was delivered to the app as Stripe sends one",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "D6-partial.stripe.md",
+    "caption": "the same, as a table",
+    "step": "D a partial dispute ($96 of $444.67)"
+  },
+  {
+    "file": "E1-followed.png",
+    "caption": "charge.dispute.updated to $120.00 while nothing is repaid: followed (now $120 + $15).",
+    "step": "E the disputed amount changes"
+  },
+  {
+    "file": "F1-reserved.png",
+    "caption": "Card verified with 3D Secure; Pay what you owe reserved $111.00 ($96 + $15) on the card (Stripe: Uncaptured).",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F1-reserved.stripe.json",
+    "caption": "Stripe: 5 PaymentIntents · the reservation: a manual-capture PaymentIntent for $111.00",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F1-reserved.stripe.md",
+    "caption": "the same, as a table",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F2-admin-log.png",
+    "caption": "The admin's Chargebacks box for Dana: the open chargeback ($96.00 of a $444.67 payment) and Stripe's amount changes, followed or not.",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F3-admin-approve.png",
+    "caption": "The admin's row before Approve: card verified, $111.00 reserved.",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F4-repaid.png",
+    "caption": "After the team's Approve: the hold lifted; What you've paid shows the repayment “Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)”.",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F4-repaid.stripe.json",
+    "caption": "Stripe: 5 PaymentIntents · the reservation captured: $111.00",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F4-repaid.stripe.md",
+    "caption": "the same, as a table",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F5-tester-cid.png",
+    "caption": "Cid Moreau's Payments after the repayment: unchanged.",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "F5-tester-dee.png",
+    "caption": "Dee Lin's Payments after the repayment: unchanged.",
+    "step": "F chargeback steps"
+  },
+  {
+    "file": "G1-won.png",
+    "caption": "Won: the $111.00 repayment is refunded to the card; What you've paid counts the $444.67 payment fully again.",
+    "step": "G won"
+  },
+  {
+    "file": "G1-won.stripe.json",
+    "caption": "Stripe: 5 PaymentIntents · the refund of exactly $111.00 on the reservation's charge",
+    "step": "G won"
+  },
+  {
+    "file": "G1-won.stripe.md",
+    "caption": "the same, as a table",
+    "step": "G won"
+  },
+  {
+    "file": "H1-descriptions.json",
+    "caption": "each PaymentIntent's description next to the What you've paid rows charged on it",
+    "step": "H descriptions"
+  }
+]

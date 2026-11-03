@@ -1,0 +1,101 @@
+{
+  "stripe": [
+    {
+      "pi": "pi_3UXcAOAwolF8enxC0yKq1x7s",
+      "amount": "244.67",
+      "status": "succeeded",
+      "description": "Playtest: Ana Silva's written answers on “Harbor Run”",
+      "rows": [
+        "review charged (cmw0db6gy00cr7k48ptnc1faj)"
+      ]
+    },
+    {
+      "pi": "pi_3UXcAPAwolF8enxC3bjRGjbO",
+      "amount": "244.67",
+      "status": "succeeded",
+      "description": "Playtest: Ben Okafor's written answers on “Harbor Run”",
+      "rows": [
+        "review charged (cmw0db76500d37k48rm7cmoqv)"
+      ]
+    },
+    {
+      "pi": "pi_3UXcAtAwolF8enxC41AgK19a",
+      "amount": "244.67",
+      "status": "canceled",
+      "description": "Playtest: Cid Moreau's written answers on “Harbor Run”, charged by Cid Moreau after 7 days without a review",
+      "rows": []
+    },
+    {
+      "pi": "pi_3UXcBDAwolF8enxC07pdqlgP",
+      "amount": "444.67",
+      "status": "succeeded",
+      "description": "Playtest: What you owe (Cid Moreau's written answers on “Harbor Run” $244.67, Dee Lin's written answers on “Harbor Run” $200.00)",
+      "rows": [
+        "review charged (cmw0dbtva00dj7k4819p7uxar)",
+        "review charged (cmw0dbynk00dv7k486kq0rtny)",
+        "owed bundled (cmw0dc97x00e37k482ve788w7)"
+      ]
+    },
+    {
+      "pi": "pi_3UXcCYAwolF8enxC2vG4uplO",
+      "amount": "111.00",
+      "status": "succeeded",
+      "description": "Playtest: Reserved for the team's review: Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee) $111.00",
+      "rows": [
+        "chargeback refunded (cmw0df1i900f37k48ovh15ziu)"
+      ]
+    }
+  ],
+  "page": [
+    {
+      "id": "cmw0df1i900f37k48ovh15ziu",
+      "kind": "chargeback",
+      "status": "refunded",
+      "amount": "111.00",
+      "pi": "pi_3UXcCYAwolF8enxC2vG4uplO",
+      "page": "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)",
+      "hover": "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)",
+      "stripeDescription": null
+    },
+    {
+      "id": "cmw0dbynk00dv7k486kq0rtny",
+      "kind": "review",
+      "status": "charged",
+      "amount": "200.00",
+      "pi": "pi_3UXcBDAwolF8enxC07pdqlgP",
+      "page": "Dee Lin's written answers on “Harbor Run”, paid through Pay what you owe",
+      "hover": "Dee Lin's written answers on “Harbor Run”, paid through Pay what you owe",
+      "stripeDescription": null
+    },
+    {
+      "id": "cmw0dbtva00dj7k4819p7uxar",
+      "kind": "review",
+      "status": "charged",
+      "amount": "244.67",
+      "pi": "pi_3UXcBDAwolF8enxC07pdqlgP",
+      "page": "Cid Moreau's written answers on “Harbor Run”, paid through Pay what you owe",
+      "hover": "Cid Moreau's written answers on “Harbor Run”, paid through Pay what you owe",
+      "stripeDescription": "Playtest: Cid Moreau's written answers on “Harbor Run”, charged by Cid Moreau after 7 days without a review"
+    },
+    {
+      "id": "cmw0db76500d37k48rm7cmoqv",
+      "kind": "review",
+      "status": "charged",
+      "amount": "244.67",
+      "pi": "pi_3UXcAPAwolF8enxC3bjRGjbO",
+      "page": "Ben Okafor's written answers on “Harbor Run”",
+      "hover": "Ben Okafor's written answers on “Harbor Run”",
+      "stripeDescription": "Playtest: Ben Okafor's written answers on “Harbor Run”"
+    },
+    {
+      "id": "cmw0db6gy00cr7k48ptnc1faj",
+      "kind": "review",
+      "status": "charged",
+      "amount": "244.67",
+      "pi": "pi_3UXcAOAwolF8enxC0yKq1x7s",
+      "page": "Ana Silva's written answers on “Harbor Run”",
+      "hover": "Ana Silva's written answers on “Harbor Run”",
+      "stripeDescription": "Playtest: Ana Silva's written answers on “Harbor Run”"
+    }
+  ]
+}
