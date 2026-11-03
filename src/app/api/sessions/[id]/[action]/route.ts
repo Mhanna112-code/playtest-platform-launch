@@ -88,7 +88,7 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
   let extra: Record<string, unknown> = {};
   if (c) {
     try {
-      await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: action === "terms" });
+      await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: action === "terms", ...(action === "choose" ? { owedPiece: String(body.callId ?? body.submissionId ?? "") || undefined } : {}) });
     } catch (e) {
       if (e instanceof HttpError && e.code === "stop_once" && Array.isArray(e.data?.changes)) {
         more = e.data.changes as typeof more;

@@ -152,7 +152,7 @@ describe("§158 the peek: read-only, the developer's own only", () => {
     expect(stillWaiting({ status: "requires_payment_method" })).toBe(true); // not tried yet
     expect(stillWaiting({ status: "requires_payment_method", last_payment_error: { code: "x" } })).toBe(false); // the attempt failed
     expect(stillWaiting({ status: "requires_payment_method", last_setup_error: { code: "x" } })).toBe(false);
-    for (const s of ["succeeded", "requires_capture", "processing", "canceled"]) expect(stillWaiting({ status: s })).toBe(false);
+    for (const s of ["succeeded", "requires_capture", "canceled"]) expect(stillWaiting({ status: s })).toBe(false);
   });
 });
 

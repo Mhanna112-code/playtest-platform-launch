@@ -140,7 +140,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {/* (Owner, Nov 3, §147) Confirm all above the list (its state first: a Confirm all check that ran out lets go before the list is read). */}
-      {dev && await (async () => { const all = await confirmAllState(u.id); return <ConfirmList items={await confirmItems(u.id)} all={all} />; })()}
+      {dev && await (async () => { const all = await confirmAllState(u.id); return <ConfirmList items={await confirmItems(u.id)} all={all} seenAt={new Date().toISOString()} />; })()}
       {q.error && q.error !== "off" && q.error !== "card_limit" && MESSAGES[q.error] && <p className="err" data-refusal="">{refused(q.error)}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
       {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}

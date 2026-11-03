@@ -281,8 +281,9 @@ describe("batch 26 section 9: Confirm with your bank stops for exactly what Pay 
     await db.testEvent.create({ data: { testId, contractId: b.sessionId, kind: "dispute", text: "Ben Okafor disputed what you paid for the written answers" } });
     expect((await pay(dev.cookie, { kind: "submission", id: subC.id, amount: "10.00", tickedCents: 1000, tab: "other" })).status).toBe(200);
     await later();
+    // (Owner, Nov 3, §159) Pay on a part whose Charge waits for the bank is refused with what to do (never a stop-once: it can't go ahead).
     const payStop = await pay(dev.cookie, { kind: "submission", id: subA.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false, tab: "this" });
-    expect(payStop.body.error.code).toBe("stop_once");
+    expect([payStop.body.error.code, payStop.body.error.message]).toEqual(["bank_waits", "Confirm Ana Silva's $10.00 charge with your bank first."]);
     let confirmErr: { code?: string; data?: { changes: { text: string }[] } } = {};
     try {
       await confirmStart({ id: dev.user.id }, p.id, { seenAt: loaded, tab: "this" });
@@ -291,7 +292,6 @@ describe("batch 26 section 9: Confirm with your bank stops for exactly what Pay 
     }
     expect(confirmErr.code).toBe("stop_once");
     const lines = (x: { text: string }[]) => x.map((c) => c.text);
-    expect(lines(confirmErr.data!.changes)).toEqual(lines(payStop.body.error.changes ?? payStop.body.error.data?.changes ?? []));
     expect(lines(confirmErr.data!.changes)).toContain("Ben Okafor disputed what you paid for the written answers");
     expect(lines(confirmErr.data!.changes).some((t) => t.startsWith("You paid Cam Lee $10.00"))).toBe(true);
     // The code: one press description for Pay, Pay more and Confirm.

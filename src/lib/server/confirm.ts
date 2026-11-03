@@ -314,6 +314,10 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   // dispute, the tester's Charge or Let it go, a Pay or Pay more in another tab, a call change... (Alerts apply) stops it once; the second press opens the bank's check.
   // (Owner, Oct 29, batch 26 section 9) EXACTLY Pay's check on that piece: the same devGate call under the same test lock, the same press (payPressOf: a retried
   // chargeback's row checks the piece of the payment the bank reversed), so whatever stops Pay on it stops Confirm, and the same Alerts types are ignored.
+  // (Owner, Nov 3, §159) Pressed while the developer is suspended: refused like Pay, under the developer's row lock (a check already open still finishes: §159 rule 4b).
+  // Pay what you owe's own payments and a renewal stay open (unchanged).
+  if (p.contractId && p.kind !== "owed" && p.kind !== "chargeback" && p.kind !== "subscription")
+    await db.$transaction(async (tx) => (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank"));
   if (p.contractId && seenOf(body.seenAt)) {
     const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } });
     if (c) {
@@ -323,6 +327,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
       const piece = { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null };
       await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
+        if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank");
         await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, payPressOf(c.id, piece));
       });
     }
@@ -333,6 +338,11 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   if (!stripeOn() || fakeOn()) return { paymentId, clientSecret: `${p.actionPi}_secret_fake`, publishableKey: pk(), simulated: true, paymentMethod: u.stripePaymentMethodId, checkUrl: null };
   const stripe = getStripe();
+  // (Owner, Nov 3, §159 R4, found on Stripe test mode) Two "Confirm with your bank" presses at the same moment (two tabs) both re-confirmed the same PaymentIntent: the
+  // second attempt replaced the first's bank page, both pages then read "nothing was charged" and the one Complete that went through wasn't recorded. The start is now
+  // one at a time per payment (a lock held while Stripe answers): the second press finds the check already started and opens the same bank page.
+  return db.$transaction(async (lockTx) => {
+  await lockTx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${p.id}))`;
   let pi: Awaited<ReturnType<typeof stripe.paymentIntents.retrieve>>;
   try {
     pi = await stripe.paymentIntents.retrieve(p.actionPi!);
@@ -365,6 +375,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   }
   const needs = pi.status === "succeeded" ? "none" : pi.status === "requires_action" ? "action" : "confirm";
   return { paymentId, clientSecret: pi.client_secret, publishableKey: pk(), simulated: simulated(), paymentMethod: u.stripePaymentMethodId, needs, checkUrl: checkUrlOf(pi) ?? null };
+  }, { timeout: 60_000, maxWait: 60_000 });
 }
 
 // (Batch 35 §117) The check's PaymentIntent: Confirm claims it (actionPi cleared) before finishing, so the one stored with it (pressAction / awayAction) is used then.
@@ -380,7 +391,13 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
     return cb.reservationChecked(dev.id, paymentId, status === "requires_capture" || status === "succeeded");
   }
   const p = await own(dev.id, paymentId);
-  const status = await piStatus(p.actionPi!, body.simulate);
+  let status = await piStatus(p.actionPi!, body.simulate);
+  // (Owner, Nov 3, §159 R4) Right after Complete Stripe can still be "processing": its final answer is waited for (a few seconds), never read as "nothing was charged".
+  for (let i = 0; status === "processing" && i < 10; i++) {
+    await new Promise((r) => setTimeout(r, 1000));
+    status = await piStatus(p.actionPi!, body.simulate);
+  }
+  if (status === "processing") return { done: false, processing: true };
   const ok = status === "succeeded";
   if (!ok) {
     if (p.status === "needs_action" || p.status === "paying") await release(p.id);

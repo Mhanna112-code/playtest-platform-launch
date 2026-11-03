@@ -41,6 +41,8 @@ export function PayBox(p: {
   /** (Batch 30 §2) This Pay more answers an updated version sent after the piece was paid: $0 closes it (an optional note). */
   update?: boolean;
   confirming?: string;
+  /** (Owner, Nov 3, §159) Pay more while a payment on this part waits for the bank: the box is greyed with this line ("Confirm Ana Silva's $10.00 charge with your bank first."). */
+  bankWaits?: string;
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
@@ -133,7 +135,8 @@ export function PayBox(p: {
 
   if (p.confirming) return <BankWaiting paymentId={p.confirming} line="Confirming with your bank" seenAt={p.seenAt} />;
   return (
-    <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-mistakes-root="">
+    <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}${p.bankWaits ? " opacity-60" : ""}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-mistakes-root="">
+      {p.bankWaits && <p className="info" data-pay-more-waits="">{p.bankWaits}</p>}
       <p className="text-sm">
         {more && <b className="text-white">Pay more · </b>}
         <b>{listed ? `Listing: ${p.listingText}` : NOT_LISTED}</b>
@@ -176,7 +179,7 @@ export function PayBox(p: {
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        <button className="btn-green" disabled={busy || bank.open || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
+        <button className="btn-green" disabled={busy || bank.open || !!p.bankWaits || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
         {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
         {!done && <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>}
       </div>

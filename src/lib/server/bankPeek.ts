@@ -10,9 +10,10 @@ import { fakeOn, getStripe, isMissing, stripeOn } from "./stripe";
 
 export type PeekAnswer = "waiting" | "done";
 
-/** Stripe still waits for the customer (the bank's page is open); anything else (succeeded, requires_capture, processing, canceled, a failed attempt) is an end. */
+/** Stripe still waits for the customer (the bank's page is open, or its answer is processing); anything else (succeeded, requires_capture, canceled, a failed attempt) is an end. */
 export function stillWaiting(o: { status?: string | null; last_payment_error?: unknown; last_setup_error?: unknown }) {
-  if (o.status === "requires_action" || o.status === "requires_confirmation") return true;
+  // (§159 R4) "processing" (the bank's answer on its way after Complete) isn't an end yet either: the finish would read it as not confirmed.
+  if (o.status === "requires_action" || o.status === "requires_confirmation" || o.status === "processing") return true;
   // Back to requires_payment_method after a failed attempt (the bank refused): ended. Without an error it hasn't been tried yet: still waiting.
   if (o.status === "requires_payment_method") return !(o.last_payment_error || o.last_setup_error);
   return false;
