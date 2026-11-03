@@ -1,4 +1,4 @@
-import { Cut } from "@/components/Cut";
+import { Cut, NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
 import { hasPerks } from "@/lib/server/subscription";
@@ -269,11 +269,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, name: displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) }] : [];
   });
   const disputesWaiting = t.contracts.flatMap((c) => [
-    ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
-    ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
+    ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
+    ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
   ]);
   // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (shown in the row; batch 29 section 30: only the tester removes one).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
@@ -333,7 +333,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               {excerptReqs.map((x) => (
                 <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
                   {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
-                  <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile</span>}>
+                  <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on their profile</span>}>
                   <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
                     {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                     <ExcerptQuestion question={x.question} />
@@ -361,7 +361,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <div className="space-y-2">
                 {disputesWaiting.map((d) => (
                   <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-                    <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
+                    <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
                     <ResizeBox id={`dispute-${d.id}`} label="Their reason"><ReasonQuote text={d.reason} /></ResizeBox>
                     </Fold>
                     <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
@@ -453,7 +453,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
               {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
-              <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile</span>}>
+              <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on their profile</span>}>
               <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
                 {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                 <ExcerptQuestion question={x.question} />
@@ -466,7 +466,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ))}
           {disputesWaiting.map((d) => (
             <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-              <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
+              <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
               <ResizeBox id={`dispute-${d.id}`} label="Their reason"><ReasonQuote text={d.reason} /></ResizeBox>
               </Fold>
               <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
@@ -568,6 +568,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <RowsBox many={t.contracts.length > 6}>
           {t.contracts.map((c) => {
             const name = displayName(c.tester);
+            // (Batch 35 §137) Their name in a sentence links to their profile (cut, with its hover and tap pop-up).
+            const personHref = c.tester.deletedAt ? null : `/app/testers/${c.testerId}`;
             const ri = rateInfo.get(c.id);
             const unreadN = unread.get(c.id) ?? 0;
             const callPaid = payments.filter((p) => p.contractId === c.id && p.callId && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
@@ -696,7 +698,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Batch 13) Excerpts shown from this test. (Batch 29 section 30) Only the tester removes one (Remove on their profile): no Take down here. */}
                 {shownEx.filter((e) => e.contractId === c.id).map((e) => (
                   <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
-                    <span className="min-w-0 flex-1"><span className="text-slate-400">On {name}&apos;s profile{t.ndaText ? " (hidden while this test has an NDA)" : ""}: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
+                    <span className="min-w-0 flex-1"><span className="text-slate-400">On <NameLink text={name} href={personHref} />&apos;s profile{t.ndaText ? " (hidden while this test has an NDA)" : ""}: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
                   </div>
                 ))}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
@@ -710,15 +712,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     <a href={`/app/testers/${c.testerId}`} className="text-xs" data-tester-profile="">See their profile</a>
                   </div>
                   <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
-                  {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
+                  {ri?.avg && <p className="note"><NameLink text={name} href={personHref} />: {ri.avg}</p>}
                   {ri?.tester && (ri.testerRevealed ? (
-                    <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
+                    <p className="note"><NameLink text={name} href={personHref} /> rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
                   ) : (
-                    <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
+                    <p className="note"><NameLink text={name} href={personHref} /> rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
                   ))}
-                  {ri?.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
+                  {ri?.developer && <p className="note">You rated <NameLink text={name} href={personHref} />: {ri.developer.stars} ★</p>}
                   {!restricted && rateBoxOf(c)}
-                  {blockedIds.has(c.testerId) && <p className="note">You blocked {name}. Unblock in Account → Blocked people.</p>}
+                  {blockedIds.has(c.testerId) && <p className="note">You blocked <NameLink text={name} href={personHref} />. Unblock in Account → Blocked people.</p>}
                 </div>
               </div>
             );

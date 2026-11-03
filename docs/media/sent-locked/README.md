@@ -36,3 +36,10 @@ Taken on a separate dev server (port 3486, its own schema `rec_sent`, the fake S
 | `e-tester-closed-*` | A tester folded: the name and badges, then Chat, See their profile and "Paid in all". |
 | `e-tester-open-*` | The same tester open: their parts, the written answers' panel dragged shorter (110 px) and Pay more in view under it. |
 | `e-needs-open-*` | Needs you: each piece with its body fold and its Pay fold, open. |
+
+## §137 Names in sentences
+
+| Picture | What it shows |
+|---|---|
+| `names-excerpt-row-*` | The dashboard's Excerpt requests row: "fbbb Montgom… would like to show this from “Harbor Run:…” on their profile", both names cut and linked (the tester's profile, the test). |
+| `names-excerpt-popup-phone` | A tap on the cut name on a phone: the full name, "Open profile →" and Copy. |

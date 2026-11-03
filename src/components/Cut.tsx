@@ -124,3 +124,12 @@ function CutPopup({ full, kind, at, onClose }: { full: string; kind: CutKind; at
     document.body,
   );
 }
+
+/**
+ * (Owner, Nov 3, batch 35 §137) A person's or a test's name inside a SENTENCE: cut like a listed name (hover / title, the tap pop-up with "Open profile →" /
+ * "Open test →" and Copy) and a link to their profile or to the test. No `href` (a deleted account, someone whose profile isn't open to you): the cut name only.
+ */
+export function NameLink({ text, href, kind = "person", className = "" }: { text: string; href?: string | null; kind?: CutKind; className?: string }) {
+  if (!href) return <Cut text={text} kind={kind} className={className} />;
+  return <a href={href} className={`relative z-10 ${className}`} data-name-link={kind}><Cut text={text} kind={kind} /></a>;
+}
