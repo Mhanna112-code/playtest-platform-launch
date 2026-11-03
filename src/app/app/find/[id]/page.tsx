@@ -257,7 +257,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       </section>
 
       {ratedHere && <p className="info">{mine?.status === "left" && mine.endKind === "rated" ? "You rated this test, so you can't join it again." : "You can't join this test again."}</p>}
-      {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && !blocked && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
+      {mine && mine.status !== "working" && !ratedHere && canRejoin && !invite && !blocked && <p className="info">{mine.endKind === "suspended" ? "You were removed from this test." : mine.status === "left" ? "You left this test." : "Your work on this test ended."}{/* (Owner, Nov 2) the time a rejoin gives back, on the page itself */}{mine.endedAt && mine.dueAt > mine.endedAt ? ` You had ${leftText(mine.dueAt.getTime() - mine.endedAt.getTime())} left, and that's what you get back.` : ""} Ask to rejoin: if {dev} accepts, your session comes back with everything in it (work you sent, payments and chat), on the current listing.</p>}
       {mine && mine.status !== "working" && !ratedHere && !canRejoin && !invite && !blocked && <p className="info">You can&apos;t ask to rejoin this test.</p>}
       {/* (Owner's repro, Oct 29, batch 30 §8) Their application or ask, followed live: accepted (the line and Go to your session →), declined (the line below). */}
       {t.developerId !== u.id && !isAdmin(u) && <JoinWatch testId={t.id} v={joinFp} />}
