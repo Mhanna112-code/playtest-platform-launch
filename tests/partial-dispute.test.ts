@@ -129,8 +129,9 @@ describe("§133 a full dispute is unchanged", () => {
     expect((await send("evt_" + randomUUID(), "charge.dispute.created", dispute(one.stripePaymentIntentId!, 1100))).status).toBe(200);
     const [line] = await owedLines(w.dev.user.id);
     expect([line.id, line.amountCents, line.text]).toEqual([one.id, 1100 + R.CHARGEBACK_FEE_CENTS, "Your bank reversed a $11 payment: $11 + $15 chargeback fee"]);
-    expect(line.covers?.map((c) => c.text)).toHaveLength(2);
-    expect(line.covers?.map((c) => c.text).join(" | ")).toMatch(/\$8\.00.*\$3\.00|\$3\.00.*\$8\.00/);
+    const covers = (line as { covers?: { text: string }[] }).covers ?? [];
+    expect(covers.map((c) => c.text)).toHaveLength(2);
+    expect(covers.map((c) => c.text).join(" | ")).toMatch(/\$8\.00.*\$3\.00|\$3\.00.*\$8\.00/);
     await clear(w);
     const repay = await db.payment.findFirstOrThrow({ where: { repaysId: one.id } });
     expect((await paidRows([repay], "developer")).get(repay.id)).toBeUndefined(); // the page's own label: "A reversed payment, paid again"

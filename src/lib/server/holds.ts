@@ -250,7 +250,7 @@ async function chargeDeferredLocked(devId: string) {
         const r = await chargePlatform(dev, p.amountCents, serverKey("deferred", p.id), description);
         if (r.status === "requires_action") { await (await import("./confirm")).awayAction(p.id, r as NeedsAction); continue; }
         await db.payment.update({ where: { id: p.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, settledAt: new Date() } });
-        await receipt(dev.email, await owedItemName(p), p.amountCents, r.status, "/app/payments");
+        await receipt(dev.email, await owedItemName(p, true), p.amountCents, r.status, "/app/payments"); // (Owner, Nov 3) full names in receipts
       } catch (e) {
         // Declined: the reversal is owed again (its chargeback reopens), so a chargeback hold starts for it.
         if (e instanceof HttpError && e.code === "card_failed") {
@@ -538,7 +538,8 @@ export async function settledOwed(paymentId: string, wasOwed = false) {
   const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
   const tester = await db.user.findUniqueOrThrow({ where: { id: p.testerId } });
-  const name = await owedItemName(p);
+  // (Owner, Nov 3) Full names in receipts (an email has no hover).
+  const name = await owedItemName(p, true);
   await receipt(dev.email, wasOwed ? owedReceiptWhat([name]) : name, p.amountCents, p.status, "/app/payments");
   if (p.kind !== "chargeback" && p.kind !== "subscription") await tellArrived(p, tester.email, displayName(dev));
 }
@@ -1297,7 +1298,8 @@ export async function autoChargeCalls(now: Date) {
         outcome = `${name}'s call was charged automatically: ${money(amount)}, waiting for your bank to confirm it`;
       } else {
         await db.payment.update({ where: { id: row.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
-        await receipt(dev.email, what, amount, r.status, `/app/tests/${c.testId}#call-${x.id}`);
+        // (Owner, Nov 3) Full names in the receipt email.
+        await receipt(dev.email, `${pieceName({ tester: name, part: "live call", test: c.title, full: true })} (${T(x.startsAt, "date")}, charged automatically after ${REVIEW_DAYS} days)`, amount, r.status, `/app/tests/${c.testId}#call-${x.id}`);
         const line = autoPaidTesterLine(displayName(dev), amount, x.startsAt);
         // (Batch 30 §20) In the day's "You were paid" stack with the other payments (it arrived on time: not "Delayed payments arrived").
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tpaid" });
@@ -1502,7 +1504,7 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
   const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
   const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
   // (§131) The receipt names the tester, the part and the test (pieceName).
-  await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title })} (charged by them after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
+  await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title, full: true })} (charged by them after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for their ${label}`, false, {}, c.id));
   return { choice: "charge" as const, amountCents: p.amountCents, status: r.status };
 }

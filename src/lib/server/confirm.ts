@@ -416,7 +416,7 @@ async function finish(paymentId: string) {
     await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: new Date(), actionPi: null, actionBy: null } });
     const u = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
     // (Batch 25 section 5) One receipt, naming what was paid (the retry that waited for the bank sent no line of its own for this money).
-    await payments.receipt(u.email, await holds.owedItemName(p), p.amountCents, "charged", "/app/payments");
+    await payments.receipt(u.email, await holds.owedItemName(p, true), p.amountCents, "charged", "/app/payments"); // (Owner, Nov 3) full names in receipts
     return { done: true, lifted: await holds.liftHoldIfClear(p.developerId) };
   }
   if (p.kind === "subscription") return { done: true, ...(await (await import("./subscription")).subscriptionConfirmed(p.id)) };

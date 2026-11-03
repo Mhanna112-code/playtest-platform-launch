@@ -182,7 +182,8 @@ export async function settleOwed(id: string, pi: string | null) {
   for (const p of rows) {
     await settleOwedRow(dev, p, pi && stripeOn() ? pi : null, id);
     // (§122) Charges made while away keep the names their own receipts had ("… (charged by them after 7 days)").
-    names.push(forCharges(one) ? await holds.deferredWhat(p) : await holds.owedItemName(p));
+    // (Owner, Nov 3) Full names: these go into the receipt email, which has no hover.
+    names.push(forCharges(one) ? await holds.deferredWhat(p, true) : await holds.owedItemName(p, true));
     parts.push({ name: names[names.length - 1], cents: p.amountCents });
     cents += p.amountCents;
   }

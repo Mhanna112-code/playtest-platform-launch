@@ -226,7 +226,7 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
     { payment: true, group: "tpaid" },
   );
   // (§131) The receipt names the tester, the part and the test (pieceName).
-  if (rev.amountCents > 0) await receipt(dev.email, pieceName({ tester: name, part: piece.label, test: c.title }), rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+  if (rev.amountCents > 0) await receipt(dev.email, pieceName({ tester: name, part: piece.label, test: c.title, full: true }), rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   // (Batch 22 section 2) A suspended tester is paid like anyone (no held share).
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }
@@ -413,7 +413,9 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
       heldNow = true;
     }
     if (result) {
-      await receipt(c.test.developer.email, decision, due, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+      // (Owner, Nov 3) Full names in the receipt email.
+      const decisionFull = disputeDecisionName((await (await import("./holds")).paymentPiece(owedRow, undefined, true)) ?? `${displayName(c.tester)}'s work on “${c.title}”`);
+      await receipt(c.test.developer.email, decisionFull, due, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
       await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
     }
   }
@@ -656,6 +658,6 @@ export async function finishExtraPay(paymentId: string, result: { status: string
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”`;
   await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`Their note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
-  await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+  await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title, full: true })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   return { paid: true, amountCents: amount, status: result.status };
 }
