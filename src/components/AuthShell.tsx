@@ -5,15 +5,19 @@ import { Brand } from "@/components/Brand";
  * The signed-out pages (log in, sign up, forgot, reset, confirm), as the full app lays them out: the site header (logo,
  * Log in / Sign up), then one narrow column with the title and a card.
  */
-export function AuthShell({ title, intro, children }: { title: string; intro?: React.ReactNode; children: React.ReactNode }) {
+export function AuthShell({ title, intro, children, signedIn = false }: { title: string; intro?: React.ReactNode; children: React.ReactNode; /** (Owner, Nov 2) someone is signed in on this browser: the header offers the app, not Log in / Sign up */ signedIn?: boolean }) {
   return (
     <>
       <header className="sticky top-0 z-20 border-b border-white/[0.07] bg-ink-950/75 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3">
           <Brand />
           <div className="ml-auto flex items-center gap-2">
-            <Link href="/login" className="nav-link">Log in</Link>
-            <Link href="/signup" className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Sign up</Link>
+            {signedIn ? <Link href="/app" className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Open the app</Link> : (
+              <>
+                <Link href="/login" className="nav-link">Log in</Link>
+                <Link href="/signup" className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Sign up</Link>
+              </>
+            )}
           </div>
         </nav>
       </header>

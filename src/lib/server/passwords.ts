@@ -234,5 +234,5 @@ export async function confirmEmail(raw: string) {
   if (!user) return { ok: false as const };
   if (!user.emailVerifiedAt) await db.user.update({ where: { id: user.id }, data: { emailVerifiedAt: now } });
   await db.loginToken.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: now } });
-  return { ok: true as const, email: user.email };
+  return { ok: true as const, email: user.email, userId: user.id };
 }
