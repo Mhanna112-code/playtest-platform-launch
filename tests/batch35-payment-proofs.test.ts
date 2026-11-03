@@ -616,7 +616,7 @@ describe("a chargeback on an OLDER payment while Pay what you owe's press check 
     await db.user.update({ where: { id: w.dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
     const r2 = await press(w.dev.cookie, { seenTotalCents: 800, seenIds: [] });
     expect(r2.body.error.code).toBe("stop_once");
-    expect(r2.body.error.changes[0].text).toBe(`Added to what you owe meanwhile: Your bank reversed $7 you paid for Cid Moreau's written answers on “Harbor Run” (${fmtDate(new Date()).replace(/, \d{4}$/, "")}): $7 + $15 chargeback fee, Ana Silva's written answers $8.00. New total ${money(total)}. Press again to reserve ${money(total)} on your card: it's taken when the team approves lifting your hold.`);
+    expect(r2.body.error.changes[0].text).toBe(`Added to what you owe meanwhile: Your bank reversed $7 you paid for Cid Moreau's written answers on “Harbor Run” (${fmtDate(new Date()).replace(/, \d{4}$/, "")}): $7 + $15 chargeback fee, Ana Silva's written answers on “Harbor Run” $8.00. New total ${money(total)}. Press again to reserve ${money(total)} on your card: it's taken when the team approves lifting your hold.`);
     const done = await press(w.dev.cookie, { seenTotalCents: total, seenIds: r2.body.error.ids, confirmed: true });
     expect(done.body).toMatchObject({ paid: 0, reservedCents: total, lifted: false });
     expect(st.succeeded()).toEqual([]);

@@ -120,7 +120,7 @@ describe("§117 rule 6: Pay what you owe is ONE payment", () => {
     expect(r.body.confirm[0].paymentId).toBe(one.id);
     // The box still lists each payment it covers, by name and amount, every one waiting under the same check.
     const lines = await owedLines(w.dev.user.id);
-    expect(lines.map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers \$8\.00 · card declined /), expect.stringMatching(/\$3\.00 · card declined /), expect.stringMatching(/^Ana Silva's written answers \$5\.00 · charged by the tester while your tests were paused$/)]);
+    expect(lines.map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers on “Harbor Run” \$8\.00 · card declined /), expect.stringMatching(/^The team's dispute decision on Ana Silva's written answers on “Harbor Run” \$3\.00 · card declined /), expect.stringMatching(/^Ana Silva's written answers on “Harbor Run” \$5\.00 · charged by the tester while your tests were paused$/)]);
     expect(lines.every((l) => l.waiting && !l.retry && l.checkId === one.id)).toBe(true);
     // Approved on the bank's page: every debt is paid by that one payment, the tester's shares go out from its charge, one receipt names all three.
     st.approve(one.actionPi!);
@@ -130,7 +130,7 @@ describe("§117 rule 6: Pay what you owe is ONE payment", () => {
     expect(st.transfers.map((t) => t.source_transaction)).toEqual([one.actionPi!.replace(/^pi_/, "ch_"), one.actionPi!.replace(/^pi_/, "ch_"), one.actionPi!.replace(/^pi_/, "ch_")]);
     const rc = await receipts(w.dev.user.id);
     expect(rc).toHaveLength(1);
-    expect(rc[0].text).toBe("Receipt: you paid $16.00 for what you owed: Ana Silva's written answers, the team's decision on Ana Silva's dispute and Ana Silva's work");
+    expect(rc[0].text).toBe("Receipt: you paid $16.00 for what you owed: Ana Silva's written answers on “Harbor Run”, the team's dispute decision on Ana Silva's work on “Harbor Run” and Ana Silva's work on “Harbor Run”");
     expect(st.made).toHaveLength(1);
     expect(await hold(w.dev.user.id)).toBeNull();
     // A second Confirm (another tab) never pays it again.
@@ -147,7 +147,8 @@ describe("§117 rule 6: Pay what you owe is ONE payment", () => {
     const one = await oneOf(w.dev.user.id);
     expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 1600 });
     const items = await confirmItems(w.dev.user.id);
-    expect(items).toEqual([{ id: one.id, href: null, text: expect.stringMatching(/^What you owe \$16\.00 \(Ana Silva's written answers \$8\.00, the team's decision on Ana Silva's dispute \$3\.00, Ana Silva's work \$5\.00\) · confirm by /) }]);
+    const listed = /^What you owe \$16\.00 \(Ana Silva's written answers on “Harbor Run” \$8\.00, the team's dispute decision on Ana Silva's work on “Harbor Run” \$3\.00, Ana Silva's work on “Harbor Run” \$5\.00\) · confirm by /;
+    expect(items).toEqual([{ id: one.id, href: null, text: expect.stringMatching(listed), full: expect.stringMatching(listed) }]);
     expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { startsWith: "Your bank wants you to confirm a $16.00 payment by " } } })).toBe(1);
   });
 });
@@ -616,7 +617,8 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     const one = await oneOf(w.dev.user.id);
     expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 3300 });
     for (const x of items) expect(await db.payment.findUniqueOrThrow({ where: { id: x.p.id } })).toMatchObject({ status: "deferred", coveredById: one.id });
-    expect(await confirmItems(w.dev.user.id)).toEqual([{ id: one.id, href: null, text: expect.stringMatching(/^Charges made while you were away \$33\.00 \(Ana Silva's written answers \$10\.00, the team's decision on Ana Silva's dispute \$11\.00, Ana Silva's work \$12\.00\) · confirm by /) }]);
+    const listed = /^Charges made while you were away \$33\.00 \(Ana Silva's written answers on “Harbor Run” \$10\.00, the team's dispute decision on Ana Silva's work on “Harbor Run” \$11\.00, Ana Silva's work on “Harbor Run” \$12\.00\) · confirm by /;
+    expect(await confirmItems(w.dev.user.id)).toEqual([{ id: one.id, href: null, text: expect.stringMatching(listed), full: expect.stringMatching(listed) }]);
     expect(await hold(w.dev.user.id)).toBeNull();
     // Approved: all three paid by it, each tester's share sent from that one payment, one receipt.
     st.approve(one.actionPi!);

@@ -99,7 +99,7 @@ describe("(batch 11 section 4) the daily retries of what is owed during a hold",
     await cron();
     expect(calls).toBe(1); // (batch 35 §117) one payment for the total
     // (Batch 25 section 5) ONE line for the retry, naming what was paid; no separate receipt line for the same money.
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "We charged your card $31.00 for what you owed: Ana Silva's work and a payment your bank had reversed (Ana Silva's work)." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "We charged your card $31.00 for what you owed: Ana Silva's work on “Harbor Run” and a payment your bank had reversed (Ana Silva's work on “Harbor Run”)." } })).toBe(1);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid" } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { endsWith: "paid $9.00 for your written answers" }, groupKey: "tarrived" } })).toBe(1);

@@ -262,7 +262,7 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 500, feeCents: 0, testerCents: 0, status: "owed" } });
     const stop = await press({ seenTotalCents: 800, seenIds: [rows[0].id] });
     expect(stop.body.error.code).toBe("stop_once");
-    expect(stop.body.error.changes[0].text).toBe("Added to what you owe meanwhile: Ana Silva's written answers $5.00 · charged by the tester while your tests were paused. New total $13.00. Press again to pay $13.00.");
+    expect(stop.body.error.changes[0].text).toBe("Added to what you owe meanwhile: Ana Silva's written answers on “Harbor Run” $5.00 · charged by the tester while your tests were paused. New total $13.00. Press again to pay $13.00.");
     // Tab A pays.
     const paid = await press({ seenTotalCents: 1300, seenIds: stop.body.error.ids, confirmed: true });
     expect(paid.body).toMatchObject({ paid: 2, lifted: true });

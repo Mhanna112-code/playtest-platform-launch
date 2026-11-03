@@ -256,14 +256,15 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     expect(n.mustEmail).toBe(true);
     // Payments: no Confirm of its own, a link to the same button.
     const items = await confirmItems(dev.user.id);
-    expect(items).toEqual([{ id: p.id, text: expect.stringMatching(/^A payment \$10\.00 on “Harbor Run” · confirm by /), href }]);
+    // (§131) It names the piece: which tester, which part, which test (cut at 10 characters; `full` uncut, the hover).
+    expect(items).toEqual([{ id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href }]);
     const list = renderToStaticMarkup(createElement(ConfirmList, { items }));
     expect(list).toContain(`href="${href}"`);
     expect(list).toContain("Confirm with your bank →");
     expect(list).not.toContain("<button");
     // The test page: under the piece (the tester's written answers), the box the link marks.
     const rows = await bankWaitingOnTest(dev.user.id, testId);
-    expect(rows).toEqual([{ id: p.id, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for Ana Silva's written answers, made while you were away\. Confirm it by .+\.$/) }]);
+    expect(rows).toEqual([{ id: p.id, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for Ana Silva's written answers on “Harbor Run”, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("Ana Silva's written answers on “Harbor Run”") }]);
     const box = renderToStaticMarkup(createElement(BankWaiting, { paymentId: p.id, line: rows[0].line }));
     expect(box).toContain(`id="bank-${p.id}"`);
     expect(box).toContain("data-[marked]:ring-2");
@@ -308,7 +309,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // (Batch 35 §117) What's owed is ONE payment (it can span tests): confirmed on Payments, its row naming each payment it covers; the debt is locked on the box.
     const one = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
     expect(await bankWaitingOnTest(dev.user.id, testId)).toEqual([]);
-    expect((await confirmItems(dev.user.id)).find((i) => i.id === one.id)).toMatchObject({ href: null, text: expect.stringMatching(/^What you owe \$8\.00 \(Ana Silva's work \$8\.00\) · confirm by /) });
+    expect((await confirmItems(dev.user.id)).find((i) => i.id === one.id)).toMatchObject({ href: null, text: expect.stringMatching(/^What you owe \$8\.00 \(Ana Silva's work on “Harbor Run” \$8\.00\) · confirm by /) });
     expect((await (await import("@/lib/server/holds")).owedLines(dev.user.id)).find((l) => l.id === row.id)).toMatchObject({ retry: false, waiting: true, checkId: one.id });
     expect(sessionId).toBeTruthy();
     expect(src("app/app/tests/[id]/page.tsx")).toContain('data-restricted-bank=""');

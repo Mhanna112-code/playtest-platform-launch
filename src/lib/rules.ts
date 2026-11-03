@@ -893,11 +893,11 @@ export const HOLD_RETRY_MAX = 7;
 export const namesList = (names: string[]) =>
   names.length <= 1 ? (names[0] ?? "") : names.length <= 3 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : `${names.slice(0, 3).join(", ")} and ${names.length - 3} more`;
 /**
- * (Owner, Oct 29, batch 25 section 5) An automatic retry's ONE bell line, naming what was paid: "We charged your card $10.00 for what you owed: Ana Silva's call on Oct 30."
+ * (Owner, Oct 29, batch 25 section 5) An automatic retry's ONE bell line, naming what was paid: "We charged your card $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (Oct 30)."
  * (It is a money line, so it also rides the payment email: that is the retry's receipt; no separate "Receipt:" line.)
  */
 export const retriedLine = (cents: number, names: string[] = []) => `We charged your card ${money(cents)} for what you owed${names.length ? `: ${namesList(names)}` : ""}.`;
-/** (Batch 25 section 5) What a receipt for paying what's owed names: "what you owed: Ana Silva's call on Oct 30 and Ben Okafor's written answers". */
+/** (Batch 25 section 5) What a receipt for paying what's owed names: "what you owed: Ana Silva's live call on “Harbor Run” (Oct 30) and Ben Okafor's written answers on “Sky Lab”" (§131: each named by pieceName). */
 export const owedReceiptWhat = (names: string[]) => (names.length ? `what you owed: ${namesList(names)}` : "an amount you owed");
 /** Payments' line about the automatic retries. */
 export function retryStatusLine(u: { holdRetries: number; holdRetryAt: Date | null }, fmt: (d: Date) => string) {
@@ -932,9 +932,25 @@ const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
 /** The Payments line of an open chargeback: "Your bank reversed a $X payment: $X + $15 chargeback fee." */
 // (Owner, Nov 2) With what it paid for, when known: "Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run” (Nov 2): $10 + $15 chargeback fee".
 // (Owner, Nov 2) The tester's and the test's names are cut at 10 characters with "…" so the line stays short.
-const cut10 = (s: string) => (s.length > 10 ? `${s.slice(0, 10).trimEnd()}…` : s);
-export const chargebackOwedLine = (cents: number, paidFor?: { name: string; part: string; test: string; date: string }) =>
-  `Your bank reversed ${paidFor ? `${wholeMoney(cents)} you paid for ${cut10(paidFor.name)}'s ${paidFor.part} on “${cut10(paidFor.test)}” (${paidFor.date})` : `a ${wholeMoney(cents)} payment`}: ${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
+export const cut10 = (s: string) => (s.length > 10 ? `${s.slice(0, 10).trimEnd()}…` : s);
+/** (Owner, Nov 2, §131) Which part of a tester's work a payment is for. "work": a payment that names no part (an extra pay with no part, an old row). */
+export type PiecePart = "written answers" | "recording" | "live call" | "work";
+/** The part a payment is for, from its call (a live call) or its sent part's kind. */
+export const partOf = (callId: string | null | undefined, subKind: string | null | undefined): PiecePart =>
+  callId ? "live call" : subKind === "recording" ? "recording" : subKind ? "written answers" : "work";
+/**
+ * (Owner, Nov 2, §131) THE name of what a payment is for, in every developer-facing payment line: WHICH tester, WHICH part and WHICH test, the tester's and the
+ * test's names cut at 10 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
+ * “Harbor Run” (Oct 30)". `full`: the names uncut, for the hover (`title`) of a line shown on a page (emails and bells stay cut).
+ */
+export const pieceName = ({ tester, part, test, when, full = false }: { tester: string; part: PiecePart | string; test: string; when?: string | null; full?: boolean }) => {
+  const cut = full ? (s: string) => s : cut10;
+  return `${cut(tester)}'s ${part} on “${cut(test)}”${when ? ` (${when})` : ""}`;
+};
+/** (§131) A team's dispute decision, named by its piece: "the team's dispute decision on Marc Hanna's recording on “chargechar…”". */
+export const disputeDecisionName = (piece: string) => `the team's dispute decision on ${piece}`;
+export const chargebackOwedLine = (cents: number, paidFor?: { name: string; part: string; test: string; date: string }, full = false) =>
+  `Your bank reversed ${paidFor ? `${wholeMoney(cents)} you paid for ${pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test, when: paidFor.date, full })}` : `a ${wholeMoney(cents)} payment`}: ${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
 /** (Batch 11) The stop-once line on the developer's test page and Edit when the platform won a chargeback (a payments-kind line). */
 export const chargebackReversedLine = (cents: number, backCents: number, refunded: boolean) =>
   `Your bank's chargeback of ${money(cents)} was reversed: ${money(backCents)} ${refunded ? "refunded to your card" : "taken off what you owe"}.`;

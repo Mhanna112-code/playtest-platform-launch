@@ -232,13 +232,13 @@ export async function resumeStaleOwed(devId: string, now = new Date()) {
 export const receiptWhat = (names: string[], charges: boolean) => (charges ? namesList(names) : owedReceiptWhat(names));
 
 /** Each one payment's covered debts, named with their amounts ("Ana Silva's work $8.00"), for the confirm items. */
-export async function coveredNames(ids: string[]) {
+export async function coveredNames(ids: string[], full = false) {
   const out = new Map<string, string[]>();
   if (!ids.length) return out;
   const holds = await import("./holds");
   for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: { createdAt: "asc" } })) {
     const cents = p.chargeback === "open" ? p.amountCents + CHARGEBACK_FEE_CENTS : p.amountCents;
-    out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), `${await holds.owedItemName(p)} ${money(cents)}`]);
+    out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), `${await holds.owedItemName(p, full)} ${money(cents)}`]);
   }
   return out;
 }

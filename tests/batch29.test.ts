@@ -149,7 +149,7 @@ describe("batch 29 §37: a deferred payment declined after a lift names what it 
     const { chargeDeferred } = await import("@/lib/server/holds");
     await chargeDeferred(s.dev.user.id);
     const lines = await (await import("@/lib/server/holds")).owedLines(s.dev.user.id);
-    expect(lines.map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers \$10\.00 · card declined /), expect.stringMatching(/\$7\.00 · card declined /)]);
+    expect(lines.map((l) => l.text)).toEqual([expect.stringMatching(/^Ana Silva's written answers on “Harbor Run” \$10\.00 · card declined /), expect.stringMatching(/\$7\.00 · card declined /)]);
     expect((await db.payment.findFirstOrThrow({ where: { developerId: s.dev.user.id, kind: "dispute" } })).status).toBe("failed");
     expect(src("lib/server/holds.ts")).not.toContain('p.kind === "dispute" ? "a team decision" : "work you paid for during the pause"');
   });

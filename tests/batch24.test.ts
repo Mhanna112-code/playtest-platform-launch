@@ -63,14 +63,14 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const p = await waiting(x.dev.user.id, x.tester.user.id, { submissionId: x.sub.id, contractId: x.sessionId, by });
     const rows = await bankToConfirm(x.dev.user.id);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: p.id, lead: "$12.50 on “Harbor Run” · Ana Silva's written answers", soon: false, href: bankHref(x.testId, p.id) });
+    expect(rows[0]).toMatchObject({ id: p.id, lead: "$12.50 · Ana Silva's written answers on “Harbor Run”", full: "$12.50 · Ana Silva's written answers on “Harbor Run”", soon: false, href: bankHref(x.testId, p.id) });
     expect(rows[0].href).toBe(`/app/tests/${x.testId}#bank-${p.id}`);
     expect(rows[0].by).toBe(confirmByText(by, new Date()).text);
     expect(rows[0].by).toMatch(/^confirm by [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} (AM|PM)$/);
     const html = markup(rows);
     expect(html).toContain("Your bank wants you to confirm");
     expect(html).toContain('class="text-sm font-normal text-slate-400">1</span>');
-    expect(html).toContain(`$12.50 on “Harbor Run” · Ana Silva&#x27;s written answers · <span`);
+    expect(html).toContain(`$12.50 · Ana Silva&#x27;s written answers on “Harbor Run” · <span`);
     expect(html).toContain(`data-bank-waiting="${p.id}"`);
     expect(html).toContain("Confirm with your bank</button>");
     // The same plain scroll box as Needs you, everything in it (no "Show N more").
@@ -90,10 +90,10 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(rows.map((r) => r.id)).toEqual([onCall.id, retry.id, decision.id, late.id]);
     const day = call.startsAt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
     expect(rows.map((r) => r.lead)).toEqual([
-      `$15.00 on “Harbor Run” · Ana Silva's call on ${day}`,
+      `$15.00 · Ana Silva's live call on “Harbor Run” (${day})`,
       "$10.00 on “Harbor Run” · what you owe",
-      "$5.00 on “Harbor Run” · the team's decision on Ana Silva's dispute",
-      "$12.50 on “Harbor Run” · Ana Silva's written answers",
+      "$5.00 · the team's dispute decision on Ana Silva's written answers on “Harbor Run”",
+      "$12.50 · Ana Silva's written answers on “Harbor Run”",
     ]);
     expect(markup(rows)).toContain('class="text-sm font-normal text-slate-400">4</span>');
   });
@@ -106,7 +106,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(markup([row])).toContain(`$9.00 for your plan · <span`);
     // Payments' row for a renewal is the inline box carrying that anchor (marked by HashJump).
     expect(src("components/BankWaiting.tsx")).toContain("id={bankAnchor(paymentId)}");
-    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} line={i.text} />");
+    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} line={i.text} full={i.full} />");
   });
 
   it("under 24 hours left the confirm-by part is red and names the day", async () => {
@@ -169,7 +169,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const rows = await bankToConfirm(x.dev.user.id);
     expect(rows.map((r) => r.id)).toEqual([p.id]);
     expect(rows[0].href).toBe(bankHref(x.testId, p.id)); // the test's paused view carries the same button
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("{bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} seenAt={seenAt} />)}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("{bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} full={b.full} seenAt={seenAt} />)}");
     // The poll keeps refreshing during a hold or suspension.
     expect((await pulse(x.dev.cookie)).body).toMatchObject({ restricted: false });
     // §106 revision: the same box comes below the developer name, whatever their state.
@@ -185,7 +185,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
   });
 
   it("phones: the same plain rows and an inline button that fills the row", () => {
-    const html = markup([{ id: "p1", lead: "$1.00 for your plan", by: "confirm by Nov 2, 3:10 PM", soon: false, href: "/app/payments#bank-p1", at: 0 }]);
+    const html = markup([{ id: "p1", lead: "$1.00 for your plan", full: "$1.00 for your plan", by: "confirm by Nov 2, 3:10 PM", soon: false, href: "/app/payments#bank-p1", at: 0 }]);
     expect(html).toContain("rounded-lg border border-white/10 p-3 text-sm");
     expect(html).toContain('data-bank-waiting="p1"');
     expect(html).toContain("w-full");

@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, toCents } from "@/lib/server/dateFormat";
-import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine } from "@/lib/rules";
+import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -169,7 +169,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       await recordReviewDraft(payment!, tx);
       await tx.payment.update({ where: { id: payment!.id }, data: { failure: (e as Error).message } });
     });
-    await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, `${name}'s ${piece.label} on “${c.title}”`);
+    await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, pieceName({ tester: name, part: piece.label, test: c.title }));
     // The tester is told at once (bell; their top box and stop-once read the owed payment): never "failed".
     await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents), `/app/sessions/${c.id}#${partAnchor(piece.label)}`, undefined, { payment: true, group: "tdelayed" });
     throw new HttpError(402, "card_failed", declinedHoldLine(name, rev.amountCents, piece.label), { held: true, failed: `Your Pay on ${c.title} was declined` });
@@ -222,7 +222,8 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
     `/app/sessions/${c.id}#${partAnchor(piece.label)}`,
     { payment: true, group: "tpaid" },
   );
-  if (rev.amountCents > 0) await receipt(dev.email, `${name}'s ${piece.label}`, rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+  // (§131) The receipt names the tester, the part and the test (pieceName).
+  if (rev.amountCents > 0) await receipt(dev.email, pieceName({ tester: name, part: piece.label, test: c.title }), rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   // (Batch 22 section 2) A suspended tester is paid like anyone (no held share).
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }
@@ -340,8 +341,10 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   let heldNow = false; // (batch 35 §82) this decision's own decline started a hold: the test is paused now
   const owedRow = { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0 };
   const waiting = extra > 0 ? await (await import("./holds")).deferIfHeld(owedRow) : null;
+  // (Owner, Nov 2, §131) The developer's lines name the decision by its piece: "the team's dispute decision on Ana Silva's written answers on “Harbor Run”".
+  const decision = disputeDecisionName((await (await import("./holds")).paymentPiece(owedRow)) ?? `${displayName(c.tester)}'s work on “${c.title}”`);
   if (waiting) {
-    await bell(c.test.developerId, `The team's decision on ${displayName(c.tester)}'s dispute (${money(extra)} more) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+    await bell(c.test.developerId, `${decision.replace(/^the/, "The")} (${money(extra)} more) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     delayed = true;
   } else if (extra > 0) {
     // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.
@@ -363,12 +366,12 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
         throw e;
       }
       const failed = await db.payment.create({ data: { ...owedRow, status: "failed", failure: e.message, owedUntil: new Date() } });
-      await (await import("./holds")).declinedPayment(c.test.developerId, failed.id, extra, `the team's decision on ${displayName(c.tester)}'s dispute`);
+      await (await import("./holds")).declinedPayment(c.test.developerId, failed.id, extra, decision);
       delayed = true;
       heldNow = true;
     }
     if (result) {
-      await receipt(c.test.developer.email, `the dispute decision on ${displayName(c.tester)}'s work`, extra, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+      await receipt(c.test.developer.email, decision, extra, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
       await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
     }
   }
@@ -558,7 +561,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     // (Owner, Oct 27) A declined extra pay starts the payment hold at once, like any declined payment.
     await db.payment.update({ where: { id: row.id }, data: { failure: (e as Error).message } });
     if (row.submissionId) await answerUpdate(db, row.submissionId, row.createdAt); // (batch 30 §2) it was pressed: the update's row goes (the amount is owed)
-    await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${name}`);
+    await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${pieceName({ tester: name, part: piece.label, test: c.title })}`);
     throw new HttpError(402, "card_failed", `Your card was declined, so ${name} wasn't paid ${money(amount)} extra yet. Your tests are paused until you pay what you owe: open Payments.`, { held: true, failed: `Your extra pay on ${c.test.title} was declined` });
   }
   if (result.status === "requires_action") return (await import("./confirm")).pressAction(row.id, result as NeedsAction & Record<string, unknown>);
@@ -611,6 +614,6 @@ export async function finishExtraPay(paymentId: string, result: { status: string
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”`;
   await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`Their note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
-  await receipt(dev.email, `an extra payment to ${name}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+  await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   return { paid: true, amountCents: amount, status: result.status };
 }

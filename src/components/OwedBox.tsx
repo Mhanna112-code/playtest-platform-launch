@@ -11,7 +11,7 @@ import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OWED_BANK_WAITING, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 
 /** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
-type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string };
+type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string };
 
 /** (Owner, Nov 2, batch 35 §117 rule 3) "Cancel this check": the bank's check is cancelled and what it covered can be paid at once (the page redraws). */
 function CancelCheck({ id }: { id: string }) {
@@ -81,7 +81,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
       {owed.length > 0 && (
         <ul className="list-disc pl-5">
           {owed.map((o, i) => (
-            <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined}>
+            <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined} title={o.full}>
               {o.text}
               {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
               {o.after && <> · <b data-owed-after="">{o.after}</b></>}
