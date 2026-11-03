@@ -61,7 +61,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Days per tester",
-    text: "Every tester on a test gets the same number of days, counted in whole days from when the test opened (it was posted, or its Next round opened) to its Open until. A tester's deadline is the day they join plus those days. A deadline is a guide: late work is accepted and marked as sent late.",
+    text: "Every tester on a test gets the same number of days, counted in whole days from when the test opened (it was posted, or its Next round opened) to its Open until. A tester's deadline is the day they join plus those days. Work sent after your own deadline is still accepted, marked as sent late, but it can't be charged if the developer doesn't review it: only their own Pay settles it. Nothing can be sent once the test has ended (at the last tester's deadline).",
     example: "Opened Nov 6 with Open until Nov 20: 14 days per tester, so a tester who joins Nov 19 is due Dec 3.",
   },
   {
