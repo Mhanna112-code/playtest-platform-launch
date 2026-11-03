@@ -65,14 +65,24 @@ export { ANSWER_REQUIRED };
 function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const chars = answerChars(value);
+  // (Owner, Nov 3) The preview stays hidden until "Preview" is pressed (on phones it took the screen); the button names the files placed in the answer.
+  const [preview, setPreview] = useState(false);
+  const files = attachments.filter((a) => hasMarkerFor(value, a.id, attachments)).length;
   return (
     <div className="space-y-1">
       <FormatBar target={ref} onChange={onChange} sessionId={sessionId} onAttach={onAttach} known={attachments} />
       <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
+      {value.trim() && (
+        <button type="button" className="btn-ghost px-2 py-0.5 text-xs" aria-expanded={preview} data-preview-toggle="" onClick={() => setPreview((p) => !p)}>
+          {preview ? "Hide preview" : `Preview${files ? ` (${files} ${files === 1 ? "file" : "files"})` : ""}`}
+        </button>
+      )}
       {/* (Owner, Oct 30) The preview scrolls in its own box (about 12 lines) instead of growing the page. */}
-      <div className="max-h-72 overflow-y-auto rounded-lg border border-white/10 p-2" tabIndex={0} data-answer-preview="">
-        <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
-      </div>
+      {preview && value.trim() && (
+        <div className="max-h-72 overflow-y-auto rounded-lg border border-white/10 p-2" tabIndex={0} data-answer-preview="">
+          <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
+        </div>
+      )}
       <CharacterCount value={value} count={withoutAttachmentMarkers(value).length} minCount={chars} min={min ? ANSWER_MIN_CHARS : 0} max={WRITTEN_MAX_CHARS} required={required || short} data-answer-count={chars} />
     </div>
   );
