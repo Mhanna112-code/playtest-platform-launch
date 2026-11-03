@@ -18,7 +18,7 @@ import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
-import { callReference, dayIn, disputeDecisionName, disputedCentsOf, endOfDayIn, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
+import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
@@ -185,17 +185,14 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   // (Owner, Nov 2) Open until stays the END of a day in the developer's zone (the nearest one to the moved time), so joining closing and Edit's lock (by calendar
   // day) always agree: a pause of 2 days and 1 minute moves "Nov 1, 11:59 PM" to "Nov 3, 11:59 PM", never "Nov 4, 12:01 AM".
   // (Owner, Nov 2) Like deadlines: an Open until that had already passed when the pause started stays (joining never reopens).
+  const tz = (await tx.test.findUnique({ where: { id: t.id }, select: { developer: { select: { timeZone: true } } } }))?.developer.timeZone;
   if (t.openUntil && t.openUntil > start && t.status !== "stopped" && !t.workEndedAt) {
-    const tz = (await tx.test.findUnique({ where: { id: t.id }, select: { developer: { select: { timeZone: true } } } }))?.developer.timeZone;
-    const moved = later(t.openUntil);
-    const day = dayIn(moved, tz);
-    const prev = dayIn(new Date(Date.parse(`${day}T12:00:00Z`) - 86_400_000), tz);
-    const ends = [endOfDayIn(prev, tz), endOfDayIn(day, tz)];
-    const openUntil = ends.reduce((a, b) => (Math.abs(b.getTime() - moved.getTime()) < Math.abs(a.getTime() - moved.getTime()) ? b : a));
+    const openUntil = nearestDayEnd(later(t.openUntil), tz);
     await tx.test.update({ where: { id: t.id }, data: { openUntil, notified3d: false, notified1d: false } });
   }
   // (Owner, Nov 2) Only deadlines that hadn't passed when the pause started (like moving Open until later): one already passed keeps it.
-  for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working", dueAt: { gt: start } } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: later(c.dueAt) } });
+  // (Owner, Nov 3, batch 35 §154) The moved deadline is rounded UP to the end of its day (11:59 PM in the zone it was counted in), never an odd time like 7:22 AM.
+  for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working", dueAt: { gt: start } } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, ms, tz) } });
   for (const x of await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } })) {
     const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now, others); // only the part of the pause after it was sent
     if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: later(x.payBy, by), choiceBy: later(x.choiceBy, by) } });

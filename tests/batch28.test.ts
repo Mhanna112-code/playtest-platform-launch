@@ -11,7 +11,7 @@ import { getStripe, sendWaitingShares, setStripeForTests } from "@/lib/server/st
 import { startHold } from "@/lib/server/holds";
 import { approveChargebackHold, chargebackSteps } from "@/lib/server/chargeback";
 import { adminPage, type ChargebackVM } from "@/lib/server/adminLists";
-import { reservedAddedLine } from "@/lib/rules";
+import { movedDue, reservedAddedLine } from "@/lib/rules";
 import { renderTimes } from "@/lib/tz";
 import { json, makeUser, req } from "./helpers";
 import { joined, setup } from "./fixtures";
@@ -583,7 +583,7 @@ describe("batch 28 §1 and §2: heartbeat gaps wait for an admin; an uptime repo
     expect((await O.adminOutages()).gaps.map((x) => x.id)).toEqual([g.id]);
     const a = await db.user.update({ where: { id: (await makeUser({ name: "Admin" })).user.id }, data: { isAdmin: true } });
     await O.approveGap(a.id, g.id);
-    expect((await dueOf(sessionId)) - due0).toBe(32 * MIN);
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 32 * MIN, null).getTime()); // (§154) by the outage, up to that day's end
     expect(await db.outage.count()).toBe(1);
     await expect(O.approveGap(a.id, g.id)).rejects.toMatchObject({ code: "done" }); // once
     // A second gap, dismissed: nothing moves and it leaves the list.
@@ -592,7 +592,7 @@ describe("batch 28 §1 and §2: heartbeat gaps wait for an admin; an uptime repo
     expect((await O.adminOutages()).gaps).toHaveLength(1);
     await O.dismissGap(g2.id);
     expect((await O.adminOutages()).gaps).toHaveLength(0);
-    expect((await dueOf(sessionId)) - due0).toBe(32 * MIN);
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 32 * MIN, null).getTime()); // (§154) by the outage, up to that day's end
     expect(src("app/admin/page.tsx")).toContain('<AdminButton action="dismiss-gap" id={g.id} label="Dismiss" extra={{ since: seenAt }} />'); // (batch 34 §1) with the page's time
     // Any server activity is a heartbeat (API calls and page loads).
     expect(src("lib/server/http.ts")).toContain("m.touchHeartbeat()");
@@ -610,7 +610,7 @@ describe("batch 28 §1 and §2: heartbeat gaps wait for an admin; an uptime repo
     await O.sweepGap(new Date(t0.getTime() + 60 * MIN)); // gap [t0, t0 + 60]
     const o = await O.recordAlert("up", new Date(t0.getTime() + 40 * MIN), 20 * MIN); // the alert: [t0 + 20, t0 + 40]
     expect(o).toMatchObject({ startAt: new Date(t0.getTime() + 20 * MIN), endAt: new Date(t0.getTime() + 40 * MIN), ms: 20 * MIN });
-    expect((await dueOf(sessionId)) - due0).toBe(20 * MIN);
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 20 * MIN, null).getTime()); // (§154) by the outage, up to that day's end
     expect((await O.adminOutages()).gaps).toHaveLength(0);
   });
 
@@ -621,17 +621,17 @@ describe("batch 28 §1 and §2: heartbeat gaps wait for an admin; an uptime repo
     const end = new Date(Date.now() - 2 * H);
     const first = await O.recordAlert("up", end, 20 * H);
     expect(first).toMatchObject({ needsApproval: false });
-    expect((await dueOf(sessionId)) - due0).toBe(20 * H);
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 20 * H, null).getTime()); // (§154) by the outage, up to that day's end
     // A second report: from the same start, 6 hours longer.
     const second = await O.recordAlert("up", new Date(end.getTime() + 6 * H), 26 * H);
     expect(second!.id).toBe(first!.id);
     expect((await db.outage.findUniqueOrThrow({ where: { id: first!.id } })).ms).toBe(20 * H);
     const extra = await db.outage.findFirstOrThrow({ where: { id: { not: first!.id } } });
     expect(extra).toMatchObject({ startAt: end, ms: 6 * H, needsApproval: true, approvedAt: null });
-    expect((await dueOf(sessionId)) - due0).toBe(20 * H); // nothing more moved
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 20 * H, null).getTime()); // (§154) by the outage, up to that day's end // nothing more moved
     const a = await db.user.update({ where: { id: (await makeUser({ name: "Admin" })).user.id }, data: { isAdmin: true } });
     await O.approveOutage(a.id, extra.id);
-    expect((await dueOf(sessionId)) - due0).toBe(26 * H);
+    expect(await dueOf(sessionId)).toBe(movedDue(movedDue(new Date(due0), 20 * H, null), 6 * H, null).getTime()); // (§154) the extra 6 hours, each move up to that day's end
   });
 });
 

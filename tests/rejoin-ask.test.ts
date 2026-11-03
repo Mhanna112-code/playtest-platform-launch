@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import { dayEndAtOrAfter } from "@/lib/rules";
 import { POST as testsPOST } from "@/app/api/tests/route";
 import { json, makeUser, req } from "./helpers";
 import { act, joined, listingBody, sact, seen, setup } from "./fixtures";
@@ -32,8 +33,11 @@ describe("Ask to rejoin (design doc 7.3, 8)", () => {
     expect(accepted.body.sessionId).toBe(sessionId);
     const back = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(back.status).toBe("working");
-    // Exactly the time that was left when they left (about 6 days), counted from now.
-    expect(Math.abs(back.dueAt.getTime() - (Date.now() + (old.dueAt.getTime() - old.endedAt!.getTime())))).toBeLessThan(5000);
+    // The time that was left when they left (about 6 days), counted from now, up to the end of that day (§154).
+    const exact = Date.now() + (old.dueAt.getTime() - old.endedAt!.getTime());
+    expect(back.dueAt.getTime()).toBeGreaterThan(exact - 5000);
+    expect(back.dueAt.getTime()).toBe(dayEndAtOrAfter(new Date(back.dueAt.getTime() - 1000), null).getTime());
+    expect(back.dueAt.getTime() - exact).toBeLessThan(86_400_000);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "You're back in" } } })).toBe(1);
   });
 

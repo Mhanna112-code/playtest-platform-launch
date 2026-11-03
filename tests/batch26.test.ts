@@ -26,7 +26,7 @@ import { signUp } from "@/lib/server/passwords";
 import { finishGoogleSignup } from "@/lib/server/google";
 import { decideTerms } from "@/lib/server/terms";
 import { ANSWER_ONE, ANSWER_REQUIRED, NOT_REQUIRED, REQUIRED, answersMissing, qOptional, qRequired, qText } from "@/lib/questions";
-import { chargeOpensNote, endedLine, stillWorksLine, termsDiff } from "@/lib/rules";
+import { chargeOpensNote, endedLine, movedDue, stillWorksLine, termsDiff } from "@/lib/rules";
 import { endLine } from "@/lib/adminScroll";
 import { renderTimes } from "@/lib/tz";
 import { json, makeUser, req } from "./helpers";
@@ -71,7 +71,7 @@ describe("batch 26 section 1: a real outage is always recorded", () => {
     expect(body.outage!.ms).toBeGreaterThanOrEqual(40 * MIN);
     expect(new Date(body.outage!.endAt).getTime() - new Date(body.outage!.startAt).getTime()).toBe(40 * MIN);
     expect(await db.outage.count()).toBe(1);
-    expect((await dueOf(sessionId)) - due0).toBe(40 * MIN);
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 40 * MIN, null).getTime()); // (§154) by the outage, up to that day's end
     // A placeholder UptimeRobot didn't fill in reads as no duration: nothing recorded from it.
     expect((await import("@/lib/server/outages")).parseAlert({ alertType: "2", alertDuration: "*alertDuration*" }).durationMs).toBeNull();
   });
@@ -105,7 +105,7 @@ describe("batch 26 section 1: a real outage is always recorded", () => {
     const merged = await recordAlert("up", upAt, 50 * 60_000);
     expect(await db.outage.count()).toBe(1);
     expect(merged).toMatchObject({ startAt: new Date(t0.getTime() - 4 * MIN), endAt: upAt, ms: 50 * MIN });
-    expect((await dueOf(sessionId)) - due0).toBe(50 * MIN);
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 50 * MIN, null).getTime()); // (§154) by the outage, up to that day's end
     expect(await db.appState.count({ where: { key: { startsWith: "gap:" } } })).toBe(0);
     // One bell line for the tester, reworded to the merged times.
     const tester = (await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).testerId;
@@ -114,7 +114,7 @@ describe("batch 26 section 1: a real outage is always recorded", () => {
     // The same up alert again (or the next sweep for an already-covered stretch): nothing new.
     expect((await recordAlert("up", upAt, 50 * 60_000))!.id).toBe(merged!.id);
     expect(await db.outage.count()).toBe(1);
-    expect((await dueOf(sessionId)) - due0).toBe(50 * MIN);
+    expect(await dueOf(sessionId)).toBe(movedDue(new Date(due0), 50 * MIN, null).getTime()); // (§154) by the outage, up to that day's end
   });
 
   it("the up alert first, then the heartbeat's gap for the same downtime: still one outage, with the alert's span (batch 28 §2)", async () => {

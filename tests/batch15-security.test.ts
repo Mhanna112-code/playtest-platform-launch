@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import type Stripe from "stripe";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
+import { movedDue } from "@/lib/rules";
 import { POST as webhookPOST } from "@/app/api/stripe/webhook/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { POST as adminPOST } from "@/app/api/admin/[action]/route";
@@ -199,7 +200,7 @@ describe("M4: outages on the server's clock", () => {
     const a = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
     await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
     await approveOutage(a.user.id, o!.id);
-    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime() - due0).toBe(30 * 3_600_000);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime()).toBe(movedDue(new Date(due0), 30 * 3_600_000, null).getTime()); // (§154) up to that day's end
     await expect(approveOutage(a.user.id, o!.id)).rejects.toThrow();
   });
 });

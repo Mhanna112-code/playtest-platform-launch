@@ -1631,3 +1631,34 @@ developer's saved card at once, hold or not (deferIfHeld never defers for a dele
 waiting for the lift when they delete are made at the delete, as one payment (chargeDeferred; the daily drain also picks up deleted accounts). Declined, or a bank
 check nobody can approve running out after 3 days: no hold (there's no account), the payment stays delayed for the tester and is listed for the admins. Repayments of
 reversed payments (chargebacks) still wait.
+
+## §154 Moved deadlines round up to the end of the day (owner, Nov 3)
+Owner: "make testers' deadline and that call thing round up to end of day." A tester's deadline is the end of a day (11:59 PM in the developer's saved zone, where
+`dueFromJoin` counts it, §111), but a pause moved it by the pause's exact length, so a 7 h 23 min pause turned "Thu, Nov 5, 11:59 PM" into "Fri, Nov 6, 7:22 AM", and
+the call form's limit read "Pick a time before Fri, Nov 6, 7:22 AM (when testers' work on this test ends)."
+
+- **Every move of a working tester's deadline now lands on 11:59 PM of the day it moves to, rounded UP, never down** (`rules.dayEndAtOrAfter`, in the developer's
+  zone like `dueFromJoin`; unknown zone: UTC):
+  - **a pause lifted** (a payment hold paid off, a suspension lifted, the team's pause lifted: `holds.shiftAfterPause`): the deadline + the pause's length
+    (`pauseShiftMs`, unchanged), then up to that day's end (`rules.movedDue`). 11:59 PM + 7 h 23 min = Fri 7:22 AM → **Fri, Nov 6, 11:59 PM**. A pause of exactly
+    whole days keeps 11:59 PM, whole days later. Only deadlines that hadn't passed when the pause started move (as before); one that passed during it comes back the
+    same way.
+  - **an outage** (recorded, or approved: "move every timer", `outages.applyOutage`): the same, per tester in their test's developer's zone (it was a raw SQL
+    shift).
+  - **a rejoin** (`tests.rejoinDue`): now + the time left when they left, up to that day's end. A deadline that had passed when they left stays passed (exactly as
+    before). The developer's "asks to rejoin" line names the same deadline (`joining.rejoinAskLine`, with the developer's zone).
+  - **Edit moving Open until later by D days** (batch 15 §18): D calendar days in the developer's zone, at 11:59 PM (`rules.dueAfterDays`; it was D × 24 hours in
+    SQL, which read 10:59 PM after the clock change on Nov 1). An older odd deadline lands on 11:59 PM too.
+- **Open until** keeps the owner's Nov 2 rule for pauses: the nearest end of a day in the developer's zone (2 days and 1 minute move "Nov 1, 11:59 PM" to
+  "Nov 3, 11:59 PM", never "Nov 4"); now one helper (`rules.nearestDayEnd`), and outages use it too (an outage used to leave it at an odd time).
+- **The call window follows**: its end (`workDeadlineOf`, the latest deadline, no earlier than Open until) is always an end of a day, so the form's red line and the
+  server's refusal read "Pick a time before Fri, Nov 6, 11:59 PM (when testers' work on this test ends).", and the repeat counts ("2 days (to Nov 5)", "3 days (to
+  Nov 6)") fit that end. Charge opening, close-out, the developer's last day to pay and reminders read the stored deadline, so they follow without a second shift
+  (review clocks still move by the pause's exact length, as before).
+- **Existing odd deadlines** (moved before this): nothing has launched, so no migration. `scripts/round-deadlines-eod.ts` rounds working, not-yet-passed deadlines
+  up to their day's end on a local database (dry run by default; `--apply` writes; it refuses a non-localhost DATABASE_URL). Legacy tests without Open until
+  (deadline = joining + N × 24 h) are left as they are, as is Switch's `newDueAt` for them.
+- **Tests:** `tests/batch35-deadline-eod.test.ts`: 7 h 23 min turns 11:59 PM into 11:59 PM the next day (not 7:22 AM), through a pause lift, an outage and the
+  helpers; a whole-day pause and Edit's +2 days keep 11:59 PM (also across the clock change); a far zone (Tokyo) rounds in that zone; a rejoin lands on 11:59 PM and
+  a passed one stays passed; the call window's end and both sides' refusal read 11:59 PM; the repeat counts fit the new end. `batch16-open-until` (deadlines
+  after a pause land on 11:59 PM) follows.
