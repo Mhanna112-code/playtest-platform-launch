@@ -7,9 +7,14 @@ import { isPerkRefusal } from "@/lib/subscription";
 import { SubscribeLink } from "@/components/SubscribeLink";
 import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { useGoneOnNewVersion } from "@/lib/pageVersion";
+import { refusalLine } from "@/lib/pressLabels";
 
-/** Red for a form mistake (fix the field and press again); blue for a refusal. Brought into view when it appears. */
-export function Err({ text }: { text: string }) {
+/**
+ * Red for a form mistake (fix the field and press again); blue for a refusal. Brought into view when it appears.
+ * (Owner, Nov 3, §156) `press`: the pressed button's label. A refusal then names it first, as every refusal does (batch 15 section 36): "Your Block didn't go
+ * through: …". A red form mistake, a line that already names its press, and "Answer the new terms first: Switch or Keep." read as they are.
+ */
+export function Err({ text, press = "" }: { text: string; press?: string }) {
   const ref = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     // (Batch 27 section 1) The new-terms line stays under its button while the page goes up to the Switch / Keep box.
@@ -21,7 +26,8 @@ export function Err({ text }: { text: string }) {
   if (!text || gone) return null;
   if (text === ANSWER_TERMS_FIRST) return <p ref={ref} className="err" data-answer-terms="">{text}</p>;
   const red = text.startsWith(FIELD);
-  if (!red && text.startsWith("Confirm your email first.")) return <p ref={ref} className="err flex flex-wrap items-center gap-2">{text} <ResendConfirm label="Resend the link" /></p>;
-  if (!red && isPerkRefusal(text)) return <p ref={ref} className="err flex flex-wrap items-center gap-2" data-perk-refusal="">{text} <SubscribeLink /></p>;
-  return <p ref={ref} className={red ? "err-field" : "err"}>{red ? text.slice(1) : text}</p>;
+  const line = red ? text : refusalLine(press, text);
+  if (!red && text.startsWith("Confirm your email first.")) return <p ref={ref} className="err flex flex-wrap items-center gap-2">{line} <ResendConfirm label="Resend the link" /></p>;
+  if (!red && isPerkRefusal(text)) return <p ref={ref} className="err flex flex-wrap items-center gap-2" data-perk-refusal="">{line} <SubscribeLink /></p>;
+  return <p ref={ref} className={red ? "err-field" : "err"} {...(!red && line !== text ? { "data-refusal-named": "" } : {})}>{red ? text.slice(1) : line}</p>;
 }

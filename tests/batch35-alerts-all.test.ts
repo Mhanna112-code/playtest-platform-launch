@@ -7,7 +7,8 @@ describe("batch 35 §71: Alerts menu", () => {
   const src = fs.readFileSync(path.join(process.cwd(), "src/components/AlertsMenu.tsx"), "utf8");
   it("no \"Saved.\" after a change; a failure still says so", () => {
     expect(src).not.toContain('setSaved("Saved.")');
-    expect(src).toContain('setSaved("Couldn\'t save. Try again.")');
+    // (§156) The failure names its press: "Your Alerts didn't go through: …" (the server's reason, or "Couldn't save. Try again.").
+    expect(src).toContain('setSaved(refusalLine("Alerts", (e as Error)?.message || "Couldn\'t save. Try again."));');
   });
   it("an All tick covering the types that can happen here (greyed ones keep their ticks)", () => {
     expect(src).toContain('data-alerts-all=""');

@@ -5,6 +5,7 @@ import { usePress } from "@/lib/usePress";
 import { needsBank } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
 import { PressDone } from "@/components/PressDone";
+import { pressLabelOf, refusalLine } from "@/lib/pressLabels";
 
 /**
  * One button that goes through the page's stop-once gate: the first press may stop (the box shows right under it and
@@ -38,7 +39,8 @@ export function PressButton(p: { seenAt: string; path: string; body: Record<stri
       {bank.view}
       <ChangesBox changes={changes} error={error} />
       <PressDone line={doneLine} />
-      {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}
+      {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
+      {bankErr && <p className="info" data-bank-not-confirmed="">{refusalLine(pressLabelOf(p.path, p.body), bankErr)}</p>}
     </>
   );
 }

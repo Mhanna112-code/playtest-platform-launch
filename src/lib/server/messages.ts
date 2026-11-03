@@ -80,7 +80,7 @@ export async function sendChat(user: { id: string; name: string; email: string }
   // (the route's requireActive sends them to the dashboard top); the other person's Send is turned back with a neutral notice and the text is kept.
   const r = await chatRestriction(testId, testerId);
   const iAmDev = user.id === a.test.developerId;
-  if (iAmDev ? r.developer : r.tester) throw new HttpError(403, iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended", iAmDev ? "Your tests are paused." : "Your account is paused.", { failed: `Your message on ${a.test.title} didn't go through`, [iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended"]: true });
+  if (iAmDev ? r.developer : r.tester) throw new HttpError(403, iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended", iAmDev ? "Your tests are paused." : "Your account is paused.", { failed: `Your Send on ${a.test.title} didn't go through`, [iAmDev && !r.dev.devSuspendedAt ? "held" : "suspended"]: true });
   if (iAmDev ? r.tester : r.developer) throw new HttpError(409, "chat_paused", CHAT_NOT_SENT);
   const body = typeof raw === "string" ? raw.trim() : "";
   if (!body) throw new HttpError(400, "empty", "Type a message first.");

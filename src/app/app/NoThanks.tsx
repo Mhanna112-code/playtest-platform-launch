@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { api, ApiError } from "@/lib/client";
 import { ChangesBox } from "@/components/ChangesBox";
+import { refusalLine } from "@/lib/pressLabels";
 import { stopBox, type StopBox } from "@/lib/topStop";
 import { useFinished } from "@/lib/usePress";
 
@@ -30,7 +31,7 @@ export function NoThanks({ inviteId }: { inviteId: string }) {
       <button className="btn-ghost" disabled={fin.done || closing} onClick={() => void press()}>
         No thanks
       </button>
-      {why && <p className="basis-full text-sm text-slate-300" role="status" data-invite-refused="">{why}</p>}
+      {why && <p className="basis-full text-sm text-slate-300" role="status" data-invite-refused="">{refusalLine("No thanks", why)}</p>}
       <ChangesBox changes={box?.changes ?? null} tail={box?.tail} press="No thanks" />
     </>
   );

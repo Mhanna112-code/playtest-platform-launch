@@ -1794,3 +1794,44 @@ sits in the §139 panel (`ResizeBox`): the content scrolls inside, the grip at t
   with no "added after you paid"; an addition the live check already showed doesn't stop; Pay more after an unseen addition stops once, a shown one goes
   straight through; Confirm with your bank stops once for an unseen addition; Accept on a call request that just arrived still goes through). §79's and §86's
   tests (`batch35-answering-press`, `batch35-answered-seen`) now expect Pay / Pay more to stop once for their own piece's unseen line.
+
+## §156 Every refused press names itself (owner, Nov 3)
+
+- **The decision.** "It should always name the refused press — any other cases?" (batch 15 §36: every stop-once box and every refusal names the press first,
+  "Your Pay didn't go through: …"). §146 fixed Add and Dismiss all; this pass found every other press that didn't, and a guard so a new one can't slip through.
+- **What wasn't named, and now is** (route → the button's label; under the button, in the kept line after a redraw, and in the dashboard top's failed line):
+  - tests / sessions: `recording-remove` → Remove; `keys-dismiss` → Dismiss selected (Dismiss 2 for two; it showed a bare red line); `key-broken` → “This key
+    doesn't work” (was "Report"; its inline refusal was bare); `terms` → Switch to the new terms / Keep my current terms (was "Switch or Keep"; the refusal
+    under them was bare); `choose` → Let it go when that was pressed; Join / Apply / Ask to rejoin / Withdraw on the join page (refusals were bare); the
+    Post / Save / Delete refusal under the listing form (bare).
+  - payments: `/api/payments/confirm` → Confirm with your bank (the kept line after a redraw named nothing); Add a card / Change card and the payout setup
+    (Connect a payout account / Continue setup / Update payout details) → the Payments page's refusals ("We couldn't save the card…", too many card attempts,
+    payments switched off, confirm your email first) now start "Your Add a card didn't go through: …"; `verify-card` → Verify a card / Verify this card;
+    `subscription` → Subscribe for $7/month / Cancel subscription / Keep my subscription; Cancel this check (Pay what you owe's and Confirm all's) and Pay
+    what you owe's own refusal (were bare); the bank's "Your bank didn't confirm the payment, so nothing was charged." under Pay, Pay more, Subscribe, Pay
+    what you owe, Confirm all and Confirm with your bank now names that press.
+  - account: `/api/profile` → Save profile (Continue at first setup); `account/delete` → Delete account; `account/side` → Switch to your … side / Start
+    testing too / Start posting tests too; `account/notify` → Save; Alerts ticks and the tester's Alerts button → Alerts (they read "Couldn't save. Try
+    again." in green); Resend the link.
+  - people and messages: `blocks` → Block / Unblock; `direct/[id]` and chat → Send (the chat line said "Your message on …"); `excerpts` → Ask the developer /
+    Allow / Deny (the stop box said "Allow / Deny") / Remove; `reports` and `help` → Send to the team; `invites/[id]` → No thanks (its closed-invite line was
+    bare); `visits/[id]` → Remove; `chat/open` → Chat with <name>; `calls/[id]/join` → Join call; Dismiss / Dismiss all; the recording upload, the recorder's
+    Upload this recording and Attach a file.
+  - sign-in pages: Log in, Sign up, Send the reset link, Save the new password, Continue (Google), Sign out / Sign out of all devices.
+  - admin console (§45's labels): every AdminButton refusal (Pause, Lift the pause, Stop (close), Suspend, Reinstate, Delete account, Approve, Extend, Close
+    now, Mark replied, Dismiss, Allow 3 more changes…, Clear this list…, Don't approve…), the payment hold's Approve, Decide, the team close and its
+    Preview, Preview suspension. They were bare ("You already paused this test in another tab at 3:20 AM."); the stop boxes already named them.
+- **The dashboard top's failed line** (`users.failedLine`, a suspended or held account's press) now uses the same table as the page (`pressLabelOf`, with the
+  body peeked where one route serves several buttons). It used to say "Save" for every press it had no word for (Block, Send to the team, Save profile, No
+  thanks, Remove, Dismiss selected …) and "Stop", "Message", "Rating", "Call request", "Dispute reply", "Open", "Pay" (Pay more), "Post" for buttons that read
+  Stop the test, Send, Rate, Request a time, Send your side, Accept testers again, Pay more, Post the test.
+- **Code.** `lib/pressLabels.ts`: `pressLabelOf` covers every route (`otherPress`, `ADMIN_PRESS`, body-dependent labels); `refusalLine` leaves a line that already
+  names its press anywhere ("…, so your Send didn't go through.") as it is. `Err` takes `press` (FormMistakes passes its own), so a blue refusal names the
+  press while a red form mistake, "Answer the new terms first" and a named line read as they are (the confirm-email Resend link and the Subscribe link stay).
+  `AdminButton`'s `onRefused` gets the button's label.
+- **Not presses** (never name one; listed in the guard with why): the join pop-up's needs check, the invite panel's check and search, a failed upload's clean-up,
+  the time-zone sync, marking bell lines read, kept drafts, the call room's updates, Stripe's webhook, the monitor and the dev hook.
+- **Tests:** `tests/press-names.test.ts`: reads every route under `src/app/api` and every action of the tests / sessions / admin routes and checks each press
+  has a real label (never "press"), with the explicit list of non-presses (which can't go stale); the failed line for every other press; the labels by route
+  and body; `refusalLine`, `Err` and `FormMistakes` naming; end to end, a refused Confirm with your bank ("Your Confirm with your bank didn't go through: You
+  already confirmed this payment.", kept line too), a refused Block, and a suspended tester's Block / Unblock / Save profile reaching the dashboard top named.

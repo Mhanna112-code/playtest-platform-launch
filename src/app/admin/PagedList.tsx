@@ -4,6 +4,7 @@ import { LIMITS } from "@/lib/limits";
 import { CharacterCount } from "@/components/CharacterCount";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { api, errOf } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf, shownWithFresh } from "@/lib/adminScroll";
 import { AccountActions } from "./AccountActions";
 import { DisputeWork } from "./DisputeWork";
@@ -70,7 +71,7 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
       >
         Approve
       </button>
-      {msg && <span className={msg.ok ? "ok" : "err"}>{msg.text}</span>}
+      {msg && <span className={msg.ok ? "ok" : "err"}>{msg.ok ? msg.text : refusalLine("Approve", msg.text)}</span>}
       <PressDone line={fin.line} />
       <ChangesBox changes={stop.changes} press="Approve" heading={ADMIN_STOP_HEADING} />
     </div>
@@ -84,8 +85,9 @@ const RefreshRows = createContext<() => void>(() => {});
 function PauseToggle({ t }: { t: TestVM }) {
   const refreshRows = useContext(RefreshRows);
   const [refused, setRefused] = useState("");
-  const onRefused = (e: unknown) => {
-    setRefused(errOf(e));
+  // (§156) Named by the button pressed ("Your Lift the pause didn't go through: …"): the row redraws, so the button may be the other one by then.
+  const onRefused = (e: unknown, press: string) => {
+    setRefused(refusalLine(press, errOf(e)));
     refreshRows();
   };
   // (Batch 27 section 5) Keyed by the state: a pause lifted (or set) elsewhere swaps in a fresh button (Pause with its own empty Why box, or Lift the pause), never the

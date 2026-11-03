@@ -8,7 +8,8 @@ export async function POST(req: Request) {
   return handle(async () => {
     const body = await readJson(req);
     const unblock = body.action === "unblock";
-    const u = await requireActive(req, unblock ? {} : { devSide: "auto" });
+    // (§156) The body is read already: the dashboard top's failed line is told which button it was.
+    const u = await requireActive(req, unblock ? { what: "Unblock" } : { devSide: "auto", what: "Block" });
     const id = String(body.userId ?? "");
     if (unblock) return ok(await unblockUser(u, id));
     return ok(await blockUser(u, id));

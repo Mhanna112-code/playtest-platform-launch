@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { BellOff, Bell } from "lucide-react";
 import { api } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 import { publishTesterAlertsOff, setTesterAlertsOff, useTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
@@ -22,8 +23,9 @@ export function TesterAlertsToggle({ off: start }: { off: boolean }) {
     try {
       const r = await api<{ off: boolean }>("/api/account/tester-alerts", { off: !off });
       publishTesterAlertsOff(typeof r.off === "boolean" ? r.off : !off);
-    } catch {
-      setErr("Couldn't save. Try again.");
+    } catch (e) {
+      // (§156) Named like every refusal: "Your Alerts didn't go through: …".
+      setErr(refusalLine("Alerts", (e as Error)?.message || "Couldn't save. Try again."));
     }
   }
   return (

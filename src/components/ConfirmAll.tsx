@@ -9,6 +9,7 @@ import { useFinished } from "@/lib/usePress";
 import { type BankAction } from "@/lib/bankConfirm";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, PAY_TICK_CENTS } from "@/lib/rules";
 import { ALL_BACK, CONFIRM_ALL, allConfirmedLine, allWaitingLine, confirmAllLabel } from "@/lib/confirmAllText";
+import { refusalLine } from "@/lib/pressLabels";
 
 /** What the server says Confirm all would cover now (src/lib/server/confirmAll.ts confirmAllState). */
 export type ConfirmAllProps = { ids: string[]; totalCents: number; leftOut: string | null; open: { id: string; cents: number; n: number } | null };
@@ -80,9 +81,10 @@ export function ConfirmAll({ ids, totalCents, leftOut, open }: ConfirmAllProps) 
       {leftOut && <p className="text-xs text-slate-400" data-confirm-all-left-out="">{leftOut}</p>}
       <ChangesBox changes={changes} press={CONFIRM_ALL} />
       {bank.view}
-      {note && <p className="info" data-bank-not-confirmed="">{note}</p>}
+      {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
+      {note && <p className="info" data-bank-not-confirmed="">{refusalLine(CONFIRM_ALL, note)}</p>}
       {fin.line && <p className="ok" data-confirm-all-done="">{fin.line}</p>}
-      <Err text={err} />
+      <Err text={err} press={CONFIRM_ALL} />
     </div>
   );
 }
@@ -107,7 +109,7 @@ function OpenCheck({ id, cents, n }: { id: string; cents: number; n: number }) {
         }
       }}>{CANCEL_CHECK}</button>
       {fin.line && <p className="ok basis-full">{fin.line}</p>}
-      <Err text={err} />
+      <Err text={err} press={CANCEL_CHECK} />
     </div>
   );
 }

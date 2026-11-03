@@ -8,6 +8,7 @@ import { MistakeList, announcePress, focusFirstMistake } from "@/components/Fiel
 import { useEffect, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, errOf, ApiError } from "@/lib/client";
+import { pressLabelOf } from "@/lib/pressLabels";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
 import { LIVE_EVENT, useLiveAppend, wasShownInBox } from "@/lib/live";
 import { announcedWithRedraw } from "@/lib/liveSync";
@@ -40,6 +41,8 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [err, setErr] = useState("");
+  // (§156) The refusal under the buttons names the press: Join, Apply, Ask to rejoin or Withdraw.
+  const [errPress, setErrPress] = useState("");
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState("");
   // (Batch 30 §8) Their application or ask changed (the page followed it live: pending, declined, closed): the "Sent." line gives way to what the page now shows.
@@ -106,6 +109,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
   // The pop-up's press: "Join anyway" / "Apply anyway", checked on the server against what the pop-up showed.
   async function sendFromPopup(shown: Gaps): Promise<PopupAnswer> {
     const action = rejoining ? "rejoin-ask" : applying ? "apply" : "join";
+    setErrPress(pressLabelOf(`/api/tests/${p.testId}/${action}`));
     try {
       const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
       await keep.clear(); // (batch 35 §10) the press went through: the note's draft goes
@@ -157,6 +161,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     let reloading = false;
     setBusy(true);
     setErr("");
+    setErrPress(pressLabelOf(`/api/tests/${p.testId}/${action}`));
     try {
         const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
       if (action !== "withdraw-application") await keep.clear(); // (batch 35 §10) Apply / Ask to rejoin / Join went through: the note's draft goes
@@ -200,7 +205,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         </div>
         <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
-        <Err text={err} />
+        <Err text={err} press={errPress} />
       </div>
     );
   if (p.application?.status === "pending" && !p.invited)
@@ -209,7 +214,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
         <p className="info">{p.application.kind === "rejoin" ? "You asked to rejoin. You'll hear back when the developer answers." : "You applied to join. You'll hear back when the developer answers."}</p>
         <button className="btn-ghost" disabled={busy} onClick={() => go("withdraw-application")}>Withdraw application</button>
         <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" />
-        <Err text={err} />
+        <Err text={err} press={errPress} />
       </div>
     );
   if (p.mode === "invite" && !p.invited) return <p className="note">This test is invite only.</p>;
@@ -269,7 +274,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       <MistakeList press={rejoining ? "Ask to rejoin" : applying ? "Apply to join" : "Join this test"} />
       <ChangesBox side="tester" changes={box?.changes ?? null} tail={box?.tail} seeIt="#listing" alertsWhere="join" press={rejoining ? "Ask to rejoin" : applying ? "Apply" : "Join"} />{/* (Batch 32 §9) the box names the press, the needs-covered path too */}
       {done && <p className="ok">{done}</p>}
-      <Err text={err} />
+      <Err text={err} press={errPress} />
       {rejoining ? (
         <p className="text-sm text-slate-300">If {p.devName} accepts, your session comes back on the current listing with the time you had left{p.timeBack ? `: ${p.timeBack}` : ""}.</p>
       ) : (

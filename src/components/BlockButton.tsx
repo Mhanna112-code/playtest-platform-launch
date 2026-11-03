@@ -31,7 +31,7 @@ export function BlockButton({ userId, name, effect, plain }: { userId: string; n
         }}>
         Block {name}
       </ConfirmButton>
-      <Err text={err} />
+      <Err text={err} press="Block" />
     </div>
   );
 }
@@ -47,7 +47,7 @@ export function UnblockButton({ userId, say = false, name = "" }: { userId: stri
         {name ? `Unblock ${name}` : "Unblock"}
       </button>
       {done && <span className="text-emerald-300" role="status">Unblocked.</span>}
-      <Err text={err} />
+      <Err text={err} press="Unblock" />
     </span>
   );
 }

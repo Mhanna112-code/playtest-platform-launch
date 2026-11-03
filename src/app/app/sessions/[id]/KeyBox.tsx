@@ -2,9 +2,13 @@
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
+import { pressLabelOf, refusalLine } from "@/lib/pressLabels";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 import { copyText } from "@/components/Cut";
+
+/** (§156) The report button's own words, as its refusals and stop box name it. */
+const KEY_PRESS = pressLabelOf("/api/sessions/x/key-broken");
 
 /** (Design doc 8) The tester's access key, with "This key doesn't work" (the developer is told; a free extra replaces it). */
 export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = true, fixed = false }: { sessionId: string; seenAt: string; value: string; broken: boolean; fresh?: boolean; canReport?: boolean; fixed?: boolean }) {
@@ -33,8 +37,9 @@ export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = tr
       </p>
       {fresh && !broken && <p className="info" role="status">The developer gave you a new access key.</p>}
       {fixed && !broken && !said && <p className="info" role="status" data-key-state="fixed">The developer marked your key as working. If it still fails, you can report it again.</p>}
-      {changes == null && error && <p className="info" role="status">{error}</p>}
-      <ChangesBox side="tester" changes={changes} />
+      {/* (§156) Both name the press by its button: "Your “This key doesn't work” didn't go through: …". */}
+      {changes == null && error && <p className="info" role="status" data-refusal="">{refusalLine(KEY_PRESS, error)}</p>}
+      <ChangesBox side="tester" changes={changes} press={KEY_PRESS} />
     </div>
   );
 }

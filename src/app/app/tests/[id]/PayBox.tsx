@@ -15,6 +15,7 @@ import { amountFromRate, overCeilingLine, rateFromAmount } from "@/lib/callMeasu
 import { DraftTag, useKept } from "@/lib/useKept";
 import { LIMITS } from "@/lib/limits";
 import { PressDone } from "@/components/PressDone";
+import { refusalLine } from "@/lib/pressLabels";
 
 /** What can still be paid on this piece (pieceRoom on the server). */
 export type PayRoom = { roomCents: number; aboveRoomCents: number; ceilingBinds: boolean; /** (batch 29 §38) the piece's max in all */ totalCapCents?: number };
@@ -183,7 +184,8 @@ export function PayBox(p: {
       <PressDone line={doneLine} />
       {at === "pay" && <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} press={`${more ? "Pay more" : "Pay"} on ${p.name}'s ${p.kind === "call" ? "call" : /recording/.test(p.listingText) ? "recording" : "written answers"}`} />}
       <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={more ? "Pay more" : "Pay"} />
-      {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}
+      {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
+      {bankErr && <p className="info" data-bank-not-confirmed="">{refusalLine(more ? "Pay more" : "Pay", bankErr)}</p>}
       {!done && !more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
       {!done && more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this row (a note is optional).</p>}
       {!done && p.note && <p className="note">{p.note}</p>}

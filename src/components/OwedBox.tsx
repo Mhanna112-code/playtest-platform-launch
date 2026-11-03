@@ -9,6 +9,7 @@ import { money } from "@/lib/format";
 import { type BankAction } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, OWED_BANK_WAITING, OWED_HOW, PAY_TICK_CENTS, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
+import { refusalLine } from "@/lib/pressLabels";
 
 /** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string; /** (§133) part of Pay what you owe's one payment reversed: what that payment covered (the bank doesn't say which), each with its hover */ covers?: { text: string; full: string }[] };
@@ -32,7 +33,7 @@ function CancelCheck({ id }: { id: string }) {
         }
       }}>{CANCEL_CHECK}</button>
       {fin.line && <span className="ok">{fin.line}</span>}
-      <Err text={err} />
+      <Err text={err} press={CANCEL_CHECK} />
     </span>
   );
 }
@@ -158,7 +159,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
       {/* (Owner, Oct 28, batch 16 section 41) The chargeback steps in order: the card first. */}
       {verifyFirst && <p className="text-xs" data-verify-first="">Verify your card first (step 1): then you can pay what you owe.</p>}
       <ChangesBox changes={changes} tail={over && !over200 ? `Tick “${OVER_PAY_TICK_LINE}” and press again to go ahead.` : undefined} />
-      {bankNote && <p className="info" data-bank-not-confirmed="">{bankNote}</p>}
+      {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
+      {bankNote && <p className="info" data-bank-not-confirmed="">{refusalLine("Pay what you owe", bankNote)}</p>}
       {done && <p className="ok">{done}</p>}
       {failing.length > 0 && (
         <p className="err">
@@ -166,7 +168,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
         </p>
       )}
       {chargeback && <p>Pay what you owe reserves the money on your card: nothing is taken until the team approves lifting your hold, and your tests resume then.</p>}
-      <Err text={err} />
+      <Err text={err} press="Pay what you owe" />
     </div>
   );
 }
