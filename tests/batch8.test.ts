@@ -365,7 +365,7 @@ describe("batch 8 item 7: admin", () => {
   it("testers never see any of it: a subscription payment is not the tester side's income", async () => {
     await freeOver();
     const dev = await subscriber();
-    expect(src("app/app/payments/page.tsx")).toContain('tester ? db.payment.findMany({ where: { testerId: u.id, kind: { not: "subscription" }');
+    expect(src("app/app/payments/page.tsx")).toContain('tester ? db.payment.findMany({ where: { testerId: u.id, kind: { notIn: ["subscription", "chargeback", "owed"] }');
     expect(src("app/app/page.tsx")).toContain('db.payment.aggregate({ where: { testerId: userId, kind: { not: "subscription" }');
     expect(await db.payment.count({ where: { testerId: dev.user.id, kind: { not: "subscription" } } })).toBe(0);
   });
