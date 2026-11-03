@@ -119,8 +119,9 @@ describe("Find: Most time to finish sorts by days per tester (section 3)", () =>
     ];
     expect([...tests].sort(R.byMostTimeToFinish).map((t) => t.id)).toEqual(["long", "tie-late", "tie-early", "short-late", "none"]);
     const page = src("app/app/find/page.tsx");
-    expect(page).toContain('else if (sp.sort === "deadline") shown.sort(byMostTimeToFinish);');
-    expect(page).toContain('<option value="deadline">Most time to finish</option>');
+    expect(page).toContain('else if (sort === "deadline") shown.sort(byMostTimeToFinish);');
+    // (Batch 35 §144) Sort by is in the filters' form now.
+    expect(src("app/app/find/FindFilters.tsx")).toContain('<option value="deadline">Most time to finish</option>');
   });
 });
 

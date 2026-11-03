@@ -726,8 +726,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             <Link href="/app/find" className="text-sm text-indigo-300 hover:underline">See all</Link>
           </div>
           {more.length === 0 ? (
-            <p className="card text-sm text-slate-400">
-              No new matches right now. <Link href="/app/profile" className="text-indigo-300 hover:underline">Add more devices or languages</Link> to see more.
+            // (Owner, Nov 3, batch 35 §144) The profile never hides tests (it only orders them), so the empty line doesn't send you to it.
+            <p className="card text-sm text-slate-400" data-new-tests-empty="">
+              No open tests to join right now. New ones show up here as soon as developers post them. <Link href="/app/find" className="text-indigo-300 hover:underline">See all tests</Link>
             </p>
           ) : (
             <ul className="grid gap-3 md:grid-cols-2">
