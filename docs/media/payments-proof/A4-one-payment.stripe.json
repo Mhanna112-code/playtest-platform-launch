@@ -1,0 +1,69 @@
+{
+  "at": "2026-11-02T23:37:01.309Z",
+  "note": "one succeeded PaymentIntent ($30.00) for all three",
+  "customer": "rec+a-devr5@playtest.test",
+  "count": 4,
+  "succeeded": 1,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXUl6AwolF8enxC1UR79cRE",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:35:24.000Z",
+      "canceled_at": "2026-11-02T23:36:03.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": ""
+    },
+    {
+      "id": "pi_3UXUl9AwolF8enxC2HSv1e8X",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:35:28.000Z",
+      "canceled_at": "2026-11-02T23:36:04.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": ""
+    },
+    {
+      "id": "pi_3UXUlDAwolF8enxC3clqdEaO",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:35:31.000Z",
+      "canceled_at": "2026-11-02T23:36:04.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": ""
+    },
+    {
+      "id": "pi_3UXUmCAwolF8enxC3VIc1Z9j",
+      "amount": "30.00",
+      "status": "succeeded",
+      "description": "Playtest: what you owe",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:36:32.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "30.00",
+      "captured": true,
+      "card": "3184",
+      "stripe_dispute": "none",
+      "app_rows": "review:charged owed:bundled review:charged review:charged"
+    }
+  ]
+}

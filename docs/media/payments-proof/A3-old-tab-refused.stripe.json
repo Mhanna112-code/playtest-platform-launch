@@ -1,0 +1,54 @@
+{
+  "at": "2026-11-02T23:36:15.892Z",
+  "note": "no new PaymentIntent after the refused Confirm",
+  "customer": "rec+a-devr5@playtest.test",
+  "count": 3,
+  "succeeded": 0,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXUl6AwolF8enxC1UR79cRE",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:35:24.000Z",
+      "canceled_at": "2026-11-02T23:36:03.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:failed"
+    },
+    {
+      "id": "pi_3UXUl9AwolF8enxC2HSv1e8X",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:35:28.000Z",
+      "canceled_at": "2026-11-02T23:36:04.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:deferred"
+    },
+    {
+      "id": "pi_3UXUlDAwolF8enxC3clqdEaO",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:35:31.000Z",
+      "canceled_at": "2026-11-02T23:36:04.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:deferred"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "at": "2026-11-02T22:04:12.184Z",
+  "note": "unchanged",
+  "customer": "rec+h-devr3@playtest.test",
+  "count": 3,
+  "succeeded": 1,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXTJkAwolF8enxC0hfSlAWX",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T22:03:04.000Z",
+      "canceled_at": "2026-11-02T22:03:28.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:deferred"
+    },
+    {
+      "id": "pi_3UXTJnAwolF8enxC3werEPP2",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T22:03:08.000Z",
+      "canceled_at": "2026-11-02T22:03:28.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:deferred"
+    },
+    {
+      "id": "pi_3UXTK3AwolF8enxC37FNim1s",
+      "amount": "10.00",
+      "status": "succeeded",
+      "description": "Playtest: Cid Moreau's written answers (an earlier payment, for this test)",
+      "last_payment_error": null,
+      "created": "2026-11-02T22:03:23.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "10.00",
+      "captured": true,
+      "card": "4242",
+      "stripe_dispute": "none",
+      "app_rows": "review:charged:chargeback=open"
+    }
+  ]
+}

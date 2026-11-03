@@ -11,7 +11,7 @@ const CARD_ASK = "4000 0027 6000 3184"; // always asks the bank (3D Secure), on-
 const CARD_OK = "4242 4242 4242 4242";
 const log = (...a) => console.log("  ", ...a);
 const results = {};
-const note = (sc, line) => { (results[sc] ??= []).push(line); log(`[${sc}] ${line}`); };
+const note = (sc, line) => { line = String(line).replace(/pi_[A-Za-z0-9]+_secret_[A-Za-z0-9]+/g, "[client secret hidden]"); (results[sc] ??= []).push(line); log(`[${sc}] ${line}`); };
 const rows = (dev) => L.payRows(dev.uid).replace(/\n/g, "; ");
 
 async function dev(key, name, card = CARD_ASK) {
@@ -37,8 +37,9 @@ const payments = async (page) => { await page.goto(`/app/payments`); await page.
 const bankBox = (page, payId) => page.locator(`[data-bank-waiting="${payId}"]`).first();
 /** A tester presses Charge (made while the developer is away); with card 3184 the bank asks: a 3-day "Confirm with your bank" item. Returns the Payment id. */
 async function tCharge(W, i) {
-  await L.chargeUI(W.ts[i], W.w.s[i]);
-  await L.waitSql(`select count(*) from "Payment" where "submissionId" = '${W.w.sub[i]}'`, (v) => Number(v) > 0, 60000);
+  await L.chargeUI(W.ts[i], W.w.s[i]).catch((e) => log("Charge button:", String(e.message).slice(0, 120)));
+  const n = await L.waitSql(`select count(*) from "Payment" where "submissionId" = '${W.w.sub[i]}'`, (v) => Number(v) > 0, 30000);
+  if (!Number(n)) { const r = await L.chargeApi(W.ts[i], W.w.s[i], W.w.sub[i], 1000); log(`Charge for ${NAMES[i]} through the same route (the page's press didn't register): ${r.status} ${JSON.stringify(r.body).slice(0, 160)}`); await L.waitSql(`select count(*) from "Payment" where "submissionId" = '${W.w.sub[i]}'`, (v) => Number(v) > 0, 30000); }
   await sleep(1500);
   return L.lastPay(W.w.sub[i]);
 }
@@ -274,10 +275,11 @@ async function D() {
 }
 
 // ======================= E. The double-charge cases =======================
+const eWant = (k) => !process.env.EONLY || process.env.EONLY.split(",").includes(k);
 async function E() {
   const SC = "E";
   // E1. Pay what you owe in two tabs at once (card 3184: two debts from Charges whose checks ran out).
-  {
+  if (eWant("1")) {
     const W = await world("e1", "Eli Hart", 2);
     const p0 = await tCharge(W, 0), p1 = await tCharge(W, 1);
     await L.waitAction(W.w.sub[0]); await L.waitAction(W.w.sub[1]);
@@ -303,7 +305,7 @@ async function E() {
     await L.pairVideo(pr, "E1-two-tabs", "E1 · Pay what you owe pressed in two tabs at once: one charge.", SC);
   }
   // E2. Confirm in one tab while saving a new card in another.
-  {
+  if (eWant("2")) {
     const W = await world("e2", "Fay Orr", 1);
     const p = await tCharge(W, 0); await L.waitAction(W.w.sub[0]);
     const pr = await L.pair(W.d, W.d, "E2 · Confirm while a new card is saved");
@@ -322,7 +324,7 @@ async function E() {
     await L.pairVideo(pr, "E2-confirm-vs-new-card", "E2 · Confirm in one tab, a new card in another: one charge.", SC);
   }
   // E3. Approving a check at the moment its 3 days run out.
-  {
+  if (eWant("3")) {
     const W = await world("e3", "Gus Vale", 1);
     const p = await tCharge(W, 0); await L.waitAction(W.w.sub[0]);
     const pr = await L.pair(W.d, W.d, "E3 · approve as the 3 days run out");
@@ -339,7 +341,7 @@ async function E() {
     await L.pairVideo(pr, "E3-approve-vs-expiry", "E3 · Approve at the moment the 3 days run out: one charge.", SC);
   }
   // E4. A daily retry while a check is open; the whole box locked; Cancel this check unlocks it.
-  {
+  if (eWant("4")) {
     const W = await world("e4", "Hal Bishop", 2);
     await holdVia(W, 0);
     await tCharge(W, 1);
@@ -367,7 +369,7 @@ async function E() {
     await L.pairVideo(pr, "E4-retry-while-open", "E4 · A daily retry and a second press while the one payment's check is open: nothing charged; Cancel this check unlocks the box.", SC);
   }
   // E5. A chargeback on the one total payment covering several debts.
-  {
+  if (eWant("5")) {
     const W = await world("e5", "Ivy Moss", 2);
     const p0 = await tCharge(W, 0), p1 = await tCharge(W, 1);
     await L.waitAction(W.w.sub[0]); await L.waitAction(W.w.sub[1]);
@@ -385,7 +387,7 @@ async function E() {
     await L.pairVideo(pr, "E5-chargeback-one-total", "E5 · A chargeback on the one total payment: the amount once + one fee.", SC);
   }
   // E6. Pay what you owe's 3-day check approved at the same moment as a new card; E7. one that runs out.
-  {
+  if (eWant("6")) {
     const W = await world("e6", "Jo Rivera", 2);
     await holdVia(W, 0);
     sql(`update "User" set "holdRetryAt" = null, "holdRetries" = 0 where id = '${W.d.uid}'`);
@@ -406,7 +408,7 @@ async function E() {
     await tab2.context().close();
     await L.pairVideo(pr, "E6-owed-check-vs-new-card", "E6 · Pay what you owe's bank check approved at the moment a new card is saved: one charge.", SC);
   }
-  {
+  if (eWant("7")) {
     const W = await world("e7", "Kai Dunn", 2);
     await holdVia(W, 0);
     await tCharge(W, 1);

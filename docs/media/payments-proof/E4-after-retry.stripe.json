@@ -1,0 +1,39 @@
+{
+  "at": "2026-11-03T00:11:29.879Z",
+  "note": "no new PaymentIntent from the daily job or the second press",
+  "customer": "rec+e4-devr8@playtest.test",
+  "count": 2,
+  "succeeded": 0,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXVIrAwolF8enxC1xbbWkNo",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-03T00:10:17.000Z",
+      "canceled_at": "2026-11-03T00:10:25.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:failed"
+    },
+    {
+      "id": "pi_3UXVJEAwolF8enxC4VB7k0Up",
+      "amount": "20.00",
+      "status": "requires_payment_method",
+      "description": "Playtest: what you owe",
+      "last_payment_error": "authentication_required/authentication_required",
+      "created": "2026-11-03T00:10:40.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "owed:needs_confirmation"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+{
+  "at": "2026-11-03T00:01:45.432Z",
+  "note": "the two expired checks (canceled) + ONE Pay what you owe",
+  "customer": "rec+e1-devr7@playtest.test",
+  "count": 3,
+  "succeeded": 1,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXV9LAwolF8enxC10qU8XVR",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-03T00:00:27.000Z",
+      "canceled_at": "2026-11-03T00:00:40.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": ""
+    },
+    {
+      "id": "pi_3UXV9PAwolF8enxC11dFx2Ea",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-03T00:00:31.000Z",
+      "canceled_at": "2026-11-03T00:00:40.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": ""
+    },
+    {
+      "id": "pi_3UXV9qAwolF8enxC24VaaUpr",
+      "amount": "20.00",
+      "status": "succeeded",
+      "description": "Playtest: what you owe",
+      "last_payment_error": null,
+      "created": "2026-11-03T00:00:58.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "20.00",
+      "captured": true,
+      "card": "3184",
+      "stripe_dispute": "none",
+      "app_rows": "review:charged review:charged owed:bundled"
+    }
+  ]
+}

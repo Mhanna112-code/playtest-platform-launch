@@ -1,0 +1,10 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "paused",
+      "message": "This payment is paused until your tests resume."
+    }
+  },
+  "shownOnPage": true
+}

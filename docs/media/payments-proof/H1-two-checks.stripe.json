@@ -1,0 +1,39 @@
+{
+  "at": "2026-11-02T22:03:24.413Z",
+  "note": "two PaymentIntents waiting",
+  "customer": "rec+h-devr3@playtest.test",
+  "count": 2,
+  "succeeded": 0,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXTJkAwolF8enxC0hfSlAWX",
+      "amount": "10.00",
+      "status": "requires_payment_method",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": "authentication_required/authentication_required",
+      "created": "2026-11-02T22:03:04.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:needs_confirmation"
+    },
+    {
+      "id": "pi_3UXTJnAwolF8enxC3werEPP2",
+      "amount": "10.00",
+      "status": "requires_payment_method",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": "authentication_required/authentication_required",
+      "created": "2026-11-02T22:03:08.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": "review:needs_confirmation"
+    }
+  ]
+}

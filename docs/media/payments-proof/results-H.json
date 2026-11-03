@@ -1,0 +1,6 @@
+[
+  "chargeback on Cid's payment: true; hold=chargeback|2026-11-02 22:03:29.032",
+  "seconds after the hold started: 9; statuses: 10.00 canceled canceled_at 2026-11-02T22:03:28.000Z; 10.00 canceled canceled_at 2026-11-02T22:03:28.000Z; 10.00 succeeded",
+  "Verify a card with nothing open: PaymentIntents 3 -> 3; statuses unchanged: true",
+  "reservation pi_3UXTKuAwolF8enxC13skTIqZ at Stripe after Verify: canceled; app: cancelled"
+]

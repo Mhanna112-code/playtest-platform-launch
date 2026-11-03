@@ -1,0 +1,472 @@
+[
+  {
+    "file": "D1-box.png",
+    "caption": "(§125) The box lists the debt AND both Charges made during the hold; Pay what you owe's total is all three ($30.00).",
+    "scenario": "D"
+  },
+  {
+    "file": "D2-paid.png",
+    "caption": "One payment ($30.00) approved: all three paid by it, the hold lifted, nothing left to charge afterwards.",
+    "scenario": "D"
+  },
+  {
+    "file": "D2-paid.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 1 succeeded · one succeeded PaymentIntent",
+    "scenario": "D"
+  },
+  {
+    "file": "D3-one-hold.png",
+    "caption": "One chargeback on it: ONE chargeback hold owing $30.00 + one fee; there's no second payment to dispute.",
+    "scenario": "D"
+  },
+  {
+    "file": "D3-one-hold.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 1 succeeded · still exactly one succeeded PaymentIntent",
+    "scenario": "D"
+  },
+  {
+    "file": "D-one-payment-one-chargeback.webm",
+    "caption": "D · Pay what you owe covers the debt and the waiting charges as one payment; one chargeback -> one hold, amount + one fee.",
+    "scenario": "D"
+  },
+  {
+    "file": "B1-waiting.png",
+    "caption": "A combined payment for two Charges waits for the bank (one item listing both), and a third Charge has its own check.",
+    "scenario": "B"
+  },
+  {
+    "file": "B1-waiting.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents, 0 succeeded · the combined payment and the third check waiting",
+    "scenario": "B"
+  },
+  {
+    "file": "B2-one-outcome.png",
+    "caption": "Exactly one outcome: the hold's pause tried to cancel the combined payment at Stripe, Stripe said it had already gone through, so it was recorded as paid (both Charges paid) and never charged again; the held-back Confirm then finished as already done.",
+    "scenario": "B"
+  },
+  {
+    "file": "B2-one-outcome.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents, 1 succeeded · one succeeded PaymentIntent for the combined payment",
+    "scenario": "B"
+  },
+  {
+    "file": "B-approve-vs-hold.webm",
+    "caption": "B · Approve vs cancel: the combined payment's bank check completed at the moment a hold starts; one outcome (paid), one charge at Stripe.",
+    "scenario": "B"
+  },
+  {
+    "file": "H1-two-checks.png",
+    "caption": "Two Charges wait for Hana's bank (Stripe: waiting for authentication).",
+    "scenario": "H"
+  },
+  {
+    "file": "H1-two-checks.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 0 succeeded · two PaymentIntents waiting",
+    "scenario": "H"
+  },
+  {
+    "file": "H2-hold-started.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · right after the hold started: both waiting checks canceled at Stripe",
+    "scenario": "H"
+  },
+  {
+    "file": "H2-hold-started.png",
+    "caption": "The chargeback hold started: at that moment both waiting checks were cancelled at Stripe (Canceled) and wait for the lift.",
+    "scenario": "H"
+  },
+  {
+    "file": "H3-verified-nothing-to-cancel.png",
+    "caption": "Verify a card (chargeback step 1): nothing was left to cancel, so nothing changed at Stripe.",
+    "scenario": "H"
+  },
+  {
+    "file": "H3-verified-nothing-to-cancel.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · unchanged",
+    "scenario": "H"
+  },
+  {
+    "file": "H4-reservation-open.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents, 1 succeeded · the reservation's PaymentIntent waiting for the bank",
+    "scenario": "H"
+  },
+  {
+    "file": "H5-verify-cancelled-reservation.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents, 1 succeeded · the open reservation check canceled by Verify a card",
+    "scenario": "H"
+  },
+  {
+    "file": "H5-verify-cancelled-reservation.png",
+    "caption": "Verify a card while Pay what you owe's reservation check was open (on the old card): that check is cancelled at Stripe (Canceled); Pay what you owe reserves again on the new card.",
+    "scenario": "H"
+  },
+  {
+    "file": "H-hold-cancels-checks.webm",
+    "caption": "H · A hold cancels every waiting check at once; Verify a card finds nothing left, except a reservation check left open, which it cancels.",
+    "scenario": "H"
+  },
+  {
+    "file": "I-old-page-stops.png",
+    "caption": "A page that hadn't shown the chargeback: Pay what you owe stops once, naming it (“Your bank reversed a $7 payment: $7 + $15 chargeback fee”), and charges nothing.",
+    "scenario": "J"
+  },
+  {
+    "file": "I-old-page-stops.webm",
+    "caption": "The old page's Pay what you owe after the chargeback: stops once naming it; nothing charged.",
+    "scenario": "J"
+  },
+  {
+    "file": "I-old-page-stops.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · no new PaymentIntent from the old page's press",
+    "scenario": "J"
+  },
+  {
+    "file": "I-approve-1-check-open.png",
+    "caption": "Pay what you owe ($10.00, fixed at the press): the bank's real 3D Secure page is open under the button.",
+    "scenario": "I"
+  },
+  {
+    "file": "I-approve-2-chargeback.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · the older payment disputed (via chargebackOpened); the one payment's check still open",
+    "scenario": "I"
+  },
+  {
+    "file": "I-approve-3-old-page-stops.png",
+    "caption": "A page that hadn't shown the chargeback: Pay what you owe stops once, naming it (“Your bank reversed a $7 payment: $7 + $15 chargeback fee”), and charges nothing.",
+    "scenario": "I"
+  },
+  {
+    "file": "I-approve-4-paid.png",
+    "caption": "Approved: exactly the $10.00 it covered was paid (Ana's debt); (2) the box now shows the reversed $7 + $15 fee under the chargeback steps; the hold stays (a chargeback hold).",
+    "scenario": "I"
+  },
+  {
+    "file": "I-approve-4-paid.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 2 succeeded · the older payment (disputed) and the one $10.00 payment; nothing more",
+    "scenario": "I"
+  },
+  {
+    "file": "I-approve.webm",
+    "caption": "I · A chargeback arrives while Pay what you owe's check is open: an old page's press stops once naming it; approving the check pays exactly what it covered.",
+    "scenario": "I"
+  },
+  {
+    "file": "I-verify-1-check-open.png",
+    "caption": "Pay what you owe ($10.00, fixed at the press): the bank's real 3D Secure page is open under the button.",
+    "scenario": "I"
+  },
+  {
+    "file": "I-verify-2-chargeback.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · the older payment disputed (via chargebackOpened); the one payment's check still open",
+    "scenario": "I"
+  },
+  {
+    "file": "I-verify-3-cancelled.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · the open one payment's PaymentIntent canceled by Verify a card",
+    "scenario": "I"
+  },
+  {
+    "file": "I-verify-3-cancelled.png",
+    "caption": "Verify a card while that check was still open: the check is cancelled at Stripe first (Canceled); nothing charged on either card; Pay what you owe now reserves the debt and the reversed payment + fee.",
+    "scenario": "I"
+  },
+  {
+    "file": "I-verify.webm",
+    "caption": "I · Verify a card while Pay what you owe's check is open: the check is cancelled at Stripe first.",
+    "scenario": "I"
+  },
+  {
+    "file": "A1-three-confirms.png",
+    "caption": "Three testers pressed Charge while Ada was away; card 3184 makes the bank ask on each (Stripe: requires_payment_method / authentication_required), so the test page shows three “Confirm with your bank” items.",
+    "scenario": "A"
+  },
+  {
+    "file": "A1-three-confirms.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 0 succeeded · three PaymentIntents waiting for the bank's check",
+    "scenario": "A"
+  },
+  {
+    "file": "A3-old-tab-refused.png",
+    "caption": "An old tab still showing Ben's “Confirm with your bank”: pressed, it is refused with “This payment is paused until your tests resume.” and nothing is charged.",
+    "scenario": "A"
+  },
+  {
+    "file": "A3-old-tab-refused.webm",
+    "caption": "The old tab's Confirm with your bank on a paused charge: refused, nothing charged.",
+    "scenario": "A"
+  },
+  {
+    "file": "A3-old-tab-refused.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 0 succeeded · no new PaymentIntent after the refused Confirm",
+    "scenario": "A"
+  },
+  {
+    "file": "A2-paused.png",
+    "caption": "Ana's check ran out: it's a debt and a payment hold started. Ben's and Cid's checks were cancelled at Stripe (Canceled) and wait; (§125) Pay what you owe lists the debt AND both waiting charges ($30.00).",
+    "scenario": "A"
+  },
+  {
+    "file": "A2-paused.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 0 succeeded · Ana's expired check and the two paused checks: all cancelled at Stripe",
+    "scenario": "A"
+  },
+  {
+    "file": "A4-one-payment.png",
+    "caption": "(§125) Pay what you owe: ONE payment for the debt and both waiting charges ($30.00), the bank's real 3D Secure page completed; the hold lifted with nothing left to charge.",
+    "scenario": "A"
+  },
+  {
+    "file": "A4-one-payment.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents, 1 succeeded · one succeeded PaymentIntent ($30.00) for all three",
+    "scenario": "A"
+  },
+  {
+    "file": "A-pause-on-hold.webm",
+    "caption": "A · Pause on hold: three confirms; one runs out -> a debt and a hold; the other two cancelled at Stripe and waiting; Pay what you owe pays all three as one payment.",
+    "scenario": "A"
+  },
+  {
+    "file": "C1-chargeback-hold.png",
+    "caption": "Pay what you owe went through ($10.00) and the bank reversed it the same second: a chargeback hold owing $10.00 + ONE chargeback fee.",
+    "scenario": "C"
+  },
+  {
+    "file": "C1-chargeback-hold.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 1 succeeded · one succeeded payment, disputed (opened via chargebackOpened)",
+    "scenario": "C"
+  },
+  {
+    "file": "C2-admin-row-1.png",
+    "caption": "The team's row: card verified ✓, owed reserved ✓, the first chargeback.",
+    "scenario": "C"
+  },
+  {
+    "file": "C3-combined.png",
+    "caption": "Approve took the reservation and lifted the hold; the two Charges made during the hold are ONE combined payment ($20.00), one “Confirm with your bank” item listing each.",
+    "scenario": "C"
+  },
+  {
+    "file": "C4-second-chargeback.png",
+    "caption": "The combined payment was approved, then reversed too: a chargeback hold again owing $20.00 + one fee.",
+    "scenario": "C"
+  },
+  {
+    "file": "C5-admin-row-both.png",
+    "caption": "The admin's Chargeback holds row for Cal lists both chargebacks.",
+    "scenario": "C"
+  },
+  {
+    "file": "C6-tester-paid.png",
+    "caption": "Ben Okafor's part still reads “Paid”.",
+    "scenario": "C"
+  },
+  {
+    "file": "C-final.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents, 3 succeeded · Pay what you owe, the reservation (captured), the combined payment",
+    "scenario": "C"
+  },
+  {
+    "file": "C-two-chargebacks.webm",
+    "caption": "C · Chargeback on Pay what you owe, cleared; the after-lift combined payment approved and reversed: one hold each time, amount + one fee.",
+    "scenario": "C"
+  },
+  {
+    "file": "G1-hold.png",
+    "caption": "A payment hold: Ana's Charge wasn't confirmed in 3 days.",
+    "scenario": "G"
+  },
+  {
+    "file": "G2-late-charge.png",
+    "caption": "While Pay what you owe's bank check is open, Ben charges: his $10.00 is NOT added to it (the payment stays $10.00); his line reads “Charged right after the payment above goes through”.",
+    "scenario": "G"
+  },
+  {
+    "file": "G3-combined.png",
+    "caption": "Approved: the hold lifted, and Ben's late Charge was made right after as one combined payment (card 3184: one “Confirm with your bank” item).",
+    "scenario": "G"
+  },
+  {
+    "file": "G3-combined.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 2 succeeded · two succeeded payments: Pay what you owe and the combined one",
+    "scenario": "G"
+  },
+  {
+    "file": "G4-chargeback-1.png",
+    "caption": "Chargeback #1 on Pay what you owe: one chargeback hold owing $10.00 + one fee.",
+    "scenario": "G"
+  },
+  {
+    "file": "G5-chargeback-2.png",
+    "caption": "Chargeback #2 on the combined payment: added to the SAME hold ($10.00 + fee and $10.00 + fee).",
+    "scenario": "G"
+  },
+  {
+    "file": "G6-admin-row.png",
+    "caption": "The admin's Chargeback holds row for Gia lists both chargebacks.",
+    "scenario": "G"
+  },
+  {
+    "file": "G7-tester-1.png",
+    "caption": "Ana Silva's part reads “Paid” (no hold or chargeback words).",
+    "scenario": "G"
+  },
+  {
+    "file": "G7-tester-2.png",
+    "caption": "Ben Okafor's part reads “Paid” (no hold or chargeback words).",
+    "scenario": "G"
+  },
+  {
+    "file": "G7-stripe.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 2 succeeded · exactly two succeeded payments, both disputed (via chargebackOpened), no third charge",
+    "scenario": "G"
+  },
+  {
+    "file": "G8-verified.png",
+    "caption": "Chargeback steps: card verified with 3D Secure.",
+    "scenario": "G"
+  },
+  {
+    "file": "G8-reserved.png",
+    "caption": "Pay what you owe reserved what's owed on the card (Stripe: Uncaptured).",
+    "scenario": "G"
+  },
+  {
+    "file": "G8-admin-row.png",
+    "caption": "The admin's Chargeback holds row: card verified ✓, owed reserved ✓, the chargebacks listed, Approve.",
+    "scenario": "G"
+  },
+  {
+    "file": "G9-lifted.png",
+    "caption": "The chargeback steps cleared (card verified, reservation, the team's Approve): the hold lifted.",
+    "scenario": "G"
+  },
+  {
+    "file": "G9-lifted.stripe.json",
+    "caption": "Stripe: 4 PaymentIntents, 3 succeeded · Pay what you owe, the combined payment, the reservation captured",
+    "scenario": "G"
+  },
+  {
+    "file": "G-full-chain.webm",
+    "caption": "G · The owner's full chain: a late Charge during Pay what you owe's check, the lift, the combined payment, two chargebacks on one hold, the steps cleared.",
+    "scenario": "G"
+  },
+  {
+    "file": "E1-tab2.png",
+    "caption": "The other tab's press at the same moment charged nothing (the one payment had claimed both debts; this tab's box now waits for the bank).",
+    "scenario": "E"
+  },
+  {
+    "file": "E1-one-charge.png",
+    "caption": "Pay what you owe pressed in two tabs at once: ONE payment ($20.00) at Stripe.",
+    "scenario": "E"
+  },
+  {
+    "file": "E1-one-charge.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · the two expired checks (canceled) + ONE Pay what you owe",
+    "scenario": "E"
+  },
+  {
+    "file": "E1-two-tabs.webm",
+    "caption": "E1 · Pay what you owe pressed in two tabs at once: one charge.",
+    "scenario": "E"
+  },
+  {
+    "file": "E2-one-charge.png",
+    "caption": "Confirm with your bank completed in one tab while a new card was saved in another: the new card's cancel found it already paid, so it's recorded paid and nothing is charged on the new card.",
+    "scenario": "E"
+  },
+  {
+    "file": "E2-one-charge.stripe.json",
+    "caption": "Stripe: 1 PaymentIntents, 1 succeeded · one succeeded PaymentIntent",
+    "scenario": "E"
+  },
+  {
+    "file": "E2-confirm-vs-new-card.webm",
+    "caption": "E2 · Confirm in one tab, a new card in another: one charge.",
+    "scenario": "E"
+  },
+  {
+    "file": "E3-one-charge.png",
+    "caption": "Approved at the moment its 3 days ran out: the clock's cancel found it already paid at Stripe, so it's recorded paid (no debt, no hold), charged once.",
+    "scenario": "E"
+  },
+  {
+    "file": "E3-one-charge.stripe.json",
+    "caption": "Stripe: 1 PaymentIntents, 1 succeeded · one succeeded PaymentIntent",
+    "scenario": "E"
+  },
+  {
+    "file": "E3-approve-vs-expiry.webm",
+    "caption": "E3 · Approve at the moment the 3 days run out: one charge.",
+    "scenario": "E"
+  },
+  {
+    "file": "E4-locked.png",
+    "caption": "The daily retry's one payment ($20.00: the debt and the waiting Charge) waits for the bank: every line says “Waiting for your bank”, with Cancel this check.",
+    "scenario": "E"
+  },
+  {
+    "file": "E4-after-retry.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 0 succeeded · no new PaymentIntent from the daily job or the second press",
+    "scenario": "E"
+  },
+  {
+    "file": "E4-unlocked.png",
+    "caption": "Cancel this check: cancelled at Stripe (Canceled), the box is payable again at once.",
+    "scenario": "E"
+  },
+  {
+    "file": "E4-unlocked.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 0 succeeded · the retry's PaymentIntent canceled",
+    "scenario": "E"
+  },
+  {
+    "file": "E4-retry-while-open.webm",
+    "caption": "E4 · A daily retry and a second press while the one payment's check is open: nothing charged; Cancel this check unlocks the box.",
+    "scenario": "E"
+  },
+  {
+    "file": "E5-once.png",
+    "caption": "A chargeback on the one $20.00 payment that paid both debts: owed once, $20.00 + ONE fee; a second notice changes nothing.",
+    "scenario": "E"
+  },
+  {
+    "file": "E5-once.stripe.json",
+    "caption": "Stripe: 3 PaymentIntents, 1 succeeded · one succeeded PaymentIntent for both debts",
+    "scenario": "E"
+  },
+  {
+    "file": "E5-chargeback-one-total.webm",
+    "caption": "E5 · A chargeback on the one total payment: the amount once + one fee.",
+    "scenario": "E"
+  },
+  {
+    "file": "E6-one-charge.png",
+    "caption": "Pay what you owe's check approved while a new card was saved: one outcome, one charge.",
+    "scenario": "E"
+  },
+  {
+    "file": "E6-one-charge.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 1 succeeded · one succeeded PaymentIntent",
+    "scenario": "E"
+  },
+  {
+    "file": "E6-owed-check-vs-new-card.webm",
+    "caption": "E6 · Pay what you owe's bank check approved at the moment a new card is saved: one charge.",
+    "scenario": "E"
+  },
+  {
+    "file": "E7-ran-out.png",
+    "caption": "Pay what you owe's 3-day check ran out: cancelled at Stripe, nothing charged; the debt stays owed and the Charge keeps waiting; the box unlocks and says “Your bank check ran out on …: nothing was charged. Pay again or change your card.”",
+    "scenario": "E"
+  },
+  {
+    "file": "E7-ran-out.stripe.json",
+    "caption": "Stripe: 2 PaymentIntents, 0 succeeded · the one payment canceled; nothing succeeded",
+    "scenario": "E"
+  },
+  {
+    "file": "E7-check-ran-out.webm",
+    "caption": "E7 · Pay what you owe's 3-day check runs out: nothing charged, the box unlocks.",
+    "scenario": "E"
+  }
+]
