@@ -113,25 +113,6 @@ describe("(batch 11 section 4; §145) what is owed during a hold is charged by a
   });
 });
 
-describe("(Owner, Nov 3) a new card declined for what is owed: Payments says so under Card saved.", () => {
-  it("retryOwed reports the decline and its total; the line names it; a problem that isn't the card reads differently", async () => {
-    const { dev, sessionId, tester } = await waiting14();
-    await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID(), stripePaymentMethodId: "pm_x" } });
-    await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 2000, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(Date.now() + 2 * 86_400_000) } });
-    await startHold(dev.user.id, "unpaid");
-    setStripeForTests({ paymentIntents: { create: async () => { throw Object.assign(new Error("declined"), { type: "StripeCardError" }); } } } as unknown as Stripe);
-    const r = await retryOwed(dev.user.id);
-    expect(r?.declined).toEqual({ cents: 2000, card: true });
-    const { cardSavedLine } = await import("@/lib/rules");
-    expect(cardSavedLine("declined", 2000)).toBe("Card saved. Your bank declined it for what you owe ($20.00): nothing was charged. Try another card, or press Pay what you owe.");
-    expect(cardSavedLine("failed", 2000)).toMatch(/^Card saved\. We couldn't charge it for what you owe \(\$20\.00\) just now: nothing was charged\./);
-    expect(cardSavedLine(undefined, NaN)).toBe("Card saved.");
-    expect(cardSavedLine("declined", -5)).toBe("Card saved.");
-    const route = (await import("node:fs")).readFileSync("src/app/api/payments/card-saved/route.ts", "utf8");
-    expect(route).toContain("&owed=${r.declined.card ? \"declined\" : \"failed\"}&amt=${r.declined.cents}");
-  });
-});
-
 describe("charge amount and a second failure", () => {
   it("charge cap = listing minus what's already been paid for that part (no Ask $)", async () => {
     const R = await import("@/lib/rules");

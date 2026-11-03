@@ -513,9 +513,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
 
 /** (Batch 15 section 41, L4) Why one owed payment failed, in plain words (never Stripe's raw text). */
 // (§130) A card Stripe doesn't know ("no_card": cleared, add a card) and payments switched off ("payments_off") say so in their own words; neither is a decline.
-/** A card decline, in owedWhy's words. */
-export const CARD_DECLINED = "Your card was declined.";
-export const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? CARD_DECLINED : e instanceof HttpError && (e.code === "payments_problem" || e.code === "no_card" || e.code === "payments_off") ? e.code === "payments_problem" ? PAYMENTS_PROBLEM : e.message : "It didn't go through. Try again shortly.");
+export const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? "Your card was declined." : e instanceof HttpError && (e.code === "payments_problem" || e.code === "no_card" || e.code === "payments_off") ? e.code === "payments_problem" ? PAYMENTS_PROBLEM : e.message : "It didn't go through. Try again shortly.");
 
 /**
  * (Owner, Oct 29, batch 11 section 4; owner, Nov 3, batch 35 §145) A new card saved during a payment hold: what is owed is charged on it at once. That is the ONLY
@@ -544,9 +542,7 @@ export async function retryOwed(devId: string) {
   const cents = r.result === "paid" ? r.cents : 0;
   if (r.result === "paid" && cents > 0) await bell(devId, retriedLine(cents, r.names), "/app/payments", undefined, { side: "developer", payment: true, group: "payhold" });
   const lifted = cents > 0 ? await liftHoldIfClear(devId) : false;
-  // (Owner, Nov 3) The Payments page says when the new card was declined for what's owed (a card decline, not a problem on our side).
-  const declined = r.result === "failed" && !r.notTried ? { cents: list.reduce((a, p) => a + p.amountCents, 0), card: r.why === CARD_DECLINED } : null;
-  return { cents, lifted, declined };
+  return { cents, lifted };
 }
 
 /** (Batch 11) An owed payment a "Pay what you owe" press is charging right now. */
