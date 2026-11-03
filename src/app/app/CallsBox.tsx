@@ -21,7 +21,7 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
   const { press, changes, error, busy, at, finish } = usePress(seenAt);
   return (
     <section className="space-y-3" aria-label="Calls" id="calls-box">
-      <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Calls <span className="text-sm font-normal text-slate-400">soonest first</span></h2>
+      <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Calls{/* (Owner, Nov 2) no "soonest first": the order speaks for itself */}</h2>
       {calls.length === 0 ? <p className="card text-sm text-slate-400">No booked calls.</p> : (
         <div className="card p-3">
           <ScrollList size="lines" className="divide-y divide-white/5">
