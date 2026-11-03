@@ -219,7 +219,7 @@ async function T() {
   await L.connect(ben);
   const harbor = await L.postTest(d, { writtenCents: "90.00" });
   const sky = await L.postTest(d, { productName: "Sky Lab", title: "Sky Lab", writtenCents: "30.00" });
-  const deep = await L.postTest(d, { productName: "Deep Dive", title: "Deep Dive", writtenCents: "250.00" });
+  const deep = await L.postTest(d, { productName: "Deep Dive", title: "Deep Dive", writtenCents: "250.00", confirmHigh: ["written"] });
   const parts = [];
   for (const [t, testId, cents] of [[ana, harbor, 9000], [ben, harbor, 9000], [ana, sky, 3000], [ben, deep, 25000]]) {
     const s = await L.join(t, testId);
