@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
-import { startHold } from "@/lib/server/holds";
+import { retryOwed, startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, req } from "./helpers";
 import { joined, sact, seen, setup } from "./fixtures";
@@ -86,8 +86,9 @@ describe("Charge / Let it go at day 14", () => {
   });
 });
 
-describe("(batch 11 section 4) the daily retries of what is owed during a hold", () => {
-  it("the daily job retries what is owed on the saved card (the failed payment, and an open chargeback with its fee) and tells both sides", async () => {
+// (Owner, Nov 3, batch 35 §145) No daily retries: the daily job never charges what is owed; a new card's charge does (retryOwed, called when a card is saved).
+describe("(batch 11 section 4; §145) what is owed during a hold is charged by a new card, never by the daily job", () => {
+  it("the daily job charges nothing; saving a new card charges what is owed (the failed payment, and an open chargeback with its fee) and tells both sides", async () => {
     const { dev, sessionId, tester } = await waiting14();
     const cus = "cus_" + randomUUID();
     await db.user.update({ where: { id: dev.user.id }, data: { stripeCustomerId: cus, stripePaymentMethodId: "pm_x" } });
@@ -97,6 +98,9 @@ describe("(batch 11 section 4) the daily retries of what is owed during a hold",
     let calls = 0;
     setStripeForTests({ paymentIntents: { create: async (x: { customer?: string }) => { if (x.customer === cus) calls++; return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     await cron();
+    expect(calls).toBe(0); // (§145) the daily job never retries
+    expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "failed" });
+    await retryOwed(dev.user.id); // what saving a new card runs
     expect(calls).toBe(1); // (batch 35 §117) one payment for the total
     // (Batch 25 section 5) ONE line for the retry, naming what was paid; no separate receipt line for the same money.
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "We charged your card $31.00 for what you owed: Ana Silva's work on “Harbor Run” and a payment your bank had reversed (Ana Silva's work on “Harbor Run”)." } })).toBe(1);
