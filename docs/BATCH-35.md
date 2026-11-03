@@ -1864,3 +1864,39 @@ sits in the §139 panel (`ResizeBox`): the content scrolls inside, the grip at t
   done after the bank confirmed or refused, still unpaid until the finish; someone else's payment, reservation or card check refused; the page peeks every 3
   s, ignores failed peeks, ends the check once on done and stops when closed; Close and its hint under the frame, the stand-in's Confirm / Cancel kept).
   `batch17-bank-check` now expects Close under the bank's frame.
+
+## §159 The payment stop matrix (owner, Nov 3)
+
+Exact rules for every payment press. "Stops once" means the first press shows the box naming what changed and charges nothing; the second press goes ahead. A
+change the page already showed (the redraw, the pill, the top box) never stops. Our stops happen at our own button, before the bank's page opens; inside the
+bank's page (Stripe's own 3D Secure page, inline under the button) the only button is the bank's Complete.
+
+**Developer side: Pay, Pay more and Confirm with your bank** (the bank button on a waiting charge, and the one on a Pay or Pay more press's own check).
+
+1. **The team's dispute decision about the same tester always stops once**, on any of that tester's parts in this test, even with "Decisions by the team" (and
+   "Disputes") ticked off in Alerts: the decision changes what that tester is owed. A decision about another tester follows the Alerts ticks like any other line
+   ("Decisions by the team" ticked off: it doesn't stop). This narrows the same day's change, which forced every decision on every part.
+2. **The tester's sent, updated or added work on the part being paid always stops once**, whatever the "Work sent" tick (§155 made it stop; now Alerts can't
+   switch it off either). Work on that tester's other parts, and other testers' work, follows the "Work sent" tick.
+3. **A tester leaving the test** stops once with Alerts "Testers leaving" on; ticked off, it doesn't stop.
+
+**Tester side: Charge and Let it go.**
+
+4. **A developer payment on the part being charged** (Pay, Pay more, an automatic call charge) always stops once, whatever the tester's Alerts On/Off. When
+   that payment left nothing to charge, the existing refusal stays ("Nora Lane paid $10.00 for this meanwhile."). **The team's decision on any of that tester's
+   disputes** (any part) also always stops once. A developer payment on the tester's other parts follows their Alerts as before (On: stops once; Off: doesn't).
+
+**Payments page.**
+
+5. **Pay what you owe stops once for chargeback changes**: a new chargeback ("Added to what you owe meanwhile: Your bank reversed … New total $50.00.") and the
+   bank changing a disputed amount ("What you owe changed: now $46.00."). Already so (§146 fix 3; `holds.payOwed` compares the total and the items the page
+   showed); verified, no change.
+
+- **Code.** `live.devChanges`: for a payment press (`payPressOf`: its contract is `stopCheck`, its part is `keys`), a team decision whose `contractId` is the
+  press's contract, and a "sent" line whose item is the press's part, pass the Alerts filter. `testerGate`'s `owedPiece` (Charge / Let it go on that part:
+  `terms.testerTermsGate`, and the route's stop-moment box for `choose`) keeps, with Alerts Off, a "paid" line on that part and any team decision line
+  (`owedChange`). No migration.
+- **Tests:** `tests/pay-matrix.test.ts` (one per rule: same vs other tester for decisions on Pay, Pay more and Confirm; work on the same part with "Work sent"
+  ticked off vs another part on and off; leaving on and off; Charge / Let it go for a payment on the same part (the refusal) and on another part with Alerts
+  Off and On, an automatic call charge, a decision with Alerts Off; Pay what you owe after a new chargeback and a changed amount).
+  `tests/decision-stops-pay.test.ts` follows the narrowed rule (same tester: stops; another tester with Decisions ticked off: goes through).

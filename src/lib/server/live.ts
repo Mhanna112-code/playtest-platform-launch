@@ -195,10 +195,15 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   const loud = await unanswered(devId, testId, all.filter((c) => !c.quiet), tx);
   // (Batch 35 §73) The ticks of this test's own Alerts menu.
   const ignored = new Set((await tx.test.findUnique({ where: { id: testId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
-  // (Owner, Nov 3) The team's dispute decision always stops a payment press (Pay, Pay more, Confirm with your bank), whatever part it's on and even with
-  // "Decisions by the team" ticked: what was decided changes what is owed.
-  const payPress = !!opts.press?.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x));
-  return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a) || (payPress && isTeamDecision(c)); }) : loud;
+  // (Owner, Nov 3, batch 35 §159 rule 1; narrows the same day's "any part") The team's dispute decision about the SAME tester (any of their parts in this test: the
+  // decision's contract is the press's) always stops a payment press once (Pay, Pay more, Confirm with your bank), even with "Decisions by the team" ticked: what
+  // was decided changes what that tester is owed. A decision about ANOTHER tester follows the Alerts ticks like every other line.
+  // (§159 rule 2) Likewise the tester's sent, updated or added work on the SAME part being paid ("sent" lines carry the part as their item) always stops once,
+  // even with "Work sent" ticked; work on their other parts, and other testers' work, follows the tick.
+  const payContract = opts.press?.stopCheck && opts.press.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x)) ? opts.press.stopCheck : null;
+  const always = (c: TestEventLike & { contractId?: string | null; item?: string }) => !!payContract && (
+    (isTeamDecision(c) && c.contractId === payContract) || (c.kind === "sent" && !!c.item && !!opts.press?.keys.includes(`sub:${c.item}`)));
+  return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a) || always(c); }) : loud;
 }
 
 /** (Owner, Nov 3) A line recording the team's dispute decision ("The team decided Ana Silva's dispute: …"). */

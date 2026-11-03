@@ -95,6 +95,10 @@ export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);
  * like the developer's own other-tab actions, batch 29 §12). Never an Alerts-ignorable kind. */
 export const ALERTS_OFF_KINDS = new Set([...CONTRACT_KINDS, "own"]);
 
+/** (§159 rule 4) What stops Charge / Let it go on `piece` whatever the tester's Alerts: a payment on that very part ("paid": Pay, Pay more, an automatic call charge,
+ * the team's $0 closure, a delayed payment going through) or the team's decision on any of their disputes in this test (lines about other tests carry no `piece`). */
+export const owedChange = (e: TestEventLike, piece: string) => (e.kind === "paid" && e.piece === piece) || (e.kind === "admin" && !!e.piece);
+
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute"];
 /**
  * (Owner, Oct 28, batch 16 section 38B) The call changes a tester sees (the developer's requests, withdrawn or taken, their own request accepted or declined, a call
@@ -104,7 +108,8 @@ const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", 
 export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
-export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers; /** (§93) Stop/pause moments: always stop, in the same box as the shared lines. */ moments?: TestEventLike[] } = {}) {
+export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers; /** (§93) Stop/pause moments: always stop, in the same box as the shared lines. */ moments?: TestEventLike[];
+  /** (§159 rule 4) Charge / Let it go on this piece (submission or call id): a developer payment on it, or the team's decision on any of the tester's disputes. */ owedPiece?: string } = {}) {
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
   // these same stop-once rules (Block never stops; batch 35 §59: Leave stops like the rest).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
@@ -131,7 +136,10 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // what they did themselves in another tab. (Owner, Oct 31, batch 35 §68) `piece` (the Dispute press): a payment on that piece since the page loaded (Pay, Pay more,
   // a dispute decision, a Charge) changes what's disputed, so it stops once even with Alerts Off, like new terms.
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
-  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || (!!opts.piece && e.piece === opts.piece)) : r.changes;
+  // (Owner, Nov 3, batch 35 §159 rule 4) Charge / Let it go (`owedPiece`): a developer payment on THAT part (Pay, Pay more, an automatic call charge) and the team's
+  // decision on ANY of this tester's disputes change what they're owed: one the page hasn't shown stops the press once even with Alerts Off. A payment on their
+  // other parts follows their Alerts as before.
+  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || (!!opts.piece && e.piece === opts.piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece))) : r.changes;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
   const list = withRenamed((await unanswered(testerId, testId, [...terms, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt)])).filter((e) => !answersIt(e, opts.answers)), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.

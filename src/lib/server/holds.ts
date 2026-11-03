@@ -1359,7 +1359,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   // (Batch 30 §3) Work sent after the tester's own deadline never opens Charge or Let it go.
   if (s.late) throw new HttpError(409, "late", NO_CHARGE_LATE);
   if (!s.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since you sent it and your deadline has passed.`);
-  await testerTermsGate(contractId, displayName(dev), body);
+  await testerTermsGate(contractId, displayName(dev), body, s.id);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   // (Owner, Oct 28 afternoon) Charge and Let it go both work while the test is paused: during a payment or chargeback hold a Charge is added to what the developer owes (below).
@@ -1443,7 +1443,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
   await chargeCloseOutGate({ callId: x.id });
   if (!x.choiceOfferedAt) throw new HttpError(409, "not_yet", `You can choose once ${REVIEW_DAYS} days have passed since the call and your deadline has passed.`);
-  await testerTermsGate(contractId, displayName(dev), body);
+  await testerTermsGate(contractId, displayName(dev), body, x.id);
   const choice = body.choice === "letgo" ? "letgo" : body.choice === "charge" ? "charge" : null;
   if (!choice) throw new HttpError(400, "bad_choice", "Choose Charge or Let it go.");
   const cap = (await callChargeCap(x)).cents;

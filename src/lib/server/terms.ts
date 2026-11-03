@@ -81,10 +81,11 @@ export async function testerSendGate(contractId: string, body: Record<string, un
  * Tester-side stop once (box at the TOP of the session page): Charge / Let it go stop once if new terms were offered since the page loaded (batch 27: Send
  * no longer does; an open offer blocks it). The second press goes ahead under the current terms.
  */
-export async function testerTermsGate(contractId: string, _devName: string, body: Record<string, unknown>) {
+export async function testerTermsGate(contractId: string, _devName: string, body: Record<string, unknown>, piece?: string) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
   const fresh = typeof body.seenAt === "string" ? await db.termsOffer.count({ where: { contractId, createdAt: { gt: new Date(body.seenAt) } } }) : 0;
-  await testerGate(c.testerId, contractId, c.testId, body, fresh ? "Press again to go ahead under your current terms, or switch first." : "Press again to go ahead.");
+  // (§159 rule 4) Charge / Let it go on `piece`: a developer payment on it, or the team's decision on any of the tester's disputes, stops once whatever their Alerts.
+  await testerGate(c.testerId, contractId, c.testId, body, fresh ? "Press again to go ahead under your current terms, or switch first." : "Press again to go ahead.", { owedPiece: piece });
 }
 
 /** (Batch 16 section 38A) Switch / Keep when no offer is open any more. */
