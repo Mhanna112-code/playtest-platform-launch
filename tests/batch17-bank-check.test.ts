@@ -102,7 +102,7 @@ describe("batch 17 §11: the bank's check opens inline, under the button", () =>
     const real = renderToStaticMarkup(createElement(BankCheckView, { action: { ...action, simulated: false, checkUrl: CHECK_URL }, finish: async () => ({}), onEnd: () => {} }));
     expect(real).toContain('data-bank-check="bank"');
     expect(real).toContain(`<iframe src="${CHECK_URL.replace(/&/g, "&amp;")}" title="Your bank&#x27;s check"`);
-    expect(real).toContain(">Close</button>"); // (batch 35 §158) "Close" under the bank's frame (it may end by itself), the stand-in keeps Cancel
+    expect(real).toContain(">Cancel</button>"); // (batch 35 §160) "Cancel" under the bank's frame again (it asks Stripe first), the stand-in keeps Cancel
     // Under the button that was pressed: Pay / Pay more, Pay what you owe, Subscribe (PressButton) and Verify a card each render the check right after their button.
     expect(src("app/app/tests/[id]/PayBox.tsx")).toMatch(/at least \$0\.50 \(or 0\)<\/span>\}?\s*<\/div>\s*\{bank\.view\}/); // (batch 35 §41: hidden while a finished press waits for the redraw)
     expect(src("components/OwedBox.tsx")).toMatch(/<\/button>(<\/div>)?\}\s*\{bank\.view\}/); // (§150) the button sits in a row with its over-$200 tick
@@ -290,7 +290,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id, kind: "review" } });
     setStripeForTests(null); // no Stripe: the start hands the page the stand-in
     expect((await confirm(dev.cookie, { paymentId: p.id, start: true })).body).toMatchObject({ simulated: true, checkUrl: null });
-    expect((await confirm(dev.cookie, { paymentId: p.id, simulate: "failed" })).body.error.message).toBe(R.BANK_NOT_CONFIRMED);
+    expect((await confirm(dev.cookie, { paymentId: p.id, simulate: "failed" })).body.error.message).toMatch(/^Nothing was charged: this payment still waits for your bank. Confirm with your bank by /); // (§160) a charge made while away keeps waiting
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "needs_confirmation" });
     expect((await bankWaitingOnTest(dev.user.id, testId)).map((b) => b.id)).toEqual([p.id]);
     expect((await confirm(dev.cookie, { paymentId: p.id, simulate: "succeeded" })).status).toBe(200);

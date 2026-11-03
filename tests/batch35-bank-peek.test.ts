@@ -11,7 +11,8 @@ import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { stillWaiting } from "@/lib/server/bankPeek";
-import { BANK_CLOSE, BANK_CLOSE_HINT, peekBank, watchBank, type PeekAnswer } from "@/lib/bankConfirm";
+import { peekBank, watchBank, type PeekAnswer } from "@/lib/bankConfirm";
+import { BANK_CANCEL, CANCEL_HINTS } from "@/lib/bankNotice";
 import { BankCheckView } from "@/components/BankCheck";
 import { json, makeUser, req } from "./helpers";
 import { joined, sact, seen, settle, setup } from "./fixtures";
@@ -207,18 +208,18 @@ describe("§158 the page polls while the bank's page is open", () => {
     expect(JSON.parse((fetchFn.mock.calls[0] as unknown as [string, { body: string }])[1].body)).toEqual({ setupIntent: "seti_1", peek: true });
   });
 
-  it("the bank's frame: Close with its hint, and the watch wired to end(); the stand-in keeps Confirm / Cancel; every check's peek fits its kind", () => {
+  it("the bank's frame: Cancel with its hint (§160; was Close), and the watch wired to end(); the stand-in keeps Confirm / Cancel; every check's peek fits its kind", () => {
     const action = { requiresAction: true as const, paymentId: "p1", clientSecret: "", publishableKey: "", simulated: false, checkUrl: CHECK_URL };
     const real = renderToStaticMarkup(createElement(BankCheckView, { action, finish: async () => ({}), onEnd: () => {}, peek: async () => "waiting" as const }));
-    expect(BANK_CLOSE).toBe("Close");
-    expect(BANK_CLOSE_HINT).toBe("If this doesn't close by itself after you finish with your bank, press Close.");
-    expect(real).toContain(">Close</button>");
-    expect(real).toContain("If this doesn&#x27;t close by itself after you finish with your bank, press Close.");
-    expect(real).not.toContain(">Cancel</button>");
+    expect(BANK_CANCEL).toBe("Cancel");
+    expect(CANCEL_HINTS.press).toBe("Already finished with your bank? It's recorded as paid; otherwise nothing is charged.");
+    expect(real).toContain(">Cancel</button>");
+    expect(real).toContain("Already finished with your bank? It&#x27;s recorded as paid; otherwise nothing is charged.");
+    expect(real.match(/<button/g)).toHaveLength(1); // only Cancel: no stand-in Confirm
     expect(real).toMatch(/<iframe [^>]*>.*data-bank-close-hint.*data-bank-close=/s);
     const standIn = renderToStaticMarkup(createElement(BankCheckView, { action: { ...action, simulated: true, checkUrl: null }, finish: async () => ({}), onEnd: () => {} }));
     expect(standIn).toMatch(/>Confirm<\/button>.*>Cancel<\/button>/);
-    expect(standIn).not.toContain(BANK_CLOSE_HINT.slice(0, 20));
+    expect(standIn).not.toContain(CANCEL_HINTS.press.slice(0, 20));
     const bc = src("components/BankCheck.tsx");
     expect(bc).toContain("return watchBank(() => peek(opened.current), () => void end(), undefined, (r) => setNotice((n) => addNews(n, r)));");
     expect(bc).toMatch(/if \(!action\.checkUrl \|\| !peek\) return;/);

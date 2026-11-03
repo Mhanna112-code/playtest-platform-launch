@@ -1,5 +1,6 @@
 "use client";
 import { TAB, api, pageUser } from "@/lib/client";
+import type { CancelKind } from "@/lib/bankNotice";
 
 // (Owner, Oct 29, batch 11) "Your bank wants to confirm this payment". (Batch 17 §11) The bank's check opens INLINE, directly under the button that was pressed (see
 // components/BankCheck.tsx): the bank's own page in a frame (`checkUrl`), or, with the fake Stripe (no publishable key, tests, recordings), a clearly-marked stand-in.
@@ -26,6 +27,7 @@ export type BankAction = {
   requiresAction: true; paymentId: string; clientSecret: string; publishableKey: string; simulated: boolean; paymentMethod?: string | null;
   /** "none": it went through without a check (a "Confirm with your bank" Stripe needed nothing more for) */ needs?: "action" | "confirm" | "none";
   /** (Batch 17 §11) the bank's check page, shown inline */ checkUrl?: string | null;
+  /** (§160) What Cancel under the bank's window does: the developer's own press (default), a charge made while away that keeps waiting, Confirm all, Verify a card */ cancel?: CancelKind;
 };
 export const needsBank = (r: unknown): r is BankAction => !!r && typeof r === "object" && (r as { requiresAction?: unknown }).requiresAction === true;
 
@@ -49,9 +51,18 @@ export type PeekAnswer = "waiting" | "done";
  * it (`changes`, with what Complete still does: `still`), or that the check was cancelled underneath it (`cancelled`).
  */
 export type PeekResult = { status: PeekAnswer; changes?: string[]; still?: string; cancelled?: string };
-/** (§158) The close button under the bank's page, and its hint (the return page can be blocked: on localhost Chrome's Private Network Access stops it). */
-export const BANK_CLOSE = "Close";
-export const BANK_CLOSE_HINT = "If this doesn't close by itself after you finish with your bank, press Close.";
+/**
+ * (Owner, Nov 3, §160) Closing or reloading the page while the bank's window is open does what Cancel does: the same finish request, sent as a beacon on pagehide (it
+ * survives the page going away). The server asks Stripe first (paid if it went through; the developer's own press otherwise cancelled; a charge made while away
+ * keeps waiting). Only a crash leaves it open: then the 15-minute clock ends it.
+ */
+export function leaveBeacon(url: string, body: Record<string, unknown>) {
+  try {
+    return navigator.sendBeacon(url, new Blob([JSON.stringify({ ...body, leave: true })], { type: "application/json" }));
+  } catch {
+    return false;
+  }
+}
 /** How often the open bank check asks whether Stripe still waits. */
 export const PEEK_EVERY_MS = 3000;
 

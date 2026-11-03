@@ -381,9 +381,22 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
   }
   const p = await own(dev.id, paymentId);
   const status = await piStatus(p.actionPi!, body.simulate);
-  const ok = status === "succeeded";
+  // (Owner, Nov 3, §160) Stripe is asked first: went through (succeeded, or processing: a card payment on its way) is recorded as paid.
+  const ok = status === "succeeded" || status === "processing";
   if (!ok) {
-    if (p.status === "needs_action" || p.status === "paying") await release(p.id);
+    // (§160) The developer's own press (Pay, Pay more, Pay what you owe, Subscribe, Confirm all's one check): its check is cancelled at Stripe and what it covered is
+    // payable again. If the cancel finds it had just gone through, release records it paid once: said so, never "nothing was charged".
+    if (p.status === "needs_action" || p.status === "paying") {
+      await release(p.id);
+      const now = await db.payment.findUnique({ where: { id: p.id }, select: { status: true, amountCents: true } });
+      if (now && ["charged", "not_set_up", "bundled"].includes(now.status)) return { done: true, status: now.status === "bundled" ? "charged" : now.status, amountCents: now.amountCents, paidAtCancel: true };
+    }
+    // (§160) A charge made while the developer was away (a tester's Charge, a decision, a retry): Cancel (or leaving the page) never cancels it (that would count as
+    // declined and start a hold): it keeps waiting for the bank with its own date.
+    else if (["needs_confirmation", "failed", "owed"].includes(p.status) && p.actionBy && p.actionBy > new Date()) {
+      const tz = (await db.user.findUnique({ where: { id: dev.id }, select: { timeZone: true } }))?.timeZone ?? null;
+      throw new HttpError(402, "not_confirmed", (await import("@/lib/bankNotice")).stillWaitingLine(fmtDateTimeIn(p.actionBy, tz)));
+    }
     // (§147) Confirm all's check: nothing was charged and each payment is back to its own Confirm with your bank.
     const all = (await import("./owedOnce")).isAll(p);
     throw new HttpError(402, "not_confirmed", all ? (await import("@/lib/confirmAllText")).ALL_NOT_CONFIRMED : BANK_NOT_CONFIRMED);

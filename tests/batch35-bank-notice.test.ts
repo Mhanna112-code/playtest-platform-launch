@@ -1,3 +1,5 @@
+import fs from "node:fs";
+import path from "node:path";
 import { randomUUID } from "node:crypto";
 import * as React from "react";
 import { createElement } from "react";
@@ -93,7 +95,7 @@ describe("§160 the peek's changes: what would have stopped the press since it",
     for (let i = 0; i < 2; i++) {
       const r = await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since });
       expect(r.status).toBe(200);
-      expect(r.body).toEqual({ status: "waiting", changes: ["Ana Silva disputed the pay for her recording"], still: "Complete still pays $10.00 as pressed; or press Close." });
+      expect(r.body).toEqual({ status: "waiting", changes: ["Ana Silva disputed the pay for her recording"], still: "Complete still pays $10.00 as pressed; or press Cancel." });
     }
     // Read-only: no claim, no answered-log, nothing at Stripe.
     expect(await snapshot(o.dev.user.id)).toEqual(before);
@@ -121,18 +123,18 @@ describe("§160 the peek's changes: what would have stopped the press since it",
     expect(r.body.changes).toEqual(["The team decided Ana Silva's dispute: $5.00 more for her recording", "You invited Lee Park in another tab"]);
   });
 
-  it("Confirm all: a charge made while away that came in after the press is a line", async () => {
+  it("Confirm all: a charge made while away that came in after the press is a line (not added to it)", async () => {
     const o = await payOpen();
     const one = await db.payment.create({ data: { kind: "owed", note: ALL_NOTE, developerId: o.dev.user.id, testerId: o.dev.user.id, amountCents: 2000, feeCents: 2000, testerCents: 0, status: "needs_action", actionPi: "pi_all_" + randomUUID(), actionBy: new Date(Date.now() + 900_000) } });
     o.st.status.set(one.actionPi!, { status: "requires_action" });
     const since = new Date(Date.now() + 5).toISOString();
     await settle();
     expect((await peek(o.dev.cookie, { paymentId: one.id, since })).body).toEqual({ status: "waiting" });
-    await db.payment.create({ data: { kind: "dispute", developerId: o.dev.user.id, testerId: o.tester.user.id, contractId: o.sessionId, submissionId: o.sub.id, amountCents: 500, feeCents: 0, testerCents: 500, status: "needs_confirmation", actionPi: "pi_new_" + randomUUID(), actionBy: new Date(Date.now() + 86_400_000) } });
+    await db.payment.create({ data: { kind: "review", developerId: o.dev.user.id, testerId: o.tester.user.id, contractId: o.sessionId, submissionId: o.sub.id, amountCents: 500, feeCents: 0, testerCents: 500, status: "needs_confirmation", actionPi: "pi_new_" + randomUUID(), actionBy: new Date(Date.now() + 86_400_000) } });
     const r = await peek(o.dev.cookie, { paymentId: one.id, since });
     expect(r.body.status).toBe("waiting");
     expect(r.body.changes).toHaveLength(1);
-    expect(r.body.changes[0]).toMatch(/^Also waiting for your bank now: .*Ana Silva.* \$5\.00$/);
+    expect(r.body.changes[0]).toBe("Ana Silva charged $5.00 meanwhile: it isn't in this payment; confirm it on its own, or with Confirm all after this one");
     expect(r.body.still).toBe(stillPaysLine("$20.00"));
   });
 });
@@ -154,8 +156,30 @@ describe("§160 Pay what you owe's changes", () => {
     await debt(300, new Date());
     const r = await peek(o.dev.cookie, { paymentId: one.id, since });
     expect(r.body.changes).toHaveLength(1);
-    expect(r.body.changes[0]).toMatch(/^Another payment failed meanwhile: .*\$3\.00/);
+    expect(r.body.changes[0]).toMatch(/\$3\.00.* \(card declined\): it isn't in this payment; pay it with Pay what you owe after this one$/);
     expect(r.body.still).toBe(stillPaysLine("$7.00"));
+  });
+
+  it("a chargeback hold's reservation open: a NEW chargeback is named with its amount and fee, and what happens to it (charged after the team approves the lift)", async () => {
+    const o = await payOpen();
+    const dev = o.dev.user.id;
+    await db.payment.update({ where: { id: o.paymentId }, data: { status: "charged", actionPi: null, settledAt: new Date() } }); // Ana's $10.00, paid
+    const older = await db.payment.create({ data: { kind: "review", developerId: dev, testerId: o.tester.user.id, contractId: o.sessionId, amountCents: 2000, feeCents: 0, testerCents: 2000, status: "charged", settledAt: new Date(Date.now() - 86_400_000), chargeback: "open", chargebackAt: new Date(Date.now() - 60_000), createdAt: new Date(Date.now() - 86_400_000) } });
+    await db.user.update({ where: { id: dev }, data: { holdStartedAt: new Date(Date.now() - 60_000), holdReason: "chargeback", chargebackCardVerifiedAt: new Date() } });
+    const pi = "pi_res_" + randomUUID();
+    o.st.status.set(pi, { status: "requires_action" });
+    const res = await db.reservation.create({ data: { developerId: dev, amountCents: 3500, covers: [older.id], status: "needs_action", stripePaymentIntentId: pi, actionBy: new Date(Date.now() + 900_000) } });
+    await settle();
+    const since = new Date().toISOString();
+    await settle();
+    expect((await peek(o.dev.cookie, { paymentId: res.id, since })).body).toEqual({ status: "waiting" });
+    // The bank reverses Ana's $10.00 too, while the reservation's bank page is open.
+    await db.payment.update({ where: { id: o.paymentId }, data: { chargeback: "open", chargebackAt: new Date() } });
+    const r = await peek(o.dev.cookie, { paymentId: res.id, since });
+    expect(r.body.changes).toHaveLength(1);
+    expect(r.body.changes[0]).toMatch(/\$10.*\$15.*: it isn't in this reservation; it's charged right after the team approves lifting your hold$/);
+    expect(r.body.still).toBe(stillPaysLine("$35.00", true));
+    expect(o.st.changed).toEqual([]);
   });
 });
 
@@ -201,7 +225,7 @@ describe("§160 the notice in the box", () => {
     n = addNews(n, { status: "waiting", changes: ["Ana Silva disputed the pay for her recording", "Ana Silva left the test", "Ana Silva left the test"] });
     expect(n.lines).toEqual(["Ana Silva disputed the pay for her recording.", "Ana Silva left the test."]);
     n = addNews(n, { status: "waiting" });
-    expect(n.still).toBe("Complete still pays $10.00 as pressed; or press Close.");
+    expect(n.still).toBe("Complete still pays $10.00 as pressed; or press Cancel.");
     n = addNews(n, { status: "waiting", cancelled: cancelledLine(CANCELLED_WHY.hold) });
     expect(n.cancelled).toBe("This bank check was cancelled: your tests were paused (a payment hold started). Pressing Complete won't charge anything.");
   });
@@ -212,7 +236,7 @@ describe("§160 the notice in the box", () => {
     expect(plain).toContain('class="info"');
     expect(plain).toContain(NOTICE_HEAD.replace("'", "&#x27;"));
     expect(plain).toContain("<li data-bank-notice-line=\"\">Ana Silva disputed the pay for her recording.</li>");
-    expect(plain).toContain("Complete still pays $10.00 as pressed; or press Close.");
+    expect(plain).toContain("Complete still pays $10.00 as pressed; or press Cancel.");
     expect(plain.match(/data-bank-notice-line/g)).toHaveLength(1);
     const cancelled = renderToStaticMarkup(createElement(BankCheckView, { action, finish: async () => ({}), onEnd: () => {}, notice: { lines: [], still: "", cancelled: cancelledLine(CANCELLED_WHY.hold) } }));
     expect(cancelled).toMatch(/data-bank-notice-cancelled="">This bank check was cancelled: your tests were paused \(a payment hold started\)\. Pressing Complete won&#x27;t charge anything\.<\/p>.*<iframe /s);
@@ -240,5 +264,154 @@ describe("§160 the notice in the box", () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(onDone).toHaveBeenCalledTimes(1);
     stop();
+  });
+});
+
+const finish = (cookie: string, body: Record<string, unknown>) => confirmPOST(req("/api/payments/confirm", { cookie, headers: { "x-tab": TAB }, body })).then(json);
+
+describe("§160 Cancel under the bank's window (and leaving the page): Stripe is asked first", () => {
+  it("unfinished: the developer's own Pay is cancelled at Stripe, nothing charged, and the part can be paid again at once", async () => {
+    const o = await payOpen();
+    const pi = (await db.payment.findUniqueOrThrow({ where: { id: o.paymentId } })).actionPi!;
+    const r = await finish(o.dev.cookie, { paymentId: o.paymentId });
+    expect(r.status).toBe(402);
+    expect(r.body.error.message).toBe("Your bank didn't confirm the payment, so nothing was charged.");
+    expect(o.st.changed).toEqual([`cancel ${pi}`]);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: o.paymentId } })).toMatchObject({ status: "cancelled", actionPi: null });
+    expect(await db.review.count({ where: { submissionId: o.sub.id } })).toBe(0);
+    const again = await pay(o.dev.cookie, { kind: "submission", id: o.sub.id, amount: "10.00", tickedCents: 1000 });
+    expect(again.body).toMatchObject({ requiresAction: true }); // payable again at once
+  });
+
+  it("finished at the bank (the return blocked): recorded as paid once; a second Cancel or the beacon charges nothing more", async () => {
+    const o = await payOpen();
+    const pi = (await db.payment.findUniqueOrThrow({ where: { id: o.paymentId } })).actionPi!;
+    o.st.status.set(pi, { status: "succeeded" });
+    const r = await finish(o.dev.cookie, { paymentId: o.paymentId });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ done: true, amountCents: 1000, status: "charged" });
+    expect(o.st.changed).toEqual([]); // never cancelled
+    const twice = await finish(o.dev.cookie, { paymentId: o.paymentId, leave: true });
+    expect(twice.status).toBe(409); // already confirmed: nothing again
+    expect(await db.review.count({ where: { submissionId: o.sub.id } })).toBe(1);
+    expect(await db.payment.count({ where: { submissionId: o.sub.id, status: "charged" } })).toBe(1);
+  });
+
+  it("the cancel at Stripe finds it just went through: recorded paid once, and said so (never 'nothing was charged')", async () => {
+    const o = await payOpen();
+    const stripe = (await import("@/lib/server/stripe")).getStripe() as unknown as { paymentIntents: { cancel: (id: string) => Promise<unknown> } };
+    stripe.paymentIntents.cancel = async (id: string) => { o.st.status.set(id, { status: "succeeded" }); return { id, status: "succeeded" }; };
+    const r = await finish(o.dev.cookie, { paymentId: o.paymentId, leave: true });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ done: true, amountCents: 1000, paidAtCancel: true });
+    expect(await db.payment.findUniqueOrThrow({ where: { id: o.paymentId } })).toMatchObject({ status: "charged" });
+    expect(await db.review.count({ where: { submissionId: o.sub.id } })).toBe(1);
+  });
+
+  it("a single charge made while away (Confirm with your bank): Cancel never cancels it; it keeps waiting with its own date, no hold", async () => {
+    const o = await payOpen();
+    await db.payment.update({ where: { id: o.paymentId }, data: { status: "cancelled", actionPi: null } }); // the Pay out of the way
+    const by = new Date(Date.now() + 2 * 86_400_000);
+    const away = await db.payment.create({ data: { kind: "review", developerId: o.dev.user.id, testerId: o.tester.user.id, contractId: o.sessionId, submissionId: o.sub.id, amountCents: 1000, feeCents: 0, testerCents: 1000, status: "needs_confirmation", actionPi: "pi_away_" + randomUUID(), actionBy: by } });
+    o.st.status.set(away.actionPi!, { status: "requires_action" });
+    const r = await finish(o.dev.cookie, { paymentId: away.id, leave: true });
+    expect(r.status).toBe(402);
+    expect(r.body.error.message).toMatch(/^Nothing was charged: this payment still waits for your bank\. Confirm with your bank by /);
+    expect(o.st.changed).toEqual([]);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: away.id } })).toMatchObject({ status: "needs_confirmation", actionPi: away.actionPi, actionBy: by });
+    expect((await db.user.findUniqueOrThrow({ where: { id: o.dev.user.id } })).holdStartedAt).toBeNull();
+  });
+
+  it("Pay what you owe: a tester's Charge arriving while its check is open waits (not added) and the notice says so", async () => {
+    const o = await payOpen();
+    const dev = o.dev.user.id;
+    await db.payment.update({ where: { id: o.paymentId }, data: { status: "cancelled", actionPi: null } });
+    await db.user.update({ where: { id: dev }, data: { holdStartedAt: new Date(Date.now() - 60_000), holdReason: "unpaid" } });
+    const a = await db.payment.create({ data: { kind: "review", developerId: dev, testerId: o.tester.user.id, contractId: o.sessionId, amountCents: 700, feeCents: 0, testerCents: 700, status: "failed", owedUntil: new Date(Date.now() - 30_000), createdAt: new Date(Date.now() - 30_000) } });
+    const one = await db.payment.create({ data: { kind: "owed", note: "press", developerId: dev, testerId: dev, amountCents: 700, feeCents: 700, testerCents: 0, status: "needs_action", actionPi: "pi_owed_" + randomUUID(), actionBy: new Date(Date.now() + 900_000) } });
+    await db.payment.update({ where: { id: a.id }, data: { coveredById: one.id } });
+    o.st.status.set(one.actionPi!, { status: "requires_action" });
+    await settle();
+    const since = new Date().toISOString();
+    await settle();
+    await db.payment.create({ data: { kind: "review", developerId: dev, testerId: o.tester.user.id, contractId: o.sessionId, submissionId: o.sub.id, amountCents: 1000, feeCents: 0, testerCents: 1000, status: "deferred" } });
+    const r = await peek(o.dev.cookie, { paymentId: one.id, since });
+    expect(r.body.changes).toEqual(["Ana Silva charged $10.00 meanwhile: it's charged right after this payment goes through"]);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: one.id } })).amountCents).toBe(700); // not added
+  });
+
+  it("the page: Cancel under the frame with the hint for its kind; leaving the page sends the same finish as a beacon", () => {
+    const action = { requiresAction: true as const, paymentId: "p1", clientSecret: "", publishableKey: "", simulated: false, checkUrl: CHECK_URL };
+    const own = renderToStaticMarkup(createElement(BankCheckView, { action, finish: async () => ({}), onEnd: () => {} }));
+    expect(own).toContain(">Cancel</button>");
+    expect(own).toContain("Already finished with your bank? It&#x27;s recorded as paid; otherwise nothing is charged.");
+    const waits = renderToStaticMarkup(createElement(BankCheckView, { action: { ...action, cancel: "waits" as const }, finish: async () => ({}), onEnd: () => {} }));
+    expect(waits).toContain("otherwise nothing is charged and it keeps waiting for your bank.");
+    const read = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
+    expect(read("components/BankCheck.tsx")).toContain('window.addEventListener("pagehide", gone);');
+    expect(read("components/BankCheck.tsx")).toContain('leaveBeacon("/api/payments/confirm", { paymentId: a.paymentId })');
+    expect(read("components/BankWaiting.tsx")).toContain('cancel: own ? "press" : "waits"');
+    expect(read("components/ConfirmAll.tsx")).toContain('cancel: "all"');
+    expect(read("components/ChargebackSteps.tsx")).toContain('leaveBeacon("/api/payments/verify-card", { finish: true, setupIntent, cancel: true })');
+  });
+});
+
+describe("§160 an open bank check stays open only while its page is open (heartbeat, 3 minutes)", () => {
+  const later = (ms: number) => new Date(Date.now() + ms);
+  it("each peek is a heartbeat; with none for 3 minutes the developer's own check is ended like Cancel (Stripe first); a fresh one and an away charge stay", async () => {
+    const o = await payOpen();
+    const { endStaleChecks, HEARTBEAT_STALE_MS } = await import("@/lib/server/bankHeartbeat");
+    expect(HEARTBEAT_STALE_MS).toBe(180_000);
+    await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since });
+    const beat = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: o.dev.user.id, key: `bankcheck:${o.paymentId}` } } });
+    expect(beat.updatedAt.getTime()).toBeGreaterThan(Date.now() - 10_000);
+    const by = new Date(Date.now() + 2 * 86_400_000);
+    const away = await db.payment.create({ data: { kind: "dispute", developerId: o.dev.user.id, testerId: o.tester.user.id, contractId: o.sessionId, submissionId: o.sub.id, amountCents: 500, feeCents: 0, testerCents: 500, status: "needs_confirmation", actionPi: "pi_away_" + randomUUID(), actionBy: by, createdAt: new Date(Date.now() - 600_000) } });
+    // 2 minutes after the last heartbeat: still open.
+    expect(await endStaleChecks(o.dev.user.id, later(120_000), true)).toBe(0);
+    expect(o.st.changed).toEqual([]);
+    // 3+ minutes: ended, cancelled at Stripe, payable again; the away charge keeps waiting.
+    const pi = (await db.payment.findUniqueOrThrow({ where: { id: o.paymentId } })).actionPi!;
+    expect(await endStaleChecks(o.dev.user.id, later(200_000), true)).toBe(1);
+    expect(o.st.changed).toEqual([`cancel ${pi}`]);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: o.paymentId } })).toMatchObject({ status: "cancelled", actionPi: null });
+    expect(await db.payment.findUniqueOrThrow({ where: { id: away.id } })).toMatchObject({ status: "needs_confirmation", actionPi: away.actionPi, actionBy: by });
+  });
+
+  it("a stale check that had gone through at the bank is recorded as paid once (never cancelled)", async () => {
+    const o = await payOpen();
+    const { endStaleChecks } = await import("@/lib/server/bankHeartbeat");
+    const stripe = (await import("@/lib/server/stripe")).getStripe() as unknown as { paymentIntents: { cancel: (id: string) => Promise<unknown> } };
+    stripe.paymentIntents.cancel = async (id: string) => ({ id, status: "succeeded" });
+    expect(await endStaleChecks(o.dev.user.id, later(200_000), true)).toBe(1);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: o.paymentId } })).toMatchObject({ status: "charged" });
+    expect(await db.review.count({ where: { submissionId: o.sub.id } })).toBe(1);
+  });
+
+  it("a chargeback hold's reservation: its rows carry its Cancel this check in any tab; pressed there, it's cancelled at Stripe (Stripe first) and the open box says so", async () => {
+    const o = await payOpen();
+    const dev = o.dev.user.id;
+    await db.payment.update({ where: { id: o.paymentId }, data: { status: "charged", actionPi: null, settledAt: new Date(), chargeback: "open", chargebackAt: new Date(Date.now() - 60_000) } });
+    await db.user.update({ where: { id: dev }, data: { holdStartedAt: new Date(Date.now() - 60_000), holdReason: "chargeback", chargebackCardVerifiedAt: new Date() } });
+    const pi = "pi_res_" + randomUUID();
+    o.st.status.set(pi, { status: "requires_action" });
+    const res = await db.reservation.create({ data: { developerId: dev, amountCents: 2500, covers: [o.paymentId], status: "needs_action", stripePaymentIntentId: pi, actionBy: new Date(Date.now() + 900_000) } });
+    const { owedLines } = await import("@/lib/server/holds");
+    const row = (await owedLines(dev)).find((l) => l.id === o.paymentId)!;
+    expect(row).toMatchObject({ waiting: true, checkId: res.id });
+    const { POST: owedPOST } = await import("@/app/api/payments/owed/route");
+    const r = await owedPOST(req("/api/payments/owed", { cookie: o.dev.cookie, body: { cancelCheck: res.id } })).then(json);
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ cancelled: true });
+    expect(o.st.changed).toEqual([`cancel ${pi}`]);
+    expect(await db.reservation.findUniqueOrThrow({ where: { id: res.id } })).toMatchObject({ status: "cancelled" });
+    const box = await peek(o.dev.cookie, { paymentId: res.id, since: new Date(Date.now() - 5_000).toISOString() });
+    expect(box.body.cancelled).toMatch(/^This bank check was cancelled: /);
+  });
+
+  it("the page: the Pay box with its window open elsewhere offers Cancel this check", () => {
+    const read = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
+    expect(read("app/app/tests/[id]/PayBox.tsx")).toContain("<BankWaiting own paymentId={p.confirming}");
+    expect(read("components/BankWaiting.tsx")).toContain("{own && !doneLine && <button");
   });
 });

@@ -1,8 +1,9 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bringInView } from "@/lib/markJump";
-import { BANK_CLOSE, BANK_CLOSE_HINT, countBankCheck, finishPayment, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type PeekResult, type Simulate } from "@/lib/bankConfirm";
-import { NOTICE_HEAD, noticeLine } from "@/lib/bankNotice";
+import { liveBeat } from "@/lib/liveSync";
+import { countBankCheck, finishPayment, leaveBeacon, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type PeekResult, type Simulate } from "@/lib/bankConfirm";
+import { BANK_CANCEL, CANCEL_HINTS, NOTICE_HEAD, noticeLine } from "@/lib/bankNotice";
 import { BANK_CHECK_TITLE, BANK_STAND_IN, BANK_STAND_IN_NOTE } from "@/lib/rules";
 
 type Ended = { ok: true; value: unknown } | { ok: false; error: Error };
@@ -53,7 +54,7 @@ export function BankNotice({ notice }: { notice: Notice }) {
  * Plain changes never close the box (the developer decides: Complete still pays as pressed, or Close); a cancelled check stays open with its notice until the
  * bank's return or Close ends it with the usual finish.
  */
-export function BankCheckView({ action, finish, onEnd, peek, since = "", notice: initial = NO_NOTICE }: { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; onEnd: (r: Ended) => void; peek?: Peek; since?: string; /** tests and recordings: a notice to start with */ notice?: Notice }) {
+export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", notice: initial = NO_NOTICE }: { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; onEnd: (r: Ended) => void; peek?: Peek; /** (§160) the page goes away with the window open: what Cancel does, as a beacon */ leave?: () => void; since?: string; /** tests and recordings: a notice to start with */ notice?: Notice }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(initial);
   const box = useRef<HTMLDivElement>(null);
@@ -70,6 +71,17 @@ export function BankCheckView({ action, finish, onEnd, peek, since = "", notice:
     }
   }, [finish, onEnd]);
   useEffect(() => bringInView(box.current), []);
+  // (Owner, Nov 3, §160) Closing or reloading the page with the window open does what Cancel does (a beacon: it outlives the page). Not once the box has ended.
+  useEffect(() => {
+    if (!leave) return;
+    const gone = () => {
+      if (ended.current) return;
+      ended.current = true;
+      leave();
+    };
+    window.addEventListener("pagehide", gone);
+    return () => window.removeEventListener("pagehide", gone);
+  }, [leave]);
   useEffect(() => {
     if (!action.checkUrl) return;
     const heard = (e: MessageEvent) => {
@@ -100,13 +112,13 @@ export function BankCheckView({ action, finish, onEnd, peek, since = "", notice:
       <p className="font-semibold text-white">{BANK_CHECK_TITLE}</p>
       <BankNotice notice={notice} />
       <iframe src={action.checkUrl} title={BANK_CHECK_TITLE} className="h-[28rem] w-full rounded-lg border border-white/10 bg-white" />
-      <p className="text-xs text-sky-100/80" data-bank-close-hint="">{BANK_CLOSE_HINT}</p>
-      <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end()} data-bank-close="">{BANK_CLOSE}</button>
+      <p className="text-xs text-sky-100/80" data-bank-close-hint="">{CANCEL_HINTS[action.cancel ?? "press"]}</p>
+      <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end()} data-bank-close="">{BANK_CANCEL}</button>
     </div>
   );
 }
 
-type Open = { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; peek?: Peek; since: string; resolve: (v: unknown) => void; reject: (e: Error) => void };
+type Open = { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; peek?: Peek; leave?: () => void; since: string; resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 /**
  * (Batch 17 §11) A button's inline bank check: `check(action)` opens it (render `view` directly under the button) and resolves with the server's result when the payment
@@ -122,13 +134,15 @@ export function useBankCheck() {
     countBankCheck(1);
     return () => countBankCheck(-1);
   }, [open]);
-  const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate) => Promise<T>, peek?: Peek): Promise<T> => {
+  const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate) => Promise<T>, peek?: Peek, leave?: () => void): Promise<T> => {
     const fin = finish ?? ((s?: Simulate) => finishPayment<T>(a.paymentId, s));
     const look: Peek | undefined = peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId }, since) : undefined);
     if (a.needs === "none") return fin();
     if (!a.checkUrl && !a.simulated) return stripePopup(a).then(() => fin());
     return new Promise<T>((resolve, reject) => {
-      cur.current = { action: a, finish: fin, peek: look, since: new Date().toISOString(), resolve: resolve as (v: unknown) => void, reject };
+      // (§160) Leaving the page: the payment's own finish as a beacon (Verify a card passes its own).
+      const away = leave ?? (!finish && a.paymentId ? () => void leaveBeacon("/api/payments/confirm", { paymentId: a.paymentId }) : undefined);
+      cur.current = { action: a, finish: fin, peek: look, leave: away, since: new Date().toISOString(), resolve: resolve as (v: unknown) => void, reject };
       setOpen(cur.current);
     });
   }, []);
@@ -138,7 +152,9 @@ export function useBankCheck() {
     setOpen(null);
     if (o && r.ok) o.resolve(r.value);
     else if (o && !r.ok) o.reject(r.error);
+    // (§160) The page's live checks waited while the window was open: they run now (a redraw drawn meanwhile shows the payment as it was), not at the next beat.
+    setTimeout(liveBeat, 400);
   }, []);
-  const view = open ? <BankCheckView key={open.action.paymentId || "card"} action={open.action} finish={open.finish} peek={open.peek} since={open.since} onEnd={onEnd} /> : null;
+  const view = open ? <BankCheckView key={open.action.paymentId || "card"} action={open.action} finish={open.finish} peek={open.peek} leave={open.leave} since={open.since} onEnd={onEnd} /> : null;
   return { check, view, open: !!open };
 }

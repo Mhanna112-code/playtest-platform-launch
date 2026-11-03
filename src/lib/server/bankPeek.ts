@@ -1,6 +1,6 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
-import { money } from "@/lib/format";
+import { displayName, money } from "@/lib/format";
 import { PRESS_ACTION_MS } from "@/lib/rules";
 import { CANCELLED_WHY, cancelledLine, stillPaysLine } from "@/lib/bankNotice";
 import { HttpError } from "./http";
@@ -72,36 +72,49 @@ async function pieceChanges(p: Payment, since: Date, tab: string) {
 }
 
 /**
- * (§160) Pay what you owe (its one payment, or a chargeback hold's reservation): what is owed changed since the press, as its own stop-once says it. A debt added
- * (a payment declined, a chargeback) or a disputed amount the bank changed. A tester's Charge that came in during the hold waits for the lift and never stopped this
- * press (§125), so it isn't a line either.
+ * (§160) Pay what you owe (its one payment, or a chargeback hold's reservation): every new debt or charge that arrived after the press, named with its amount and
+ * what happens to it (owner, Nov 3). None is ever added to the check that is open: a new chargeback, a payment declined or a tester's Charge waits for the next Pay
+ * what you owe (an unpaid hold), or is charged right after the team approves lifting the hold (a chargeback hold's reservation, which reserves ONCE: batch 28
+ * §8); a charge made during an unpaid hold is charged right after this payment goes through (§125). A disputed amount the bank changed is said too.
  */
-async function owedChanges(devId: string, since: Date, covered: Set<string>) {
+const testerOf = async (contractId: string | null) => { const c = contractId ? await db.contract.findUnique({ where: { id: contractId }, select: { tester: true } }) : null; return c ? displayName(c.tester) : "A tester"; };
+export const owedTail = (reservation: boolean, charge: boolean) =>
+  reservation ? "it isn't in this reservation; it's charged right after the team approves lifting your hold"
+    : charge ? "it's charged right after this payment goes through" : "it isn't in this payment; pay it with Pay what you owe after this one";
+async function owedChanges(devId: string, since: Date, covered: Set<string>, reservation = false) {
   const { owedLines } = await import("./holds");
   const lines = (await owedLines(devId)).filter((l) => !covered.has(l.id));
-  const rows = lines.length ? await db.payment.findMany({ where: { id: { in: lines.map((l) => l.id) } }, select: { id: true, status: true, createdAt: true, owedUntil: true, chargebackAt: true } }) : [];
+  const rows = lines.length ? await db.payment.findMany({ where: { id: { in: lines.map((l) => l.id) } }, select: { id: true, kind: true, status: true, amountCents: true, createdAt: true, owedUntil: true, chargebackAt: true, contractId: true } }) : [];
   const out: Line[] = [];
   for (const l of lines) {
     const r = rows.find((x) => x.id === l.id);
-    if (!r || r.status === "deferred") continue;
+    if (!r) continue;
+    if (r.status === "deferred") {
+      if (r.createdAt > since) out.push({ text: `${r.kind === "dispute" ? "The team's dispute decision added" : `${await testerOf(r.contractId)} charged`} ${money(r.amountCents)} meanwhile: ${owedTail(reservation, true)}`, at: r.createdAt });
+      continue;
+    }
     const at = [r.chargebackAt, r.owedUntil, r.status === "owed" ? r.createdAt : null].filter((d): d is Date => !!d && d > since).sort((a, b) => a.getTime() - b.getTime())[0];
     if (!at) continue;
-    out.push({ text: `${l.source === "failed" ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${l.text.replace(/ · card declined .*$/, "")}`, at });
+    const what = l.source === "failed" ? `${l.text.replace(/ · card declined .*$/, "")} (card declined)` : l.text;
+    out.push({ text: `${what}: ${owedTail(reservation, false)}`, at });
   }
   for (const e of await db.accountEvent.findMany({ where: { userId: devId, kind: "chargeback-amount", createdAt: { gt: since } }, orderBy: { createdAt: "asc" }, take: 20 })) {
     const m = / of the (\$[\d,.]+) payment \([^)]*\) from (\$[\d,.]+) to (\$[\d,.]+)/.exec(e.note);
-    if (m) out.push({ text: `Your bank changed the disputed amount of your ${m[1]} payment from ${m[2]} to ${m[3]}`, at: e.createdAt });
+    if (m) out.push({ text: `Your bank changed the disputed amount of your ${m[1]} payment from ${m[2]} to ${m[3]}${reservation ? ": this reservation stays as pressed; the difference is settled when the team approves lifting your hold" : ": this payment stays as pressed"}`, at: e.createdAt });
   }
   return after(out, since);
 }
 
-/** (§160) Confirm all: what's waiting for the bank changed since the press (a new charge made while away that it doesn't cover), as its stop-once says it. */
+/**
+ * (§160) Confirm all: a new charge made while away (it asks the bank) that this one payment doesn't cover. Never added to it: "Ben Okafor charged $10.00 meanwhile:
+ * it isn't in this payment; confirm it on its own, or with Confirm all after this one." (owner, Nov 3).
+ */
+export const notInAllLine = (who: string, cents: number) => `${who} ${who.startsWith("The team") ? "added" : "charged"} ${money(cents)} meanwhile: it isn't in this payment; confirm it on its own, or with Confirm all after this one`;
 async function allChanges(devId: string, since: Date, oneId: string) {
   const { inAll } = await import("./confirmAll");
-  const { owedItemName } = await import("./holds");
   const fresh = (await db.payment.findMany({ where: { developerId: devId, createdAt: { gt: since }, actionPi: { not: null }, coveredById: null, NOT: { id: oneId } }, orderBy: { createdAt: "asc" } })).filter(inAll);
   const out: Line[] = [];
-  for (const p of fresh) out.push({ text: `Also waiting for your bank now: ${await owedItemName(p)} ${money(p.amountCents)}`, at: p.createdAt });
+  for (const p of fresh) out.push({ text: notInAllLine(p.kind === "dispute" ? "The team's dispute decision" : await testerOf(p.contractId), p.amountCents), at: p.createdAt });
   return after(out, since);
 }
 
@@ -161,7 +174,7 @@ export async function peekBankCheck(dev: { id: string }, body: Record<string, un
     // (§160) A new card cancelled it (§148), or it lapsed: its Complete reserves nothing.
     if (since && ["cancelled", "expired", "failed"].includes(reservation.status)) return { status: "waiting", cancelled: cancelledLine(reservation.status === "cancelled" ? CANCELLED_WHY.card : CANCELLED_WHY.pressRanOut) };
     const status = reservation.stripePaymentIntentId ? await piAnswer(reservation.stripePaymentIntentId) : "waiting";
-    return since ? withChanges(status, await owedChanges(dev.id, since, new Set(reservation.covers)), reservation.amountCents, true) : { status };
+    return since ? withChanges(status, await owedChanges(dev.id, since, new Set(reservation.covers), true), reservation.amountCents, true) : { status };
   }
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (!p || p.developerId !== dev.id) throw new HttpError(404, "not_found", NOTHING);

@@ -6,7 +6,7 @@
 export const NOTICE_HEAD = "While your bank's page was open:";
 
 /** Under the changes: the press still goes through as pressed when Complete is pressed ("reserves" for a chargeback hold's Pay what you owe). */
-export const stillPaysLine = (amount: string, reserve = false) => `Complete still ${reserve ? "reserves" : "pays"} ${amount} as pressed; or press Close.`;
+export const stillPaysLine = (amount: string, reserve = false) => `Complete still ${reserve ? "reserves" : "pays"} ${amount} as pressed; or press Cancel.`;
 
 /** The cancelled check: "This bank check was cancelled: your tests were paused (a payment hold started). Pressing Complete won't charge anything." */
 export const cancelledLine = (why: string, card = false) => `This bank check was cancelled: ${why}. ${card ? "Pressing Complete won't verify this card." : "Pressing Complete won't charge anything."}`;
@@ -24,3 +24,21 @@ export const CANCELLED_WHY = {
 
 /** A change line as the notice shows it: one sentence, ending with its stop. */
 export const noticeLine = (text: string) => (/[.!?)”"]$/.test(text.trim()) ? text.trim() : `${text.trim()}.`);
+
+// (Owner, Nov 3, §160) The button under the open bank window is "Cancel" again. Pressed (or the page closed or reloaded while the window is open), the server asks
+// Stripe first: a payment that went through is recorded as paid and the box just closes; otherwise the developer's own press is cancelled at Stripe (nothing charged)
+// and what it covered is payable again. A charge made while the developer was away is never cancelled (that would count as declined): it keeps waiting.
+export const BANK_CANCEL = "Cancel";
+/** Under Cancel: what it does, per kind of check. */
+export const CANCEL_HINTS = {
+  press: "Already finished with your bank? It's recorded as paid; otherwise nothing is charged.",
+  waits: "Already finished with your bank? It's recorded as paid; otherwise nothing is charged and it keeps waiting for your bank.",
+  all: "Already finished with your bank? It's recorded as paid; otherwise nothing is charged and each payment keeps waiting for your bank.",
+  card: "Already finished with your bank? Your card is verified; otherwise nothing is saved.",
+} as const;
+export type CancelKind = keyof typeof CANCEL_HINTS;
+/** A charge made while away, its window closed unfinished: it keeps waiting with its own date. */
+export const STILL_WAITS = "Nothing was charged: this payment still waits for your bank.";
+export const stillWaitingLine = (by: string) => `${STILL_WAITS} Confirm with your bank by ${by}.`;
+/** (§160) The developer's own press with its bank window open elsewhere (another tab, or left): its Cancel there. */
+export const CANCEL_THIS_CHECK = "Cancel this check";

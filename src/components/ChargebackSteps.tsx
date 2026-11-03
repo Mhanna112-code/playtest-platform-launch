@@ -7,7 +7,7 @@ import { api, errOf } from "@/lib/client";
 import { stepsLine } from "@/lib/pause";
 import { useBankCheck } from "@/components/BankCheck";
 import { CARD_NOT_VERIFIED } from "@/lib/rules";
-import { peekBank, type Simulate } from "@/lib/bankConfirm";
+import { leaveBeacon, peekBank, type Simulate } from "@/lib/bankConfirm";
 
 type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[] };
 
@@ -45,9 +45,10 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   const done = fin.line || (fin.done ? " " : "");
   // (Batch 17 §11) The bank's check (3D Secure) opens inline, under the button; with the fake Stripe, the clearly-marked stand-in.
   const bank = useBankCheck();
-  const finish = (setupIntent: string) => (simulate?: Simulate) => api<{ verified: boolean }>("/api/payments/verify-card", { finish: true, setupIntent, ...(simulate ? { simulate } : {}) });
+  // (§160) Ended without a verified card (Cancel, or the bank refused): the server cancels the card check at Stripe too (`cancel`).
+  const finish = (setupIntent: string) => (simulate?: Simulate) => api<{ verified: boolean }>("/api/payments/verify-card", { finish: true, setupIntent, cancel: true, ...(simulate ? { simulate } : {}) });
   const check = async (setupIntent: string, checkUrl: string | null, simulated: boolean) => {
-    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent), (since) => peekBank({ setupIntent }, since)); // (§158; §160: a cancelled card check is said)
+    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl, cancel: "card" }, finish(setupIntent), (since) => peekBank({ setupIntent }, since), () => void leaveBeacon("/api/payments/verify-card", { finish: true, setupIntent, cancel: true })); // (§158; §160: a cancelled card check is said; leaving the page cancels it)
     fin.finish("Card verified.");
   };
   const mount = useRef<HTMLDivElement>(null);

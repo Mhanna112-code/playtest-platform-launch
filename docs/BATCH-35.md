@@ -1929,7 +1929,7 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
   within the bank window, not below the box). The app's blue "info" style, as the stop boxes use.
 - **What it says.**
   - Changes: "While your bank's page was open:" then each line ("Ana Silva disputed the pay for her recording."), then "Complete still pays $10.00 as
-    pressed; or press Close." ("reserves" for a chargeback hold's Pay what you owe). Plain changes never close the box: the developer decides.
+    pressed; or press Cancel." ("reserves" for a chargeback hold's Pay what you owe). Plain changes never close the box: the developer decides.
   - Cancelled: "This bank check was cancelled: <reason>. Pressing Complete won't charge anything." Reasons: "your tests were paused (a payment hold
     started)", "you saved a new card", "its 15 minutes ran out", "the 3 days to confirm it ran out", "this payment is paused until your tests resume", "it
     was made in Stripe's other mode (test or live)", otherwise "it was ended elsewhere (in another tab, or by the team)". Verify a card: "… Pressing Complete
@@ -1946,19 +1946,51 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
     chargeback or an owed charge: "Added to what you owe meanwhile: …"), and a disputed amount the bank changed ("Your bank changed the disputed amount of your
     $444.67 payment from $96.00 to $80.00"). What the one payment covers isn't a line; a tester's Charge that came in during the hold waits for the lift and
     never stopped the press (§125), so it isn't either.
-  - Confirm all: a new charge made while away it doesn't cover ("Also waiting for your bank now: … $5.00").
+  - Confirm all: a new charge made while away it doesn't cover is never added to it: "Ben Okafor charged $10.00 meanwhile: it isn't in this payment; confirm it on its
+    own, or with Confirm all after this one."
+  - Pay what you owe (owner's §125 rule, unchanged): a charge arriving while its check is open isn't added either: "Ben Okafor charged $10.00 meanwhile: it's charged
+    right after this payment goes through."
   - Subscribe, a renewal, Verify a card: only `cancelled`.
 - **Cancelled.** A payment whose check no longer waits and wasn't paid (cancelled, paused/"deferred", or ran out to a decline), a reservation cancelled or
   lapsed, a SetupIntent Stripe cancelled. The check was cancelled at Stripe by whatever ended it (never by the peek), so Complete charges nothing; the peek
-  then answers "waiting" so the box stays open with its notice, and the bank's return message or Close ends it with the usual finish ("nothing was charged").
+  then answers "waiting" so the box stays open with its notice, and the bank's return message or Cancel ends it with the usual finish ("nothing was charged").
   A check that had already gone through when it was cancelled was recorded as paid: not cancelled, done as before.
 - **Read-only, still.** The peek claims nothing, writes no log (nothing is marked answered or seen), and never finishes, cancels, releases or charges: the
   stop-once lines come from `devGate` run without a press (it only reads, and throws its stop, which the peek catches).
+- **Cancel (owner, Nov 3; replaces §158's "Close").** The button under the open bank window is "Cancel" again. Pressed, the server asks Stripe FIRST:
+  - went through (succeeded, or processing): recorded as paid, once, and the box just closes ("Paid $10.00 to Ana Silva.");
+  - not: the developer's own press (Pay, Pay more, Pay what you owe, Subscribe, Confirm all's one payment) is cancelled at Stripe (nothing charged) and what it
+    covered is payable again at once (Confirm all: each charge back to its own "Confirm with your bank" with its ORIGINAL date, a new off-session check each, no
+    decline, no hold, as §147 built it). Verify a card: its SetupIntent is cancelled at Stripe (nothing saved);
+  - the cancel at Stripe finds it had just gone through: recorded paid once, and said so (never "nothing was charged");
+  - EXCEPTION: a single "Confirm with your bank" on a charge made while the developer was away (a tester's Charge, a team decision, a retry, a renewal) is never
+    cancelled (that would count as declined and start a hold): the window closes and the charge keeps waiting with its own 3-day date: "Nothing was charged:
+    this payment still waits for your bank. Confirm with your bank by Fri, Nov 6, 4:26 PM." (Stripe stays Incomplete).
+  Hints under Cancel: "Already finished with your bank? It's recorded as paid; otherwise nothing is charged." (own presses), "…; otherwise nothing is charged and
+  it keeps waiting for your bank." (Confirm with your bank), "…; otherwise nothing is charged and each payment keeps waiting for your bank." (Confirm all),
+  "Already finished with your bank? Your card is verified; otherwise nothing is saved." (Verify a card). The stand-in (fake Stripe) keeps Confirm / Cancel.
+- **Leaving the page.** Closing or reloading the page with the window open does what Cancel does: on `pagehide` the box sends the same finish request with
+  `navigator.sendBeacon` (`POST /api/payments/confirm { paymentId, leave: true }`, or Verify a card's `{ finish, setupIntent, cancel }`), which outlives the
+  page. Only a crash leaves it open; then the 15-minute clock ends it.
+- **The box stays put (bug found while recording).** A redraw while the window was open replaced the box and the bank's page under the developer (the
+  Invite panel's availability poll redrew without checking for an open bank check, and a redrawn Pay box turned into "Confirming with your bank"). Now the
+  Invite panel waits while a bank check is open, a Pay box keeps its own open check through a redraw, and when the check ends the page's live checks run at
+  once (no stale "waiting for your bank" until the next 20-second beat).
 - **Code.** `lib/bankNotice.ts` (wording), `lib/server/bankPeek.ts` (`changes`, `cancelled`, `still`), `lib/bankConfirm.ts` (`peekBank(target, since)`,
-  `watchBank(…, onNews)`), `components/BankCheck.tsx` (`BankNotice`, `addNews`; `useBankCheck` sends the box's open time; a custom peek gets it too:
-  ChargebackSteps' Verify a card). No migration.
+  `watchBank(…, onNews)`, `leaveBeacon`), `components/BankCheck.tsx` (`BankNotice`, `addNews`; `useBankCheck` sends the box's open time; a custom peek gets it
+  too: ChargebackSteps' Verify a card; Cancel and its hint per `BankAction.cancel`; the pagehide beacon), `lib/server/confirm.ts` `confirmFinish` (processing
+  counts as paid; paid-at-cancel; the still-waiting line), `api/payments/verify-card` (cancel the SetupIntent), `BankWaiting` / `ConfirmAll` /
+  `ChargebackSteps` (their Cancel kinds), `InvitePanel` and `PayBox` (the box stays put). No migration.
 - **Tests:** `tests/batch35-bank-notice.test.ts` (a change after the press is a line with what Complete still does, one before isn't, asked twice the same;
   Alerts-ignored types aren't lines but the team's dispute decision is, another tab's own action is and this tab's isn't; Confirm all's and Pay what you owe's
   changes; a hold or a new card cancels with its reason and the box stays open; still-open or paid checks are never cancelled; the peek changes nothing (rows,
-  action logs, reviews, Stripe calls); the notice renders inside the box above the frame and never duplicates a line; plain changes never end the watch).
-  `batch35-bank-peek` follows the new peek answer and watch.
+  action logs, reviews, Stripe calls); the notice renders inside the box above the frame and never duplicates a line; plain changes never end the watch;
+  Cancel on an unfinished Pay cancels at Stripe and the part is payable again; Cancel after the bank finished records it paid once (a second Cancel or the
+  beacon charges nothing); a cancel that finds it just succeeded records it paid once; Cancel on a charge made while away never cancels it (same date, no
+  hold); Pay what you owe's notice names a charge that waits instead of being added; the page has Cancel with its hint and the pagehide beacon).
+  `batch35-bank-peek` follows the new peek answer and watch; `batch17-bank-check` expects Cancel under the frame and the still-waiting line.
+- **Recorded (real Stripe test mode, card 4000 0027 6000 3184, the Stripe viewer beside the app):** every rule clip with the window open (the same tester's
+  decision, another tester's decision with Decisions on / off, work on the same part with Work sent off, work on another part on / off, the tester's dispute
+  on / off), the cancelled check (hold, new card in another tab, ran out), the tester's dispute during a Pay more, Charge / Let it go before and during the
+  check and at the same moment, Cancel / reload / Confirm with your bank, Confirm all with new charges stacking. The suspension cancel (feat/pay-matrix) is not
+  recorded: not on master yet.
