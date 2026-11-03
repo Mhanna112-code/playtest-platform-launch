@@ -438,7 +438,7 @@ describe("Y) cross-tab sign-in", () => {
     expect(watch).not.toContain("Signed in as someone else");
     expect(watch).not.toContain("data-wrong-account");
     expect(watch).toContain("window.location.replace(landingOfNewSignIn())");
-    expect(src("components/AuthForm.tsx")).toContain('announceAuth("in", p.next || "/app")');
+    expect(src("components/AuthForm.tsx")).toContain('announceAuth("in", next || "/app")');
     expect(src("components/SignOut.tsx")).toContain('window.location.href = "/login"');
     expect(src("lib/client.ts")).toContain('"x-uid"');
     expect(src("lib/client.ts")).toContain("account_changed");
