@@ -360,7 +360,7 @@ describe("§125: the whole box is locked while the one payment's check is open",
     const lines = await owedLines(w.dev.user.id);
     expect(lines.map((l) => [l.id, l.waiting, l.checkId])).toEqual([[d.id, true, one.id], [a.id, true, one.id]]);
     const n = st.made.length;
-    expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "bank_waiting" });
+    expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "owed_in_flight", message: expect.stringContaining(") is waiting for your bank in another tab or window: finish that check, or cancel it.") }); // (§160) refused with the plain line
     await runDaily(new Date());
     expect(st.made.length).toBe(n);
     expect(st.cancelled).toEqual([]);
@@ -503,7 +503,7 @@ describe("§125: Pay what you owe's check against a new card, running out, and a
     const late = await waiting(w, 2, 1100);
     const lines = await owedLines(w.dev.user.id);
     expect(lines.find((l) => l.id === late.id)).toMatchObject({ retry: false, waiting: true, after: "Charged right after the payment above goes through" });
-    expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "bank_waiting" });
+    expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "owed_in_flight", message: expect.stringContaining(") is waiting for your bank in another tab or window: finish that check, or cancel it.") }); // (§160) refused with the plain line
     expect((await oneOf(w.dev.user.id)).amountCents).toBe(1800);
     st.ask.clear();
     st.approve(one.actionPi!);

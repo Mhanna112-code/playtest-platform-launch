@@ -42,3 +42,8 @@ export const STILL_WAITS = "Nothing was charged: this payment still waits for yo
 export const stillWaitingLine = (by: string) => `${STILL_WAITS} Confirm with your bank by ${by}.`;
 /** (§160) The developer's own press with its bank window open elsewhere (another tab, or left): its Cancel there. */
 export const CANCEL_THIS_CHECK = "Cancel this check";
+/**
+ * (Owner, Nov 3, §160) Pay what you owe's check (its one payment, or a chargeback hold's reservation) is being made or waits for the bank in another tab: that tab's
+ * box hides the button and says so (with Cancel this check); a press from an older page is refused with the same line (never a stop-once, never "already reserved").
+ */
+export const owedElsewhereLine = (amount: string) => `Pay what you owe (${amount}) is waiting for your bank in another tab or window: finish that check, or cancel it.`;

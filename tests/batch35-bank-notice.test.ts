@@ -414,4 +414,48 @@ describe("§160 an open bank check stays open only while its page is open (heart
     expect(read("app/app/tests/[id]/PayBox.tsx")).toContain("<BankWaiting own paymentId={p.confirming}");
     expect(read("components/BankWaiting.tsx")).toContain("{own && !doneLine && <button");
   });
+
+  it("Pay what you owe while its reservation is at the bank in another tab: an older page's press is refused with the plain line (never a stop-once, never 'already reserved')", async () => {
+    const o = await payOpen();
+    const dev = o.dev.user.id;
+    await db.payment.update({ where: { id: o.paymentId }, data: { status: "charged", actionPi: null, settledAt: new Date(), chargeback: "open", chargebackAt: new Date(Date.now() - 60_000) } });
+    await db.user.update({ where: { id: dev }, data: { holdStartedAt: new Date(Date.now() - 60_000), holdReason: "chargeback", chargebackCardVerifiedAt: new Date() } });
+    const { owedLines } = await import("@/lib/server/holds");
+    const shown = (await owedLines(dev)).filter((l) => l.retry);
+    const pi = "pi_res_" + randomUUID();
+    o.st.status.set(pi, { status: "requires_action" });
+    const res = await db.reservation.create({ data: { developerId: dev, amountCents: 2500, covers: shown.map((l) => l.id), status: "needs_action", stripePaymentIntentId: pi, actionBy: new Date(Date.now() + 900_000) } });
+    const { POST: owedPOST } = await import("@/app/api/payments/owed/route");
+    const r = await owedPOST(req("/api/payments/owed", { cookie: o.dev.cookie, body: { seenTotalCents: shown.reduce((s, l) => s + l.amountCents, 0), seenIds: shown.map((l) => l.id), confirmed: false } })).then(json);
+    expect(r.status).toBe(409);
+    expect(r.body.error).toMatchObject({ code: "owed_in_flight", message: "Pay what you owe ($25.00) is waiting for your bank in another tab or window: finish that check, or cancel it." });
+    expect(await db.reservation.count({ where: { developerId: dev } })).toBe(1);
+    // Once reserved, a press says it's reserved (and only then).
+    await db.reservation.update({ where: { id: res.id }, data: { status: "reserved" } });
+    const again = await owedPOST(req("/api/payments/owed", { cookie: o.dev.cookie, body: { seenTotalCents: 0, seenIds: [], confirmed: true } })).then(json);
+    expect(again.body.error.code).not.toBe("owed_in_flight");
+    expect(fs.readFileSync(path.resolve(__dirname, "../src/components/OwedBox.tsx"), "utf8")).toContain("owedElsewhereLine(money(elsewhereCents))");
+  });
+
+  it("Pay what you owe: a redraw counts as seen (the box sends what it drew last); a change not drawn yet still stops once", async () => {
+    const o = await payOpen();
+    const dev = o.dev.user.id;
+    await db.payment.update({ where: { id: o.paymentId }, data: { status: "cancelled", actionPi: null } });
+    await db.user.update({ where: { id: dev }, data: { holdStartedAt: new Date(Date.now() - 60_000), holdReason: "unpaid" } });
+    const a = await db.payment.create({ data: { kind: "review", developerId: dev, testerId: o.tester.user.id, contractId: o.sessionId, amountCents: 700, feeCents: 0, testerCents: 700, status: "failed", owedUntil: new Date(Date.now() - 30_000) } });
+    const { POST: owedPOST } = await import("@/app/api/payments/owed/route");
+    const press = (seen: number, ids: string[]) => owedPOST(req("/api/payments/owed", { cookie: o.dev.cookie, body: { seenTotalCents: seen, seenIds: ids, confirmed: false } })).then(json);
+    // A new debt arrives; the page that drew only the first one: stops once naming it.
+    const b = await db.payment.create({ data: { kind: "review", developerId: dev, testerId: o.tester.user.id, contractId: o.sessionId, amountCents: 300, feeCents: 0, testerCents: 300, status: "failed", owedUntil: new Date() } });
+    const stale = await press(700, [a.id]);
+    expect(stale.body.error).toMatchObject({ code: "stop_once" });
+    // The page redrew with both rows: its press is checked against what it drew, and goes ahead (the bank's check opens for $10.00).
+    const drawn = await press(1000, [a.id, b.id]);
+    expect(drawn.status).toBe(200);
+    expect(drawn.body.confirm?.[0]).toMatchObject({ requiresAction: true });
+    expect(await db.payment.findFirstOrThrow({ where: { developerId: dev, kind: "owed" } })).toMatchObject({ amountCents: 1000 });
+    const box = fs.readFileSync(path.resolve(__dirname, "../src/components/OwedBox.tsx"), "utf8");
+    expect(box).toContain("if (drawn !== lastDrawn) {");
+    expect(box).toMatch(/if \(!changes\) \{\s+setTotal\(seenTotal\);\s+setShownIds\(retry\.map\(\(o\) => o\.id\)\);/);
+  });
 });

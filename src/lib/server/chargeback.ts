@@ -80,7 +80,10 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
   // under the developer's row lock and only when none is open (being made, waiting for the bank, or reserved): the second press reserves nothing.
   const r = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${u.id} FOR UPDATE`;
-    if (await tx.reservation.count({ where: { developerId: u.id, status: { in: ["pending", "needs_action", "reserved"] } } })) return null;
+    // (Owner, Nov 3, §160) One being made or at the bank (another tab): refused with that line; "already reserved" only when it really is.
+    const open = await tx.reservation.findFirst({ where: { developerId: u.id, status: { in: ["pending", "needs_action", "reserved"] } }, orderBy: { createdAt: "desc" }, select: { status: true, amountCents: true } });
+    if (open && open.status !== "reserved") return { elsewhere: open.amountCents };
+    if (open) return null;
     // (Owner, Nov 3, races) The bank changed the disputed part after the press read what is owed (it takes this same lock): what the rows come to is read again
     // here, and a total that changed reserves nothing (the press stops once on the new total, below).
     const fresh = await tx.payment.findMany({ where: { id: { in: rows.map((p) => p.id) } }, select: { id: true, amountCents: true, reversedCents: true, chargeback: true } });
@@ -92,6 +95,7 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
     return tx.reservation.create({ data: { developerId: u.id, amountCents: total, covers: rows.map((p) => p.id), status: "pending", actionBy: new Date(now.getTime() + PRESS_ACTION_MS) } });
   });
   if (!r) throw new HttpError(409, "nothing_owed", (await import("./holds")).ALREADY_RESERVED);
+  if ("elsewhere" in r) throw new HttpError(409, "owed_in_flight", (await import("@/lib/bankNotice")).owedElsewhereLine(money(r.elsewhere)));
   if ("changed" in r) {
     // (Owner, Nov 3, races) Pay what you owe's own stop-once line, with the new total; the second press reserves it.
     const ids = (await (await import("./holds")).owedLines(u.id)).filter((l) => l.retry).map((l) => l.id);

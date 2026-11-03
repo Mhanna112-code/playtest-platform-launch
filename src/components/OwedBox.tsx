@@ -10,6 +10,7 @@ import { type BankAction } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, OWED_BANK_WAITING, OWED_HOW, PAY_TICK_CENTS, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 import { refusalLine } from "@/lib/pressLabels";
+import { owedElsewhereLine } from "@/lib/bankNotice";
 
 /** (Owner, Nov 3) Lines shown before "Show all". */
 const OWED_FOLD = 4;
@@ -64,10 +65,23 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
   // One check covers every debt it paid: its Cancel sits next to the first of them (shown even while the list is folded).
   const cancelAt = (o: Line, i: number) => !!(o.waiting && o.checkId && owed.findIndex((x) => x.checkId === o.checkId) === i);
   const retry = owed.filter((o) => o.retry);
+  // (§160) The rows a check of Pay what you owe covers (a reservation or its one payment: their check isn't the row's own).
+  const elsewhereCents = owed.filter((o) => o.waiting && o.checkId && o.checkId !== o.id && !o.after).reduce((s, o) => s + o.amountCents, 0);
   const seenTotal = retry.reduce((s, o) => s + o.amountCents, 0);
   // What the page / the stop box showed last: every press (the second too) is checked against it.
   const [total, setTotal] = useState(seenTotal);
   const [shownIds, setShownIds] = useState(retry.map((o) => o.id));
+  // (Owner, Nov 3, §160) A redraw counts as seen: when the page draws new rows (a live redraw), the next press is checked against THEM, not the first render's.
+  // While a stop box shows, its own values win (the press after it is checked against what the box said).
+  const drawn = `${seenTotal}|${retry.map((o) => o.id).join(",")}`;
+  const [lastDrawn, setLastDrawn] = useState(drawn);
+  if (drawn !== lastDrawn) {
+    setLastDrawn(drawn);
+    if (!changes) {
+      setTotal(seenTotal);
+      setShownIds(retry.map((o) => o.id));
+    }
+  }
   // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: with a reservation in place the button is disabled, and what was added since is charged after the lift.
   const reservedOnce = chargeback && reservedCents > 0;
   // (Owner, Nov 3, §150) Over $200 (the amount on the button) the tick "I confirm this payment is over $200." shows next to it, and the button waits for it. It stays
@@ -119,6 +133,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
           {allLines ? "Show fewer" : `Show all ${owed.length} lines`}
         </button>
       )}
+      {/* (Owner, Nov 3, §160) Pay what you owe's check is open in another tab (or window): no button here; the line says so (Cancel this check sits on its rows). */}
+      {!bank.open && !done && retry.length === 0 && elsewhereCents > 0 && <p data-owed-elsewhere="">{owedElsewhereLine(money(elsewhereCents))}</p>}
       {retry.length > 0 && <div className="flex flex-wrap items-center gap-2">
       {over && (
         <label className="flex max-w-xs items-start gap-2 text-sm" data-over-tick="">
