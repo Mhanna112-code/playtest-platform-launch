@@ -8,7 +8,7 @@ import { Banknote, CreditCard, ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { money } from "@/lib/server/dateFormat";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
-import { PAYMENTS_OFF, stripeOn } from "@/lib/server/stripe";
+import { PAYMENTS_OFF, PAYOUT_ALREADY_CONNECTED, stripeOn } from "@/lib/server/stripe";
 import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -44,6 +44,7 @@ const MESSAGES: Record<string, string> = {
   verify: "We couldn't verify the card. Try again or use another card.",
   confirm: "Confirm your email first: payouts go only to a confirmed account. We sent you a link.",
   card_limit: TOO_MANY_CARD_ATTEMPTS, // (batch 35 §127) shown under Add a card / Change card, not up here
+  payout_ready: PAYOUT_ALREADY_CONNECTED, // (Owner, Nov 3, §157) payout setup pressed from a page that didn't show it connected
   paused: PAYMENTS_OFF, // (§130) live keys while payments are switched off (STRIPE_ALLOW_LIVE not set): Add a card / payout setup
 };
 
@@ -63,7 +64,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const side = sideFor(u);
   const dev = side === "developer", tester = side === "tester";
   const returnSide = q.saved === "card" || q.saved === "verified" || q.error === "card" || q.error === "card_limit" || q.error === "verify" ? "developer"
-    : q.saved === "payout" || q.pending === "payout" || q.error === "payout" || q.error === "confirm" ? "tester" : null;
+    : q.saved === "payout" || q.pending === "payout" || q.error === "payout" || q.error === "payout_ready" || q.error === "confirm" ? "tester" : null;
   if (hasBoth(u) && returnSide && returnSide !== side) {
     const again = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === "string")).toString();
     return <OtherSidePage side={returnSide} next={`/app/payments${again ? `?${again}` : ""}`} />;

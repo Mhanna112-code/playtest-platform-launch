@@ -546,6 +546,8 @@ describe("a hold starting cancels every waiting check; Verify a card then finds 
     const res = await db.reservation.findFirstOrThrow({ where: { developerId: w.dev.user.id } });
     expect(res.status).toBe("needs_action");
     st.card.customer = w.customer; st.card.next = "pm_verified"; st.card.user = w.dev.user.id;
+    // (Batch 35 §157) A verified card is never verified again ("Your card is already verified."): this check began before the first one was recorded.
+    await db.user.update({ where: { id: w.dev.user.id }, data: { chargebackCardVerifiedAt: null } });
     const { finishCardVerification } = await import("@/lib/server/chargeback");
     await finishCardVerification(w.dev.user.id, "seti_" + randomUUID());
     expect(st.cancelled).toEqual([res.stripePaymentIntentId]);

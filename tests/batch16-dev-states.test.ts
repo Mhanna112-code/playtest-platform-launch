@@ -91,7 +91,7 @@ describe("developer, stopped / closed or paused / held: what still works follows
     expect((await act(w.testId, "next-round", w.dev.cookie, B)).body.error.code).toBe("stop_once");
     expect((await act(w.testId, "next-round", w.dev.cookie, { ...B, confirmed: true, boxAt: seen() })).status).toBe(200);
     // Repeats are plain refusals.
-    expect((await act(w.testId, "dispute-side", w.dev.cookie, { disputeId: d.id, text: "Again", ...B })).body.error.message).toBe("You already sent your side.");
+    expect((await act(w.testId, "dispute-side", w.dev.cookie, { disputeId: d.id, text: "Again", ...B })).body.error.message).toBe("You already added your side.");
   });
 
   it("paused (a payment hold): Stop, End early and Cancel call stop once for news, then go ahead", async () => {

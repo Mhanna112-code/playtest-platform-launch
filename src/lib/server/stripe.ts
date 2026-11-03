@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { splitFee } from "@/lib/rules";
 import { money } from "@/lib/format";
 import { HttpError } from "./http";
-import { cardLabel, logAccountChange } from "./accountChanges";
+import { ACCOUNT, cardLabel, logAccountChange } from "./accountChanges";
 import { appUrl } from "./auth";
 
 // Stripe in test mode: developers save a card (Checkout in setup mode) and are charged off-session when they press Pay;
@@ -426,14 +426,28 @@ export async function resendWaitingShares() {
 /** "Your payout setup is done: $8.00 on its way." */
 export const payoutDoneLine = (cents: number) => `Your payout setup is done: ${money(cents)} on its way.`;
 
-/** Developer: Stripe Checkout in setup mode to save a card. */
-export async function cardSetupUrl(user: Party, base: string) {
-  const stripe = getStripe();
-  const newCustomer = async () => {
-    const id = (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
-    await db.user.update({ where: { id: user.id }, data: { stripeCustomerId: id } });
+/**
+ * (Owner, Nov 3, §157) The developer's ONE Stripe customer: read again and, when there is none, made under their row lock, so two first "Add a card" presses (two
+ * tabs) share one customer and both tabs' cards can be saved on it. `stale`: the id §130 just found unknown to Stripe (a new one is made in its place).
+ */
+const CARD_FIELD = '"field":"card"';
+export async function ensureCustomer(user: { id: string; email: string }, stale: string | null = null) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
+    const cur = (await tx.user.findUniqueOrThrow({ where: { id: user.id }, select: { stripeCustomerId: true } })).stripeCustomerId;
+    if (cur && cur !== stale) return cur;
+    const id = (await getStripe().customers.create({ email: user.email, metadata: { userId: user.id } })).id;
+    await tx.user.update({ where: { id: user.id }, data: { stripeCustomerId: id } });
     return id;
-  };
+  }, { maxWait: 20_000, timeout: 30_000 });
+}
+
+/**
+ * Developer: Stripe Checkout in setup mode to save a card. (§157) `press`: the Payments page's time for this press (its seen time, or the stop box's) and its tab, kept
+ * on the Checkout session so the return can tell whether another tab saved a card meanwhile.
+ */
+export async function cardSetupUrl(user: Party, base: string, press: { since?: string; tab?: string } = {}) {
+  const stripe = getStripe();
   const session = (customer: string) => stripe.checkout.sessions.create({
     mode: "setup",
     customer,
@@ -441,39 +455,61 @@ export async function cardSetupUrl(user: Party, base: string) {
     allowed_payment_method_types: CARD_TYPES,
     success_url: `${base}/api/payments/card-saved?session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${base}/app/payments`,
+    metadata: { userId: user.id, since: (press.since ?? "").slice(0, 40), tab: (press.tab ?? "").slice(0, 64) },
   });
-  const customer = user.stripeCustomerId ?? (await newCustomer());
+  const customer = await ensureCustomer(user);
   try {
     return (await session(customer)).url!;
   } catch (e) {
     // (§130) The saved customer is unknown to Stripe: the stale card is cleared and the card is saved on a new customer.
-    if (!isMissing(e) || !user.stripeCustomerId) throw e;
+    if (!isMissing(e)) throw e;
     await forgetCard(user.id);
-    return (await session(await newCustomer())).url!;
+    return (await session(await ensureCustomer(user, customer))).url!;
   }
 }
 
-export async function saveCardFromCheckout(userId: string, sessionId: string) {
+/**
+ * The card typed on Stripe's Checkout becomes the card on file. (Owner, Nov 3, §157) When another tab's card was saved after this press (two Change card checkouts
+ * finishing), this one is not saved: the return stops once on Payments with the formGate box naming that change ("Card: Visa ending 1111 → Visa ending 4242");
+ * Change card again saves on top. Returns `{ stop }` (the press's time and tab) then.
+ */
+export async function saveCardFromCheckout(userId: string, sessionId: string): Promise<{ stop?: { since: string; tab: string } }> {
   const stripe = getStripe();
   const s = await stripe.checkout.sessions.retrieve(sessionId, { expand: ["setup_intent"] });
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
-  if (s.customer !== user.stripeCustomerId) throw new HttpError(403, "bad_session", "That card setup belongs to another account.");
+  if (!s.customer || s.customer !== user.stripeCustomerId) throw new HttpError(403, "bad_session", "That card setup belongs to another account.");
   const si = s.setup_intent as Stripe.SetupIntent | null;
   const pm = typeof si?.payment_method === "string" ? si.payment_method : si?.payment_method?.id;
   if (!pm) throw new HttpError(400, "no_card", "The card wasn't saved. Try again.");
-  await stripe.customers.update(user.stripeCustomerId!, { invoice_settings: { default_payment_method: pm } });
   const paymentMethod = await stripe.paymentMethods.retrieve(pm);
-  await db.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm, cardExpMonth: paymentMethod.card?.exp_month ?? null, cardExpYear: paymentMethod.card?.exp_year ?? null } });
-  // (Owner, Oct 28, batch 16 section 27) "Card: Visa ending 1111 → Visa ending 4242" for a Payments page open in another tab or device.
-  if (user.stripePaymentMethodId !== pm) {
-    const label = async (id: string | null) => (id ? cardLabel(await stripe.paymentMethods.retrieve(id).then((x) => x.card ?? {}, () => ({}))) : "no card");
-    await logAccountChange(userId, "", { scopes: ["payments"], field: "card", label: "Card", before: await label(user.stripePaymentMethodId), after: await label(pm) });
-  }
+  const label = async (id: string | null) => (id ? cardLabel(id === pm ? paymentMethod.card ?? {} : await stripe.paymentMethods.retrieve(id).then((x) => x.card ?? {}, () => ({}))) : "no card");
+  const sinceRaw = typeof s.metadata?.since === "string" ? s.metadata.since : "";
+  const since = sinceRaw ? new Date(sinceRaw) : null;
+  const tab = typeof s.metadata?.tab === "string" ? s.metadata.tab : "";
+  const after = await label(pm);
+  const before = await label(user.stripePaymentMethodId);
+  // The check and the save together, under the developer's row lock (two returns at once: one saves, the other stops once).
+  const saved = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${userId} FOR UPDATE`;
+    if (since && !isNaN(since.getTime())) {
+      const changed = await tx.actionLog.count({ where: { userId, testId: ACCOUNT, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : {}), text: { contains: CARD_FIELD } } });
+      if (changed) return null;
+    }
+    const cur = await tx.user.findUniqueOrThrow({ where: { id: userId }, select: { stripePaymentMethodId: true } });
+    await tx.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm, cardExpMonth: paymentMethod.card?.exp_month ?? null, cardExpYear: paymentMethod.card?.exp_year ?? null } });
+    // (Owner, Oct 28, batch 16 section 27) "Card: Visa ending 1111 → Visa ending 4242" for a Payments page open in another tab or device (recorded in the same
+    // commit, so a return waiting on the lock sees it).
+    if (cur.stripePaymentMethodId !== pm) await logAccountChange(userId, tab, { scopes: ["payments"], field: "card", label: "Card", before: cur.stripePaymentMethodId === user.stripePaymentMethodId ? before : "a card", after }, tx);
+    return { was: cur.stripePaymentMethodId };
+  }, { maxWait: 20_000 });
+  if (!saved) return { stop: { since: sinceRaw, tab } };
+  await stripe.customers.update(user.stripeCustomerId!, { invoice_settings: { default_payment_method: pm } });
   // (Owner, Nov 2, batch 35 §117 rule 1) ONE CARD IN PLAY: every bank check still waiting (made on the old card) is cancelled at Stripe and each charge made while
   // away is made again on the new card at once (§148: debts are not: they wait for Pay what you owe).
-  if (user.stripePaymentMethodId !== pm) await (await import("./owedOnce")).newCardChecks(userId).catch((e) => console.error("[card] new card checks:", (e as Error).message));
+  if (saved.was !== pm) await (await import("./owedOnce")).newCardChecks(userId).catch((e) => console.error("[card] new card checks:", (e as Error).message));
   // (Owner, Nov 3, batch 35 §148) Saving a card never charges what's owed (a debt): it waits for the developer's Pay what you owe. Only charges made while away
   // move to the new card (above); Payments just says "Card saved.".
+  return {};
 }
 
 /** (Batch 34 §6) Refresh saved-card expiry from Stripe and send each threshold once. Missing cards are handled only when a charge fails. */
@@ -509,25 +545,38 @@ export async function cardExpiryReminders(now = new Date()) {
   return sent;
 }
 
+/**
+ * (Owner, Nov 3, §157) The tester's ONE Express account: read again and, when there is none, made under their row lock, so a first payout setup pressed in two tabs
+ * makes one account. `stale`: the id §130 just found unknown to Stripe.
+ */
+async function ensurePayoutAccount(user: { id: string; email: string }, stale: string | null = null) {
+  return db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${user.id} FOR UPDATE`;
+    const cur = (await tx.user.findUniqueOrThrow({ where: { id: user.id }, select: { stripeAccountId: true } })).stripeAccountId;
+    if (cur && cur !== stale) return cur;
+    const id = (await getStripe().accounts.create({ type: "express", email: user.email, capabilities: { transfers: { requested: true } }, metadata: { userId: user.id } })).id;
+    await tx.user.update({ where: { id: user.id }, data: { stripeAccountId: id, payoutsReady: false } });
+    return id;
+  }, { maxWait: 20_000, timeout: 30_000 });
+}
+
 /** Tester: Stripe Connect Express onboarding link. */
 export async function payoutSetupUrl(user: Party, base: string) {
   const stripe = getStripe();
-  const newAccount = async () => {
-    const id = (await stripe.accounts.create({ type: "express", email: user.email, capabilities: { transfers: { requested: true } }, metadata: { userId: user.id } })).id;
-    await db.user.update({ where: { id: user.id }, data: { stripeAccountId: id, payoutsReady: false } });
-    return id;
-  };
   const link = (account: string) => stripe.accountLinks.create({ account, type: "account_onboarding", refresh_url: `${base}/app/payments`, return_url: `${base}/api/payments/payout-return` });
-  const account = user.stripeAccountId ?? (await newAccount());
+  const account = await ensurePayoutAccount(user);
   try {
     return (await link(account)).url;
   } catch (e) {
     // (§130) The saved account is unknown to Stripe: cleared, and onboarding starts on a new account.
-    if (!isMissing(e) || !user.stripeAccountId) throw e;
+    if (!isMissing(e)) throw e;
     await forgetPayout(user.id);
-    return (await link(await newAccount())).url;
+    return (await link(await ensurePayoutAccount(user, account))).url;
   }
 }
+
+/** (Owner, Nov 3, §157) Payout setup pressed when the account is already connected (another tab, or Stripe's update meanwhile). */
+export const PAYOUT_ALREADY_CONNECTED = "Your payout account is already connected.";
 
 /**
  * (Owner, Oct 30, batch 15 section 4) A tester's Express account is ready for payouts when Stripe has payouts on and the transfers capability is active. These accounts only

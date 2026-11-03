@@ -42,7 +42,7 @@ export function TesterAlertsOff({ show, where }: { show: boolean; /** (Batch 30 
     <div className="mt-1 space-y-1 text-xs text-sky-200/90" data-quick-alerts-off="">
       {/* (Batch 30 §10) The join page has no test page yet: Alerts is on the dashboard. */}
       <p>{where === "join" ? "You can turn these stops off below, or with Alerts on your dashboard." : "You can turn these stops off below, or with Alerts at the top of your test's page."} New terms from the developer, a key marked as working and what you did in another tab still stop.</p>
-      <button type="button" className="btn-ghost !rounded-md !px-2 !py-0.5 text-xs" disabled={done} onClick={() => void api("/api/account/tester-alerts", { off: true }).then(() => { setPressed(true); setTesterAlertsOff(true); publishTesterAlertsOff(true); }).catch(() => null)}>{done ? "Alerts are off" : "Turn off alerts"}</button>
+      <button type="button" className="btn-ghost !rounded-md !px-2 !py-0.5 text-xs" disabled={done} onClick={() => void api("/api/account/tester-alerts", { alerts: "off" }).then(() => { setPressed(true); setTesterAlertsOff(true); publishTesterAlertsOff(true); }).catch(() => null)}>{done ? "Alerts are off" : "Turn off alerts"}</button>
     </div>
   );
 }

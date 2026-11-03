@@ -483,7 +483,7 @@ On a paused test (any cause) the Alerts menu lists only the kinds that can still
   - Pay more on the same piece: the box updates to the new paid total and room; the amount and note you typed stay.
   - Call changes: the Live session updates at once; anything you were requesting that is now booked or requested is marked "Already booked" or "Already requested", and the rest of your request form stays.
   - Invite and Cancel invite: the invite panel updates at once (Invited <date>, or tickable again).
-- **The same press on the same item is refused, with no stop box:** "You already rated Ana Silva.", "You already allowed this excerpt.", "You already declined this application.", "You already sent your side." The page updates to show it.
+- **The same press on the same item is refused, with no stop box:** "You already rated Ana Silva.", "You already allowed this excerpt.", "You already declined this application.", "You already added your side." The page updates to show it.
 - **Everything else from another tab** (Alerts ticks, chat, the side of a dispute, a call's problem report): no line in the top box; the side of a dispute and a problem report stop only a press on the same thing.
 - On a stopped, closed or paused test, and while the developer is held or suspended, these stop a press the same way (Stopped tests on Every page).
 

@@ -265,10 +265,17 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
   if (r.status === "taken") return `${r.closedReason}.`;
   if (r.status === "withdrawn") return mine ? "You already withdrew this request." : `${otherName} withdrew this request at ${fmtTime(r.updatedAt)}.`;
   if (r.status === "declined") return mine ? `${otherName} declined this request at ${fmtTime(r.updatedAt)}.` : "You already declined this request.";
-  if (r.status === "booked") return `This time was booked at ${fmtTime(r.updatedAt)}.`;
+  // (Owner, Nov 3, §157) Only the side that didn't ask books a request: booked when it isn't yours means your other tab's Accept.
+  if (r.status === "booked") return mine ? `This time was booked at ${fmtTime(r.updatedAt)}.` : `You already accepted this request at ${fmtTime(r.updatedAt)}.`;
   if (!mine && r.fromSide === "developer") return `The call time ${fmtDateTime(r.startsAt)} is no longer available.`;
   return `This request closed${r.closedReason ? `: ${r.closedReason}` : ""}.`;
 };
+
+/** (§157) Decide a request only while it is still pending (one claim); a press that lost to another tab or the other side reads what happened. */
+async function claimRequest(id: string, status: string, other: Parameters<typeof displayName>[0], mine: boolean) {
+  if ((await db.callRequest.updateMany({ where: { id, status: "pending" }, data: { status, decidedAt: new Date() } })).count === 1) return;
+  throw new HttpError(409, "gone", refusalFor(await db.callRequest.findUniqueOrThrow({ where: { id } }), displayName(other), mine));
+}
 
 async function refusals(c: Ctx["c"], side: Side) {
   if (c.status !== "working") throw new HttpError(409, "closed", side === "tester" ? "Your session has ended." : `${displayName(c.tester)}'s session has ended.`);
@@ -473,59 +480,69 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });
   if (action === "accept") {
     await refusals(c, side);
-    // Every call books at the contract rate, fixed at acceptance (every week of a weekly); a call that isn't a listed part has none.
-    const rate = bookRate(c.test, c);
-    // The other side picks ONE row; a repeating row books its whole set (Forever: the next 4 ahead).
-    const rowsR = rowsOf(r);
+    // (Owner, Nov 3, §157) Claimed before anything is checked or booked: of two Accepts (two tabs), or an Accept and a Withdraw / Decline at the same moment,
+    // exactly one goes through; the other reads what happened (refusalFor), never the first one's booking as a clash. A check or a booking that fails afterwards
+    // puts the request back as it was.
+    await claimRequest(r.id, "booked", other, mine);
+    let first: Awaited<ReturnType<typeof bookAt>> | null = null;
+    let times: Date[] = [];
     let row: CallRow;
-    if (rowsR.length === 1) row = rowsR[0];
-    else {
-      const pick = body.time ? new Date(String(body.time)) : null;
-      const chosen = pick ? rowsR.find((x) => x.startsAt.getTime() === pick.getTime()) : undefined;
-      if (!chosen) throw new HttpError(400, "pick", "Pick one of the times.");
-      row = chosen;
-    }
-    // (Owner, Nov 2, batch 35 §132) The time must still be inside the call window: at least the lead ahead NOW (a request from 2 days ago for tomorrow can't be booked
-    // once it's less than 24 hours away) and no later than when testers' work on this test ends; a set's calls after the end are dropped (as when it was sent).
-    const end = await workEndOf(db, c.testId);
-    if (!farEnoughAhead(row.startsAt)) throw new HttpError(409, "too_soon", tooSoonToBookLine(fmtDateTime(row.startsAt), CALL_MIN_AHEAD_MINUTES));
-    const inWindow = cutRow(row, end);
-    if (!inWindow) throw new HttpError(409, "after_end", afterEndToBookLine(fmtDateTime(row.startsAt), fmtDateTime(end!)));
-    row = inWindow;
-    const times = occurrences(row, end);
-    if (row.repeat !== "once") {
-      // Every call is checked; any clash refuses the whole request and names the week(s) / day(s).
-      const bad: string[] = [];
-      for (const [i, t] of times.entries()) {
-        const cl = await acceptClash(c, side, [t], r.minutes);
-        if (cl.length) bad.push(`${row.repeat === "daily" ? "day" : "week"} ${i + 1} (${fmtDateTime(t)}): ${cl[0]}`);
+    const rate = bookRate(c.test, c);
+    try {
+      // Every call books at the contract rate, fixed at acceptance (every week of a weekly); a call that isn't a listed part has none (`rate`, above).
+      // The other side picks ONE row; a repeating row books its whole set (Forever: the next 4 ahead).
+      const rowsR = rowsOf(r);
+      if (rowsR.length === 1) row = rowsR[0];
+      else {
+        const pick = body.time ? new Date(String(body.time)) : null;
+        const chosen = pick ? rowsR.find((x) => x.startsAt.getTime() === pick.getTime()) : undefined;
+        if (!chosen) throw new HttpError(400, "pick", "Pick one of the times.");
+        row = chosen;
       }
-      if (bad.length) throw new HttpError(409, "clash", `These ${row.repeat === "daily" ? "days" : "weeks"} clash: ${bad.join(" ")}`);
-    } else {
-      const clashes = await acceptClash(c, side, times, r.minutes);
-      if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
+      // (Owner, Nov 2, batch 35 §132) The time must still be inside the call window: at least the lead ahead NOW (a request from 2 days ago for tomorrow can't be booked
+      // once it's less than 24 hours away) and no later than when testers' work on this test ends; a set's calls after the end are dropped (as when it was sent).
+      const end = await workEndOf(db, c.testId);
+      if (!farEnoughAhead(row.startsAt)) throw new HttpError(409, "too_soon", tooSoonToBookLine(fmtDateTime(row.startsAt), CALL_MIN_AHEAD_MINUTES));
+      const inWindow = cutRow(row, end);
+      if (!inWindow) throw new HttpError(409, "after_end", afterEndToBookLine(fmtDateTime(row.startsAt), fmtDateTime(end!)));
+      row = inWindow;
+      times = occurrences(row, end);
+      if (row.repeat !== "once") {
+        // Every call is checked; any clash refuses the whole request and names the week(s) / day(s).
+        const bad: string[] = [];
+        for (const [i, t] of times.entries()) {
+          const cl = await acceptClash(c, side, [t], r.minutes);
+          if (cl.length) bad.push(`${row.repeat === "daily" ? "day" : "week"} ${i + 1} (${fmtDateTime(t)}): ${cl[0]}`);
+        }
+        if (bad.length) throw new HttpError(409, "clash", `These ${row.repeat === "daily" ? "days" : "weeks"} clash: ${bad.join(" ")}`);
+      } else {
+        const clashes = await acceptClash(c, side, times, r.minutes);
+        if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
+      }
+      if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
+      // (Batch 18 section 6) A request longer than what's left of the $1,000 allows: "At most 95 minutes: ...".
+      const overCap = await lengthOverCap(r.minutes, [{ contractId, rateCents: rate, name: side === "developer" ? displayName(c.tester) : displayName(c.test.developer) }]);
+      if (overCap) throw new HttpError(409, "calls_ceiling", overCap);
+      // (Batch 15 section 34) A pending request over the $1,000 for calls can't be accepted.
+      await checkCeiling(contractId, rate, r.minutes, times.length, side === "developer" ? displayName(c.tester) : displayName(c.test.developer));
+      // A repeating pick is one CallSet (it counts as 1 of the 3 booked times); Forever keeps the next 4 ahead.
+      const set = row.repeat === "once" ? null : await db.callSet.create({ data: { testId: c.testId, contractId, repeat: row.repeat, count: row.count, minutes: r.minutes, rateCents: rate, nextAt: new Date(row.startsAt.getTime() + times.length * stepMs(row.repeat)) } });
+      for (const t of times) {
+        const call = await bookAt(contractId, t, r.minutes, rate, set?.id ?? null, side === "developer");
+        first = first ?? call;
+      }
+    } catch (e) {
+      if (!first) await db.callRequest.updateMany({ where: { id: r.id, status: "booked", callId: null }, data: { status: "pending", decidedAt: null } });
+      throw e;
     }
-    if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
-    // (Batch 18 section 6) A request longer than what's left of the $1,000 allows: "At most 95 minutes: ...".
-    const overCap = await lengthOverCap(r.minutes, [{ contractId, rateCents: rate, name: side === "developer" ? displayName(c.tester) : displayName(c.test.developer) }]);
-    if (overCap) throw new HttpError(409, "calls_ceiling", overCap);
-    // (Batch 15 section 34) A pending request over the $1,000 for calls can't be accepted.
-    await checkCeiling(contractId, rate, r.minutes, times.length, side === "developer" ? displayName(c.tester) : displayName(c.test.developer));
-    let first = null;
-    // A repeating pick is one CallSet (it counts as 1 of the 3 booked times); Forever keeps the next 4 ahead.
-    const set = row.repeat === "once" ? null : await db.callSet.create({ data: { testId: c.testId, contractId, repeat: row.repeat, count: row.count, minutes: r.minutes, rateCents: rate, nextAt: new Date(row.startsAt.getTime() + times.length * stepMs(row.repeat)) } });
-    for (const t of times) {
-      const call = await bookAt(contractId, t, r.minutes, rate, set?.id ?? null, side === "developer");
-      first = first ?? call;
-    }
-    await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
+    await db.callRequest.update({ where: { id: r.id }, data: { callId: first!.id } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
     const what = row.repeat === "once" ? T(times[0]) : row.count ? `${times.length} ${unitOf(row.repeat)} calls from ${T(times[0])}` : `${unitOf(row.repeat)} calls from ${T(times[0])} (until testers' work ends)`;
     await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";
-  await db.callRequest.update({ where: { id: r.id }, data: { status, decidedAt: new Date() } });
+  await claimRequest(r.id, status, other, mine);
   // (Owner bug, Oct 31, batch 35 §74) The developer's own withdraw / decline is theirs ("You …": never a stop from the same page; another tab's is the action log's
   // "You withdrew a call request for … in another tab"), and the past tense is "withdrew" (it read "dev withdrawn a call request").
   const verb = status === "withdrawn" ? "withdrew" : "declined";

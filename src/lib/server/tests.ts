@@ -315,12 +315,28 @@ export async function postDraft(dev: U, testId: string, body: Record<string, unk
 
 /** (Owner, Oct 28 evening) Delete a draft from its Post page (after the confirm pop-up). Nobody can have joined a draft. */
 export async function deleteDraft(dev: U, testId: string) {
-  const t = await ownTest(dev.id, testId);
+  const t = await db.test.findUnique({ where: { id: testId } });
+  // (Owner, Nov 3, batch 35 §157) Deleted in another tab (or by both presses at once): "You already deleted this draft.", never "doesn't exist" or a 500.
+  if (!t && (await draftDeletedBy(dev.id, testId))) throw new HttpError(409, "deleted", DRAFT_ALREADY_DELETED);
+  if (!t || t.developerId !== dev.id) throw new HttpError(404, "not_found", "That test doesn't exist or isn't yours.");
   if (t.status !== "draft") throw new HttpError(409, "not_draft", "Only a draft can be deleted.");
-  await db.test.delete({ where: { id: testId } });
+  // One claim: deleted only while still this developer's draft, with its record (which draft, by whom) in the same commit.
+  const gone = await db.$transaction(async (tx) => {
+    const n = (await tx.test.deleteMany({ where: { id: testId, developerId: dev.id, status: "draft" } })).count;
+    if (n) await tx.actionLog.create({ data: { userId: dev.id, testId: DRAFT_DELETED, tab: testId, text: "deleted the draft" } });
+    return n;
+  });
+  if (!gone) {
+    if (await draftDeletedBy(dev.id, testId)) throw new HttpError(409, "deleted", DRAFT_ALREADY_DELETED);
+    throw new HttpError(409, "not_draft", (await db.test.findUnique({ where: { id: testId }, select: { status: true } }))?.status === "stopped" ? "This test was stopped." : "Only a draft can be deleted.");
+  }
   await db.keptForm.deleteMany({ where: { userId: dev.id, key: `test:draft:${testId}` } }).catch(() => null);
   return { deleted: true };
 }
+/** (§157) The ActionLog "test" that records a deleted draft (its id in `tab`): never a real test id. */
+const DRAFT_DELETED = "draft-deleted";
+export const DRAFT_ALREADY_DELETED = "You already deleted this draft.";
+const draftDeletedBy = async (devId: string, testId: string) => !!(await db.actionLog.findFirst({ where: { userId: devId, testId: DRAFT_DELETED, tab: testId }, select: { id: true } }));
 
 export async function createTest(dev: U, body: Record<string, unknown>) {
   // (Batch 31) At most 10 spots; (design doc 4) with access keys, at least as many keys as open spots.
@@ -570,7 +586,13 @@ export async function openDraft(dev: U, testId: string, body: Record<string, unk
   await devGateIfSeen(testId, body, { acts: ["open"], keys: ["test"] });
   if (t.status !== "draft") throw new HttpError(409, "not_draft", t.status === "stopped" ? "This test was stopped." : "This test is already open.");
   await postPerks(dev.id, t.joinMode, testId);
-  return db.$transaction((tx) => recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open", testerDays: testerDaysFor(t.openUntil, dev) }));
+  // (Owner, Nov 3, batch 35 §157) Checked again under the test's lock: of two Opens at once (two tabs) one opens it and records "opened"; the other reads
+  // "This test is already open."
+  return db.$transaction(async (tx) => {
+    const now = await lockTest(tx, testId);
+    if (now.status !== "draft") throw new HttpError(409, "not_draft", now.status === "stopped" ? "This test was stopped." : "This test is already open.");
+    return recordEvent(tx, testId, "opened", "The test opened for testers", true, { status: "open", testerDays: testerDaysFor(t.openUntil, dev) });
+  });
 }
 
 /** (Batch 15 section 18) Tester days at the moment a test opens: today (the developer's date) to Open until. */

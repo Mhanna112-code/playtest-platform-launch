@@ -481,13 +481,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             const who = displayName(mine[0].c.tester);
             return (
               <details key={cid} open className="rounded-xl border border-white/10 p-2" data-needs-person={who}>
-                {/* (Owner, Nov 3, long text) A long name wraps beside the arrow (never past the box); the count follows it, kept on one line. */}
-                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><Cut text={who} /> <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
+                {/* (Owner, Nov 3, long text) A long name wraps beside the arrow (never past the box); the count follows it, kept on one line. (Owner, Nov 3) The name is the
+                    tester's link (green), shown here only, not again on each part. */}
+                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><a href={`/app/testers/${mine[0].c.testerId}`}><Cut text={who} /></a> <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
                 <div className="mt-2 space-y-3">
           {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
               <p className="text-sm font-medium">
-                <a href={`/app/testers/${x.c.testerId}`}><Cut text={displayName(x.c.tester)} /></a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "updated" : "sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
+                {/* (Owner, Nov 3) The tester's name (their link) is on the fold above, once; each part starts with what it is. */}
+                {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "updated" : "sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
               </p>
               {/* (Batch 17 §19) The last 7 days before close-out. */}
               {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}

@@ -75,8 +75,16 @@ async function tell(dev: Dev, line: string, always = false) {
 
 /** Record one subscription charge as a payment row (the receipts list; a chargeback on it starts a chargeback hold like any other). */
 async function recordCharge(dev: Dev, r: { status: string; stripePaymentIntentId: string | null }, cents = SUBSCRIPTION_CENTS) {
-  await db.payment.create({ data: { kind: "subscription", developerId: dev.id, testerId: dev.id, amountCents: cents, feeCents: cents, testerCents: 0, transferStatus: "none", settledAt: new Date(), ...r } });
+  // (§157) Two Subscribes at once share one charge (the same one-time key): it is recorded, and receipted, once; the later press is "You're already subscribed."
+  const made = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${dev.id} FOR UPDATE`;
+    if (r.stripePaymentIntentId && (await tx.payment.count({ where: { kind: "subscription", developerId: dev.id, stripePaymentIntentId: r.stripePaymentIntentId } }))) return false;
+    await tx.payment.create({ data: { kind: "subscription", developerId: dev.id, testerId: dev.id, amountCents: cents, feeCents: cents, testerCents: 0, transferStatus: "none", settledAt: new Date(), ...r } });
+    return true;
+  });
+  if (!made) return false;
   await receipt(dev.email, `your subscription (${SUBSCRIPTION_PRICE})`, cents, r.status, "/app/payments#subscription");
+  return true;
 }
 
 /**
@@ -126,6 +134,8 @@ export async function subscribe(dev: Dev, now = new Date()) {
   if (launch.free && !launch.until) throw new HttpError(409, "free", "Everything is free during launch: there's nothing to subscribe to yet.");
   if (stripeOn() && (!u.stripeCustomerId || !u.stripePaymentMethodId)) throw new HttpError(409, "no_card", "Add a card first, then subscribe.");
   const startsCharging = launch.free && launch.until ? launch.until : now;
+  // (Owner, Nov 3, §157) A Subscribe from another tab already waits for the bank: one check at a time (finish or cancel that one).
+  if (await openSubCheck(u.id)) throw new HttpError(409, "check_waiting", SUBSCRIBE_CHECK_WAITING);
   // (Batch 19 section 5) A Subscribe whose bank check was cancelled (or failed) freed the press: the next one is a new attempt with a new one-time key (a double press
   // of one attempt shares it, so it is charged once).
   const tries = await db.payment.count({ where: { kind: "subscription", developerId: u.id, status: { in: ["cancelled", "failed"] }, note: { startsWith: "sub:" } } });
@@ -155,11 +165,12 @@ export async function subscribe(dev: Dev, now = new Date()) {
           });
         }
         if (pi?.status === "requires_action") {
-          const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note: `sub:${s.id}` } });
+          const row = await checkRow(u.id, `sub:${s.id}`, () => stripe.subscriptions.cancel(s.id), pi.id);
           return (await import("./confirm")).pressAction(row.id, { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) });
         }
-        if (pi?.status === "succeeded") await recordCharge(u, { status: "charged", stripePaymentIntentId: pi.id });
-        else {
+        if (pi?.status === "succeeded") {
+          if (!(await recordCharge(u, { status: "charged", stripePaymentIntentId: pi.id }))) alreadySubscribed();
+        } else {
           // Declined (or no payment to confirm): the incomplete subscription is cancelled (its invoice is voided), nothing was charged.
           await stripe.subscriptions.cancel(s.id).catch(() => null);
           throw new Error("incomplete");
@@ -190,21 +201,48 @@ export async function subscribe(dev: Dev, now = new Date()) {
     });
     if (!r) throw new HttpError(402, "card_failed", "Your card was declined, so you're not subscribed. Update your card and try again.");
     if (r.status === "requires_action") {
-      const row = await db.payment.create({ data: { kind: "subscription", developerId: u.id, testerId: u.id, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note: "sub:manual" } });
+      const row = await checkRow(u.id, "sub:manual", () => getStripe().paymentIntents.cancel(r.stripePaymentIntentId!), r.stripePaymentIntentId);
       return (await import("./confirm")).pressAction(row.id, r as NeedsAction);
     }
-    await recordCharge(u, r);
+    if (!(await recordCharge(u, r))) alreadySubscribed();
   }
-  return activate(u, now, id, startsCharging);
+  return (await activate(u, now, id, startsCharging)) ?? alreadySubscribed();
+}
+const alreadySubscribed = (): never => { throw new HttpError(409, "already", "You're already subscribed."); };
+
+/** (Owner, Nov 3, §157) "Your Subscribe is already waiting for your bank: …": a Subscribe pressed while another tab's Subscribe waits for the bank. */
+export const SUBSCRIBE_CHECK_WAITING = "Your Subscribe is already waiting for your bank: finish that check, or cancel it.";
+/** A Subscribe's bank check still open (its 15 minutes not run out). */
+const openSubCheck = (devId: string, tx: Pick<typeof db, "payment"> = db) =>
+  tx.payment.findFirst({ where: { kind: "subscription", developerId: devId, status: "needs_action", note: { startsWith: "sub:" }, OR: [{ actionBy: null }, { actionBy: { gt: new Date() } }] } });
+/**
+ * (§157) The Subscribe's bank-check row, made under the developer's row lock: when another tab's Subscribe made one meanwhile (both pressed at once), this press is
+ * refused and its own check is dropped at Stripe (with the shared one-time key it is usually the same check: then nothing is dropped), so there is ONE check, ONE
+ * activation and ONE receipt.
+ */
+async function checkRow(devId: string, note: string, drop: () => Promise<unknown>, piId: string | null) {
+  const made = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${devId} FOR UPDATE`;
+    const open = await openSubCheck(devId, tx);
+    if (open) return { open };
+    return { row: await tx.payment.create({ data: { kind: "subscription", developerId: devId, testerId: devId, amountCents: SUBSCRIPTION_CENTS, feeCents: SUBSCRIPTION_CENTS, testerCents: 0, transferStatus: "none", status: "needs_action", note, stripePaymentIntentId: piId } }) };
+  });
+  if (made.row) return made.row;
+  const o = made.open!;
+  const same = (!!piId && o.stripePaymentIntentId === piId) || (note !== "sub:manual" && o.note === note);
+  if (!same) await drop().catch(() => null);
+  throw new HttpError(409, "check_waiting", SUBSCRIBE_CHECK_WAITING);
 }
 
 /** The subscription starts (after the first payment, or straight away during a free launch). */
-async function activate(u: Dev, now: Date, id: string, startsCharging: Date) {
+async function activate(u: Dev & { subscriptionStatus: string; subscribedAt: Date | null }, now: Date, id: string, startsCharging: Date) {
   const renews = startsCharging > now ? startsCharging : periodEnd(now, now);
-  await db.user.update({
-    where: { id: u.id },
+  // (§157) Once: claimed against the state this press read, so a start another tab recorded meanwhile is not started, or told, again.
+  const started = await db.user.updateMany({
+    where: { id: u.id, subscriptionStatus: u.subscriptionStatus, subscribedAt: u.subscribedAt },
     data: { subscriptionStatus: "active", subscriptionId: id, subscribedAt: now, subscriptionAnchorAt: startsCharging, subscriptionRenewsAt: renews, subscriptionCanceling: false, subscriptionEndedAt: null, subscriptionEndReason: "", subscriptionPastDueAt: null, subscriptionPausedAt: null },
   });
+  if (started.count !== 1) return null;
   await tell(u, startsCharging > now ? `You're subscribed (${SUBSCRIPTION_PRICE}): the first charge is on ${T(startsCharging, "dateYear")}` : `You're subscribed (${SUBSCRIPTION_PRICE}), renewing ${T(renews, "dateYear")}`);
   return { subscribed: true, renewsAt: renews };
 }
@@ -217,9 +255,11 @@ export async function subscriptionConfirmed(paymentId: string, now = new Date())
   const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
   const u = await userOf(p.developerId);
   const first = p.status === "needs_action";
-  await db.payment.update({ where: { id: p.id }, data: { status: "charged", settledAt: now, actionPi: null, actionBy: null, stripePaymentIntentId: p.actionPi } });
+  // (§157) Claimed: a payment already recorded as charged is never recorded, receipted or activated again.
+  const claimed = await db.payment.updateMany({ where: { id: p.id, status: { in: ["needs_action", "needs_confirmation"] } }, data: { status: "charged", settledAt: now, actionPi: null, actionBy: null, stripePaymentIntentId: p.actionPi ?? p.stripePaymentIntentId } });
+  if (claimed.count !== 1) return { subscribed: true, repeated: true };
   await receipt(u.email, `your subscription (${SUBSCRIPTION_PRICE})`, p.amountCents, "charged", "/app/payments#subscription");
-  if (first) return activate(u, now, p.note.startsWith("sub:") && p.note !== "sub:manual" ? p.note.slice(4) : "manual", now);
+  if (first) return (await activate(u, now, p.note.startsWith("sub:") && p.note !== "sub:manual" ? p.note.slice(4) : "manual", now)) ?? { subscribed: true };
   await renewed(u.id, now);
   return { subscribed: true };
 }

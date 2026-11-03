@@ -178,7 +178,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     expect(texts(st)).toEqual(lines);
     expect((await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "B", ...again() })).status).toBe(200);
     expect(src("lib/server/excerpts.ts")).toContain('"You already allowed this excerpt."');
-    expect(src("lib/rules.ts")).toContain('no("You already sent your side.")');
+    expect(src("lib/rules.ts")).toContain('DEV_SIDE_ALREADY = "You already added your side."');
   });
 });
 

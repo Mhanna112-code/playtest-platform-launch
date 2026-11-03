@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
 import { displayName, fmtDateIn, money, pronouns } from "@/lib/format";
+import { isUniqueClash } from "./passwords";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
@@ -219,6 +220,11 @@ async function devRateGate(testId: string, contractId: string, body: Record<stri
   const pending = await unanswered(devId, testId, lines);
   if (pending.length) stopBox(pending.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
+/** (Owner, Nov 3, batch 35 §157) Two Rates at the same moment (two tabs): the rating's unique key keeps one; the other reads "You already rated <name>." (never a 500). */
+const ratedOnce = (already: string) => (e: unknown): never => {
+  if (isUniqueClash(e)) throw new HttpError(409, "rated", already);
+  throw e;
+};
 function refuse(s: RateState, already: string): never {
   if (s.kind === "rated") throw new HttpError(409, "rated", already);
   throw new HttpError(409, s.line === RATE_INACTIVE ? "inactive" : "not_yet", s.line);
@@ -247,7 +253,7 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     // testers). Either stops the developer's presses once; never the stars (the blind reveal).
     if (wasWorking) await recordEvent(tx, c.testId, "left", `${finishedAndRatedLine(displayName(tester))}`, true, {}, c.id);
     else await recordEvent(tx, c.testId, "rated", `${ratedYouLine(displayName(tester))}`, false, {}, c.id);
-  });
+  }).catch(ratedOnce(`You already rated ${displayName(c0.test.developer)}.`));
   // (Batch 17 section 16) The developer's Rate (and its 14 days) opens once everything this tester sent is settled too: now, or when the last piece is.
   await maybeOpenDevRating(contractId);
   await spotOpened(c0.testId);
@@ -269,7 +275,7 @@ export async function devRate(dev: { id: string; name: string; email: string }, 
     await lockTest(tx, testId);
     await tx.rating.create({ data: { testId, contractId, side: "developer", raterId: dev.id, rateeId: c0.testerId, ...r, revealedAt: now } });
     await tx.rating.updateMany({ where: { contractId, side: "tester", revealedAt: null }, data: { revealedAt: now } });
-  });
+  }).catch(ratedOnce(`You already rated ${displayName(c0.tester)}.`));
   return { rated: true };
 }
 

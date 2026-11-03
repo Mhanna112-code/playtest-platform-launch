@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BellRing } from "lucide-react";
 import { Err } from "@/components/Err";
-import { api, errOf } from "@/lib/client";
+import { api, ApiError, errOf } from "@/lib/client";
+import { ChangesBox, type Change } from "@/components/ChangesBox";
+import { mergeChanges } from "@/lib/live";
 
 const FREQUENCY: [string, string][] = [
   ["daily", "Daily"],
@@ -12,7 +14,7 @@ const FREQUENCY: [string, string][] = [
 ];
 
 /** How you're notified (the full app's fold on the notifications page): the email setting. */
-export function AlertSettings({ emailPref, side = null }: { emailPref: string; side?: "developer" | "tester" | null }) {
+export function AlertSettings({ emailPref, side = null, seenAt: seen0 }: { emailPref: string; side?: "developer" | "tester" | null; seenAt?: string }) {
   const router = useRouter();
   const dirty = useRef(false);
   const [pref, setPref] = useState(emailPref === "off" ? "off" : ["weekly", "monthly"].includes(emailPref) ? emailPref : "daily");
@@ -23,8 +25,13 @@ export function AlertSettings({ emailPref, side = null }: { emailPref: string; s
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [saved, setSaved] = useState(false);
+  // (Owner, Nov 3, batch 35 §157) Settings changed in another tab or device since the page opened: the first Save stops once with what changed (the box under
+  // Save); the second goes ahead.
+  const [seenAt, setSeenAt] = useState(seen0 ?? "");
+  const [changes, setChanges] = useState<Change[] | null>(null);
+  const [boxAt, setBoxAt] = useState("");
   return (
-    <details className="card" open={!!err}>
+    <details className="card" open={!!err || changes != null}>
       <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><BellRing className="h-5 w-5 text-volt-300" /> How you&apos;re notified</summary>
       <form
         className="mt-4 space-y-4 text-sm"
@@ -34,12 +41,17 @@ export function AlertSettings({ emailPref, side = null }: { emailPref: string; s
           setErr("");
           setSaved(false);
           try {
-            await api("/api/account/notify", { emailPref: pref });
+            const r = await api<{ at?: string }>("/api/account/notify", { emailPref: pref, ...(seenAt ? { seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) } : {}) });
+            if (typeof r?.at === "string") setSeenAt(r.at);
+            setChanges(null);
             setSaved(true);
             dirty.current = false;
             router.refresh();
           } catch (x) {
-            setErr(errOf(x));
+            if (x instanceof ApiError && x.code === "stop_once") {
+              setChanges((c) => (c ? mergeChanges(c, (x.data.changes as Change[]) ?? []) : ((x.data.changes as Change[]) ?? [])));
+              if (typeof x.data.now === "string") setBoxAt(x.data.now);
+            } else setErr(errOf(x));
           } finally {
             setBusy(false);
           }
@@ -63,6 +75,7 @@ export function AlertSettings({ emailPref, side = null }: { emailPref: string; s
           <button className="btn" disabled={busy}>Save</button>
           {saved && <span className="text-emerald-300" role="status">Your alert settings are saved.</span>}
         </div>
+        <ChangesBox changes={changes} press="Save" />
         <Err text={err} press="Save" />
       </form>
     </details>

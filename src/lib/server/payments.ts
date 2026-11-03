@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, toCents } from "@/lib/server/dateFormat";
-import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
+import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -11,6 +11,8 @@ import { blockedEitherWay } from "./blocks";
 import { labelled, reportedOver3 } from "./reports";
 import { partAnchor } from "@/lib/links";
 import { isAdmin } from "./session";
+import { isUniqueClash } from "./passwords";
+import { ownChange, presserOf, youAlready, type Presser } from "./adminRace";
 import { PAYMENTS_PROBLEM, cardRefusal, charge, type NeedsAction } from "./stripe";
 import { describedOnce, stripeDescription } from "./paymentRows";
 import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
@@ -254,7 +256,11 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   const roomCents = bounds ? bounds.max - bounds.min : 0;
   const ok = canDispute(review.amountCents, review.agreedCents, !!existing, byTesterChoice(review.reason), bounds ? bounds.max - bounds.min : null);
   if (!ok.ok) throw new HttpError(409, "no_dispute", ok.message);
-  const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } });
+  // (Owner, Nov 3, §157) Two Disputes at the same moment (two tabs): the piece's one dispute is the unique key; the later one reads the usual line, never a 500.
+  const d = await db.dispute.create({ data: { ...where, contractId, testerId: tester.id, reason } }).catch((e) => {
+    if (isUniqueClash(e)) throw new HttpError(409, "no_dispute", ALREADY_DISPUTED);
+    throw e;
+  });
   // (Batch 15 section 35) The live line opens its Needs you row, like the bell line.
   await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId, `item-dispute-${d.id}`);
   await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, `Our team decides. A decision can only raise the pay, ${disputeLimitText(roomCents)}.`], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
@@ -312,7 +318,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   const d = await db.dispute.findUnique({ where: { id: disputeId } });
   if (!d) throw new HttpError(404, "not_found", "That dispute doesn't exist.");
   // (Batch 15 section 21) The two-admin refusal names the other admin by email: "ben@… already decided this dispute at 3:10 PM."
-  if (d.status !== "open") throw new HttpError(409, "decided", await decidedByLine(d.decidedById, d.decidedAt));
+  if (d.status !== "open") throw new HttpError(409, "decided", await decidedByLine(d.decidedById, d.decidedAt, presserOf(admin.id, body)));
   // (§86) Decide answers this dispute, including its developer-side line.
   const seen = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
   if (seen && !isNaN(seen.getTime()) && d.devSideAt && d.devSideAt > seen) {
@@ -374,7 +380,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   if (!claim) {
     // Any admin, first decision wins: the second press says who and when.
     const won = await db.dispute.findUnique({ where: { id: d.id } });
-    throw new HttpError(409, "decided", await decidedByLine(won?.decidedById ?? null, won?.decidedAt ?? null));
+    throw new HttpError(409, "decided", await decidedByLine(won?.decidedById ?? null, won?.decidedAt ?? null, presserOf(admin.id, body)));
   }
   const { due, line } = claim;
   let delayed = false;
@@ -426,8 +432,13 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   return { extraCents: due };
 }
 
-/** "ben@playtest.test already decided this dispute at 3:10 PM." ("An admin (deleted)" once that account is gone). */
-async function decidedByLine(byId: string | null, at: Date | null) {
+/**
+ * "ben@playtest.test already decided this dispute at 3:10 PM." ("An admin (deleted)" once that account is gone). (Owner, Nov 3, §157; like §45) The same admin's
+ * own decision: "You already decided this dispute in another tab at 3:10 PM." (no "in another tab" when this page made it).
+ */
+async function decidedByLine(byId: string | null, at: Date | null, p: Presser | null = null) {
+  const own = at ? await ownChange(p, byId, at) : null;
+  if (own && at) return youAlready("decided this dispute", own, at);
   const by = byId ? await db.user.findUnique({ where: { id: byId }, select: { email: true, deletedAt: true } }) : null;
   const who = by && !by.deletedAt ? by.email : byId ? "An admin (deleted)" : "Another admin";
   return `${who} already decided this dispute${at ? ` at ${fmtTime(at)}` : ""}.`;
@@ -449,7 +460,13 @@ export async function addDevSide(dev: U, testId: string, body: Record<string, un
   const text = readText(body.text, LIMITS.devSide, "dev_side");
   const ok = checkDevSide(text, !!d.devSideAt);
   if (!ok.ok) throw new HttpError(ok.message.startsWith("You already") ? 409 : 400, "dev_side", ok.message);
-  await db.dispute.update({ where: { id: d.id }, data: { devSide: text, devSideAt: new Date() } });
+  // (Owner, Nov 3, §157) Claimed: once, while the dispute is open. Two presses at once (two tabs): one side is kept, the other reads "You already added your side.";
+  // a decision made meanwhile: "This dispute was already decided."
+  const claimed = await db.dispute.updateMany({ where: { id: d.id, devSideAt: null, status: "open" }, data: { devSide: text, devSideAt: new Date() } });
+  if (claimed.count !== 1) {
+    const now = await db.dispute.findUniqueOrThrow({ where: { id: d.id }, select: { status: true, devSideAt: true } });
+    throw new HttpError(409, now.devSideAt ? "dev_side" : "decided", now.devSideAt ? DEV_SIDE_ALREADY : "This dispute was already decided.");
+  }
   return { ok: true };
 }
 

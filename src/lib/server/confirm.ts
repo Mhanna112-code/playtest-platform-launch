@@ -280,6 +280,8 @@ async function own(devId: string, paymentId: string) {
   if (p && p.developerId === devId && !p.actionPi) await refuseInAll(p);
   // (§148) A press's check a new card cancelled (an old tab finishing the bank's page): said plainly, nothing was charged.
   if (p && p.developerId === devId && !p.actionPi && p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
+  // (Owner, Nov 3, §157) Finished in another tab first (the bank's page done in both): said plainly, nothing is charged again.
+  if (p && p.developerId === devId && !p.actionPi && (p.status === "charged" || p.status === "not_set_up" || p.status === "bundled")) throw new HttpError(409, "confirmed", ALREADY_CONFIRMED);
   if (!p || p.developerId !== devId || !p.actionPi) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   return p;
 }
