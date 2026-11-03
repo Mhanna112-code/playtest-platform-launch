@@ -320,3 +320,12 @@ describe("small things (section 13)", () => {
     expect(src("app/app/tests/TestForm.tsx")).toContain('(k === "keys" && !!keyLine && keyLine.includes(m))');
   });
 });
+
+describe("Find's empty state (owner, Nov 2)", () => {
+  it("says nothing is available when nothing is open, and 'match your filters' only when filters hid some", async () => {
+    const fs = await import("node:fs");
+    const page = fs.readFileSync("src/app/app/find/page.tsx", "utf8");
+    expect(page).toContain('open.length === 0 ? "No open tests are available right now" : "No open tests match your filters"');
+    expect(page).toContain('<Link href="/app/profile">adding more devices and languages</Link>');
+  });
+});

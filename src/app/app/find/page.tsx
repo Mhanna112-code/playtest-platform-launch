@@ -143,7 +143,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
       ) : shown.length === 0 ? (
         <div className="card flex flex-col items-center gap-2 py-12 text-center">
           <SearchX className="h-10 w-10 text-slate-600" />
-          <p className="font-medium text-slate-300">{admin ? "No tests match these ticks" : "No open tests match right now"}</p>
+          {/* (Owner, Nov 2) "match" only when the filters hid some: with nothing open to this account at all, it says so. */}
+          <p className="font-medium text-slate-300" data-find-empty="">{admin ? "No tests match these ticks" : open.length === 0 ? "No open tests are available right now" : "No open tests match your filters"}</p>
           {!admin && (
             <p className="text-sm text-slate-500">
               {matchMine ? <>Try <Link href="/app/find?mine=0">showing everything</Link>, or </> : "Try "}
