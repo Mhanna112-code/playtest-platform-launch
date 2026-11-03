@@ -140,7 +140,10 @@ async function testLinksOf(waiting: { id: string; kind: string; contractId: stri
     }
     return out;
   };
-  return new Map(waiting.map((p) => [p.id, linksFor([p.contractId, ...covered.filter((x) => x.coveredById === p.id).map((x) => x.contractId)])]));
+  // Each name once.
+  const once = (xs: { name: string; href: string }[]) => [...new Map(xs.map((x) => [`${x.name}
+${x.href}`, x])).values()];
+  return new Map(waiting.map((p) => [p.id, once(linksFor([p.contractId, ...covered.filter((x) => x.coveredById === p.id).map((x) => x.contractId)]))]));
 }
 
 /**

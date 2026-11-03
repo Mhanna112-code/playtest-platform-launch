@@ -108,3 +108,14 @@ describe("§131 the owed box", () => {
     expect(await db.notification.count({ where: { userId: w.dev.user.id, text: "Another payment was declined: $5.00 for Alexandria…'s recording on “chargechar…” was added to what you owe" } })).toBe(1);
   });
 });
+
+describe("a charge paused by a hold that started after it (owner, Nov 2)", () => {
+  it("reads 'waiting until your tests resume', not '… while your tests were paused'", async () => {
+    const w = await world();
+    await db.payment.create({ data: { ...w.base, kind: "review", submissionId: w.written.id, amountCents: 800, status: "failed", owedUntil: new Date(), createdAt: new Date(Date.now() - 3000) } });
+    await db.payment.create({ data: { ...w.base, kind: "dispute", submissionId: w.recording.id, amountCents: 9600, status: "deferred", createdAt: new Date(Date.now() - 2000) } });
+    await startHold(w.dev.user.id, "unpaid");
+    const lines = await owedLines(w.dev.user.id);
+    expect(lines.map((l) => l.text)).toContain("The team's dispute decision on Alexandria…'s recording on “chargechar…” $96.00 · waiting until your tests resume");
+  });
+});

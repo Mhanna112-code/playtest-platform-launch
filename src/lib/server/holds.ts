@@ -622,7 +622,8 @@ export async function owedLines(devId: string) {
     // (§131) `full`: the same line with the names uncut, the line's hover on the page.
     const paidFor = c ? { name: displayName(c.tester), part, test: c.test.title, date: fmtDate(p.createdAt).replace(/, \d{4}$/, "") } : undefined;
     const tail = p.status === "owed" || p.status === "deferred" || (p.status === PAYING && !p.owedUntil)
-      ? ` ${money(p.amountCents)} · ${p.kind === "dispute" ? "decided" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused`
+      // (Owner, Nov 2) One made before this hold started (its bank check paused when the hold began) reads "waiting until your tests resume", not "… while paused".
+      ? ` ${money(p.amountCents)} · ${p.status === "deferred" && u?.holdStartedAt && p.createdAt < u.holdStartedAt ? "waiting until your tests resume" : `${p.kind === "dispute" ? "decided" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused`}`
       : null;
     // `source` (batch 10): what put it on the list, for the stop-once wording.
     out.push(p.chargeback === "open"
