@@ -84,14 +84,15 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         include: { test: { include: { developer: true } }, submissions: { include: { review: true, dispute: true } }, calls: { include: { review: true, dispute: true } } },
       })
     : [];
-  const owed = tester ? await db.payment.findMany({ where: { testerId: u.id, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "owed" }] }, select: { submissionId: true, callId: true } }) : [];
+  // (Owner, Nov 2) A developer's repayment of a reversed payment ("chargeback" rows) and Pay what you owe's own record ("owed") are never the tester's: hidden from them.
+  const owed = tester ? await db.payment.findMany({ where: { testerId: u.id, kind: { notIn: ["chargeback", "owed"] }, OR: [{ status: "failed", settledAt: null, owedUntil: { not: null } }, { status: "owed" }] }, select: { submissionId: true, callId: true } }) : [];
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   // (Batch 32 §3) A paid part's total, Pay more and extra pay included (as the session page's "Paid so far").
   const partPaid = tester ? new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { testerId: u.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0])) : new Map<string, number>();
   const [paidOut, paidIn] = await Promise.all([
     // (Batch 10) A repaid chargeback refunded after the platform won it stays in the list, marked refunded (not in the total).
     dev ? db.payment.findMany({ where: { developerId: u.id, OR: [{ status: { in: ["charged", "not_set_up"] } }, { status: "refunded", kind: "chargeback" }] }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
-    tester ? db.payment.findMany({ where: { testerId: u.id, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
+    tester ? db.payment.findMany({ where: { testerId: u.id, kind: { notIn: ["subscription", "chargeback", "owed"] }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
   ]);
   // (Batch 32 §18) What each paid line was for (who, which part, which test, how it was paid; a reversed payment says so).
   const rows = new Map([...(dev ? await paidRows(paidOut, "developer") : []), ...(tester ? await paidRows(paidIn, "tester") : [])]);

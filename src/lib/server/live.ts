@@ -309,7 +309,8 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
 export async function testerPaymentChanges(testerId: string, contractId: string, since: Date, onlyHere = false): Promise<TestEventLike[]> {
   const me = await db.contract.findUniqueOrThrow({ where: { id: contractId }, select: { test: { select: { developerId: true, developer: true } } } });
   const [pays, disputes] = await Promise.all([
-    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, contractId: onlyHere ? contractId : { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: { in: ["deferred", "owed"] }, createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
+    // (Owner, Nov 2) Never a developer's repayment of a reversed payment, or Pay what you owe's own record: not the tester's.
+    db.payment.findMany({ where: { testerId, developerId: me.test.developerId, kind: { notIn: ["chargeback", "owed"] }, contractId: onlyHere ? contractId : { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { status: { in: ["deferred", "owed"] }, createdAt: { gt: since } }, { settledAt: { gt: since } }] }, orderBy: { createdAt: "asc" }, take: 50 }),
     db.dispute.findMany({ where: { contractId, decidedAt: { gt: since } }, include: { submission: { select: { kind: true } }, call: { select: { startsAt: true } } } }),
   ]);
   const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
