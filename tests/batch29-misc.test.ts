@@ -156,12 +156,13 @@ describe("batch 29 section 20: leftovers", () => {
     expect(list).toContain("`/api/admin/more?kind=tests&ids=${encodeURIComponent(rest.slice(i, i + 100).join(\",\"))}`");
   });
 
-  it("one wording: 'Pick a time in the future.' from the server too", async () => {
+  it("one wording from the server too: the form's line (batch 35 §132: 'Pick a time at least 1 minute from now.' locally)", async () => {
     const s = await setup();
     const j = await joined(s.testId);
     const tooSoon = new Date(Date.now() + 20_000).toISOString();
     const r = await act(s.testId, "request-time", s.dev.cookie, { contractIds: [j.sessionId], rows: [{ startsAt: tooSoon, repeat: "once", count: 1 }], minutes: "30", seenAt: seen(), confirmed: true });
-    expect(r.body.error).toMatchObject({ code: "bad_time", message: "Pick a time in the future." });
+    expect(r.body.error).toMatchObject({ code: "bad_time", message: "Pick a time at least 1 minute from now." });
+    expect(src("components/RequestRows.tsx")).toContain("data-msg={leadLine(leadMinutes ?? 0)}"); // the same words at the time box
     expect(src("lib/server/requests.ts")).not.toContain("Pick times in the future.");
   });
 

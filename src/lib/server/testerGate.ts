@@ -143,5 +143,5 @@ function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks:
   const rows = rowsOf(r);
   if (rows.length > 1) return `a call (pick one of ${rows.length} times)`;
   const x = rows[0];
-  return x.repeat === "once" ? `a call for ${when}` : `${x.repeat === "daily" ? "daily" : "weekly"} calls from ${when}${x.count ? "" : " (until cancelled)"}`;
+  return x.repeat === "once" ? `a call for ${when}` : `${x.repeat === "daily" ? "daily" : "weekly"} calls from ${when}${x.count ? "" : " (until testers' work ends)"}`;
 }

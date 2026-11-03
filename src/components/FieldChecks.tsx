@@ -478,16 +478,39 @@ export function MistakeList({ press, orphans = [], shown, top = false }: { press
   );
 }
 
-/** A picker's min, set after the page loads (the viewer's own time): "" on the server. */
+/**
+ * A picker's min, set after the page loads (the viewer's own time): "" on the server. (Batch 35 §132) It moves on with the clock while the page is open (a call's
+ * "at least 24 hours from now" stays true for a form left open for hours).
+ */
 export function useLocalMin(plusMinutes = 0, dateOnly = false) {
   const [v, setV] = useState("");
-  useEffect(() => setV(localNow(plusMinutes, dateOnly)), [plusMinutes, dateOnly]);
+  useEffect(() => {
+    const now = () => setV(localNow(plusMinutes, dateOnly));
+    now();
+    const t = setInterval(now, 30_000);
+    return () => clearInterval(t);
+  }, [plusMinutes, dateOnly]);
   return v;
 }
 
-/** "now + minutes" as a datetime-local / date value in the viewer's time (a picker's min). */
+/**
+ * "now + minutes" as a datetime-local / date value in the viewer's time (a picker's min). (Batch 35 §132) A time is rounded UP to the next whole minute, so the
+ * earliest minute the box takes is never a few seconds short of what the server asks.
+ */
 export function localNow(plusMinutes = 0, dateOnly = false) {
-  const d = new Date(Date.now() + plusMinutes * 60_000);
+  const at = Date.now() + plusMinutes * 60_000;
+  return localValue(new Date(dateOnly ? at : Math.ceil(at / 60_000) * 60_000), dateOnly);
+}
+
+/** A moment as a datetime-local value ("2026-12-03T23:59", the minute it's in) or a date value, in the viewer's time. */
+export function localValue(d: Date, dateOnly = false) {
   const s = new Date(d.getTime() - d.getTimezoneOffset() * 60_000).toISOString();
   return dateOnly ? s.slice(0, 10) : s.slice(0, 16);
+}
+
+/** (Batch 35 §132) A picker's max from a moment the server passed down (when testers' work ends), in the viewer's time: "" on the server and when there's none. */
+export function useLocalMax(iso: string | null | undefined) {
+  const [v, setV] = useState("");
+  useEffect(() => setV(iso ? localValue(new Date(iso)) : ""), [iso]);
+  return v;
 }

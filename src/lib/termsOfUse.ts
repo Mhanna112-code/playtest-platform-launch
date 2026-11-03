@@ -2,9 +2,16 @@
 // TERMS_VERSION is bumped whenever the Terms change. An account on an older version is asked once, at its next Post a test / post a draft (developer) or Join,
 // Apply, Accept an invite, Ask to rejoin (tester): a box under the button with a link to what changed and a tick. Nothing else is blocked.
 import { CLOSE_OUT_DAYS, REVIEW_DAYS } from "./rules";
+import { LIVE_CALL_LEAD_MINUTES } from "./callLead";
+import { leadWords } from "./callWindow";
 
 /** The current Terms of Use version. Bump it (and add a WHAT_CHANGED entry) whenever the Terms change. */
 export const TERMS_VERSION = 2;
+/**
+ * (Owner, Nov 2, batch 35 §132) The call window as the site enforces it (section 7, Calls and recordings): at least 24 hours ahead (the live site's lead), and no later
+ * than the latest deadline. It replaces calls booked any time ahead, even after a tester's deadline.
+ */
+export const CALL_WINDOW_TERMS = `A call can be booked at least ${leadWords(LIVE_CALL_LEAD_MINUTES)} ahead, and no later than when testers' work on the test ends (the latest tester's deadline, or Open until if later); daily and weekly calls stop there.`;
 /** The anchor of the "What changed" note at the top of the Terms page. */
 export const WHAT_CHANGED_ID = "what-changed";
 export const TERMS_CHANGED_HREF = `/terms#${WHAT_CHANGED_ID}`;
@@ -45,6 +52,8 @@ export const WHAT_CHANGED: { version: number; date: string; points: string[] }[]
       "A piece of work can be paid at most the part's maximum in all, listed or not: $1,000 for written answers or a recording, $200 an hour for a call's measured length. Pay, Pay more and a dispute decision all count toward it (section 4, Pay more).",
       "A listed call the developer hasn't paid 7 days after it took place is charged to their card automatically; there's no Charge or Let it go for it (section 4, Calls).",
       "Emails about payments are always sent the same evening, whatever your email setting, Off included (section 4, Bank checks, declines, holds).",
+      // (Batch 35 §132) Folded into version 2: nothing has launched.
+      `${CALL_WINDOW_TERMS.replace(/\.$/, "")} (section 7).`,
     ],
   },
 ];

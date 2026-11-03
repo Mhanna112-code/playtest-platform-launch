@@ -33,12 +33,11 @@ import { LiveTop } from "@/components/LiveTop";
 import { MessagesSquare } from "lucide-react";
 import { Applications } from "./Applications";
 import { NeedsRequests } from "./NeedsRequests";
-import { devRateLabel, rateLabel } from "@/lib/server/requests";
-import { rowsOf, toJson } from "@/lib/callRows";
+import { callEndProps, devRateLabel, pageRows, rateLabel } from "@/lib/server/requests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
 import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, stopReasonOf } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, stopReasonOf, workDeadlineOf } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -128,6 +127,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const keysEver = await db.accessKey.count({ where: { testId: id } });
   const keysLeft = keysEver > 0 ? await db.accessKey.count({ where: { testId: id, status: "free" } }) : null;
   const working = t.contracts.filter((c) => c.status === "working");
+  // (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (every tester's deadline, no earlier than Open until): no call time later. The request form's
+  // time box stops there, its calls drop-down offers only what fits, and a waiting request's words say how many calls it covers.
+  const callEnd = t.workEndedAt ?? workDeadlineOf(t, t.contracts);
   const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
   const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
@@ -224,7 +226,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       const left = cs.filter((x) => x.startsAt > now).length;
       if (!left) return [];
       const next = cs.find((x) => x.startsAt > now)!;
-      return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: u.timeZone || "UTC" })}${row?.count === 0 ? "" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), calls: cs.map(toCall) }];
+      return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: u.timeZone || "UTC" })}${row?.count === 0 ? " (until testers' work ends)" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), calls: cs.map(toCall) }];
     });
     const booked = new Set(c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id)).size;
     return {
@@ -234,7 +236,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       // (Batch 16 section 33) Their waiting requests and yours, as they arrive (answered in the Call requests panel).
       pending: reqs.filter((r) => r.contractId === c.id).length, leftCents: callsLeft.get(c.id) ?? null, rateCents: callListed(t, c) ? c.liveRateCents : null,
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
-        id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "developer",
+        id: r.id, minutes: r.minutes, rows: pageRows(r, callEnd), mine: r.fromSide === "developer",
         rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents),
       })),
     };
@@ -266,7 +268,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, name: displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) }] : [];
   });
   const disputesWaiting = t.contracts.flatMap((c) => [
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
@@ -698,6 +700,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}
       <DevCallPanel
         leadMinutes={CALL_MIN_AHEAD_MINUTES}
+        end={callEndProps(callEnd)}
         testId={t.id}
         seenAt={seenAt}
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
@@ -706,7 +709,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         // (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request, both directions (Needs you's rows open it here).
         requests={restricted ? [] : reqs.flatMap((r) => {
           const c = working.find((x) => x.id === r.contractId);
-          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: toJson(rowsOf(r)), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) || undefined }] : [];
+          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) || undefined }] : [];
         })}
         elsewhere={otherCalls}
       />

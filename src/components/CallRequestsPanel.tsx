@@ -5,6 +5,7 @@ import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 import type { RowJson } from "@/lib/callRows";
 import { acceptChoices, describeRows } from "@/components/RequestRows";
+import { bookableNow, tooSoonNote } from "@/lib/callWindow";
 
 /** One waiting call request: `tester` (whose test session it is), `asker` (who asked: "you" when it's yours). */
 export type PanelReq = { id: string; contractId: string; tester: string; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string };
@@ -18,8 +19,18 @@ export type PanelReq = { id: string; contractId: string; tester: string; asker: 
 /** (Batch 26 section 10) The pressed button's name for its stop box or refusal ("Your Withdraw didn't go through"), from the press key. */
 export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
 
-export function CallRequestsPanel({ side, seenAt, requests, path }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string }) {
+export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0 }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
+  /** (Owner, Nov 2, batch 35 §132) The server's call lead: a time less than it away can't be booked any more. */
+  leadMinutes?: number }) {
   const { press, changes, error, busy, at, finish } = usePress(seenAt);
+  // (Batch 35 §132) A time less than the lead away (24 hours on the live site) can't be booked any more: its Accept goes and the row says why. The clock moves on
+  // while the page is open (checked every half minute).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(t);
+  }, []);
+  const bookable = (r: PanelReq) => acceptChoices(r.rows).filter((x) => bookableNow(x.time ?? r.rows[0].startsAt, leadMinutes, now));
   // (Owner, Oct 29, batch 26 section 10) A shown request that closed meanwhile (the tester finished their part, left, a block, a stop…) or was answered elsewhere says
   // so in its row at once ("Closed: the tester finished their part") and its buttons go, without waiting for the page to refresh.
   const [gone, setGone] = useState<Record<string, string>>({});
@@ -72,12 +83,13 @@ export function CallRequestsPanel({ side, seenAt, requests, path }: { side: "dev
                 <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "withdraw" }, "w-" + r.id)}>Withdraw</button>
               ) : (
                 <>
-                  {acceptChoices(r.rows).map((x) => (
+                  {bookable(r).map((x) => (
                     <button key={x.label} className="btn" disabled={busy} onClick={() => go(r, { action: "accept", ...(x.time ? { time: x.time } : {}) }, "a-" + r.id)}>{x.label}</button>
                   ))}
                   <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "decline" }, "d-" + r.id)}>Decline</button>
                 </>
               )}
+              {!gone[r.id] && bookable(r).length === 0 && <span className="basis-full text-xs text-amber-200" data-too-soon="">{tooSoonNote(leadMinutes)}</span>}
               {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}
               {(at === "a-" + r.id || at === "d-" + r.id || at === "w-" + r.id) && <div className="basis-full"><ChangesBox side={side} changes={changes} error={error} press={requestPressName(at)} /></div>}
             </li>

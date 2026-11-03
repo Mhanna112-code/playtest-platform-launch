@@ -8,6 +8,16 @@ import { closeOffersOfEnded } from "./offerClose";
 type Reader = Pick<Prisma.TransactionClient, "test">;
 export const workEndedLine = (at: Date) => `This test ended on ${fmtDate(at)}. Work already sent can still be paid.`;
 
+/**
+ * (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (the latest tester deadline, no earlier than Open until; the recorded end once it ended): the end of
+ * the call window, no call time later. null for a draft, or (`developerId`) a test of someone else (nothing about it is told).
+ */
+export async function workEndOf(reader: Reader, testId: string, developerId?: string) {
+  const t = await reader.test.findUnique({ where: { id: testId }, select: { status: true, openUntil: true, workEndedAt: true, developerId: true, contracts: { select: { dueAt: true } } } });
+  if (!t || (developerId && t.developerId !== developerId)) return null;
+  return t.workEndedAt ?? workDeadlineOf(t, t.contracts);
+}
+
 /** A stale press must refuse even before the background job has persisted the end. */
 export async function assertWorkOpen(reader: Reader, testId: string, now = new Date()) {
   const t = await reader.test.findUniqueOrThrow({ where: { id: testId }, include: { developer: true, contracts: { select: { dueAt: true } } } });

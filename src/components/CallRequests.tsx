@@ -9,9 +9,10 @@ import { FIELD, offerShown } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { DraftTag, useKept } from "@/lib/useKept";
 import type { RowJson } from "@/lib/callRows";
-import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, type PressMade, type RowState } from "@/components/RequestRows";
+import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallRequestsPanel } from "@/components/CallRequestsPanel";
 import type { ClashTarget, Slot } from "@/lib/callClash";
+import type { CallEnd } from "@/lib/callWindow";
 
 type Req = { id: string; rows: RowJson[]; mine: boolean; who: string; contractId: string; rate: string; minutes?: number };
 
@@ -25,6 +26,8 @@ export function CallRequests(p: {
   path: string; seenAt: string; side: "developer" | "tester"; requests: Req[]; targets: { contractId: string; name: string; rate: string }[]; canRequest: boolean;
   /** (Owner, Oct 29, batch 29 section 20) The server's call lead (CALL_MIN_AHEAD_MINUTES, read on the server and passed down), so form and server agree. */
   leadMinutes: number;
+  /** (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (the server's, in the reader's words): the time box's latest time and the calls drop-down. */
+  end?: CallEnd;
   /** (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked, what's left of the $1,000, the rate). */
   clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number; leftCents: number | null; rateCents: number | null };
 }) {
@@ -64,15 +67,17 @@ export function CallRequests(p: {
     } else setFrozen(null);
   };
   const all = p.targets.length > 0 && p.targets.every((t) => ticked.includes(t.contractId));
-  const filled = rowsPayload(rows);
+  const filled = rowsPayload(rows, p.end);
   // (Owner, Oct 28, batch 16 section 33) Clash checks while the form is filled (the same as the developer's): red under the row, blue for an exact match.
   const clash = liveTargets.length
-    ? alignedClash(rows, minutes, "tester", formClashInputs(liveTargets, frozen?.targets ?? null, made), frozen?.elsewhere ?? liveElsewhere)
+    ? alignedClash(rows, minutes, "tester", formClashInputs(liveTargets, frozen?.targets ?? null, made), frozen?.elsewhere ?? liveElsewhere, p.end)
     : { notes: undefined, limits: [] as string[] };
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for your calls at the call's rate.
   const lenCap = p.clash && p.side === "tester" && p.targets[0] ? lengthCap([{ name: p.targets[0].name, leftCents: p.clash.leftCents, rateCents: p.clash.rateCents }]) : null;
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(p.leadMinutes); // (batch 27 section 6; batch 29 section 20) the server's lead, passed from the server
+  // (Batch 35 §132) Less than the lead left before testers' work ends: no time fits, so the form goes and a line says why.
+  const shut = useWindowShutLine(p.end, p.leadMinutes);
   // (Batch 27 section 1) The tester's open new-terms offer comes first: the press goes straight to its refusal (the page goes up to Switch / Keep).
   const send = () =>
     ((p.side === "tester" && offerShown()) || checkFields(form.current)) &&
@@ -88,9 +93,10 @@ export function CallRequests(p: {
   return (
     <div className="space-y-2 text-sm">
       {/* (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request with them, both directions, soonest first. */}
-      <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path}
+      <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes}
         requests={p.requests.map((r) => ({ id: r.id, contractId: r.contractId, tester: p.side === "tester" ? "You" : r.who, asker: r.who, rows: r.rows, minutes: r.minutes ?? 0, mine: r.mine, rate: r.rate }))} />
-      {p.canRequest && (
+      {p.canRequest && shut && <p className="note" data-window-shut="">{shut}</p>}
+      {p.canRequest && !shut && (
         <div className="space-y-2" ref={form} data-mistakes-root="">
           {p.side === "developer" && p.targets.length > 0 && (
             <fieldset className="space-y-1" id="call-with" data-field-group="" data-match="tick at least one tester">
@@ -103,7 +109,7 @@ export function CallRequests(p: {
               ))}
             </fieldset>
           )}
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={p.leadMinutes} end={p.end} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
           <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">
