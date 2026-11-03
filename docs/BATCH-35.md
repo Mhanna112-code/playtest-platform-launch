@@ -1250,3 +1250,22 @@ Replaces the earlier rule: a call could be booked any time 5 minutes or more ahe
 - **Terms of Use** (still version 2: nothing has launched). Section 7 now says: "A call can be booked at least 24 hours ahead, and no later than when testers' work on the test ends (the latest tester's deadline, or Open until if later); daily and weekly calls stop there." (`CALL_WINDOW_TERMS` in `src/lib/termsOfUse.ts`), and version 2's What changed lists it. No sentence said calls could be booked after a deadline.
 - **Wording:** a running set's "Forever" / "until cancelled" now reads "until testers' work ends" (the event lines, the Booked bell, the tester's stop box). A count outside 2–8: "Daily calls repeat 2 to 8 times, or until testers' work ends." The design doc, HANDOVER and TEST-ONLY-SETTINGS now say 24 hours for the live site.
 - **Tests:** `tests/batch35-call-window.test.ts` covers the lead (24 hours in production whatever the setting, through the real endpoints and with its line; 1 minute locally with the override), a time after the end refused on both sides with the end in the reader's zone (the end's own minute taken), a weekly ×8 cut to the calls that fit with the count on both pages and Accept booking them, a set left with one call becoming a single call, the closed window (the server and both forms), Forever stopping at the end and going on when Open until moves later, Accept refused for a time now too soon or after the end (and an older set past the end booking only what fits), the forms' earliest and latest times and their lines, the calls drop-down's counts, Forever's words and the greyed repeats with their line, both pages passing the lead and the end, the fingerprint changing when the end moves, the panel's Accept going for a time too soon, and the Terms text. Updated for the new rule: `batch27` and `batch29-misc` (the lead's words; 24 hours in production), `call-sets` (the count line; the Forever test's work runs 60 days so the weekly set has room), `request-kinds` (4 weekly calls need Open until 29 days ahead; a time inside the window).
+
+## §139 Sent work in small panels, with folds for the body and Pay (owner, Nov 3)
+
+Replaces batch 10's 16-line scroll box (`AnswersBox`, `max-h-[20rem]`) for the developer's view of sent work on the test page. (The admin's "See the work" keeps it.)
+
+- **Where:** a piece in Needs you (written answers, a recording), an update row in Needs you (sent after the piece was paid), and a paid part on the tester's row (Testers joined).
+- **Two folds under each part, each with its own toggle, both open at first:**
+  - the body ("Their written answers" / "Their recording"): the answers, notes, files and recordings, in a panel;
+  - the Pay box ("Pay" in Needs you, "Pay more" on an update row and on a paid part; a call's Pay box in Needs you and its Pay more under the tester's Calls fold too).
+  - Opened or closed, a fold stays that way while the page redraws (live refresh), and in the tab's sessionStorage (`fold:<id>`, wrapped in try/catch).
+  - A link straight to a part (a bell or email link to `#piece-…`, `#update-…`, `#part-…`) opens the folds it lands in and the folds under it (`jumpTo` in `src/lib/markJump.ts`).
+- **The panel** (`ResizeBox` in `src/components/Panel.tsx`):
+  - starts small: at most `min(12rem, 40vh)` (6–8 lines, never more than 40% of a phone's screen), so the Pay / Pay more box under a long written answer is in view without dragging; a shorter piece is only as tall as it is;
+  - a grip at its bottom-right corner drags it taller or shorter: at least 5rem (about 3 lines), at most 60% of the screen; the grip is also a keyboard control (arrow keys, Home / End);
+  - the content scrolls inside at any height;
+  - a dragged height stays while the page redraws, and in the tab's sessionStorage (`panel-h:<id>`).
+  - A custom grip rather than CSS `resize`, so the panel can always be dragged shorter than where it starts and stays within its limits.
+- **Tests:** `tests/batch35-sent-panels.test.ts` (the small default, dragging below it, the limits, the kept height and fold state with storage blocked too, both folds in each place with the body in the panel and the Pay box after it, a link opening the folds). `batch10`'s scroll-box check now looks for the panel.
+- **Pictures:** `docs/media/sent-locked/panel-*` (README there).

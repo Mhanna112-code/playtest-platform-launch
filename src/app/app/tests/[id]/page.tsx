@@ -50,7 +50,7 @@ import { ListingPanel } from "./ListingPanel";
 import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
 import { panelRows } from "@/lib/listingPanel";
 import { lastListingSave } from "@/lib/server/listingPanel";
-import { AnswersBox } from "@/components/AnswersBox";
+import { Fold, ResizeBox } from "@/components/Panel";
 import { AttachmentList } from "@/components/AttachmentList";
 import { pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
@@ -479,31 +479,37 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
               {x.kind === "sub" ? (
                 <>
-                  {/* (Owner, Oct 29, batch 10) One piece's answers in their own scroll box (about 16 lines) when longer; the Pay box below stays outside it. */}
-                  {/* (Batch 11) Formatted answers, and the piece's files and recordings, inside the same scroll box. */}
-                  <AnswersBox>
+                  {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Under the part, two folds of its own: the answers or recordings, in a small panel (about
+                      12rem) that drags taller or shorter and scrolls inside, so the Pay box under it is in view; and the Pay box. Both open at first. */}
+                  <Fold id={`needs-body-${x.s!.id}`} summary={x.s!.kind === "written" ? "Their written answers" : "Their recording"}>
+                  <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
                     {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                     {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
                     {x.s!.kind === "written" && <SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} attachments={x.s!.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />}
                     {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={x.s!.notes} attachments={x.s!.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
                     <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} inlineText={x.s!.kind === "written" ? itemsOf(x.s!.answers, writtenQuestions(x.c)).map((it) => it.answer) : []} inlineIds={[...markerIds(x.s!.notes, x.s!.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
-                  </AnswersBox>
+                  </ResizeBox>
+                  </Fold>
+                  <Fold id={`needs-pay-${x.s!.id}`} summary="Pay">
                   <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
                     /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
                     note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                     listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
+                  </Fold>
                 </>
               ) : (
                 <>
                   {/* (Batch 15 section 40) The measured length: "Length: 29 min (both in the call 2:21–2:50 PM)"; a lowered one says so, with the reason. */}
                   <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
                   {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
+                  <Fold id={`needs-pay-${x.x!.id}`} summary="Pay">
                   <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                     /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
                     note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
                     minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
                     listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
                     listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                  </Fold>
                 </>
               )}
             </div>
@@ -516,13 +522,17 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             <div key={`update-${x.id}`} id={`update-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
               <p className="text-sm font-medium"><a href={`/app/testers/${c.testerId}`}><Cut text={displayName(c.tester)} /></a> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</p>
               <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
-              <AnswersBox>
+              <Fold id={`update-body-${x.id}`} summary={x.kind === "written" ? "Their written answers" : "Their recording"}>
+              <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
                 {x.kind === "written" && <SetView items={itemsOf(x.answers, writtenQuestions(c))} attachments={x.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />}
                 {x.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={x.notes} attachments={x.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
                 <AttachmentList items={x.recordings.filter((r) => r.uploadedAt)} inlineText={x.kind === "written" ? itemsOf(x.answers, writtenQuestions(c)).map((it) => it.answer) : []} inlineIds={[...markerIds(x.notes, x.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
-              </AnswersBox>
+              </ResizeBox>
+              </Fold>
+              <Fold id={`update-pay-${x.id}`} summary="Pay more">
               <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                 room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
+              </Fold>
             </div>
           ))}
         </NeedsYou>
@@ -586,18 +596,23 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
                       {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
+                      {/* (Batch 35 §139) The part's body and its Pay more box are each their own fold under it (open at first), the body in a small panel. */}
                       {r.sub?.review && <div className="w-full" data-paid-part-content="">
-                        <AnswersBox>
+                        <Fold id={`row-body-${r.sub.id}`} summary={r.sub.kind === "written" ? "Their written answers" : "Their recording"}>
+                        <ResizeBox id={`row-${r.sub.id}`} label={r.sub.kind === "written" ? "Written answers" : "Recordings"}>
                           {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
                           {r.sub.kind === "written" && <SetView items={itemsOf(r.sub.answers, writtenQuestions(c))} attachments={r.sub.recordings.filter((a) => a.uploadedAt).map((a) => ({ id: a.id, filename: a.filename, size: a.sizeBytes, contentType: a.contentType }))} />}
                           {r.sub.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={r.sub.notes} attachments={r.sub.recordings.filter((a) => a.part === "written" && a.uploadedAt).map((a) => ({ id: a.id, filename: a.filename, size: a.sizeBytes, contentType: a.contentType }))} /></div>}
                           <AttachmentList items={r.sub.recordings.filter((a) => a.uploadedAt)} inlineText={r.sub.kind === "written" ? itemsOf(r.sub.answers, writtenQuestions(c)).map((it) => it.answer) : []} inlineIds={[...markerIds(r.sub.notes, r.sub.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
-                        </AnswersBox>
+                        </ResizeBox>
+                        </Fold>
                       </div>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
+                        <Fold id={`row-more-${r.sub.id}`} className="w-full" summary="Pay more">
                         <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
+                        </Fold>
                       )}
                       {/* (Owner, Oct 29, batch 28 §14) At its cap, where Pay more was (grey). */}
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && (
@@ -652,10 +667,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {bankAt(x.id)}
                             {x.review?.teamClosedById && <p className="text-sm text-slate-300" data-team-closed="">{teamClosedLine(x.review.reason)}</p>}
                             {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                              <Fold id={`row-more-${x.id}`} summary="Pay more">
                               <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                              </Fold>
                             )}
                             {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
                               <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
