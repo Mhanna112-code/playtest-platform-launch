@@ -52,6 +52,11 @@ const now = () => new Date().toISOString();
 let runN = Date.now() % 1000;
 async function mkTest(dev, title0, over = {}) {
   const title = `${title0} · ${++runN}`;
+  // Each clip has its own test: the earlier clips' tests are closed first (a developer may have 10 open tests, a tester 10 working parts).
+  sql(`update "Contract" set status = 'ended', "endKind" = 'closed', "endedAt" = ${L.U} where status = 'working'`);
+  sql(`update "Test" set status = 'stopped', "stoppedAt" = ${L.U} where status in ('open', 'closed')`);
+  // ... and charges an earlier clip left waiting for the bank are let go (so Confirm all covers only this clip's).
+  sql(`update "Payment" set status = 'cancelled', "actionPi" = null, "actionBy" = null where status = 'needs_confirmation'`);
   return L.postTest(dev, { productName: title, title, recordingCents: "10.00", liveRateCents: "30.00", liveMinutes: 30, ...over });
 }
 async function joinWritten(t, testId) {
@@ -121,11 +126,14 @@ async function openPage(page, url, target) {
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(1200);
   if (target) await page.locator(target).first().evaluate((el) => el.scrollIntoView({ block: "center" })).catch(() => {});
+  if (!page.mark) page.mark = Date.now() - 300; // the clip starts here (the page is ready)
 }
 /** The Pay (or Pay more) box of a piece: amount typed, tick ticked, reason when asked. */
 async function fillPay(page, id, cents, reason = "") {
   const amt = page.locator(`#amt-${id}`).last();
-  await amt.evaluate((el) => el.scrollIntoView({ block: "center" }));
+  // A Pay more box sits in a closed fold ("Pay more"): opened first.
+  await amt.evaluate((el) => { for (let d = el.closest("details"); d; d = d.parentElement?.closest("details")) d.open = true; el.scrollIntoView({ block: "center" }); });
+  await page.waitForTimeout(300);
   await amt.fill((cents / 100).toFixed(2));
   const box = amt.locator("xpath=ancestor::div[contains(@class,'space-y-3')][1]");
   const why = box.locator(`#why-${id}`);
@@ -193,7 +201,7 @@ async function A(W) {
   await pressAgain(pr.app, X.rec, 1000);
   await capWait(pr.app, "Second press: the Pay goes through. Stripe (right): a new $10.00 payment Succeeded.", 600);
   const paid = await waitPaid(`"submissionId" = ${lit(X.rec)}`);
-  await pr.app.waitForTimeout(3000);
+  await pr.app.waitForTimeout(8000);
   await L.pairVideo(pr, name, "", "A");
   const s = L.stripeOut(W.d1, name, "A");
   const good = /The team decided Ana Silva's dispute/.test(st) && Number(paid) > 0 && s.paymentIntents.some((p) => p.amount === "10.00" && p.status === "succeeded");
@@ -229,7 +237,7 @@ async function B(W) {
       await capWait(pr.app, st ? "It stopped (it shouldn't have)." : "Decisions ticked off and it's another tester: it goes straight through. Stripe: $10.00 Succeeded.", 600);
     }
     const paid = await waitPaid(`"submissionId" = ${lit(X.b.sub)}`);
-    await pr.app.waitForTimeout(3000);
+    await pr.app.waitForTimeout(8000);
     await L.pairVideo(pr, name, "", "B");
     const s = L.stripeOut(W.d1, name, "B");
     const good = (ticked ? /The team decided Ana Silva's dispute/.test(st) : !st) && Number(paid) > 0 && s.paymentIntents.some((p) => p.amount === "10.00" && p.status === "succeeded");
@@ -260,7 +268,7 @@ async function C(W) {
   await pressAgain(pr.app, X.rec, 200);
   await capWait(pr.app, "Second press: Pay more goes through. Stripe: $2.00 Succeeded.", 600);
   const paid = await waitPaid(`"submissionId" = ${lit(X.rec)} and kind = 'extra'`);
-  await pr.app.waitForTimeout(3000);
+  await pr.app.waitForTimeout(8000);
   await L.pairVideo(pr, name, "", "C");
   const s = L.stripeOut(W.d1, name, "C");
   const good = /The team decided Ana Silva's dispute/.test(st) && Number(paid) > 0 && s.paymentIntents.some((p) => p.amount === "2.00" && p.status === "succeeded");
@@ -373,7 +381,7 @@ async function F(W) {
       await capWait(pr.app, st ? "It stopped (it shouldn't have)." : "Work on ANOTHER part with “Work sent” ticked off: no stop. Paid at once — Stripe: $10.00 Succeeded.", 600);
     }
     const paid = await waitPaid(`"submissionId" = ${lit(target)}`);
-    await pr.app.waitForTimeout(3000);
+    await pr.app.waitForTimeout(8000);
     await L.pairVideo(pr, name, "", "F");
     const s = L.stripeOut(W.d1, name, "F");
     const good = (shouldStop ? /added to (her|their) written answers/.test(st) : !st) && Number(paid) > 0 && s.paymentIntents.some((p) => p.amount === "10.00" && p.status === "succeeded");
@@ -415,7 +423,7 @@ async function G(W) {
       await capWait(pr.app, st ? "It stopped (it shouldn't have)." : "“Testers leaving” ticked off: straight through. Stripe: $10.00 Succeeded.", 600);
     }
     const paid = await waitPaid(`"submissionId" = ${lit(b.sub)}`);
-    await pr.app.waitForTimeout(3000);
+    await pr.app.waitForTimeout(8000);
     await L.pairVideo(pr, name, "", "G");
     const s = L.stripeOut(W.d1, name, "G");
     const good = (off ? !st : /Ana Silva left the test/.test(st)) && Number(paid) > 0 && s.paymentIntents.some((p) => p.amount === "10.00" && p.status === "succeeded");
@@ -441,7 +449,7 @@ async function chargeBox(page, part) {
   await root.evaluate((el) => el.scrollIntoView({ block: "center" })).catch(() => {});
   return root;
 }
-async function H(W) {
+async function Hrow(W) {
   const rows = [
     // [name, title, alertsOff, what happens meanwhile, press, expect]
     { name: "h1-charge-same-part-paid-alerts-off", title: "H1 · Ana's Charge after Nora paid THAT part (Ana's Alerts Off)", off: true, press: "charge", part: "written", ev: "same" },
@@ -478,7 +486,8 @@ async function H(W) {
     };
     await capWait(pr.app, `Ana presses ${r.press === "charge" ? "Charge" : "Let it go"} on her written answers…`, 600);
     await pressIt();
-    const st = await stopText(pr.app);
+    // (A payment on THAT part leaves nothing to charge: the refusal shows in the part's box, not as a stop box.)
+    const st = r.ev === "same" ? (await pr.app.waitForTimeout(2500), (await root.innerText().catch(() => "")).replace(/\s+/g, " ").match(/[^.]*paid \$10\.00 for this meanwhile\./)?.[0] ?? "") : await stopText(pr.app);
     const refusal = st && /paid \$10\.00 for this meanwhile/.test(st);
     const wantStop = r.ev !== "other" || !r.off;
     let after = "";
@@ -505,6 +514,14 @@ async function H(W) {
   return all;
 }
 
+/** Runs an appfn action (the app's own function, as Stripe's webhook calls it) and, the moment it's done, the press: no wait in between. */
+function appfnThen(action, arg, press) {
+  const { spawn } = require("child_process");
+  return new Promise((res) => {
+    const p = spawn(process.execPath, [path.join(__dirname, "appfn.cjs"), action, arg], { cwd: path.join(__dirname, "..", ".."), windowsHide: true });
+    p.on("exit", async () => { await press().catch((e) => log("press:", String(e.message).slice(0, 100))); res(); });
+  });
+}
 async function I(W) {
   const name = "i-pay-owed-chargebacks";
   // A fresh developer (a chargeback hold pauses all their tests): Ben paid with 4242, then the card changed to 0259 (Stripe opens a real dispute on what it pays).
@@ -520,24 +537,22 @@ async function I(W) {
   const anaPi = sql(`select "stripePaymentIntentId" from "Payment" where "submissionId" = ${lit(a.sub)} and status = 'charged'`);
   log("waiting for Stripe's real dispute on Ana's payment (webhook through stripe listen)…");
   await L.waitSql(`select coalesce(chargeback, '') from "Payment" where "stripePaymentIntentId" = ${lit(anaPi)}`, (v) => v === "open", 120000);
-  await L.verifyCard(dev);
+  await L.verifyCard(dev).catch((e) => log("verify card:", String(e.message).slice(0, 120)));
+  // (If Stripe's verification page didn't finish in the recording browser, the card is marked verified as the tests do: the step itself isn't what this clip shows.)
+  if (!sql(`select coalesce("chargebackCardVerifiedAt"::text, '') from "User" where id = ${lit(dev.uid)}`)) { log("card verified directly"); sql(`update "User" set "chargebackCardVerifiedAt" = ${L.U} where id = ${lit(dev.uid)}`); }
   const pr = await L.pair(dev, dev, "I · Pay what you owe after a new chargeback and a changed disputed amount", [W.ana, W.ben]);
   await openPage(pr.app, "/app/payments", "#owed");
   await capWait(pr.app, "Lena's Payments: Stripe's real dispute on Ana's $10 payment is owed ($10 + $15 fee = $25.00). Card verified.", 3000);
   await capWait(pr.app, "Meanwhile the bank reverses Ben's $10 payment too (a new chargeback).", 600);
-  L.appfn("chargeback", benPi);
-  await pr.app.waitForTimeout(1000);
   const btn = pr.app.locator("#owed button", { hasText: /Pay what you owe|Reserve|Pay/ }).first();
   await btn.evaluate((el) => el.scrollIntoView({ block: "center" })).catch(() => {});
-  await capWait(pr.app, "Lena presses Pay what you owe (her page still shows $25.00)…", 600);
-  await btn.click();
+  // The press lands the moment the chargeback is recorded, before the page's live check could redraw the box (which would show $50.00 and need no stop).
+  await appfnThen("chargeback", benPi, () => btn.click());
+  await capWait(pr.app, "Lena pressed Pay what you owe while her page still showed $25.00…", 300);
   const st1 = await stopText(pr.app, "#owed").then((x) => x || stopText(pr.app));
   await capWait(pr.app, st1 ? "Stops once with the new total ($50.00), naming Ben's chargeback. Nothing reserved." : "No stop box appeared.", 3500);
   await capWait(pr.app, "Before the second press, the bank lowers the disputed amount of Ana's payment to $6.", 600);
-  const ch = L.appfn("disputeamount", `${anaPi}:600`);
-  log("dispute amount:", JSON.stringify(ch));
-  await pr.app.waitForTimeout(800);
-  await btn.click();
+  await appfnThen("disputeamount", `${anaPi}:600`, () => btn.click());
   await pr.app.waitForTimeout(2500);
   const st2 = await stopText(pr.app, "#owed").then((x) => x || stopText(pr.app));
   await capWait(pr.app, /changed: now \$46/.test(st2) ? "Stops once more: “What you owe changed: now $46.00”. Nothing reserved." : `Second press: ${st2 || "no stop"}`, 3500);
@@ -577,7 +592,7 @@ async function J(W) {
   await pressAgain(pr.app, call, cents);
   await capWait(pr.app, `Second press: paid. Stripe: $${(cents / 100).toFixed(2)} Succeeded.`, 600);
   const paid = await waitPaid(`"callId" = ${lit(call)}`);
-  await pr.app.waitForTimeout(3000);
+  await pr.app.waitForTimeout(8000);
   await L.pairVideo(pr, name, "", "J");
   const s = L.stripeOut(W.d1, name, "J");
   const good = /The team decided Ana Silva's dispute/.test(st) && Number(paid) > 0 && s.paymentIntents.some((p) => p.amount === (cents / 100).toFixed(2) && p.status === "succeeded");
@@ -590,7 +605,8 @@ async function J(W) {
   const want = process.argv.slice(2);
   await L.start();
   const W = await world();
-  const rows = { A, B, C, D, E, F, G, H, I, J };
+  const H = { L, sql, lit, ok, post, now, log, mkTest, joinWritten, sendRec, payApi, disputeApi, decide, ignore, openChoice, caption, capWait, openPage, fillPay, payButton, pressAgain, stopText, waitPaid, verdict, CARD_ASK, CARD_OK, testerAlertsOff, finishCheck };
+  const rows = { A, B, C, D, E, F, G, H: Hrow, I, J, ...require("./rows2.cjs")(H), ...require("./races.cjs")(H), ...require("./events.cjs")(H) };
   for (const k of want) {
     console.log(`== ${k}`);
     try { await rows[k](W); } catch (e) { console.log(`   ! ${k} failed:`, String(e.stack || e).slice(0, 1500)); }

@@ -44,7 +44,7 @@ let browser;
 async function start() { // Stripe's 3D Secure page (a public site, inside the app's frame) returns to the app on localhost; Chrome's Local Network Access blocks that from a test machine
   // ("The connection is blocked because it was initiated by a public page…"), so the check is turned off for this local recording browser only.
   browser = await chromium.launch({ channel: process.env.BROWSER_CHANNEL || "chrome", args: ["--disable-features=LocalNetworkAccessChecks,BlockInsecurePrivateNetworkRequests,PrivateNetworkAccessSendPreflights,PrivateNetworkAccessRespectPreflightResults"] }); return browser; }
-async function stop() { await browser?.close(); }
+async function stop() { await browser?.close(); try { fs.rmSync(VTMP, { recursive: true, force: true }); } catch {} }
 
 const hideDevBadge = (c) => c.addInitScript(() => document.addEventListener("DOMContentLoaded", () => { const s = document.createElement("style"); s.textContent = "nextjs-portal{display:none!important}"; document.head.appendChild(s); }));
 async function newPage({ from, video = false, opts = V } = {}) {
@@ -185,6 +185,8 @@ async function addCard(page, number, { tds = false } = {}) {
   const link = page.locator("#enableStripePass");
   if (await link.isChecked().catch(() => false)) await link.uncheck({ force: true });
   await page.waitForTimeout(800);
+  // (R10) `hold`: the card is typed in Stripe Checkout and its Save is pressed only when the caller says (`page.saveCard()`).
+  if (arguments[2] && arguments[2].hold) { page.saveCard = () => page.locator("[data-testid=hosted-payment-submit-button], button[type=submit]").first().click(); return; }
   await page.locator("[data-testid=hosted-payment-submit-button], button[type=submit]").first().click();
   if (tds) await threeDS(page, true, 60000);
   // (The dev server restarts its worker now and then: a refused connection on the way back is retried once it answers again.)
@@ -216,6 +218,13 @@ async function pair(who, dev, title, testers = []) {
   const pan = await panel(dev, title, testers);
   return { app, pan };
 }
+/** Two (or more) recorded app tabs of the same person (`from`, each its own window: two tabs of the same account) and the viewer. */
+async function pairTabs(who, dev, title, testers = [], n = 2, opts = { viewport: { width: 900, height: 900 } }) {
+  const apps = [];
+  for (let i = 0; i < n; i++) apps.push(await newPage({ from: who, video: true, opts }));
+  const pan = await panel(dev, title, testers);
+  return { app: apps[0], apps, pan };
+}
 const made = [];
 function record(file, caption, scenario) { made.push({ file, caption, scenario }); console.log(`   + ${file}  (${caption})`); }
 async function pairShot(pr, name, caption, scenario, target) {
@@ -240,16 +249,27 @@ async function shot(page, name, caption, scenario, target) {
   record(file, caption, scenario);
   return file;
 }
+/**
+ * The recorded pages side by side (the app's tab or tabs, then the Stripe viewer), from `pr.mark` (the moment the clip's story starts: set by the run when its page
+ * is ready, so loading isn't in the clip). Each page's own video starts when its context was made (`t0`): each input is cut at mark - t0, so they line up.
+ */
 async function pairVideo(pr, name, caption, scenario) {
-  const save = async (p, f) => { const v = p.video(); await p.context().close(); const dst = path.join(VTMP, f); await v.saveAs(dst); return dst; };
-  const a = await save(pr.app, `${name}-a.webm`), b = await save(pr.pan, `${name}-p.webm`);
-  // the viewer started ~ the same moment as the app (pair); trim the viewer by the difference
-  const skip = Math.max(0, (pr.pan.t0 - pr.app.t0) / 1000);
+  const pages = [...(pr.apps || [pr.app]), pr.pan];
+  const save = async (p, f) => { const v = p.video(); await p.context().close(); const dst = path.join(VTMP, f); await v.saveAs(dst); try { fs.unlinkSync(await v.path()); } catch {} return dst; };
+  const files = [];
+  for (let i = 0; i < pages.length; i++) files.push(await save(pages[i], `${name}-${i}.webm`));
+  const mark = pr.mark || pages.map((p) => p.mark).filter(Boolean).sort()[0] || Math.max(...pages.map((p) => p.t0));
+  const args = ["-y", "-loglevel", "error"];
+  pages.forEach((p, i) => { args.push("-ss", Math.max(0, (mark - p.t0) / 1000).toFixed(2), "-i", files[i]); });
+  const h = 720;
+  const chain = pages.map((_, i) => `[${i}:v]setpts=PTS-STARTPTS,scale=-2:${h},setsar=1${i < pages.length - 1 ? ",pad=iw+8:ih:0:0:0x101826" : ""}[v${i}]`).join(";");
+  const filter = `${chain};${pages.map((_, i) => `[v${i}]`).join("")}hstack=inputs=${pages.length}:shortest=1[v]`;
   const file = `${name}.webm`;
   for (let kbps = 1000; ; kbps = Math.floor(kbps * 0.6)) {
-    execFileSync(FFMPEG, ["-y", "-loglevel", "error", "-i", a, "-itsoffset", String(skip.toFixed(2)), "-i", b, "-filter_complex", "[0:v]scale=-2:720,setsar=1,pad=iw+8:ih:0:0:0x101826[x];[1:v]scale=-2:720,setsar=1[y];[x][y]hstack=inputs=2:shortest=1[v]", "-map", "[v]", "-c:v", "libvpx", "-b:v", `${kbps}k`, "-maxrate", `${kbps}k`, "-bufsize", `${kbps * 2}k`, "-crf", "12", "-an", path.join(OUT, file)]);
+    execFileSync(FFMPEG, [...args, "-filter_complex", filter, "-map", "[v]", "-c:v", "libvpx", "-b:v", `${kbps}k`, "-maxrate", `${kbps}k`, "-bufsize", `${kbps * 2}k`, "-crf", "12", "-an", path.join(OUT, file)]);
     if (fs.statSync(path.join(OUT, file)).size <= 9 * 1024 * 1024 || kbps < 250) break;
   }
+  for (const f of files) try { fs.unlinkSync(f); } catch {}
   record(file, caption, scenario);
   return file;
 }
@@ -278,4 +298,4 @@ async function addCardRetry(page, number, o) {
     try { return await addCard(page, number, o); } catch (e) { if (i >= 2) throw e; console.log("   ! add card again:", String(e.message).slice(0, 100)); await page.waitForTimeout(3000); }
   }
 }
-module.exports = { connect, BASE, OUT, VTMP, TS, sql, lit, U, nowIso, sleep, start, stop, newPage, post, ok, account, admin, postTest, join, sendWritten, subOf, writtenTest, openCharge, chargeUI, chargeApi, waitSql, lastPay, waitAction, threeDS, addCard: addCardRetry, verifyCard, pair, pairShot, shot, pairVideo, stripeOut, record, made, writeMade, appfn, stripe, payRows, holdOf, get browser() { return browser; } };
+module.exports = { addCardOnce: addCard, pairTabs, connect, BASE, OUT, VTMP, TS, sql, lit, U, nowIso, sleep, start, stop, newPage, post, ok, account, admin, postTest, join, sendWritten, subOf, writtenTest, openCharge, chargeUI, chargeApi, waitSql, lastPay, waitAction, threeDS, addCard: addCardRetry, verifyCard, pair, pairShot, shot, pairVideo, stripeOut, record, made, writeMade, appfn, stripe, payRows, holdOf, get browser() { return browser; } };

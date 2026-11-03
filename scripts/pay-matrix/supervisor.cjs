@@ -25,6 +25,7 @@ const secret = execFileSync(STRIPE, ["listen", "--api-key", sk, "--print-secret"
 if (!/^whsec_/.test(secret)) throw new Error("stripe listen --print-secret gave no signing secret");
 const EVENTS = "account.updated,charge.dispute.created,charge.dispute.closed,customer.subscription.deleted,invoice.paid,invoice.payment_failed,invoice.payment_action_required,payment_intent.amount_capturable_updated,payment_intent.canceled";
 run("listen", STRIPE, ["listen", "--api-key", sk, "--events", EVENTS, "--forward-to", "localhost:3517/api/stripe/webhook", "--forward-connect-to", "localhost:3517/api/stripe/webhook"], {});
-run("next", process.execPath, [path.join(WT, "node_modules", "next", "dist", "bin", "next"), "dev", "-p", "3517"], { cwd: WT, env: env({ webhookSecret: secret }) });
+// A production build (build.cjs): no compile pauses in the middle of a recording.
+run("next", process.execPath, [path.join(WT, "node_modules", "next", "dist", "bin", "next"), "start", "-p", "3517"], { cwd: WT, env: { ...env({ webhookSecret: secret }), NODE_ENV: "production" } });
 run("viewer", process.execPath, [path.join(__dirname, "viewer.cjs")], { env: { ...process.env, VIEWER_PORT: "3518" } });
 sup(`${new Date().toISOString()} started\n`);

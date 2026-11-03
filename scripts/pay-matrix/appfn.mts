@@ -1,6 +1,7 @@
 // Runs the app's own server functions against the rec schema with the Stripe TEST key (scripts/payments-proof/appfn.cjs sets the environment):
 //   chargeback <paymentIntentId>[:<cents>]   holds.chargebackOpened (with the dispute's amount: a partial dispute, §133): exactly what Stripe's charge.dispute.created webhook calls (the webhook can't reach localhost)
 //   disputeamount <pi>:<cents>      holds.disputeAmountChanged: exactly what Stripe's charge.dispute.updated webhook calls (test mode can't change a dispute's amount)
+//   finishwork <testId>            workWindow.finishWorkIfDue: the testers' time ran out (what the next page load or the daily job does)
 //   daily                          holds.runDaily (the daily job: expiries, retries of what's owed, ...)
 //   retry <userId>                 holds.retryOwed(user, now, "daily") (the daily retry of what a held developer owes)
 //   expire                         confirm.expireActions (the clock: a 3-day check running out)
@@ -11,6 +12,7 @@ const now = new Date();
 let r: unknown;
 if (action === "chargeback") { const [pi, cents] = arg.split(":"); r = await (await import("@/lib/server/holds")).chargebackOpened(pi, cents ? Number(cents) : null); }
 else if (action === "disputeamount") { const [pi, cents] = arg.split(":"); r = await (await import("@/lib/server/holds")).disputeAmountChanged(pi, Number(cents)); }
+else if (action === "finishwork") r = await (await import("@/lib/server/workWindow")).finishWorkIfDue(arg);
 else if (action === "daily") r = await (await import("@/lib/server/holds")).runDaily(now);
 else if (action === "retry") r = await (await import("@/lib/server/holds")).retryOwed(arg, now, "daily");
 else if (action === "expire") r = await (await import("@/lib/server/confirm")).expireActions(now);

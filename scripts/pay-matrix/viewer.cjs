@@ -12,7 +12,9 @@ const stripe = new Stripe(sk);
 const PORT = Number(process.env.VIEWER_PORT || 3518);
 const sql = (q) => execFileSync("psql", ["-h", "localhost", "-p", "5499", "-U", "postgres", "-d", "playtest_lite", "-t", "-A", "-F", "\t", "-c", q], { env: { ...process.env, PGOPTIONS: "-c search_path=rec_paymatrix" } }).toString().replace(/\r/g, "").trim();
 const lit = (s) => `'${String(s).replace(/'/g, "''")}'`;
-const userRow = (email) => {
+const userRows = new Map();
+const userRow = (email) => { const hit = userRows.get(email); if (hit && Date.now() - hit.at < 20000) return hit.v; const v = userRow0(email); userRows.set(email, { at: Date.now(), v }); return v; };
+const userRow0 = (email) => {
   if (!email) return null;
   const r = sql(`select name, coalesce("stripeCustomerId",''), coalesce("stripeAccountId",''), coalesce("stripePaymentMethodId",'') from "User" where email = ${lit(email)}`);
   if (!r) return null;
@@ -31,13 +33,22 @@ function word(pi) {
   if (pi.status === "processing") return { w: "Processing", c: "warn" };
   return { w: pi.status, c: "mute" };
 }
+const cache = new Map();
+/** A Stripe read kept for `ms` (things that change rarely: the card, plans, accounts). */
+async function cached(key, ms, fn) {
+  const hit = cache.get(key);
+  if (hit && Date.now() - hit.at < ms) return hit.v;
+  const v = await fn();
+  cache.set(key, { at: Date.now(), v });
+  return v;
+}
 const usd = (c) => `$${(c / 100).toFixed(2)}`;
 async function data(q) {
   const dev = userRow(q.get("dev"));
   const testers = (q.get("testers") || "").split(",").filter(Boolean).map(userRow).filter(Boolean);
   const out = { at: new Date().toISOString(), dev: dev && { name: dev.name, customer: dev.customer }, payments: [], card: null, transfers: [], accounts: [], disputes: [], subscriptions: [] };
   if (dev?.customer) {
-    const pis = await stripe.paymentIntents.list({ customer: dev.customer, limit: 20, expand: ["data.latest_charge", "data.payment_method"] });
+    const pis = await stripe.paymentIntents.list({ customer: dev.customer, limit: 12, expand: ["data.latest_charge", "data.payment_method"] });
     out.payments = pis.data.map((pi) => {
       const ch = typeof pi.latest_charge === "object" ? pi.latest_charge : null;
       const pm = typeof pi.payment_method === "object" && pi.payment_method ? pi.payment_method.card : ch?.payment_method_details?.card;
@@ -47,30 +58,38 @@ async function data(q) {
         decline: pi.last_payment_error ? (pi.last_payment_error.decline_code || pi.last_payment_error.code || "") : "",
         destination: pi.transfer_data?.destination || "", fee: pi.application_fee_amount != null ? usd(pi.application_fee_amount) : "",
         tds: ch?.payment_method_details?.card?.three_d_secure?.result || "",
-        app: sql(`select coalesce(string_agg(kind || ':' || status || case when chargeback <> '' then ' chargeback=' || chargeback else '' end, ', '), '') from "Payment" where "stripePaymentIntentId" = ${lit(pi.id)} or "actionPi" = ${lit(pi.id)}`),
+        app: "",
       };
     });
+    // (One query for every PaymentIntent's app rows: a psql run each was too slow to keep up with the 1.5 s poll.)
+    if (out.payments.length) {
+      const arr = `ARRAY[${out.payments.map((p) => lit(p.id)).join(",")}]::text[]`;
+      const rows = sql(`select pi, string_agg(kind || ':' || status || case when chargeback <> '' then ' chargeback=' || chargeback else '' end, ', ') from (select coalesce(case when "stripePaymentIntentId" = any(${arr}) then "stripePaymentIntentId" end, "actionPi") as pi, kind, status, chargeback from "Payment" where "stripePaymentIntentId" = any(${arr}) or "actionPi" = any(${arr})) x group by pi`);
+      const by = new Map(rows ? rows.split("\n").map((l) => l.split("\t")) : []);
+      for (const p of out.payments) p.app = by.get(p.id) || "";
+    }
     if (dev.pm.startsWith("pm_")) {
-      const pm = await stripe.paymentMethods.retrieve(dev.pm).catch(() => null);
+      const pm = await cached(`pm:${dev.pm}`, 60000, () => stripe.paymentMethods.retrieve(dev.pm).catch(() => null));
       if (pm?.card) out.card = `${pm.card.brand} •••• ${pm.card.last4}`;
     }
-    const subs = await stripe.subscriptions.list({ customer: dev.customer, status: "all", limit: 3, expand: ["data.latest_invoice"] });
+    const subs = await cached(`subs:${dev.customer}`, 30000, () => stripe.subscriptions.list({ customer: dev.customer, status: "all", limit: 3, expand: ["data.latest_invoice"] }));
     out.subscriptions = subs.data.map((s) => {
       const item = s.items.data[0];
       const inv = typeof s.latest_invoice === "object" ? s.latest_invoice : null;
       return { id: s.id, status: s.status, amount: item?.price ? `${usd(item.price.unit_amount || 0)}/${item.price.recurring?.interval || ""}` : "", periodEnd: item?.current_period_end || s.current_period_end || null, invoice: inv && { id: inv.id, status: inv.status, amount: usd(inv.amount_paid || inv.amount_due || 0), created: inv.created } };
     });
     const ids = new Set(out.payments.map((p) => p.id));
-    const ds = await stripe.disputes.list({ limit: 20 });
+    const ds = await cached("disputes", 4000, () => stripe.disputes.list({ limit: 20 }));
     out.disputes = ds.data.filter((d) => ids.has(typeof d.payment_intent === "string" ? d.payment_intent : d.payment_intent?.id)).map((d) => ({ id: d.id, amount: usd(d.amount), status: d.status, reason: d.reason, pi: d.payment_intent, created: d.created }));
   }
-  for (const t of testers) {
-    if (!t.account) { out.accounts.push({ name: t.name, account: "", note: "no Stripe account yet" }); continue; }
-    const a = await stripe.accounts.retrieve(t.account).catch((e) => ({ error: e.message }));
+  // (The testers' accounts change rarely: kept 60 s. Their transfers are read together.)
+  await Promise.all(testers.map(async (t) => {
+    if (!t.account) { out.accounts.push({ name: t.name, account: "", note: "no Stripe account yet" }); return; }
+    const a = await cached(`acct:${t.account}`, 60000, () => stripe.accounts.retrieve(t.account).catch((e) => ({ error: e.message })));
     out.accounts.push({ name: t.name, account: t.account, details: !!a.details_submitted, payouts: !!a.payouts_enabled, transfers: a.capabilities?.transfers || "inactive", due: (a.requirements?.currently_due || []).length });
     const tr = await stripe.transfers.list({ destination: t.account, limit: 8 });
     for (const x of tr.data) out.transfers.push({ id: x.id, to: t.name, account: t.account, amount: usd(x.amount), created: x.created, source: typeof x.source_transaction === "string" ? x.source_transaction : x.source_transaction?.id || "", reversed: x.reversed });
-  }
+  }));
   out.transfers.sort((a, b) => b.created - a.created);
   return out;
 }
@@ -117,7 +136,7 @@ async function draw(){
     h+='<section><h2>Transfers to testers</h2>'+(d.transfers.length?d.transfers.map(x=>row(x.id,'<div class="top"><span class="amt">'+x.amount+'</span><span>to '+esc(x.to)+'</span><span class="pill ok">Paid</span></div><div class="id">'+x.id+' · '+t(x.created)+(x.source?' · from '+esc(x.source):'')+'</div>')).join(""):'<div class="empty">No transfers yet</div>')+'</section>';}
   document.getElementById("m").innerHTML=h;first=false;
 }
-draw();setInterval(draw,1500);
+(async function loop(){await draw();setTimeout(loop,1200);})();
 </script></body></html>`;
 const EMAIL_PAGE = `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Resend status</title>
 <style>body{margin:0;background:#f6f8fb;color:#1a2233;font:14px/1.4 system-ui,Segoe UI,Arial,sans-serif}header{background:#111;color:#fff;padding:10px 14px}header p{margin:4px 0 0;font-size:12px;color:#bbb}
