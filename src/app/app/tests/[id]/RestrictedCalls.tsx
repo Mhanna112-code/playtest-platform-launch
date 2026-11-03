@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { ChangesBox } from "@/components/ChangesBox";
 import { CancelMenu } from "@/components/CancelMenu";
 import { usePress } from "@/lib/usePress";
@@ -20,7 +21,7 @@ export function RestrictedCalls({ testId, seenAt, calls, embedded = false }: { t
       <ul className={embedded ? "space-y-2 text-sm" : "max-h-72 space-y-2 overflow-y-auto pr-1 text-sm"}>
         {calls.map((c) => (
           <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
-            <span className="mr-auto text-slate-200">{fmt(c.when)} · {c.who} · {c.minutes} min</span>
+            <span className="mr-auto text-slate-200">{fmt(c.when)} · <Cut text={c.who} /> · {c.minutes} min</span>
             <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={async (why) => { if (await press(`/api/tests/${testId}/cancel-call`, { callId: c.id, reason: why }, c.id)) finish(); }} />
             {at === c.id && <div className="basis-full"><ChangesBox changes={changes} error={error} press="Cancel call" /></div>}
           </li>

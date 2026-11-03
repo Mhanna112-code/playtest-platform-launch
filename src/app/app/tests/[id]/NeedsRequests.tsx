@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { jumpTo } from "@/lib/markJump";
 import type { RowJson } from "@/lib/callRows";
 import { describeRows } from "@/components/RequestRows";
@@ -17,7 +18,7 @@ export function NeedsRequests({ requests }: { testId?: string; seenAt?: string; 
     <ul className="space-y-2 text-sm">
       {requests.map((r) => (
         <li key={r.id} id={`needs-req-${r.id}`} className="flex cursor-pointer flex-wrap items-center gap-2 rounded-lg border border-white/10 p-3 hover:border-white/20" data-needs-request="" onClick={() => open(r.id)}>
-          <span className="mr-auto text-slate-300"><b className="text-white">{r.name}</b> asked for a live call: {describeRows(r.rows)} · {r.minutes} min · {r.rate}</span>
+          <span className="mr-auto text-slate-300"><b className="text-white"><Cut text={r.name} /></b> asked for a live call: {describeRows(r.rows)} · {r.minutes} min · {r.rate}</span>
           <a href={`#req-${r.id}`} className="text-sm" data-answer-live="" onClick={(e) => { e.preventDefault(); e.stopPropagation(); open(r.id); }}>Answer in Live session →</a>
           {/* (Batch 15 section 34) What's left of the $1,000 for this tester's calls, when it's under an hour. */}
           {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}

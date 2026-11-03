@@ -933,6 +933,24 @@ const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
 // (Owner, Nov 2) With what it paid for, when known: "Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run” (Nov 2): $10 + $15 chargeback fee".
 // (Owner, Nov 2) The tester's and the test's names are cut at 10 characters with "…" so the line stays short.
 export const cut10 = (s: string) => (s.length > 10 ? `${s.slice(0, 10).trimEnd()}…` : s);
+/**
+ * (Owner, Nov 3) A name LISTED on a page (a person, a test, a product; components/Cut.tsx): the same rule as cut10, at `n` characters, counted by character so
+ * an emoji is never split in half. Unchanged when it fits.
+ */
+export const cutTo = (s: string, n = 10) => {
+  const chars = Array.from(s);
+  return chars.length > n ? `${chars.slice(0, n).join("").trimEnd()}…` : s;
+};
+/**
+ * (Owner, Nov 3) An email listed on a page, cut in the middle: the part before "@" keeps its first 6 characters then "…" (only when it is longer than 7), and
+ * the domain stays whole unless it is over 14 characters, then its first 14 and "…". "maximiliana.alexandrina@playtest.test" → "maximi…@playtest.test".
+ */
+export function cutEmail(email: string) {
+  const at = email.lastIndexOf("@");
+  if (at < 0) return cutTo(email);
+  const local = Array.from(email.slice(0, at)), domain = Array.from(email.slice(at + 1));
+  return `${local.length > 7 ? `${local.slice(0, 6).join("")}…` : local.join("")}@${domain.length > 14 ? `${domain.slice(0, 14).join("")}…` : domain.join("")}`;
+}
 /** (Owner, Nov 2, §131) Which part of a tester's work a payment is for. "work": a payment that names no part (an extra pay with no part, an old row). */
 export type PiecePart = "written answers" | "recording" | "live call" | "work";
 /** The part a payment is for, from its call (a live call) or its sent part's kind. */

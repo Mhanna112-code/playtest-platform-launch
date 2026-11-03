@@ -1,3 +1,4 @@
+import { Cut } from "@/components/Cut";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Users } from "lucide-react";
@@ -64,7 +65,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children, ti
           <summary className="cursor-pointer">No longer working ({gone.length})</summary>
           <LongList shown={5} tall="max-h-56" className="mt-1.5 space-y-0.5 pl-4">
             {gone.map((g) => (
-              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline"><span className="inline-block max-w-[16rem] truncate align-bottom" title={g.name}>{g.name}</span></a> <span className="badge ml-1" data-gone-tag={g.how}>{g.how}</span>{g.at && <> · {fmtDateIn(g.at, timeZone)}</>}</li>
+              <li key={g.contractId}><a href={`#tester-${g.contractId}`} className="text-sky-300 hover:underline"><span className="inline-block max-w-[16rem] truncate align-bottom" title={g.name}><Cut text={g.name} /></span></a> <span className="badge ml-1" data-gone-tag={g.how}>{g.how}</span>{g.at && <> · {fmtDateIn(g.at, timeZone)}</>}</li>
             ))}
           </LongList>
         </details>

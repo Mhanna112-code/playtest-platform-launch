@@ -1,3 +1,4 @@
+import { Cut } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { deferredForBox } from "@/lib/server/holds";
@@ -184,7 +185,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList as="div" shown={5} tall="max-h-[28rem]" className="space-y-3">
             {sent.filter((c) => c.submissions.length + c.calls.filter((x) => x.review).length > 0).map((c) => (
               <div key={c.id} className="space-y-1">
-                <p className="text-sm font-medium text-slate-200">{c.title} <span className="font-normal text-slate-500">· {c.test.developer.name || c.test.developer.email}</span></p>
+                <p className="text-sm font-medium text-slate-200"><Cut text={c.title} kind="test" /> <span className="font-normal text-slate-500">· <Cut text={c.test.developer.name || c.test.developer.email} kind={c.test.developer.name ? "person" : "email"} /></span></p>
                 <ul className="divide-y divide-white/5 text-sm">
                   {[
                     ...c.submissions.map((x) => ({ id: x.id, at: x.sentAt, what: x.kind === "recording" ? "Screen recording" : "Written answers", review: x.review, dispute: x.dispute })),

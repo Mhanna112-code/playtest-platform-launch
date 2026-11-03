@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { CharacterCount } from "@/components/CharacterCount";
 import { refreshBell } from "./BellLink";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -56,7 +57,7 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
             {(i === 0 || day(messages[i - 1].at) !== day(m.at)) && <p className="my-2 text-center text-xs text-slate-500">{day(m.at)}</p>}
             <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
               <div className="max-w-[78%] space-y-1">
-                {!m.mine && <p className="px-1 text-xs text-slate-400">{m.hover ? <span data-person-hover=""><PersonHover {...m.hover} className="text-slate-400" /></span> : m.who}</p>}
+                {!m.mine && <p className="px-1 text-xs text-slate-400">{m.hover ? <span data-person-hover=""><PersonHover {...m.hover} className="text-slate-400" /></span> : <Cut text={m.who} />}</p>}
                 <div className={`rounded-2xl px-3.5 py-2 text-sm ${m.mine ? "bg-volt-300 text-ink-950" : "bg-white/[0.07] text-slate-100"}`}>
                   <div className="whitespace-pre-wrap break-words">{m.body}</div>
                   <p className={`mt-1 text-[10px] ${m.mine ? "text-ink-950/75" : "text-slate-500"}`}>{time(m.at)}</p>

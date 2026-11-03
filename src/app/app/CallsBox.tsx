@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import Link from "next/link";
 import { ArrowRight, CalendarClock } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -31,9 +32,9 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show, on a line of their own when the
                       names are long. */}
                   {restricted ? (
-                    <span className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200" title={`${c.who} · ${c.test}`}><span className="min-w-0 max-w-full truncate"><b className="text-white">{c.who}</b> · {c.test}</span> <span className="whitespace-nowrap">· {fmt(c.when)} · {c.minutes} min</span></span>
+                    <span className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200" title={`${c.who} · ${c.test}`}><span className="min-w-0 max-w-full truncate"><b className="text-white"><Cut text={c.who} /></b> · <Cut text={c.test} kind="test" /></span> <span className="whitespace-nowrap">· {fmt(c.when)} · {c.minutes} min</span></span>
                   ) : (
-                    <Link href={`/app/tests/${c.testId}#call-${c.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${c.who} · ${c.test}`}><span className="min-w-0 max-w-full truncate"><b className="text-white">{c.who}</b> · {c.test}</span> <span className="whitespace-nowrap">· {fmt(c.when)} · {c.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
+                    <Link href={`/app/tests/${c.testId}#call-${c.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${c.who} · ${c.test}`}><span className="min-w-0 max-w-full truncate"><b className="text-white"><Cut text={c.who} /></b> · <Cut text={c.test} kind="test" /></span> <span className="whitespace-nowrap">· {fmt(c.when)} · {c.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
                   )}
                   {c.joinable && <JoinCall callId={c.id} />}
                   {restricted && <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={(reason) => void press(`/api/tests/${c.testId}/cancel-call`, { callId: c.id, reason }, c.id).then((r) => r && finish())} />}

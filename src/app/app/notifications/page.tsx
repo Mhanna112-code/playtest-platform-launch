@@ -43,6 +43,7 @@ export default async function Notifications() {
     key,
     title: g[0].groupKey ? groupTitle(g[0].groupKey, new Set(g.map((n) => n.testId ?? n.id)).size, g.length) : g[0].testId ? titles.get(g[0].testId) : undefined,
     counted: !!(g[0].groupKey && GROUP_COUNT_TITLES[g[0].groupKey]),
+    test: !g[0].groupKey && !!g[0].testId,
     day: dayKey(g[0].createdAt, u.timeZone) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
     lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone) })),
   }));

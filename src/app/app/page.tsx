@@ -1,3 +1,4 @@
+import { Cut } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { owed } from "@/lib/server/holds";
@@ -132,7 +133,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         <DashboardActionBox id="dispute-sides" title="Disputes: add your side" count={disputeBox.length} kind="disputes">
             {disputeBox.map((d) => (
               <li key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-                <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} on “{d.testTitle}”:</p>
+                <p className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} on “<Cut text={d.testTitle} kind="test" />”:</p>
                 <ReasonQuote text={d.reason} />
                 <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
               </li>
@@ -143,7 +144,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         <DashboardActionBox id="excerpt-requests" title="Excerpt requests" count={excerptBox.length} kind="excerpts">
           {excerptBox.map((x) => (
             <li key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white">{x.tester}</b> would like to show this from “{x.testTitle}” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              <p className="text-slate-300"><b className="text-white"><Cut text={x.tester} /></b> would like to show this from “<Cut text={x.testTitle} kind="test" />” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               {/* (Batch 16 section 37) The question it answers, above the quote. */}
               <ExcerptQuestion question={x.question} />
@@ -209,11 +210,11 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
       const who = displayName(c.tester);
       // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work still waits for review when their payout account was connected.
       if (!testerPayable(c.tester)) continue;
-      for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b></>, cta: "Review" });
+      for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><Cut text={t.title} kind="test" /></b></>, cta: "Review" });
       // (Batch 30 §2) An updated version sent after a piece was paid, while it can still be paid more: in Needs review too (it opens the update's row).
-      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, text: <>sent an updated version of their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white">{t.title}</b> after you paid</>, cta: "Review" });
+      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, text: <>sent an updated version of their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><Cut text={t.title} kind="test" /></b> after you paid</>, cta: "Review" });
       // (Batch 15 section 40) A call that took place, once its measured length is final: pay it.
-      for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>had a live call for <b className="text-white">{t.title}</b>: pay it</>, cta: "Review" });
+      for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, text: <>had a live call for <b className="text-white"><Cut text={t.title} kind="test" /></b>: pay it</>, cta: "Review" });
     }
   for (const a of apps) {
     const t = allTests.find((x) => x.id === a.testId)!;
@@ -221,13 +222,13 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     const name = x ? displayName(x) : "A tester";
     if (a.kind === "rejoin") {
       const old = await oldOf(a);
-      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white">{t.title}</b></>, cta: "Answer" });
-    } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>applied to join <b className="text-white">{t.title}</b></>, cta: "Answer" });
+      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white"><Cut text={t.title} kind="test" /></b></>, cta: "Answer" });
+    } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, text: <>applied to join <b className="text-white"><Cut text={t.title} kind="test" /></b></>, cta: "Answer" });
   }
   // (§106) Excerpt requests and disputes use their own inline boxes above, in both account states.
   for (const r of reqs) {
     const x = contractTest.get(r.contractId);
-    if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#req-${r.id}`, who: displayName(x.c.tester), text: <>asked for a live call · <b className="text-white">{x.t.title}</b></>, cta: "Answer in Live session →" }); // (batch 16 section 35) opens the Call requests panel at it
+    if (x) items.push({ key: `r-${r.id}`, at: r.createdAt, href: `/app/tests/${x.t.id}#req-${r.id}`, who: displayName(x.c.tester), text: <>asked for a live call · <b className="text-white"><Cut text={x.t.title} kind="test" /></b></>, cta: "Answer in Live session →" }); // (batch 16 section 35) opens the Call requests panel at it
   }
   items.sort((a, b) => b.at.getTime() - a.at.getTime());
   const toReview = items.filter((i) => i.key.startsWith("s-") || i.key.startsWith("c-")).length;
@@ -276,7 +277,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
             {reviewRows.map((r) => (
               <li key={`review-${r.id}`} id="needs-review" data-needs-review={r.id}>
                 <Link href={`/app/tests/${r.id}#needs-you`} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">
-                  <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay`}><b className="text-white">{r.title}</b> · {plural(r.n, "part")} to pay{r.closes && <span className="text-slate-400" data-pay-closes=""> · {r.closes}</span>}</p>
+                  <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay`}><b className="text-white"><Cut text={r.title} kind="test" /></b> · {plural(r.n, "part")} to pay{r.closes && <span className="text-slate-400" data-pay-closes=""> · {r.closes}</span>}</p>
                   <span className="flex shrink-0 items-center gap-1 text-sm text-indigo-300">Review <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
@@ -287,7 +288,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950">{initial(r.who)}</span>
                   {/* (Owner, Nov 3, long text) The words keep at least 12rem: with a long name the action drops onto its own line (right-aligned) instead of
                       squeezing them into a narrow column. */}
-                  <p className="min-w-[min(100%,12rem)] flex-1 text-slate-300"><span className="font-medium text-white">{r.who}</span> {r.text}</p>
+                  <p className="min-w-[min(100%,12rem)] flex-1 text-slate-300"><span className="font-medium text-white"><Cut text={r.who} /></span> {r.text}</p>
                   <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300">{r.cta} <ArrowRight className="h-4 w-4" /></span>
                 </>
               );
@@ -327,7 +328,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               // (Batch 9) Every reason: "Paused: payment hold · paused by the team".
               const why = pauseReasons(user, t);
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
-              const title = <span className="text-lg font-semibold text-white">{t.title}</span>;
+              const title = <span className="text-lg font-semibold text-white"><Cut text={t.title} kind="test" /></span>;
               return (
                 <li key={t.id}>
                   {/* The whole card opens the test (its title's link stretches over it); a suspended developer's cards don't open. */}
@@ -335,7 +336,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                     <div className="flex items-start gap-3">
                       <CategoryTile category={mainCategory(t.categories)} />
                       <div className="min-w-0 space-y-2">
-                        {t.productName && <p className="kicker">{t.productName}</p>}
+                        {t.productName && <p className="kicker"><Cut text={t.productName} kind="product" /></p>}
                         {/* Under a suspension or a hold the test pages are closed: the card doesn't open. */}
                         {/* (Batch 15 section 29) A restricted developer's cards open the test's restricted view (a draft still doesn't open). */}
                         <p>{restricted && t.status === "draft" ? title : <Link href={t.status === "draft" ? `/app/tests/new?draft=${t.id}` : `/app/tests/${t.id}`} className={`${CARD_LINK} no-underline hover:no-underline`}>{title}</Link>}</p> {/* (Owner, Oct 28 evening) a draft opens in Post a test */}
@@ -483,7 +484,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
         <div className="min-w-[12rem] flex-1">
           {/* (Batch 16 section 28) The row opens the session page: while suspended, its limited view (parts, what was paid, Dispute, Charge, Let it go, Rate). */}
-          <p className="truncate font-semibold text-white" title={c.title}><Link href={`/app/sessions/${c.id}`} className="text-white" data-removed-open={c.id}>{c.title}</Link> {pausedTest(c.test) && <PausedTag />}</p>
+          <p className="truncate font-semibold text-white" title={c.title}><Link href={`/app/sessions/${c.id}`} className="text-white" data-removed-open={c.id}><Cut text={c.title} kind="test" /></Link> {pausedTest(c.test) && <PausedTag />}</p>
           <p className="text-sm text-slate-400" data-removed-label="">You were removed from this test.</p>
         </div>
         {may && (
@@ -498,7 +499,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       <Link href={`/app/find/${c.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-rejoin={c.id}>
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
         <div className="min-w-[12rem] flex-1">
-          <p className="truncate font-semibold text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
+          <p className="truncate font-semibold text-white" title={c.title}><Cut text={c.title} kind="test" /> {pausedTest(c.test) && <PausedTag />}</p>
           <p className="text-sm text-slate-400">{c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}).` : `Your work ended (${fmtDate(c.endedAt ?? c.joinedAt)}).`} Your deadline is {fmtDate(c.dueAt)}.</p>
         </div>
         {!pausedTest(c.test) && <span className="btn-secondary px-3 py-1.5 text-sm"><RotateCcw className="h-4 w-4" /> Ask to rejoin</span>}
@@ -535,7 +536,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>
                 <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={`${c.title} · ${plural(parts.length, "part")}`}>{c.title} · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={`${c.title} · ${plural(parts.length, "part")}`}><Cut text={c.title} kind="test" /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
@@ -555,7 +556,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <Link href={a.href} className="card card-hover flex flex-wrap items-center gap-3 border-sky-300/40 p-4 no-underline hover:no-underline">
                   <CategoryTile category={mainCategory(a.c.test.categories)} size="h-10 w-10" />
                   <div className="min-w-[12rem] flex-1">
-                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={a.c.title}>{a.c.title}</span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={a.c.title}><Cut text={a.c.title} kind="test" /></span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                     <p className="text-sm text-slate-400">{a.text}</p>
                   </div>
                   <span className="btn px-3 py-1.5 text-sm">{a.cta} <ArrowRight className="h-4 w-4" /></span>
@@ -569,7 +570,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <li key={`${c.id}-${p.key}`} className="card flex flex-wrap items-center gap-3 p-4" data-todo-part={`${c.id}:${p.key}`}>
                   <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
                   <div className="min-w-[12rem] flex-1">
-                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={`${c.title} · ${p.name}`}>{c.title} · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={`${c.title} · ${p.name}`}><Cut text={c.title} kind="test" /> · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                     <div className="mt-1 flex flex-wrap gap-2">
                       <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> Due {fmtDate(c.dueAt)}{due ? ` · ${due}` : ""}</span>
                       {messages > 0 && <span className="badge border-fuchsia-300/40 text-fuchsia-200"><MessagesSquare className="h-3.5 w-3.5" /> {plural(messages, "unread message")}</span>}
@@ -584,7 +585,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               <li key={`${c.id}-sent`} className="card flex flex-wrap items-center gap-3 p-4" data-todo-sent={c.id}>
                 <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
                 <div className="min-w-[12rem] flex-1">
-                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={c.title}>{c.title}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={c.title}><Cut text={c.title} kind="test" /></span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                   <p className="text-sm text-slate-400">Every part sent</p>
                 </div>
                 <Link href={`/app/sessions/${c.id}#parts`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
@@ -621,7 +622,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               const opens = listed && !s.late ? chargeOpensAt(s, c.test, c, now) : null;
               const inner = (
                 <>
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}><Cut text={c.title} kind="test" /> {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
                   {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), pieceDay(opens, user.timeZone))}</p>}
                   {listed && s.late && <p className="basis-full text-xs text-slate-400" data-sent-late="">{lateSentLine(fmtDate(c.dueAt), displayName(c.test.developer))}</p>}
@@ -638,7 +639,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {waitingCalls.map(({ c, x, minutes, cents }) => {
               const inner = (
                 <>
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}>{c.title} {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}><Cut text={c.title} kind="test" /> {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300" data-waiting-call-line=""><Clock className="h-3.5 w-3.5" /> Live call on {pieceDay(x.startsAt, user.timeZone)} · {minutes} min: waiting for review</span>
                   {cents != null && <span className="text-sm text-slate-300" data-waiting-call-amount="">{money(cents)}</span>}
                 </>
@@ -661,7 +662,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               {upcoming.map(({ c, x }) => (
                 <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long). */}
-                  <Link href={`/app/sessions/${c.id}#live`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><span className="min-w-0 max-w-full truncate"><b className="text-white">{displayName(c.test.developer)}</b> · {c.title}</span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
+                  <Link href={`/app/sessions/${c.id}#live`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><span className="min-w-0 max-w-full truncate"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <Cut text={c.title} kind="test" /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
                   {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
                   {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
                   {/* (Batch 18 section 13; batch 21) The camera and microphone check, once per upcoming call. */}
@@ -685,7 +686,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {invites.map((i) => (
               <li key={i.id} className="info flex flex-wrap items-center gap-2">
                 <Link href={`/app/find/${i.testId}`} className="mr-auto min-w-0 truncate" title={`${displayName(i.test.developer)} invited you to “${i.test.title}”`}>
-                  {displayName(i.test.developer)} invited you to “{i.test.title}”. {pausedTest(i.test) && <PausedTag />}
+                  <Cut text={displayName(i.test.developer)} /> invited you to “<Cut text={i.test.title} kind="test" />”. {pausedTest(i.test) && <PausedTag />}
                 </Link>
                 {/* (Batch 16 section 32) Re-sent on a new listing, or the test is full: said on the card. */}
                 {resentIds.has(i.id) && <span className="badge" data-invite-resent="">Sent again on the new listing · {fmtDate(i.createdAt)}</span>}
@@ -726,8 +727,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   <Link href={`/app/find/${t.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
                     <CategoryTile category={mainCategory(t.categories)} size="h-10 w-10" />
                     <div className="min-w-[12rem] flex-1">
-                      {t.productName && <p className="kicker truncate" title={t.productName}>{t.productName}</p>}
-                      <p className="truncate font-semibold text-white" title={t.title}>{t.title}</p>
+                      {t.productName && <p className="kicker truncate" title={t.productName}><Cut text={t.productName} kind="product" /></p>}
+                      <p className="truncate font-semibold text-white" title={t.title}><Cut text={t.title} kind="test" /></p>
                       <div className="mt-1 flex flex-wrap gap-2"><PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} /><CategoryBadges categories={t.categories} /></div>
                     </div>
                     <div className="ml-auto max-w-full text-right">
@@ -752,8 +753,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
                 <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>
                   <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
-                    <span className="block truncate" title={c.title}>{c.title}</span>
-                    <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · joined {fmtDate(c.joinedAt)}</span>
+                    <span className="block truncate" title={c.title}><Cut text={c.title} kind="test" /></span>
+                    <span className="block text-sm font-normal text-slate-400">by <Cut text={displayName(c.test.developer)} /> · joined {fmtDate(c.joinedAt)}</span>
                   </span>
                   <span className="badge border-emerald-400/40 text-emerald-200">In progress</span>
                   <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>
@@ -766,8 +767,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               const inner = (
                 <>
                   <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
-                    <span className="block truncate" title={c.title}>{c.title}</span>
-                    <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · {tag === "You left" ? "left" : "ended"} {fmtDate(c.endedAt ?? c.joinedAt)}</span>
+                    <span className="block truncate" title={c.title}><Cut text={c.title} kind="test" /></span>
+                    <span className="block text-sm font-normal text-slate-400">by <Cut text={displayName(c.test.developer)} /> · {tag === "You left" ? "left" : "ended"} {fmtDate(c.endedAt ?? c.joinedAt)}</span>
                   </span>
                   <span className="badge border-white/20 text-slate-300" data-history-tag="">{tag}</span>
                   {!suspended && <span className="flex items-center gap-1 text-sm text-indigo-300">Open <ArrowRight className="h-4 w-4" /></span>}
