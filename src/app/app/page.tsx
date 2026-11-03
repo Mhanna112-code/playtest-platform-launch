@@ -553,7 +553,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       )}
 
       <section className="space-y-3" id="to-do">
-        {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do")}
+        {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do (all open tests)")}
         {todoParts.length === 0 && answers.length === 0 && allSent.length === 0 ? (
           <p className="card text-sm text-slate-400">{suspended ? "Nothing to do while your account is suspended." : "Nothing to finish. Pick up a new test below."}</p>
         ) : (
