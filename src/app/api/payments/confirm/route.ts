@@ -1,6 +1,7 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
 import { confirmFinish, confirmStart } from "@/lib/server/confirm";
+import { peekBankCheck } from "@/lib/server/bankPeek";
 import { logPayMore, logReview } from "@/lib/server/actionText";
 import { db } from "@/lib/db";
 
@@ -12,6 +13,8 @@ export async function POST(req: Request) {
     if (u.deletedAt) throw new HttpError(403, "deleted", "This account was deleted.");
     const body = await readJson(req);
     const paymentId = String(body.paymentId ?? "");
+    // (§158) The open bank check asks whether Stripe still waits for the customer: read-only (nothing is finished, cancelled or charged), the developer's own only.
+    if (body.peek === true) return ok(await peekBankCheck(u, body));
     // (Batch 23 section 9) The start runs the stop-once check (the page's seen marker) and the plain refusals first.
     if (body.start === true) return ok(await confirmStart(u, paymentId, body));
     const p = await db.payment.findUnique({ where: { id: paymentId }, select: { kind: true, submissionId: true, callId: true, status: true, contractId: true, amountCents: true } });
