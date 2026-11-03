@@ -1224,3 +1224,56 @@ The bank-confirm box showed "Charges made while you were away $416.00 (the team'
 - **Hover shows the full names.** On a page, each of these lines also carries its uncut version (`full`), shown as its hover (`title`): the owed box's lines (`owedLines` → OwedBox's `<li>`), the Confirm list (`confirmItems`), the dashboard's rows (`bankToConfirm` → BankToConfirm), the test page's rows (`bankWaitingOnTest` → BankWaiting), Payments' waiting charges (`deferredForBox`) and its paid list (`paidRows`). Bells and emails are plain text and stay cut.
 - **Unchanged on purpose:** testers' own lines (they already name the test; no "hold" or "chargeback" words added); admin lines (adminLists, the team-close preview, the admin chargeback email: they show the test, full names); the test page's own event lines ("Ana Silva charged $5.00 for their written answers": they sit on that test); the review reminders ("“Harbor Run”: review Ana's written answers…", "Pay now: …", "Closing soon: …": they already name the test and the part); the one bell summing every charge waiting for the bank ("Your bank wants you to confirm a $16.00 payment on “Harbor Run” by …": a total per test, no piece); the reservation receipt after the team's Approve ("what you owed (reserved on your card, taken on the team's approval)": it names no item).
 - **Tests:** `tests/payment-piece-names.test.ts` (the helper, the cut, the uncut version; a dispute decision waiting for the bank on Payments, the dashboard and the test page; the owner's example of one payment listing two decisions; the owed box's lines; each hover rendered as `title`; a bell staying cut). The suites asserting the old wording are updated (addition, batch3, batch10, batch11, batch17-bank-check, batch23, batch24, batch25, batch28, batch29, batch35-one-card-checks, batch35-payment-proofs, choice, hold).
+
+## §133 A bank can dispute PART of a payment (owner, Nov 3)
+
+- **The report.** A bank can dispute part of a card payment (e.g. $96 of a $444.67 "Pay what you owe" payment). Stripe's `charge.dispute.created` carries the disputed `amount` (cents), and Stripe takes back only that amount (+ its $15 dispute fee). The webhook ignored the amount and treated the WHOLE payment as reversed, so the developer was asked for too much.
+- **What's stored.** The payment carrying the chargeback keeps what the bank reversed: `Payment.reversedCents` (nullable; migration `20261113090000_payment_reversed_cents`; null = the whole payment, which is how every chargeback recorded before §133 reads). It is the dispute's amount, at most the payment's amount (a larger amount counts as the whole payment). An event with no usable amount counts as the whole payment, as before. The webhook passes the amount to `chargebackOpened(paymentIntentId, amount)`; the claim writes `chargeback: "open"` and `reversedCents` together. Helpers in `src/lib/rules.ts`: `reversedOf`, `reversedPart`, `disputedCentsOf`, `reversedWords`, `repaidReversedLine`.
+- **A full dispute behaves exactly as today:** the same amounts and the same lines.
+- **A partial one:** the developer owes the disputed amount + ONE $15 fee. The rest of that payment stays paid, and testers' shares are untouched (the payment row, its share and its transfer don't change).
+- **The lines** (whole-payment lines unchanged):
+  - **Owed box, Pay what you owe's one payment:** "Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee". It paid for several items and the bank gives only an amount, so what that payment covered is listed under the line ("That payment covered:" then each item with its amount, named as the confirm items name them). None of the items is named as the disputed one.
+  - **Owed box, a payment for one piece:** "Your bank reversed $96 of the $444.67 you paid for Ana Silva's written answers on “Harbor Run” (Nov 2): $96 + $15 chargeback fee". The names are cut with `cut10` (`pieceName`), and the hover shows them uncut.
+  - **The developer's test page and bell:** "Your bank reversed $96.00 of your $444.67 payment for …" (the event), "…: it was added to what you owe" (the bell when a hold was already on), and "The team resolved the bank reversal of $96.00 of your $444.67 payment".
+  - **Won:** "Your bank's chargeback of $96.00 was reversed in your favour.", "Refund: your bank's chargeback of $96.00 was reversed: $111.00 refunded.", and on the test page "Your bank's chargeback of $96.00 was reversed: $111.00 refunded to your card." (or "… taken off what you owe.").
+  - **Admins:**
+    - the chargeback email: "Playtest: new chargeback of $96.00" and "A developer's bank reversed $96.00 of a $444.67 payment (pi_…)…";
+    - the hold row: "Chargeback open: $96.00 of a $444.67 payment · pi_…";
+    - the person's Chargebacks box: "Chargeback $96.00 of a $444.67 payment (open)";
+    - payment rows: "· chargeback open ($96.00 reversed)";
+    - the needs-the-team list: "Open chargeback: $96.00 of a $444.67 payment".
+- **Every total follows it.** That covers what's owed and payable, Pay what you owe's one payment and the chargeback reservation (so the team's Approve captures $96 + $15), the chargeback steps, the admin's owed line, the owed box's stop-once, and the confirm items' covered amounts.
+- **What you've paid** (`paidOutTotal` in `src/lib/server/paymentRows.ts`):
+  - The reversed payment counts minus the disputed part. Its row says "· your bank reversed $96.00 of this (chargeback)".
+  - The repayment row: "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)". A payment for one piece adds "for <piece>" before the brackets. A whole one still reads "Repaid the reversed $39.00 … ($39.00 + $15.00 chargeback fee)".
+  - Pay what you owe's one payments the bank reversed aren't listed themselves (their items are), so they take what was reversed off the total too. This also fixes a combined payment's whole reversal being counted twice (its items and its repayment).
+- **Won:**
+  - Already repaid: exactly what was repaid is refunded ($96 + $15 = $111) at the repayment's PaymentIntent.
+  - Not repaid yet: the $96 + $15 leaves what's owed.
+  - A repayment still waiting for the lift ("deferred": e.g. a suspension still on) is dropped, so it's never charged after a win. This was a gap found while building §133.
+- **A second delivery changes nothing.**
+  - The same event id is a duplicate (StripeEvent).
+  - The same dispute under another event id (even with another amount) finds the chargeback open and changes nothing: one chargeback, one fee, one hold, one email.
+  - Two deliveries at the same moment open it once.
+- **`charge.dispute.updated`.** A bank can change the disputed amount before it's decided (`disputeAmountChanged` in `src/lib/server/holds.ts`).
+  - **Followed** only when all of these hold (checked under the developer's row lock):
+    - the chargeback is open;
+    - nothing of it is repaid or being repaid: no repayment paid or waiting, no Pay what you owe payment holding it, no reservation covering it;
+    - Stripe hasn't decided it (won, lost, warning_closed, charge_refunded, prevented).
+  - **When followed,** what's owed and every total follow at once. The owed box redraws (`owedV`; `paymentsV` and the admin console's fingerprint include `reversedCents`). A press from an older page stops once: "What you owe changed: now $135.00. Press again …".
+  - **Otherwise,** nothing changes and it's logged for the admins:
+    - every admin gets "Playtest: a chargeback's amount changed ($96.00 to $120.00)";
+    - the developer's Chargebacks box (admin console) lists "Stripe changed the disputed amount of the $444.67 payment (pi_…) from $96.00 to $120.00: not followed, because it's reserved on the developer's card. Check it in Stripe.";
+    - followed changes are listed there too, with no email.
+  - An update for a dispute not recorded yet answers 503, so Stripe retries it.
+- **Never charged at an old amount.** Pay what you owe's one-payment claim re-reads a reversed payment's amount under the row lock. If it changed after the total was read, nothing is claimed and the press stops once.
+- **Tests:** `tests/partial-dispute.test.ts` covers:
+  - a full dispute unchanged (Stripe's amount, none, more than the payment; on one payment and on Pay what you owe's one payment);
+  - part of a single payment, with every line and total, the reservation, Approve and the repayment row;
+  - part of a combined Pay what you owe payment, with its covered list and the repayment row;
+  - the repayment and won refund amounts, won before repaid, and a waiting repayment dropped;
+  - duplicate deliveries;
+  - amount updates: followed, an older page's stop-once, the same amount, and not followed (decided, reserved, resolved, won), each logged with the admins' email;
+  - an update before the dispute is recorded, and the claim refusing a changed amount.
+  - `paid-list` follows the moved helpers.
+- **Proof:** `docs/media/partial-dispute/README.md`: real Stripe test-mode payments, a real full dispute (card 0259), and a partial dispute event signed like Stripe's.

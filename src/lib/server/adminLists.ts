@@ -10,7 +10,10 @@ import { SUBSCRIPTION_ENDED, adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
 import { notesOf } from "./adminRace";
 import { REPORTED_OVER, labelled, reportCounts, reportedOver3 } from "./reports";
-import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine, disputeRangeLine } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine, disputeRangeLine, reversedOf, reversedPart } from "@/lib/rules";
+
+/** (Owner, Nov 3, §133) A chargeback's amount for the admin: "$96.00 of a $444.67 payment" when the bank reversed part of it, else "$444.67". */
+const cbAmount = (p: { amountCents: number; reversedCents?: number | null }) => (reversedPart(p) ? `${money(reversedOf(p))} of a ${money(p.amountCents)} payment` : money(p.amountCents));
 import { callMinutesOf } from "@/lib/callMeasure";
 import { LISTING_VALUES } from "@/lib/listingInfo";
 import { LISTING_SAVED } from "@/lib/listingPanel";
@@ -500,8 +503,9 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     // (Batch 33 §1) The developer opens their profile; each chargeback's payment opens in the Stripe Dashboard.
     who: person(dev),
     since: fmtDateTime(dev.holdStartedAt!),
-    chargebacks: cbs.map((p) => `Chargeback open: ${money(p.amountCents)} · ${p.stripePaymentIntentId}`),
-    chargebackParts: cbs.map((p): Rich => [`Chargeback open: ${money(p.amountCents)}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })]),
+    // (§133) What the bank reversed: "Chargeback open: $96.00 of a $444.67 payment" when it was part of the payment.
+    chargebacks: cbs.map((p) => `Chargeback open: ${cbAmount(p)} · ${p.stripePaymentIntentId}`),
+    chargebackParts: cbs.map((p): Rich => [`Chargeback open: ${cbAmount(p)}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })]),
     cardVerified: steps.cardVerified,
     owedPaid: steps.owedPaid,
     // (Batch 23 section 6) Pay what you owe reserves: the row says how much is reserved against what is owed.
@@ -675,7 +679,7 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
       const on: Rich = t ? [" on ", testLink(t)] : [];
       rows.push(mk("pay", p.id, p.createdAt, dev
         // (Batch 35 §117) Pay what you owe's one payment, and each debt it paid (the link kept for refunds).
-        ? [`${p.kind} ${money(p.amountCents)} to `, ...(p.kind === "subscription" ? ["the platform"] : p.kind === "owed" ? ["the payments it covers"] : person(people.get(p.testerId))), ...on, ` · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}${p.coveredById ? ` · paid in one payment (${p.coveredById})` : ""}`, ...stripeIds(p)]
+        ? [`${p.kind} ${money(p.amountCents)} to `, ...(p.kind === "subscription" ? ["the platform"] : p.kind === "owed" ? ["the payments it covers"] : person(people.get(p.testerId))), ...on, ` · ${p.status}${p.chargeback === "open" ? ` · chargeback open${reversedPart(p) ? ` (${money(reversedOf(p))} reversed)` : ""}` : ""}${p.coveredById ? ` · paid in one payment (${p.coveredById})` : ""}`, ...stripeIds(p)]
         : [`${money(p.testerCents)} from `, ...person(people.get(p.developerId)), ` (${p.kind})`, ...on, ` · payout ${p.transferStatus}`, ...stripeIds(p)]));
     }
   } else if (kind === "u-failures") {
@@ -691,10 +695,12 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
       rows.push(mk("dispute", d.id, d.createdAt, [testLink(c ? { id: c.testId, title: c.title } : null), ...(other ? [" with ", ...person(other)] : []), ` · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}:`, quoted(d.reason)])); // (batch 35 §43)
     }
   } else if (kind === "u-chargebacks") {
-    for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${money(p.amountCents)} (${p.chargeback})`, ...stripeIds(p)]));
+    for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${cbAmount(p)} (${p.chargeback})`, ...stripeIds(p)]));
+    // (Owner, Nov 3, §133) Stripe changing a dispute's amount: followed, or logged here (and emailed) when it couldn't be (already repaid, resolved, won, decided).
+    for (const e of await db.accountEvent.findMany({ where: { userId, kind: "chargeback-amount" }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("cbamount", e.id, e.createdAt, e.note));
   } else if (kind === "u-holds") {
     const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated", "team-closed": "Team closure" }; // (batch 30 §5)
-    for (const e of await db.accountEvent.findMany({ where: { userId }, orderBy: { createdAt: "desc" }, take: 2000 })) {
+    for (const e of await db.accountEvent.findMany({ where: { userId, kind: { not: "chargeback-amount" } }, orderBy: { createdAt: "desc" }, take: 2000 })) { // (§133) dispute amounts: in Chargebacks
       // (Batch 35 §43) A typed reason (a suspension's, a hold lift's note, a close-out's) in the quoted box.
       const head = `${labels[e.kind] ?? e.kind}${e.byId ? ` by ${await name(e.byId)}` : ""}`;
       const [line, reason] = e.kind === "team-closed" ? splitCloseNote(e.note) : e.kind === "suspended" || e.kind === "hold-approved" ? ["", e.note] : [e.note, ""];
@@ -821,7 +827,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       if (o.decidedAt) rows.push(mk("offer-decided", o.id, o.decidedAt, [...ofP(o.contractId), o.status === "closed" ? " did not answer the new terms before their part ended (the offer closed)" : ` ${o.status === "switched" ? "switched to" : o.status === "kept" ? "kept their terms instead of" : "did not take"} the new terms`]));
     }
   } else {
-    for (const p of await db.payment.findMany({ where: { contractId: { in: ids } } })) rows.push(mk("payment", p.id, p.createdAt, [`${p.kind} ${money(p.amountCents)} to `, ...ofP(p.contractId), ` · ${p.status}${p.chargeback === "open" ? " · chargeback open" : ""}`, ...stripeIds(p)]));
+    for (const p of await db.payment.findMany({ where: { contractId: { in: ids } } })) rows.push(mk("payment", p.id, p.createdAt, [`${p.kind} ${money(p.amountCents)} to `, ...ofP(p.contractId), ` · ${p.status}${p.chargeback === "open" ? ` · chargeback open${reversedPart(p) ? ` (${money(reversedOf(p))} reversed)` : ""}` : ""}`, ...stripeIds(p)]));
   }
   sortDesc(rows);
   return slice(rows, (r) => r.date, cursor);

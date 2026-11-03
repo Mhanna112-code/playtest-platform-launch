@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
-import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, splitFee } from "@/lib/rules";
+import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, reversedWords, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
@@ -419,7 +419,8 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   for (const p of await db.payment.findMany({ where: { developerId: devId, chargeback: "open" } })) {
     await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
-    if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of your ${money(p.amountCents)} payment`, c.id);
+    // (§133) "The team resolved the bank reversal of $96.00 of your $444.67 payment" when the bank reversed part of it.
+    if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of ${reversedWords(p)}`, c.id);
   }
   // (Batch 24, a batch 23 leftover) ONE notice for the developer: when Approve lifts the hold it says so too (the testers still get their "is running again").
   const lifted = await liftHoldIfClear(devId, { quietDev: true });

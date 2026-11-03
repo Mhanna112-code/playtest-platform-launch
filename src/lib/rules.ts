@@ -949,8 +949,43 @@ export const pieceName = ({ tester, part, test, when, full = false }: { tester: 
 };
 /** (§131) A team's dispute decision, named by its piece: "the team's dispute decision on Marc Hanna's recording on “chargechar…”". */
 export const disputeDecisionName = (piece: string) => `the team's dispute decision on ${piece}`;
-export const chargebackOwedLine = (cents: number, paidFor?: { name: string; part: string; test: string; date: string }, full = false) =>
-  `Your bank reversed ${paidFor ? `${wholeMoney(cents)} you paid for ${pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test, when: paidFor.date, full })}` : `a ${wholeMoney(cents)} payment`}: ${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
+/**
+ * (Owner, Nov 3, batch 35 §133) A bank can dispute PART of a card payment (Stripe's charge.dispute.created carries the disputed `amount`; Stripe takes back only that,
+ * plus its fee). What the bank reversed of a payment: its `reversedCents` (at most the payment), or the whole payment (a chargeback recorded before §133).
+ */
+export const reversedOf = (p: { amountCents: number; reversedCents?: number | null }) => Math.min(p.reversedCents != null && p.reversedCents > 0 ? p.reversedCents : p.amountCents, p.amountCents);
+/** (§133) The bank reversed only part of the payment. */
+export const reversedPart = (p: { amountCents: number; reversedCents?: number | null }) => reversedOf(p) < p.amountCents;
+/** (§133) A dispute's amount as Stripe sends it (cents), or null when it isn't a usable amount (then the whole payment counts, as before). */
+export const disputedCentsOf = (amount: unknown) => (typeof amount === "number" && Number.isInteger(amount) && amount > 0 ? amount : null);
+/**
+ * The owed box's line of an open chargeback (`cents`: what the bank reversed). (§133) `paidCents`: the whole payment; when the bank reversed only part of it, the line
+ * says so: "Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee", or with its piece "Your bank reversed $96 of the $444.67 you paid for Ana
+ * Silva's written answers on “Harbor Run” (Nov 2): $96 + $15 chargeback fee". The whole payment reads as before.
+ */
+export const chargebackOwedLine = (cents: number, paidFor?: { name: string; part: string; test: string; date: string }, full = false, paidCents: number | null = null) => {
+  const piece = paidFor ? pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test, when: paidFor.date, full }) : "";
+  const fee = `${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
+  if (paidCents != null && paidCents > cents) return `Your bank reversed ${wholeMoney(cents)} of ${paidFor ? `the ${wholeMoney(paidCents)} you paid for ${piece}` : `your ${wholeMoney(paidCents)} payment`}: ${fee}`;
+  return `Your bank reversed ${paidFor ? `${wholeMoney(cents)} you paid for ${piece}` : `a ${wholeMoney(cents)} payment`}: ${fee}`;
+};
+/**
+ * (§133) "your $10.00 payment" for a whole reversal, "$96.00 of your $444.67 payment" for part of one: the developer's chargeback event, bell and the team's resolve
+ * line. `whose`: "your" (the developer's lines) or "a" (the admins').
+ */
+export const reversedWords = (p: { amountCents: number; reversedCents?: number | null }, whose: "your" | "a" = "your") =>
+  reversedPart(p) ? `${money(reversedOf(p))} of ${whose} ${money(p.amountCents)} payment` : `${whose} ${money(p.amountCents)} payment`;
+/**
+ * The repayment of a reversed payment in Payments' "What you've paid" (and its Stripe description). The whole payment (as before): "Repaid the reversed $39.00 Pay
+ * more for … ($39.00 + $15.00 chargeback fee)". (§133) Part of it: "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)", naming its piece when
+ * the payment paid for one ("… from your $444.67 payment for Ana Silva's written answers on “Harbor Run” (…)"). `what`: " payment", " Pay more", " dispute decision".
+ * Null for a whole reversal with no piece (the page keeps its plain label).
+ */
+export const repaidReversedLine = (o: { amountCents: number; reversedCents?: number | null }, what: string, piece: string | null) => {
+  const rev = reversedOf(o);
+  if (rev < o.amountCents) return `Repaid ${wholeMoney(rev)} reversed from your ${wholeMoney(o.amountCents)}${what}${piece ? ` for ${piece}` : ""} (${wholeMoney(rev)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee)`;
+  return piece ? `Repaid the reversed ${money(o.amountCents)}${what} for ${piece} (${money(o.amountCents)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee)` : null;
+};
 /** (Batch 11) The stop-once line on the developer's test page and Edit when the platform won a chargeback (a payments-kind line). */
 export const chargebackReversedLine = (cents: number, backCents: number, refunded: boolean) =>
   `Your bank's chargeback of ${money(cents)} was reversed: ${money(backCents)} ${refunded ? "refunded to your card" : "taken off what you owe"}.`;

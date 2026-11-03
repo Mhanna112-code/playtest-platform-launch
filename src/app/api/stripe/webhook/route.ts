@@ -1,4 +1,4 @@
-import { chargebackOpened, chargebackWon } from "@/lib/server/holds";
+import { chargebackOpened, chargebackWon, disputeAmountChanged } from "@/lib/server/holds";
 import { db } from "@/lib/db";
 import { payoutReadyOf, sendWaitingShares, verifyWebhook, webhookSecretsSet } from "@/lib/server/stripe";
 import { payoutFixed, payoutProblem } from "@/lib/server/restrictions";
@@ -57,7 +57,16 @@ async function handle(event: Event, later: (why: string) => Promise<Response>): 
     const pi = event.data.object.payment_intent;
     if (typeof pi === "string") {
       if (!(await known(pi))) return later("That payment isn't recorded yet");
-      await chargebackOpened(pi);
+      // (Owner, Nov 3, batch 35 §133) The dispute's amount (cents): a bank can dispute PART of a payment, and Stripe takes back only that (+ its fee).
+      await chargebackOpened(pi, event.data.object.amount);
+    }
+  }
+  // (§133) The bank changed the disputed amount before the dispute was decided: followed while nothing of it is repaid, otherwise logged for the admins.
+  if (event.type === "charge.dispute.updated") {
+    const pi = event.data.object.payment_intent;
+    if (typeof pi === "string") {
+      if (!(await known(pi))) return later("That payment isn't recorded yet");
+      if ((await disputeAmountChanged(pi, event.data.object.amount, event.data.object.status)) === "unknown") return later("That dispute isn't recorded yet");
     }
   }
   // (Owner, Oct 29, batch 10) A chargeback the platform won: its amount leaves what the developer owes (refunded if they already paid it).
