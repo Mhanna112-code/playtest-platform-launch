@@ -113,17 +113,14 @@ describe("§130 a stale customer or card is 'no card saved', never a decline", (
     expect(await db.review.count({ where: { submissionId: w.sub.id } })).toBe(0);
   });
 
-  it("a daily retry during a hold on a stale card: not counted as a try, nothing more owed, the stale card cleared", async () => {
+  it("a new card's retry during a hold on a stale card: nothing more owed, the stale card cleared", async () => {
     const w = await sentWork();
     const base = { contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, feeCents: 0, testerCents: 0 };
     const debt = await db.payment.create({ data: { ...base, kind: "review", submissionId: w.sub.id, amountCents: 800, status: "failed", owedUntil: new Date() } });
     await startHold(w.dev.user.id, "unpaid");
-    const before = await userOf(w.dev.user.id);
     liveStripe();
     expect(await retryOwed(w.dev.user.id)).toMatchObject({ cents: 0 });
-    const after = await userOf(w.dev.user.id);
-    expect(after).toMatchObject({ ...cardCleared, holdRetries: before.holdRetries });
-    expect(after.holdRetryAt?.getTime() ?? null).toBe(before.holdRetryAt?.getTime() ?? null);
+    expect(await userOf(w.dev.user.id)).toMatchObject(cardCleared);
     expect(await db.payment.findUniqueOrThrow({ where: { id: debt.id } })).toMatchObject({ status: "failed", coveredById: null });
     expect((await owed(w.dev.user.id)).map((p) => p.id)).toEqual([debt.id]);
     // Pay what you owe now says to add a card (the no-card line), still nothing declined.
@@ -262,16 +259,14 @@ describe("§130 live keys while payments are switched off (no STRIPE_ALLOW_LIVE)
     expect((await userOf(w.dev.user.id)).stripeCustomerId).not.toBeNull(); // the card is kept
   });
 
-  it("Pay what you owe says so, and a daily retry isn't counted", async () => {
+  it("Pay what you owe says so, and a new card's retry charges nothing either", async () => {
     const w = await sentWork();
     const base = { contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, feeCents: 0, testerCents: 0 };
     const debt = await db.payment.create({ data: { ...base, kind: "review", submissionId: w.sub.id, amountCents: 800, status: "failed", owedUntil: new Date() } });
     await startHold(w.dev.user.id, "unpaid");
     const r = await owedPress(w.dev.cookie, { seenTotalCents: 800, seenIds: [debt.id] });
     expect(r.body.stillFailing).toEqual([expect.stringContaining(PAYMENTS_OFF.replace(/\.$/, ""))]);
-    const before = (await userOf(w.dev.user.id)).holdRetries;
     await retryOwed(w.dev.user.id);
-    expect((await userOf(w.dev.user.id)).holdRetries).toBe(before);
     expect(await db.payment.findUniqueOrThrow({ where: { id: debt.id } })).toMatchObject({ status: "failed", coveredById: null });
   });
 });

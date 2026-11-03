@@ -67,34 +67,29 @@ async function owedOn(s: Awaited<ReturnType<typeof sentWork>>, reason: string) {
 }
 
 describe("batch 22 section 1: no automatic retries during a chargeback hold", () => {
-  it("a chargeback hold with a saved card: the daily job and saving a card never charge; Payments shows no next try", async () => {
+  it("a chargeback hold with a saved card: the daily job and saving a card never charge; Payments shows no new-card line", async () => {
     const s = await sentWork();
     await owedOn(s, "chargeback");
     const f = fakeStripe();
-    expect(await retryOwed(s.dev.user.id)).toBeNull();
-    expect(await retryOwed(s.dev.user.id, new Date(), "card")).toBeNull();
+    expect(await retryOwed(s.dev.user.id)).toBeNull(); // saving a card (§145: the daily job retries nothing at all)
     expect(f.charges).toEqual([]);
-    // The daily job never picks a chargeback hold for its retries.
-    expect(src("lib/server/holds.ts")).toContain("holdStartedAt: { not: null }, holdReason: { not: \"chargeback\" }, deletedAt: null, stripePaymentMethodId: { not: null } }");
-    expect((await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } })).holdRetries).toBe(0);
-    expect(src("app/app/payments/page.tsx")).toContain("retryLine={cbSteps ? \"\" : retryStatusLine(u, fmtDateTime)}");
+    expect(src("lib/server/holds.ts")).not.toMatch(/retryOwed\(u\.id/);
+    // (§145) The owed box's rule line ("…or as soon as you save a new card") shows only on a payment hold.
+    expect(src("components/OwedBox.tsx")).toContain("{onHold && !chargeback && <p");
   });
 
-  it("a payment hold still retries; one that turns into a chargeback hold stops retrying from then on", async () => {
+  it("a payment hold still charges on a new card; one that turns into a chargeback hold stops that from then on", async () => {
     const s = await sentWork();
     await owedOn(s, "unpaid");
     let f = fakeStripe({ decline: true });
     expect(await retryOwed(s.dev.user.id)).toMatchObject({ cents: 0 }); // tried (and declined)
-    expect((await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } })).holdRetries).toBe(1);
     // An earlier payment is reversed by the bank: the payment hold becomes a chargeback hold.
     const pi = "pi_" + randomUUID();
     await db.payment.create({ data: { kind: "review", contractId: s.sessionId, developerId: s.dev.user.id, testerId: s.tester.user.id, amountCents: 500, feeCents: 100, testerCents: 400, status: "charged", stripePaymentIntentId: pi, transferStatus: "sent" } });
     await chargebackOpened(pi);
     expect((await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } })).holdReason).toBe("chargeback");
     f = fakeStripe();
-    await db.user.update({ where: { id: s.dev.user.id }, data: { holdRetryAt: new Date(Date.now() - 2 * 86_400_000) } });
     expect(await retryOwed(s.dev.user.id)).toBeNull();
-    expect(await retryOwed(s.dev.user.id, new Date(), "card")).toBeNull();
     expect(f.charges).toEqual([]);
   });
 });

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import * as R from "@/lib/rules";
-import { owed, owedLines, payOwed, retryOwed, startHold } from "@/lib/server/holds";
+import { owed, owedLines, payOwed, retryOwed, runDaily, startHold } from "@/lib/server/holds";
 import { awayAction, confirmItems, expireActions } from "@/lib/server/confirm";
 import { saveCardFromCheckout, setStripeForTests } from "@/lib/server/stripe";
 import { OWED_PAID } from "@/lib/server/owedOnce";
@@ -30,10 +30,13 @@ function bank() {
   const transfers: { destination?: string; source_transaction?: string; amount?: number }[] = [];
   const ask = new Set<string>(), decline = new Set<string>(), attempt = new Set<string>(), broken = new Set<string>();
   const card = { customer: "", next: "" };
+  // (§145) Every create and cancel in the order Stripe got them: a new card cancels the old checks BEFORE charging on it.
+  const order: string[] = [];
   setStripeForTests({
     paymentIntents: {
       create: async (p: { amount: number; payment_method?: string; off_session?: boolean; capture_method?: string }) => {
         made.push(p);
+        order.push(`create:${p.payment_method}`);
         const id = "pi_" + randomUUID();
         if (decline.has(p.payment_method ?? "")) throw Object.assign(new Error("Your card was declined."), { type: "StripeCardError" });
         // (§122) Stripe's own trouble (not the card): never a decline.
@@ -57,6 +60,7 @@ function bank() {
       cancel: async (id: string) => {
         if (pis.get(id) === "succeeded") throw Object.assign(new Error("This PaymentIntent already succeeded."), { type: "StripeInvalidRequestError", code: "payment_intent_unexpected_state" });
         cancelled.push(id);
+        order.push(`cancel:${id}`);
         pis.set(id, "canceled");
         return { id, status: "canceled" };
       },
@@ -71,7 +75,7 @@ function bank() {
     paymentMethods: { retrieve: async (id: string) => ({ id, card: { brand: "visa", last4: id.slice(-4), exp_month: 12, exp_year: 2030 } }) },
     webhooks: { constructEvent: (raw: string) => JSON.parse(raw) },
   } as unknown as Stripe);
-  return { pis, made, cancelled, transfers, ask, decline, attempt, broken, card, approve: (id: string) => pis.set(id, "succeeded") };
+  return { pis, made, cancelled, transfers, ask, decline, attempt, broken, card, order, approve: (id: string) => pis.set(id, "succeeded") };
 }
 
 /** A developer with written answers sent on a test, a saved card ("pm_old") and a tester ready for payouts. */
@@ -138,7 +142,7 @@ describe("§117 rule 6: Pay what you owe is ONE payment", () => {
     expect(await receipts(w.dev.user.id)).toHaveLength(1);
   });
 
-  it("a daily retry the bank asks about is ONE 'Confirm with your bank' item listing every payment it covers", async () => {
+  it("a new card's retry the bank asks about is ONE 'Confirm with your bank' item listing every payment it covers", async () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
@@ -277,7 +281,7 @@ describe("§117 rule 2: a declined Confirm keeps waiting until its date", () => 
 });
 
 describe("§117 rule 3: a debt waiting for the bank is locked", () => {
-  it("skipped by a press and by the daily retry (other debts are paid); Cancel this check cancels it at Stripe and it's payable at once", async () => {
+  it("skipped by a press and by a new card's retry (other debts are paid); Cancel this check cancels it at Stripe and it's payable at once", async () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
@@ -293,10 +297,9 @@ describe("§117 rule 3: a debt waiting for the bank is locked", () => {
     expect(st.made.map((m) => m.amount)).toEqual([1600, 200]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: extra.id } })).toMatchObject({ status: "charged" });
     for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: d.status, coveredById: one.id, settledAt: null });
-    // Everything left waits for the bank: a press says so and charges nothing; the daily retry leaves it alone.
+    // Everything left waits for the bank: a press says so and charges nothing; the retry finds nothing it may charge.
     const all = await owedPress(w.dev.cookie, { seenTotalCents: 0, seenIds: [] });
     expect(all.body.error).toMatchObject({ code: "bank_waiting", message: R.OWED_ALL_WAITING });
-    await db.user.update({ where: { id: w.dev.user.id }, data: { holdRetryAt: new Date(Date.now() - 2 * DAY) } });
     expect(await retryOwed(w.dev.user.id)).toBeNull();
     expect(st.made).toHaveLength(2);
     // Cancel this check: cancelled at Stripe; the three are payable again and one press pays them as one payment.
@@ -699,4 +702,100 @@ describe("§122: a hold starting pauses the charges still waiting for the bank",
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged", stripePaymentIntentId: pi });
     expect(st.made).toHaveLength(0);
   });
+});
+
+describe("§145 (owner, Nov 3): no daily retries; only a new card retries what's owed", () => {
+  async function newCard(w: { dev: { user: { id: string } }; customer: string }, st: ReturnType<typeof bank>, pm: string) {
+    st.card.customer = w.customer;
+    st.card.next = pm;
+    await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
+  }
+  const charged = (devId: string) => db.notification.findMany({ where: { userId: devId, text: { startsWith: "We charged your card" } } });
+  const ids = (w: Awaited<ReturnType<typeof threeDebts>>) => w.debts.map((d) => d.id);
+
+  it("the daily job never charges what's owed, today or on later days, even on a card that would go through", async () => {
+    const w = await threeDebts();
+    const st = bank();
+    await runDaily(new Date());
+    await runDaily(new Date(Date.now() + DAY + 60_000));
+    expect(st.made.filter((m) => (m as { customer?: string }).customer === w.customer)).toEqual([]);
+    expect(await db.payment.count({ where: { developerId: w.dev.user.id, kind: "owed" } })).toBe(0);
+    expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
+    expect(await hold(w.dev.user.id)).not.toBeNull();
+    expect(await charged(w.dev.user.id)).toEqual([]);
+  });
+
+  it("a new card that pays: what's owed is ONE charge on it at once, the hold lifts, one line naming the items", async () => {
+    const w = await threeDebts();
+    const st = bank();
+    await newCard(w, st, "pm_new");
+    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_new"]]);
+    const one = await oneOf(w.dev.user.id);
+    for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: "charged", coveredById: one.id });
+    expect(await hold(w.dev.user.id)).toBeNull();
+    expect((await charged(w.dev.user.id)).map((n) => n.text)).toEqual([expect.stringMatching(/^We charged your card \$16\.00 for what you owed: /)]);
+  });
+
+  it("a new card that declines: one try on it, nothing charged, still owed and payable, the hold stays, no line", async () => {
+    const w = await threeDebts();
+    const st = bank();
+    st.decline.add("pm_new");
+    await newCard(w, st, "pm_new");
+    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_new"]]);
+    expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
+    expect(await hold(w.dev.user.id)).not.toBeNull();
+    expect(await charged(w.dev.user.id)).toEqual([]);
+  });
+
+  it("a new card whose bank asks: ONE 3-day 'Confirm with your bank' for the total; approved, paid once and the hold lifts", async () => {
+    const w = await threeDebts();
+    const st = bank();
+    st.ask.add("pm_new");
+    await newCard(w, st, "pm_new");
+    const one = await oneOf(w.dev.user.id);
+    expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 1600 });
+    expect(one.actionBy!.getTime()).toBeGreaterThan(Date.now() + 2.9 * DAY);
+    expect((await confirmItems(w.dev.user.id)).map((i) => i.id)).toEqual([one.id]);
+    expect((await owedLines(w.dev.user.id)).every((l) => l.waiting && l.checkId === one.id)).toBe(true);
+    expect(await hold(w.dev.user.id)).not.toBeNull();
+    st.approve(one.actionPi!);
+    expect((await confirm(w.dev.cookie, { paymentId: one.id })).status).toBe(200);
+    expect(await hold(w.dev.user.id)).toBeNull();
+    expect(st.made).toHaveLength(1);
+    expect(await receipts(w.dev.user.id)).toHaveLength(1);
+  });
+
+  for (const [card, outcome] of [["pm_new", "pays"], ["pm_ask", "asks"], ["pm_no", "declines"]] as const) {
+    for (const open of ["press", "retry"] as const) {
+      it(`a check already open (${open === "press" ? "Pay what you owe's own 15-minute check" : "a new card's 3-day check"}), then a card that ${outcome}: the old check is cancelled at Stripe FIRST, then one try on the new card`, async () => {
+        const w = await threeDebts();
+        const st = bank();
+        st.ask.add("pm_old").add("pm_ask");
+        st.decline.add("pm_no");
+        if (open === "press") expect((await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: ids(w) })).body.confirm).toHaveLength(1);
+        else await retryOwed(w.dev.user.id);
+        const old = await oneOf(w.dev.user.id);
+        expect(old.status).toBe(open === "press" ? "needs_action" : "needs_confirmation");
+        st.order.length = 0;
+        await newCard(w, st, card);
+        expect(st.order).toEqual([`cancel:${old.actionPi}`, `create:${card}`]);
+        expect(await db.payment.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ status: "cancelled", actionPi: null });
+        expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_old"], [1600, card]]);
+        if (outcome === "pays") {
+          expect(await hold(w.dev.user.id)).toBeNull();
+          expect([...st.pis.values()].filter((x) => x === "succeeded")).toHaveLength(1);
+        } else if (outcome === "asks") {
+          const fresh = await oneOf(w.dev.user.id);
+          expect(fresh).toMatchObject({ status: "needs_confirmation", amountCents: 1600 });
+          expect(fresh.id).not.toBe(old.id);
+          expect((await confirmItems(w.dev.user.id)).map((i) => i.id)).toEqual([fresh.id]);
+          expect(await hold(w.dev.user.id)).not.toBeNull();
+        } else {
+          expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
+          expect(await confirmItems(w.dev.user.id)).toEqual([]);
+          expect(await hold(w.dev.user.id)).not.toBeNull();
+        }
+      });
+    }
+  }
 });

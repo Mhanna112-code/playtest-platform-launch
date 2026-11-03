@@ -472,8 +472,9 @@ export async function saveCardFromCheckout(userId: string, sessionId: string) {
   // (Owner, Nov 2, batch 35 §117 rule 1) ONE CARD IN PLAY: every bank check still waiting (made on the old card) is cancelled at Stripe and each charge made while
   // away is tried again on the new card at once.
   if (user.stripePaymentMethodId !== pm) await (await import("./owedOnce")).newCardChecks(userId).catch((e) => console.error("[card] new card checks:", (e as Error).message));
-  // (Owner, Oct 29, batch 11 section 4) A new card during a hold: what is owed is retried on it at once (one payment for the total, batch 35 §117).
-  await (await import("./holds")).retryOwed(userId, new Date(), "card").catch((e) => console.error("[retry] card saved:", (e as Error).message));
+  // (Owner, Oct 29, batch 11 section 4) A new card during a hold: what is owed is charged on it at once (one payment for the total, batch 35 §117). (Owner, Nov 3,
+  // §145) This is the only automatic charge of what's owed: there are no daily retries.
+  await (await import("./holds")).retryOwed(userId).catch((e) => console.error("[retry] card saved:", (e as Error).message));
 }
 
 /** (Batch 34 §6) Refresh saved-card expiry from Stripe and send each threshold once. Missing cards are handled only when a charge fails. */
