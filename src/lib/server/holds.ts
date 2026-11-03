@@ -640,7 +640,8 @@ export async function owedLines(devId: string) {
     // (Owner, Nov 3, §133) The bank reversed only PART of the payment: "Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee" (a payment for one
     // piece names it: "… of the $444.67 you paid for …"). Pay what you owe's one payment paid for several items and the bank gives only an amount: what it covered
     // is listed under the line (`covers`), none named as the disputed one.
-    const covers = p.chargeback === "open" && p.kind === "owed" && p.paidCents > p.reversedCents ? await coveredItems(p.id) : undefined;
+    // (§147) Confirm all's one payment lists what it covered whether the bank reversed part of it or all of it.
+    const covers = p.chargeback === "open" && p.kind === "owed" && (p.paidCents > p.reversedCents || p.note === "press:all") ? await coveredItems(p.id) : undefined;
     // `source` (batch 10): what put it on the list, for the stop-once wording.
     out.push(p.chargeback === "open"
       ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, paidFor, false, p.paidCents), full: chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents), ...(covers ? { covers } : {}) }

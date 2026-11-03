@@ -108,7 +108,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(markup([row])).toContain(`$9.00 for your plan · <span`);
     // Payments' row for a renewal is the inline box carrying that anchor (marked by HashJump).
     expect(src("components/BankWaiting.tsx")).toContain("id={bankAnchor(paymentId)}");
-    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} line={withTestLinks(i.text, i.tests)} full={i.full} />");
+    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} full={i.full} />");
   });
 
   it("under 24 hours left the confirm-by part is red and names the day", async () => {
@@ -171,7 +171,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const rows = await bankToConfirm(x.dev.user.id);
     expect(rows.map((r) => r.id)).toEqual([p.id]);
     expect(rows[0].href).toBe(bankHref(x.testId, p.id)); // the test's paused view carries the same button
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("{bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} line={b.line} full={b.full} seenAt={seenAt} />)}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("{bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}");
     // The poll keeps refreshing during a hold or suspension.
     expect((await pulse(x.dev.cookie)).body).toMatchObject({ restricted: false });
     // §106 revision: the same box comes below the developer name, whatever their state.

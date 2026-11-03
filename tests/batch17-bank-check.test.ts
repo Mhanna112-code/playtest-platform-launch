@@ -257,14 +257,14 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // Payments: no Confirm of its own, a link to the same button.
     const items = await confirmItems(dev.user.id);
     // (§131) It names the piece: which tester, which part, which test (cut at 10 characters; `full` uncut, the hover).
-    expect(items).toEqual([{ tests: expect.any(Array), id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href }]);
+    expect(items).toEqual([{ tests: expect.any(Array), id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href, cents: 1000 }]); // (§147) its amount: over $200 its Confirm needs the tick
     const list = renderToStaticMarkup(createElement(ConfirmList, { items }));
     expect(list).toContain(`href="${href}"`);
     expect(list).toContain("Confirm with your bank →");
     expect(list).not.toContain("<button");
     // The test page: under the piece (the tester's written answers), the box the link marks.
     const rows = await bankWaitingOnTest(dev.user.id, testId);
-    expect(rows).toEqual([{ id: p.id, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for Ana Silva's written answers on “Harbor Run”, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("Ana Silva's written answers on “Harbor Run”") }]);
+    expect(rows).toEqual([{ id: p.id, cents: 1000, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for Ana Silva's written answers on “Harbor Run”, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("Ana Silva's written answers on “Harbor Run”") }]);
     const box = renderToStaticMarkup(createElement(BankWaiting, { paymentId: p.id, line: rows[0].line }));
     expect(box).toContain(`id="bank-${p.id}"`);
     expect(box).toContain("data-[marked]:ring-2");

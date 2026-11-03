@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
+import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
@@ -171,7 +171,7 @@ export async function confirmItems(devId: string) {
       const list = p.kind === "owed" && cov.get(p.id)?.length ? ` (${cov.get(p.id)!.join(", ")})` : "";
       return `${what} ${money(p.amountCents)}${list}${n.c && !piece ? ` on “${n.c.title}”` : ""} · confirm by ${fmtDateTimeIn(p.actionBy!, tz)}`;
     };
-    return { id: p.id, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [] };
+    return { id: p.id, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [], cents: p.amountCents };
   });
 }
 
@@ -183,7 +183,10 @@ export async function confirmItems(devId: string) {
  */
 export async function bankToConfirm(devId: string, now = new Date()): Promise<BankTopRow[]> {
   const waiting = await waitingConfirmation(devId, undefined, now);
-  if (!waiting.length) return [];
+  // (Owner, Nov 3, §147) An open Confirm all check is a row of the box too (its count and the poll's fingerprint); Confirm all draws it, with Cancel this check.
+  const all = await (await import("./confirmAll")).openAll(devId);
+  const allRow: BankTopRow[] = all ? [{ id: all.id, lead: (await import("@/lib/confirmAllText")).allWaitingLine(await db.payment.count({ where: { coveredById: all.id } }), all.amountCents), full: "", by: "", soon: false, href: "/app/payments#confirm", at: all.actionBy?.getTime() ?? 0, all: true }] : [];
+  if (!waiting.length) return allRow;
   const tz = await zoneOf(devId);
   const named = await piecesNamed(waiting, (d) => shortDay(d, tz));
   const owedIds = waiting.filter((p) => p.kind === "owed").map((p) => p.id);
@@ -191,7 +194,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
   const [covers, coversFull] = await Promise.all([once.coveredNames(owedIds), once.coveredNames(owedIds, true)]);
   const links = await testLinksOf(waiting);
   return waiting
-    .map((p) => {
+    .map((p): BankTopRow => {
       const n = named(p);
       const c = n.c;
       // (§131) The lead, and `full` (the names uncut, the row's hover).
@@ -211,8 +214,9 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
         return bankTopLead(p.amountCents, namesTest ? null : c?.title ?? null, what);
       };
       const by = confirmByText(p.actionBy!, now, tz);
-      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [] };
+      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [], cents: p.amountCents };
     })
+    .concat(allRow)
     .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
 }
 
@@ -231,7 +235,7 @@ export async function bankWaitingOnTest(devId: string, testId: string) {
     const { c, sub, call, piece, full } = named(p);
     const what = (x: string) => (p.kind === "dispute" ? pieceWords.dispute(x) : p.kind === "chargeback" ? pieceWords.reversed(x) : x);
     // (§131) `full`: the line with the names uncut, its hover.
-    return { id: p.id, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(piece!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(full!), fmtDateTimeIn(p.actionBy!, tz)) };
+    return { id: p.id, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(piece!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(full!), fmtDateTimeIn(p.actionBy!, tz)) };
   });
 }
 
@@ -242,6 +246,10 @@ async function piStatus(id: string, simulate?: unknown) {
   const pi = await getStripe().paymentIntents.retrieve(id).catch((e) => { if (isMissing(e)) return { status: "canceled" as const }; throw e; });
   return pi.status;
 }
+
+/** (Owner, Nov 3, §147) "Confirm with your bank" over $200 needs the over-$200 tick (a charge made while away; a press's own check was ticked on its press). */
+export const overTickNeeded = (p: { amountCents: number; status: string }) => p.amountCents > PAY_TICK_CENTS && p.status !== "needs_action" && p.status !== "paying";
+export const OVER_TICK_REFUSAL = `Tick “${OVER_PAY_TICK_LINE}” to pay.`;
 
 /** (Batch 23 section 9) Plain refusals for "Confirm with your bank": confirmed in another tab, expired, cancelled. */
 export const ALREADY_CONFIRMED = "You already confirmed this payment.";
@@ -254,6 +262,7 @@ async function startable(devId: string, paymentId: string) {
   if (!p || p.developerId !== devId) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   if (!p.actionPi) {
     await refusePaused(p);
+    await refuseInAll(p);
     if (p.status === "charged" || p.status === "not_set_up") throw new HttpError(409, "confirmed", ALREADY_CONFIRMED);
     if (p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
     throw new HttpError(409, "expired", CONFIRM_EXPIRED);
@@ -268,8 +277,20 @@ async function startable(devId: string, paymentId: string) {
 async function own(devId: string, paymentId: string) {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (p && p.developerId === devId && !p.actionPi) await refusePaused(p);
+  if (p && p.developerId === devId && !p.actionPi) await refuseInAll(p);
   if (!p || p.developerId !== devId || !p.actionPi) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   return p;
+}
+
+/**
+ * (Owner, Nov 3, §147) A payment Confirm all covers (another tab's, or this one's old Confirm with your bank): its own check was cancelled; it's confirmed with the others
+ * in Confirm all's one bank check, or goes back to its own Confirm when that one is cancelled or refused.
+ */
+async function refuseInAll(p: { coveredById: string | null; settledAt: Date | null }) {
+  if (!p.coveredById || p.settledAt) return;
+  const one = await db.payment.findUnique({ where: { id: p.coveredById }, select: { kind: true, note: true, status: true } });
+  const once = await import("./owedOnce");
+  if (one && once.isAll(one) && once.OWED_ACTIVE.includes(one.status)) throw new HttpError(409, "in_all", (await import("@/lib/confirmAllText")).IN_CONFIRM_ALL);
 }
 
 /** (Owner, Nov 2, batch 35 §122) "This payment is paused until your tests resume.": its check was cancelled when a hold started; it waits for the lift. */
@@ -302,6 +323,9 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
       });
     }
   }
+  // (Owner, Nov 3, §147) Over $200, a charge waiting for the bank is confirmed only with the tick "I confirm this payment is over $200." (as Pay's): refused
+  // without it. (A press's own check, a Pay or Pay more waiting for the bank, had its tick on that press.)
+  if (overTickNeeded(p) && body.over200 !== true) throw new HttpError(400, "needs_tick", OVER_TICK_REFUSAL);
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   if (!stripeOn() || fakeOn()) return { paymentId, clientSecret: `${p.actionPi}_secret_fake`, publishableKey: pk(), simulated: true, paymentMethod: u.stripePaymentMethodId, checkUrl: null };
   const stripe = getStripe();
@@ -356,7 +380,9 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
   const ok = status === "succeeded";
   if (!ok) {
     if (p.status === "needs_action" || p.status === "paying") await release(p.id);
-    throw new HttpError(402, "not_confirmed", BANK_NOT_CONFIRMED);
+    // (§147) Confirm all's check: nothing was charged and each payment is back to its own Confirm with your bank.
+    const all = (await import("./owedOnce")).isAll(p);
+    throw new HttpError(402, "not_confirmed", all ? (await import("@/lib/confirmAllText")).ALL_NOT_CONFIRMED : BANK_NOT_CONFIRMED);
   }
   // (Batch 15 section 41, L3) A doubled Confirm finishes it once: the first press claims it.
   const claimed = await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null } });
@@ -377,7 +403,9 @@ async function finish(paymentId: string) {
     const s = await (await import("./owedOnce")).settleOwed(p.id, p.stripePaymentIntentId);
     if (s.again) return { done: true, repeated: true };
     const u = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
-    if (s.cents > 0) await payments.receipt(u.email, (await import("./owedOnce")).receiptWhat(s.names, s.charges), s.cents, stripeOn() ? "charged" : "not_set_up", "/app/payments");
+    // (§147) Confirm all's one payment: ONE receipt naming every payment it covered, each with its amount.
+    if ((await import("./owedOnce")).isAll(p)) await (await import("./confirmAll")).allReceipt(u.email, s.parts, stripeOn() ? "charged" : "not_set_up");
+    else if (s.cents > 0) await payments.receipt(u.email, (await import("./owedOnce")).receiptWhat(s.names, s.charges), s.cents, stripeOn() ? "charged" : "not_set_up", "/app/payments");
     return { done: true, lifted: await holds.liftHoldIfClear(p.developerId) };
   }
   if (p.status === "needs_action" && (p.kind === "review" || p.kind === "call")) return { done: true, ...(await payments.finishReviewPay(p.id, split(p))) };
@@ -446,9 +474,26 @@ export async function expireActions(now = new Date(), where: { submissionId?: st
       console.error("[confirm] expire:", (e as Error).message); // tried again next time (the check stays tracked)
     }
   }
+  // (Owner, Nov 3, §147) Confirm all's one check covering a payment on this piece (it has no piece of its own), and its payments still to go back to their own Confirm.
+  await (await import("./confirmAll")).expireAllChecks(now, where);
+}
+
+/**
+ * A charge made while away that wasn't confirmed by its date counts as declined (a payment hold, or added to it); during a hold it waits for the lift instead (§113).
+ * (§147) Also each payment Confirm all covered when its one check ran out at the earliest of their dates.
+ */
+export async function notConfirmed(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThrow>>) {
+  if ((await (await import("./owedOnce")).deferWhileHeld(p.id))) return;
+  // (Batch 35 §113 with §117) During a hold it waits for the lift instead (never added to Pay what you owe); otherwise it counts as declined.
+  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
+  // (§131) Named by its piece: "Ana Silva's written answers on “Harbor Run” (not confirmed with your bank)".
+  const holds = await import("./holds");
+  await holds.declinedPayment(p.developerId, p.id, p.amountCents, c ? `${await holds.declinedWhat(p)} (not confirmed with your bank)` : `a payment of ${money(p.amountCents)} (not confirmed with your bank)`);
 }
 
 async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThrow>>, now: Date) {
+  // (§147) Confirm all's one check: its 15 minutes ended (each payment back to its own Confirm), or the earliest date of what it covers came (none confirmed).
+  if ((await import("./owedOnce")).isAll(p)) return (await import("./confirmAll")).expireAll(p, now);
   if (p.status === "needs_action" || p.status === "paying") return release(p.id);
   // (Owner, Nov 2, batch 35 §117 rule 4) NEVER AN ORPHAN CHECK: the check is cancelled at Stripe before the app stops tracking it (else an old bank page could still
   // complete it while the item is charged again); one that had already gone through is recorded as paid instead. (A renewal's check is its invoice's: the lapse ends it.)
@@ -474,13 +519,7 @@ async function expireOne(p: Awaited<ReturnType<typeof db.payment.findUniqueOrThr
     if (p.kind === "subscription") {
       await db.payment.update({ where: { id: p.id }, data: { status: "failed" } });
       await (await import("./subscription")).lapse(p.developerId, now);
-    } else if (!(await (await import("./owedOnce")).deferWhileHeld(p.id))) {
-      // (Batch 35 §113 with §117) During a hold it waits for the lift instead (never added to Pay what you owe); otherwise it counts as declined.
-      const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
-      // (§131) Named by its piece: "Ana Silva's written answers on “Harbor Run” (not confirmed with your bank)".
-      const holds = await import("./holds");
-      await holds.declinedPayment(p.developerId, p.id, p.amountCents, c ? `${await holds.declinedWhat(p)} (not confirmed with your bank)` : `a payment of ${money(p.amountCents)} (not confirmed with your bank)`);
-    }
+    } else await notConfirmed(p);
   }
   // else: a debt with a check of its own (before §117): it stays owed.
 }
