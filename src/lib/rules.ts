@@ -395,19 +395,21 @@ export const partHighLine = (name: string) => `The ${name} price can be at most 
 export const rateLowLine = () => `The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`;
 export const rateHighLine = () => `The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`;
 export const DESCRIPTION_REQUIRED = "Say what testers should do (What to do).";
-/** (Owner, Oct 29, batch 30 §18) "Name of this test" and "What should testers do?" are at least 10 characters (trimmed) on Post, Edit and posting a draft. */
+/** (Owner, Oct 29, batch 30 §18) "Name of this test" (5 since Nov 3: TITLE_MIN_CHARS) and "What should testers do?" (10) are a minimum length (trimmed) on Post, Edit and posting a draft. */
 export const LISTING_MIN_CHARS = 10;
+/** (Owner, Nov 3) "Name of this test" is at least 5 characters (was 10); What to do stays at LISTING_MIN_CHARS. */
+export const TITLE_MIN_CHARS = 5;
 /**
  * The minimum the server checks: LISTING_MIN_CHARS, except where the LISTING_MIN_CHARS setting says otherwise. Only the test suite sets it (to 1, since the tests written
  * before batch 30 post short titles such as "Run"; the batch 30 tests set it back to 10). Production never sets it.
  */
-export function listingMin() {
+export function listingMin(base: number = LISTING_MIN_CHARS) {
   // (Nov 2) Never lowered on the live site, even if the setting is left there.
   const v = typeof process !== "undefined" && process.env?.NODE_ENV !== "production" ? Number(process.env?.LISTING_MIN_CHARS) : NaN;
-  return Number.isInteger(v) && v >= 1 ? v : LISTING_MIN_CHARS;
+  return Number.isInteger(v) && v >= 1 ? Math.min(v, base) : base;
 }
 /** "Name of this test: at least 10 characters (6 so far)." / "What should testers do: at least 10 characters (6 so far)." (the field's red line, the server's refusal) */
-export const minCharsLine = (field: string, n: number) => `${field}: at least ${LISTING_MIN_CHARS} characters (${n} so far).`;
+export const minCharsLine = (field: string, n: number) => `${field}: at least ${field === TITLE_FIELD ? TITLE_MIN_CHARS : LISTING_MIN_CHARS} characters (${n} so far).`;
 export const TITLE_FIELD = "Name of this test";
 export const STEPS_FIELD = "What should testers do";
 /** The counter while a field is under its minimum: "6 / 10 minimum". */
@@ -438,7 +440,7 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (!l.title.trim()) errs.push("Give the test a title.");
   else if (l.title.length > LIMITS.testName && isNew("title")) errs.push(`Keep the title to ${LIMITS.testName} characters.`);
   // (Batch 30 §18) At least 10 characters; an older test's shorter title or steps stay until that field is edited.
-  else if (l.title.trim().length < listingMin() && isNew("title")) errs.push(minCharsLine(TITLE_FIELD, l.title.trim().length));
+  else if (l.title.trim().length < listingMin(TITLE_MIN_CHARS) && isNew("title")) errs.push(minCharsLine(TITLE_FIELD, l.title.trim().length));
   if (!l.description?.trim()) { if (isNew("description")) errs.push(DESCRIPTION_REQUIRED); }
   else if (l.description.length > LIMITS.whatToDo && isNew("description")) errs.push(`Keep What to do to ${LIMITS.whatToDo.toLocaleString("en-US")} characters.`);
   else if (l.description.trim().length < listingMin() && isNew("description")) errs.push(minCharsLine(STEPS_FIELD, l.description.trim().length));
