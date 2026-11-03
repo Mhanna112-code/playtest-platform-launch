@@ -1,0 +1,76 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+import * as React from "react";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+import { AllTesters, AvatarButton, rowShown } from "@/app/app/tests/[id]/TesterFilter";
+import { Fold } from "@/components/Panel";
+
+// (Owner, Nov 3, batch 35 §140) The test page's tester list and Needs you: the circles filter the list, each tester folds by their name (the summary block stays
+// out), and each request in Needs you is its own fold with its buttons under it.
+(globalThis as unknown as { React: typeof React }).React = React;
+const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
+const page = () => src("app/app/tests/[id]/page.tsx");
+/** The tester row's markup, from its opening div to the end of its map. */
+const row = () => { const p = page(); const a = p.indexOf('id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId}>'); return p.slice(a, p.indexOf("</RowsBox>", a)); };
+
+describe("the circles filter the tester list", () => {
+  it("a circle shows only that tester; pressing it again (or All testers) shows everyone", () => {
+    expect(rowShown("t1", "")).toBe(true);
+    expect(rowShown("t1", "t1")).toBe(true);
+    expect(rowShown("t2", "t1")).toBe(false);
+    const h = renderToStaticMarkup(createElement(AvatarButton, { testerId: "t1", name: "fbbb" }));
+    expect(h).toMatch(/^<button type="button" aria-pressed="false" aria-label="Show only fbbb" data-avatar-filter="t1"/);
+    expect(h).toContain(">F</button>");
+    // Nothing chosen: no "All testers" button.
+    expect(renderToStaticMarkup(createElement(AllTesters))).toBe("");
+    const filter = src("app/app/tests/[id]/TesterFilter.tsx");
+    expect(filter).toContain('onClick={() => choose(on ? "" : testerId)}');
+    expect(filter).toContain("All testers");
+    // The list hides the other rows (the name search still works with it).
+    expect(src("app/app/tests/[id]/RowsBox.tsx")).toContain('|| !rowShown(el.dataset.testerId ?? "", chosen);');
+    expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("<AvatarButton testerId={seat.testerId} name={seat.name} />");
+  });
+});
+
+describe("each tester folds by their name", () => {
+  it("closed: the name and the summary block (paid in all, ratings, Rate); open: their parts, each in a panel", () => {
+    const r = row();
+    const fold = r.indexOf("<Fold id={`tester-${c.id}`}"), end = r.indexOf("</Fold>\n                <div className=\"space-y-1\" data-tester-summary=\"\">");
+    expect(fold).toBeGreaterThan(0);
+    expect(end).toBeGreaterThan(fold);
+    expect(r.slice(fold, fold + 400)).toContain("<Cut text={name} /></h3>"); // the name is the toggle
+    const inside = r.slice(fold, end), summary = r.slice(end);
+    for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', "<PrevSetFolds"]) expect(inside).toContain(s);
+    for (const s of ["<b>Paid in all:</b>", "{ri?.avg && <p", "rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);
+    // Open by default only when there's one tester; the state is kept like every fold (sessionStorage, through redraws).
+    expect(r).toContain("defaultOpen={t.contracts.length === 1}");
+  });
+
+  it("buttons in the closed summary still work: Rate, Chat and the profile link are outside the fold; a request's buttons are outside its fold", () => {
+    const r = row();
+    const end = r.indexOf('data-tester-summary=""');
+    expect(r.indexOf("rateBoxOf(c)")).toBeGreaterThan(end);
+    expect(r.indexOf('data-tester-profile=""')).toBeGreaterThan(end);
+    const p = page();
+    for (const [f, button] of [["needs-excerpt-${x.id}", "<ExcerptDecision"], ["needs-dispute-${d.id}", "<DisputeSide"], ["needs-pay-${x.s!.id}", "<PayBox"]]) {
+      const at = p.indexOf(`<Fold id={\`${f}\`}`);
+      expect(at, f).toBeGreaterThan(0);
+      const close = p.indexOf("</Fold>", at);
+      // The excerpt's and dispute's buttons follow their fold; the Pay box is its own fold.
+      if (f.startsWith("needs-pay")) expect(p.slice(at, close)).toContain(button);
+      else expect(p.indexOf(button, close)).toBeLessThan(p.indexOf("</div>", close) + 200);
+    }
+    expect(src("app/app/tests/[id]/Applications.tsx")).toMatch(/<\/Fold>\n[ ]*<div className="flex flex-wrap gap-2">\n[ ]*<button className="btn"/);
+  });
+
+  it("a link to a part inside a closed tester opens it first (a details fold), and opens the part's own folds", () => {
+    const h = renderToStaticMarkup(createElement(Fold, { id: "tester-c1", summary: "fbbb", defaultOpen: false }, createElement("li", { id: "part-s1" }, "x")));
+    expect(h).toMatch(/^<details class="group\/fold [^"]*" data-fold="tester-c1" data-jump-open="">/); // closed, and a <details> HashJump opens
+    expect(h).toContain('<li id="part-s1">');
+    const jump = src("lib/markJump.ts");
+    expect(jump).toContain("for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement && !p.open) p.open = true;");
+    expect(jump).toContain('el.querySelectorAll?.<HTMLDetailsElement>("details[data-jump-open]")');
+  });
+});

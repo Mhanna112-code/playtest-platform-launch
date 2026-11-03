@@ -332,11 +332,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <h2 className="font-semibold text-white">Excerpts</h2>
               {excerptReqs.map((x) => (
                 <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
-                  <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
-                {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
-                  <ExcerptQuestion question={x.question} />
-                  <ClampText text={`“${x.text}”`} className="text-slate-200" />
-                  <ExcerptReplaces texts={x.replaces} />
+                  {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
+                  <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile</span>}>
+                  <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
+                    {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
+                    <ExcerptQuestion question={x.question} />
+                    <ClampText text={`“${x.text}”`} className="text-slate-200" />
+                    <ExcerptReplaces texts={x.replaces} />
+                  </ResizeBox>
+                  </Fold>
                   <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
                 </div>
               ))}
@@ -357,8 +361,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <div className="space-y-2">
                 {disputesWaiting.map((d) => (
                   <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-                    <p className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team:</p>
-                    <ReasonQuote text={d.reason} />
+                    <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
+                    <ResizeBox id={`dispute-${d.id}`} label="Their reason"><ReasonQuote text={d.reason} /></ResizeBox>
+                    </Fold>
                     <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
                   </div>
                 ))}
@@ -447,18 +452,23 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
-              <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
-              {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
-              <ExcerptQuestion question={x.question} />
-              <ClampText text={`“${x.text}”`} className="text-slate-200" />
-              <ExcerptReplaces texts={x.replaces} />
+              {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
+              <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile</span>}>
+              <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
+                {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
+                <ExcerptQuestion question={x.question} />
+                <ClampText text={`“${x.text}”`} className="text-slate-200" />
+                <ExcerptReplaces texts={x.replaces} />
+              </ResizeBox>
+              </Fold>
               <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
             </div>
           ))}
           {disputesWaiting.map((d) => (
             <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team:</p>
-              <ReasonQuote text={d.reason} />
+              <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
+              <ResizeBox id={`dispute-${d.id}`} label="Their reason"><ReasonQuote text={d.reason} /></ResizeBox>
+              </Fold>
               <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
             </div>
           ))}
@@ -572,15 +582,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
             ];
             return (
-              <div key={c.id} className="panel" id={`tester-${c.id}`} data-tester-name={name}>
-                <div className="flex flex-wrap items-baseline gap-2">
-                  <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}><Cut text={name} /></a></h3>
+              <div key={c.id} className="panel space-y-2" id={`tester-${c.id}`} data-tester-name={name} data-tester-id={c.testerId}>
+                {/* (Owner, Nov 3, batch 35 §140) Each tester folds by their name: closed, only the summary under it (paid in all, ratings, Rate); open, all their
+                    parts, each in its own panel. Kept open or closed through the live redraws; a link into it (#part-, #call-…) opens it. */}
+                <Fold id={`tester-${c.id}`} defaultOpen={t.contracts.length === 1} className="space-y-2" summaryClassName="flex flex-wrap items-baseline gap-2 !text-base" summary={<>
+                  <h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><Cut text={name} /></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
-                  {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
-                    {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
-                  </a>}
-                </div>
+                </>}>
                 <p className="note">Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
                 <ul className="space-y-1 text-sm" data-parts-sent="">
                   {partRows.filter((r) => r.on || r.sub).map((r) => (
@@ -677,7 +686,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </ul>
                   </details>
                 )}
-                <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                 {/* (Batch 17 §11; batch 35 §80) A waiting charge whose piece isn't listed above: a link up to it in Needs you under the tester's row. */}
                 {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>)}
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
@@ -693,15 +701,25 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 ))}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
                 {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }))}</p>}
-                {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
-                {ri?.tester && (ri.testerRevealed ? (
-                  <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
-                ) : (
-                  <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
-                ))}
-                {ri?.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
-                {!restricted && rateBoxOf(c)}
-                {blockedIds.has(c.testerId) && <p className="note">You blocked {name}. Unblock in Account → Blocked people.</p>}
+                </Fold>
+                <div className="space-y-1" data-tester-summary="">
+                  <div className="flex flex-wrap items-center gap-2">
+                    {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
+                      {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
+                    </a>}
+                    <a href={`/app/testers/${c.testerId}`} className="text-xs" data-tester-profile="">See their profile</a>
+                  </div>
+                  <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
+                  {ri?.avg && <p className="note">{name}: {ri.avg}</p>}
+                  {ri?.tester && (ri.testerRevealed ? (
+                    <p className="note">{name} rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
+                  ) : (
+                    <p className="note">{name} rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
+                  ))}
+                  {ri?.developer && <p className="note">You rated {name}: {ri.developer.stars} ★</p>}
+                  {!restricted && rateBoxOf(c)}
+                  {blockedIds.has(c.testerId) && <p className="note">You blocked {name}. Unblock in Account → Blocked people.</p>}
+                </div>
               </div>
             );
           })}

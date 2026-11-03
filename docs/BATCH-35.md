@@ -1437,3 +1437,21 @@ Replaces batch 10's 16-line scroll box (`AnswersBox`, `max-h-[20rem]`) for the d
   - A custom grip rather than CSS `resize`, so the panel can always be dragged shorter than where it starts and stays within its limits.
 - **Tests:** `tests/batch35-sent-panels.test.ts` (the small default, dragging below it, the limits, the kept height and fold state with storage blocked too, both folds in each place with the body in the panel and the Pay box after it, a link opening the folds). `batch10`'s scroll-box check now looks for the panel.
 - **Pictures:** `docs/media/sent-locked/panel-*` (README there).
+
+## §140 The tester list and Needs you fold (owner, Nov 3)
+
+- **The circles filter the list.** On the test page's Testers card, each tester's circle is now a button (`aria-pressed`): pressing it shows only that tester's
+  row in the list below (the circle is ringed, "All testers" appears); pressing it again or "All testers" shows everyone. It works with the name search and
+  stays through the live redraws (sessionStorage). The circle's hover card keeps "See their profile" and "Chat with …" (the circle used to open the profile).
+- **Each tester folds by their name.** Closed: the name (with the status and NDA badges), then the summary block, always shown: Chat, "See their profile",
+  "Paid in all: … · Calls: …", the rating line, "… rated you", "You rated …" and the Rate box. Open: their contract line and all their parts (written answers,
+  recording, calls with their Pay more, waiting bank checks, earlier question sets, excerpts), each part's body and Pay more in the folds and panels of §139.
+  Closed at first when the test has more than one tester (open with one); open or closed stays through the live redraws (sessionStorage). A link into a closed
+  tester (`#part-…`, `#call-…`, a bell link) opens it first (HashJump opens the folds around its target).
+- **Each Needs you request is its own fold.** A piece: its line, then its body fold and its Pay fold (§139). An excerpt request and a dispute: the one-line
+  summary as the toggle, the full content (the question, the quote, the NDA note, what it replaces; the tester's reason) in a panel, and the buttons (Allow /
+  Deny; the developer's side) under the fold, so they work when it's closed. An application: its details (tag, devices, note) in a fold above Accept / Decline.
+  Call requests and bank checks are already one line with their button.
+- The update row's line under Pay more reads "…or $0 to close this row".
+- **Tests:** `tests/batch35-tester-folds.test.ts` (the filter, the closed and open tester, buttons outside the folds, a hash opening a closed tester); `long-text-cut`
+  follows the new heading. **Pictures:** `docs/media/sent-locked/e-*`.

@@ -27,3 +27,12 @@ Taken on a separate dev server (port 3486, its own schema `rec_sent`, the fake S
 | Picture | What it shows |
 |---|---|
 | `textarea-cap-*` | Add more's box with 80 lines, dragged to 3,000 px: it stops at 32rem on desktop and 60% of the screen on a phone, and scrolls inside. |
+
+## §140 Tester list and Needs you
+
+| Picture | What it shows |
+|---|---|
+| `e-avatars-selected-*` | fbbb's circle pressed: ringed, "All testers" beside the circles, and only fbbb's row below. |
+| `e-tester-closed-*` | A tester folded: the name and badges, then Chat, See their profile and "Paid in all". |
+| `e-tester-open-*` | The same tester open: their parts, the written answers' panel dragged shorter (110 px) and Pay more in view under it. |
+| `e-needs-open-*` | Needs you: each piece with its body fold and its Pay fold, open. |

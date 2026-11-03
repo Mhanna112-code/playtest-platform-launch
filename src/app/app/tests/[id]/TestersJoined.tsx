@@ -5,6 +5,7 @@ import { Users } from "lucide-react";
 import { fmtDateIn } from "@/lib/format";
 import { PlusMore } from "@/components/PlusMore";
 import { LongList } from "@/components/LongList";
+import { AllTesters, AvatarButton } from "./TesterFilter";
 
 // The full app's "Testers joined" card (dev test page, right after the header): the Seats avatar row (one circle per
 // spot; each tester's circle has a hover / tap card with their profile summary, a link to the profile and Block at its
@@ -19,10 +20,8 @@ function TesterAvatar({ seat }: { seat: Seat }) {
   return (
     // (Owner, Nov 3, long text) On a phone the card opens from the row's left edge, never past the screen; from sm up under the avatar.
     <span className="group inline-block sm:relative">
-      <Link href={`/app/testers/${seat.testerId}`} aria-label={`${seat.name}: profile`}
-        className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950 no-underline ring-2 ring-slate-950 hover:no-underline hover:ring-sky-300 focus:outline-none focus-visible:ring-sky-300">
-        {seat.name.trim().charAt(0).toUpperCase()}
-      </Link>
+      {/* (Batch 35 §140) The circle filters the list below to this tester; the card keeps "See their profile". */}
+      <AvatarButton testerId={seat.testerId} name={seat.name} />
       <span role="tooltip"
         className="invisible absolute left-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
         <span className="block font-semibold text-white">{seat.name}</span>
@@ -58,6 +57,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children, ti
       <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
         {Array.from({ length: shown }, (_, i) => (seats[i] ? <TesterAvatar key={seats[i].testerId} seat={seats[i]} /> : <span key={i} className="h-9 w-9 rounded-full border-2 border-dashed border-slate-600" />))}
         {spots > shown && <span className="text-sm text-slate-400" data-seats-more="">{seatsOverflow(joined, spots, shown)}</span>}
+        <AllTesters />
       </div>
       {children}
       {gone.length > 0 && (
