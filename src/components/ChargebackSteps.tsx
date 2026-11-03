@@ -7,7 +7,7 @@ import { api, errOf } from "@/lib/client";
 import { stepsLine } from "@/lib/pause";
 import { useBankCheck } from "@/components/BankCheck";
 import { CARD_NOT_VERIFIED } from "@/lib/rules";
-import type { Simulate } from "@/lib/bankConfirm";
+import { peekBank, type Simulate } from "@/lib/bankConfirm";
 
 type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[] };
 
@@ -45,7 +45,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   const bank = useBankCheck();
   const finish = (setupIntent: string) => (simulate?: Simulate) => api<{ verified: boolean }>("/api/payments/verify-card", { finish: true, setupIntent, ...(simulate ? { simulate } : {}) });
   const check = async (setupIntent: string, checkUrl: string | null, simulated: boolean) => {
-    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent));
+    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent), () => peekBank({ setupIntent })); // (§158)
     fin.finish("Card verified.");
   };
   const mount = useRef<HTMLDivElement>(null);

@@ -1794,3 +1794,32 @@ sits in the §139 panel (`ResizeBox`): the content scrolls inside, the grip at t
   with no "added after you paid"; an addition the live check already showed doesn't stop; Pay more after an unseen addition stops once, a shown one goes
   straight through; Confirm with your bank stops once for an unseen addition; Accept on a call request that just arrived still goes through). §79's and §86's
   tests (`batch35-answering-press`, `batch35-answered-seen`) now expect Pay / Pay more to stop once for their own piece's unseen line.
+
+## §158 The bank check finishes by itself even when the return page is blocked (owner, Nov 3)
+
+- **Before.** The inline bank check (§11: the bank's page in a frame) finished only when the frame came back to `/api/payments/bank-return`, whose tiny page
+  tells the page around it the check ended. Testing locally with Stripe's test card 4000 0027 6000 3184, Chrome blocked that return ("The connection is
+  blocked because it was initiated by a public page to connect to devices or servers on your local network": Private Network Access stops Stripe's public
+  page from sending the frame to http://localhost:3400), so the check never closed and the owner had to press Cancel (which then found it had gone through).
+  On the live site the return works, but the page must not depend on it.
+- **Now.** While the bank's page is open, the page also asks every 3 seconds whether Stripe still waits for the customer: `POST /api/payments/confirm` with
+  `{ paymentId, peek: true }` (or `{ setupIntent, peek: true }` for Verify a card) answers `{ status: "waiting" | "done" }`. Once Stripe isn't waiting any
+  more (succeeded, requires_capture, processing, canceled, or back to requires_payment_method after a failed attempt), the page runs the same finish the
+  return page's message runs; the server decides there as always (paid, or "nothing was charged"). The return message still works; whichever comes first ends
+  it, once. Polling stops when the box closes.
+- **Read-only.** The peek only reads Stripe's status: it never finishes, cancels, releases, expires or charges anything, and answers only for the signed-in
+  developer's own payment, chargeback reservation or card check (someone else's payment or reservation: 404 "There's nothing to confirm here."; someone
+  else's card check: 403). A payment that no longer waits (already finished, released or claimed in another tab) answers done, so the finish gives its
+  usual answer. A failed peek (offline, a refusal) is quiet: the page just asks again.
+- **Covers every inline check:** Pay, Pay more, Subscribe, Confirm with your bank, Pay what you owe (a payment, or a chargeback hold's reservation), Confirm
+  all (its one payment) and the chargeback steps' Verify a card (its SetupIntent). The fake Stripe's stand-in (Confirm / Cancel) isn't polled: its answer
+  decides.
+- **Close.** The button under the bank's frame is now "Close" (was "Cancel"), with the hint "If this doesn't close by itself after you finish with your bank,
+  press Close." under the frame. Close still ends the check and the server decides how it ended. The stand-in keeps Confirm / Cancel.
+- **Code.** `lib/server/bankPeek.ts` (`peekBankCheck`, `stillWaiting`); the confirm route answers `peek` first; `lib/bankConfirm.ts` `peekBank` / `watchBank`;
+  `BankCheckView` takes `peek`, `useBankCheck().check(action, finish?, peek?)` (default: the action's `paymentId`; Verify a card passes its SetupIntent's).
+  No migration.
+- **Tests:** `tests/batch35-bank-peek.test.ts` (a waiting check stays waiting however often it's peeked, with nothing changed at Stripe or in the database;
+  done after the bank confirmed or refused, still unpaid until the finish; someone else's payment, reservation or card check refused; the page peeks every 3
+  s, ignores failed peeks, ends the check once on done and stops when closed; Close and its hint under the frame, the stand-in's Confirm / Cancel kept).
+  `batch17-bank-check` now expects Close under the bank's frame.
