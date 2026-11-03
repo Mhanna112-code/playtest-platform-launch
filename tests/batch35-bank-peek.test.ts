@@ -203,7 +203,7 @@ describe("§158 the page polls while the bank's page is open", () => {
   it("a Verify a card peek asks about its SetupIntent", async () => {
     const fetchFn = vi.fn(async () => new Response(JSON.stringify({ status: "done" }), { status: 200 }));
     vi.stubGlobal("fetch", fetchFn);
-    expect(await peekBank({ setupIntent: "seti_1" })).toBe("done");
+    expect(await peekBank({ setupIntent: "seti_1" })).toEqual({ status: "done" });
     expect(JSON.parse((fetchFn.mock.calls[0] as unknown as [string, { body: string }])[1].body)).toEqual({ setupIntent: "seti_1", peek: true });
   });
 
@@ -220,11 +220,11 @@ describe("§158 the page polls while the bank's page is open", () => {
     expect(standIn).toMatch(/>Confirm<\/button>.*>Cancel<\/button>/);
     expect(standIn).not.toContain(BANK_CLOSE_HINT.slice(0, 20));
     const bc = src("components/BankCheck.tsx");
-    expect(bc).toContain("return watchBank(peek, () => void end());");
+    expect(bc).toContain("return watchBank(() => peek(opened.current), () => void end(), undefined, (r) => setNotice((n) => addNews(n, r)));");
     expect(bc).toMatch(/if \(!action\.checkUrl \|\| !peek\) return;/);
     // The default peek is the payment's (or reservation's) own id; Verify a card passes its SetupIntent's.
-    expect(bc).toContain("peek ?? (!finish && a.paymentId ? () => peekBank({ paymentId: a.paymentId }) : undefined)");
-    expect(src("components/ChargebackSteps.tsx")).toContain("finish(setupIntent), () => peekBank({ setupIntent })");
+    expect(bc).toContain("peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId }, since) : undefined)");
+    expect(src("components/ChargebackSteps.tsx")).toContain("finish(setupIntent), (since) => peekBank({ setupIntent }, since)");
     // The route answers a peek before anything that changes a payment.
     const route = src("app/api/payments/confirm/route.ts");
     expect(route.indexOf("body.peek === true")).toBeGreaterThan(0);

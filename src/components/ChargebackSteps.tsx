@@ -47,7 +47,7 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
   const bank = useBankCheck();
   const finish = (setupIntent: string) => (simulate?: Simulate) => api<{ verified: boolean }>("/api/payments/verify-card", { finish: true, setupIntent, ...(simulate ? { simulate } : {}) });
   const check = async (setupIntent: string, checkUrl: string | null, simulated: boolean) => {
-    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent), () => peekBank({ setupIntent })); // (§158)
+    await bank.check({ requiresAction: true, paymentId: "", clientSecret: "", publishableKey: "", simulated, checkUrl }, finish(setupIntent), (since) => peekBank({ setupIntent }, since)); // (§158; §160: a cancelled card check is said)
     fin.finish("Card verified.");
   };
   const mount = useRef<HTMLDivElement>(null);

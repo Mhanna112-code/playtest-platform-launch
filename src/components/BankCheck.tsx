@@ -1,10 +1,46 @@
 "use client";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bringInView } from "@/lib/markJump";
-import { BANK_CLOSE, BANK_CLOSE_HINT, countBankCheck, finishPayment, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type Simulate } from "@/lib/bankConfirm";
+import { BANK_CLOSE, BANK_CLOSE_HINT, countBankCheck, finishPayment, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type PeekResult, type Simulate } from "@/lib/bankConfirm";
+import { NOTICE_HEAD, noticeLine } from "@/lib/bankNotice";
 import { BANK_CHECK_TITLE, BANK_STAND_IN, BANK_STAND_IN_NOTE } from "@/lib/rules";
 
 type Ended = { ok: true; value: unknown } | { ok: false; error: Error };
+/** (§158) The open check's question; (§160) `since`: when its box opened (the press). */
+export type Peek = (since: string) => Promise<PeekAnswer | PeekResult>;
+/** (§160) What the blue notice shows: every change line once, in the order they arrived; what Complete still does; or that the check was cancelled. */
+export type Notice = { lines: string[]; still: string; cancelled: string };
+export const NO_NOTICE: Notice = { lines: [], still: "", cancelled: "" };
+
+/** (§160) A peek's answer added to the notice: new lines appended (never twice), the latest "still" and cancelled line kept. */
+export function addNews(n: Notice, r: PeekResult): Notice {
+  const fresh = (r.changes ?? []).map(noticeLine).filter((l, i, all) => !n.lines.includes(l) && all.indexOf(l) === i);
+  const still = r.still || n.still, cancelled = r.cancelled || n.cancelled;
+  if (!fresh.length && still === n.still && cancelled === n.cancelled) return n;
+  return { lines: [...n.lines, ...fresh], still, cancelled };
+}
+
+/**
+ * (Owner, Nov 3, §160) The blue notice INSIDE the bank check's box, directly above the bank's frame, so it is read before Complete: what changed while the bank's page
+ * was open that would have stopped the press ("While your bank's page was open: Ana Silva disputed the pay for her recording.", then "Complete still pays $10.00 as
+ * pressed; or press Close."), or that the check was cancelled underneath it ("This bank check was cancelled: … Pressing Complete won't charge anything.").
+ */
+export function BankNotice({ notice }: { notice: Notice }) {
+  if (!notice.lines.length && !notice.cancelled) return null;
+  return (
+    <div className="info" role="status" aria-live="polite" data-bank-notice="">
+      {notice.lines.length > 0 && (
+        <>
+          <p className="font-medium">{NOTICE_HEAD}</p>
+          <ul className="my-1 list-disc pl-5">
+            {notice.lines.map((l) => <li key={l} data-bank-notice-line="">{l}</li>)}
+          </ul>
+        </>
+      )}
+      {notice.cancelled ? <p className="font-semibold" data-bank-notice-cancelled="">{notice.cancelled}</p> : notice.still && <p className="font-semibold" data-bank-notice-still="">{notice.still}</p>}
+    </div>
+  );
+}
 
 /**
  * (Batch 17 §11) The bank's check, INLINE, directly under the button that was pressed (never a pop-up): the bank's own page in a frame (it returns to
@@ -13,11 +49,16 @@ type Ended = { ok: true; value: unknown } | { ok: false; error: Error };
  * (Owner, Nov 3, §158) The return page can be blocked (on localhost Chrome stops Stripe's public page from sending the frame back: Private Network Access), so while the
  * bank's page is open the page also asks the server every few seconds whether Stripe still waits (`peek`, read-only); once it doesn't, the check ends as the return
  * message would (first one wins). "Close" under the frame ends it too; the server decides how it ended.
+ * (Owner, Nov 3, §160) Each answer also says what changed since the press, or that the check was cancelled: shown in the blue notice above the frame as it arrives.
+ * Plain changes never close the box (the developer decides: Complete still pays as pressed, or Close); a cancelled check stays open with its notice until the
+ * bank's return or Close ends it with the usual finish.
  */
-export function BankCheckView({ action, finish, onEnd, peek }: { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; onEnd: (r: Ended) => void; peek?: () => Promise<PeekAnswer> }) {
+export function BankCheckView({ action, finish, onEnd, peek, since = "", notice: initial = NO_NOTICE }: { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; onEnd: (r: Ended) => void; peek?: Peek; since?: string; /** tests and recordings: a notice to start with */ notice?: Notice }) {
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<Notice>(initial);
   const box = useRef<HTMLDivElement>(null);
   const ended = useRef(false);
+  const opened = useRef(since || new Date().toISOString());
   const end = useCallback(async (simulate?: Simulate) => {
     if (ended.current) return;
     ended.current = true;
@@ -37,10 +78,10 @@ export function BankCheckView({ action, finish, onEnd, peek }: { action: BankAct
     window.addEventListener("message", heard);
     return () => window.removeEventListener("message", heard);
   }, [action.checkUrl, end]);
-  // (§158) Only the bank's own page is watched (the stand-in's Confirm / Cancel decide); stops when the box closes.
+  // (§158) Only the bank's own page is watched (the stand-in's Confirm / Cancel decide); stops when the box closes. (§160) Its news fills the notice.
   useEffect(() => {
     if (!action.checkUrl || !peek) return;
-    return watchBank(peek, () => void end());
+    return watchBank(() => peek(opened.current), () => void end(), undefined, (r) => setNotice((n) => addNews(n, r)));
   }, [action.checkUrl, peek, end]);
   if (!action.checkUrl) {
     return (
@@ -57,6 +98,7 @@ export function BankCheckView({ action, finish, onEnd, peek }: { action: BankAct
   return (
     <div ref={box} role="group" aria-label={BANK_CHECK_TITLE} className="basis-full space-y-2 rounded-lg border border-sky-300/40 bg-sky-500/10 p-3 text-sm" data-bank-check="bank">
       <p className="font-semibold text-white">{BANK_CHECK_TITLE}</p>
+      <BankNotice notice={notice} />
       <iframe src={action.checkUrl} title={BANK_CHECK_TITLE} className="h-[28rem] w-full rounded-lg border border-white/10 bg-white" />
       <p className="text-xs text-sky-100/80" data-bank-close-hint="">{BANK_CLOSE_HINT}</p>
       <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end()} data-bank-close="">{BANK_CLOSE}</button>
@@ -64,13 +106,13 @@ export function BankCheckView({ action, finish, onEnd, peek }: { action: BankAct
   );
 }
 
-type Open = { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; peek?: () => Promise<PeekAnswer>; resolve: (v: unknown) => void; reject: (e: Error) => void };
+type Open = { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; peek?: Peek; since: string; resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 /**
  * (Batch 17 §11) A button's inline bank check: `check(action)` opens it (render `view` directly under the button) and resolves with the server's result when the payment
  * went through, or throws the plain sentence when it didn't. `finish` overrides what ends it (Verify a card). While it is open (`open`), the button stays disabled and the
  * page's live refresh waits. (§158) `peek` asks whether Stripe still waits: by default the payment's (or reservation's) own `paymentId`; Verify a card passes its
- * SetupIntent's.
+ * SetupIntent's. (§160) It is asked with the moment the box opened (the press), so its answer carries the notice's lines since then.
  */
 export function useBankCheck() {
   const [open, setOpen] = useState<Open | null>(null);
@@ -80,13 +122,13 @@ export function useBankCheck() {
     countBankCheck(1);
     return () => countBankCheck(-1);
   }, [open]);
-  const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate) => Promise<T>, peek?: () => Promise<PeekAnswer>): Promise<T> => {
+  const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate) => Promise<T>, peek?: Peek): Promise<T> => {
     const fin = finish ?? ((s?: Simulate) => finishPayment<T>(a.paymentId, s));
-    const look = peek ?? (!finish && a.paymentId ? () => peekBank({ paymentId: a.paymentId }) : undefined);
+    const look: Peek | undefined = peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId }, since) : undefined);
     if (a.needs === "none") return fin();
     if (!a.checkUrl && !a.simulated) return stripePopup(a).then(() => fin());
     return new Promise<T>((resolve, reject) => {
-      cur.current = { action: a, finish: fin, peek: look, resolve: resolve as (v: unknown) => void, reject };
+      cur.current = { action: a, finish: fin, peek: look, since: new Date().toISOString(), resolve: resolve as (v: unknown) => void, reject };
       setOpen(cur.current);
     });
   }, []);
@@ -97,6 +139,6 @@ export function useBankCheck() {
     if (o && r.ok) o.resolve(r.value);
     else if (o && !r.ok) o.reject(r.error);
   }, []);
-  const view = open ? <BankCheckView key={open.action.paymentId || "card"} action={open.action} finish={open.finish} peek={open.peek} onEnd={onEnd} /> : null;
+  const view = open ? <BankCheckView key={open.action.paymentId || "card"} action={open.action} finish={open.finish} peek={open.peek} since={open.since} onEnd={onEnd} /> : null;
   return { check, view, open: !!open };
 }

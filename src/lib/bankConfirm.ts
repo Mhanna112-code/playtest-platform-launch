@@ -1,5 +1,5 @@
 "use client";
-import { api, pageUser } from "@/lib/client";
+import { TAB, api, pageUser } from "@/lib/client";
 
 // (Owner, Oct 29, batch 11) "Your bank wants to confirm this payment". (Batch 17 §11) The bank's check opens INLINE, directly under the button that was pressed (see
 // components/BankCheck.tsx): the bank's own page in a frame (`checkUrl`), or, with the fake Stripe (no publishable key, tests, recordings), a clearly-marked stand-in.
@@ -44,6 +44,11 @@ export async function finishPayment<T = Record<string, unknown>>(paymentId: stri
 /** (§158) What the open bank check asks about: a payment's (or a chargeback hold's reservation's) check, or Verify a card's SetupIntent. */
 export type PeekTarget = { paymentId: string } | { setupIntent: string };
 export type PeekAnswer = "waiting" | "done";
+/**
+ * (Owner, Nov 3, §160) A peek's whole answer: whether Stripe still waits, and what the box's blue notice says: the changes since the press that would have stopped
+ * it (`changes`, with what Complete still does: `still`), or that the check was cancelled underneath it (`cancelled`).
+ */
+export type PeekResult = { status: PeekAnswer; changes?: string[]; still?: string; cancelled?: string };
 /** (§158) The close button under the bank's page, and its hint (the return page can be blocked: on localhost Chrome's Private Network Access stops it). */
 export const BANK_CLOSE = "Close";
 export const BANK_CLOSE_HINT = "If this doesn't close by itself after you finish with your bank, press Close.";
@@ -52,32 +57,44 @@ export const PEEK_EVERY_MS = 3000;
 
 /**
  * (Owner, Nov 3, §158) Is Stripe still waiting for the customer? A read-only question (nothing is finished, cancelled or charged). Quiet: a failed peek (offline, a
- * refusal) is "waiting" and shows nothing, so the page simply asks again (Close still ends it).
+ * refusal) is "waiting" and shows nothing, so the page simply asks again (Close still ends it). (§160) `since`: when the bank box opened (the press), so the
+ * answer also carries the notice's lines; the page's tab goes with it (what this same tab did is never a change).
  */
-export async function peekBank(t: PeekTarget): Promise<PeekAnswer> {
+export async function peekBank(t: PeekTarget, since?: string): Promise<PeekResult> {
   try {
     const res = await fetch("/api/payments/confirm", {
       method: "POST",
-      headers: { "content-type": "application/json", ...(pageUser() ? { "x-uid": pageUser() } : {}) },
-      body: JSON.stringify({ ...t, peek: true }),
+      headers: { "content-type": "application/json", ...(TAB ? { "x-tab": TAB } : {}), "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(pageUser() ? { "x-uid": pageUser() } : {}) },
+      body: JSON.stringify({ ...t, ...(since ? { since } : {}), peek: true }),
     });
-    if (!res.ok) return "waiting";
-    const data = (await res.json().catch(() => null)) as { status?: unknown } | null;
-    return data?.status === "done" ? "done" : "waiting";
+    if (!res.ok) return { status: "waiting" };
+    const data = (await res.json().catch(() => null)) as { status?: unknown; changes?: unknown; still?: unknown; cancelled?: unknown } | null;
+    const changes = Array.isArray(data?.changes) ? data.changes.filter((x): x is string => typeof x === "string" && !!x) : [];
+    return {
+      status: data?.status === "done" ? "done" : "waiting",
+      ...(changes.length ? { changes } : {}),
+      ...(typeof data?.still === "string" && data.still ? { still: data.still } : {}),
+      ...(typeof data?.cancelled === "string" && data.cancelled ? { cancelled: data.cancelled } : {}),
+    };
   } catch {
-    return "waiting";
+    return { status: "waiting" };
   }
 }
 
-/** (§158) Ask every `everyMs` until the peek says done, then call `onDone` once. Returns the stop (the box closed). */
-export function watchBank(peek: () => Promise<PeekAnswer>, onDone: () => void, everyMs = PEEK_EVERY_MS): () => void {
+/**
+ * (§158) Ask every `everyMs` until the peek says done, then call `onDone` once. Returns the stop (the box closed). (§160) Every answer with something for the box's
+ * notice goes to `onNews` first, as it arrives.
+ */
+export function watchBank(peek: () => Promise<PeekAnswer | PeekResult>, onDone: () => void, everyMs = PEEK_EVERY_MS, onNews?: (r: PeekResult) => void): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;
   const tick = async () => {
     if (stopped) return;
-    const a = await peek().catch((): PeekAnswer => "waiting");
+    const got = await peek().catch((): PeekAnswer => "waiting");
+    const a: PeekResult = typeof got === "string" ? { status: got } : got;
     if (stopped) return;
-    if (a === "done") {
+    if (onNews && (a.changes?.length || a.cancelled)) onNews(a);
+    if (a.status === "done") {
       stopped = true;
       onDone();
       return;
