@@ -4,7 +4,8 @@ import { fmtDateTimeIn } from "@/lib/format";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/server/dateFormat";
 import { callStatus } from "@/lib/server/blocks";
-import { iceServers } from "@/lib/server/calls";
+import { callIceServers, iceServers } from "@/lib/server/turn";
+import { turnRelaySetUp } from "@/lib/server/config";
 import { adminAway, leaveIfClosed, requireOpenPage, requirePageUser } from "@/lib/server/page-auth";
 import { CALL_NOT_AVAILABLE } from "@/lib/callMeasure";
 import { JOIN_OPENS_MIN } from "@/lib/rules";
@@ -44,19 +45,22 @@ export default async function CallPage({ params, searchParams }: { params: Promi
   // The full app's call page header: "Call with Ana", then the test, the booked length and what's paid.
   const other = await db.user.findUnique({ where: { id: amTester ? call.contract.test.developerId : call.contract.testerId } });
   const otherName = other ? displayName(other) : "them";
+  // (Batch 35 §135) Only now, for one of the call's two people, the relay's short-lived credentials (never the API token); none while the page shows a line
+  // instead of the room (cancelled, over, closed).
+  const ice = s.line ? iceServers() : await callIceServers(call, u.id);
   return (
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white">Call with {otherName}</h1>
         <p className="text-sm text-slate-400">{/* (Owner, Nov 2) the test opens in a new tab, so the call keeps going here */}<a href={amTester ? `/app/sessions/${call.contractId}` : `/app/tests/${call.contract.testId}`} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-white" data-call-test-link="">“<Cut text={call.contract.title} kind="test" />”</a> · {fmtDateTime(call.startsAt)} · booked for {call.minutes} minutes (paid up to {Math.floor(call.minutes * 1.5)}) · the length is measured while you&apos;re both connected.</p>
       </div>
-      {relayOnly && <p className="info" data-relay-only="">{process.env.TURN_URL ? "Relay-only check: this call goes only through the TURN relay, as it would on a strict network. If it connects, the relay works." : "Relay-only check: no TURN relay is set up (TURN_URL), so this call can't connect this way."}</p>}
+      {relayOnly && <p className="info" data-relay-only="">{turnRelaySetUp() ? "Relay-only check: this call goes only through the TURN relay, as it would on a strict network. If it connects, the relay works." : "Relay-only check: no TURN relay is set up (CLOUDFLARE_TURN_KEY_ID and CLOUDFLARE_TURN_API_TOKEN, or TURN_URL), so this call can't connect this way."}</p>}
       <CallRoom
         callId={id}
         role={amTester ? "tester" : "developer"}
         myName={displayName(u)}
         otherName={otherName}
-        iceServers={iceServers()}
+        iceServers={ice}
         relayOnly={relayOnly}
         initialLine={s.line}
         opensAt={new Date(call.startsAt.getTime() - JOIN_OPENS_MIN * 60_000).toISOString()}

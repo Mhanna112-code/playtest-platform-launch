@@ -12,6 +12,7 @@ import { testerGate as sharedTesterGate } from "./testerGate";
 import { answerTermsFirst } from "./terms";
 import { devGate, devGateIfSeen, ownContract, ownTest, recordEvent, staleNote } from "./tests";
 import { CALL_ACTS } from "./live";
+import { callIceServers } from "./turn";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -133,12 +134,8 @@ const loadRoomCall = async (id: string) => {
 const sideIn = (call: { contract: { testerId: string; test: { developerId: string } } }, userId: string) =>
   call.contract.testerId === userId ? ("tester" as const) : call.contract.test.developerId === userId ? ("developer" as const) : null;
 
-/** Google's free STUN servers, plus a TURN relay when TURN_URL is set (needed on some strict networks: some offices, some mobile carriers). */
-export function iceServers() {
-  const servers: { urls: string | string[]; username?: string; credential?: string }[] = [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }];
-  if (process.env.TURN_URL) servers.push({ urls: process.env.TURN_URL.split(",").map((x) => x.trim()).filter(Boolean), username: process.env.TURN_USERNAME, credential: process.env.TURN_CREDENTIAL });
-  return servers;
-}
+// (Batch 35 §135) The ICE servers (Google's STUN, the Cloudflare TURN relay's short-lived credentials, or a fixed TURN_URL relay) live in ./turn.
+export { iceServers } from "./turn";
 
 type CapCall = { id: string; contractId: string; status: string; rateCents: number | null; minutes: number; startsAt: Date; measuredAt: Date | null; actualMinutes: number | null; cappedAt: Date | null; endedAt: Date | null; endReason: string };
 type Presence = { side: string; startAt: Date; endAt: Date };
@@ -355,7 +352,9 @@ export async function roomSend(user: { id: string; timeZone?: string | null }, c
     await markSeen(call, side, now);
     await db.callSignal.deleteMany({ where: { callId } });
     const s = await db.callSignal.create({ data: { callId, fromId: user.id, kind: "join", payload: "null" } });
-    return { sent: true, id: s.id };
+    // (Batch 35 §135) The room connects with these, so a rejoin (or a Join pressed long after the page opened) gets the relay's credentials again: the same
+    // ones within a few minutes of the page's, otherwise new ones lasting the call's remaining time.
+    return { sent: true, id: s.id, iceServers: await callIceServers(call, user.id, now) };
   }
   const body = typeof payload === "string" ? payload : JSON.stringify(payload ?? null);
   if (body.length > MAX_SIGNAL) throw new HttpError(413, "too_large", "That's too much to send at once. Try sending less at once.");
