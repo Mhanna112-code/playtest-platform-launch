@@ -10,7 +10,7 @@ export function jumpTo(id: string) {
   for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement && !p.open) p.open = true;
   if (el instanceof HTMLDetailsElement && !el.open) el.open = true;
   // (Batch 35 §139) A link straight to a part (or to its Pay / Pay more) opens the folds under it: its answers or recordings and its Pay box.
-  el.querySelectorAll<HTMLDetailsElement>("details[data-jump-open]").forEach((d) => { d.open = true; });
+  el.querySelectorAll?.<HTMLDetailsElement>("details[data-jump-open]").forEach((d) => { d.open = true; });
   el.scrollIntoView({ block: "center", behavior: "smooth" });
   el.setAttribute("data-marked", "");
   setTimeout(() => el.removeAttribute("data-marked"), 4000);

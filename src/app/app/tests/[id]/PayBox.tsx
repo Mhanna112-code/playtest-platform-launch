@@ -185,7 +185,7 @@ export function PayBox(p: {
       <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={more ? "Pay more" : "Pay"} />
       {bankErr && <p className="info" data-bank-not-confirmed="">{bankErr}</p>}
       {!done && !more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
-      {!done && more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this update (a note is optional).</p>}
+      {!done && more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this row (a note is optional).</p>}
       {!done && p.note && <p className="note">{p.note}</p>}
       {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
     </div>

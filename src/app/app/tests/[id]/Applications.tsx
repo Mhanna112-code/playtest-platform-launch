@@ -5,6 +5,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { PressDone } from "@/components/PressDone";
 import { usePress } from "@/lib/usePress";
 import { ClampText } from "@/components/ClampText";
+import { Fold, ResizeBox } from "@/components/Panel";
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useTesterChanges } from "@/lib/useTesterChanges";
@@ -31,9 +32,14 @@ export function Applications({ testId, seenAt, apps, needs }: { needs: Needs; te
         {apps.map((a) => (
           <li key={a.id} id={`item-app-${a.id}`} className={`space-y-1 ${MARKABLE}`}>
             {a.line ? <p><a href={`/app/testers/${a.userId}`}><b><Cut text={a.name} /></b></a> {a.line.replace(a.name, "").trim()}</p> : <p><a href={`/app/testers/${a.userId}`}><b><Cut text={a.name} /></b></a></p>}
-            {a.tag && <span className="badge border-amber-300/40 text-amber-200">{a.tag}</span>}
-            <p className="text-xs text-slate-500">{a.detail}</p>
-            {a.note && <ClampText text={`“${a.note}”`} />}
+            {/* (Owner, Nov 3, batch 35 §140) The request's details in its own fold (open at first), in a panel; Accept / Decline stay under it. */}
+            <Fold id={`needs-app-${a.id}`} summary="Details">
+              <ResizeBox id={`app-${a.id}`} label="Their application">
+                {a.tag && <span className="badge border-amber-300/40 text-amber-200">{a.tag}</span>}
+                <p className="text-xs text-slate-500">{a.detail}</p>
+                {a.note && <ClampText text={`“${a.note}”`} />}
+              </ResizeBox>
+            </Fold>
             <div className="flex flex-wrap gap-2">
               <button className="btn" disabled={busy} onClick={() => go(a, "accept")}>Accept</button>
               <button className="btn-ghost" disabled={busy} onClick={() => go(a, "decline")}>Decline</button>

@@ -396,7 +396,8 @@ describe("batch 11 item 7: the written part", () => {
     expect(await db.recording.count({ where: { submissionId: sub.id } })).toBe(5);
     expect(src("components/ScreenRecorder.tsx")).toContain("getDisplayMedia");
     expect(src("components/ScreenRecorder.tsx")).toContain("MediaRecorder");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} inlineText={");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("<SentWork kind={x.s!.kind} answers={x.s!.answers}"); // (batch 35 §136) SentWork lists the files
+    expect(src("components/SentWork.tsx")).toContain("<AttachmentList items={writtenFiles} inlineText=");
   });
 });
 

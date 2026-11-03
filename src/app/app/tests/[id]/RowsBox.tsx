@@ -1,15 +1,18 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { Search } from "lucide-react";
+import { rowShown, useTesterFilter } from "./TesterFilter";
 
 /** The tester rows in a scroll box about 6 rows tall, with a search box above them (find a tester by name). Rows carry data-tester-name. */
 export function RowsBox({ children, many }: { children: React.ReactNode; many: boolean }) {
   const [q, setQ] = useState("");
   const box = useRef<HTMLDivElement>(null);
+  // (Batch 35 §140) A circle pressed at the top of the list shows only that tester.
+  const chosen = useTesterFilter();
   useEffect(() => {
     const needle = q.trim().toLowerCase();
     box.current?.querySelectorAll<HTMLElement>("[data-tester-name]").forEach((el) => {
-      el.hidden = !!needle && !(el.dataset.testerName ?? "").toLowerCase().includes(needle);
+      el.hidden = (!!needle && !(el.dataset.testerName ?? "").toLowerCase().includes(needle)) || !rowShown(el.dataset.testerId ?? "", chosen);
     });
   });
   return (
