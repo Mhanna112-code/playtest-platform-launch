@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime } from "@/lib/format";
 import { linesFor, notify } from "./notify";
 import { T, fmtIn, renderTimes } from "@/lib/tz";
+import { movedDue, nearestDayEnd } from "@/lib/rules";
 
 // (Owner, Oct 22, NEWEST+6; batch 15 section 10) Outages come from the uptime service's own alerts (POST /api/health/alert?key=...): a "down" is stored and the
 // matching "up" records the outage when it lasted 15 minutes or more. It is recorded once (unique start) and then every timer that was running moves later by its
@@ -314,9 +315,12 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
     await tx.$executeRaw`UPDATE "Payment" SET "retriedAt" = "retriedAt" + ${L} * interval '1 millisecond' WHERE status = 'failed' AND "settledAt" IS NULL AND "retriedAt" IS NOT NULL`;
     // A hold's 30-day clock.
     await tx.$executeRaw`UPDATE "User" SET "holdStartedAt" = "holdStartedAt" + ${L} * interval '1 millisecond' WHERE "holdStartedAt" IS NOT NULL`;
-    // Tester deadlines and Open until.
-    await tx.$executeRaw`UPDATE "Contract" SET "dueAt" = "dueAt" + ${L} * interval '1 millisecond' WHERE status = 'working' AND "dueAt" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
-    await tx.$executeRaw`UPDATE "Test" SET "openUntil" = "openUntil" + ${L} * interval '1 millisecond' WHERE "openUntil" > (${start}::timestamptz AT TIME ZONE 'UTC')`;
+    // Tester deadlines and Open until. (Owner, Nov 3, batch 35 §154) A moved deadline is rounded UP to the end of its day (11:59 PM in the developer's zone, where it
+    // was counted), and Open until stays the end of a day (the nearest one, as for a pause lift), never an odd time like 7:22 AM.
+    for (const c of await tx.contract.findMany({ where: { status: "working", dueAt: { gt: start } }, select: { id: true, dueAt: true, test: { select: { developer: { select: { timeZone: true } } } } } }))
+      await tx.contract.update({ where: { id: c.id }, data: { dueAt: movedDue(c.dueAt, L, c.test.developer.timeZone) } });
+    for (const t of await tx.test.findMany({ where: { openUntil: { gt: start } }, select: { id: true, openUntil: true, developer: { select: { timeZone: true } } } }))
+      await tx.test.update({ where: { id: t.id }, data: { openUntil: nearestDayEnd(new Date(t.openUntil!.getTime() + L), t.developer.timeZone) } });
     // Rating windows (14 days from the tester's rating).
     await tx.$executeRaw`UPDATE "Rating" SET "createdAt" = "createdAt" + ${L} * interval '1 millisecond' WHERE side = 'tester' AND "revealedAt" IS NULL AND "createdAt" + interval '14 days' > (${start}::timestamptz AT TIME ZONE 'UTC')`;
     // Invite reminders.

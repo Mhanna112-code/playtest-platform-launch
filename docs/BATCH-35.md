@@ -1689,3 +1689,34 @@ Owner: ask testers for their devices and languages at sign-up, and drop the test
 - **Code.** `src/lib/server/confirmAll.ts` (state, press, claim, put-back, clocks), `src/app/api/payments/confirm-all/route.ts` (the press and `cancel`), `src/components/ConfirmAll.tsx`, `src/lib/confirmAllText.ts` (the words). `owedOnce.ts`: `releaseOwed`, `settleOwed`, `resumeStaleOwed`, `newCardChecks` and `owedLocks` know Confirm all's one payment; `confirm.ts`: `finish` sends its one receipt, a covered charge's own Confirm is refused plainly, the clocks run it (`notConfirmed` is the shared "not confirmed by its date" rule).
 - **Proof:** Stripe test-mode recordings (`scripts/confirm-all/run.cjs`, port 3460, the app beside a viewer of Stripe's side): approved, declined (card 3178), a full and a partial dispute on it, left open past the earliest date, and the button on the box and Payments (desktop and phone).
 - **Tests:** `tests/confirm-all.test.ts`: one PaymentIntent for three items across two testers and two tests, old checks cancelled first; one already approved recorded as paid and left out; approved → all paid once, three transfers from the one charge, one receipt, each tester's paid line; refused, cancelled and left → each back with a new check and its original date; declined at the press (back) and declined everywhere (the usual decline); ran out at the earliest date; a single Confirm at the same moment (one charge per item); two Confirm all at once (one payment, and an old tab's own Confirm refused); the stop-once; a renewal left out; a dispute on it (whole amount once + one fee, each item listed). The over-$200 tick: a single Confirm at $200 and over $200 (refused without it), and Confirm all crossing $200 (the stop line, refused without the tick, then one payment).
+
+## §154 Moved deadlines round up to the end of the day (owner, Nov 3)
+Owner: "make testers' deadline and that call thing round up to end of day." A tester's deadline is the end of a day (11:59 PM in the developer's saved zone, where
+`dueFromJoin` counts it, §111), but a pause moved it by the pause's exact length, so a 7 h 23 min pause turned "Thu, Nov 5, 11:59 PM" into "Fri, Nov 6, 7:22 AM", and
+the call form's limit read "Pick a time before Fri, Nov 6, 7:22 AM (when testers' work on this test ends)."
+
+- **Every move of a working tester's deadline now lands on 11:59 PM of the day it moves to, rounded UP, never down** (`rules.dayEndAtOrAfter`, in the developer's
+  zone like `dueFromJoin`; unknown zone: UTC):
+  - **a pause lifted** (a payment hold paid off, a suspension lifted, the team's pause lifted: `holds.shiftAfterPause`): the deadline + the pause's length
+    (`pauseShiftMs`, unchanged), then up to that day's end (`rules.movedDue`). 11:59 PM + 7 h 23 min = Fri 7:22 AM → **Fri, Nov 6, 11:59 PM**. A pause of exactly
+    whole days keeps 11:59 PM, whole days later. Only deadlines that hadn't passed when the pause started move (as before); one that passed during it comes back the
+    same way.
+  - **an outage** (recorded, or approved: "move every timer", `outages.applyOutage`): the same, per tester in their test's developer's zone (it was a raw SQL
+    shift).
+  - **a rejoin** (`tests.rejoinDue`): now + the time left when they left, up to that day's end. A deadline that had passed when they left stays passed (exactly as
+    before). The developer's "asks to rejoin" line names the same deadline (`joining.rejoinAskLine`, with the developer's zone).
+  - **Edit moving Open until later by D days** (batch 15 §18): D calendar days in the developer's zone, at 11:59 PM (`rules.dueAfterDays`; it was D × 24 hours in
+    SQL, which read 10:59 PM after the clock change on Nov 1). An older odd deadline lands on 11:59 PM too.
+- **Open until** keeps the owner's Nov 2 rule for pauses: the nearest end of a day in the developer's zone (2 days and 1 minute move "Nov 1, 11:59 PM" to
+  "Nov 3, 11:59 PM", never "Nov 4"); now one helper (`rules.nearestDayEnd`), and outages use it too (an outage used to leave it at an odd time).
+- **The call window follows**: its end (`workDeadlineOf`, the latest deadline, no earlier than Open until) is always an end of a day, so the form's red line and the
+  server's refusal read "Pick a time before Fri, Nov 6, 11:59 PM (when testers' work on this test ends).", and the repeat counts ("2 days (to Nov 5)", "3 days (to
+  Nov 6)") fit that end. Charge opening, close-out, the developer's last day to pay and reminders read the stored deadline, so they follow without a second shift
+  (review clocks still move by the pause's exact length, as before).
+- **Existing odd deadlines** (moved before this): nothing has launched, so no migration. `scripts/round-deadlines-eod.ts` rounds working, not-yet-passed deadlines
+  up to their day's end on a local database (dry run by default; `--apply` writes; it refuses a non-localhost DATABASE_URL). Legacy tests without Open until
+  (deadline = joining + N × 24 h) are left as they are, as is Switch's `newDueAt` for them.
+- **Tests:** `tests/batch35-deadline-eod.test.ts`: 7 h 23 min turns 11:59 PM into 11:59 PM the next day (not 7:22 AM), through a pause lift, an outage and the
+  helpers; a whole-day pause and Edit's +2 days keep 11:59 PM (also across the clock change); a far zone (Tokyo) rounds in that zone; a rejoin lands on 11:59 PM and
+  a passed one stays passed; the call window's end and both sides' refusal read 11:59 PM; the repeat counts fit the new end. `batch16-open-until` (deadlines
+  after a pause land on 11:59 PM) follows.

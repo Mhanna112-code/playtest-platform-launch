@@ -77,7 +77,8 @@ describe("Moving Open until later skips deadlines that already passed (owner, No
     const later = new Date(t.openUntil!.getTime() + 2 * DAY).toISOString().slice(0, 10);
     expect((await editOU(s.testId, s.dev.cookie, later)).status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).dueAt.getTime()).toBe(passed.getTime());
-    expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).dueAt.getTime()).toBe(ahead.getTime() + 2 * DAY);
+    // (§154) D calendar days, landing on 11:59 PM of that day (the developer's zone; none saved: UTC).
+    expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).dueAt.getTime()).toBe(R.dueAfterDays(ahead, 2, null).getTime());
   });
 });
 
@@ -95,8 +96,9 @@ describe("A pause lift skips deadlines that had passed when it started (owner, N
     await db.$transaction((tx) => shiftAfterPause(tx, t, start, new Date(now)));
     const due = async (id: string) => (await db.contract.findUniqueOrThrow({ where: { id } })).dueAt.getTime();
     expect(await due(a.sessionId)).toBe(before.getTime());
-    expect(await due(b.sessionId)).toBe(during.getTime() + 2 * DAY);
-    expect(await due(c.sessionId)).toBe(ahead.getTime() + 2 * DAY);
+    // (§154) Moved by the pause, then up to the end of that day.
+    expect(await due(b.sessionId)).toBe(R.dayEndAtOrAfter(new Date(during.getTime() + 2 * DAY), null).getTime());
+    expect(await due(c.sessionId)).toBe(R.dayEndAtOrAfter(new Date(ahead.getTime() + 2 * DAY), null).getTime());
   });
 });
 

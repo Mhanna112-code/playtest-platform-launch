@@ -20,7 +20,7 @@ import { T, safeZone, renderTimes } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
-  andList, testClosedToNewLine, daysBetween, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -214,8 +214,14 @@ export async function spotOpened(testId: string) {
   for (const p of people) await notify(p.email, spotOpenLine(t.title, displayName(t.developer)), [spotOpenLine(t.title, displayName(t.developer))], `/app/find/${testId}`, { ...APPS_GROUP, testId });
 }
 
-/** (NEWEST+4) Rejoining keeps exactly the time they had left when they left (hours count; if it had passed, it stays passed). */
-export const rejoinDue = (oldDue: Date, leftAt: Date | null, now: Date) => new Date(now.getTime() + (oldDue.getTime() - (leftAt ?? now).getTime()));
+/**
+ * (NEWEST+4) Rejoining keeps the time they had left when they left (hours count; if it had passed, it stays passed). (Owner, Nov 3, batch 35 §154) The new deadline
+ * is rounded UP to the end of the day it lands on (11:59 PM in the developer's zone, where deadlines are counted), never an odd time.
+ */
+export const rejoinDue = (oldDue: Date, leftAt: Date | null, now: Date, tz?: string | null) => {
+  const left = oldDue.getTime() - (leftAt ?? now).getTime();
+  return left > 0 ? movedDue(now, left, tz) : new Date(now.getTime() + left);
+};
 
 /** The developer's own test, or a refusal. Other people's tests look like they don't exist. */
 export async function ownTest(devId: string, testId: string) {
@@ -499,7 +505,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       const d = daysBetween(openUntilDay(current.openUntil, tzOf(body, dev)), openUntilDay(next.openUntil, tzOf(body, dev)));
       if (d > 0) {
         await tx.test.update({ where: { id: testId }, data: { testerDays: (t.testerDays ?? testerDaysOf(t.createdAt, current.openUntil, dev.timeZone)) + d } });
-        await tx.$executeRaw`UPDATE "Contract" SET "dueAt" = "dueAt" + ${d} * interval '1 day' WHERE "testId" = ${testId} AND status = 'working' AND "dueAt" > (now() AT TIME ZONE 'UTC')`; // dueAt is stored as UTC without a zone
+        // (Owner, Nov 3, batch 35 §154) D calendar days in the developer's zone (where deadlines are counted), landing on that day's 11:59 PM.
+        for (const c of await tx.contract.findMany({ where: { ...working(testId), dueAt: { gt: new Date() } }, select: { id: true, dueAt: true } }))
+          await tx.contract.update({ where: { id: c.id }, data: { dueAt: dueAfterDays(c.dueAt, d, dev.timeZone) } });
       }
     }
     // (F) Listing info (description, devices, languages): shown to working testers and on the join page; stops once.
@@ -961,7 +969,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     // (Batch 15 section 18) The tester's deadline: the day they join + the test's tester days (counted in the developer's time zone, like Open until).
     const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion, testerDays: t.testerDays, tz: dev.timeZone }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
     const contract = old
-      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date()), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
+      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
     await stampCounting(testId, tx); // (batch 35 §66) the 3-change count starts with the first join
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });

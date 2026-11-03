@@ -350,7 +350,8 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect(days((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt, due0)).toBe(0);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(0); // still paused
     await reinstateAccount(dev.user.id);
-    expect(days((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt, due0)).toBe(5);
+    // (§154) 5 days and the moments the test took, up to the end of that day.
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime()).toBe(R.movedDue(due0, 5 * DAY + 1, null).getTime());
     expect(days((await db.test.findUniqueOrThrow({ where: { id: testId } })).openUntil!, ou0)).toBe(5);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "is running again" } } })).toBe(1);
   });
@@ -362,7 +363,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date(Date.now() - 2 * DAY) } });
     const a = await admin();
     expect((await adm("unpause-test", a.cookie, { id: testId })).status).toBe(200);
-    expect(Math.round(((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime() - due0.getTime()) / DAY)).toBe(2);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime()).toBe(R.movedDue(due0, 2 * DAY + 1, null).getTime()); // (§154) up to that day's end
   });
 
   it("the old open question about sending during a hold is gone", () => {

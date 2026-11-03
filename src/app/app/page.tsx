@@ -230,7 +230,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     const name = x ? displayName(x) : "A tester";
     if (a.kind === "rejoin") {
       const old = await oldOf(a);
-      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, whoHref: x && !x.deletedAt ? `/app/testers/${x.id}` : null, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Answer" });
+      items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, whoHref: x && !x.deletedAt ? `/app/testers/${x.id}` : null, text: <>{old && x ? rejoinAskLine(name, pronouns(x.pronoun), old, user.timeZone).replace(`${name} asks`, "asks") : "asks to rejoin"} · <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Answer" });
     } else items.push({ key: `a-${a.id}`, at: a.createdAt, href: `/app/tests/${t.id}#item-app-${a.id}`, who: name, whoHref: x && !x.deletedAt ? `/app/testers/${x.id}` : null, text: <>applied to join <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Answer" });
   }
   // (§106) Excerpt requests and disputes use their own inline boxes above, in both account states.

@@ -144,7 +144,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
     const old = a.kind === "rejoin" ? t.contracts.find((c) => c.testerId === a.testerId) : undefined;
-    return { id: a.id, kind: a.kind, line: old ? rejoinAskLine(displayName(x), pronouns(x.pronoun), old) : undefined, userId: x.id, name: displayName(x), note: a.note, ...appInfo.get(x.id)! };
+    return { id: a.id, kind: a.kind, line: old ? rejoinAskLine(displayName(x), pronouns(x.pronoun), old, u.timeZone) : undefined, userId: x.id, name: displayName(x), note: a.note, ...appInfo.get(x.id)! };
   });
   // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
   const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));

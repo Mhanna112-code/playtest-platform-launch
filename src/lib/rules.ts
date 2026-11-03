@@ -346,6 +346,30 @@ export function dueFromJoin(joinedAt: Date, testerDays: number, tz?: string | nu
   const day = new Date(Date.parse(`${dayIn(joinedAt, tz)}T00:00:00Z`) + testerDays * DAY).toISOString().slice(0, 10);
   return endOfDayIn(day, tz);
 }
+/** The calendar date (YYYY-MM-DD) `days` after another. */
+const plusDays = (day: string, days: number) => new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
+/**
+ * (Owner, Nov 3, batch 35 §154) A tester's deadline that moves later lands on the END of the day it moves to (11:59 PM in the zone dueFromJoin counts in, the
+ * developer's): the moved time rounded UP, never down. "Fri, Nov 6, 7:22 AM" becomes "Fri, Nov 6, 11:59 PM"; a time already at a day's end stays.
+ */
+export function dayEndAtOrAfter(d: Date, tz?: string | null) {
+  const day = dayIn(d, tz);
+  const end = endOfDayIn(day, tz);
+  return end.getTime() >= d.getTime() ? end : endOfDayIn(plusDays(day, 1), tz);
+}
+/** (§154) A deadline moved later by a pause or an outage (`ms`, the time given back): rounded up to the end of the day it lands on. */
+export const movedDue = (due: Date, ms: number, tz?: string | null) => dayEndAtOrAfter(new Date(due.getTime() + ms), tz);
+/** (§154) A deadline moved later by whole days (Edit moving Open until later): the end of the day `days` calendar days after its own day (clock changes never shift it off 11:59 PM). */
+export const dueAfterDays = (due: Date, days: number, tz?: string | null) => endOfDayIn(plusDays(dayIn(due, tz), days), tz);
+/**
+ * (Owner, Nov 2) Open until moved by a pause or an outage stays the END of a day in the developer's zone, the nearest one to the moved time, so joining closing and
+ * Edit's lock (by calendar day) always agree: 2 days and 1 minute move "Nov 1, 11:59 PM" to "Nov 3, 11:59 PM", never "Nov 4, 12:01 AM".
+ */
+export function nearestDayEnd(moved: Date, tz?: string | null) {
+  const day = dayIn(moved, tz);
+  const ends = [endOfDayIn(plusDays(day, -1), tz), endOfDayIn(day, tz)];
+  return ends.reduce((a, b) => (Math.abs(b.getTime() - moved.getTime()) < Math.abs(a.getTime() - moved.getTime()) ? b : a));
+}
 /** Joining has closed (Open until passed): the test takes no new testers. */
 export const joiningClosed = (t: { openUntil: Date | null }, now = new Date()) => !!t.openUntil && t.openUntil.getTime() < now.getTime();
 /** "This test closed to new testers on Nov 20." */

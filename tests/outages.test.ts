@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { heartbeat, outageLine, recordAlert } from "@/lib/server/outages";
 import { renderTimes } from "@/lib/tz";
+import { movedDue, nearestDayEnd } from "@/lib/rules";
 import { GET as healthGET } from "@/app/api/health/route";
 import { POST as alertPOST } from "@/app/api/health/alert/route";
 import { bookCall, joined, sact, setup } from "./fixtures";
@@ -55,8 +56,9 @@ describe("outages", () => {
     const L = 2.5 * H;
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect(sub.payBy!.getTime() - before.sub.payBy!.getTime()).toBe(L);
-    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime() - before.c.dueAt.getTime()).toBe(L);
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).openUntil!.getTime() - before.t.openUntil!.getTime()).toBe(L);
+    // (§154) The deadline by the outage, up to the end of that day; Open until to the nearest end of a day (as for a pause lift).
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime()).toBe(movedDue(before.c.dueAt, L, null).getTime());
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).openUntil!.getTime()).toBe(nearestDayEnd(new Date(before.t.openUntil!.getTime() + L), null).getTime());
     const p = await db.payment.findUniqueOrThrow({ where: { id: owed.id } });
     expect(p.owedUntil!.getTime() - owed.owedUntil!.getTime()).toBe(L);
     expect(p.retriedAt!.getTime() - owed.retriedAt!.getTime()).toBe(L);
@@ -132,6 +134,6 @@ describe("outages", () => {
     const r = { outage: await recordAlert("up", new Date(t0.getTime() + 40 * MIN)) };
     expect(r.outage!.ms).toBe(40 * MIN);
     expect(await db.outage.count()).toBe(1);
-    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime() - due0).toBe(40 * MIN);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: sessionId } })).dueAt.getTime()).toBe(movedDue(new Date(due0), 40 * MIN, null).getTime()); // (§154) up to that day's end
   }, 90_000);
 });

@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/server/dateFormat";
-import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
+import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, movedDue, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
@@ -415,10 +415,10 @@ export async function closeApplicationsAfterEdit(testId: string, why: "listing" 
 }
 
 /** The line the developer reads about a rejoin ask: what the tester gets back if accepted. */
-export function rejoinAskLine(name: string, pron: { subj: string; poss: string }, c: { endedAt: Date | null; dueAt: Date }) {
+export function rejoinAskLine(name: string, pron: { subj: string; poss: string }, c: { endedAt: Date | null; dueAt: Date }, tz?: string | null) {
   const left = c.endedAt ? c.dueAt.getTime() - c.endedAt.getTime() : 0;
   if (left <= 0) return `${name} asks to rejoin. ${pron.subj[0].toUpperCase()}${pron.subj.slice(1)} had no time left: ${pron.poss} deadline stays passed.`;
-  return `${name} asks to rejoin. If you accept, ${pron.subj === "they" ? "they get" : `${pron.subj} gets`} back the ${leftText(left)} ${pron.subj === "they" ? "they" : pron.subj} had left (deadline ${fmtDateTime(new Date(Date.now() + left))}).`;
+  return `${name} asks to rejoin. If you accept, ${pron.subj === "they" ? "they get" : `${pron.subj} gets`} back the ${leftText(left)} ${pron.subj === "they" ? "they" : pron.subj} had left (deadline ${fmtDateTime(movedDue(new Date(), left, tz))}).`; // (§154) the end of that day, as rejoinDue gives
 }
 
 /**

@@ -10,6 +10,7 @@ import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as verifyPOST } from "@/app/api/payments/verify-card/route";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { runDaily, startHold } from "@/lib/server/holds";
+import { movedDue } from "@/lib/rules";
 import { json, makeUser, req } from "./helpers";
 import { act, bookCall, joined, listingBody, sact, seen, setup } from "./fixtures";
 
@@ -84,7 +85,8 @@ describe("payment hold", () => {
     expect(r.body.lifted).toBe(true);
     const after = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     const t1 = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    expect(Math.round((after.dueAt.getTime() - before.dueAt.getTime()) / DAY)).toBe(2);
+    // (§154) 2 days and the moments the test took, up to the end of that day: the end of the day 3 days on.
+    expect(after.dueAt.getTime()).toBe(movedDue(before.dueAt, 2 * DAY + 1, null).getTime());
     expect(Math.round((t1.openUntil!.getTime() - t0.openUntil!.getTime()) / DAY)).toBe(2);
     // Lifted: Pay works again.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
