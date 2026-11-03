@@ -351,6 +351,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
   const confirmed = !!boxAt;
   const [reason, setReason] = useState("");
   const [err, setErr] = useState("");
+  const [meanwhile, setMeanwhile] = useState("");
   const [busy, setBusy] = useState(false);
   // (Batch 35 §41) Sent: the box and its lines go, Send the dispute stays greyed with its line until the page has redrawn (then the dispute shows on the page).
   const fin = useFinished(() => { setBusy(false); setReason(""); setBox(null); setBoxAt(""); });
@@ -383,6 +384,10 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
             if (sb) {
               setBox(sb);
               setBoxAt(sb.now);
+            } else if (e instanceof ApiError && e.code === "no_dispute" && / meanwhile \(/.test(e.message)) {
+              // (Owner, Nov 3, §159) A payment since the page loaded left nothing to dispute: one refusal naming it, in the blue box (never a stop to press again).
+              setBox(null);
+              setMeanwhile(e.message);
             } else setErr(errOf(e));
             setBusy(false);
           }
@@ -394,6 +399,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && reason !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setReason("")} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      {meanwhile && <p className="info" data-dispute-meanwhile="">{refusalLine("Send the dispute", meanwhile)}</p>}
       <FormMistakes text={err} press="Send the dispute" />
     </details>
   );
