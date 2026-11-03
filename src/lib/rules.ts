@@ -1012,6 +1012,16 @@ export const chargebackReversedLine = (cents: number, backCents: number, refunde
  * takes it. An authorization lasts about 7 days: unused by then, it is released and the developer presses Pay what you owe again.
  */
 export const RESERVE_DAYS = 7;
+/**
+ * (Owner, Nov 3) Payments after a card is saved: the new card is tried at once for what's owed (§145), and when that's refused the page says so under "Card saved."
+ * `owed`: "declined" (the bank declined the card) or "failed" (a problem on the way, not the card); `cents`: the total it was tried for.
+ */
+export const cardSavedLine = (owed: string | undefined, cents: number) =>
+  !Number.isFinite(cents) || cents <= 0 || (owed !== "declined" && owed !== "failed")
+    ? "Card saved."
+    : owed === "declined"
+      ? `Card saved. Your bank declined it for what you owe (${money(cents)}): nothing was charged. Try another card, or press Pay what you owe.`
+      : `Card saved. We couldn't charge it for what you owe (${money(cents)}) just now: nothing was charged. Press Pay what you owe to try again.`;
 export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's taken when the team approves lifting your hold.`;
 /**
  * (Batch 35 §129) The end of Pay what you owe's stop-once line: what the second press does. Outside a chargeback hold it pays; during one it reserves (with the card

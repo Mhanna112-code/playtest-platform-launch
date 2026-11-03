@@ -13,7 +13,7 @@ import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { owedV } from "@/lib/server/pulseV";
-import { HOLD_APPROVAL_AFTER, reservedLine } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, cardSavedLine, reservedLine } from "@/lib/rules";
 import { confirmItems } from "@/lib/server/confirm";
 import { ConfirmList } from "./ConfirmList";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
@@ -45,7 +45,7 @@ const MESSAGES: Record<string, string> = {
   paused: PAYMENTS_OFF, // (§130) live keys while payments are switched off (STRIPE_ALLOW_LIVE not set): Add a card / payout setup
 };
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; owed?: string; amt?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
   const u = await requirePageUser();
   return withDateZone(u.timeZone, async () => {
 
@@ -133,7 +133,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       {dev && <ConfirmList items={await confirmItems(u.id)} />}
       {q.error && q.error !== "off" && q.error !== "card_limit" && <p className="err">{MESSAGES[q.error]}</p>}
       {q.saved === "verified" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card verified.</p>}
-      {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Card saved.</p>}
+      {q.saved === "card" && <p className="card border-emerald-400/30 text-sm text-emerald-200" data-card-saved={q.owed ?? ""}>{cardSavedLine(q.owed, Number(q.amt))}</p>}
       {q.saved === "payout" && <p className="card border-emerald-400/30 text-sm text-emerald-200">Your payout account is connected.</p>}
       {q.pending === "payout" && <p className="info">Stripe still needs a few details before you can be paid. Continue setup below.</p>}
 

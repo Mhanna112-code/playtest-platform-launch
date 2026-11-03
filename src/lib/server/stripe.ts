@@ -474,7 +474,7 @@ export async function saveCardFromCheckout(userId: string, sessionId: string) {
   if (user.stripePaymentMethodId !== pm) await (await import("./owedOnce")).newCardChecks(userId).catch((e) => console.error("[card] new card checks:", (e as Error).message));
   // (Owner, Oct 29, batch 11 section 4) A new card during a hold: what is owed is charged on it at once (one payment for the total, batch 35 §117). (Owner, Nov 3,
   // §145) This is the only automatic charge of what's owed: there are no daily retries.
-  await (await import("./holds")).retryOwed(userId).catch((e) => console.error("[retry] card saved:", (e as Error).message));
+  return (await import("./holds")).retryOwed(userId).catch((e) => { console.error("[retry] card saved:", (e as Error).message); return null; });
 }
 
 /** (Batch 34 §6) Refresh saved-card expiry from Stripe and send each threshold once. Missing cards are handled only when a charge fails. */
