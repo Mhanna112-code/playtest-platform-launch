@@ -1,8 +1,9 @@
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, disputeDecisionName, pieceName } from "@/lib/rules";
+import { CHARGEBACK_FEE_CENTS, CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, disputeDecisionName, pieceName } from "@/lib/rules";
+import { money } from "@/lib/format";
 
-type Row = { id: string; kind: string; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null };
+type Row = { id: string; kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null };
 /** `full` (§131): `what` with the names uncut, the row's hover on Payments. */
 export type PaidRow = { what: string; full: string; how: string; testId: string | null; reversed: boolean };
 
@@ -35,7 +36,8 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
       const piece = pieceName({ tester, part, test: c.title, full });
       return p.kind === "extra" ? `Pay more for ${piece}`
         : p.kind === "dispute" ? disputeDecisionName(piece).replace(/^the/, "The")
-        : p.kind === "chargeback" ? `Paid again after your bank reversed a payment: ${piece}`
+        // (Owner, Nov 2) Which payment it repaid, and the fee: "Repaid the reversed $39.00 Pay more for … ($39.00 + $15.00 chargeback fee)".
+        : p.kind === "chargeback" ? `Repaid the reversed ${money(o.amountCents)}${o.kind === "extra" ? " Pay more" : o.kind === "dispute" ? " dispute decision" : " payment"} for ${piece} (${money(o.amountCents)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee)`
         : piece;
     };
     const what = side === "developer" ? devWhat(false) : `from ${dev} for your ${part} ${on}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
