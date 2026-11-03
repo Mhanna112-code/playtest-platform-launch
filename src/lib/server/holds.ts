@@ -111,6 +111,11 @@ export async function startHold(devId: string, reason: string) {
   // (Owner, Nov 2, batch 35 §122) Charges made while away still waiting for the bank are paused: their checks are cancelled at Stripe (one that already went through is
   // recorded as paid) and they wait for the lift with the other new charges (§113), made then as the one combined payment.
   await (await import("./owedOnce")).pauseAwayChecks(devId).catch((e) => console.error("[hold] pause bank checks:", (e as Error).message));
+  // (Owner, Nov 2) A Pay the developer pressed whose bank page is still open is cancelled too (at Stripe first; one the bank already approved is recorded as paid,
+  // never charged again): nothing is charged on a card during a hold, and the piece is unpaid again (the tester can still Charge it later).
+  const { release } = await import("./confirm");
+  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "needs_action", kind: { in: ["review", "call"] } }, select: { id: true } }))
+    await release(p.id).catch((e) => console.error("[hold] cancel open Pay check:", (e as Error).message));
   // (Batch 9) One closing clock per paused test: it starts now unless the test was already paused.
   await markPaused({ developerId: devId }, now);
   // (Batch 8) Subscription billing pauses while the hold lasts.

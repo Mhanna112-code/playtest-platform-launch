@@ -228,3 +228,18 @@ describe("Open until", () => {
     expect(r.body.error.message).toBe("Open until has passed, so it can't be changed.");
   });
 });
+
+describe("A hold starting cancels a Pay whose bank page is still open (owner, Nov 2)", () => {
+  it("the open check is cancelled, nothing is charged, and the piece is unpaid again", async () => {
+    const s = await setup();
+    const j = await joined(s.testId);
+    await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a"] });
+    const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
+    const p = await db.payment.create({ data: { kind: "review", status: "needs_action", developerId: s.dev.user.id, testerId: j.tester.user.id, submissionId: sub.id, amountCents: 1000, testerCents: 800, feeCents: 200, actionPi: "pi_open_check" } });
+    await startHold(s.dev.user.id, "chargeback");
+    const after = await db.payment.findUniqueOrThrow({ where: { id: p.id } });
+    expect(after.status).toBe("cancelled");
+    expect(after.actionPi).toBeNull();
+    expect(await db.review.count({ where: { submissionId: sub.id } })).toBe(0);
+  });
+});
