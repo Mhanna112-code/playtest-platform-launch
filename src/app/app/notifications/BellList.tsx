@@ -9,7 +9,7 @@ import { keepAmounts } from "@/components/Amounts";
 import { Cut } from "@/components/Cut";
 
 export type BellLine = { id: string; text: string; href: string; read: boolean; ago: string };
-export type BellEntry = { key: string; title?: string; day?: string; lines: BellLine[]; /** (batch 14) the title already counts: no "N updates" */ counted?: boolean; /** (Owner, Nov 3) the title is a test's name (cut at 10 characters), not a kind of update */ test?: boolean };
+export type BellEntry = { key: string; title?: string; day?: string; lines: BellLine[]; /** (batch 14) the title already counts: no "N updates" */ counted?: boolean; /** (Owner, Nov 3) the title is a test's name (cut at 12 characters), not a kind of update */ test?: boolean };
 
 /**
  * (Design doc 9) The bell list. Lines about the same test on the same day stack into one entry ("Harbor Run · 4 updates today",

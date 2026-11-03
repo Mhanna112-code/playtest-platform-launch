@@ -931,25 +931,26 @@ export const CHARGEBACK_FEE_CENTS = 1500;
 const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
 /** The Payments line of an open chargeback: "Your bank reversed a $X payment: $X + $15 chargeback fee." */
 // (Owner, Nov 2) With what it paid for, when known: "Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run” (Nov 2): $10 + $15 chargeback fee".
-// (Owner, Nov 2) The tester's and the test's names are cut at 10 characters with "…" so the line stays short.
-export const cut10 = (s: string) => (s.length > 10 ? `${s.slice(0, 10).trimEnd()}…` : s);
+// (Owner, Nov 2) The tester's and the test's names are cut with "…" so the line stays short: at NAME_CUT characters (owner, Nov 3: 12, was 10).
+export const NAME_CUT = 12;
+export const cut10 = (s: string) => cutTo(s);
 /**
- * (Owner, Nov 3) A name LISTED on a page (a person, a test, a product; components/Cut.tsx): the same rule as cut10, at `n` characters, counted by character so
+ * (Owner, Nov 3) A name LISTED on a page (a person, a test, a product; components/Cut.tsx): the same rule as cut10, at `n` characters (NAME_CUT unless given), counted by character so
  * an emoji is never split in half. Unchanged when it fits.
  */
-export const cutTo = (s: string, n = 10) => {
+export const cutTo = (s: string, n = NAME_CUT) => {
   const chars = Array.from(s);
   return chars.length > n ? `${chars.slice(0, n).join("").trimEnd()}…` : s;
 };
 /**
- * (Owner, Nov 3) An email listed on a page, cut in the middle: the part before "@" keeps its first 6 characters then "…" (only when it is longer than 7), and
- * the domain stays whole unless it is over 14 characters, then its first 14 and "…". "maximiliana.alexandrina@playtest.test" → "maximi…@playtest.test".
+ * (Owner, Nov 3) An email listed on a page, cut in the middle: the part before "@" keeps its first NAME_CUT characters then "…" (only when it is longer than NAME_CUT + 1; owner, Nov 3: 12, was 6), and
+ * the domain stays whole unless it is over 14 characters, then its first 14 and "…". "maximiliana.alexandrina@playtest.test" → "maximiliana.…@playtest.test".
  */
 export function cutEmail(email: string) {
   const at = email.lastIndexOf("@");
   if (at < 0) return cutTo(email);
   const local = Array.from(email.slice(0, at)), domain = Array.from(email.slice(at + 1));
-  return `${local.length > 7 ? `${local.slice(0, 6).join("")}…` : local.join("")}@${domain.length > 14 ? `${domain.slice(0, 14).join("")}…` : domain.join("")}`;
+  return `${local.length > NAME_CUT + 1 ? `${local.slice(0, NAME_CUT).join("")}…` : local.join("")}@${domain.length > 14 ? `${domain.slice(0, 14).join("")}…` : domain.join("")}`;
 }
 /** (Owner, Nov 2, §131) Which part of a tester's work a payment is for. "work": a payment that names no part (an extra pay with no part, an old row). */
 export type PiecePart = "written answers" | "recording" | "live call" | "work";
@@ -958,7 +959,7 @@ export const partOf = (callId: string | null | undefined, subKind: string | null
   callId ? "live call" : subKind === "recording" ? "recording" : subKind ? "written answers" : "work";
 /**
  * (Owner, Nov 2, §131) THE name of what a payment is for, in every developer-facing payment line: WHICH tester, WHICH part and WHICH test, the tester's and the
- * test's names cut at 10 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
+ * test's names cut at 12 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
  * “Harbor Run” (Oct 30)". `full`: the names uncut, for the hover (`title`) of a line shown on a page (emails and bells stay cut).
  */
 export const pieceName = ({ tester, part, test, when, full = false }: { tester: string; part: PiecePart | string; test: string; when?: string | null; full?: boolean }) => {
