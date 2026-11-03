@@ -289,7 +289,8 @@ describe("batch 30 §5: the team closes a developer's open reviews at $0", () =>
     const reason = "Spam testers on a fraudulent test.";
     const r = await aact(ad.cookie, "team-close", { id: w.a.dev.user.id, scope: "developer", reason, pieces: preview.body.pieces });
     expect(r.status).toBe(200);
-    expect(r.body.line).toBe("2 closed; 1 was settled meanwhile");
+    // (Batch 35 §157) Who settled it, and when.
+    expect(r.body.line).toMatch(/^2 closed; 1 was settled meanwhile: .+ settled 1 at \d{1,2}:\d{2} [AP]M$/);
     for (const id of [w.a.sub.id, w.cidSub.id]) {
       const s = await subOf(id);
       expect(s.review).toMatchObject({ amountCents: 0, reason, teamClosedById: ad.user.id, rejected: false });

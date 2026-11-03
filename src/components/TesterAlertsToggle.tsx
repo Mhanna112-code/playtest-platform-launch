@@ -21,7 +21,8 @@ export function TesterAlertsToggle({ off: start }: { off: boolean }) {
   async function flip() {
     setErr("");
     try {
-      const r = await api<{ off: boolean }>("/api/account/tester-alerts", { off: !off });
+      // (Owner, Nov 3, batch 35 §157) The state this button offers ("Alerts: On" offers Off), never a flip on the server.
+      const r = await api<{ off: boolean }>("/api/account/tester-alerts", { alerts: off ? "on" : "off" });
       publishTesterAlertsOff(typeof r.off === "boolean" ? r.off : !off);
     } catch (e) {
       // (§156) Named like every refusal: "Your Alerts didn't go through: …".

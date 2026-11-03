@@ -128,11 +128,13 @@ export function listingAmount(c: { writtenCents: number | null; recordingCents: 
  * $0 included) on an unlisted part. The tester's own Charge or Let it go isn't the developer's decision, so it can't be disputed. (`paidCents` and `listingCents` are kept for
  * the callers' signatures: no amount refuses a dispute any more.)
  */
+/** A second Dispute on the same part (another tab, or both at the same moment: batch 35 §157). */
+export const ALREADY_DISPUTED = "You already disputed this payment. A part can be disputed once.";
 export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean, testerChose = false, /** (Batch 20 section 15) what a decision could still add (disputeBounds' max minus min) */ roomCents: number | null = null): Check {
   void paidCents;
   void listingCents;
   if (testerChose) return no(TESTER_CHOSE_LINE);
-  if (alreadyDisputed) return no("You already disputed this payment. A part can be disputed once.");
+  if (alreadyDisputed) return no(ALREADY_DISPUTED);
   if (roomCents != null && roomCents <= 0) return no(NOTHING_TO_DISPUTE);
   return yes;
 }
@@ -892,6 +894,8 @@ export const OWED_ALL_WAITING = "What you owe is waiting for your bank: confirm 
 export const CHECK_CANCELLED = "Check cancelled: nothing was charged. You can pay it now.";
 export const CHECK_ALREADY_PAID = "Your bank already confirmed this payment: it's paid.";
 export const NO_CHECK_WAITING = "There's no bank check waiting here.";
+/** (Owner, Nov 3, batch 35 §157) Cancel this check pressed again (another tab, or both at once) after it was cancelled. */
+export const CHECK_ALREADY_CANCELLED = "You already cancelled this check.";
 /** (Owner, Oct 31, batch 35 §92) Confirm with your bank on a charge made while away, refused because the card on file was declined (it keeps waiting until its date). */
 export const cardDeclinedConfirmLine = (by: string) => `Your card was declined, so nothing was charged. Change your card and confirm again by ${by}.`;
 /**
@@ -1299,8 +1303,10 @@ export function paidByKind(parts: { kind: "written" | "recording" | "call"; amou
 }
 
 /** The developer adds their side to a dispute once. */
+/** (Owner, Nov 3, batch 35 §157) The design doc's wording (it read "You already sent your side."): another tab's, or both at the same moment. */
+export const DEV_SIDE_ALREADY = "You already added your side.";
 export function checkDevSide(text: string, already: boolean): Check {
-  if (already) return no("You already sent your side."); // (batch 16 section 21) the same press already made, in another tab or here
+  if (already) return no(DEV_SIDE_ALREADY); // (batch 16 section 21) the same press already made, in another tab or here
   if (text.trim().length < 5) return no("Write your side in a sentence or two.");
   return yes;
 }

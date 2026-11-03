@@ -4,6 +4,7 @@ import { isPaymentsOff, payoutSetupUrl, stripeOn } from "@/lib/server/stripe";
 import { confirmSkipped } from "@/lib/server/users";
 import { sameOriginForm } from "@/lib/server/http";
 import { formGate } from "@/lib/server/accountChanges";
+import { db } from "@/lib/db";
 
 // Tester: Stripe Connect Express onboarding. (Batch 15 section 41, L5) Only a POST from this site's own form makes Stripe objects; a GET goes back to Payments.
 export async function GET(req: Request) {
@@ -19,6 +20,8 @@ export async function POST(req: Request) {
     // (Owner, Oct 28, batch 16 section 27) Changed in another tab or device since the page opened: back to Payments with the box under this button.
     const back = await formGate(u.id, await req.formData().catch(() => new FormData()), "payout", base);
     if (back) return Response.redirect(back, 303);
+    // (Owner, Nov 3, §157) Already connected (another tab's setup, or Stripe's update meanwhile): "Your payout account is already connected."
+    if ((await db.user.findUnique({ where: { id: u.id }, select: { payoutsReady: true } }))?.payoutsReady) return Response.redirect(`${base}/app/payments?error=payout_ready#payout`, 303);
     // (Batch 15 section 41, H2) Payouts only to a confirmed email address.
     if (!u.emailVerifiedAt && !confirmSkipped()) return Response.redirect(`${base}/app/payments?error=confirm`, 303);
     return Response.redirect(await payoutSetupUrl(u, base), 303);

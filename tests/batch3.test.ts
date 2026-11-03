@@ -189,7 +189,8 @@ describe("call length and payment problems on a call", () => {
     // A chargeback hold is a hold with extra steps: a verified card and the admin's approval lift it (paying alone never does).
     const { startCardVerification, approveChargebackHold } = await import("@/lib/server/chargeback");
     setStripeForTests(null); // no Stripe here (dev): the card check is simulated
-    await startCardVerification(dev.user);
+    // (Batch 35 §157) Verified above: a second Verify is refused ("Your card is already verified."), never a second attempt.
+    await expect(startCardVerification(dev.user)).rejects.toMatchObject({ code: "already_verified", message: "Your card is already verified." });
     expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });

@@ -625,7 +625,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {/* The full app's "Your recordings" card, then "The written part" (a card of its own). */}
       <section className="card space-y-3" id="recording">
         <h2 className="flex flex-wrap items-center gap-2 font-semibold text-white"><Clapperboard className="h-5 w-5 text-fuchsia-300" /> Your recordings
-          <span className="text-sm font-normal text-slate-400">{c.recordingCents != null ? "(the recorded session part)" : "(clips, if you like)"}</span></h2>
+          {c.recordingCents != null && <span className="text-sm font-normal text-slate-400">(the recorded session part)</span>}</h2>
         {termLine("Recording", c.recordingCents, c.recordingRequired, false, recording ? partPaid.get(recording.id) ?? 0 : 0)}
         <RecordingUpload
           seenAt={seenAt}

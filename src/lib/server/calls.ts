@@ -111,7 +111,9 @@ export async function reportNoShow(user: U, callId: string, body: Record<string,
   const note = kind ? `${kind[0].toUpperCase()}${kind.slice(1)}${typed ? `: ${typed}` : "."}` : typed;
   if (side === "developer") await devGateIfSeen(call.contract.testId, body, { acts: ["no-show", "cancel-call", "cancel-set"], keys: [`call:${call.id}`] });
   else await sharedTesterGate(user.id, call.contractId, call.contract.testId, body);
-  await db.call.update({ where: { id: call.id }, data: { noShowBy: side, noShowNote: note, noShowAt: new Date() } });
+  // (Owner, Nov 3, §157) Claimed: of two reports at the same moment (two tabs, or both sides) one is kept; the other is refused and never overwrites it.
+  const claimed = await db.call.updateMany({ where: { id: call.id, noShowBy: null }, data: { noShowBy: side, noShowNote: note, noShowAt: new Date() } });
+  if (claimed.count !== 1) throw new HttpError(409, "reported", "A problem with this call was already reported.");
   return { reported: true };
 }
 

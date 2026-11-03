@@ -245,7 +245,9 @@ describe("E5, E6, E7) names, Contact us, data requests", () => {
     const d = await makeUser({ dev: true });
     await db.user.update({ where: { id: t.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     await db.user.update({ where: { id: d.user.id }, data: { holdStartedAt: new Date(), holdReason: "unpaid" } });
-    const send = (cookie: string) => helpPOST(req("/api/help", { cookie, body: { topic: "My account", message: "Please look at my account, thanks" } })).then(json);
+    // (Batch 35 §157) Each a different message: the same one twice within 10 minutes is "You already sent this message."
+    let n = 0;
+    const send = (cookie: string) => helpPOST(req("/api/help", { cookie, body: { topic: "My account", message: `Please look at my account, thanks (${++n})` } })).then(json);
     for (let i = 0; i < 5; i++) expect((await send(t.cookie)).status).toBe(200);
     const sixth = await send(t.cookie);
     expect(sixth.status).toBe(409);

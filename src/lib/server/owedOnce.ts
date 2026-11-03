@@ -1,7 +1,7 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
 import { money, zoneOpt } from "@/lib/format";
-import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat, reversedOf } from "@/lib/rules";
+import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_CANCELLED, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat, reversedOf } from "@/lib/rules";
 import { HttpError } from "./http";
 import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
@@ -274,6 +274,18 @@ export async function coveredNames(ids: string[], full = false) {
   return out;
 }
 
+/** (§157) The ActionLog "test" recording a check the developer cancelled (the payment's id in `tab`): never a real test id. */
+const CHECK_CANCELS = "check-cancelled";
+const cancelledBefore = async (devId: string, id: string) => !!(await db.actionLog.findFirst({ where: { userId: devId, testId: CHECK_CANCELS, tab: id }, select: { id: true } }));
+/** Cancel this check's claim (as claimCheck), with its record when it cancels. */
+async function claimCancel(p: { id: string; developerId: string; actionPi: string | null }, cancels: boolean) {
+  return db.$transaction(async (tx) => {
+    const n = (await tx.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null, actionBy: null } })).count;
+    if (n === 1 && cancels) await tx.actionLog.create({ data: { userId: p.developerId, testId: CHECK_CANCELS, tab: p.id, text: p.actionPi ?? "" } });
+    return n === 1;
+  });
+}
+
 /**
  * (Rule 3) "Cancel this check" next to a debt waiting for the bank: the check is cancelled at Stripe and what it covered is payable at once. When the bank had
  * already confirmed it, it is recorded as paid instead (nothing charged again).
@@ -283,11 +295,17 @@ export async function cancelOwedCheck(devId: string, id: string) {
   if (!p || p.developerId !== devId) throw new HttpError(404, "not_found", NO_CHECK_WAITING);
   if (!p.actionPi) {
     if (p.status === OWED_PAID) throw new HttpError(409, "confirmed", CHECK_ALREADY_PAID);
+    if (await cancelledBefore(devId, p.id)) throw new HttpError(409, "cancelled", CHECK_ALREADY_CANCELLED); // (§157)
     if (p.kind === OWED_KIND && p.status === "paying") throw new HttpError(409, "busy", "This payment is going through right now. Try again shortly.");
     throw new HttpError(409, "no_check", NO_CHECK_WAITING);
   }
   const end = await dropCheck(p.actionPi);
-  if (!(await claimCheck(p))) throw new HttpError(409, "confirmed", CHECK_ALREADY_PAID);
+  // (§157) The claim and, for a cancel, its record commit together: of two Cancels at once (two tabs) the other reads "You already cancelled this check." (it read
+  // "Your bank already confirmed this payment" before).
+  if (!(await claimCancel(p, end !== "succeeded"))) {
+    if (await cancelledBefore(devId, p.id)) throw new HttpError(409, "cancelled", CHECK_ALREADY_CANCELLED);
+    throw new HttpError(409, "confirmed", CHECK_ALREADY_PAID);
+  }
   const confirm = await import("./confirm");
   if (end === "succeeded") {
     await confirm.finishConfirmed(p.id);

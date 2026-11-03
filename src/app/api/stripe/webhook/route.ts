@@ -2,6 +2,7 @@ import { chargebackOpened, chargebackWon, disputeAmountChanged } from "@/lib/ser
 import { db } from "@/lib/db";
 import { payoutReadyOf, sendWaitingShares, verifyWebhook, webhookSecretsSet } from "@/lib/server/stripe";
 import { payoutFixed, payoutProblem } from "@/lib/server/restrictions";
+import { logAccountChange } from "@/lib/server/accountChanges";
 
 // Stripe webhook: a dispute (the developer's bank reversing a payment) opens a chargeback and a payment hold; a dispute the platform won closes it (batch 10).
 export async function POST(req: Request) {
@@ -86,7 +87,11 @@ async function handle(event: Event, later: (why: string) => Promise<Response>): 
       // (Batch 15 section 4) Ready = payouts on and the transfers capability active (the same rule as refreshPayoutStatus).
       const o = event.data.object as Parameters<typeof payoutReadyOf>[0] & { details_submitted?: boolean };
       const ready = payoutReadyOf(o);
-      await db.user.updateMany({ where: { stripeAccountId: account }, data: { payoutsReady: ready } });
+      // (Owner, Nov 3, §157) Recorded like the return's change (refreshPayoutStatus), so a Payments page open elsewhere stops once for it.
+      for (const w of await db.user.findMany({ where: { stripeAccountId: account, payoutsReady: !ready }, select: { id: true } })) {
+        if ((await db.user.updateMany({ where: { id: w.id, payoutsReady: !ready }, data: { payoutsReady: ready } })).count === 1)
+          await logAccountChange(w.id, "", { scopes: ["payments"], field: "payout", label: "Payout account", before: ready ? "not connected" : "connected", after: ready ? "connected" : "not connected" });
+      }
       if (ready) await payoutFixed(account);
       // (Batch 22 section 3) The tester's shares that waited for their payout setup go out now (each once).
       if (ready) for (const u of await db.user.findMany({ where: { stripeAccountId: account }, select: { id: true } })) await sendWaitingShares(u.id);
