@@ -1989,9 +1989,15 @@ bank's page (Stripe's own 3D Secure page, inline under the button) the only butt
   ticked off vs another part on and off; leaving on and off; Charge / Let it go for a payment on the same part (the refusal) and on another part with Alerts
   Off and On, an automatic call charge, a decision with Alerts Off; Pay what you owe after a new chargeback and a changed amount).
   `tests/decision-stops-pay.test.ts` follows the narrowed rule (same tester: stops; another tester with Decisions ticked off: goes through).
+14. **Confirm with your bank in two tabs at the same moment** (found on Stripe test mode): both presses started the bank check at Stripe, both pages then read "Your
+    bank didn't confirm the payment, so nothing was charged." while the Complete went through at Stripe, and the charge was left waiting. The start now runs one at a
+    time per payment (a lock held while Stripe answers: the second press gets the same bank page), and Stripe's "processing" right after Complete is waited out (the
+    page's peek keeps waiting; the finish waits up to 10 s) instead of being read as not confirmed.
+
 - **Code (6–13).** `live.devChanges` (a "left" line on the press's contract always passes); `confirmAll.itemStops` in `claim` (plus the suspension read);
   `payments.refuseSuspendedLocked`, `suspendedAfterCheck`, `bankWaitsLine` (Pay's reviewed branch and Pay more's locked step), `paidMostMeanwhileLine` and the
   locked dispute claim in `openDispute`; `restrictions.suspendAccount` releases the developer's own `needs_action` checks; `confirm.confirmStart` refuses while
   suspended; `holds.claimChoice` (Charge / Let it go under the test lock), `paidBefore` / `reservedBefore`;
   `PayBox` `bankWaits`; `ConfirmAll` sends `seenAt` / `boxAt`. No migration.
-- **Tests (6–13):** `tests/pay-matrix-2.test.ts`.
+- **Code (14).** `confirm.confirmStart` (advisory lock per payment), `confirmFinish` (waits out "processing"), `bankPeek.stillWaiting` ("processing" waits).
+- **Tests (6–14):** `tests/pay-matrix-2.test.ts`; `batch35-bank-peek` ("processing" still waits).
