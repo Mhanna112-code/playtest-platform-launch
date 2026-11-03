@@ -7,6 +7,8 @@ import { MARKABLE } from "@/lib/markJump";
 import type { RowJson } from "@/lib/callRows";
 import { acceptChoices, describeRows } from "@/components/RequestRows";
 import { bookableNow, tooSoonNote } from "@/lib/callWindow";
+import { ResizeBox } from "@/components/Panel";
+import { LIST_PANEL } from "@/components/ScrollList";
 
 /** One waiting call request: `tester` (whose test session it is), `asker` (who asked: "you" when it's yours). */
 export type PanelReq = { id: string; contractId: string; tester: string; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string };
@@ -20,9 +22,11 @@ export type PanelReq = { id: string; contractId: string; tester: string; asker: 
 /** (Batch 26 section 10) The pressed button's name for its stop box or refusal ("Your Withdraw didn't go through"), from the press key. */
 export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
 
-export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0 }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
+export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0, panelId }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
   /** (Owner, Nov 2, batch 35 §132) The server's call lead: a time less than it away can't be booked any more. */
-  leadMinutes?: number }) {
+  leadMinutes?: number;
+  /** (Owner, Nov 3, batch 35 §152) The list's panel id ("call-requests-<test or session id>"): its dragged height is kept by it. */
+  panelId: string }) {
   const { press, changes, error, busy, at, finish } = usePress(seenAt);
   // (Batch 35 §132) A time less than the lead away (24 hours on the live site) can't be booked any more: its Accept goes and the row says why. The clock moves on
   // while the page is open (checked every half minute).
@@ -71,7 +75,9 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
       {sorted.length === 0 ? (
         <p className="note">No call requests waiting.</p>
       ) : (
-        <ul className="max-h-80 space-y-2 overflow-y-auto pr-1 text-sm" data-scroll-list="rows">
+        // (Owner, Nov 3, batch 35 §152) In the draggable panel (§139): it scrolls inside, and the grip drags it shorter or taller.
+        <ResizeBox id={panelId} label="Call requests" defaultMax={LIST_PANEL.requests}>
+        <ul className="space-y-2 text-sm" data-call-requests-list="">
           {sorted.map((r) => (
             <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 ${MARKABLE}`} data-request-row={r.mine ? "mine" : "theirs"}>
               <span className="mr-auto text-slate-300">
@@ -96,6 +102,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
             </li>
           ))}
         </ul>
+        </ResizeBox>
       )}
     </section>
   );

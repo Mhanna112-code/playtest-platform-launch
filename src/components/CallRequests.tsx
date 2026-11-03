@@ -93,7 +93,7 @@ export function CallRequests(p: {
   return (
     <div className="space-y-2 text-sm">
       {/* (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request with them, both directions, soonest first. */}
-      <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes}
+      <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`call-requests-${p.path.split("/").filter(Boolean).pop() ?? ""}`}
         requests={p.requests.map((r) => ({ id: r.id, contractId: r.contractId, tester: p.side === "tester" ? "You" : r.who, asker: r.who, rows: r.rows, minutes: r.minutes ?? 0, mine: r.mine, rate: r.rate }))} />
       {p.canRequest && shut && <p className="note" data-window-shut="">{shut}</p>}
       {p.canRequest && !shut && (

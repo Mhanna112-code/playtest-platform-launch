@@ -1720,3 +1720,33 @@ the call form's limit read "Pick a time before Fri, Nov 6, 7:22 AM (when testers
   helpers; a whole-day pause and Edit's +2 days keep 11:59 PM (also across the clock change); a far zone (Tokyo) rounds in that zone; a rejoin lands on 11:59 PM and
   a passed one stays passed; the call window's end and both sides' refusal read 11:59 PM; the repeat counts fit the new end. `batch16-open-until` (deadlines
   after a pause land on 11:59 PM) follows.
+
+## §152 Call lists and payment lists in draggable panels; each part's payments on the developer's test page (owner, Nov 3)
+"Do call requests and booked calls have scrolls (with expand) — have the expand for the payment lists we just mentioned too." Every call list and payment list now
+sits in the §139 panel (`ResizeBox`): the content scrolls inside, the grip at the bottom-right corner (finger-sized on touch screens; arrow keys too) drags it shorter
+(about 3 lines) or taller (60% of the screen), and the dragged height is kept by the panel's id through live redraws and reloads (this tab).
+- **Lists and ids:** Call requests (developer's test page `call-requests-<testId>`, tester's session page `call-requests-<sessionId>`); the developer's booked calls
+  per tester (`booked-<contractId>`) inside the testers' calls list (`testers-calls-<testId>`); the paused / restricted view's booked calls
+  (`booked-restricted-<testId>`); the developer dashboard's Calls (`dash-calls`) and the tester dashboard's Upcoming calls (`dash-upcoming-calls`); the tester's
+  booked calls (`booked-<sessionId>`); past calls (the developer's "Calls (N)" `past-calls-<contractId>`, the tester's Call history `past-calls-<sessionId>`); the
+  tester's payment lines under a part (`paylines-<pieceId>`); the developer's new per-part payments (`part-pays-<pieceId>`).
+- **Heights:** each starts at its old max-height (`LIST_PANEL` in components/ScrollList.tsx: call requests 20rem, booked 10rem, restricted 18rem, dashboards 14rem,
+  past calls 27rem / 16rem, payment lines 7rem; the tester's booked calls had no box: 20rem), never past 60% of the screen, so nothing is bigger at first. The testers'
+  calls list was already up to 2 screens (`max-h-[200vh]`): it keeps that height and its grip drags up to it (`tallest` 2) rather than snapping it to 60%.
+- **Short lists:** a list that is always a list (call requests, booked, dashboards) keeps its panel and grip even when short, as §139's panels do (a short one is only
+  as tall as it is: a max-height, not a fixed height). ResizeBox can't know whether the content overflows before the browser lays it out, and hiding the grip after
+  would make the box jump. Lists that were plain until long stay so: past calls are a panel past 3 (`PanelWhen`), payment lines past 4.
+- **Each part's payments (developer's test page):** under each part where its paid total shows (written answers and recording in the tester rows, each call in
+  "Calls (N)", updates and pieces in Needs you): every Pay, Pay more, team decision and automatic call charge on that part, oldest first, as its line in Payments'
+  "What you've paid" (`paidRows`, developer side: "Pay more for …", "The team's dispute decision on …", ", charged automatically after 7 days"), then date ·
+  amount · status in the developer's existing words: Payments' ("recorded (payments not set up)", "refunded (your bank's chargeback was reversed)", "your bank
+  reversed this (chargeback)" / "… $96.00 of this …"), Pay what you owe's ("card declined", "waiting until your tests resume") and Confirm with your bank's
+  ("waiting for your bank"). Not listed: a payment still being sent, a cancelled one (nothing charged). Up to 4: a plain list; more: a panel (about 12rem).
+  Built by `lib/server/partPayments.ts` from the page's own payments query. Testers never see it (their lines never name holds).
+- **By question:** a "Search questions" box above the list (any case, anywhere in the question, "Other notes" included; "No questions match “…”." when none; clearing
+  shows all), Open all / Close all, and the list in a panel (`by-question-<testId>`, about 32rem at first: it had no box). Each question is its own fold, closed at first and kept open or closed through
+  the live redraws: closed, the question, "required" and "N answers"; open, its answers (the same rows) in their own panel (`by-question-<testId>-<key>`, the key a
+  hash of the question's text, so it stays when other questions come and go). Filtering hides the others without closing them.
+- **Tests:** `tests/batch35-list-panels.test.ts` (each list's ResizeBox and id, the heights and limits, past calls / payment lines only when long, the status words
+  against Payments' page, the per-part list for a Pay + 2 Pay mores + a decision and its panel from a 5th on the rendered test page, By question's search, folds and
+  panels). `batch16-lists`, `batch20`, `batch30d-wave1`, `batch35-call-window` follow.

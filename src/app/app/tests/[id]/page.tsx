@@ -64,7 +64,9 @@ import { ClampText } from "@/components/ClampText";
 import { RowsBox } from "./RowsBox";
 import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
-import { pastCallsBox } from "@/components/QuestionBox";
+import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen } from "@/components/ScrollList";
+import { PartPayments } from "@/components/PartPayments";
+import { partPaymentLines } from "@/lib/server/partPayments";
 import { byQuestion } from "@/lib/byQuestion";
 import { PrevSetFolds } from "@/components/AnswerSets";
 import { prevSetsOf } from "@/lib/answerSets";
@@ -198,6 +200,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const lateOf = (c: { dueAt: Date; tester: { name: string; email: string } }, x: { createdAt: Date }) => (isBookedLate(x.createdAt, c.dueAt) ? bookedLateLabel(displayName(c.tester), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) : undefined);
   const partPaid = (id: string) => payments.filter((p) => (p.submissionId === id || p.callId === id) && (p.status === "charged" || p.status === "not_set_up")).reduce((a, p) => a + p.amountCents, 0);
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
+  // (Owner, Nov 3, batch 35 §152) Each part's payments, listed under it (Payments' "What you've paid" lines, with their date, amount and status).
+  const partPays = await partPaymentLines(payments, fmtDateTime);
   // The developer's live-call panel: one row per working tester (terms like the parts listing) and their calls/requests.
   const whole = (c: number | null) => money(c).replace(/\.00$/, "");
   const devTesters: DevTester[] = working.map((c) => {
@@ -487,6 +491,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </p>
               {/* (Batch 17 §19) The last 7 days before close-out. */}
               {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
+              {/* (Owner, Nov 3, batch 35 §152) Any payment already made on it (e.g. one declined or waiting for your bank). */}
+              <PartPayments id={x.id} lines={partPays.get(x.id)} />
               {x.kind === "sub" ? (
                 <>
                   {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Under the part, two folds of its own: the answers or recordings, in a small panel (about
@@ -530,6 +536,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             <div key={`update-${x.id}`} id={`update-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
               <p className="text-sm font-medium"><a href={`/app/testers/${c.testerId}`}><Cut text={displayName(c.tester)} /></a> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</p>
               <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
+              {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
+              <PartPayments id={x.id} lines={partPays.get(x.id)} />
               <Fold id={`update-body-${x.id}`} summary={x.kind === "written" ? "Their written answers" : "Their recording"}>
               <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
                 <SentWork kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
@@ -601,6 +609,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
                       <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? (additionsOf(r.sub.additions).length ? `Updated ${fmtDate(r.sub.updatedAt)}` : `Sent ${fmtDate(r.sub.sentAt)}`) : "Not sent yet"}</span>
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
+                      {/* (Owner, Nov 3, batch 35 §152) Under the paid total: this part's payments (a panel above 4). */}
+                      {r.sub && <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />}
                       {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
                       {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
                       {/* (Batch 35 §139) The part's body and its Pay more box are each their own fold under it (open at first), the body in a small panel. */}
@@ -651,8 +661,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {overCalls.length > 0 && (
                   <details open={overCalls.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined} className="rounded-lg border border-white/10 p-2 text-sm" data-calls-fold={c.id}>
                     <summary className="fold-chevron cursor-pointer font-medium text-white">Calls ({overCalls.length})</summary>
-                    {/* (Batch 20 section 11) More than 3: a scroll box about 3 calls tall (each call's Pay / Pay more / dispute controls inside it). */}
-                    <ul className={`mt-2 space-y-2 ${pastCallsBox(overCalls.length, "developer")}`} data-calls-history="" data-calls-scroll={overCalls.length > 3 ? overCalls.length : undefined}>
+                    {/* (Batch 20 section 11) More than 3: a scroll box about 3 calls tall (each call's Pay / Pay more / dispute controls inside it). (Owner, Nov 3,
+                        §152) It is the draggable panel. */}
+                    <div className="mt-2">
+                    <PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label={`Calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>
+                    <ul className="space-y-2" data-calls-history="" data-calls-scroll={overCalls.length > PAST_CALLS_SHOWN ? overCalls.length : undefined}>
                       {overCalls.map((x) => {
                         const m = callMinutesOf(x);
                         const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m);
@@ -665,6 +678,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                               <span className="ml-auto text-slate-300">{tookPlace(x) ? `paid ${money(partPaid(x.id))}` : ""}</span>
                             </div>
                             {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : "In their contract"}</p>}
+                            {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
+                            <PartPayments id={x.id} lines={partPays.get(x.id)} />
                             {badge.reason && <ReasonQuote text={badge.reason} />}
                             {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
                             {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
@@ -686,6 +701,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         );
                       })}
                     </ul>
+                    </PanelWhen>
+                    </div>
                   </details>
                 )}
                 {/* (Batch 17 §11; batch 35 §80) A waiting charge whose piece isn't listed above: a link up to it in Needs you under the tester's row. */}
@@ -770,7 +787,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
 
       <section className="space-y-3">
-        <ByQuestion timeZone={u.timeZone}
+        <ByQuestion testId={t.id} timeZone={u.timeZone}
           blocks={byQuestion(
             (t.questions as string[]) ?? [],
             t.contracts.flatMap((c) =>

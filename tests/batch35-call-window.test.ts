@@ -364,7 +364,7 @@ describe("§132 the forms offer only what's inside the window, and follow it liv
 
   it("the requests panel: a waiting time less than the lead away loses its Accept and says why (Decline stays)", () => {
     const panel = (leadMinutes: number) => unescape(render(h(CallRequestsPanel, {
-      side: "tester", seenAt: new Date().toISOString(), path: () => "/api/sessions/x", leadMinutes,
+      side: "tester", seenAt: new Date().toISOString(), path: () => "/api/sessions/x", leadMinutes, panelId: "call-requests-x",
       requests: [{ id: "r1", contractId: "c1", tester: "You", asker: "Nora Lane", rows: [{ startsAt: new Date(Date.now() + 2 * HOUR).toISOString(), repeat: "once", count: 1 }], minutes: 30, mine: false, rate: "Contract $30/h" }],
     })));
     const live = panel(1440);

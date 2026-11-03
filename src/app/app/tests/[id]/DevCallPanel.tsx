@@ -23,6 +23,8 @@ import { jumpTo } from "@/lib/markJump";
 import { CallCheck } from "@/components/CallCheck";
 import { PressDone } from "@/components/PressDone";
 import type { CallEnd } from "@/lib/callWindow";
+import { ResizeBox } from "@/components/Panel";
+import { LIST_PANEL, TESTERS_CALLS_TALLEST } from "@/components/ScrollList";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null; measuring?: string };
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
@@ -178,10 +180,12 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
         </div>
       )}
-      <CallRequestsPanel side="developer" seenAt={seenAt} requests={requests} path={() => `/api/tests/${testId}`} leadMinutes={leadMinutes} />
+      <CallRequestsPanel side="developer" seenAt={seenAt} requests={requests} path={() => `/api/tests/${testId}`} leadMinutes={leadMinutes} panelId={`call-requests-${testId}`} />
       {shown.length === 0 && canRequest && <p className="note">No calls or requests yet.</p>}
-      {/* (Batch 15 section 33) The whole list of tester cards scrolls on its own once it's taller than about 2 screens; the tick list and the request form stay above it. */}
-      <div className="max-h-[200vh] space-y-2 overflow-y-auto pr-1" data-testers-calls="">
+      {/* (Batch 15 section 33) The whole list of tester cards scrolls on its own once it's taller than about 2 screens; the tick list and the request form stay above it.
+          (Owner, Nov 3, batch 35 §152) It is the draggable panel: about 2 screens at first, the grip drags it shorter (or back up to that). */}
+      {shown.length > 0 && <ResizeBox id={`testers-calls-${testId}`} label="Testers' calls" defaultMax={LIST_PANEL.testersCalls} tallest={TESTERS_CALLS_TALLEST}>
+      <div className="space-y-2" data-testers-calls="">
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           {/* (Batch 35 §79, owner Oct 31) No name heading when every row already starts with it ("fbbb · Daily · Sat 9:46 PM (4 left) · …", "fbbb requested …"). */}
@@ -189,8 +193,10 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           {!t.calls.length && !t.sets.length && !t.requests.length && <p className="note">No calls or requests</p>}
           {t.warning && <p className="text-xs text-amber-200" data-calls-warning="">{t.warning}</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}
-          {/* (Batch 15 sections 33 and 42) Calls ahead and in progress, soonest first, in a scroll box about 3 calls tall; calls that are over are in the tester's row. */}
-          <ul className="max-h-40 space-y-1 overflow-y-auto pr-1" data-booked-scroll="">
+          {/* (Batch 15 sections 33 and 42) Calls ahead and in progress, soonest first, in a scroll box about 3 calls tall; calls that are over are in the tester's row.
+              (Owner, Nov 3, batch 35 §152) The box is the draggable panel (none when there's nothing booked). */}
+          {(t.calls.length > 0 || t.sets.length > 0) && <ResizeBox id={`booked-${t.contractId}`} label={`Booked calls with ${t.name}`} defaultMax={LIST_PANEL.booked}>
+          <ul className="space-y-1" data-booked-scroll="">
             {t.calls.map((c) => callRow(t, c))}
             {t.sets.map((s) => (
               <li key={s.id} className="space-y-1" data-call-set="">
@@ -207,6 +213,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
               </li>
             ))}
           </ul>
+          </ResizeBox>}
           {/* (Batch 16 section 33) Their waiting requests and yours, as they arrive; each opens its row in Call requests (Accept / Decline / Withdraw are there). */}
           {t.requests.length > 0 && <p className="font-medium">Waiting</p>}
           <ul className="space-y-1">
@@ -221,6 +228,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
         </div>
       ))}
       </div>
+      </ResizeBox>}
     </section>
     </LivePanel>
   );

@@ -10,6 +10,7 @@ import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
 import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
 import { CancelMenu } from "@/components/CancelMenu";
 import { CallCheck } from "@/components/CallCheck";
+import { LIST_PANEL } from "@/components/ScrollList";
 
 export type TesterSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; callIds: string[] };
 type Mine = { id: string; setId?: string | null; when: string; minutes: number; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string; report?: { byMe: boolean; note: string } | null };
@@ -66,7 +67,8 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
   return (
     <div className="space-y-4" id="calls">
       {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
-      <LiveSection title={LIVE_SECTIONS.booked} show={booked.length > 0 || sets.length > 0}>
+      {/* (Owner, Nov 3, batch 35 §152) The booked calls in the draggable panel (scrolls inside; the grip drags it shorter or taller). */}
+      <LiveSection title={LIVE_SECTIONS.booked} show={booked.length > 0 || sets.length > 0} panel={`booked-${p.sessionId}`} panelMax={LIST_PANEL.testerBooked}>
         {booked.map(row)}
         {sets.map((st) => {
           const calls = p.mine.filter((m) => st.callIds.includes(m.id));
