@@ -6,7 +6,7 @@ import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import * as R from "@/lib/rules";
 import { fmtDate, money } from "@/lib/format";
-import { chargeDeferred, chargebackOpened, deferredForBox, declinedPayment, liftHoldIfClear, owed, owedLines, payOwed, retryOwed, startHold } from "@/lib/server/holds";
+import { chargeDeferred, chargebackOpened, deferredForBox, declinedPayment, liftHoldIfClear, owed, owedLines, payOwed, retryOwed, runDaily, startHold } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
 import { awayAction, confirmItems, expireActions } from "@/lib/server/confirm";
 import { saveCardFromCheckout, setStripeForTests } from "@/lib/server/stripe";
@@ -19,7 +19,6 @@ import { joined, sact, settle, setup } from "./fixtures";
 // plus (§125) the whole box locked while the one payment's check is open, and a decline and a chargeback landing at the same moment. Every case ends with ONE
 // successful charge at the fake Stripe for each thing paid.
 
-const DAY = 86_400_000;
 afterEach(() => setStripeForTests(null));
 
 /** A Stripe stand-in that remembers each PaymentIntent (as batch35-one-card-checks): `ask` cards make the bank ask; a cancel refuses one that already went through. */
@@ -314,20 +313,17 @@ describe("E. the five double-charge cases: one charge at Stripe each", () => {
     expect(st.succeeded()).toEqual([1000]);
   });
 
-  it("4. a daily retry while a check is open (the retry's 3-day item, and the press's 15-minute check)", async () => {
+  it("4. the daily job while a check is open (a new card's 3-day item): it charges nothing (§145: no daily retries at all)", async () => {
     const w = await world();
     const st = bank();
     await debt(w, 0, 800);
     await startHold(w.dev.user.id, "unpaid");
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id, new Date(), "card"); // a retry the bank asks about: one 3-day item
+    await retryOwed(w.dev.user.id); // a retry the bank asks about: one 3-day item
     const one = await oneOf(w.dev.user.id);
     expect(one.status).toBe("needs_confirmation");
     const n = st.made.length;
-    // The daily job's retry step (holds.runDaily calls retryOwed for every held developer; here for this one, so other tests' rows stay out).
-    await db.user.update({ where: { id: w.dev.user.id }, data: { holdRetryAt: new Date(Date.now() - 2 * DAY) } });
-    expect(await retryOwed(w.dev.user.id, new Date(), "daily")).toBeNull();
-    expect(await retryOwed(w.dev.user.id, new Date(Date.now() + 2 * DAY), "daily")).toBeNull();
+    await runDaily(new Date());
     expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "bank_waiting" });
     expect(st.made.length).toBe(n);
     st.approve(one.actionPi!);
@@ -351,7 +347,7 @@ describe("E. the five double-charge cases: one charge at Stripe each", () => {
 });
 
 describe("§125: the whole box is locked while the one payment's check is open", () => {
-  it("a press's check open: every line waits for the bank; another tab's press and the daily retry charge nothing; Cancel this check unlocks it at once", async () => {
+  it("a press's check open: every line waits for the bank; another tab's press and the daily job charge nothing; Cancel this check unlocks it at once", async () => {
     const w = await world();
     const st = bank();
     const d = await debt(w, 0, 800);
@@ -365,8 +361,7 @@ describe("§125: the whole box is locked while the one payment's check is open",
     expect(lines.map((l) => [l.id, l.waiting, l.checkId])).toEqual([[d.id, true, one.id], [a.id, true, one.id]]);
     const n = st.made.length;
     expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "bank_waiting" });
-    await db.user.update({ where: { id: w.dev.user.id }, data: { holdRetryAt: null } });
-    expect(await retryOwed(w.dev.user.id, new Date(), "daily")).toBeNull();
+    await runDaily(new Date());
     expect(st.made.length).toBe(n);
     expect(st.cancelled).toEqual([]);
     // Cancel this check: cancelled at Stripe, the box is payable at once.
@@ -403,7 +398,7 @@ describe("§125: the whole box is locked while the one payment's check is open",
     await startHold(w.dev.user.id, "unpaid");
     await waiting(w, 1, 1000);
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id, new Date(), "card");
+    await retryOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 1800 });
     expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "bank_waiting" });
@@ -446,7 +441,7 @@ describe("§125: Pay what you owe's check against a new card, running out, and a
     await startHold(w.dev.user.id, "unpaid");
     await waiting(w, 1, 1000);
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id, new Date(), "card");
+    await retryOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     expect(one.status).toBe("needs_confirmation");
     st.approve(one.actionPi!);
@@ -466,7 +461,7 @@ describe("§125: Pay what you owe's check against a new card, running out, and a
     await startHold(w.dev.user.id, "unpaid");
     const a = await waiting(w, 1, 1000);
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id, new Date(), "card");
+    await retryOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     expect((await owedLines(w.dev.user.id)).every((l) => l.waiting)).toBe(true);
     await db.payment.update({ where: { id: one.id }, data: { actionBy: new Date(Date.now() - 1000) } });

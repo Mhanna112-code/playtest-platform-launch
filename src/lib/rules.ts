@@ -892,24 +892,18 @@ export const bankHref = (testId: string, paymentId: string) => `/app/tests/${tes
 /** (Batch 17 §11) The line above "Confirm with your bank" on the test page. */
 export const bankWaitingLine = (cents: number, what: string, by: string) => `Your bank wants you to confirm a ${money(cents)} payment for ${what}, made while you were away. Confirm it by ${by}.`;
 export const PIECE_LOCKED = "A payment for this is being confirmed right now.";
-/** (Owner, Oct 29, batch 11 section 4) Automatic retries of what is owed during a hold: once a day, at most this many a hold. */
-export const HOLD_RETRY_MAX = 7;
+/** (Owner, Nov 3, batch 35 §145) How what's owed gets paid during a payment hold: no daily retries, only Pay what you owe or a new card (Payments' owed box, the Terms). */
+export const OWED_HOW = "What you owe is charged when you press Pay what you owe, or as soon as you save a new card.";
 /** (Batch 25 section 5) Items named in one line: "A", "A and B", "A, B and C"; more than 3: "A, B, C and 2 more". */
 export const namesList = (names: string[]) =>
   names.length <= 1 ? (names[0] ?? "") : names.length <= 3 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : `${names.slice(0, 3).join(", ")} and ${names.length - 3} more`;
 /**
- * (Owner, Oct 29, batch 25 section 5) An automatic retry's ONE bell line, naming what was paid: "We charged your card $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (Oct 30)."
+ * (Owner, Oct 29, batch 25 section 5) A new card's charge of what's owed (§145: the only automatic one): ONE bell line, naming what was paid: "We charged your card $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (Oct 30)."
  * (It is a money line, so it also rides the payment email: that is the retry's receipt; no separate "Receipt:" line.)
  */
 export const retriedLine = (cents: number, names: string[] = []) => `We charged your card ${money(cents)} for what you owed${names.length ? `: ${namesList(names)}` : ""}.`;
 /** (Batch 25 section 5) What a receipt for paying what's owed names: "what you owed: Ana Silva's live call on “Harbor Run” (Oct 30) and Ben Okafor's written answers on “Sky Lab”" (§131: each named by pieceName). */
 export const owedReceiptWhat = (names: string[]) => (names.length ? `what you owed: ${namesList(names)}` : "an amount you owed");
-/** Payments' line about the automatic retries. */
-export function retryStatusLine(u: { holdRetries: number; holdRetryAt: Date | null }, fmt: (d: Date) => string) {
-  if (u.holdRetries >= HOLD_RETRY_MAX) return "No more automatic tries: press Pay what you owe.";
-  if (!u.holdRetryAt) return "";
-  return `Last try: ${fmt(u.holdRetryAt)} · next try: ${fmt(new Date(u.holdRetryAt.getTime() + 86_400_000))}`;
-}
 /** (Owner, Oct 29, batch 11) A written part (all its answers and notes together) is at most this many characters. */
 export const WRITTEN_MAX_CHARS = 50_000; // (Owner, Oct 29, batch 14 section 5; was 10,000)
 export const writtenLength = (texts: string[]) => texts.reduce((a, t) => a + withoutAttachmentMarkers(t ?? "").length, 0);

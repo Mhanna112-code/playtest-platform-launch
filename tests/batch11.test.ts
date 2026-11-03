@@ -235,7 +235,7 @@ describe("batch 11 item 3: the bank wants to confirm a payment", () => {
   });
 });
 
-describe("batch 11 item 4: automatic retries during a hold", () => {
+describe("batch 11 item 4 (batch 35 §145): what is owed during a hold is charged by Pay what you owe or a new card, never once a day", () => {
   async function held(amounts = [800]) {
     const s = await sentWork();
     await withCard(s.dev.user.id);
@@ -253,23 +253,34 @@ describe("batch 11 item 4: automatic retries during a hold", () => {
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
 
-  it("a failed retry sends nothing; once a day, at most 7 a hold; a new card retries at once; Payments shows the tries", async () => {
+  it("a declined new-card charge sends nothing; the daily job never charges what's owed (any day, any number of days); a new card charges it at once; Payments says how", async () => {
     const { dev } = await held();
     fakeStripe({ mode: "decline" });
-    const now = new Date();
-    expect(await retryOwed(dev.user.id, now)).toMatchObject({ cents: 0 });
-    expect(await retryOwed(dev.user.id, new Date(now.getTime() + 3_600_000))).toBeNull(); // not twice a day
+    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 0 });
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "We charged your card" } } })).toBe(0);
-    let u = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
-    expect(u.holdRetries).toBe(1);
-    expect(R.retryStatusLine(u, (d) => d.toISOString())).toMatch(/^Last try: .+ · next try: .+$/);
-    await db.user.update({ where: { id: dev.user.id }, data: { holdRetries: 7, holdRetryAt: new Date(Date.now() - 2 * DAY) } });
-    expect(await retryOwed(dev.user.id)).toBeNull();
-    u = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
-    expect(R.retryStatusLine(u, (d) => d.toISOString())).toBe("No more automatic tries: press Pay what you owe.");
-    fakeStripe();
-    expect(await retryOwed(dev.user.id, new Date(), "card")).toMatchObject({ cents: 800, lifted: true });
-    expect(src("lib/server/stripe.ts")).toContain('retryOwed(userId, new Date(), "card")');
+    // (§145) The daily job (today, and a day later) with a card that would go through: nothing of what's owed is charged, the hold stays.
+    const f = fakeStripe();
+    const { stripeCustomerId } = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
+    const tries = await db.payment.count({ where: { developerId: dev.user.id, kind: "owed" } }); // the declined try above
+    await runDaily(new Date());
+    await runDaily(new Date(Date.now() + DAY + 60_000));
+    expect(await db.payment.count({ where: { developerId: dev.user.id, kind: "owed" } })).toBe(tries);
+    expect(f.made.filter((m) => (m as { customer?: string }).customer === stripeCustomerId)).toEqual([]);
+    expect((await owed(dev.user.id)).map((p) => p.amountCents)).toEqual([800]);
+    expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
+    // The daily job's code has no retry step; the dev hook has no "retry" action; the old wording is gone.
+    expect(src("lib/server/holds.ts")).not.toMatch(/retryOwed\(u\.id/);
+    expect(src("app/api/dev/hook/route.ts")).not.toContain('"retry"');
+    expect(R).not.toHaveProperty("HOLD_RETRY_MAX");
+    expect(R).not.toHaveProperty("retryStatusLine");
+    // A new card: charged at once (stripe.saveCardFromCheckout calls it after cancelling open checks).
+    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 800, lifted: true });
+    expect(src("lib/server/stripe.ts")).toContain("retryOwed(userId)");
+    // Payments' owed box states the one rule (payment holds only).
+    expect(R.OWED_HOW).toBe("What you owe is charged when you press Pay what you owe, or as soon as you save a new card.");
+    expect(src("components/OwedBox.tsx")).toContain("{onHold && !chargeback && <p className=\"text-xs\" data-owed-how=\"\">{OWED_HOW}</p>}");
+    for (const f of ["app/app/payments/page.tsx", "components/OwedBox.tsx", "lib/termsOfUse.ts"]) expect(src(f), f).not.toMatch(/next try|once a day|retryStatusLine|7 times/);
+    expect(src("lib/termsOfUse.ts")).toContain(R.OWED_HOW);
   });
 
   it("a suspension is never lifted by a payment; a retry the bank wants confirmed waits for Confirm", async () => {

@@ -246,7 +246,7 @@ export async function coveredNames(ids: string[], full = false) {
   const out = new Map<string, string[]>();
   if (!ids.length) return out;
   const holds = await import("./holds");
-  for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: { createdAt: "asc" } })) {
+  for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
     const cents = p.chargeback === "open" ? reversedOf(p) + CHARGEBACK_FEE_CENTS : p.amountCents; // (§133) what the bank reversed + the fee
     out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), `${await holds.owedItemName(p, full)} ${money(cents)}`]);
   }
@@ -280,7 +280,7 @@ export async function cancelOwedCheck(devId: string, id: string) {
 /**
  * (Rule 1) ONE CARD IN PLAY: a new card was saved. Every waiting bank check (debts and new charges made while away) is cancelled at Stripe and each item is tried
  * again on the new card at once: a new charge here (goes through: paid; the bank asks: a new 3-day "Confirm with your bank" item on the new card; declined: a debt);
- * debts by the new-card retry of what's owed (retryOwed "card"). A check that had already gone through is recorded as paid. (A renewal's check is its invoice's:
+ * debts by the new-card retry of what's owed (holds.retryOwed: since §145 the only automatic charge of what's owed). A check that had already gone through is recorded as paid. (A renewal's check is its invoice's:
  * its Confirm uses the current card.)
  */
 export async function newCardChecks(devId: string) {
