@@ -11,7 +11,7 @@ None of these should be set in Vercel. The admin page's settings box (`src/lib/c
 | `SKIP_EMAIL_CONFIRM=1` | Lets unconfirmed accounts post, join and apply | Ignored in production; flagged |
 | `ANSWER_MIN_CHARS` | Lowers the 50-character answer minimum (the test suite uses 1) | Ignored in production (Nov 2); flagged |
 | `LISTING_MIN_CHARS` | Lowers the 10-character title/steps minimum | Ignored in production (Nov 2); flagged |
-| `CALL_MIN_AHEAD_MINUTES` | How far ahead a call can be booked (1 minute by default when testing) | Always 5 minutes; flagged |
+| `CALL_MIN_AHEAD_MINUTES` | How far ahead a call can be booked (1 minute by default when testing) | Always 24 hours (batch 35 §132); flagged |
 | `DISPUTE_WAIT_MS` | How long a chargeback notice waits for its payment to be recorded (tests use 0) | 8 seconds; flagged |
 | `UPLOAD_DIR` | Uploads go to the computer's own disk | Uploads go to R2; flagged |
 | `TEST_DATABASE_URL` | The test suite's own database schema | Not used |

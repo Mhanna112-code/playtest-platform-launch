@@ -39,8 +39,8 @@ import { LivePanel } from "@/components/LivePanel";
 import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
 import { CallRequests } from "@/components/CallRequests";
-import { rateLabel } from "@/lib/server/requests";
-import { rowsOf, toJson } from "@/lib/callRows";
+import { callEndProps, pageRows, rateLabel } from "@/lib/server/requests";
+import { workEndOf } from "@/lib/server/workWindow";
 import { unreadCount } from "@/lib/server/messages";
 import { PersonHover } from "@/components/PersonHover";
 import { ChatWithButton } from "@/components/ChatWithButton";
@@ -179,6 +179,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const canRequestCall = !refusal && !blockedPair && !paused;
   const listedCall = callListed(c.test, c);
   const pendingReqs = await db.callRequest.findMany({ where: { contractId: c.id, status: "pending", startsAt: { gt: now } }, orderBy: { startsAt: "asc" } });
+  // (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (the latest tester deadline, no earlier than Open until): no call time later. The request
+  // form's time box stops there, its calls drop-down offers only what fits, and a waiting request's words say how many calls it covers.
+  const callEnd = await workEndOf(db, c.testId);
   const unread = await unreadCount(u.id, c.testId, c.testerId);
   const blockedByMe = (await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) > 0;
   const devRating = (await ratingSummary(c.test.developerId)).line;
@@ -225,7 +228,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     const left = cs.filter((x) => x.startsAt > now).length;
     if (!left) return [];
     const next = cs.find((x) => x.startsAt > now)!;
-    return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: u.timeZone || "UTC" })}${row?.count === 0 ? "" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), callIds: cs.map((x) => x.id) }];
+    return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: u.timeZone || "UTC" })}${row?.count === 0 ? " (until testers' work ends)" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), callIds: cs.map((x) => x.id) }];
   });
   // (Owner, Oct 29, batch 10) A paused test hides what doesn't work right now (Send, the call-request tools, Join call, chat's message box) and says at the top what still
   // works, built from what is actually on the page (the server refusals stay as a backstop).
@@ -563,12 +566,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <h3 className="text-sm font-semibold text-white">Requests</h3>
               <CallRequests
                 leadMinutes={CALL_MIN_AHEAD_MINUTES}
+                end={callEndProps(callEnd)}
                 side="tester"
                 path={`/api/sessions/${c.id}`}
                 seenAt={seenAt}
                 canRequest={canRequestCall}
                 targets={[{ contractId: c.id, name: dev, rate: "" }]}
-                requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, rows: toJson(rowsOf(r)), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: rateLabel(listedCall ? c.liveRateCents : null, c.liveRateCents) }))}
+                requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, rows: pageRows(r, callEnd), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: rateLabel(listedCall ? c.liveRateCents : null, c.liveRateCents) }))}
                 // (Batch 16 section 33) The clash checks while the form is filled: the calls between you, your other calls, and the limits.
                 clash={{
                   calls: liveCalls.filter((x) => x.startsAt > new Date(now.getTime() - 6 * 3_600_000)).map((x) => ({ id: x.id, start: x.startsAt.toISOString(), minutes: x.minutes })),

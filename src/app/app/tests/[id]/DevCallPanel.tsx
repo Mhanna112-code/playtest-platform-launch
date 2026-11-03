@@ -16,11 +16,12 @@ import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
-import { alignedClash, describeRows, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, type PressMade, type RowState } from "@/components/RequestRows";
+import { alignedClash, describeRows, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallRequestsPanel, type PanelReq } from "@/components/CallRequestsPanel";
 import { jumpTo } from "@/lib/markJump";
 import { CallCheck } from "@/components/CallCheck";
 import { PressDone } from "@/components/PressDone";
+import type { CallEnd } from "@/lib/callWindow";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null; measuring?: string };
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
@@ -39,7 +40,9 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [], leadMinutes }: { testId: string; seenAt: string; /** (Batch 29 section 20) the server's call lead, passed down */ leadMinutes: number; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[] }) {
+export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [], leadMinutes, end }: { testId: string; seenAt: string; /** (Batch 29 section 20) the server's call lead, passed down */ leadMinutes: number; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[];
+  /** (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (the server's, in the reader's words): the time box's latest time and the calls drop-down. */
+  end?: CallEnd }) {
   const router = useRouter();
   // (Batch 16 section 21) A call request, booking or cancellation from another tab stops a press touching it once: the panel shows it at once.
   const { press, changes, error, busy, at, errData, doneLine, finish } = usePress(seenAt, () => router.refresh(), { onFresh: () => { setFrozen(null); setMade(null); } });
@@ -58,6 +61,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   });
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(leadMinutes); // (batch 27 section 6; batch 29 section 20) the server's lead, passed from the server
+  const shut = useWindowShutLine(end, leadMinutes); // (batch 35 §132) "No more calls can be requested: …"
   const [open, setOpen] = useState<Record<string, boolean>>({});
   // (Batch 16 section 10) A mistake in the request form is red at its box and listed under Request a time (not as a plain line).
   const red = error.startsWith(FIELD);
@@ -83,7 +87,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   };
   const checked = formClashInputs(testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })), frozen ? frozen.testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })) : null, made);
   const all = testers.length > 0 && testers.every((t) => ticked.includes(t.contractId));
-  const filled = rowsPayload(rows);
+  const filled = rowsPayload(rows, end);
   // (Owner, Oct 28, batch 16 section 33) Clash checks as the form is filled, for every ticked tester (and every call of a Daily / Weekly set): red lines under the
   // row (listed under the button; the press waits until fixed), a blue line for an exact match with their waiting request, and the limits in today's wording.
   const tickedTesters = testers.filter((t) => ticked.includes(t.contractId));
@@ -93,7 +97,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     name: t.name, pending: t.pending, booked: t.booked, leftCents: t.leftCents, rateCents: t.rateCents,
     calls: t.calls.map((c) => ({ id: c.id, start: c.when, minutes: c.minutes })),
     requests: t.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })),
-  })), (frozen?.elsewhere ?? elsewhere).filter((c) => !ticked.includes(c.contractId)).map((c) => ({ start: c.start, minutes: c.minutes, name: c.name })));
+  })), (frozen?.elsewhere ?? elsewhere).filter((c) => !ticked.includes(c.contractId)).map((c) => ({ start: c.start, minutes: c.minutes, name: c.name })), end);
   // (Owner, Oct 28, batch 16 section 21) What this form is requesting that is now booked or requested (e.g. from another tab): marked; the rest of the form stays.
   const already = filled.flatMap((r) => ticked.flatMap((cid) => {
     const t = checked.find((x) => x.contractId === cid);
@@ -141,10 +145,12 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           ))}
         </fieldset>
       )}
-      {/* (Owner, Nov 1, batch 35 §103) Nobody working: no form (it could only be refused). */}
-      {canRequest && testers.length > 0 && (
+      {/* (Owner, Nov 1, batch 35 §103) Nobody working: no form (it could only be refused). (Batch 35 §132) Less than the lead left before testers' work ends: no
+          time fits, so no form either, and a line says why. */}
+      {canRequest && testers.length > 0 && shut && <p className="note" data-window-shut="">{shut}</p>}
+      {canRequest && testers.length > 0 && !shut && (
         <div className="space-y-2 text-sm" ref={form} data-mistakes-root="">
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={leadMinutes} end={end} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {already.length > 0 && <ul className="space-y-0.5 text-xs text-amber-200" data-already="">{already.map((l) => <li key={l}>{l}</li>)}</ul>}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
@@ -167,7 +173,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
         </div>
       )}
-      <CallRequestsPanel side="developer" seenAt={seenAt} requests={requests} path={() => `/api/tests/${testId}`} />
+      <CallRequestsPanel side="developer" seenAt={seenAt} requests={requests} path={() => `/api/tests/${testId}`} leadMinutes={leadMinutes} />
       {shown.length === 0 && canRequest && <p className="note">No calls or requests yet.</p>}
       {/* (Batch 15 section 33) The whole list of tester cards scrolls on its own once it's taller than about 2 screens; the tick list and the request form stay above it. */}
       <div className="max-h-[200vh] space-y-2 overflow-y-auto pr-1" data-testers-calls="">

@@ -1,10 +1,10 @@
-import { assertWorkOpen, finishWorkIfDue } from "./workWindow";
+import { assertWorkOpen, finishWorkIfDue, workEndOf } from "./workWindow";
 import { randomBytes } from "node:crypto";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/server/dateFormat";
-import { andList, checkCallMinutes, checkCancel } from "@/lib/rules";
-import { FOREVER_AHEAD, MAX_ROWS, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
+import { displayName, fmtDate, fmtDateTime, fmtTime, money, pronouns } from "@/lib/server/dateFormat";
+import { andList, checkCallMinutes, checkCancel, workDeadlineOf } from "@/lib/rules";
+import { FOREVER_AHEAD, MAX_ROWS, cutRow, occurrences, rowsOf, stepMs, toJson, type CallRow, type RowRepeat } from "@/lib/callRows";
 import type { Prisma } from "@prisma/client";
 import { NOT_LISTED, PAUSED_RIGHT_NOW, callListed, testPaused } from "@/lib/rules";
 import { DEV_SUSPENDED } from "./users";
@@ -14,7 +14,8 @@ import { bell, notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
 import { testerGate } from "./testerGate";
 import { answerTermsFirst } from "./terms";
-import { farEnoughAhead } from "@/lib/callLead";
+import { CALL_MIN_AHEAD_MINUTES, farEnoughAhead } from "@/lib/callLead";
+import { afterEndToBookLine, beforeEndLine, leadLine, tooSoonToBookLine, windowShut, windowShutLine, type CallEnd } from "@/lib/callWindow";
 
 /** (Batch 27 section 1) The tester's call presses: an open new-terms offer blocks them (answerTermsFirst), so new terms are no longer a stop-once for them. */
 const CALL_PRESS = { skipTerms: true } as const;
@@ -25,8 +26,18 @@ import { CALL_ACTS } from "./live";
 import { clashNotes, localFmt } from "@/lib/callClash";
 import { safeZone } from "@/lib/tz";
 
-/** (Batch 15 section 34) The calls a request books if accepted: the most of any one row (a "choose one" row books 1; a set books all of its calls). */
-const callsIfAccepted = (rows: CallRow[]) => Math.max(1, ...rows.map((r) => occurrences(r).length));
+/** (Batch 15 section 34) The calls a request books if accepted: the most of any one row (a "choose one" row books 1; a set books all of its calls, up to the end). */
+const callsIfAccepted = (rows: CallRow[], end: Date | null) => Math.max(1, ...rows.map((r) => occurrences(r, end).length));
+
+/**
+ * (Owner, Nov 2, batch 35 §132) What a page with a call request form passes down besides its lead: when testers' work on the test ends, in the reader's words (the
+ * page runs in the reader's zone). The form's time box takes no later time, and its calls drop-down only what fits before it.
+ */
+export const callEndProps = (end: Date | null): CallEnd => (end ? { at: end.toISOString(), text: fmtDateTime(end), day: endDay(end) } : null);
+/** "Dec 3": the end's day for "until testers' work ends (Dec 3)". */
+const endDay = (end: Date) => fmtDate(end).replace(/, \d{4}$/, "");
+/** (Batch 35 §132) A request's rows as a page shows them: each repeating row with the end, so its words say how many calls it covers. */
+export const pageRows = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat?: string }, end: Date | null) => toJson(rowsOf(r), end ? { at: end, day: endDay(end) } : null);
 
 // Calls are ALWAYS requests (owner rules). Every call starts as a request from one side and is booked only when the
 // other side accepts, or by auto-match. A request is ONE of:
@@ -77,8 +88,8 @@ export function requestGoneLine(r: { status: string; closedReason: string }) {
 /** The rate a call is booked at: the contract rate when the call is a listed part, else none (not a listed part: pay is up to the developer). */
 export const bookRate = (test: { liveRateCents: number | null }, c: { liveRateCents: number | null }) => (callListed(test, c) ? c.liveRateCents : null);
 
-/** Every call time a request covers: each row's calls (a Forever row: the next 4 ahead). */
-export const requestTimes = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat?: string }) => rowsOf(r).flatMap(occurrences);
+/** Every call time a request covers: each row's calls (a Forever row: the next 4 ahead), (batch 35 §132) none after the end. */
+export const requestTimes = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat?: string }, end: Date | null = null) => rowsOf(r).flatMap((x) => occurrences(x, end));
 /** The single-call ("Once") times of a request: what auto-match compares. */
 const onceTimes = (r: { rows?: unknown; times: Date[]; startsAt: Date; weeks: number; repeat?: string }) => rowsOf(r).filter((x) => x.repeat === "once").map((x) => x.startsAt);
 const overlaps = (a: Date, am: number, b: Date, bm: number) => a.getTime() < b.getTime() + bm * 60_000 && b.getTime() < a.getTime() + am * 60_000;
@@ -96,12 +107,17 @@ function readMinutes(body: Record<string, unknown>) {
 /**
  * The rows of a request (NEXT-UI 7): `rows` [{ startsAt, repeat: once | daily | weekly, count }] (count 2-8, or 0 / "forever"),
  * 1-3 of them; the older shape (times[], or startsAt + weeks + repeat) still reads the same way.
+ * (Owner, Nov 2, batch 35 §132) Every time is inside the call window: at least CALL_MIN_AHEAD_MINUTES ahead (24 hours on the live site, 1 minute by default when
+ * testing locally) and no later than `end`, when testers' work on the test ends (refused with the form's lines). A Daily / Weekly row's calls after the end are
+ * dropped (cutRow: one left is a single call; Forever stops there).
  */
-function readRows(body: Record<string, unknown>): CallRow[] {
+function readRows(body: Record<string, unknown>, end: Date | null): CallRow[] {
+  // (Batch 35 §132) Less than the lead left before the end: no time fits any more (the forms show this line instead of the time boxes).
+  if (windowShut(end, CALL_MIN_AHEAD_MINUTES)) throw new HttpError(400, "bad_time", windowShutLine(fmtDateTime(end!), CALL_MIN_AHEAD_MINUTES));
   const future = (d: Date) => {
-    if (isNaN(d.getTime())) throw new HttpError(400, "bad_time", "Pick a time in the future.");
-    // (Batch 27 section 6) At least CALL_MIN_AHEAD_MINUTES ahead: 5 in production, 1 by default when testing locally.
-    if (!farEnoughAhead(d)) throw new HttpError(400, "bad_time", "Pick a time in the future."); // (batch 29 section 20) the form's wording
+    // (Batch 29 section 20) the form's wording: "Pick a time at least 24 hours from now."
+    if (isNaN(d.getTime()) || !farEnoughAhead(d)) throw new HttpError(400, "bad_time", leadLine(CALL_MIN_AHEAD_MINUTES));
+    if (end && d.getTime() > end.getTime()) throw new HttpError(400, "bad_time", beforeEndLine(fmtDateTime(end)));
     return d;
   };
   let rows: CallRow[];
@@ -113,7 +129,7 @@ function readRows(body: Record<string, unknown>): CallRow[] {
       if (repeat === "once") return { startsAt, repeat, count: 1 };
       const forever = o.count === 0 || o.count === "0" || o.count === "forever" || o.forever === true;
       const n = Number(o.count);
-      if (!forever && (!Number.isInteger(n) || n < 2 || n > 8)) throw new HttpError(400, "bad_weeks", `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times, or Forever.`);
+      if (!forever && (!Number.isInteger(n) || n < 2 || n > 8)) throw new HttpError(400, "bad_weeks", `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times, or until testers' work ends.`);
       return { startsAt, repeat, count: forever ? 0 : n };
     });
   } else {
@@ -121,7 +137,7 @@ function readRows(body: Record<string, unknown>): CallRow[] {
     const repeat: RowRepeat = weeks ? (body.repeat === "daily" ? "daily" : "weekly") : "once";
     const raw = Array.isArray(body.times) ? body.times : body.startsAt ? [body.startsAt] : [];
     const times = raw.map((x) => new Date(String(x))).filter((d) => !isNaN(d.getTime()));
-    if (!times.length) throw new HttpError(400, "bad_time", "Pick a time in the future.");
+    if (!times.length) throw new HttpError(400, "bad_time", leadLine(CALL_MIN_AHEAD_MINUTES));
     times.forEach(future);
     if (weeks) {
       if (times.length !== 1) throw new HttpError(400, "bad_kind", `A ${repeat} request has exactly one time.`);
@@ -129,27 +145,29 @@ function readRows(body: Record<string, unknown>): CallRow[] {
       rows = [{ startsAt: times[0], repeat, count: weeks }];
     } else rows = times.map((startsAt) => ({ startsAt, repeat: "once" as const, count: 1 }));
   }
-  if (!rows.length) throw new HttpError(400, "bad_time", "Pick a time in the future.");
+  if (!rows.length) throw new HttpError(400, "bad_time", leadLine(CALL_MIN_AHEAD_MINUTES));
   if (rows.length > MAX_ROWS) throw new HttpError(400, "bad_kind", "Offer up to 3 times to choose from.");
-  return rows.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  // (Batch 35 §132) A Daily / Weekly row's calls after the end are dropped, not refused (only its first one left: a single call); Forever runs until the end.
+  return rows.map((r) => cutRow(r, end) ?? r).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 }
 
-function readKind(body: Record<string, unknown>) {
-  const rows = readRows(body);
+/** (Batch 35 §132) `end`: when testers' work on the test ends (the call window's end). One already passed isn't checked here: the press is refused as the work ended. */
+function readKind(body: Record<string, unknown>, end: Date | null) {
+  const rows = readRows(body, end && end.getTime() > Date.now() ? end : null);
   // The older columns keep their meaning for a single counted repeating row (what the rest of the app reads).
   const single = rows.length === 1 && rows[0].repeat !== "once" && rows[0].count > 0 ? rows[0] : null;
   return { rows, startsAt: rows[0].startsAt, times: rows.map((r) => r.startsAt), weeks: single?.count ?? 0, repeat: single?.repeat ?? "" };
 }
 type Kind = ReturnType<typeof readKind>;
 const unitOf = (repeat: string) => (repeat === "daily" ? "daily" : "weekly");
-/** "weekly calls (4 weeks)" / "daily calls (until cancelled)" for a one-row repeat, else "a call". */
+/** "weekly calls (4 weeks)" / (batch 35 §132) "daily calls (until testers' work ends)" for a one-row repeat, else "a call". */
 const kindWords = (rows: CallRow[]) => {
   const r = rows.length === 1 && rows[0].repeat !== "once" ? rows[0] : null;
-  return r ? `${unitOf(r.repeat)} calls (${r.count ? `${r.count} ${r.repeat === "daily" ? "days" : "weeks"}` : "until cancelled"})` : "a call";
+  return r ? `${unitOf(r.repeat)} calls (${r.count ? `${r.count} ${r.repeat === "daily" ? "days" : "weeks"}` : "until testers' work ends"})` : "a call";
 };
 
 /** Sending: a time overlapping a booked call or a pending request between the same two people is refused. */
-async function sendClash(contractId: string, times: Date[], minutes: number, otherName: string, exceptId?: string, mine?: { side: Side; otherPoss: string }) {
+async function sendClash(contractId: string, times: Date[], minutes: number, otherName: string, exceptId?: string, mine?: { side: Side; otherPoss: string }, end: Date | null = null) {
   const [calls, reqs] = await Promise.all([
     db.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: new Date(Date.now() - 6 * 3_600_000) } } }),
     db.callRequest.findMany({ where: { contractId, status: "pending", ...(exceptId ? { id: { not: exceptId } } : {}) } }),
@@ -158,7 +176,7 @@ async function sendClash(contractId: string, times: Date[], minutes: number, oth
     const call = calls.find((x) => overlaps(t, minutes, x.startsAt, x.minutes));
     if (call) return `You already have a call with ${otherName} at ${fmtDateTime(call.startsAt)}.`;
     for (const r of reqs) {
-      const hit = requestTimes(r).find((x) => overlaps(t, minutes, x, r.minutes));
+      const hit = requestTimes(r, end).find((x) => overlaps(t, minutes, x, r.minutes));
       if (!hit) continue;
       // (NEWEST+8) The other side's waiting request: name it; its Accept shows right there (no merging, no partial match).
       if (mine && r.fromSide !== mine.side) throw new HttpError(409, "their_request", `${otherName} already asked for ${fmtDateTime(hit)} (${r.minutes} min). Accept ${mine.otherPoss} request, or pick a time that doesn't overlap.`, { requestId: r.id, contractId });
@@ -268,12 +286,13 @@ async function refusals(c: Ctx["c"], side: Side) {
  * (Owner, Oct 28, batch 16 section 33) The server's re-check of what the form shows red that the older checks don't cover: the requester's OTHER calls (another
  * person, any test: "You have a call with Ana Silva then (1:30–2:00 PM).") and two times in the request overlapping each other. The same lines as the form.
  */
-async function ownCallClash(side: Side, who: { id: string; timeZone?: string | null }, contractIds: string[], rows: CallRow[], minutes: number) {
+async function ownCallClash(side: Side, who: { id: string; timeZone?: string | null }, contractIds: string[], rows: CallRow[], minutes: number, end: Date | null = null) {
   const since = new Date(Date.now() - 6 * 3_600_000);
   const others = side === "developer"
     ? (await db.call.findMany({ where: { status: "booked", startsAt: { gt: since }, contractId: { notIn: contractIds }, contract: { test: { developerId: who.id } } }, include: { contract: { include: { tester: true } } } })).map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes, name: displayName(x.contract.tester) }))
     : (await db.call.findMany({ where: { status: "booked", startsAt: { gt: since }, contractId: { notIn: contractIds }, contract: { testerId: who.id } }, include: { contract: { include: { test: { include: { developer: true } } } } } })).map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes, name: displayName(x.contract.test.developer) }));
-  const n = clashNotes({ rows: toJson(rows), minutes, side, targets: [], elsewhere: others, fmt: localFmt(safeZone(who.timeZone)) });
+  // (Batch 35 §132) A Daily / Weekly row's calls stop at the end, as the form checks them.
+  const n = clashNotes({ rows: toJson(rows, end ? { at: end, day: "" } : null), minutes, side, targets: [], elsewhere: others, fmt: localFmt(safeZone(who.timeZone)) });
   return n.rows.flat().find((x) => x.tone === "red")?.text ?? "";
 }
 
@@ -297,7 +316,9 @@ async function lengthOverCap(minutes: number, targets: { contractId: string; rat
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
   const ids = Array.isArray(body.contractIds) ? body.contractIds.map(String) : body.contractId ? [String(body.contractId)] : [];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
-  const kind = readKind(body);
+  // (Batch 35 §132) Every time inside the call window: at least the lead ahead, and no later than when testers' work on this test ends.
+  const end = await workEndOf(db, testId, dev.id);
+  const kind = readKind(body, end);
   const reqMinutes = readMinutes(body);
   const all: Ctx[] = [];
   for (const id of ids) {
@@ -335,16 +356,16 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     }
   }
   {
-    const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes);
+    const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes, end);
     if (own) throw new HttpError(409, "clash", own);
   }
   // Clashes and the 2-pending limit, per tester.
   const blocked: string[] = [], atLimit: string[] = [], ok: Ctx[] = [];
   for (const x of all) {
     const minutes = reqMinutes;
-    const clash = await sendClash(x.c.id, requestTimes(kind), minutes, displayName(x.c.tester), undefined, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined);
+    const clash = await sendClash(x.c.id, requestTimes(kind, end), minutes, displayName(x.c.tester), undefined, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined, end);
     // (Batch 15 section 34) Over the $1,000 for this tester's calls: refused for them (named with what's left).
-    const ceiling = await ceilingRefusal(x.c.id, bookRate(x.c.test, x.c), minutes, callsIfAccepted(kind.rows), displayName(x.c.tester));
+    const ceiling = await ceilingRefusal(x.c.id, bookRate(x.c.test, x.c), minutes, callsIfAccepted(kind.rows, end), displayName(x.c.tester));
     if (clash) blocked.push(clash);
     else if (ceiling) blocked.push(ceiling);
     else if ((await pendingRequests(x.c.id)) >= MAX_REQUESTS) atLimit.push(displayName(x.c.tester));
@@ -380,7 +401,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   if (side !== "tester") throw new HttpError(404, "not_found", "That session doesn't exist.");
   await refusals(c, "tester");
   await answerTermsFirst(contractId);
-  const kind = readKind(body);
+  // (Batch 35 §132) Every time inside the call window: at least the lead ahead, and no later than when testers' work on this test ends.
+  const end = await workEndOf(db, c.testId);
+  const kind = readKind(body, end);
   await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   const minutes = readMinutes(body);
   const devName = displayName(c.test.developer);
@@ -406,12 +429,12 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       return { booked: true, callId: call.id, message: line };
     }
   }
-  const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes); // (batch 16 section 33)
+  const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33)
   if (own) throw new HttpError(409, "clash", own);
-  const clash = await sendClash(contractId, requestTimes(kind), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss });
+  const clash = await sendClash(contractId, requestTimes(kind, end), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
   if (clash) throw new HttpError(409, "clash", clash);
   if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
-  await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(kind.rows), devName);
+  await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(kind.rows, end), devName);
   const r = await createRequest({
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
   });
@@ -461,7 +484,14 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       if (!chosen) throw new HttpError(400, "pick", "Pick one of the times.");
       row = chosen;
     }
-    const times = occurrences(row);
+    // (Owner, Nov 2, batch 35 §132) The time must still be inside the call window: at least the lead ahead NOW (a request from 2 days ago for tomorrow can't be booked
+    // once it's less than 24 hours away) and no later than when testers' work on this test ends; a set's calls after the end are dropped (as when it was sent).
+    const end = await workEndOf(db, c.testId);
+    if (!farEnoughAhead(row.startsAt)) throw new HttpError(409, "too_soon", tooSoonToBookLine(fmtDateTime(row.startsAt), CALL_MIN_AHEAD_MINUTES));
+    const inWindow = cutRow(row, end);
+    if (!inWindow) throw new HttpError(409, "after_end", afterEndToBookLine(fmtDateTime(row.startsAt), fmtDateTime(end!)));
+    row = inWindow;
+    const times = occurrences(row, end);
     if (row.repeat !== "once") {
       // Every call is checked; any clash refuses the whole request and names the week(s) / day(s).
       const bad: string[] = [];
@@ -489,7 +519,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     }
     await db.callRequest.update({ where: { id: r.id }, data: { status: "booked", callId: first!.id, decidedAt: new Date() } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
-    const what = row.repeat === "once" ? T(times[0]) : row.count ? `${row.count} ${unitOf(row.repeat)} calls from ${T(times[0])}` : `${unitOf(row.repeat)} calls from ${T(times[0])} (until cancelled)`;
+    const what = row.repeat === "once" ? T(times[0]) : row.count ? `${times.length} ${unitOf(row.repeat)} calls from ${T(times[0])}` : `${unitOf(row.repeat)} calls from ${T(times[0])} (until testers' work ends)`;
     await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
     return { booked: true, callId: first!.id, calls: times.length };
   }
@@ -544,9 +574,11 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
  * The daily job's top-up: every active Forever set keeps its next 4 calls booked (each checked for clashes with either
  * side's other calls: a clashing one is skipped and both are told). A set ends when the tester's part ends (left, rated,
  * ended) or the test stops; a payment hold waits.
+ * (Owner, Nov 2, batch 35 §132) Forever runs until testers' work on the test ends: no call is added after the end. The set waits there (an end that moves later, e.g.
+ * Open until extended or a pause lifted, lets it go on), and ends with the work.
  */
 export async function topUpForeverSets(now = new Date()) {
-  const sets = await db.callSet.findMany({ where: { status: "active", count: 0 }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
+  const sets = await db.callSet.findMany({ where: { status: "active", count: 0 }, include: { contract: { include: { tester: true, test: { include: { developer: true, contracts: { select: { dueAt: true } } } } } } } });
   let booked = 0, skipped = 0;
   for (const set of sets) {
     const c = set.contract;
@@ -555,10 +587,12 @@ export async function topUpForeverSets(now = new Date()) {
       continue;
     }
     if (testPaused(c.test.developer, c.test)) continue;
+    const end = c.test.workEndedAt ?? workDeadlineOf(c.test, c.test.contracts);
     let ahead = await db.call.count({ where: { setId: set.id, status: "booked", startsAt: { gt: now } } });
     let nextAt = set.nextAt;
     for (let guard = 0; ahead < FOREVER_AHEAD && guard < FOREVER_AHEAD * 2; guard++) {
       const at = nextAt;
+      if (end && at.getTime() > end.getTime()) break; // (batch 35 §132) the next call would be after the end: it waits there
       nextAt = new Date(at.getTime() + stepMs(set.repeat));
       if (at.getTime() <= now.getTime()) continue; // (an old occurrence: never booked back in time)
       const clash = await acceptClash(c, "developer", [at], set.minutes);

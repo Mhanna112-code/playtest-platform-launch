@@ -22,15 +22,16 @@ export type Fmt = { range: (start: Date, minutes: number) => string; times: (sta
 export const MAX_WAITING = 3;
 export const MAX_BOOKED_TIMES = 3;
 const DAY = 86_400_000;
-/** The starts a row covers for the checks: one; a set's calls; Forever: its first 8. */
+/** The starts a row covers for the checks: one; a set's calls; Forever: its first 8; (batch 35 §132) none after the end (`until`) but the first. */
 export const rowStarts = (r: RowJson) => {
   const n = r.repeat === "once" ? 1 : r.count === 0 ? 8 : r.count;
   const step = (r.repeat === "daily" ? 1 : 7) * DAY;
   const s = new Date(r.startsAt).getTime();
-  return Array.from({ length: n }, (_, k) => new Date(s + k * step));
+  const until = r.until ? new Date(r.until).getTime() : Number.POSITIVE_INFINITY;
+  return Array.from({ length: n }, (_, k) => new Date(s + k * step)).filter((d, k) => k === 0 || d.getTime() <= until);
 };
-/** How many calls accepting the request books (Forever: the next 4), as the server counts for the $1,000. */
-const callsIfAccepted = (rows: RowJson[]) => Math.max(1, ...rows.map((r) => (r.repeat === "once" ? 1 : r.count === 0 ? 4 : r.count)));
+/** How many calls accepting the request books (Forever: the next 4; batch 35 §132: up to the end), as the server counts for the $1,000. */
+const callsIfAccepted = (rows: RowJson[]) => Math.max(1, ...rows.map((r) => (r.repeat === "once" ? 1 : Math.min(r.count === 0 ? 4 : r.count, rowStarts(r).length))));
 const overlap = (a: Date, am: number, b: Date, bm: number) => a.getTime() < b.getTime() + bm * 60_000 && b.getTime() < a.getTime() + am * 60_000;
 const ORD = ["1st", "2nd", "3rd"];
 const ord = (n: number) => ORD[n - 1] ?? `${n}th`;

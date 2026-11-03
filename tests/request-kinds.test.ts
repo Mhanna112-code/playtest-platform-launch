@@ -24,7 +24,8 @@ describe("request kinds", () => {
   });
 
   it("'Weekly': accepting books every week; cancelling one week leaves the rest booked", async () => {
-    const { dev, testId } = await setup();
+    // (Batch 35 §132) No call after testers' work ends: Open until 29 days ahead leaves room for 4 weekly calls from 2 days ahead.
+    const { dev, testId } = await setup({ openUntil: new Date(Date.now() + 29 * 86_400_000).toISOString().slice(0, 10) });
     const { tester, sessionId } = await joined(testId);
     await devReq(testId, dev.cookie, [sessionId], { times: [atHours(50)], weeks: 4 });
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Nora Lane asked for weekly calls: " }, AND: { text: { endsWith: ", 4 weeks" } } } })).toBe(0); // (Owner) a call request is not a bell line
@@ -56,7 +57,7 @@ describe("request kinds", () => {
     await devReq(s2.testId, s2.dev.cookie, [j.sessionId], { times: [atHours(400)] });
     const r4 = await sact(j.sessionId, "answer-request", j.tester.cookie, { requestId: (await pending(j.sessionId, "developer")).id, action: "accept" });
     expect(r4.body.error.message).toBe("You already have 3 booked times in this test.");
-    await sact(j.sessionId, "request-time", j.tester.cookie, { times: [atHours(500)] });
+    await sact(j.sessionId, "request-time", j.tester.cookie, { times: [atHours(450)] }); // (batch 35 §132) before testers' work ends (about 20 days ahead)
     const r5 = await act(s2.testId, "answer-request", s2.dev.cookie, { contractId: j.sessionId, requestId: (await pending(j.sessionId, "tester")).id, action: "accept", seenAt: seen(), confirmed: true });
     expect(r5.body.error.message).toBe("Ana Silva already has 3 booked times with you. Wait until one is over or cancel one.");
   });

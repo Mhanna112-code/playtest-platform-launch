@@ -38,7 +38,8 @@ describe("call request rows", () => {
     const { dev, testId } = await setup();
     const { sessionId } = await joined(testId);
     const one = { startsAt: atHours(50), repeat: "weekly" };
-    expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ ...one, count: 9 }] })).body.error.message).toBe("Weekly calls repeat 2 to 8 times, or Forever.");
+    // (Batch 35 §132) Forever reads "until testers' work ends".
+    expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ ...one, count: 9 }] })).body.error.message).toBe("Weekly calls repeat 2 to 8 times, or until testers' work ends.");
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ ...one, count: 1 }] })).status).toBe(400);
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: [] })).status).toBe(400);
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: Array.from({ length: 4 }, (_, i) => ({ startsAt: atHours(50 + i * 30), repeat: "once" })) })).body.error.message).toBe("Offer up to 3 times to choose from.");
@@ -48,6 +49,9 @@ describe("call request rows", () => {
   it("Forever: the next 4 are booked; the daily job adds the next as each passes; Cancel on the set stops it and nothing more is added", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
+    // (Batch 35 §132) A Forever set runs until testers' work ends (tests/batch35-call-window.test.ts): this test's work runs 60 days (Open until moved later, as a
+    // pause lift does), so the weekly set has room for the top-ups below.
+    await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() + 60 * DAY * 3_600_000) } });
     await devReq(testId, dev.cookie, [sessionId], { rows: [{ startsAt: atHours(48), repeat: "weekly", count: "forever" }] });
     const r = await pending(sessionId, "developer");
     const acc = await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" });

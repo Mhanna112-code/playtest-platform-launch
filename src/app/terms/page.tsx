@@ -1,7 +1,7 @@
 import { HashJump } from "@/components/HashJump";
 import { PublicShell } from "@/components/PublicShell";
 import { MAX_ACTIVE_TESTS, MAX_SPOTS, PAYMENTS_TERMS_ID } from "@/lib/rules";
-import { PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
+import { CALL_WINDOW_TERMS, PAYMENT_RULES, TERMS_VERSION, WHAT_CHANGED, WHAT_CHANGED_ID } from "@/lib/termsOfUse";
 
 export const metadata = { title: "Terms of Use · Playtest" };
 const LATEST = WHAT_CHANGED.reduce((a, b) => (b.version > a.version ? b : a));
@@ -65,6 +65,8 @@ const SECTIONS: { title: string; points: (string | { id: string; text: string })
   {
     title: "7. Calls and recordings",
     points: [
+      // (Owner, Nov 2, batch 35 §132) When a call can be booked.
+      CALL_WINDOW_TERMS,
       "Calls run in the app's own call room, on the call page: video and sound go directly between the two browsers, and the app only passes along the messages that connect them. Only the developer and tester of that call can be in it, from 10 minutes before the start until the call ends. When the two browsers were connected is recorded (it measures the length); the team can read it when handling a report. Nothing in the call is recorded.",
       "Screen recordings are only seen by the developer and tester of that session, and by the team when handling a dispute or report.",
     ],

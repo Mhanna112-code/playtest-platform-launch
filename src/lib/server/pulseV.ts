@@ -1,4 +1,4 @@
-import { MAX_ACTIVE_TESTS } from "@/lib/rules";
+import { MAX_ACTIVE_TESTS, workDeadlineOf } from "@/lib/rules";
 import { revealedRatingsWhere } from "./ratings";
 import { db } from "@/lib/db";
 
@@ -61,8 +61,11 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   await (await import("./workWindow")).finishWorkIfDue(testId);
   const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
   if (!t) return "";
-  const cons = await db.contract.findMany({ where: { testId }, select: { id: true, status: true, endedAt: true, testerId: true } });
+  const cons = await db.contract.findMany({ where: { testId }, select: { id: true, status: true, endedAt: true, testerId: true, dueAt: true } });
   const ids = cons.map((c) => c.id);
+  // (Owner, Nov 2, batch 35 §132) When testers' work on the test ends: the call request forms' latest time and their calls drop-downs. It moves (Open until extended, a
+  // tester joining with a later deadline, a pause lifted) without a test event, so it's in the fingerprint and the forms' limits follow on the normal poll.
+  const workEnd = (t.workEndedAt ?? workDeadlineOf(t, cons))?.getTime() ?? 0;
   // (Owner, Oct 29, batch 29 §36; batch 28 §9's unchecked part) A block (either way) ends the session, cancels its calls and closes its requests without a test
   // event: the sessions' states, the calls' states and the block itself are in the fingerprint, so the session page drops Join call, Request a time and the call
   // requests on its normal poll (and the test page its rows' call buttons).
@@ -107,7 +110,7 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   const excerpts = await db.excerpt.findMany({ where: sessionId ? { contractId: sessionId } : { testId }, orderBy: { id: "asc" }, select: { id: true, status: true } });
   const excerptsV = excerpts.map((x) => `${x.id}:${x.status}`).join(",");
   // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, excerptsV, myKeyV].join("|");
+  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, excerptsV, workEnd, myKeyV].join("|");
 }
 
 /** (Owner, Oct 29, batch 10) Payments'"Pay what you owe": a declined payment, a chargeback, a tester's Charge during the hold, a payment from another tab, a reservation. */
