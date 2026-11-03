@@ -600,7 +600,7 @@ async function closeUpdateAtZero(dev: U, c: { id: string; testId: string; tester
     return true;
   });
   if (done) {
-    const line = `${displayName(dev)} paid $0 more for your updated ${label} on “${c.test.title}”`;
+    const line = `${displayName(dev)} paid $0 more for what you added to your ${label} on “${c.test.title}”`; // (batch 35 §136)
     await notify(c.tester.email, line, [line + ".", ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#part-${label === "recording" ? "recording" : "written"}`, { payment: true, group: "tpaid", about: dev.id });
   }
   return { paid: true, amountCents: 0, status: "closed" };

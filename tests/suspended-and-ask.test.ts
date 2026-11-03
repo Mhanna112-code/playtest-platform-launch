@@ -77,9 +77,10 @@ describe("no Ask $ on sends (owner, Oct 26): the Pay box starts at the listing; 
   it("an ask is never stored, and an updated send says nothing about asks in the live feed", async () => {
     const { sessionId, tester, sub, testId } = await sent();
     expect((await newest(sub.id)).askedCents).toBeNull();
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "c"], ask: "15.00" })).status).toBe(200);
+    // (Batch 35 §136) Sent answers are added to, not updated.
+    expect((await sact(sessionId, "written-add", tester.cookie, { text: "c", ask: "15.00" })).status).toBe(200);
     expect((await newest(sub.id)).askedCents).toBeNull();
-    expect(await db.testEvent.count({ where: { testId, text: "Ana Silva updated her written answers" } })).toBe(1);
+    expect(await db.testEvent.count({ where: { testId, text: "Ana Silva added to her written answers" } })).toBe(1);
     expect(await db.testEvent.count({ where: { testId, text: { contains: "asks" } } })).toBe(0);
   });
 

@@ -28,6 +28,7 @@ export function SentWork({ kind, answers, questions = [], notes, additions, file
   if (kind === "recording") {
     return (
       <div className="space-y-2" data-sent-work="recording">
+        {notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={notes} attachments={all} /></div>}
         <AttachmentList items={first} />
         {adds.map((a, i) => (
           <div key={i} className="space-y-1 border-t border-white/10 pt-2" data-addition={i}>

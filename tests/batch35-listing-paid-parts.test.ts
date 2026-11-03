@@ -81,7 +81,7 @@ describe("listing folds, paid parts and sent-part labels (owner, Nov 1)", () => 
     const contract = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     expect(contract.dueAt.toISOString().slice(0, 10)).toBe("2026-11-15");
     vi.setSystemTime(new Date("2026-11-12T12:00:00Z"));
-    const resend = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["Updated work", "New observations"], seenAt: seen(), confirmed: true });
+    const resend = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "Updated work: new observations", seenAt: seen(), confirmed: true }); // (batch 35 §136) added, as an update was
     expect(resend.status, JSON.stringify(resend.body)).toBe(200);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
     expect(sub.late).toBe(false);

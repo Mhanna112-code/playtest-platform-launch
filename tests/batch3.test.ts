@@ -236,7 +236,7 @@ describe("newest owner rules", () => {
     const { tester, sessionId } = await joined(testId);
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "12.00" })).status).toBe(200);
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBeNull();
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "c"], ask: "abc" })).status).toBe(200); // (batch 20 section 26) an identical resend is refused
+    expect((await sact(sessionId, "written-add", tester.cookie, { text: "c", ask: "abc" })).status).toBe(200); // (batch 35 §136) sent answers are added to
     await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(48), ask: "20" });
     expect((await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId } })).askRateCents).toBeNull();
     expect(dev).toBeTruthy();

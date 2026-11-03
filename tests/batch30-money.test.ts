@@ -39,31 +39,32 @@ const subOf = (id: string) => db.submission.findUniqueOrThrow({ where: { id }, i
 
 // ---------- §2 ----------
 
-describe("batch 30 §2: sending a part again after it's paid", () => {
+describe("batch 30 §2 (batch 35 §136): adding to a part after it's paid", () => {
   it("the lines", () => {
-    expect(M.updateAboveSendLine("Nora Lane", 1000, 100000, null)).toBe("Nora Lane has paid $10.00 for this. An update can be paid more, up to $1,000.00 in all.");
-    expect(M.updateAboveSendLine("Nora Lane", 100000, 100000, null)).toBe("This part is already paid the most it can be ($1,000.00): Nora Lane can't pay more for an update.");
-    expect(M.updateRowLine("Ana Silva", 1000, 99000)).toBe("Ana Silva sent an updated version after you paid ($10.00 paid · up to $990.00 more)");
-    expect(M.UPDATED_AT_CAP).toBe("Updated after you paid · already paid the most");
-    expect(M.updatedAtCapLive("Ana Silva", "her", "written answers")).toBe("Ana Silva sent an updated version of her written answers (already paid the most)");
+    expect(M.updateAboveSendLine("Nora Lane", 1000, 100000, null)).toBe("Nora Lane has paid $10.00 for this. What you add can be paid more, up to $1,000.00 in all.");
+    expect(M.updateAboveSendLine("Nora Lane", 100000, 100000, null)).toBe("This part is already paid the most it can be ($1,000.00): Nora Lane can't pay more for what you add.");
+    expect(M.updateRowLine("Ana Silva", 1000, 99000)).toBe("Ana Silva added to this after you paid ($10.00 paid · up to $990.00 more)");
+    expect(M.UPDATED_AT_CAP).toBe("Added to after you paid · already paid the most");
+    expect(M.updatedAtCapLive("Ana Silva", "her", "written answers")).toBe("Ana Silva added to her written answers (already paid the most)");
+    expect(M.updatedAfterPaidLive("Ana Silva", "her", "recording", 2)).toBe("Ana Silva added 2 recordings after you paid");
     expect((R.DEV_QUIET_KINDS as readonly string[]).includes("sentpaid")).toBe(true);
   });
 
   it("below the cap: the update is sent, waits in Needs you (a stop line, the alert opens its row); $0 closes it with a note the tester reads", async () => {
     const w = await sent();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    // The paid part can be sent again (it used to be locked).
-    const up = await sact(w.sessionId, "written", w.tester.cookie, { answers: LONG2, seenAt: seen(), confirmed: true });
+    // The paid part can be added to (what was sent stays).
+    const up = await sact(w.sessionId, "written-add", w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true });
     expect(up.status).toBe(200);
     const s = await subOf(w.sub.id);
     expect(s.paidUpdateAt).not.toBeNull();
     expect(M.updateWaiting(s)).toBe(true);
     expect(s.review!.amountCents).toBe(1000); // the same piece, its review kept
-    expect((s.answers as { answer: string }[]).map((x) => x.answer)).toEqual(LONG2);
+    expect((s.answers as { answer: string }[]).map((x) => x.answer)).toEqual(LONG); // what was sent stays
     const ev = await db.testEvent.findFirstOrThrow({ where: { testId: w.testId, kind: "sent" }, orderBy: { createdAt: "desc" } });
-    expect(ev.text).toBe("Ana Silva sent an updated version of her written answers after you paid");
+    expect(ev.text).toBe("Ana Silva added to her written answers after you paid");
     const devLines = await db.notification.findMany({ where: { userId: w.dev.user.id }, orderBy: { createdAt: "desc" } });
-    expect(devLines[0].text).toBe("Ana Silva sent an updated version of her written answers for “Harbor Run”");
+    expect(devLines[0].text).toBe("Ana Silva added to her written answers for “Harbor Run”");
     expect(devLines[0].link).toBe(`/app/tests/${w.testId}#update-${w.sub.id}`);
     const { updateRoomLeft } = await import("@/lib/server/paidUpdates");
     expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(true);
@@ -77,7 +78,7 @@ describe("batch 30 §2: sending a part again after it's paid", () => {
     expect(after.paidUpdateZeroAt).not.toBeNull();
     expect(after.paidUpdateNote).toBe("Thanks, nothing new to pay for.");
     expect(await db.payment.count({ where: { submissionId: w.sub.id } })).toBe(paysBefore); // nothing charged
-    expect(await lines(w.tester.user.id)).toContain("Nora Lane paid $0 more for your updated written answers on “Harbor Run”");
+    expect(await lines(w.tester.user.id)).toContain("Nora Lane paid $0 more for what you added to your written answers on “Harbor Run”");
     // A second $0 with nothing waiting: refused as before.
     const again = await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "0" });
     expect(again.status).toBe(400);
@@ -87,7 +88,7 @@ describe("batch 30 §2: sending a part again after it's paid", () => {
   it("a Pay more (any amount above $0) also answers the update: the row leaves", async () => {
     const w = await sent();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect((await sact(w.sessionId, "written", w.tester.cookie, { answers: LONG2, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     expect(M.updateWaiting(await subOf(w.sub.id))).toBe(true);
     const r = await more(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "5.00", tickedCents: 500 });
     expect(r.status).toBe(200);
@@ -99,16 +100,16 @@ describe("batch 30 §2: sending a part again after it's paid", () => {
   it("at the cap: no Needs you row, a quiet line, the usual Work sent alert only", async () => {
     const w = await sent();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "1000.00", tickedCents: 100000, over200: true })).status).toBe(200);
-    expect((await sact(w.sessionId, "written", w.tester.cookie, { answers: LONG2, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     const { paidUpdateRoom, updateRoomLeft } = await import("@/lib/server/paidUpdates");
     expect((await paidUpdateRoom(db, w.sub.id, w.testId)).atCap).toBe(true);
     expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(false);
     const ev = await db.testEvent.findFirstOrThrow({ where: { testId: w.testId, kind: "sentpaid" } });
-    expect(ev.text).toBe("Ana Silva sent an updated version of her written answers (already paid the most)");
+    expect(ev.text).toBe("Ana Silva added to her written answers (already paid the most)");
     expect(await db.testEvent.count({ where: { testId: w.testId, kind: "sent", text: { contains: "after you paid" } } })).toBe(0);
     const devLines = await lines(w.dev.user.id);
-    expect(devLines).toContain("Ana Silva updated her written answers for “Harbor Run”");
-    expect(devLines.some((l) => l.startsWith("Ana Silva sent an updated version"))).toBe(false);
+    expect(devLines).toContain("Ana Silva added to her written answers for “Harbor Run”");
+    expect(devLines.some((l) => l.includes("after you paid"))).toBe(false);
     // The page: the at-cap tag on the tester's row; the update row only below the cap while Pay more is open.
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain("{UPDATED_AT_CAP}");
@@ -119,7 +120,7 @@ describe("batch 30 §2: sending a part again after it's paid", () => {
   it("Pay more closed (the close-out passed): the update doesn't wait in Needs you", async () => {
     const w = await sent();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect((await sact(w.sessionId, "written", w.tester.cookie, { answers: LONG2, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     const { updateRoomLeft } = await import("@/lib/server/paidUpdates");
     expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(true);
     // The last deadline 20 days ago: the close-out (14 days after it) passed.
@@ -129,7 +130,7 @@ describe("batch 30 §2: sending a part again after it's paid", () => {
     expect(await updateRoomLeft(w.sub.id, w.testId)).toBe(false);
   });
 
-  it("a paid recording can be updated too (new uploads aren't refused); an old rejection and a team closure stay locked", async () => {
+  it("a paid recording can be added to (new uploads aren't refused); an old rejection and a team closure stay locked", async () => {
     const { resendRefusal } = await import("@/lib/server/paidUpdates");
     expect(resendRefusal({ rejected: false }, "recording")).toBe("");
     expect(resendRefusal({ rejected: true }, "written")).toBe("Your written answers were already reviewed, so they can't be changed.");
@@ -149,12 +150,12 @@ describe("batch 30 §2: sending a part again after it's paid", () => {
     expect(M.updateWaiting(await subOf(sub.id))).toBe(true);
   });
 
-  it("an update doesn't reopen a dispute (the dispute stays as it was)", async () => {
+  it("an addition doesn't reopen a dispute (the dispute stays as it was)", async () => {
     const w = await sent();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "5.00", tickedCents: 500, reason: "Missing the second answer's detail." })).status).toBe(200);
     expect((await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "We agreed the full price in the chat.", seenAt: seen(), confirmed: true })).status).toBe(200);
     await db.dispute.updateMany({ where: { submissionId: w.sub.id }, data: { status: "decided", decidedCents: 500, decidedAt: new Date() } });
-    expect((await sact(w.sessionId, "written", w.tester.cookie, { answers: LONG2, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await db.dispute.findFirstOrThrow({ where: { submissionId: w.sub.id } })).status).toBe("decided");
     const again = await sact(w.sessionId, "dispute", w.tester.cookie, { kind: "submission", id: w.sub.id, reason: "Again, please, it was updated.", seenAt: seen(), confirmed: true });
     expect(again.status).toBe(409);
@@ -227,14 +228,14 @@ describe("batch 30 §3: late listed work never opens Charge", () => {
     expect(r.body.error.code).toBe("pay_closed");
   });
 
-  it("an update of a late piece stays late; an update before the deadline of an on-time piece stays on time", async () => {
+  it("an addition to a late piece stays late; an addition before the deadline of an on-time piece stays on time", async () => {
     const w = await sent();
     expect((await subOf(w.sub.id)).late).toBe(false);
-    expect((await sact(w.sessionId, "written", w.tester.cookie, { answers: LONG2, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: LONG2[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await subOf(w.sub.id)).late).toBe(false);
     // A late piece whose deadline later moved (a pause) stays late when updated before the new deadline.
     await db.submission.update({ where: { id: w.sub.id }, data: { late: true } });
-    expect((await sact(w.sessionId, "written", w.tester.cookie, { answers: LONG, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: LONG[0], seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await subOf(w.sub.id)).late).toBe(true);
   });
 });

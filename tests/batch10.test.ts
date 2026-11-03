@@ -155,7 +155,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(src("app/app/chat/[id]/page.tsx")).toContain("closed={blocked || paused}");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(actions).toContain("{canSend && <button className={`btn ${unchanged ? \"!bg-white/10 !text-ink-400 !shadow-none\" : \"\"}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged}"); // (batch 20 section 26)
-    expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("{canSend && sendable && uploaded.length > 0 && (");
+    expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("{canSend && sendable && fresh.length > 0 && ("); // (batch 35 §136) only what isn't sent yet
     // Testers' dashboard rows keep the "Paused" tag.
     // (Owner, Nov 3) The title is cut at 10 characters (Cut).
     expect(src("app/app/page.tsx")).toContain("<Cut text={c.title} kind=\"test\" /> {pausedTest(c.test) && <PausedTag />}");
@@ -190,8 +190,8 @@ describe("batch 10 item 3: long written answers scroll on the developer's side",
     const open = page.indexOf("<ResizeBox id={`needs-${x.s!.id}`}"), close = page.indexOf("</ResizeBox>", open);
     expect(open).toBeGreaterThan(0);
     // The question labels are inside; the Pay box comes after the box closes.
-    expect(page.slice(open, close)).toContain("<SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} attachments="); // (batch 13) each answer under its own question
-    expect(page.slice(open, close)).toContain("<AnswerWithAttachments text={x.s!.notes} attachments=");
+    // (Batch 35 §136) One list: the answers under their questions, the notes, then what was added.
+    expect(page.slice(open, close)).toContain("<SentWork kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions}");
     expect(page.slice(open, close)).not.toContain("<PayBox");
     expect(page.indexOf('<PayBox owes={owesNow} key={x.s!.id} kind="submission"')).toBeGreaterThan(close);
   });

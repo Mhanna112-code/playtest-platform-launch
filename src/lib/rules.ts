@@ -1707,7 +1707,7 @@ export function checkExtraPay(amountCents: number | null, tickedCents: number | 
  * written part; nothing sent yet: only the first sentence; a part that wasn't listed: no price).
  */
 export const switchQuestionsLine = (sent: { agreedCents: number | null } | null | undefined) =>
-  `Switching means answering the new questions: send your updated answers.${!sent ? "" : sent.agreedCents != null ? ` Answers you already sent stay payable at ${money(sent.agreedCents)}.` : " Answers you already sent stay payable."}`;
+  `Switching means answering the new questions: your answers to them are added under what you sent.${!sent ? "" : sent.agreedCents != null ? ` Answers you already sent stay payable at ${money(sent.agreedCents)}.` : " Answers you already sent stay payable."}`;
 
 // ---------- (Batch 18 section 9, replaced by batch 21 section 2) Calls in progress ----------
 // A pause (any cause), a block, a suspension of either side, a leave, End early or a Stop ends a call in progress at that moment, on the server (both rooms hang up;
