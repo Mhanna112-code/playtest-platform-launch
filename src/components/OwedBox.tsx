@@ -11,6 +11,14 @@ import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, OWED_BANK_WAITING, OWED_HOW, PAY_TICK_CENTS, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 import { refusalLine } from "@/lib/pressLabels";
 
+/**
+ * (Owner, Nov 3) The lines a stop carries replace the box's (the bank changed a disputed amount: the bullet reads the new amount, like the button); a stop without
+ * lines keeps the box's own.
+ */
+export function linesAfterStop<L>(owed: L[], data: Record<string, unknown>): L[] {
+  return Array.isArray(data.lines) ? (data.lines as L[]) : owed;
+}
+
 /** (Owner, Nov 3) Lines shown before "Show all". */
 const OWED_FOLD = 4;
 
@@ -49,11 +57,14 @@ function CancelCheck({ id }: { id: string }) {
  * (Batch 23 section 6) During a chargeback hold the box reserves rather than pays: Pay what you owe puts the amount on hold on the card ("Reserved $X: it's taken when
  * the team approves lifting your hold."), the team's Approve takes it, and it's released if they don't approve or after about 7 days.
  */
-export function OwedBox({ onHold, owed, chargeback = false, review = false, verifyFirst = false, reservedCents = 0, reserveExpired = false, ranOut = "" }: { /** (§125) "Your bank check ran out on Nov 5: nothing was charged. Pay again or change your card." */ ranOut?: string | null; onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
+export function OwedBox({ onHold, owed: drawn, chargeback = false, review = false, verifyFirst = false, reservedCents = 0, reserveExpired = false, ranOut = "" }: { /** (§125) "Your bank check ran out on Nov 5: nothing was charged. Pay again or change your card." */ ranOut?: string | null; onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
   const [err, setErr] = useState("");
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [changes, setChanges] = useState<Change[] | null>(null);
+  // (Owner, Nov 3) The lines of the last stop, until the page's next redraw brings its own.
+  const [stopLines, setStopLines] = useState<{ base: Line[]; lines: Line[] } | null>(null);
+  const owed = stopLines && stopLines.base === drawn ? stopLines.lines : drawn;
   // (Batch 35 §40, §41) Paid: the page redraws in place; until it has, the button stays greyed with the result line.
   const fin = useFinished(() => setBusy(false));
   const done = fin.line;
@@ -68,6 +79,8 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
   // What the page / the stop box showed last: every press (the second too) is checked against it.
   const [total, setTotal] = useState(seenTotal);
   const [shownIds, setShownIds] = useState(retry.map((o) => o.id));
+  // (Owner, Nov 3) What each line showed (a chargeback's amount can change under it): the stop then names the change.
+  const [shownAmounts, setShownAmounts] = useState<Record<string, number>>(() => Object.fromEntries(retry.map((o) => [o.id, o.amountCents])));
   // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: with a reservation in place the button is disabled, and what was added since is charged after the lift.
   const reservedOnce = chargeback && reservedCents > 0;
   // (Owner, Nov 3, §150) Over $200 (the amount on the button) the tick "I confirm this payment is over $200." shows next to it, and the button waits for it. It stays
@@ -134,7 +147,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
           setErr("");
           setFailing([]);
           try {
-            const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[]; reservedCents?: number }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null, over200: over && over200 });
+            const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[]; reservedCents?: number }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, seenAmounts: shownAmounts, confirmed: changes != null, over200: over && over200 });
             setChanges(null);
             // (Batch 11) Payments the bank wants confirmed: one check each, inline under the button; any it refused stay owed (nothing was charged for them).
             let refused = "";
@@ -162,6 +175,11 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
               setChanges((c) => (c ? mergeChanges(c, e.data.changes as Change[]) : (e.data.changes as Change[])));
               if (typeof e.data.totalCents === "number") setTotal(e.data.totalCents);
               if (Array.isArray(e.data.ids)) setShownIds(e.data.ids as string[]);
+              const next = linesAfterStop(drawn, e.data);
+              if (next !== drawn) {
+                setStopLines({ base: drawn, lines: next });
+                setShownAmounts(Object.fromEntries(next.filter((o) => o.retry).map((o) => [o.id, o.amountCents])));
+              }
             } else setErr(errOf(e));
             if (!(e instanceof ApiError && e.code === "nothing_owed")) setBusy(false);
           }

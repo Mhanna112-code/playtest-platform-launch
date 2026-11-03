@@ -1920,3 +1920,17 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
   done after the bank confirmed or refused, still unpaid until the finish; someone else's payment, reservation or card check refused; the page peeks every 3
   s, ignores failed peeks, ends the check once on done and stops when closed; Close and its hint under the frame, the stand-in's Confirm / Cancel kept).
   `batch17-bank-check` now expects Close under the bank's frame.
+
+## Pay what you owe names the bank's change of a disputed amount (owner, Nov 3; A3 fix)
+
+- **Before.** When the bank changed how much of a payment it took back (Stripe's `charge.dispute.updated`, §133) after the page drew, Pay what you owe stopped
+  once with only "What you owe changed: now $35.00", while the line above still read "$12 + $15 chargeback fee" and the button said $35.00.
+- **Now.** The stop names the change: "Your bank changed the amount it took back from your $40.00 payment for Ana Silva's written answers on “Harbor Run:…”:
+  $12.00 → $20.00 (now $20.00 + $15.00 fee = $35.00). Press again to reserve $35.00 on your card: …" (several changed: joined with "; "). The stop carries
+  the box's lines, so the bullets redraw with it ("$20 + $15 chargeback fee") and never disagree with the button; the page's next redraw brings its own.
+  The page sends what each line showed (`seenAmounts`); an older page that didn't: its one chargeback line explains the whole difference. Other stops (added
+  meanwhile, a won chargeback) are unchanged. The reservation's own re-read (§146 item 3, the bank's change landing during the press) words it the same.
+- **Code.** `rules.bankChangedLine`; `holds.owedLines` (a chargeback line's `cb`: the payment, the piece, what was taken back) and `holds.payOwed` (the line,
+  `lines` in the stop's data); `chargeback.reserveOwed` (the same on its re-read); `components/OwedBox.tsx` (`linesAfterStop`, `seenAmounts`). No migration.
+- **Tests:** `tests/owed-dispute-change.test.ts` (the wording; a page that sent its amounts stops once naming $12.00 → $20.00 with the new lines, then reserves
+  $35.00; an older page gets the same line; the box draws the stop's lines). `partial-dispute` and `races-nov3` now expect the named change.

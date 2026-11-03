@@ -6,7 +6,7 @@ import { logEvent } from "./live";
 import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, ensureCustomer, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
 import { cardLabel, logAccountChange } from "./accountChanges";
-import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
+import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, bankChangedLine, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
@@ -88,14 +88,23 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
       const x = fresh.find((f) => f.id === p.id);
       return a + (x?.chargeback === "open" ? reversedOf(x) + CHARGEBACK_FEE_CENTS : p.amountCents);
     }, 0);
-    if (nowTotal !== total) return { changed: nowTotal };
+    if (nowTotal !== total) {
+      // (Owner, Nov 3) Which rows the bank changed, and from what to what: the stop names it.
+      const moved = rows.flatMap((p) => { const x = fresh.find((f) => f.id === p.id); return x?.chargeback === "open" && reversedOf(x) + CHARGEBACK_FEE_CENTS !== p.amountCents ? [{ id: p.id, was: p.amountCents - CHARGEBACK_FEE_CENTS, now: reversedOf(x), paid: x.amountCents }] : []; });
+      return { changed: nowTotal, moved };
+    }
     return tx.reservation.create({ data: { developerId: u.id, amountCents: total, covers: rows.map((p) => p.id), status: "pending", actionBy: new Date(now.getTime() + PRESS_ACTION_MS) } });
   });
   if (!r) throw new HttpError(409, "nothing_owed", (await import("./holds")).ALREADY_RESERVED);
   if ("changed" in r) {
     // (Owner, Nov 3, races) Pay what you owe's own stop-once line, with the new total; the second press reserves it.
-    const ids = (await (await import("./holds")).owedLines(u.id)).filter((l) => l.retry).map((l) => l.id);
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: `What you owe changed: now ${money(r.changed)}. ${pressAgainLine(r.changed, { cardVerified: true })}`, at: new Date() }], totalCents: r.changed, ids });
+    const lines = await (await import("./holds")).owedLines(u.id);
+    const ids = lines.filter((l) => l.retry).map((l) => l.id);
+    // (Owner, Nov 3) The stop names the bank's change ("Your bank changed the amount it took back from your $40.00 payment for …: $12.00 → $20.00 (now …)"), and
+    // carries the lines so the box's bullets redraw with the new total.
+    const named = r.moved.map((m) => { const l = lines.find((x) => x.id === m.id); return bankChangedLine(m.paid, l && "cb" in l && l.cb ? l.cb.piece : null, m.was, m.now); });
+    const head = named.length ? named.join("; ") : `What you owe changed: now ${money(r.changed)}`;
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: `${head}. ${pressAgainLine(r.changed, { cardVerified: true })}`, at: new Date() }], totalCents: r.changed, ids, lines });
   }
   const reserved = (pi: string | null) => db.reservation.update({ where: { id: r.id }, data: { status: "reserved", stripePaymentIntentId: pi, actionBy: null, expiresAt: new Date(Date.now() + RESERVE_DAYS * 86_400_000) } });
   if (!stripeOn()) {

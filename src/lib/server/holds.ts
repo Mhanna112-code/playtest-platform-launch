@@ -4,7 +4,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, pressAgainLine, bankChangedLine, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
@@ -484,15 +484,25 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     const won = goneIds.length ? await db.payment.findMany({ where: { id: { in: goneIds }, chargeback: "won" } }) : [];
     // (§129) During a chargeback hold the second press reserves (after verifying the card if it isn't yet): the line says so, never "pay".
     const again = pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, tickMissing);
+    // (Owner, Nov 3) The bank changed how much it took back (charge.dispute.updated) since the page drew: the stop names that change. The page sends what each line
+    // showed (`seenAmounts`); an older page that didn't: the one chargeback line it showed explains the whole difference.
+    const seenAmounts = body.seenAmounts && typeof body.seenAmounts === "object" && !Array.isArray(body.seenAmounts) ? (body.seenAmounts as Record<string, unknown>) : null;
+    const cbLines = lines.filter((l) => l.retry && l.source === "chargeback" && seenIds.includes(l.id));
+    let moved = cbLines.flatMap((l) => { const was = seenAmounts?.[l.id]; return typeof was === "number" && was !== l.amountCents ? [{ l, was }] : []; });
+    if (!seenAmounts && !goneIds.length && cbLines.length === 1 && total !== seen && cbLines[0].amountCents - (total - seen) > CHARGEBACK_FEE_CENTS) moved = [{ l: cbLines[0], was: cbLines[0].amountCents - (total - seen) }];
+    const movedText = moved.map(({ l, was }) => ("cb" in l && l.cb ? bankChangedLine(l.cb.paidCents, l.cb.piece, was - CHARGEBACK_FEE_CENTS, l.cb.reversedCents) : "")).filter(Boolean).join("; ");
     const text = fresh.length
       ? `${freshLines.every((l) => l.source === "failed") ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh.join(", ")}. New total ${money(total)}. ${again}`
       : won.length
         ? `${won.map((w) => `Your bank's chargeback of ${money(reversedOf(w))} was reversed`).join("; ")}. Now ${money(total)}. ${again}` /* (§133) what it reversed */
-        : `What you owe changed: now ${money(total)}. ${again}`;
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds });
+        : movedText
+          ? `${movedText}. ${again}`
+          : `What you owe changed: now ${money(total)}. ${again}`;
+    // (Owner, Nov 3) The lines come with the stop, so the box redraws them with the new total (a bullet never disagrees with the button).
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds, lines });
   }
   // (§150) Unchanged but over $200 without the tick (a page that never showed it, or a press without it): refused, stopping once with the tick's line; the box shows it.
-  if (tickMissing) throw new HttpError(409, "stop_once", OWED_OVER_TICK, { changes: [{ text: pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, true), at: new Date() }], totalCents: total, ids: nowIds });
+  if (tickMissing) throw new HttpError(409, "stop_once", OWED_OVER_TICK, { changes: [{ text: pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, true), at: new Date() }], totalCents: total, ids: nowIds, lines });
   // (Owner, Oct 28, batch 16 section 41) A chargeback hold's steps go in order: a card verified with 3D Secure first, then paying (which never lifts it: the team's Approve does).
   // (Nov 2, payments proof) After the stop-once check: a page that hadn't shown a chargeback stops once naming it first ("Your bank reversed a $10 payment…").
   if (u.holdStartedAt && u.holdReason === "chargeback" && !u.chargebackCardVerifiedAt) throw new HttpError(409, "verify_first", VERIFY_FIRST);
@@ -623,8 +633,10 @@ export async function owedLines(devId: string) {
     // a full chargeback on Pay what you owe's (or a new card's combined) payment lists the charges it covered too.
     const covers = p.chargeback === "open" && p.kind === "owed" ? await coveredItems(p.id) : undefined;
     // `source` (batch 10): what put it on the list, for the stop-once wording.
+    // (Owner, Nov 3) `cb`: what a press's stop needs to name a change of the reversed amount (the payment, the piece, what the bank took back now).
+    const cb = { paidCents: p.paidCents, reversedCents: p.reversedCents, piece: paidFor ? pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test }) : null };
     out.push(p.chargeback === "open"
-      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, paidFor, false, p.paidCents), full: chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents), ...(covers ? { covers } : {}) }
+      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, paidFor, false, p.paidCents), full: chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents), cb, ...(covers ? { covers } : {}) }
       : tail !== null
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet. (§125) A charge waiting for the lift ("deferred") is paid with
         // what you owe, as one payment, and reads the same.

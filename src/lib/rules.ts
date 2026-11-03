@@ -1046,6 +1046,13 @@ export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's t
  * (Batch 35 §129) The end of Pay what you owe's stop-once line: what the second press does. Outside a chargeback hold it pays; during one it reserves (with the card
  * verified first when it isn't yet), and the team's Approve takes it.
  */
+/**
+ * (Owner, Nov 3) Pay what you owe's stop when the bank changed how much of a payment it took back (Stripe's charge.dispute.updated) since the page drew: the change
+ * itself, not just a new total: "Your bank changed the amount it took back from your $40.00 payment for Ana Silva's written answers on “Harbor Run”: $12.00 →
+ * $20.00 (now $20.00 + $15.00 fee = $35.00)".
+ */
+export const bankChangedLine = (paidCents: number, piece: string | null, wasCents: number, nowCents: number) =>
+  `Your bank changed the amount it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(wasCents)} → ${money(nowCents)} (now ${money(nowCents)} + ${money(CHARGEBACK_FEE_CENTS)} fee = ${money(nowCents + CHARGEBACK_FEE_CENTS)})`;
 export const pressAgainLine = (cents: number, chargeback: null | { cardVerified: boolean } = null, tick = false) => {
   const line = !chargeback ? `Press again to pay ${money(cents)}.`
     : chargeback.cardVerified ? `Press again to reserve ${money(cents)} on your card: it's taken when the team approves lifting your hold.`
