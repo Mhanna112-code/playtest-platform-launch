@@ -70,7 +70,7 @@ export default async function AccountPage() {
         <ul className="divide-y divide-white/5">
           {/* (Batch 16 section 30) Only the profile of the side in use. */}
           {side === "tester" && tester && !profileClosed && link("/app/profile", UserRound, "Tester profile", "Devices, languages and bio, as developers see them")}
-          {side === "developer" && dev && !profileClosed && link("/app/profile", Building2, "Developer profile", "Your name, as testers see it on your tests")}
+          {side === "developer" && dev && !profileClosed && link("/app/profile", Building2, "Developer profile", "Your name and bio, as testers see them")}
           {/* (Owner, Oct 29, batch 32 §5) A team account has no payments or blocks of its own (Payments sends an admin back to the console). */}
           {side && link("/app/payments", Banknote, "Payments", side === "developer" ? "What you have paid and your saved card" : "What you have been paid and your payout setup")}
           {link("/app/notifications", Bell, "Notifications and alerts", "How you're notified by email")}

@@ -19,18 +19,20 @@ async function lastLink(addr: string, path: string) {
   return { mail, token: link.split(path)[1].trim() };
 }
 const cookieOf = (r: Response) => r.headers.get("set-cookie")!.split(";")[0];
+/** (Batch 35 §134) What sign-up needs besides the email and password: who you are, a name and both ticks. */
+const WHO = { role: "developer", name: "Ana Silva", acceptTerms: "yes", over18: "yes" };
 
 describe("sign up, confirm, log in, reset", () => {
   it("signs up with email + password (signed in at once), confirms the email by link, logs in; a wrong password is red", async () => {
     const addr = email("signup");
     expect((await json(await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "short" } })))).body.error).toMatchObject({ code: "bad_field", message: "Password must be at least 8 characters" });
-    const r = await signupPOST(req("/api/auth/signup", { body: { email: " " + addr.toUpperCase(), password: "harbor-run-1", over18: "yes" } }));
+    const r = await signupPOST(req("/api/auth/signup", { body: { email: " " + addr.toUpperCase(), password: "harbor-run-1", ...WHO } }));
     expect(r.status).toBe(200);
     const u = await getUserFromRequest(req("/app", { cookie: cookieOf(r) }));
     expect(u?.email).toBe(addr);
     expect(u?.passwordHash).toMatch(/^\$2[aby]\$10\$/); // bcrypt, cost 10 (as the full app)
     expect(u?.emailVerifiedAt).toBeNull();
-    expect((await json(await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "harbor-run-1", over18: "yes" } })))).body.error.message).toBe("An account with that email already exists");
+    expect((await json(await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "harbor-run-1", ...WHO } })))).body.error.message).toBe("An account with that email already exists");
     // Confirm the email.
     const { mail, token } = await lastLink(addr, "/verify/");
     expect(mail.subject).toBe("Confirm your email");
@@ -46,7 +48,7 @@ describe("sign up, confirm, log in, reset", () => {
 
   it("Forgot password -> reset link -> new password; every device is signed out; the link works once", async () => {
     const addr = email("reset");
-    const s1 = await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "first-pass-1", over18: "yes" } }));
+    const s1 = await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "first-pass-1", ...WHO } }));
     const s2 = await loginPOST(req("/api/auth/login", { body: { email: addr, password: "first-pass-1", over18: "yes" } }));
     expect((await json(await forgotPOST(req("/api/auth/forgot", { body: { email: addr } })))).body).toEqual({ sent: true });
     expect((await json(await forgotPOST(req("/api/auth/forgot", { body: { email: email("nobody") } })))).body).toEqual({ sent: true }); // same answer
@@ -62,7 +64,7 @@ describe("sign up, confirm, log in, reset", () => {
 
   it("changing the password signs out the other devices (not this one); old accounts without a password use Forgot password", async () => {
     const addr = email("change");
-    const here = await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "first-pass-1", over18: "yes" } }));
+    const here = await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "first-pass-1", ...WHO } }));
     const other = await loginPOST(req("/api/auth/login", { body: { email: addr, password: "first-pass-1", over18: "yes" } }));
     expect((await json(await passwordPOST(req("/api/auth/password", { cookie: cookieOf(here), body: { current: "nope-nope", password: "second-pass", confirm: "second-pass" } })))).body.error.message).toBe("Your current password isn't right");
     expect((await passwordPOST(req("/api/auth/password", { cookie: cookieOf(here), body: { current: "first-pass-1", password: "second-pass", confirm: "second-pass" } }))).status).toBe(200);

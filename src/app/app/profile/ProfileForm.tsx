@@ -9,7 +9,9 @@ import { mergeChanges } from "@/lib/live";
 import { DEVICES, LANGUAGES } from "@/lib/options";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { PROFILE_DRAFT_FIELDS, type ProfileDraftField } from "@/lib/keptText";
+import { LIMITS } from "@/lib/limits";
 
+/** `bio`: the bio of the form's own side (batch 35 §134: the developer's and the tester's are separate; the first setup's is the tester's). */
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string };
 
 /** (Batch 35 §10) The profile's draft: the fields that differ from the saved profile (never the first setup's sides). */
@@ -28,7 +30,12 @@ export function profileFromDraft(d: unknown): Partial<Pick<Init, ProfileDraftFie
   return out as Partial<Pick<Init, ProfileDraftField>>;
 }
 
-/** The profile form of the side in use: the developer's is the name; the tester's adds devices, languages and a bio. (Batch 16 section 10) A mistake is red at its box and listed under the button. */
+/**
+ * The profile form of the side in use: the developer's is the name, pronoun and their bio; the tester's has the name and pronoun, devices, languages and their own
+ * bio. (Batch 16 section 10) A mistake is red at its box and listed under the button. (Owner, Nov 3, batch 35 §134) The name and pronoun are the account's, the same
+ * on both sides (saved on either, both show it); each side's bio is its own (optional, up to 2,000 characters), and a Save sends its side so it changes only that
+ * side's fields: a side opened for the first time shows the name and pronoun already there, with its own fields (and bio) empty.
+ */
 export function ProfileForm({ init, first, admin = false, side = "tester", seenAt: seen0 }: { init: Init; first?: boolean; /** (Batch 20 section 16) an admin's first setup: Name and Pronoun only, then the admin console */ admin?: boolean; side?: "developer" | "tester"; /** (Batch 16 section 27) the page's load time */ seenAt?: string }) {
   const [v, setV] = useState(init);
   const [busy, setBusy] = useState(false);
@@ -63,13 +70,22 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
     typed.current.clear();
     setV(init);
   };
+  // (Owner, Nov 3, batch 35 §134) The side's own bio, optional, with its count (x / 2,000): the developer's is shown to testers, the tester's to developers.
+  const bioBox = (shownTo: "developers" | "testers", placeholder: string) => (
+    <div>
+      <label className="label" htmlFor="bio">{`Bio (shown to ${shownTo})`}</label>
+      <textarea id="bio" className="input min-h-24" maxLength={LIMITS.bio} value={v.bio} onChange={(e) => set({ bio: e.target.value })} placeholder={placeholder} />
+      <CharacterCount value={v.bio} max={LIMITS.bio} />
+    </div>
+  );
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
     setBusy(true);
     setMsg(null);
     try {
-      await api("/api/profile", { ...v, ...(seenAt ? { seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) } : {}) });
+      // (Batch 35 §134) The side this form is for: the server saves that side's fields only (the first setup has no side yet).
+      await api("/api/profile", { ...v, ...(first ? {} : { side }), ...(seenAt ? { seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}) } : {}) });
       setChanges(null);
       typed.current.clear();
       if (!first) await keep.clear(); // (batch 35 §10) saved: the draft goes
@@ -108,16 +124,12 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
           <label className="text-sm"><input type="checkbox" checked={v.isTester} onChange={(e) => set({ isTester: e.target.checked })} /> test apps, games and more, and get paid (tester)</label>
         </fieldset>
       )}
+      {!first && side === "developer" && bioBox("testers", "e.g. A two-person studio making co-op puzzle games for PC; we read every answer.")}
       {tester && (
         <>
           <div id="devices" data-field-group="" data-match="at least one device"><Choices label="Devices you use" required options={DEVICES} value={v.devices} onChange={(devices) => set({ devices })} /></div>
           <div id="languages" data-field-group="" data-match="at least one language"><Choices label="Languages you can test in" required options={LANGUAGES} value={v.languages} onChange={(languages) => set({ languages })} /></div>
-          <div>
-            <label className="label" htmlFor="bio">Bio (shown to developers)</label>
-            <textarea id="bio" className="input min-h-24" maxLength={1000} value={v.bio} onChange={(e) => set({ bio: e.target.value })}
-              placeholder="e.g. Gameplay-experience QA for 5 years; Castilian Spanish LQA; I play a lot of roguelikes on PC." />
-            <CharacterCount value={v.bio} max={1000} />
-          </div>
+          {bioBox("developers", "e.g. Gameplay-experience QA for 5 years; Castilian Spanish LQA; I play a lot of roguelikes on PC.")}
         </>
       )}
       <div className="flex flex-wrap items-center gap-3">

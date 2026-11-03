@@ -28,7 +28,7 @@ export const dynamic = "force-dynamic";
 
 /**
  * A developer's profile as testers see it (the full app's developer page): who they are, how they review (the tiles and
- * what each counts), and their open tests. Not shown between people who blocked each other.
+ * what each counts), their bio (About, batch 35 §134) and their open tests. Not shown between people who blocked each other.
  */
 export default async function DeveloperProfilePage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -73,6 +73,11 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
         {mine && <p className="text-xs text-slate-500">This is how testers see your profile.</p>}
       </section>
       <DeveloperTiles userId={p.id} />
+      {/* (Owner, Nov 3, batch 35 §134) The developer side's own bio (the tester side's stays on their tester profile), as the tester profile's About shows theirs. */}
+      <section className="card space-y-3" data-developer-about="">
+        <h2 className="font-semibold text-white">About</h2>
+        <p className="whitespace-pre-wrap break-words text-sm text-slate-300">{p.devBio || <span className="text-slate-500">No bio yet.</span>}</p>
+      </section>
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">Open tests</h2>
         {/* (Owner, Oct 28, batch 17 section 9) Seen by someone else, the list stays current on the page's poll (and when shown again with Back). */}

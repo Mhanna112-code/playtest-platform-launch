@@ -62,7 +62,8 @@ export async function blockedV(u: User) {
 
 export async function publicProfileV(viewer: User, id: string) {
   const [person, blocks] = await Promise.all([
-    db.user.findUnique({ where: { id }, select: { id: true, name: true, email: true, deletedAt: true, isDeveloper: true, isTester: true, devSuspendedAt: true, testerSuspendedAt: true, holdStartedAt: true } }),
+    // (Batch 35 §134) The developer's bio too (the tester's is in the profile row below): an edit shows on an open profile within the poll.
+    db.user.findUnique({ where: { id }, select: { id: true, name: true, email: true, deletedAt: true, isDeveloper: true, isTester: true, devSuspendedAt: true, testerSuspendedAt: true, holdStartedAt: true, devBio: true } }),
     db.block.findMany({ where: { OR: [{ blockerId: viewer.id, blockedId: id }, { blockerId: id, blockedId: viewer.id }] }, orderBy: { id: "asc" } }),
   ]);
   if (!person || person.deletedAt || (!isAdmin(viewer) && blocks.some((b) => b.blockerId === id && b.blockedId === viewer.id))) return stateV("unavailable");

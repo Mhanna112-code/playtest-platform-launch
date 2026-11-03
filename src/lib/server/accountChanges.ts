@@ -9,8 +9,11 @@ import { HttpError } from "./http";
 export const ACCOUNT = "account";
 /** Which page's presses a change stops. */
 export type AccountScope = "payments" | "profile" | "settings";
-/** One change: the field (to compare with what a press sends), its short label, and before → after (or a whole line). */
-export type AccountChange = { scopes: AccountScope[]; field: string; label: string; before?: string; after?: string; line?: string; at?: boolean };
+/**
+ * One change: the field (to compare with what a press sends), its short label, and before → after (or a whole line). `side` (batch 35 §134): a profile field of
+ * one side only (the tester's devices, languages and bio; the developer's bio), which only that side's profile page shows.
+ */
+export type AccountChange = { scopes: AccountScope[]; field: string; label: string; before?: string; after?: string; line?: string; at?: boolean; side?: "developer" | "tester" };
 /** The heading of the stop box on these pages. */
 export const ACCOUNT_STOP_HEADING = "Changed in another tab or device since you opened this page:";
 
@@ -36,15 +39,17 @@ export const changeLine = (c: AccountChange) => c.line ?? `${c.label}: ${c.befor
 
 /**
  * The changes another tab made since `since` for this page, one line per field (the first before, the latest after; a field changed and changed back
- * drops out). `sent`: the values this press sends, by field; a field changed elsewhere to exactly that value is not news.
+ * drops out). `sent`: the values this press sends, by field; a field changed elsewhere to exactly that value is not news. `side` (batch 35 §134): the side of
+ * the profile page pressed on; the other side's own fields aren't news there.
  */
-export async function accountChangesSince(userId: string, since: Date, scope: AccountScope, tab: string, sent: Record<string, string> = {}) {
+export async function accountChangesSince(userId: string, since: Date, scope: AccountScope, tab: string, sent: Record<string, string> = {}, side: "developer" | "tester" | null = null) {
   const rows = await db.actionLog.findMany({ where: { userId, testId: ACCOUNT, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : {}) }, orderBy: { createdAt: "asc" }, take: 100 });
   const byField = new Map<string, { c: AccountChange; at: Date }>();
   for (const r of rows) {
     let c: AccountChange;
     try { c = JSON.parse(r.text) as AccountChange; } catch { continue; }
     if (!c || !Array.isArray(c.scopes) || !c.scopes.includes(scope)) continue;
+    if (side && c.side && c.side !== side) continue;
     const prev = byField.get(c.field);
     byField.set(c.field, { c: prev && c.before !== undefined ? { ...c, before: prev.c.before } : c, at: r.createdAt });
   }
@@ -58,12 +63,12 @@ export async function accountChangesSince(userId: string, since: Date, scope: Ac
  * The gate for a press on these pages: the first press after a change elsewhere stops once with what changed; the second (confirmed, with the box's
  * time) goes ahead unless something newer happened. A press without the page's time (an older page, or an API call) goes ahead as before.
  */
-export async function accountGate(userId: string, body: Record<string, unknown>, scope: AccountScope, sent: Record<string, string> = {}) {
+export async function accountGate(userId: string, body: Record<string, unknown>, scope: AccountScope, sent: Record<string, string> = {}, side: "developer" | "tester" | null = null) {
   const boxAt = dateOf(body.boxAt);
   if (body.confirmed === true && !boxAt) return;
   const since = body.confirmed === true ? boxAt : dateOf(body.seenAt);
   if (!since) return;
-  const changes = await accountChangesSince(userId, since, scope, tabOf(body), sent);
+  const changes = await accountChangesSince(userId, since, scope, tabOf(body), sent, side);
   if (changes.length) throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes, heading: ACCOUNT_STOP_HEADING, now: new Date().toISOString() });
 }
 
