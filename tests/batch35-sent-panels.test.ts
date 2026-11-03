@@ -77,17 +77,17 @@ describe("two folds under each part", () => {
     expect(keptFold("needs-body-s1")).toBe(true);
   });
 
-  it("Needs you and the tester rows put each part's body and its Pay / Pay more box in their own folds, the body in the panel", () => {
+  it("(owner, Nov 3) each sent part is its own drop-down: inside it the body panel, then its Pay / Pay more box", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    for (const [body, pay, box] of [["needs-body-${x.s!.id}", "needs-pay-${x.s!.id}", "needs-${x.s!.id}"], ["update-body-${x.id}", "update-pay-${x.id}", "update-${x.id}"], ["row-body-${r.sub.id}", "row-more-${r.sub.id}", "row-${r.sub.id}"]]) {
-      const b = page.indexOf(`<Fold id={\`${body}\`}`), p = page.indexOf(`<Fold id={\`${pay}\``), r = page.indexOf(`<ResizeBox id={\`${box}\`}`);
-      expect(b).toBeGreaterThan(0);
-      expect(r).toBeGreaterThan(b); // the panel inside the body fold
-      expect(p).toBeGreaterThan(r); // the Pay box's fold after it
-      expect(page.slice(p, page.indexOf("</Fold>", p))).toContain("<PayBox");
+    for (const [part, box] of [["needs-part-${x.id}", "needs-${x.s!.id}"], ["update-part-${x.id}", "update-${x.id}"], ["row-part-${r.sub.id}", "row-${r.sub.id}"]]) {
+      const f = page.indexOf(`<Fold id={\`${part}\``), r = page.indexOf(`<ResizeBox id={\`${box}\`}`);
+      expect(f, part).toBeGreaterThan(0);
+      expect(r, part).toBeGreaterThan(f); // the panel inside the part's fold
+      expect(page.indexOf("<PayBox", r), part).toBeGreaterThan(r); // the Pay box after it
     }
-    expect(page).toContain('<Fold id={`needs-pay-${x.x!.id}`} summary="Pay">'); // a call's Pay box too
-    expect(page).toContain('<Fold id={`row-more-${x.id}`} summary="Pay more">');
+    // No separate folds for the body or the Pay box any more.
+    for (const old of ["needs-body-", "needs-pay-", "update-body-", "update-pay-", "row-body-"]) expect(page).not.toContain(`<Fold id={\`${old}`);
+    expect(page).toContain('<Fold id={`row-more-${x.id}`} summary="Pay more">'); // a call's Pay more under the Calls fold stays
     expect(page).not.toContain("<AnswersBox>");
   });
 

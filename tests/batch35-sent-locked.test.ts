@@ -200,6 +200,6 @@ describe("one list per part, with Added", () => {
     expect(await testV(dev.user.id, testId)).not.toBe(before);
     // The redraw keeps the panel's own height state and the folds' DOM (no key change, no remount).
     expect(src("components/Panel.tsx")).toContain("const [height, setHeight] = useState<number | null>(null);");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('<Fold id={`needs-body-${x.s!.id}`}');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('<Fold id={`needs-part-${x.id}`}');
   });
 });

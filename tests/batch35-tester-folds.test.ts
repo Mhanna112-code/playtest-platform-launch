@@ -54,12 +54,12 @@ describe("each tester folds by their name", () => {
     expect(r.indexOf("rateBoxOf(c)")).toBeGreaterThan(end);
     expect(r.indexOf('data-tester-profile=""')).toBeGreaterThan(end);
     const p = page();
-    for (const [f, button] of [["needs-excerpt-${x.id}", "<ExcerptDecision"], ["needs-dispute-${d.id}", "<DisputeSide"], ["needs-pay-${x.s!.id}", "<PayBox"]]) {
+    for (const [f, button] of [["needs-excerpt-${x.id}", "<ExcerptDecision"], ["needs-dispute-${d.id}", "<DisputeSide"], ["needs-part-${x.id}", "<PayBox"]]) {
       const at = p.indexOf(`<Fold id={\`${f}\`}`);
       expect(at, f).toBeGreaterThan(0);
       const close = p.indexOf("</Fold>", at);
-      // The excerpt's and dispute's buttons follow their fold; the Pay box is its own fold.
-      if (f.startsWith("needs-pay")) expect(p.slice(at, close)).toContain(button);
+      // The excerpt's and dispute's buttons follow their fold; the Pay box is inside the part's fold.
+      if (f.startsWith("needs-part")) expect(p.slice(at, close)).toContain(button);
       else expect(p.indexOf(button, close)).toBeLessThan(p.indexOf("</div>", close) + 200);
     }
     expect(src("app/app/tests/[id]/Applications.tsx")).toMatch(/<\/Fold>\n[ ]*<div className="flex flex-wrap gap-2">\n[ ]*<button className="btn"/);
