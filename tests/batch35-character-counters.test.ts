@@ -29,7 +29,16 @@ describe("owner: every limited text field shows its current count", () => {
     const html = render(h(CharacterCount, { value, min, max: 10, required }));
     expect(html).toContain(`${value.length} / 10`);
     expect(invalid(html)).toBe(bad);
-    expect(html).toContain(bad ? "text-rose-300" : "text-slate-500");
+    // (Owner, Nov 3) Red at once only over the limit; under the minimum it's grey (data-count-under) until a save marks its field (globals.css).
+    const over = value.length > 10;
+    expect(html).toContain(over ? "text-rose-300" : "text-slate-500");
+    expect(html.includes("data-count-under")).toBe(bad && !over);
+    // "(at least N)" only while the minimum isn't met.
+    expect(html.includes("(at least")).toBe(bad && !over);
+  });
+  it("the red-after-a-save rule is in the stylesheet", async () => {
+    const fs = await import("node:fs");
+    expect(fs.readFileSync("src/app/globals.css", "utf8")).toContain(':where(*):has(> .field-bad, > [aria-invalid="true"], > [data-note-after] .field-bad, > [data-note-after] [aria-invalid="true"]) > [data-count-under] { color: rgb(253 164 175); }');
   });
   it("counts marker-free written text and uses the same formatted-text minimum as Send", () => {
     const value = "Hello [📎 picture.png #abcd]";

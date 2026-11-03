@@ -86,3 +86,6 @@ details[open] > summary.fold-chevron::before { transform: rotate(90deg); }
 @media (prefers-reduced-motion: reduce) {
   summary.fold-chevron::before { transition: none; }
 }
+
+/* (Owner, Nov 3) A counter under its minimum turns red only after a save was tried: when its field is marked (the press's check or the server's mistake). */
+:where(*):has(> .field-bad, > [aria-invalid="true"], > [data-note-after] .field-bad, > [data-note-after] [aria-invalid="true"]) > [data-count-under] { color: rgb(253 164 175); }
