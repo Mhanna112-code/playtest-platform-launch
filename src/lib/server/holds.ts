@@ -592,11 +592,18 @@ export async function owedLines(devId: string) {
   const out = [];
   // (Owner, Nov 2, §125) A charge that came in while Pay what you owe's one payment is in flight (being charged, or its bank check open) isn't added to it (its
   // amount is fixed at the claim): it waits, and is charged right after that payment goes through and the hold lifts (the after-lift combined payment, §122).
-  const inFlight = new Set(locks.values()).size > 0 && (await db.payment.count({ where: { id: { in: [...new Set(locks.values())] }, kind: "owed", status: { in: ["paying", "needs_action", "needs_confirmation"] } } })) > 0;
+  let inFlight = new Set(locks.values()).size > 0 && (await db.payment.count({ where: { id: { in: [...new Set(locks.values())] }, kind: "owed", status: { in: ["paying", "needs_action", "needs_confirmation"] } } })) > 0;
+  // (Owner, Nov 2) A chargeback hold's reservation being made or waiting for the bank counts the same: what it covers reads "Waiting for your bank" (not paid by the
+  // button), and a charge that came in after it reads "Charged right after the payment above goes through" (it's charged after the lift, never added to it).
+  const opening = u?.holdStartedAt && u.holdReason === "chargeback" ? await db.reservation.findMany({ where: { developerId: devId, status: { in: ["pending", "needs_action"] } }, select: { covers: true } }) : [];
+  const reserving = new Set(opening.flatMap((r) => r.covers));
+  if (opening.length) inFlight = true;
   for (const p of list) {
-    const checkId = locks.get(p.id) ?? null;
-    const late = !checkId && inFlight && p.status === "deferred";
-    const lock = late ? { retry: false, waiting: true, checkId: null, tag: OWED_AFTER_CHECK, after: OWED_AFTER_CHECK } : { retry: !checkId, waiting: !!checkId, checkId, tag: checkId ? OWED_BANK_WAITING : "" };
+    if (reserving.has(p.id)) locks.set(p.id, "");
+    const checkId = locks.get(p.id) || null;
+    const late = !locks.has(p.id) && inFlight && p.status === "deferred";
+    const held = locks.has(p.id);
+    const lock = late ? { retry: false, waiting: true, checkId: null, tag: OWED_AFTER_CHECK, after: OWED_AFTER_CHECK } : { retry: !held, waiting: held, checkId, tag: held ? OWED_BANK_WAITING : "" };
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true, test: { select: { title: true } } } }) : null;
     const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
     const what = `${c ? displayName(c.tester) + "'s " : ""}${p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers"}`;
