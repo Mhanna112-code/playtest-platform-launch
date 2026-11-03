@@ -591,7 +591,7 @@ export async function owedLines(devId: string) {
     const what = `${c ? displayName(c.tester) + "'s " : ""}${p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers"}`;
     // `source` (batch 10): what put it on the list, for the stop-once wording.
     out.push(p.chargeback === "open"
-      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, c ? { what, test: c.test.title, date: fmtDate(p.createdAt).replace(/, \d{4}$/, "") } : undefined) }
+      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, c ? { name: displayName(c.tester), part: p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers", test: c.test.title, date: fmtDate(p.createdAt).replace(/, \d{4}$/, "") } : undefined) }
       : p.status === "owed" || p.status === "deferred" || (p.status === PAYING && !p.owedUntil)
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet. (§125) A charge waiting for the lift ("deferred") is paid with
         // what you owe, as one payment, and reads the same.
