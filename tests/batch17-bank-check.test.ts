@@ -257,7 +257,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // Payments: no Confirm of its own, a link to the same button.
     const items = await confirmItems(dev.user.id);
     // (§131) It names the piece: which tester, which part, which test (cut at 10 characters; `full` uncut, the hover).
-    expect(items).toEqual([{ id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href }]);
+    expect(items).toEqual([{ tests: expect.any(Array), id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href }]);
     const list = renderToStaticMarkup(createElement(ConfirmList, { items }));
     expect(list).toContain(`href="${href}"`);
     expect(list).toContain("Confirm with your bank →");

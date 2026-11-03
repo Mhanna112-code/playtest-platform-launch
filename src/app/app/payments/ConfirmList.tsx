@@ -1,6 +1,7 @@
 "use client";
 import { BankWaiting } from "@/components/BankWaiting";
 import { CONFIRM_WITH_BANK } from "@/lib/rules";
+import { withTestLinks, type TestLink } from "@/components/TestLinks";
 
 /**
  * (Owner, Oct 29, batch 11) Payments your bank wants you to confirm (made while you weren't here: a tester's Charge, a dispute decision, a retry during a hold, a renewal).
@@ -8,7 +9,7 @@ import { CONFIRM_WITH_BANK } from "@/lib/rules";
  * (Batch 17 §11) A charge on a test is confirmed on that test page, under the piece: the row links straight to its "Confirm with your bank" (the piece marked). Only a
  * charge that belongs to no test (a renewal) is confirmed here, with the same inline check.
  */
-export function ConfirmList({ items }: { items: { id: string; text: string; /** (§131) the names uncut: the hover */ full?: string; href: string | null }[] }) {
+export function ConfirmList({ items }: { items: { id: string; text: string; /** (§131) the names uncut: the hover */ full?: string; href: string | null; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: TestLink[] }[] }) {
   if (!items.length) return null;
   return (
     <section id="confirm" className="card scroll-mt-24 space-y-3 border-sky-300/30" data-confirm-list="">
@@ -18,11 +19,11 @@ export function ConfirmList({ items }: { items: { id: string; text: string; /** 
           <li key={i.id} className="flex flex-wrap items-center gap-2" data-confirm-item={i.id}>
             {i.href ? (
               <>
-                <span className="mr-auto text-slate-200" title={i.full}>{i.text}</span>
+                <span className="mr-auto text-slate-200" title={i.full}>{withTestLinks(i.text, i.tests)}</span>
                 <a href={i.href} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-bank-link="">{CONFIRM_WITH_BANK} →</a>
               </>
             ) : (
-              <BankWaiting paymentId={i.id} line={i.text} full={i.full} />
+              <BankWaiting paymentId={i.id} line={withTestLinks(i.text, i.tests)} full={i.full} />
             )}
           </li>
         ))}

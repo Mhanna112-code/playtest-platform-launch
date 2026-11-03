@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money } from "@/lib/format";
-import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine } from "@/lib/rules";
+import { CONFIRM_DAYS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
@@ -123,6 +123,27 @@ async function piecesNamed(waiting: Waiting[], day: (d: Date) => string) {
 }
 
 /**
+ * (Owner, Nov 2) The tests a waiting charge names, for linking the quoted names: its own test, or (Pay what you owe's one payment) every test of what it covers.
+ * Each under the names a line can show (cut at 10 characters, and in full).
+ */
+async function testLinksOf(waiting: { id: string; kind: string; contractId: string | null }[]) {
+  const ids = waiting.map((p) => p.id);
+  const covered = await db.payment.findMany({ where: { coveredById: { in: ids } }, select: { coveredById: true, contractId: true } });
+  const contractIds = [...new Set([...waiting.map((p) => p.contractId), ...covered.map((p) => p.contractId)].filter((x): x is string => !!x))];
+  const contracts = new Map((await db.contract.findMany({ where: { id: { in: contractIds } }, select: { id: true, title: true, testId: true, test: { select: { title: true } } } })).map((c) => [c.id, c]));
+  const linksFor = (cids: (string | null)[]) => {
+    const out: { name: string; href: string }[] = [];
+    for (const id of cids) {
+      const c = id ? contracts.get(id) : undefined;
+      if (!c) continue;
+      for (const title of new Set([c.title, c.test.title])) for (const name of new Set([title, cut10(title)])) out.push({ name, href: `/app/tests/${c.testId}` });
+    }
+    return out;
+  };
+  return new Map(waiting.map((p) => [p.id, linksFor([p.contractId, ...covered.filter((x) => x.coveredById === p.id).map((x) => x.contractId)])]));
+}
+
+/**
  * (Batch 17 §11) Payments' list: each charge waiting for the bank, with the link to its test page's "Confirm with your bank" (`href`), or none (a renewal: confirmed
  * right there). (§131) Each names its piece: "The team's dispute decision on Ana Silva's written answers on “Harbor Run” $3.00 · confirm by …".
  */
@@ -134,6 +155,7 @@ export async function confirmItems(devId: string) {
   const owedIds = waiting.filter((p) => p.kind === "owed").map((p) => p.id);
   const once = await import("./owedOnce");
   const [covers, coversFull] = await Promise.all([once.coveredNames(owedIds), once.coveredNames(owedIds, true)]);
+  const links = await testLinksOf(waiting);
   return waiting.map((p) => {
     const n = named(p);
     // (§131) `full`: the same line with the names uncut (the item's hover).
@@ -146,7 +168,7 @@ export async function confirmItems(devId: string) {
       const list = p.kind === "owed" && cov.get(p.id)?.length ? ` (${cov.get(p.id)!.join(", ")})` : "";
       return `${what} ${money(p.amountCents)}${list}${n.c && !piece ? ` on “${n.c.title}”` : ""} · confirm by ${fmtDateTimeIn(p.actionBy!, tz)}`;
     };
-    return { id: p.id, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null };
+    return { id: p.id, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [] };
   });
 }
 
@@ -164,6 +186,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
   const owedIds = waiting.filter((p) => p.kind === "owed").map((p) => p.id);
   const once = await import("./owedOnce");
   const [covers, coversFull] = await Promise.all([once.coveredNames(owedIds), once.coveredNames(owedIds, true)]);
+  const links = await testLinksOf(waiting);
   return waiting
     .map((p) => {
       const n = named(p);
@@ -185,7 +208,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
         return bankTopLead(p.amountCents, namesTest ? null : c?.title ?? null, what);
       };
       const by = confirmByText(p.actionBy!, now, tz);
-      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime() };
+      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [] };
     })
     .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
 }

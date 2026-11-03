@@ -47,7 +47,7 @@ export const bankTopLead = (cents: number, test: string | null, what: string | n
   what == null ? `${money(cents)} for your plan` : `${money(cents)}${test ? ` on “${test}”` : ""} · ${what}`;
 
 /** `full`: the lead with the names uncut, the row's hover (§131). */
-export type BankTopRow = { id: string; lead: string; full: string; by: string; soon: boolean; href: string; at: number };
+export type BankTopRow = { id: string; lead: string; full: string; by: string; soon: boolean; href: string; at: number; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: { name: string; href: string }[] };
 
 /** The dashboard poll's fingerprint for the box: a row appearing, leaving or turning red refreshes it. */
 export const bankTopV = (rows: BankTopRow[]) => rows.map((r) => `${r.id}:${r.lead}:${r.by}:${r.soon ? 1 : 0}`).join(",");

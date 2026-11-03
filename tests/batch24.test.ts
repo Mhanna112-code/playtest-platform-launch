@@ -70,7 +70,9 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const html = markup(rows);
     expect(html).toContain("Your bank wants you to confirm");
     expect(html).toContain('class="text-sm font-normal text-slate-400">1</span>');
-    expect(html).toContain(`$12.50 · Ana Silva&#x27;s written answers on “Harbor Run” · <span`);
+    // (Owner, Nov 2) The test's name opens it in a new tab.
+    expect(html).toContain(`$12.50 · Ana Silva&#x27;s written answers on <a href="/app/tests/`);
+    expect(html).toContain(`“Harbor Run”</a> · <span`);
     expect(html).toContain(`data-bank-waiting="${p.id}"`);
     expect(html).toContain("Confirm with your bank</button>");
     // The same plain scroll box as Needs you, everything in it (no "Show N more").
@@ -106,7 +108,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(markup([row])).toContain(`$9.00 for your plan · <span`);
     // Payments' row for a renewal is the inline box carrying that anchor (marked by HashJump).
     expect(src("components/BankWaiting.tsx")).toContain("id={bankAnchor(paymentId)}");
-    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} line={i.text} full={i.full} />");
+    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} line={withTestLinks(i.text, i.tests)} full={i.full} />");
   });
 
   it("under 24 hours left the confirm-by part is red and names the day", async () => {
