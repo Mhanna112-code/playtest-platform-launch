@@ -1,3 +1,4 @@
+import { Cut } from "@/components/Cut";
 import { KeyRound } from "lucide-react";
 import { FREE_KEYS_HINT } from "@/lib/keys";
 import { KeysWarning, type BrokenKey } from "./KeysWarning";
@@ -33,7 +34,7 @@ export function KeysNotice({ testId, keys }: { testId: string; keys: KeysView | 
           <ul className="max-h-[5.5rem] space-y-0.5 overflow-y-auto pr-1 text-xs" data-given-keys="">
             {keys.inUse.filter((k) => !k.gone).length ? keys.inUse.filter((k) => !k.gone).map((k) => (
               <li key={k.id} className="truncate" title={`${k.value} · ${k.tester}${k.broken ? " (reported as not working)" : ""}`}>
-                <span className={`font-mono ${k.broken ? "line-through opacity-60" : ""}`}>{k.value}</span> · {k.tester}
+                <span className={`font-mono ${k.broken ? "line-through opacity-60" : ""}`}>{k.value}</span> · <Cut text={k.tester} />
               </li>
             )) : <li className="text-amber-100/70">None yet</li>}
           </ul>

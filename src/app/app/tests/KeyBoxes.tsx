@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { KeyCounts } from "@/components/KeyCounts";
 import { FREE_KEYS_RULE, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 
@@ -56,7 +57,7 @@ export function KeyBoxes({ data, typed, onType, onBlur, openSpots, line, warning
               {inUse.map((k) => (
                 <li key={k.id} className={`flex flex-wrap items-center justify-between gap-2 ${k.gone ? "text-slate-500" : k.broken ? "text-slate-500 line-through" : "text-slate-200"}`} data-key-gone={k.gone} title={k.broken ? `${k.tester} reported this key as not working` : undefined}>
                   <span className={`font-mono ${k.broken ? "line-through" : ""}`}>{k.value}</span>
-                  <span className="text-xs no-underline">{k.tester}{k.gone ? ` (${k.gone})` : ""}{k.broken ? " · not working" : ""}</span>
+                  <span className="text-xs no-underline"><Cut text={k.tester} />{k.gone ? ` (${k.gone})` : ""}{k.broken ? " · not working" : ""}</span>
                 </li>
               ))}
             </ul>

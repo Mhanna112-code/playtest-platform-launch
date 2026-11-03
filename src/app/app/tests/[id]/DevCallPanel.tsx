@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { useEffect, useRef, useState } from "react";
 import { lengthCap } from "@/lib/callMeasure";
 import { useRouter } from "next/navigation";
@@ -112,11 +113,15 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const rowsNamed = (t: DevTester) => (t.calls.length > 0 || t.sets.length > 0 || t.requests.length > 0) && t.requests.every((r) => !r.mine);
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
-      <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
-      {c.joinable && <JoinCall callId={c.id} />}
-      {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
-      {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
-      {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
+      <span className="mr-auto"><Cut text={t.name} /> · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
+      {/* (Owner, Nov 3, long text) The call's buttons stay together: beside the line when there is room, all on a line of their own when it is long
+          (never Add to calendar on one line and Cancel on the next). */}
+      <span className="flex max-w-full flex-wrap items-center gap-2" data-call-buttons="">
+        {c.joinable && <JoinCall callId={c.id} />}
+        {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
+        {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
+        {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
+      </span>
       {box("cancel-" + c.id)}
       {box("noshow-" + c.id)}
       <CallCheck className="w-full" />
@@ -139,7 +144,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           <label className="block font-medium"><input type="checkbox" checked={all} onChange={() => setTicked(all ? [] : testers.map((t) => t.contractId))} /> Select all ({testers.length})</label>
           {testers.map((t) => (
             <label key={t.contractId} className="block">
-              <input type="checkbox" checked={ticked.includes(t.contractId)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.contractId] : ticked.filter((x) => x !== t.contractId))} /> <b>{t.name}</b> · {t.terms} · {t.booked} of 3 booked
+              <input type="checkbox" checked={ticked.includes(t.contractId)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.contractId] : ticked.filter((x) => x !== t.contractId))} /> <b><Cut text={t.name} /></b> · {t.terms} · {t.booked} of 3 booked
               {t.warning && <span className="block pl-5 text-xs text-amber-200" data-calls-warning="">{t.warning}</span>}
             </label>
           ))}
@@ -180,7 +185,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           {/* (Batch 35 §79, owner Oct 31) No name heading when every row already starts with it ("fbbb · Daily · Sat 9:46 PM (4 left) · …", "fbbb requested …"). */}
-          {!rowsNamed(t) && <h3>{t.name}</h3>}
+          {!rowsNamed(t) && <h3><Cut text={t.name} /></h3>}
           {!t.calls.length && !t.sets.length && !t.requests.length && <p className="note">No calls or requests</p>}
           {t.warning && <p className="text-xs text-amber-200" data-calls-warning="">{t.warning}</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}
@@ -190,7 +195,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             {t.sets.map((s) => (
               <li key={s.id} className="space-y-1" data-call-set="">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="mr-auto">{t.name} · {s.label} · {s.minutes} min · {s.rate}</span>
+                  <span className="mr-auto"><Cut text={t.name} /> · {s.label} · {s.minutes} min · {s.rate}</span>
                   <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [s.id]: !(open[s.id] ?? s.calls.some((c) => c.joinable)) })}>{(open[s.id] ?? s.calls.some((c) => c.joinable)) ? "Hide calls" : "Show calls"}</button>
                   <CancelMenu needsReason={s.needsReason} busy={busy} other={t.name} label="Cancel the remaining calls"
                     rule={`Cancels every call still ahead and ${t.name} is told.${s.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
@@ -208,7 +213,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             {t.requests.map((r) => (
               <li key={r.id}>
                 <a href={`#req-${r.id}`} onClick={(e) => { e.preventDefault(); jumpTo(`req-${r.id}`); }}>
-                  {r.mine ? "You requested" : `${t.name} requested`} {describeRows(r.rows)}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
+                  {r.mine ? "You requested" : <><Cut text={t.name} /> requested</>} {describeRows(r.rows)}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
                 </a>
               </li>
             ))}

@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { LIMITS } from "@/lib/limits";
 import { CharacterCount } from "@/components/CharacterCount";
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
@@ -116,7 +117,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
             <summary className="fold-chevron cursor-pointer font-medium text-white">Their chat on this test <span className="font-normal text-slate-400">({(d.chat ?? []).length})</span></summary>
             {(d.chat ?? []).length === 0 ? <p className="note mt-2">No messages.</p> : (
               <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
-                {(d.chat ?? []).map((m) => <li key={m.id} className="whitespace-pre-wrap break-words"><b>{m.who}</b> <span className="text-xs text-slate-500">{m.at}</span>: {m.text}</li>)}
+                {(d.chat ?? []).map((m) => <li key={m.id} className="whitespace-pre-wrap break-words"><b><Cut text={m.who} /></b> <span className="text-xs text-slate-500">{m.at}</span>: {m.text}</li>)}
               </ul>
             )}
           </details>
@@ -226,7 +227,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const c = row as ChargebackVM;
       return (
         <div className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-chargeback-hold={c.id}>
-          <p>{c.who ? <AdminRich parts={c.who} /> : c.email} · on hold since {c.since}</p>
+          <p>{c.who ? <AdminRich parts={c.who} /> : <Cut text={c.email} kind="email" />} · on hold since {c.since}</p>
           {(c.chargebackParts ?? c.chargebacks).map((x, i) => <p key={i} className="text-slate-400">{typeof x === "string" ? x : <AdminRich parts={x} />}</p>)}
           <div data-chargeback-steps="">
             Chargeback hold: card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, owed reserved <b>{c.owedPaid ? "✓" : "✗"}</b>{c.owedLine}{" "}

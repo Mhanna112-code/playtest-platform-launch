@@ -1,3 +1,4 @@
+import { Cut } from "@/components/Cut";
 import Link from "next/link";
 import type { ReactNode } from "react";
 
@@ -8,7 +9,7 @@ import type { ReactNode } from "react";
 export function PersonHover(p: { name: string; href: string; summary: string[]; block?: ReactNode; chat?: ReactNode; className?: string }) {
   return (
     <span className="group relative inline-block">
-      <Link href={p.href} className={`${p.className ?? "text-slate-200"} underline-offset-2 hover:underline focus:outline-none focus-visible:underline`}>{p.name}</Link>
+      <Link href={p.href} className={`${p.className ?? "text-slate-200"} underline-offset-2 hover:underline focus:outline-none focus-visible:underline`}><Cut text={p.name} /></Link>
       <span role="tooltip"
         className="invisible absolute left-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
         <span className="block font-semibold text-white">{p.name}</span>

@@ -1,3 +1,4 @@
+import { Cut } from "@/components/Cut";
 import { HelpCircle, MessageSquareText } from "lucide-react";
 import { fmtDateTimeIn, money } from "@/lib/format";
 import type { QuestionBlock } from "@/lib/byQuestion";
@@ -27,7 +28,7 @@ export function ByQuestion({ blocks, timeZone }: { timeZone?: string | null; blo
                 {b.answers.map((a) => (
                   <li key={a.contractId} className="flex gap-3 py-2.5 text-sm">
                     <span className="w-32 shrink-0 space-y-1">
-                      <a href={`#tester-${a.contractId}`} className="block text-slate-400 no-underline hover:text-white">{a.tester}</a>
+                      <a href={`#tester-${a.contractId}`} className="block text-slate-400 no-underline hover:text-white"><Cut text={a.tester} /></a>
                       <span className="block text-xs text-slate-500">{fmtDateTimeIn(a.sentAt, timeZone)}</span>
                       <span className={`badge text-xs ${STATUS[a.status]}`}>{a.status === "paid" ? `Paid ${money(a.paidCents)}` : a.status === "rejected" ? "Rejected" : "Not reviewed yet"}</span>
                     </span>

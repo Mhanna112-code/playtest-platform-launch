@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { Fragment } from "react";
 import type { Rich } from "@/lib/rich";
 import { ReasonQuote } from "@/components/ScrollText";
@@ -18,7 +19,7 @@ export function goToMine(jump: string, away: string) {
 
 export function MineLine({ m }: { m: MineVM }) {
   const parts: Rich = m.parts ?? [m.title, ` · ${m.dev} · ${m.why} · ${m.when}`];
-  if (!m.jump) return m.parts ? <AdminRich parts={m.parts} /> : <>{m.testId ? <a href={`/app/find/${m.testId}`}>“{m.title}”</a> : <span>{m.title}</span>} · {m.dev} · {m.why} · {m.when}</>;
+  if (!m.jump) return m.parts ? <AdminRich parts={m.parts} /> : <>{m.testId ? <a href={`/app/find/${m.testId}`}>“<Cut text={m.title} kind="test" />”</a> : <span><Cut text={m.title} kind="test" /></span>} · <Cut text={m.dev} /> · {m.why} · {m.when}</>;
   const jump = m.jump;
   const fallback = m.href ?? (m.testId ? `/app/find/${m.testId}` : "/admin");
   return (

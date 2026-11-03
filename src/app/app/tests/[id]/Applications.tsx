@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { MARKABLE } from "@/lib/markJump";
 import { ChangesBox } from "@/components/ChangesBox";
 import { PressDone } from "@/components/PressDone";
@@ -29,7 +30,7 @@ export function Applications({ testId, seenAt, apps, needs }: { needs: Needs; te
       <ul className="space-y-3 text-sm">
         {apps.map((a) => (
           <li key={a.id} id={`item-app-${a.id}`} className={`space-y-1 ${MARKABLE}`}>
-            {a.line ? <p><a href={`/app/testers/${a.userId}`}><b>{a.name}</b></a> {a.line.replace(a.name, "").trim()}</p> : <p><a href={`/app/testers/${a.userId}`}><b>{a.name}</b></a></p>}
+            {a.line ? <p><a href={`/app/testers/${a.userId}`}><b><Cut text={a.name} /></b></a> {a.line.replace(a.name, "").trim()}</p> : <p><a href={`/app/testers/${a.userId}`}><b><Cut text={a.name} /></b></a></p>}
             {a.tag && <span className="badge border-amber-300/40 text-amber-200">{a.tag}</span>}
             <p className="text-xs text-slate-500">{a.detail}</p>
             {a.note && <ClampText text={`“${a.note}”`} />}

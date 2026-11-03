@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
@@ -74,7 +75,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
           {sorted.map((r) => (
             <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 ${MARKABLE}`} data-request-row={r.mine ? "mine" : "theirs"}>
               <span className="mr-auto text-slate-300">
-                {side === "developer" && <><b className="text-white">{r.tester}</b> · </>}
+                {side === "developer" && <><b className="text-white"><Cut text={r.tester} /></b> · </>}
                 {describeRows(r.rows)} · {r.minutes} min · {r.rate} · asked by {r.mine ? "you" : r.asker}
               </span>
               {gone[r.id] ? (

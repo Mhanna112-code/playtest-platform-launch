@@ -157,7 +157,8 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(actions).toContain("{canSend && <button className={`btn ${unchanged ? \"!bg-white/10 !text-ink-400 !shadow-none\" : \"\"}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged}"); // (batch 20 section 26)
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("{canSend && sendable && uploaded.length > 0 && (");
     // Testers' dashboard rows keep the "Paused" tag.
-    expect(src("app/app/page.tsx")).toContain("{c.title} {pausedTest(c.test) && <PausedTag />}");
+    // (Owner, Nov 3) The title is cut at 10 characters (Cut).
+    expect(src("app/app/page.tsx")).toContain("<Cut text={c.title} kind=\"test\" /> {pausedTest(c.test) && <PausedTag />}");
   });
 
   it("the server refusals stay as a backstop", async () => {

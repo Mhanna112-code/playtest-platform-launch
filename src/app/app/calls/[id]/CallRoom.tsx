@@ -290,7 +290,7 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
         </div>
       </div>
       <div className="card flex flex-wrap items-center gap-2 py-3">
-        <span className="min-w-0 flex-1 text-sm text-slate-300" role="status" data-call-status="">{status} · measured so far: <strong className="text-white">{measured} min</strong></span>
+        <span className="min-w-[min(100%,12rem)] flex-1 text-sm text-slate-300" role="status" data-call-status="">{status} · measured so far: <strong className="text-white">{measured} min</strong></span>
         <button type="button" onClick={() => toggle("audio")} className="btn-secondary px-3 py-1.5 text-sm" aria-pressed={!mic}>{mic ? <Mic className="h-4 w-4" /> : <MicOff className="h-4 w-4" />} {mic ? "Mute" : "Unmute"}</button>
         <button type="button" onClick={() => toggle("video")} className="btn-secondary px-3 py-1.5 text-sm" aria-pressed={!cam}>{cam ? <Video className="h-4 w-4" /> : <VideoOff className="h-4 w-4" />} {cam ? "Camera off" : "Camera on"}</button>
         <button type="button" onClick={shareScreen} className="btn-secondary px-3 py-1.5 text-sm"><MonitorUp className="h-4 w-4" /> Share screen</button>

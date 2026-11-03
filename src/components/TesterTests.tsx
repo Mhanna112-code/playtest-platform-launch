@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import Link from "next/link";
 import { useState } from "react";
 import { ScrollList } from "@/components/ScrollList";
@@ -34,7 +35,7 @@ export function TesterTests({ name, rows }: { name: string; rows: TesterTestRow[
           {shown.map((r) => (
             <li key={r.id} className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-xl border border-white/10 p-3 text-sm" data-tester-test={r.open ? "open" : "closed"}>
               <span className="min-w-[12rem] flex-1">
-                <Link href={r.href} className="block truncate font-medium text-white" title={r.title}>{r.title}</Link>
+                <Link href={r.href} className="block truncate font-medium text-white" title={r.title}><Cut text={r.title} kind="test" /></Link>
                 <span className="block text-slate-400">Joined {fmtDate(new Date(r.joinedAt))}</span>
               </span>
               <span className="badge">{r.state}</span>

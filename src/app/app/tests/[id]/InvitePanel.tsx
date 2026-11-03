@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { inviteAvailabilityV } from "@/lib/inviteAvailability";
 import { LIVE_TICK, rideLiveClock } from "@/lib/liveSync";
 import { SubscribersTag } from "@/components/SubscribeLink";
@@ -281,7 +282,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const row = (t: Tester, key: string) => (
     <li key={key + t.id} data-invite-row={t.id} className={`flex flex-wrap items-center gap-2 ${t.grey ? "text-slate-500" : "text-slate-300"}`}>
       <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
-      <span className="min-w-[8rem] flex-1 truncate" title={t.name}><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a></span>
+      <span className="min-w-[8rem] flex-1 truncate" title={t.name}><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline"><Cut text={t.name} /></a></span>
       {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
       {/* (Batch 15 section 35) 3 items, then "+N more" which opens the rest in place. */}
       {t.tag && <span className="badge border-amber-300/40 text-amber-200">{t.tag}</span>}
@@ -292,7 +293,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         <details className="basis-full pl-6 text-xs text-slate-400">
           {/* (Owner, Oct 28, batch 20 section 23) Not "in" them: how each one went ("jj · ended", "Harbor Run · in it now"). */}
           <summary className="cursor-pointer">Worked with you on {t.together.length} test{t.together.length === 1 ? "" : "s"}</summary>
-          <ul className="mt-1 space-y-0.5">{t.together.map((x) => <li key={x.id} data-together-state={x.state ?? ""}><a href={`/app/tests/${x.id}`} target="_blank" rel="noopener">{x.title}</a>{x.state ? ` · ${x.state}` : ""}</li>)}</ul>
+          <ul className="mt-1 space-y-0.5">{t.together.map((x) => <li key={x.id} data-together-state={x.state ?? ""}><a href={`/app/tests/${x.id}`} target="_blank" rel="noopener"><Cut text={x.title} kind="test" /></a>{x.state ? ` · ${x.state}` : ""}</li>)}</ul>
         </details>
       )}
     </li>
@@ -305,7 +306,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     setTimeout(() => (inviteId ? jumpTo(`invited-${inviteId}`) : document.getElementById("invited-list")?.scrollIntoView({ block: "center", behavior: "smooth" })), 50);
   };
   const whyRow = (t: Tester) => {
-    const name = <a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline">{t.name}</a>;
+    const name = <a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline"><Cut text={t.name} /></a>;
     const [lead, link] = t.whyKind === "applied" ? (t.why ?? "").split(": ") : [t.why ?? "", ""];
     return (
       <li key={"f" + t.id} data-invite-row={t.id} data-invite-why={t.whyKind} className="text-slate-500">
@@ -344,7 +345,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
           <LongList shown={allSent ? p.sent.length : 3} tall="max-h-48" className="space-y-1 text-sm">
             {p.sent.map((s) => (
               <li key={s.id} id={`invited-${s.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
-                <span className="mr-auto">{s.name} · {s.status}</span>
+                <span className="mr-auto"><Cut text={s.name} /> · {s.status}</span>
                 {s.tag && <span className="badge border-amber-300/40 text-amber-200">{s.tag}</span>}
                 <span className="text-xs text-slate-500">{s.detail}</span>
                 {s.status === "waiting for them to join" && (

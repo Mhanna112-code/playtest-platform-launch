@@ -1,4 +1,5 @@
 "use client";
+import { Cut } from "@/components/Cut";
 import { fmtDateIn } from "@/lib/format";
 import { SubscribersTag } from "@/components/SubscribeLink";
 import { useState } from "react";
@@ -176,7 +177,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
               {p.working.map((w) => (
                 <label key={w.contractId} className="flex flex-wrap items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-slate-200">
                   <input type="checkbox" checked={picked.includes(w.contractId)} onChange={(e) => { setNoTick(false); setPicked(e.target.checked ? [...picked, w.contractId] : picked.filter((x) => x !== w.contractId)); }} />
-                  <strong className="text-white">{w.name}</strong>
+                  <strong className="text-white"><Cut text={w.name} /></strong>
                   <span className="text-xs text-slate-400">
                     {w.sent.length ? `sent the ${w.sent.join(" and ")}` : "nothing sent yet"}{w.toSend.length ? ` · still to send: ${w.toSend.join(" and ")}` : ""}{w.ahead ? ` · ${w.ahead} call${w.ahead === 1 ? "" : "s"} ahead` : ""}
                   </span>

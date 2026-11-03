@@ -26,7 +26,7 @@ export function ChatWithButton({ contractId, name }: { contractId: string; name:
           }
         }}
       >
-        <MessagesSquare className="h-3.5 w-3.5" /> Chat with {name}
+        <MessagesSquare className="h-3.5 w-3.5 shrink-0" /> <span className="min-w-0 [overflow-wrap:anywhere]">Chat with {name}</span>
       </button>
       <Err text={err} />
     </span>

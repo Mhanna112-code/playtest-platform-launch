@@ -1,3 +1,4 @@
+import { Cut } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
 import { markerIds } from "@/lib/answerAttachments";
@@ -331,7 +332,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <h2 className="font-semibold text-white">Excerpts</h2>
               {excerptReqs.map((x) => (
                 <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
-                  <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+                  <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
                 {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                   <ExcerptQuestion question={x.question} />
                   <ClampText text={`“${x.text}”`} className="text-slate-200" />
@@ -356,7 +357,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <div className="space-y-2">
                 {disputesWaiting.map((d) => (
                   <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-                    <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
+                    <p className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team:</p>
                     <ReasonQuote text={d.reason} />
                     <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
                   </div>
@@ -446,7 +447,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
-              <p className="text-slate-300"><b className="text-white">Excerpt request</b> · {x.tester} would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               <ExcerptQuestion question={x.question} />
               <ClampText text={`“${x.text}”`} className="text-slate-200" />
@@ -456,7 +457,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           ))}
           {disputesWaiting.map((d) => (
             <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white">{d.name}</b> disputed what you paid for {d.what} · waiting for the team:</p>
+              <p className="text-slate-300"><b className="text-white"><Cut text={d.name} /></b> disputed what you paid for {d.what} · waiting for the team:</p>
               <ReasonQuote text={d.reason} />
               <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
             </div>
@@ -466,12 +467,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             const who = displayName(mine[0].c.tester);
             return (
               <details key={cid} open className="rounded-xl border border-white/10 p-2" data-needs-person={who}>
-                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white">{who} <span className="font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></summary>
+                {/* (Owner, Nov 3, long text) A long name wraps beside the arrow (never past the box); the count follows it, kept on one line. */}
+                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><Cut text={who} /> <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
                 <div className="mt-2 space-y-3">
           {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
               <p className="text-sm font-medium">
-                <a href={`/app/testers/${x.c.testerId}`}>{displayName(x.c.tester)}</a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
+                <a href={`/app/testers/${x.c.testerId}`}><Cut text={displayName(x.c.tester)} /></a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
               </p>
               {/* (Batch 17 §19) The last 7 days before close-out. */}
               {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
@@ -512,7 +514,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           })}
           {updates.map(({ c, s: x }) => (
             <div key={`update-${x.id}`} id={`update-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
-              <p className="text-sm font-medium"><a href={`/app/testers/${c.testerId}`}>{displayName(c.tester)}</a> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</p>
+              <p className="text-sm font-medium"><a href={`/app/testers/${c.testerId}`}><Cut text={displayName(c.tester)} /></a> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</p>
               <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
               <AnswersBox>
                 {x.kind === "written" && <SetView items={itemsOf(x.answers, writtenQuestions(c))} attachments={x.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />}
@@ -566,7 +568,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             return (
               <div key={c.id} className="panel" id={`tester-${c.id}`} data-tester-name={name}>
                 <div className="flex flex-wrap items-baseline gap-2">
-                  <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}>{name}</a></h3>
+                  <h3 className="mr-auto"><a href={`/app/testers/${c.testerId}`}><Cut text={name} /></a></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
                   {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
@@ -617,7 +619,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <b className="text-white">Live call</b>
                       <span className={`badge ${c.liveRequired ? "border-amber-300/40 text-amber-200" : ""}`}>{c.liveRequired ? "Required" : "Not required"}</span>
                       <span className={done ? "text-emerald-200" : "text-slate-400"}>{done ? `${done} done` : "None done yet"}</span>
-                      <span className="ml-auto text-slate-300">paid {money(callPaid)}</span>
+                      <span className="ml-auto whitespace-nowrap text-slate-300">paid {money(callPaid)}</span>
                     </li>
                   )}
                 </ul>
