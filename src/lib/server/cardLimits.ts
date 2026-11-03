@@ -12,8 +12,12 @@ export const CARD_ATTEMPTS_PER_ACCOUNT = 5;
 export const CARD_ATTEMPTS_PER_NETWORK = 15;
 export const TOO_MANY_CARD_ATTEMPTS = "Too many card attempts today. Try again tomorrow, or contact us.";
 
+/** (Owner, Nov 3) Local testing only: CARD_ATTEMPTS_OFF=1 waives the limits on a dev server; never in production. */
+export const cardLimitsWaived = () => process.env.NODE_ENV === "development" && process.env.CARD_ATTEMPTS_OFF === "1";
+
 /** One card attempt for `userId` from network `ip` ("" = local dev, no network cap): refused with 429 over either limit, else recorded. */
 export async function cardAttempt(userId: string, ip: string, now = new Date()) {
+  if (cardLimitsWaived()) return;
   const since = new Date(now.getTime() - CARD_WINDOW_MS);
   const [byAccount, byNetwork] = await Promise.all([
     db.loginAttempt.count({ where: { kind: CARD_KIND, email: userId, at: { gt: since } } }),
