@@ -930,7 +930,9 @@ export const chargebackRefundLine = (cents: number) => `Refund: your bank's char
 export const CHARGEBACK_FEE_CENTS = 1500;
 const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
 /** The Payments line of an open chargeback: "Your bank reversed a $X payment: $X + $15 chargeback fee." */
-export const chargebackOwedLine = (cents: number) => `Your bank reversed a ${wholeMoney(cents)} payment: ${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
+// (Owner, Nov 2) With what it paid for, when known: "Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run” (Nov 2): $10 + $15 chargeback fee".
+export const chargebackOwedLine = (cents: number, paidFor?: { what: string; test: string; date: string }) =>
+  `Your bank reversed ${paidFor ? `${wholeMoney(cents)} you paid for ${paidFor.what} on “${paidFor.test}” (${paidFor.date})` : `a ${wholeMoney(cents)} payment`}: ${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
 /** (Batch 11) The stop-once line on the developer's test page and Edit when the platform won a chargeback (a payments-kind line). */
 export const chargebackReversedLine = (cents: number, backCents: number, refunded: boolean) =>
   `Your bank's chargeback of ${money(cents)} was reversed: ${money(backCents)} ${refunded ? "refunded to your card" : "taken off what you owe"}.`;

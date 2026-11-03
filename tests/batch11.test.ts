@@ -125,7 +125,7 @@ describe("batch 11 item 2: the chargeback fee", () => {
     expect(R.CHARGEBACK_FEE_CENTS).toBe(1500);
     const { dev, p, st } = await chargedBack();
     expect((await owed(dev.user.id)).map((x) => x.amountCents)).toEqual([2500]);
-    expect((await owedLines(dev.user.id))[0].text).toBe("Your bank reversed a $10 payment: $10 + $15 chargeback fee");
+    expect((await owedLines(dev.user.id))[0].text).toMatch(/^Your bank reversed \$10 you paid for .+'s (written answers|recording|live call) on “.+” \([A-Z][a-z]{2} \d{1,2}\): \$10 \+ \$15 chargeback fee$/); // (owner, Nov 2) names what it paid for
     await db.user.update({ where: { id: dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } }); // (batch 16 section 41) step 1 first: Pay what you owe waits for the verified card
     const r = await json(await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: {} })));
     expect(r.body).toMatchObject({ paid: 0, reservedCents: 2500 });

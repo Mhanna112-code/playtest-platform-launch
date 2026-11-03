@@ -586,12 +586,12 @@ export async function owedLines(devId: string) {
     const checkId = locks.get(p.id) ?? null;
     const late = !checkId && inFlight && p.status === "deferred";
     const lock = late ? { retry: false, waiting: true, checkId: null, tag: OWED_AFTER_CHECK, after: OWED_AFTER_CHECK } : { retry: !checkId, waiting: !!checkId, checkId, tag: checkId ? OWED_BANK_WAITING : "" };
-    const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } }) : null;
+    const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true, test: { select: { title: true } } } }) : null;
     const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
     const what = `${c ? displayName(c.tester) + "'s " : ""}${p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers"}`;
     // `source` (batch 10): what put it on the list, for the stop-once wording.
     out.push(p.chargeback === "open"
-      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents) }
+      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, c ? { what, test: c.test.title, date: fmtDate(p.createdAt).replace(/, \d{4}$/, "") } : undefined) }
       : p.status === "owed" || p.status === "deferred" || (p.status === PAYING && !p.owedUntil)
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet. (§125) A charge waiting for the lift ("deferred") is paid with
         // what you owe, as one payment, and reads the same.

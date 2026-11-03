@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import * as R from "@/lib/rules";
-import { money } from "@/lib/format";
+import { fmtDate, money } from "@/lib/format";
 import { chargeDeferred, chargebackOpened, deferredForBox, declinedPayment, liftHoldIfClear, owed, owedLines, payOwed, retryOwed, startHold } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
 import { awayAction, confirmItems, expireActions } from "@/lib/server/confirm";
@@ -603,7 +603,7 @@ describe("a chargeback on an OLDER payment while Pay what you owe's press check 
     const n = st.made.length;
     const r = await press(w.dev.cookie, { seenTotalCents: 800, seenIds: [(await db.payment.findFirstOrThrow({ where: { developerId: w.dev.user.id, status: "failed" } })).id] });
     expect(r.body.error.code).toBe("stop_once");
-    expect(JSON.stringify(r.body.error)).toContain("Your bank reversed a $7 payment: $7 + $15 chargeback fee");
+    expect(JSON.stringify(r.body.error)).toMatch(/Your bank reversed \$7 you paid for Cid Moreau's written answers on “Harbor Run” \([A-Z][a-z]{2} \d{1,2}\): \$7 \+ \$15 chargeback fee/);
     expect(st.made.length).toBe(n);
     // (§129) During the chargeback hold the second press doesn't pay: it asks to verify the card, then reserves. The line says so.
     const total = r.body.error.totalCents as number;
@@ -616,7 +616,7 @@ describe("a chargeback on an OLDER payment while Pay what you owe's press check 
     await db.user.update({ where: { id: w.dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
     const r2 = await press(w.dev.cookie, { seenTotalCents: 800, seenIds: [] });
     expect(r2.body.error.code).toBe("stop_once");
-    expect(r2.body.error.changes[0].text).toBe(`Added to what you owe meanwhile: Your bank reversed a $7 payment: $7 + $15 chargeback fee, Ana Silva's written answers $8.00. New total ${money(total)}. Press again to reserve ${money(total)} on your card: it's taken when the team approves lifting your hold.`);
+    expect(r2.body.error.changes[0].text).toBe(`Added to what you owe meanwhile: Your bank reversed $7 you paid for Cid Moreau's written answers on “Harbor Run” (${fmtDate(new Date()).replace(/, \d{4}$/, "")}): $7 + $15 chargeback fee, Ana Silva's written answers $8.00. New total ${money(total)}. Press again to reserve ${money(total)} on your card: it's taken when the team approves lifting your hold.`);
     const done = await press(w.dev.cookie, { seenTotalCents: total, seenIds: r2.body.error.ids, confirmed: true });
     expect(done.body).toMatchObject({ paid: 0, reservedCents: total, lifted: false });
     expect(st.succeeded()).toEqual([]);
