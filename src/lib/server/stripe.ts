@@ -215,6 +215,11 @@ export const piWaits = (pi: PiLike) => pi.status === "requires_action" || (pi.st
 // Stripe's page can save a card or Link (which may use a card or an eligible bank account); both methods remain allowed.
 export const CARD_TYPES: ("card" | "link")[] = ["card", "link"];
 const pressParams = (mode: ChargeMode) => (mode === "away" ? { off_session: true } : { allowed_payment_method_types: CARD_TYPES, return_url: bankReturnUrl() });
+/**
+ * (Owner, Nov 3) A PaymentIntent's description as sent: paymentRows.stripeDescription builds it (the payment's "What you've paid" line, names in full, after
+ * "Playtest: "); a safety cut at Stripe's 1,000 characters.
+ */
+const stripeText = (description: string) => (description.length > 1000 ? `${description.slice(0, 999)}…` : description);
 
 /**
  * Charge the developer for one Pay press. One charge per press: the idempotency key is the press's payKey.
@@ -241,7 +246,7 @@ export async function charge(dev: Party, tester: Party, amountCents: number, pay
           payment_method: dev.stripePaymentMethodId!,
           ...pressParams(mode),
           confirm: true,
-          description,
+          description: stripeText(description),
           metadata: { developerId: dev.id, testerId: tester.id, payKey },
           ...(destination ? { application_fee_amount: split.feeCents, transfer_data: { destination } } : {}),
         },
@@ -326,7 +331,7 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
   if (!stripeOn()) return { status: "not_set_up", stripePaymentIntentId: null as string | null };
   try {
     const pi = await getStripe().paymentIntents.create(
-      { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, ...pressParams(mode), confirm: true, description, metadata: { developerId: dev.id, payKey } },
+      { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, ...pressParams(mode), confirm: true, description: stripeText(description), metadata: { developerId: dev.id, payKey } },
       { idempotencyKey: `pay-${payKey}` },
     );
     if (piWaits(pi)) return { status: "requires_action", stripePaymentIntentId: pi.id, clientSecret: pi.client_secret ?? "", checkUrl: checkUrlOf(pi) };
@@ -343,12 +348,12 @@ export async function chargePlatform(dev: Party, amountCents: number, payKey: st
 /**
  * (Owner, Oct 29, batch 23 section 6) Reserve (authorize) an amount on the developer's card without taking it: a PaymentIntent with capture_method "manual", made on-session
  * (the bank may ask for its check, shown inline). Stripe shows it "Uncaptured" until it is captured (the team's Approve) or cancelled. A declined card throws a plain
- * sentence, like charge().
+ * sentence, like charge(). (Owner, Nov 3) `description`: paymentRows.stripeDescription's "Playtest: Reserved for the team's review: …".
  */
-export async function authorize(dev: Party, amountCents: number, reservationId: string): Promise<{ status: "requires_capture" | "requires_action"; stripePaymentIntentId: string; clientSecret?: string; checkUrl?: string }> {
+export async function authorize(dev: Party, amountCents: number, reservationId: string, description: string): Promise<{ status: "requires_capture" | "requires_action"; stripePaymentIntentId: string; clientSecret?: string; checkUrl?: string }> {
   try {
     const pi = await getStripe().paymentIntents.create(
-      { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, capture_method: "manual", ...pressParams("press"), confirm: true, description: "Playtest: what you owe, reserved until the team approves lifting your hold", metadata: { developerId: dev.id, reservationId, purpose: "chargeback-reserve" } },
+      { amount: amountCents, currency: "usd", customer: dev.stripeCustomerId!, payment_method: dev.stripePaymentMethodId!, capture_method: "manual", ...pressParams("press"), confirm: true, description: stripeText(description), metadata: { developerId: dev.id, reservationId, purpose: "chargeback-reserve" } },
       { idempotencyKey: `reserve-${reservationId}` },
     );
     if (pi.status === "requires_capture") return { status: "requires_capture", stripePaymentIntentId: pi.id };

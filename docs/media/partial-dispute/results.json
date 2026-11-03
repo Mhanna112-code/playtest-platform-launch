@@ -1,0 +1,220 @@
+{
+  "notes": [
+    {
+      "step": "A full dispute (card 0259)",
+      "line": "Fred paid Eve $50.00 with card 0259: pi_3UXc1bAwolF8enxC4ve6xZYy; rows: review:charged $50.00"
+    },
+    {
+      "step": "A full dispute (card 0259)",
+      "line": "Stripe's dispute: {\"id\":\"du_1UXc1bAwolF8enxC7S2e7Tr5\",\"amount\":\"50.00\",\"status\":\"needs_response\",\"reason\":\"fraudulent\",\"created\":\"2026-11-03T07:20:55.000Z\",\"evidence_due_by\":\"2026-11-11T23:59:59.000Z\",\"stripe_fee\":\"15.00\",\"net\":\"-65.00\"}"
+    },
+    {
+      "step": "A full dispute (card 0259)",
+      "line": "delivered the real charge.dispute.created (evt_1UXc1dAwolF8enxCQWfyFh8U, amount 5000): HTTP 200 {\"received\":true}"
+    },
+    {
+      "step": "A full dispute (card 0259)",
+      "line": "the same event again: HTTP 200 {\"received\":true,\"duplicate\":true}"
+    },
+    {
+      "step": "B two pieces paid",
+      "line": "Dana paid Ana and Ben $244.67 each; rows: review:charged $244.67\nreview:charged $244.67"
+    },
+    {
+      "step": "C one combined payment during a hold",
+      "line": "Cid pressed Charge $244.67 (card 3184 asks the bank: a \"Confirm with your bank\" item): 200 {\"choice\":\"charge\",\"amountCents\":24467,\"status\":\"needs_confirmation\",\"message\":\"Charged $244.67. Payment may be delayed.\"}"
+    },
+    {
+      "step": "C one combined payment during a hold",
+      "line": "Cid's check ran out: hold=unpaid|2026-11-03 07:30:37.443; rows: review:charged $244.67\nreview:charged $244.67\nreview:failed $244.67"
+    },
+    {
+      "step": "C one combined payment during a hold",
+      "line": "Dee pressed Charge $200.00 during the hold (it waits and rides along): 200 {\"choice\":\"charge\",\"amountCents\":20000,\"status\":\"deferred\",\"message\":\"Charged $200.00. Payment may be delayed until the test resumes.\"}"
+    },
+    {
+      "step": "C one combined payment during a hold",
+      "line": "Pay what you owe: ONE payment pi_3UXcBDAwolF8enxC07pdqlgP for $444.67 (bundled); hold=|none; rows: review:charged $244.67\nreview:charged $244.67\nreview:charged $244.67\nreview:charged $200.00\nowed:bundled $444.67"
+    },
+    {
+      "step": "D a partial dispute ($96 of $444.67)",
+      "line": "delivered charge.dispute.created evt_proof_1793691080133_6p94f5 (amount 9600, payment_intent pi_3UXcBDAwolF8enxC07pdqlgP, charge ch_3UXcBDAwolF8enxC0rLzn9De): HTTP 200 {\"received\":true}"
+    },
+    {
+      "step": "D a partial dispute ($96 of $444.67)",
+      "line": "the same event delivered again: HTTP 200 {\"received\":true,\"duplicate\":true}"
+    },
+    {
+      "step": "D a partial dispute ($96 of $444.67)",
+      "line": "rows: review:charged $244.67\nreview:charged $244.67\nreview:charged $244.67\nreview:charged $200.00\nowed:bundled cb=open $444.67 reversed=$96.00; hold=chargeback|2026-11-03 07:31:21.831"
+    },
+    {
+      "step": "E the disputed amount changes",
+      "line": "charge.dispute.updated amount 12000 (open, nothing repaid): HTTP 200; rows: review:charged $244.67\nreview:charged $244.67\nreview:charged $244.67\nreview:charged $200.00\nowed:bundled cb=open $444.67 reversed=$120.00"
+    },
+    {
+      "step": "E the disputed amount changes",
+      "line": "charge.dispute.updated back to 9600: HTTP 200; rows: review:charged $244.67\nreview:charged $244.67\nreview:charged $244.67\nreview:charged $200.00\nowed:bundled cb=open $444.67 reversed=$96.00"
+    },
+    {
+      "step": "F chargeback steps",
+      "line": "reserved: reserved $111.00 pi_3UXcCYAwolF8enxC2vG4uplO"
+    },
+    {
+      "step": "F chargeback steps",
+      "line": "charge.dispute.updated to 5000 after the reservation: HTTP 200 (not followed: logged for the admins); rows: review:charged $244.67\nreview:charged $244.67\nreview:charged $244.67\nreview:charged $200.00\nowed:bundled cb=open $444.67 reversed=$96.00"
+    },
+    {
+      "step": "F chargeback steps",
+      "line": "admin Approve: 200 {\"ok\":true,\"lifted\":true,\"takenCents\":11100}"
+    },
+    {
+      "step": "F chargeback steps",
+      "line": "rows: review:charged $244.67\nreview:charged $244.67\nreview:charged $244.67\nreview:charged $200.00\nowed:bundled cb=resolved $444.67 reversed=$96.00\nchargeback:charged $111.00; hold=|none"
+    },
+    {
+      "step": "G won",
+      "line": "charge.dispute.closed (won): HTTP 200; rows: review:charged $244.67\nreview:charged $244.67\nreview:charged $244.67\nreview:charged $200.00\nowed:bundled cb=won $444.67 reversed=$96.00\nchargeback:refunded $111.00"
+    },
+    {
+      "step": "H descriptions",
+      "line": "5 PaymentIntents listed with their descriptions"
+    }
+  ],
+  "ids": {
+    "fullPaymentIntent": "pi_3UXc1bAwolF8enxC4ve6xZYy",
+    "fullEvent": "evt_1UXc1dAwolF8enxCQWfyFh8U",
+    "fullOwedLines": [
+      "Your bank reversed $50 you paid for Eve Park's written answers on “Sky Harbor” (Nov 3): $50 + $15 chargeback fee"
+    ],
+    "combinedPaymentIntent": "pi_3UXcBDAwolF8enxC07pdqlgP",
+    "partialOwedLines": [
+      "Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee\nThat payment covered:\nCid Moreau's written answers on “Harbor Run” $244.67\nDee Lin's written answers on “Harbor Run” $200.00",
+      "Cid Moreau's written answers on “Harbor Run” $244.67",
+      "Dee Lin's written answers on “Harbor Run” $200.00"
+    ],
+    "paidListOpen": [
+      "Dee Lin's written answers on “Harbor Run”, paid through Pay what you owe Tue, Nov 3, 1:30 AM · $200.00",
+      "Cid Moreau's written answers on “Harbor Run”, paid through Pay what you owe Tue, Nov 3, 1:30 AM · $244.67",
+      "Ben Okafor's written answers on “Harbor Run” Tue, Nov 3, 1:30 AM · $244.67",
+      "Ana Silva's written answers on “Harbor Run” Tue, Nov 3, 1:30 AM · $244.67"
+    ],
+    "adminEmails": [
+      "Playtest: new chargeback of $50.00 :: A developer's bank reversed a $50.00 payment (pi_3UXc1bAwolF8enxC4ve6xZYy). The developer's account is on a chargeback hold. / http://localhost:3485/admin#chargebacks /  / Playtest",
+      "Playtest: new chargeback of $96.00 :: A developer's bank reversed $96.00 of a $444.67 payment (pi_3UXcBDAwolF8enxC07pdqlgP). The developer's account is on a chargeback hold. / http://localhost:3485/admin#chargebacks /  / Playtest"
+    ],
+    "paidListRepaid": [
+      "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee) Tue, Nov 3, 1:33 AM · $111.00",
+      "Dee Lin's written answers on “Harbor Run”, paid through Pay what you owe Tue, Nov 3, 1:30 AM · $200.00",
+      "Cid Moreau's written answers on “Harbor Run”, paid through Pay what you owe Tue, Nov 3, 1:30 AM · $244.67",
+      "Ben Okafor's written answers on “Harbor Run” Tue, Nov 3, 1:30 AM · $244.67",
+      "Ana Silva's written answers on “Harbor Run” Tue, Nov 3, 1:30 AM · $244.67"
+    ],
+    "paidListWon": [
+      "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee) Tue, Nov 3, 1:33 AM · $111.00 · refunded (your bank's chargeback was reversed)",
+      "Dee Lin's written answers on “Harbor Run”, paid through Pay what you owe Tue, Nov 3, 1:30 AM · $200.00",
+      "Cid Moreau's written answers on “Harbor Run”, paid through Pay what you owe Tue, Nov 3, 1:30 AM · $244.67",
+      "Ben Okafor's written answers on “Harbor Run” Tue, Nov 3, 1:30 AM · $244.67",
+      "Ana Silva's written answers on “Harbor Run” Tue, Nov 3, 1:30 AM · $244.67"
+    ]
+  },
+  "descriptions": [
+    {
+      "pi": "pi_3UXcAOAwolF8enxC0yKq1x7s",
+      "amount": "244.67",
+      "status": "succeeded",
+      "description": "Playtest: Ana Silva's written answers on “Harbor Run”",
+      "rows": [
+        "review charged (cmw0db6gy00cr7k48ptnc1faj)"
+      ]
+    },
+    {
+      "pi": "pi_3UXcAPAwolF8enxC3bjRGjbO",
+      "amount": "244.67",
+      "status": "succeeded",
+      "description": "Playtest: Ben Okafor's written answers on “Harbor Run”",
+      "rows": [
+        "review charged (cmw0db76500d37k48rm7cmoqv)"
+      ]
+    },
+    {
+      "pi": "pi_3UXcAtAwolF8enxC41AgK19a",
+      "amount": "244.67",
+      "status": "canceled",
+      "description": "Playtest: Cid Moreau's written answers on “Harbor Run”, charged by Cid Moreau after 7 days without a review",
+      "rows": []
+    },
+    {
+      "pi": "pi_3UXcBDAwolF8enxC07pdqlgP",
+      "amount": "444.67",
+      "status": "succeeded",
+      "description": "Playtest: What you owe (Cid Moreau's written answers on “Harbor Run” $244.67, Dee Lin's written answers on “Harbor Run” $200.00)",
+      "rows": [
+        "review charged (cmw0dbtva00dj7k4819p7uxar)",
+        "review charged (cmw0dbynk00dv7k486kq0rtny)",
+        "owed bundled (cmw0dc97x00e37k482ve788w7)"
+      ]
+    },
+    {
+      "pi": "pi_3UXcCYAwolF8enxC2vG4uplO",
+      "amount": "111.00",
+      "status": "succeeded",
+      "description": "Playtest: Reserved for the team's review: Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee) $111.00",
+      "rows": [
+        "chargeback refunded (cmw0df1i900f37k48ovh15ziu)"
+      ]
+    }
+  ],
+  "pageLines": [
+    {
+      "id": "cmw0df1i900f37k48ovh15ziu",
+      "kind": "chargeback",
+      "status": "refunded",
+      "amount": "111.00",
+      "pi": "pi_3UXcCYAwolF8enxC2vG4uplO",
+      "page": "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)",
+      "hover": "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)",
+      "stripeDescription": null
+    },
+    {
+      "id": "cmw0dbynk00dv7k486kq0rtny",
+      "kind": "review",
+      "status": "charged",
+      "amount": "200.00",
+      "pi": "pi_3UXcBDAwolF8enxC07pdqlgP",
+      "page": "Dee Lin's written answers on “Harbor Run”, paid through Pay what you owe",
+      "hover": "Dee Lin's written answers on “Harbor Run”, paid through Pay what you owe",
+      "stripeDescription": null
+    },
+    {
+      "id": "cmw0dbtva00dj7k4819p7uxar",
+      "kind": "review",
+      "status": "charged",
+      "amount": "244.67",
+      "pi": "pi_3UXcBDAwolF8enxC07pdqlgP",
+      "page": "Cid Moreau's written answers on “Harbor Run”, paid through Pay what you owe",
+      "hover": "Cid Moreau's written answers on “Harbor Run”, paid through Pay what you owe",
+      "stripeDescription": "Playtest: Cid Moreau's written answers on “Harbor Run”, charged by Cid Moreau after 7 days without a review"
+    },
+    {
+      "id": "cmw0db76500d37k48rm7cmoqv",
+      "kind": "review",
+      "status": "charged",
+      "amount": "244.67",
+      "pi": "pi_3UXcAPAwolF8enxC3bjRGjbO",
+      "page": "Ben Okafor's written answers on “Harbor Run”",
+      "hover": "Ben Okafor's written answers on “Harbor Run”",
+      "stripeDescription": "Playtest: Ben Okafor's written answers on “Harbor Run”"
+    },
+    {
+      "id": "cmw0db6gy00cr7k48ptnc1faj",
+      "kind": "review",
+      "status": "charged",
+      "amount": "244.67",
+      "pi": "pi_3UXcAOAwolF8enxC0yKq1x7s",
+      "page": "Ana Silva's written answers on “Harbor Run”",
+      "hover": "Ana Silva's written answers on “Harbor Run”",
+      "stripeDescription": "Playtest: Ana Silva's written answers on “Harbor Run”"
+    }
+  ]
+}

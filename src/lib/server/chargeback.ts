@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
-import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, splitFee } from "@/lib/rules";
+import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, reversedWords, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
@@ -72,7 +72,7 @@ async function cancelPi(id: string | null) {
  * reservation is in place nothing more is reserved (what is added later is charged right after the lift); after it expired or was released, the full amount owed then.
  * Without Stripe it is recorded as reserved. Returns the reserved amount, the bank's inline check, or why it failed.
  */
-export async function reserveOwed(u: { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean }, rows: { id: string; amountCents: number }[]) {
+export async function reserveOwed(u: { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean }, rows: (import("./paymentRows").PayingRow & { id: string })[]) {
   const total = rows.reduce((a, p) => a + p.amountCents, 0);
   const now = new Date();
   // (Nov 2, payments proof: bug found) Two presses at the same moment (two tabs) both saw no reservation and each authorized the total. The reservation is now made
@@ -89,7 +89,8 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
     return { reservedCents: total };
   }
   try {
-    const a = await authorize(u, total, r.id);
+    // (Owner, Nov 3) "Playtest: Reserved for the team's review: <each item as on the page> $8.00, …".
+    const a = await authorize(u, total, r.id, await (await import("./paymentRows")).stripeDescription({ reserve: rows }));
     if (a.status === "requires_capture") {
       await reserved(a.stripePaymentIntentId);
       return { reservedCents: total };
@@ -419,7 +420,8 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   for (const p of await db.payment.findMany({ where: { developerId: devId, chargeback: "open" } })) {
     await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
-    if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of your ${money(p.amountCents)} payment`, c.id);
+    // (§133) "The team resolved the bank reversal of $96.00 of your $444.67 payment" when the bank reversed part of it.
+    if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of ${reversedWords(p)}`, c.id);
   }
   // (Batch 24, a batch 23 leftover) ONE notice for the developer: when Approve lifts the hold it says so too (the testers still get their "is running again").
   const lifted = await liftHoldIfClear(devId, { quietDev: true });

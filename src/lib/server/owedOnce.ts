@@ -1,11 +1,12 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
 import { money, zoneOpt } from "@/lib/format";
-import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat } from "@/lib/rules";
+import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat, reversedOf } from "@/lib/rules";
 import { HttpError } from "./http";
 import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
+import { describedOnce, stripeDescription } from "./paymentRows";
 
 // (Owner, Nov 2, batch 35 §117) One card in play; bank checks never double-charge.
 // - Pay what you owe is ONE payment: a press, a daily retry and a new-card retry charge the TOTAL of what's owed at once, as a Payment of kind "owed" (the
@@ -103,6 +104,12 @@ async function claimOwed(devId: string, rows: { id: string; amountCents: number;
         : 0;
       const m = reversed.length ? (await tx.payment.updateMany({ where: { id: { in: reversed }, developerId: devId, coveredById: null, chargeback: "open" }, data: { coveredById: one.id } })).count : 0;
       if (n !== debts.length || m !== reversed.length) throw ROLLBACK;
+      // (§133) A reversed payment is charged for what the bank reversed + the fee: when that changed since the total was read (the bank changed the disputed
+      // amount), nothing is claimed (the press stops once on the new total).
+      if (reversed.length) {
+        const now = await tx.payment.findMany({ where: { id: { in: reversed } }, select: { id: true, amountCents: true, reversedCents: true } });
+        if (now.some((x) => rows.find((r) => r.id === x.id)!.amountCents !== reversedOf(x) + CHARGEBACK_FEE_CENTS)) throw ROLLBACK;
+      }
       return one;
     });
   } catch (e) {
@@ -158,7 +165,7 @@ export async function settleOwed(id: string, pi: string | null) {
   const holds = await import("./holds");
   const { settleOwedRow } = await import("./chargeback");
   const dev = await db.user.findUniqueOrThrow({ where: { id: one.developerId } });
-  const rows = [...(await holds.owed(one.developerId)).filter((p) => p.coveredById === id), ...(await db.payment.findMany({ where: { coveredById: id, status: "deferred", settledAt: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })).map((p) => ({ ...p, reversedCents: 0 }))];
+  const rows = [...(await holds.owed(one.developerId)).filter((p) => p.coveredById === id), ...(await db.payment.findMany({ where: { coveredById: id, status: "deferred", settledAt: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })).map((p) => ({ ...p, reversedCents: 0, paidCents: p.amountCents }))];
   const names: string[] = [];
   let cents = 0;
   for (const p of rows) {
@@ -186,8 +193,11 @@ async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payme
   try {
     // (Batch 32 §15) No saved card: handled as a declined card, never sent to Stripe with an empty card.
     if (stripeOn() && (!u.stripeCustomerId || !u.stripePaymentMethodId)) throw new HttpError(402, "card_failed", "No card is saved on this account.");
-    // One key per payment: charged again with it (resumeStaleOwed), Stripe answers with what happened the first time.
-    r = await chargePlatform(u, one.amountCents, serverKey("owedall", one.id), forCharges(one) ? "Playtest: charges made while you were away" : "Playtest: what you owe", mode);
+    // One key per payment: charged again with it (resumeStaleOwed), Stripe answers with what happened the first time. (Owner, Nov 3) Its description lists what it
+    // covers as on the page, names in full: "Playtest: What you owe (Ana Silva's written answers on “Harbor Run” $8.00, …)"; fixed at the first try, so the same
+    // key always carries the same one.
+    const description = await describedOnce(one.id, async () => stripeDescription({ owed: await db.payment.findMany({ where: { coveredById: one.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }), charges: forCharges(one) }));
+    r = await chargePlatform(u, one.amountCents, serverKey("owedall", one.id), description, mode);
   } catch (e) {
     const why = (await import("./holds")).owedWhy(e);
     // (§130) Not a try on the card: its customer or card is unknown to Stripe (cleared: "Add a card"), or payments are switched off. No decline, no retry counted.
@@ -237,7 +247,7 @@ export async function coveredNames(ids: string[], full = false) {
   if (!ids.length) return out;
   const holds = await import("./holds");
   for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: { createdAt: "asc" } })) {
-    const cents = p.chargeback === "open" ? p.amountCents + CHARGEBACK_FEE_CENTS : p.amountCents;
+    const cents = p.chargeback === "open" ? reversedOf(p) + CHARGEBACK_FEE_CENTS : p.amountCents; // (§133) what the bank reversed + the fee
     out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), `${await holds.owedItemName(p, full)} ${money(cents)}`]);
   }
   return out;

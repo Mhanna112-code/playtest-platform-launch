@@ -22,7 +22,7 @@ import { hasBoth, sideFor } from "@/lib/sides";
 import { OtherSidePage } from "@/components/OtherSidePage";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { LongList } from "@/components/LongList";
-import { paidRows } from "@/lib/server/paymentRows";
+import { paidOutTotal, paidRows, plainLabel } from "@/lib/server/paymentRows";
 import { testerShare } from "@/lib/rules";
 import { SubscriptionBox } from "./SubscriptionBox";
 import { launchState } from "@/lib/server/subscription";
@@ -97,6 +97,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   ]);
   // (Batch 32 §18) What each paid line was for (who, which part, which test, how it was paid; a reversed payment says so).
   const rows = new Map([...(dev ? await paidRows(paidOut, "developer") : []), ...(tester ? await paidRows(paidIn, "tester") : [])]);
+  // (Owner, Nov 3, §133) Pay what you owe's one payments the bank reversed (not listed themselves: the items they paid for are): what was reversed leaves the total.
+  const reversedOnes = dev ? await db.payment.findMany({ where: { developerId: u.id, kind: "owed", chargebackAt: { not: null } }, select: { amountCents: true, reversedCents: true, chargebackAt: true, chargeback: true, status: true } }) : [];
   // (Owner, Oct 28, batch 16 section 27) Change card / payout setup stopped once (the account changed in another tab or device): the box under that button.
   const seenAt = new Date().toISOString();
   const since = q.since ? new Date(q.since) : null;
@@ -160,14 +162,15 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             {/* (Owner, Nov 3, long text) The total is never split: it moves under the heading when there is no room beside it. */}
             <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <h2 className="font-semibold text-white">What you&apos;ve paid</h2>
-              <span className="whitespace-nowrap text-sm text-slate-400">Total {money(paidOut.filter((p) => p.status !== "refunded" && !(p.chargebackAt && p.chargeback !== "won")).reduce((a, p) => a + p.amountCents, 0))}{/* (Owner, Nov 2) a payment your bank reversed counts once, as its repayment */}</span>
+              <span className="whitespace-nowrap text-sm text-slate-400" data-paid-total="">Total {money(paidOutTotal(paidOut, reversedOnes))}{/* (Owner, Nov 2) a payment your bank reversed counts once, as its repayment; (§133) part of one: the rest of it counts */}</span>
             </div>
             {/* Newest first: 8 rows, then "Show N more" opening a scroll box (the long-list rule). */}
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="space-y-0.5 py-2">
-                  <span className="block text-slate-200" data-paid-what="">{rows.get(p.id) ? <><a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`} title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</a>{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
-                  <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · <span className="whitespace-nowrap">{money(p.amountCents)}</span>{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? " · your bank reversed this (chargeback)" : ""}</span>
+                  <span className="block text-slate-200" data-paid-what="">{rows.get(p.id) ? <>{rows.get(p.id)!.testId ? <a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`} title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</a> : <span title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</span>}{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : plainLabel(p.kind)}</span>
+                  {/* (§133) Part of a payment reversed: "your bank reversed $96.00 of this (chargeback)". */}
+                  <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · <span className="whitespace-nowrap">{money(p.amountCents)}</span>{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? (rows.get(p.id)?.reversedCents ? ` · your bank reversed ${money(rows.get(p.id)!.reversedCents!)} of this (chargeback)` : " · your bank reversed this (chargeback)") : ""}</span>
                 </li>
               ))}
               {paidOut.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}

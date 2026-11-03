@@ -11,7 +11,7 @@ import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OWED_BANK_WAITING, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 
 /** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
-type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string };
+type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string; /** (§133) part of Pay what you owe's one payment reversed: what that payment covered (the bank doesn't say which), each with its hover */ covers?: { text: string; full: string }[] };
 
 /** (Owner, Nov 2, batch 35 §117 rule 3) "Cancel this check": the bank's check is cancelled and what it covered can be paid at once (the page redraws). */
 function CancelCheck({ id }: { id: string }) {
@@ -87,6 +87,13 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, retr
               {o.after && <> · <b data-owed-after="">{o.after}</b></>}
               {/* One check covers every debt it paid: its Cancel sits next to the first of them. */}
               {o.waiting && o.checkId && owed.findIndex((x) => x.checkId === o.checkId) === i && <> <CancelCheck id={o.checkId} /></>}
+              {/* (Owner, Nov 3, §133) Part of a payment that paid for several items: what it covered, underneath (the bank gives only an amount, so none is named). */}
+              {o.covers && o.covers.length > 0 && (
+                <div className="mt-1 text-xs" data-owed-covers={o.id}>
+                  That payment covered:
+                  <ul className="list-[circle] pl-5">{o.covers.map((x, j) => <li key={j} title={x.full}>{x.text}</li>)}</ul>
+                </div>
+              )}
             </li>
           ))}
         </ul>

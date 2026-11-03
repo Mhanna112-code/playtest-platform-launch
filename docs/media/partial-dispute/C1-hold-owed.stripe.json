@@ -1,0 +1,125 @@
+{
+  "step": "C one combined payment during a hold",
+  "note": "Cid's charge waited for the bank and was cancelled when its 3 days ran out; nothing was taken",
+  "customer": "rec+pddana969690@playtest.test",
+  "stripe_customer": "cus_VYjdGHK29sjrb9",
+  "at": "2026-11-03T07:30:43.038Z",
+  "count": 3,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXcAOAwolF8enxC0yKq1x7s",
+      "amount": "244.67",
+      "amount_received": "244.67",
+      "amount_capturable": "0.00",
+      "status": "succeeded",
+      "capture_method": "automatic_async",
+      "description": "Playtest: Ana Silva's written answers on “Harbor Run”",
+      "metadata": {
+        "developerId": "cmw0dal0q009c7k4895fmsr23",
+        "payKey": "press:cmw0dal0q009c7k4895fmsr23:32f73680-d8ca-4fd0-b3be-a0ea2471b0d2",
+        "testerId": "cmw0dalo3009j7k48op4o4ygx"
+      },
+      "created": "2026-11-03T07:30:00.000Z",
+      "last_payment_error": null,
+      "charge": {
+        "id": "ch_3UXcAOAwolF8enxC0WADaiia",
+        "amount": "244.67",
+        "amount_captured": "244.67",
+        "amount_refunded": "0.00",
+        "captured": true,
+        "refunded": false,
+        "disputed": false,
+        "status": "succeeded",
+        "card": "visa •••• 4242",
+        "refunds": []
+      },
+      "disputes": [],
+      "app_rows": [
+        {
+          "id": "cmw0db6gy00cr7k48ptnc1faj",
+          "kind": "review",
+          "status": "charged",
+          "amount": "244.67",
+          "chargeback": null,
+          "reversed": null,
+          "covered_by": null,
+          "repays": null
+        }
+      ],
+      "app_reservations": []
+    },
+    {
+      "id": "pi_3UXcAPAwolF8enxC3bjRGjbO",
+      "amount": "244.67",
+      "amount_received": "244.67",
+      "amount_capturable": "0.00",
+      "status": "succeeded",
+      "capture_method": "automatic_async",
+      "description": "Playtest: Ben Okafor's written answers on “Harbor Run”",
+      "metadata": {
+        "developerId": "cmw0dal0q009c7k4895fmsr23",
+        "payKey": "press:cmw0dal0q009c7k4895fmsr23:e002e2ff-bbd5-4d74-b35e-0e45f050822b",
+        "testerId": "cmw0dalzu009v7k486n900c9e"
+      },
+      "created": "2026-11-03T07:30:01.000Z",
+      "last_payment_error": null,
+      "charge": {
+        "id": "ch_3UXcAPAwolF8enxC3NLgGHTB",
+        "amount": "244.67",
+        "amount_captured": "244.67",
+        "amount_refunded": "0.00",
+        "captured": true,
+        "refunded": false,
+        "disputed": false,
+        "status": "succeeded",
+        "card": "visa •••• 4242",
+        "refunds": []
+      },
+      "disputes": [],
+      "app_rows": [
+        {
+          "id": "cmw0db76500d37k48rm7cmoqv",
+          "kind": "review",
+          "status": "charged",
+          "amount": "244.67",
+          "chargeback": null,
+          "reversed": null,
+          "covered_by": null,
+          "repays": null
+        }
+      ],
+      "app_reservations": []
+    },
+    {
+      "id": "pi_3UXcAtAwolF8enxC41AgK19a",
+      "amount": "244.67",
+      "amount_received": "0.00",
+      "amount_capturable": "0.00",
+      "status": "canceled",
+      "capture_method": "automatic_async",
+      "description": "Playtest: Cid Moreau's written answers on “Harbor Run”, charged by Cid Moreau after 7 days without a review",
+      "metadata": {
+        "developerId": "cmw0dal0q009c7k4895fmsr23",
+        "payKey": "choice:cmw0db5pa00c37k48v6ahqwra",
+        "testerId": "cmw0damea00a77k48aad11vjh"
+      },
+      "created": "2026-11-03T07:30:31.000Z",
+      "last_payment_error": null,
+      "charge": null,
+      "disputes": [],
+      "app_rows": [
+        {
+          "id": "cmw0dbtva00dj7k4819p7uxar",
+          "kind": "review",
+          "status": "failed",
+          "amount": "244.67",
+          "chargeback": null,
+          "reversed": null,
+          "covered_by": null,
+          "repays": null
+        }
+      ],
+      "app_reservations": []
+    }
+  ]
+}

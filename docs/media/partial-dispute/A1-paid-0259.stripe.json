@@ -1,0 +1,63 @@
+{
+  "step": "A full dispute (card 0259)",
+  "note": "the $50.00 payment and the dispute Stripe opened on it by itself",
+  "customer": "rec+pdfred410663@playtest.test",
+  "stripe_customer": "cus_VYjUYj4NUSGG2s",
+  "at": "2026-11-03T07:21:07.767Z",
+  "count": 1,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXc1bAwolF8enxC4ve6xZYy",
+      "amount": "50.00",
+      "amount_received": "50.00",
+      "amount_capturable": "0.00",
+      "status": "succeeded",
+      "capture_method": "automatic_async",
+      "description": "Playtest: Eve Park's written answers on “Sky Harbor”",
+      "metadata": {
+        "developerId": "cmw0cyl4500007k48ycjpgtuk",
+        "payKey": "press:cmw0cyl4500007k48ycjpgtuk:66f6ca5c-194b-4ec5-923c-d40c1d62ba97",
+        "testerId": "cmw0cylti00077k48mousre71"
+      },
+      "created": "2026-11-03T07:20:55.000Z",
+      "last_payment_error": null,
+      "charge": {
+        "id": "ch_3UXc1bAwolF8enxC4vJIQrPs",
+        "amount": "50.00",
+        "amount_captured": "50.00",
+        "amount_refunded": "0.00",
+        "captured": true,
+        "refunded": false,
+        "disputed": true,
+        "status": "succeeded",
+        "card": "visa •••• 0259",
+        "refunds": []
+      },
+      "disputes": [
+        {
+          "id": "du_1UXc1bAwolF8enxC7S2e7Tr5",
+          "amount": "50.00",
+          "status": "needs_response",
+          "reason": "fraudulent",
+          "created": "2026-11-03T07:20:55.000Z",
+          "evidence_due_by": "2026-11-11T23:59:59.000Z",
+          "stripe_fee": "15.00",
+          "net": "-65.00"
+        }
+      ],
+      "app_rows": [
+        {
+          "id": "cmw0czh6z00137k487mg6eu91",
+          "kind": "review",
+          "status": "charged",
+          "amount": "50.00",
+          "chargeback": null,
+          "reversed": null,
+          "covered_by": null,
+          "repays": null
+        }
+      ],
+      "app_reservations": []
+    }
+  ]
+}

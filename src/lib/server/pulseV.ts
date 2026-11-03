@@ -154,7 +154,7 @@ export async function adminConsoleV() {
     db.contactMessage.count({ where: { repliedById: { not: null } } }),
     db.call.aggregate({ where: { noShowBy: { not: null } }, _count: { _all: true }, _max: { noShowAt: true } }),
     db.user.aggregate({ where: { holdStartedAt: { not: null } }, _count: { _all: true }, _max: { holdStartedAt: true } }),
-    db.payment.aggregate({ where: { chargeback: "open" }, _count: { _all: true }, _max: { chargebackAt: true, settledAt: true } }),
+    db.payment.aggregate({ where: { chargeback: "open" }, _count: { _all: true }, _max: { chargebackAt: true, settledAt: true }, _sum: { reversedCents: true } }), // (§133) a dispute amount changing
     db.outage.aggregate({ _count: { _all: true }, _max: { recordedAt: true, approvedAt: true } }),
     db.appState.count({ where: { key: { startsWith: "gap:" } } }), // heartbeat gaps waiting (outages.ts GAP_PREFIX)
     db.user.count({ where: { OR: [{ devSuspendedAt: { not: null } }, { testerSuspendedAt: { not: null } }] } }),
@@ -163,7 +163,7 @@ export async function adminConsoleV() {
     acts._count._all, t(acts._max.createdAt), events._count._all, t(events._max.createdAt),
     disputes._count._all, t(disputes._max.createdAt), t(disputes._max.decidedAt), t(disputes._max.devSideAt),
     reports._count._all, t(reports._max.createdAt), contact._count._all, t(contact._max.createdAt), t(contact._max.repliedAt), replied,
-    noShows._count._all, t(noShows._max.noShowAt), holds._count._all, t(holds._max.holdStartedAt), cbs._count._all, t(cbs._max.chargebackAt), t(cbs._max.settledAt),
+    noShows._count._all, t(noShows._max.noShowAt), holds._count._all, t(holds._max.holdStartedAt), cbs._count._all, t(cbs._max.chargebackAt), t(cbs._max.settledAt), cbs._sum.reversedCents ?? 0,
     outages._count._all, t(outages._max.recordedAt), t(outages._max.approvedAt), gaps, suspended,
   ].join(":");
 }
