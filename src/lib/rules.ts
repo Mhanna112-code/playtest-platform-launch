@@ -402,7 +402,8 @@ export const LISTING_MIN_CHARS = 10;
  * before batch 30 post short titles such as "Run"; the batch 30 tests set it back to 10). Production never sets it.
  */
 export function listingMin() {
-  const v = typeof process !== "undefined" ? Number(process.env?.LISTING_MIN_CHARS) : NaN;
+  // (Nov 2) Never lowered on the live site, even if the setting is left there.
+  const v = typeof process !== "undefined" && process.env?.NODE_ENV !== "production" ? Number(process.env?.LISTING_MIN_CHARS) : NaN;
   return Number.isInteger(v) && v >= 1 ? v : LISTING_MIN_CHARS;
 }
 /** "Name of this test: at least 10 characters (6 so far)." / "What should testers do: at least 10 characters (6 so far)." (the field's red line, the server's refusal) */

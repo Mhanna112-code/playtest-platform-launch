@@ -30,7 +30,8 @@ export const ANSWER_MIN_CHARS = 50;
  * before batch 30 send short answers such as "a"; the batch 30 tests set it back to 50). Production never sets it.
  */
 export function answerMin() {
-  const v = typeof process !== "undefined" ? Number(process.env?.ANSWER_MIN_CHARS) : NaN;
+  // (Nov 2) Never lowered on the live site, even if the setting is left there.
+  const v = typeof process !== "undefined" && process.env?.NODE_ENV !== "production" ? Number(process.env?.ANSWER_MIN_CHARS) : NaN;
   return Number.isInteger(v) && v >= 1 ? v : ANSWER_MIN_CHARS;
 }
 /** The server's refusal, with which question (`missing`). */

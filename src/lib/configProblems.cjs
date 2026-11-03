@@ -51,6 +51,8 @@ function configProblems(env, now = new Date()) {
     if (r2.length === 0) add("The R2 settings are missing: uploads would go to the server's own disk, which Vercel doesn't keep.", true);
     if (v("ALLOW_DEV_OUTBOX") === "1") add("ALLOW_DEV_OUTBOX=1 on the live site: /dev/outbox would show reset links. Remove it.", true);
     if (v("STRIPE_FAKE") === "1") add("STRIPE_FAKE=1 on the live site: remove it.", true);
+    // (Nov 2) Testing-only settings left on the live site: each is ignored there, but shouldn't be set.
+    for (const k of ["SKIP_EMAIL_CONFIRM", "ANSWER_MIN_CHARS", "LISTING_MIN_CHARS", "CALL_MIN_AHEAD_MINUTES", "DISPUTE_WAIT_MS", "UPLOAD_DIR"]) if (v(k)) add(`${k} is a testing setting: remove it from the live site.`);
     if (placeholder(v("ADMIN_EMAILS"))) add(`ADMIN_EMAILS still has a placeholder ("${v("ADMIN_EMAILS")}"): put the real admins' emails.`, true);
     if (!v("EMAIL_FROM") || placeholder(v("EMAIL_FROM")) || /resend\.dev/i.test(v("EMAIL_FROM"))) add("EMAIL_FROM is missing or a placeholder: set an address on your verified Resend domain.", true);
     if (v("HEALTH_KEY") && weakKey(v("HEALTH_KEY"))) add("HEALTH_KEY is a placeholder or too short: use a long random value (at least 24 characters).", true);

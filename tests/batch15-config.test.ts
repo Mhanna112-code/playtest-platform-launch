@@ -91,3 +91,17 @@ describe("configProblems", () => {
     err.mockRestore();
   });
 });
+
+describe("testing-only settings on the live site (owner, Nov 2)", () => {
+  it("are listed in the admin box, and the answer / listing minimums ignore them in production", async () => {
+    const live = { NODE_ENV: "production", SKIP_EMAIL_CONFIRM: "1", ANSWER_MIN_CHARS: "1", LISTING_MIN_CHARS: "1" };
+    for (const k of ["SKIP_EMAIL_CONFIRM", "ANSWER_MIN_CHARS", "LISTING_MIN_CHARS"]) expect(msgs(live)).toContain(`${k} is a testing setting: remove it from the live site.`);
+    vi.stubEnv("NODE_ENV", "production");
+    vi.stubEnv("ANSWER_MIN_CHARS", "1");
+    vi.stubEnv("LISTING_MIN_CHARS", "1");
+    const { answerMin } = await import("@/lib/questions");
+    const { listingMin } = await import("@/lib/rules");
+    expect(answerMin()).toBe(50);
+    expect(listingMin()).toBe(10);
+  });
+});
