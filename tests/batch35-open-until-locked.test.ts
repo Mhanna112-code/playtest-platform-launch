@@ -84,10 +84,11 @@ describe("§112: Open until locks after its calendar day", () => {
     expect(html).toContain("Open until has passed, so it can&#x27;t be changed.");
   });
 
-  it("automatic pause shifts can still move a passed date", async () => {
+  // (Owner, Nov 2) Replaces "automatic pause shifts can still move a passed date": an Open until that had passed when the pause started stays (joining never reopens).
+  it("a pause that started after Open until passed leaves it", async () => {
     const f = await fixture();
     vi.setSystemTime(new Date("2026-11-09T18:00:00Z"));
     await db.$transaction((tx) => shiftAfterPause(tx, f.test, new Date("2026-11-07T18:00:00Z"), new Date(), []));
-    expect((await db.test.findUniqueOrThrow({ where: { id: f.testId } })).openUntil!.getTime()).toBe(f.test.openUntil!.getTime() + 2 * DAY);
+    expect((await db.test.findUniqueOrThrow({ where: { id: f.testId } })).openUntil!.getTime()).toBe(f.test.openUntil!.getTime());
   });
 });
