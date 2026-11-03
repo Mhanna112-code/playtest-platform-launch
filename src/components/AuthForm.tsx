@@ -9,13 +9,16 @@ import { announceAuth } from "@/components/SessionWatch";
  * blue; on success it goes to `next` (or shows `done`). (Batch 16 section 10) A mistake is red at its field (each box's data-match names the
  * server lines that belong to it) and listed under the button.
  */
-export function AuthForm(p: { announce?: "in"; path: string; extra?: Record<string, string>; next?: string; done?: React.ReactNode; submit: string; busy: string; children: React.ReactNode; footer?: React.ReactNode }) {
+export function AuthForm(p: { announce?: "in"; /** (Batch 35 §153) Sign-up: the press goes to the server even while a box here is red, so every missing part is red at once. */ allAtOnce?: boolean; path: string; extra?: Record<string, string>; next?: string; done?: React.ReactNode; submit: string; busy: string; children: React.ReactNode; footer?: React.ReactNode }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState(false);
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const fields = Object.fromEntries([...new FormData(e.currentTarget).entries()].map(([k, v]) => [k, String(v)]));
+    const fd = new FormData(e.currentTarget);
+    const fields: Record<string, string | string[]> = Object.fromEntries([...fd.entries()].map(([k, v]) => [k, String(v)]));
+    // (Batch 35 §153) A tick list (data-list="devices"): every ticked value, as a list (none ticked: an empty list, so the server names what's missing).
+    for (const el of Array.from(e.currentTarget.querySelectorAll<HTMLElement>("[data-list]"))) fields[el.dataset.list!] = fd.getAll(el.dataset.list!).map(String);
     setBusy(true);
     setErr("");
     try {
@@ -37,7 +40,7 @@ export function AuthForm(p: { announce?: "in"; path: string; extra?: Record<stri
   }
   if (ok && p.done) return <div className="card space-y-2">{p.done}</div>;
   return (
-    <form method="post" onSubmit={onSubmit} className="card space-y-4" noValidate>
+    <form method="post" onSubmit={onSubmit} className="card space-y-4" noValidate {...(p.allAtOnce ? { "data-red-and-blue": "" } : {})}>
       {p.children}
       <button className="btn w-full" disabled={busy}>{busy ? p.busy : p.submit}</button>
       <FormMistakes text={err} press={p.submit} />

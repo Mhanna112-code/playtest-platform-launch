@@ -31,7 +31,7 @@ export default async function GoogleSignupStep() {
     );
   return (
     <AuthShell title="Finish signing up">
-      <AuthForm path="/api/auth/google/finish" next="/app" announce="in" submit="Continue" busy="Creating…">
+      <AuthForm allAtOnce path="/api/auth/google/finish" next="/app" announce="in" submit="Continue" busy="Creating…">
         <p className="text-sm text-slate-300" data-google-step="">Signing up with Google as <b className="text-white">{step.email}</b>.</p>
         <RoleChoice />
         <div>

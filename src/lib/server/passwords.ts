@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AGE_LINE, TERMS_VERSION } from "@/lib/termsOfUse";
 import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
+import { DEVICES, DEVICES_MISSING, LANGUAGES, LANGUAGES_MISSING, pickFrom } from "@/lib/options";
 import { safeZone } from "@/lib/tz";
 import { sendEmail } from "./email";
 import { HttpError } from "./http";
@@ -99,25 +100,35 @@ export type SignupRole = "developer" | "tester" | "both";
 export const readRole = (v: unknown): SignupRole | "" => (v === "developer" || v === "tester" || v === "both" ? v : "");
 
 /**
- * The new account's sides. With both it starts on the developer side (its Get started asks for a card before posting); the tester side's own gate (a saved tester
- * profile before joining) applies once they switch to it. A tester side gets its profile row, empty: devices, languages and its own bio are filled in there.
+ * The new account's sides. With both it starts on the developer side (its Get started asks for a card before posting). A tester side gets its profile row with the
+ * devices and languages ticked at sign-up (batch 35 §153: so it's saved at once and Join needs no visit to Profile); its own bio is filled in on the profile.
  */
-export function sidesOf(role: SignupRole) {
+export function sidesOf(role: SignupRole, picks: { devices: string[]; languages: string[] } = { devices: [], languages: [] }) {
   const isDeveloper = role !== "tester", isTester = role !== "developer";
-  return { isDeveloper, isTester, side: isDeveloper ? "developer" : "tester", ...(isTester ? { profile: { create: { devices: [], languages: [], categories: [] } } } : {}) };
+  return { isDeveloper, isTester, side: isDeveloper ? "developer" : "tester", ...(isTester ? { profile: { create: { devices: picks.devices, languages: picks.languages, categories: [] } } } : {}) };
 }
 
 /**
  * What a new account must give, on the email form and on Google's step alike: who you are (developer, tester or both), a name (at least 1 character, no other
- * rules: owner, Oct 27), the Terms (batch 18 section 1: the version accepted is recorded) and "I'm 18 or older." (batch 20 section 5). Every missing part is red at
- * once, each at its own field (batch 26 section 11: one line each).
+ * rules: owner, Oct 27), the Terms (batch 18 section 1: the version accepted is recorded) and "I'm 18 or older." (batch 20 section 5). (Owner, Nov 3, batch 35
+ * §153) A tester or both also ticks at least one device and one language (the profile's own lists and lines); a developer is never asked, and anything sent for
+ * them is ignored. Every missing part is red at once, each at its own field (batch 26 section 11: one line each), in the form's order.
  */
-export function readNewAccount(body: Record<string, unknown>): { role: SignupRole; name: string } {
+export function readNewAccount(body: Record<string, unknown>): { role: SignupRole; name: string; devices: string[]; languages: string[] } {
   const role = readRole(body.role);
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
-  const missing = [...(!role ? [ROLE_MISSING] : []), ...(name.length < 1 ? [NAME_MISSING] : []), ...(!isTicked(body.acceptTerms) ? [TERMS_MISSING] : []), ...(!isTicked(body.over18) ? [AGE_LINE] : [])];
+  const tester = role === "tester" || role === "both";
+  const devices = tester ? pickFrom(body.devices, DEVICES) : [], languages = tester ? pickFrom(body.languages, LANGUAGES) : [];
+  const missing = [
+    ...(!role ? [ROLE_MISSING] : []),
+    ...(tester && devices.length === 0 ? [DEVICES_MISSING] : []),
+    ...(tester && languages.length === 0 ? [LANGUAGES_MISSING] : []),
+    ...(name.length < 1 ? [NAME_MISSING] : []),
+    ...(!isTicked(body.acceptTerms) ? [TERMS_MISSING] : []),
+    ...(!isTicked(body.over18) ? [AGE_LINE] : []),
+  ];
   if (!role || missing.length) throw field(missing.join("\n"));
-  return { role, name };
+  return { role, name, devices, languages };
 }
 
 export const EMAIL_TAKEN = "An account with that email already exists";
@@ -134,9 +145,9 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
   if (await db.user.findUnique({ where: { email } })) throw field(EMAIL_TAKEN);
   // (NEXT-UI 15) The full app's sign-up form also asks who you are, your name and the Terms. (Batch 35 §134) All required: no account is made without its sides,
   // so the old "Welcome to Playtest · Tell us who you are" step never comes.
-  const { role, name } = readNewAccount(body);
+  const { role, name, devices, languages } = readNewAccount(body);
   const user = await db.user.create({
-    data: { email, passwordHash: await hashPassword(password), name, timeZone: readTimeZone(body.timeZone), termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, ...sidesOf(role) },
+    data: { email, passwordHash: await hashPassword(password), name, timeZone: readTimeZone(body.timeZone), termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, ...sidesOf(role, { devices, languages }) },
   }).catch((e) => {
     // (Owner, Nov 3, races) The same email signed up in another tab between the check above and this create: the database's unique email refuses it, with the same line.
     if (isUniqueClash(e)) throw field(EMAIL_TAKEN);

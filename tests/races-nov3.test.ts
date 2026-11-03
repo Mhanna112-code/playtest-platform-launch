@@ -260,7 +260,7 @@ describe("(Nov 3, races) 4: Add to my answers while the developer's Pay is in fl
 });
 
 describe("(Nov 3, races) 5: the same email signing up in two tabs", () => {
-  const body = (e: string) => ({ email: e, password: "a-long-password", role: "tester", name: "Ana Silva", acceptTerms: true, over18: true });
+  const body = (e: string) => ({ email: e, password: "a-long-password", role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", acceptTerms: true, over18: true });
   it("email form: one account; the other tab reads the normal line (not a 500)", async () => {
     const e = email("race");
     const [a, b] = await Promise.all([outcome(signUp(body(e), "http://localhost:3400")), outcome(signUp(body(e), "http://localhost:3400"))]);
@@ -274,7 +274,7 @@ describe("(Nov 3, races) 5: the same email signing up in two tabs", () => {
   it("Google's step in two tabs: one account, both signed into it", async () => {
     const e = email("grace");
     const [t1, t2] = [await startGoogleSignup(e), await startGoogleSignup(e)];
-    const step = { role: "tester", name: "Ana Silva", acceptTerms: true, over18: true };
+    const step = { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", acceptTerms: true, over18: true };
     const [a, b] = await Promise.all([outcome(finishGoogleSignup(t1, step)), outcome(finishGoogleSignup(t2, step))]);
     expect(a.ok && b.ok).toBe(true);
     if (a.ok && b.ok) expect(a.v.user.id).toBe(b.v.user.id);
@@ -288,7 +288,7 @@ describe("(Nov 3, races) 5: the same email signing up in two tabs", () => {
     const before = await db.user.findUniqueOrThrow({ where: { email: e } });
     expect(before.passwordHash).not.toBe("");
     expect(before.emailVerifiedAt).toBeNull();
-    const r = await finishGoogleSignup(token, { role: "tester", name: "Ana Silva", acceptTerms: true, over18: true });
+    const r = await finishGoogleSignup(token, { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", acceptTerms: true, over18: true });
     const after = await db.user.findUniqueOrThrow({ where: { email: e } });
     expect(r.user.id).toBe(before.id);
     expect(after.passwordHash).toBe("");

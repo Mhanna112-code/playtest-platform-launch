@@ -95,14 +95,14 @@ describe("batch 35 §134: who you are is required when the account is made", () 
     expect(matches(form, "over18", AGE_LINE)).toBe(true);
   });
 
-  it("each role makes its sides; both lands on the developer side (Get started asks for a card), and the tester side's own gate applies once switched", async () => {
+  it("each role makes its sides; both lands on the developer side (Get started asks for a card); (§153) its tester side is saved at sign-up, so switched it joins at once", async () => {
     const dev = await signUp({ email: mail(), password: "harbor-run-1", role: "developer", name: "Dee Moss", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     expect(dev.user).toMatchObject({ isDeveloper: true, isTester: false, side: "developer", name: "Dee Moss" });
     expect(await db.testerProfile.count({ where: { userId: dev.user.id } })).toBe(0);
-    const tester = await signUp({ email: mail(), password: "harbor-run-1", role: "tester", name: "Tia Park", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
+    const tester = await signUp({ email: mail(), password: "harbor-run-1", role: "tester", devices: ["Mac"], languages: ["French"], name: "Tia Park", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     expect(tester.user).toMatchObject({ isDeveloper: false, isTester: true, side: "tester" });
-    expect(await db.testerProfile.findUnique({ where: { userId: tester.user.id } })).toMatchObject({ devices: [], languages: [], bio: "" });
-    const both = await signUp({ email: mail(), password: "harbor-run-1", role: "both", name: "Nora Lane", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
+    expect(await db.testerProfile.findUnique({ where: { userId: tester.user.id } })).toMatchObject({ devices: ["Mac"], languages: ["French"], bio: "" });
+    const both = await signUp({ email: mail(), password: "harbor-run-1", role: "both", devices: ["Windows PC"], languages: ["English"], name: "Nora Lane", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     expect(both.user).toMatchObject({ isDeveloper: true, isTester: true, side: "developer" });
     expect(sideFor(both.user)).toBe("developer");
     expect(await db.testerProfile.count({ where: { userId: both.user.id } })).toBe(1);
@@ -111,15 +111,22 @@ describe("batch 35 §134: who you are is required when the account is made", () 
     expect(home).not.toContain("Welcome to Playtest");
     expect(home).toContain("Add a card (needed to post a test)");
     expect(home).not.toContain("Save your profile (needed to join a test)");
-    // Switched to the tester side: its Get started asks for the profile, and Join is refused until it's saved.
+    // Switched to the tester side: (§153) the devices and languages ticked at sign-up are its saved profile, so Get started has no profile step and Join goes through.
     const sw = await switchPOST(new Request("http://localhost:3400/app/switch", { method: "POST", headers: { cookie: cookieOf(both.token), origin: "http://localhost:3400", "content-type": "application/x-www-form-urlencoded" }, body: "to=tester&next=/app" }));
     expect(sw.status).toBe(303);
     expect((await fresh(both.user.id)).side).toBe("tester");
-    expect(await dashboard(both.user.id)).toContain("Save your profile (needed to join a test)");
+    const testerHome = await dashboard(both.user.id);
+    expect(testerHome).not.toContain("Save your profile (needed to join a test)");
+    expect(testerHome).toContain("Set up payouts (to receive your pay)");
     await db.user.update({ where: { id: both.user.id }, data: { emailVerifiedAt: new Date() } });
     const { testId } = await setup();
     const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    expect(await act(testId, "join", cookieOf(both.token), { listingVersion: test.listingVersion })).toMatchObject({ status: 409, body: { error: { code: "profile_first", message: PROFILE_FIRST } } });
+    expect((await act(testId, "join", cookieOf(both.token), { listingVersion: test.listingVersion })).status).toBe(200);
+    // The tester side's gate still holds for a profile that was never saved (an older account): see §153's tests.
+    await db.testerProfile.update({ where: { userId: tester.user.id }, data: { devices: [], languages: [] } });
+    expect(await dashboard(tester.user.id)).toContain("Save your profile (needed to join a test)");
+    await db.user.update({ where: { id: tester.user.id }, data: { emailVerifiedAt: new Date() } });
+    expect(await act(testId, "join", cookieOf(tester.token), { listingVersion: test.listingVersion })).toMatchObject({ status: 409, body: { error: { code: "profile_first", message: PROFILE_FIRST } } });
   });
 
   it("Google's step asks the same (who you are and a name, required, red at each); then the account is made with its sides; both lands on the developer side", async () => {
@@ -127,7 +134,7 @@ describe("batch 35 §134: who you are is required when the account is made", () 
     const token = await startGoogleSignup(email);
     const no = await json(await finish(token, { name: "Ana Silva", acceptTerms: "yes", over18: "yes" }));
     expect(no).toMatchObject({ status: 400, body: { error: { code: "bad_field", message: ROLE_MISSING } } });
-    expect((await json(await finish(token, { role: "both", acceptTerms: "yes", over18: "yes" }))).body.error.message).toBe(NAME_MISSING);
+    expect((await json(await finish(token, { role: "both", devices: ["Mac"], languages: ["English"], acceptTerms: "yes", over18: "yes" }))).body.error.message).toBe(NAME_MISSING);
     expect((await json(await finish(token, {}))).body.error.message).toBe(ALL_MISSING);
     expect(await db.user.count({ where: { email } })).toBe(0);
     // The step is still waiting: the page shows the choice and the Name box, each red at its own line.
@@ -140,12 +147,12 @@ describe("batch 35 §134: who you are is required when the account is made", () 
     expect(matches(step, "name", NAME_MISSING)).toBe(true);
     expect(step.indexOf('name="role"')).toBeLessThan(step.indexOf('id="acceptTerms"'));
     // Continue with everything: made with both sides, landing on the developer side.
-    const ok = await finish(token, { role: "both", name: "Ana Silva", acceptTerms: "yes", over18: "yes" });
+    const ok = await finish(token, { role: "both", devices: ["Mac"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", over18: "yes" });
     expect(ok.status).toBe(200);
     const u = await db.user.findUniqueOrThrow({ where: { email }, include: { profile: true } });
     expect(u).toMatchObject({ name: "Ana Silva", isDeveloper: true, isTester: true, side: "developer" });
     expect(u.emailVerifiedAt).not.toBeNull();
-    expect(u.profile).toMatchObject({ devices: [], languages: [], bio: "" });
+    expect(u.profile).toMatchObject({ devices: ["Mac"], languages: ["English"], bio: "" });
     expect(sideFor(u)).toBe("developer");
     const home = await dashboard(u.id);
     expect(home).not.toContain("Welcome to Playtest");
@@ -153,7 +160,7 @@ describe("batch 35 §134: who you are is required when the account is made", () 
     // Developer only, and tester only, the same way.
     for (const role of ["developer", "tester"] as const) {
       const e = mail();
-      expect((await finish(await startGoogleSignup(e), { role, name: "Pat Reyes", acceptTerms: "yes", over18: "yes" })).status).toBe(200);
+      expect((await finish(await startGoogleSignup(e), { role, devices: ["Mac"], languages: ["English"], name: "Pat Reyes", acceptTerms: "yes", over18: "yes" })).status).toBe(200);
       expect(await db.user.findUniqueOrThrow({ where: { email: e } })).toMatchObject({ isDeveloper: role === "developer", isTester: role === "tester", side: role, name: "Pat Reyes" });
     }
   });

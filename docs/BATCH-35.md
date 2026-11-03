@@ -1631,3 +1631,39 @@ developer's saved card at once, hold or not (deferIfHeld never defers for a dele
 waiting for the lift when they delete are made at the delete, as one payment (chargeDeferred; the daily drain also picks up deleted accounts). Declined, or a bank
 check nobody can approve running out after 3 days: no hold (there's no account), the payment stays delayed for the tester and is listed for the admins. Repayments of
 reversed payments (chargebacks) still wait.
+
+## §153 Devices and languages at sign-up for testers (owner, Nov 3)
+
+Owner: ask testers for their devices and languages at sign-up, and drop the tester's "Save your profile (needed to join a test)" step from the dashboard's Get started.
+
+- **The sign-up form and Google's step** (`RoleChoice`, `src/components/RoleChoice.tsx`, on both pages): choosing **Tester** or **Both** shows the tester's
+  **Devices you use** and **Languages you can test in** right under "I am a…", the profile's own lists (`DEVICES`, `LANGUAGES`, the ones Post / Edit and Find
+  use) as the same tick pills (`Choices`, `PICK_CHIP`), both required. **Developer** shows neither (and sends neither). The ticks stay while the choice
+  changes back and forth; under the pickers: "You can change these on your profile any time." On a phone the pills wrap (no sideways scroll).
+- **Required: at least one device and one language**, with the profile's own lines, red at each picker: "Pick at least one device you play on." and "Pick at
+  least one language you can test in." (`DEVICES_MISSING` / `LANGUAGES_MISSING` in `src/lib/options.ts`, now also used by `saveProfile`). As §134, every
+  missing part is red at once, in the form's order: the choice, devices, languages, name, Terms, 18 or older (with no choice made the pickers aren't shown, so
+  only the choice is asked for). Only known values count (`pickFrom`); anything sent for a developer is ignored. Email and password mistakes still come first.
+  - **All at once on the first press.** Before, an empty Name (checked in the browser) stopped the press before the server saw it, so only Name went red
+    and the choice, Terms and age lines came a press later. Both sign-up pages now send the press even while a box is red there (`AuthForm allAtOnce`, the
+    form's `data-red-and-blue`, as Edit's Save), so Continue with nothing ticked shows every line at once. Nothing is made while any is missing.
+- **Saved when the account is made** (`readNewAccount` returns them; `sidesOf(role, { devices, languages })` creates the tester profile with them), on the email
+  form (`signUp`) and on Google's step (`finishGoogleSignup`) alike. So a new tester's (or both's) profile is saved at once (`profileSaved` is true): Join,
+  Apply and an invite's Join go through without visiting Profile. The bio stays on the profile (optional, as §134). No migration (the profile row already had
+  the columns). The form sends every tick as a list: `AuthForm` reads a `data-list` group with `FormData.getAll` (none ticked: an empty list).
+- **Get started** (dashboard, tester side): "Save your profile (needed to join a test)" shows **only while the tester profile isn't saved**, and goes once it
+  is (it no longer stays as a ticked line). "Set up payouts (to receive your pay)" is kept. A new tester never sees the profile step. It still shows, with the
+  Join gate ("Save your tester profile first: …"), for an account whose profile was never saved: an older tester account from before this change, and a
+  developer who adds the tester side with Start testing too (its tester profile starts empty, and the profile page asks for devices and languages before Join,
+  as before). Decided this way because one rule (saved or not) covers both without telling new and old accounts apart.
+- Replaces §134's "a tester side gets its profile row, empty" and "both … the tester side's own gate … applies once they switch to it": both's tester side is
+  saved at sign-up, so after the switch it joins at once.
+- **Tests:** `tests/batch35-signup-devices.test.ts`: tester and both refused without a device or a language (each line, all missing at once in order, unknown
+  values not counted, nothing made), the ticks saved (`profileSaved` at once), Join without visiting Profile, no profile step in Get started (payouts kept);
+  developer-only unaffected (nothing asked, anything sent ignored, no tester profile); Google's step the same; an old tester with an empty profile keeps the
+  step and the gate until Profile is saved (then the step goes and Join works); a developer adding the tester side keeps them; the pickers' source (shown for
+  tester or both only, the profile's lists and red-line matches, sent as lists). `batch35-signup-bio` (its both / tester sign-ups now tick a device and a
+  language; the gate after the switch moved to an older account), `auth`, `batch15-signin`, `batch18-terms`, `batch20`, `batch26`, `races-nov3` and `sides`
+  give a device and a language where they sign up as a tester or both.
+- **Pictures:** desktop 1280 and phone 390 of the sign-up form for Developer, Tester and Both, the all-red state, filled in, Google's step for Tester, and a new
+  tester's Get started; a short video of a tester signing up through to Find tests (sent with the change).

@@ -124,7 +124,10 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
           <p className="text-sm text-slate-400">Welcome back,</p>
           <h1 className="text-3xl font-bold tracking-tight text-white">{u.name || u.email}</h1>
           {side === "developer" && u.isDeveloper && <GetStarted steps={[{ label: "Add a card (needed to post a test)", done: !!u.stripePaymentMethodId }]} />}
-          {side === "tester" && u.isTester && <GetStarted steps={[{ label: "Save your profile (needed to join a test)", done: profileSaved(await db.testerProfile.findUnique({ where: { userId: u.id } })), href: "/app/profile" }, { label: "Set up payouts (to receive your pay)", done: !!(u.payoutsReady && u.stripeAccountId) }]} />}
+          {/* (Owner, Nov 3, batch 35 §153) A tester or both ticks devices and languages at sign-up, so a new tester's profile is saved at once and the step is
+              gone. It shows only while the profile isn't saved (an older account that never saved it, or a developer who added the tester side with Start
+              testing too): Join stays gated for them, and the step goes once it's saved. */}
+          {side === "tester" && u.isTester && <GetStarted steps={[...(profileSaved(await db.testerProfile.findUnique({ where: { userId: u.id } })) ? [] : [{ label: "Save your profile (needed to join a test)", done: false, href: "/app/profile" }]), { label: "Set up payouts (to receive your pay)", done: !!(u.payoutsReady && u.stripeAccountId) }]} />}
         </div>
         <div className="flex flex-wrap gap-2">
           {side === "developer" && !devOff && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}

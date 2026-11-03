@@ -8,7 +8,7 @@ import type { ReactNode } from "react";
 export const PICK_CHIP = "flex cursor-pointer items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm text-slate-300 has-[:checked]:border-indigo-400/60 has-[:checked]:bg-indigo-500/15 has-[:checked]:text-white";
 
 /** A row of tick boxes for picking several options. */
-export function Choices({ options, value, onChange, label, required, aside }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label: string; required?: boolean; /** Shown next to the label (e.g. Edit's "Changes left: 2 of 3"). */ aside?: ReactNode }) {
+export function Choices({ options, value, onChange, label, required, aside, name }: { options: string[]; value: string[]; onChange: (v: string[]) => void; label: string; required?: boolean; /** Shown next to the label (e.g. Edit's "Changes left: 2 of 3"). */ aside?: ReactNode; /** (Batch 35 §153) The ticks' form name, for a form that sends what's ticked (sign-up's devices and languages). */ name?: string }) {
   return (
     <fieldset>
       <legend className={"label" + (required ? " req" : "")}>{label}{aside}</legend>
@@ -17,7 +17,7 @@ export function Choices({ options, value, onChange, label, required, aside }: { 
           const on = value.includes(o);
           return (
             <label key={o} className={PICK_CHIP}>
-              <input type="checkbox" checked={on} onChange={() => onChange(on ? value.filter((x) => x !== o) : [...value, o])} /> {o}
+              <input type="checkbox" name={name} value={name ? o : undefined} checked={on} onChange={() => onChange(on ? value.filter((x) => x !== o) : [...value, o])} /> {o}
             </label>
           );
         })}

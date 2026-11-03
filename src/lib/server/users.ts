@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
-import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
+import { CATEGORIES, DEVICES, DEVICES_MISSING, LANGUAGES, LANGUAGES_MISSING, pickFrom as pick } from "@/lib/options";
 import { sideFor, type Side } from "@/lib/sides";
 import { HttpError } from "./http";
 import { isAdmin, requireUser } from "./session";
@@ -97,7 +97,6 @@ export function requireConfirmed(u: { emailVerifiedAt: Date | null; email?: stri
   if (!u.emailVerifiedAt) throw new HttpError(409, "confirm_email", u.email ? confirmFirstLine(u.email) : CONFIRM_FIRST);
 }
 
-const pick = (v: unknown, allowed: string[]) => (Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === "string" && allowed.includes(x)))] : []);
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 /** (Batch 35 §134) The side a side-only profile field belongs to: its change stops only that side's profile Save. Name, pronoun and sides are the account's. */
@@ -134,8 +133,8 @@ export async function saveProfile(userId: string, body: Record<string, unknown>)
   const testerPart = isTester && (first || side === "tester");
   const devPart = isDeveloper && !first && asked === "developer";
   const devices = pick(body.devices, DEVICES), categories = pick(body.categories, CATEGORIES), languages = pick(body.languages, LANGUAGES);
-  if (testerPart && devices.length === 0) throw new HttpError(400, "bad_devices", "Pick at least one device you play on.");
-  if (testerPart && languages.length === 0) throw new HttpError(400, "bad_languages", "Pick at least one language you can test in.");
+  if (testerPart && devices.length === 0) throw new HttpError(400, "bad_devices", DEVICES_MISSING);
+  if (testerPart && languages.length === 0) throw new HttpError(400, "bad_languages", LANGUAGES_MISSING);
   const bio = str(body.bio, LIMITS.bio);
   const emailPref = ["daily", "weekly", "monthly", "off"].includes(body.emailPref as string) ? (body.emailPref as string) : undefined;
   // (Owner, Oct 28, batch 16 section 27) What this press sends, in the short form the stop box and the change log use (lists in the options' order).

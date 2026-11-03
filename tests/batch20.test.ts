@@ -243,7 +243,7 @@ describe("batch 20 section 5: 18 or older", () => {
   });
 
   it("email sign-up: refused (red at the tick) until ticked; ticked records when", async () => {
-    const body = { email: mail(), password: "harbor-run-1", role: "tester", name: "Ana Silva", acceptTerms: "yes" };
+    const body = { email: mail(), password: "harbor-run-1", role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes" };
     const no = await json(await signupPOST(req("/api/auth/signup", { body })));
     expect(no.body.error).toMatchObject({ code: "bad_field", message: AGE_LINE });
     expect(await db.user.count({ where: { email: body.email } })).toBe(0);
@@ -267,7 +267,7 @@ describe("batch 20 section 5: 18 or older", () => {
     const token = (done as { pending: string }).pending;
     expect((await pendingGoogleSignup(token))?.email).toBe(email);
     // (Batch 35 §134) The step also asks who you are and a name (required): given here, so each tick's own line shows.
-    const finish = (body: Record<string, unknown>, t = token) => googleFinishPOST(req("/api/auth/google/finish", { body: { role: "tester", name: "Ana Silva", ...body }, headers: { cookie: `${GOOGLE_SIGNUP_COOKIE}=${t}` } }));
+    const finish = (body: Record<string, unknown>, t = token) => googleFinishPOST(req("/api/auth/google/finish", { body: { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", ...body }, headers: { cookie: `${GOOGLE_SIGNUP_COOKIE}=${t}` } }));
     expect((await json(await finish({ over18: "yes" }))).body.error.message).toBe("Agree to the Terms of Use to sign up");
     expect((await json(await finish({ acceptTerms: "yes" }))).body.error.message).toBe(AGE_LINE);
     expect(await db.user.count({ where: { email } })).toBe(0);

@@ -156,14 +156,15 @@ export async function pendingGoogleSignup(token: string | null | undefined, now 
   return { email: v.email };
 }
 /**
- * Continue on the step: who you are (developer, tester or both), a name and both ticks are required, each red at its own field ("Choose developer, tester or
+ * Continue on the step: who you are (developer, tester or both), a name and both ticks are required (batch 35 §153: and, for a tester or both, at least one
+ * device and one language, saved into the tester profile), each red at its own field ("Choose developer, tester or
  * both.", "Enter your name", "Agree to the Terms of Use to sign up", "You must be 18 or older to use Playtest."); then the account is created with its sides (email
  * confirmed by Google, the Terms version and the age confirmation recorded) and signed in. (Owner, Nov 3, batch 35 §134) The same as the email form: with both it
  * lands on the developer side, and the old "Welcome to Playtest · Tell us who you are" step never comes.
  */
 export async function finishGoogleSignup(token: string | null | undefined, body: Record<string, unknown>) {
   // (Batch 26 section 11) Every missing part is red at once, each at its own field (one line each).
-  const { role, name } = readNewAccount(body);
+  const { role, name, devices, languages } = readNewAccount(body);
   const step = await pendingGoogleSignup(token);
   if (!step || !token) throw new HttpError(409, "expired", GOOGLE_STEP_EXPIRED);
   await db.appState.deleteMany({ where: { key: stepKey(token) } });
@@ -171,7 +172,7 @@ export async function finishGoogleSignup(token: string | null | undefined, body:
   const existing = await db.user.findUnique({ where: { email: step.email } });
   // Made meanwhile (another tab's sign-up): signed into it, as Google's sign-in would.
   // (Owner, Nov 3, races) Made at the same moment (two tabs' steps): the database's unique email refuses the second create, which signs into the one just made.
-  const user = existing ?? await db.user.create({ data: { email: step.email, name, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone), ...sidesOf(role) } })
+  const user = existing ?? await db.user.create({ data: { email: step.email, name, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone), ...sidesOf(role, { devices, languages }) } })
     .catch(async (e) => {
       if (!isUniqueClash(e)) throw e;
       return db.user.findUniqueOrThrow({ where: { email: step.email } });

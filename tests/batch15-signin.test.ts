@@ -10,7 +10,7 @@ import { email, json, makeUser, req, uniq } from "./helpers";
 const ipOf = () => `203.0.113.${Math.floor(Math.random() * 200) + 1}-${uniq()}`;
 const login = (body: Record<string, unknown>, ip: string) => loginPOST(req("/api/auth/login", { body, headers: { "x-forwarded-for": `198.51.100.7, ${ip}` } })).then(json);
 // (Batch 35 §134) Who you are, a name and the Terms are required at sign-up too.
-const signup = (body: Record<string, unknown>, ip: string) => signupPOST(req("/api/auth/signup", { body: { role: "tester", name: "Ana Silva", acceptTerms: "yes", ...body }, headers: { "x-real-ip": ip } })).then(json);
+const signup = (body: Record<string, unknown>, ip: string) => signupPOST(req("/api/auth/signup", { body: { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", ...body }, headers: { "x-real-ip": ip } })).then(json);
 
 describe("sign-in (section 7)", () => {
   it("one message for no account, a deleted account, a Google sign-up and a wrong password", async () => {

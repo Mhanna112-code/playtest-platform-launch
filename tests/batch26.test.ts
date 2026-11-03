@@ -331,10 +331,10 @@ describe("batch 26 section 10: call requests", () => {
 
 describe("batch 26 section 11: layout", () => {
   it("every missing tick is red, each under its whole tick row, on both sign-up steps; the * right after the question's words", async () => {
-    await expect(signUp({ email: `b26-${randomUUID()}@playtest.test`, password: "long enough pw", role: "tester", name: "Rae" }, "http://localhost")).rejects.toMatchObject({ message: "Agree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
+    await expect(signUp({ email: `b26-${randomUUID()}@playtest.test`, password: "long enough pw", role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Rae" }, "http://localhost")).rejects.toMatchObject({ message: "Agree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
     // (Batch 35 §134) Google's step asks who you are and a name too: with them given, only the ticks are left.
-    await expect(finishGoogleSignup("none", { role: "tester", name: "Rae" })).rejects.toMatchObject({ message: "Agree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
-    await expect(finishGoogleSignup("none", { role: "tester", name: "Rae", acceptTerms: "yes" })).rejects.toMatchObject({ message: "You must be 18 or older to use Playtest." });
+    await expect(finishGoogleSignup("none", { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Rae" })).rejects.toMatchObject({ message: "Agree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
+    await expect(finishGoogleSignup("none", { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Rae", acceptTerms: "yes" })).rejects.toMatchObject({ message: "You must be 18 or older to use Playtest." });
     await expect(finishGoogleSignup("none", {})).rejects.toMatchObject({ message: "Choose developer, tester or both.\nEnter your name\nAgree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
     for (const f of ["app/signup/page.tsx", "app/signup/google/page.tsx"]) expect(src(f).match(/<label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">/g)).toHaveLength(2);
     expect(src("components/FormMistakes.tsx")).toContain('text.slice(1).split("\\n").filter(Boolean)');

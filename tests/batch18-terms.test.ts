@@ -25,7 +25,7 @@ describe("batch 18 section 1: re-accepting updated Terms of Use", () => {
     expect(TERMS_UPDATED_LINE).toBe("We updated our Terms of Use. Read what changed.");
     expect(TERMS_AGREE_LABEL).toBe("I agree to the updated Terms");
     expect(TERMS_CHANGED_HREF).toBe("/terms#what-changed");
-    const r = await signUp({ email: `terms-${Date.now()}@test.playtest.test`, password: "longenough1", role: "tester", name: "Ana Silva", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
+    const r = await signUp({ email: `terms-${Date.now()}@test.playtest.test`, password: "longenough1", role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     const u = await db.user.findUniqueOrThrow({ where: { id: r.user.id } });
     expect(u.termsVersion).toBe(TERMS_VERSION);
     expect(u.termsAcceptedAt).not.toBeNull();
