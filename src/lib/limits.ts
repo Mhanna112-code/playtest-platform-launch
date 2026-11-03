@@ -14,6 +14,8 @@ export const LIMITS = {
   question: 20_000, // (Owner, Oct 30, batch 15 section 3; was 300) per question
   /** (Owner, Oct 30, batch 15 section 20) Every reason and note: the admin's reasons and decision notes, Pay notes, the reason for paying less or $0. */
   reason: 1000,
+  /** (Owner, Nov 3, batch 35 §140) Apply to join's and Ask to rejoin's note to the developer (the server cut it here before; the box now stops here) */
+  joinNote: 1000,
   /** (Batch 15 section 22) End early's "Why?" */
   endEarlyReason: 10_000,
   /** (Batch 17 §15) Stop the test's "Why?" (testers read it), like End early's */

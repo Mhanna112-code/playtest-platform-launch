@@ -42,7 +42,8 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
     <div className="flex w-full flex-col items-start gap-2" data-admin-box="stacked">
       {!fin.done && <>
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
-      <input id={`lift-note-${id}`} className="input w-full max-w-full" value={note} onChange={(e) => setNote(e.target.value)} />
+      {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). */}
+      <input id={`lift-note-${id}`} className="input w-full max-w-full" maxLength={LIMITS.reason} value={note} onChange={(e) => setNote(e.target.value)} />
       <CharacterCount value={note} max={LIMITS.reason} data-lift-note-count="" />
       {keep.restored && note !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setNote("")} />}
       </>}

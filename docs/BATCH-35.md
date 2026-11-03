@@ -1389,3 +1389,79 @@ Replaces batch 10's 16-line scroll box (`AnswersBox`, `max-h-[20rem]`) for the d
   - A custom grip rather than CSS `resize`, so the panel can always be dragged shorter than where it starts and stays within its limits.
 - **Tests:** `tests/batch35-sent-panels.test.ts` (the small default, dragging below it, the limits, the kept height and fold state with storage blocked too, both folds in each place with the body in the panel and the Pay box after it, a link opening the folds). `batch10`'s scroll-box check now looks for the panel.
 - **Pictures:** `docs/media/sent-locked/panel-*` (README there).
+
+
+## §140 Typing stops at every box's limit (owner, Nov 3)
+
+"Lock all things in text boxes when you go over the character limit, like the limit for each key (still allowing to go to the next line when it hits the limit)."
+
+- **Every text box with a limit stops taking characters at it**, typing and pasting alike. Most use the browser's own `maxLength`: it counts JS string length (UTF-16 units), exactly as the counters (`CharacterCount`: `value.length`) and the server (`readText`, `str`, `.length`) count, so the three always agree. Nothing counts code points; an emoji counts 2, as before.
+- **A saved value already longer than its limit is never cut** (an older 1,000+ character NDA, a long older key or question): it loads whole, nothing more can be added, deleting works. Once it's under the limit it fills up to the limit again.
+- **A paste longer than the room left** is cut at the limit, and a short grey line shows under the box (after its counter) for 4 seconds: "Cut to the 2,000-character limit." One shared place: the paste listener in `FieldChecks` (every `maxLength` box), and `showCutNote` in `src/lib/typingLimit.ts` (the boxes with their own limiter, below).
+- **Counters** keep showing x / max. Since typing can't go past a limit, their red "over" state now appears only for older data. The server's checks and refusals are unchanged (defence in depth); What to do's `str(…, LIMITS.whatToDo + 5000)` still keeps over-limit text so the server's own line can say so.
+- **Spaces around a value:** the server trims before it checks (`readText`), the box counts what is typed, so a box is at most a few spaces stricter than the server, never looser. Keys and questions are counted trimmed, as the server counts them (below).
+
+### The boxes
+
+| Where | Box | Limit | How |
+|---|---|---|---|
+| Post / Edit a test (and a draft's Post) | Product | 60 | maxLength |
+| | Name of this test | 60 | maxLength |
+| | What should testers do? | 20,000 | maxLength |
+| | Link to the product or build | 2,048 | maxLength |
+| | Why is this test mature? | 500 | maxLength |
+| | Your questions (one per line) | 20,000 per question, 20 questions | per-line limiter (`QUESTION_RULE`) + `capQuestions` |
+| | NDA | 1,000 | maxLength (**new**; an older, longer NDA stays) |
+| | Access keys (Post, one per line) | 200 per key | per-line limiter (`KEY_RULE`) (**new**) |
+| | Free keys (Edit, one per line) | 200 per key | per-line limiter (`KEY_RULE`) (**new**) |
+| Written answers | Each answer and "Anything else" | 50,000 for all of them together, file markers not counted | whole-box limiter (`answerRule`) (**new**) |
+| Session | Dispute the pay | 2,000 | maxLength |
+| | Rate: a note | 500 | maxLength |
+| | Report a problem with a recording | 1,000 | maxLength |
+| | Cancel a call: Why | 300 | maxLength |
+| Test page (developer) | Pay / Pay more: Note | 1,000 | maxLength (**new**) |
+| | Add your side (dispute) | 2,000 | maxLength (**new**) |
+| | End early: Why / Stop the test: Why | 10,000 | maxLength (**new**, `WhyBox`) |
+| Join a test | A note to the developer (Apply, Ask to rejoin) | 1,000 | maxLength + a counter (**new**; `LIMITS.joinNote`, the server cut there before) |
+| Messages | Chat message | 4,000 | maxLength (**new**) |
+| Profiles | Report a person | 2,000 | maxLength (**new**) |
+| | Name | 80 | maxLength (**new**) |
+| | Bio (each side) | 2,000 | maxLength |
+| | Excerpt text | 500 | maxLength |
+| Account | Sign-up name (email and Google) | 80 | maxLength (`CountedInput`) |
+| | Email (sign-up, sign-in, forgot) | 254 | maxLength (`CountedInput`) |
+| | New password (sign-up, reset, change) | 200 | maxLength (**new**: the counter said 200, the box took more) |
+| | Contact us | 50,000 | maxLength |
+| Search | Find tests | 100 | maxLength |
+| | Admin list searches | 200 | maxLength |
+| Admin | Suspend / Delete account / Pause / Stop / Decline chargeback: Why | 1,000 | maxLength (**new**) |
+| | Dispute decision: Note to both | 1,000 | maxLength (**new**) |
+| | Approve (hold lift): Note to the developer | 1,000 | maxLength (**new**) |
+| | Team close: Why | 1,000 | maxLength (**new**) |
+
+Not limited (no counter, nothing checked): the page's own name filters (Search by developer, Search your tests, Find testers on Invite, Find a tester by name). Number, money, date and time boxes keep their own rules (`src/lib/numberInput.ts`).
+
+### Boxes limited per line (access keys, questions)
+
+- Each line has its own limit (a key 200, a question 20,000), counted trimmed as the server counts it. When the line the cursor is on is full, further characters on it are ignored, **but Enter still starts a new line**, so the next key or question can be typed. A full line elsewhere never stops another line.
+- Typing into the middle of a full line is ignored too; the cursor stays where it was.
+- **Pasting several lines:** each line is cut at the limit (the first pasted line joins the line it's pasted into, the last joins the rest of its line). Windows line breaks in the clipboard are plain line breaks in the box. A cut paste shows the grey note ("Cut to the 200-character limit for each key.", "Cut to the 20,000-character limit for each question.").
+- A line already over its limit takes nothing more; deleting works, and Enter splits it.
+- The questions box still takes no 21st question (`capQuestions`, §12).
+- The written answers share 50,000 characters: each box takes what the others leave (counted without the file markers, as the counter and Send count). Bold / italic from the toolbar is held to it too.
+- One shared limiter, `limitEdit` / `limitedChange` in `src/lib/typingLimit.ts`: it compares the box before and after the edit (the cursor says where the insertion ended), keeps what fits, puts the box's value back with the cursor at the end of what was kept (so React's redraw never moves it), and shows the note for a cut paste. While an IME is composing nothing is cut (the counter and the server still check). A cut never leaves half an emoji.
+
+## §141 Keys listed under their box; a click goes to its line (owner, Nov 3)
+
+"For access keys show what each one on the line is as you type them, like the questions, and when you click on the keys or questions under the box it can redirect you to the line where it is." Then: "follow the same logic for Edit."
+
+- **One shared list, `LineList`** (`src/components/LineList.tsx`), in the questions' style: one item per filled-in line, live as it's typed, each with its name and count ("Key 2 · 15 / 200", "Question 1 · 18 / 20,000"), red with the server's line when it's over, and "Typed twice" on a key or question typed more than once. Long ones scroll in their own box.
+- **Where:** under the questions box (Post and Edit, with each question's Required tick as before), under Post's access keys box, and under Edit's **Free** keys box (only the free keys are in that box, one per line, so the list is those lines). The keys already given to testers stay in their own **In use** list beside it (with each tester's name, "(left)" / "(finished)", "not working"), not clickable: they aren't in the box.
+- **A click on an item** (or Enter / Space on it) puts the cursor in the box at the end of that line (nothing is selected, so typing never replaces it), scrolls the box so the line is in view (wrapped lines counted), and the box into the page's view. One helper, `focusLine(textarea, lineIndex)`; `lineRange` finds the line, blank lines and "\r\n" included.
+- The keys list replaces the old per-key counter rows (`KeyCounts` now renders the list).
+
+### Tests and pictures
+
+- `tests/batch35-hard-limits.test.ts`: the per-line limiter (blocked at the line's limit, Enter allowed, typing in the middle, pasted lines cut one by one, trimmed counting, an older over-long line kept, no half emoji, the cursor's place, the 21st question), the whole-box limiter (the answers' shared 50,000 without markers, an over-long value only shrinking), `lineRange` / `linesOf` with blank lines and "\r\n", both lists rendered (lines, counts, "Typed twice", Required ticks), a source check that the questions and both key boxes (Post and Edit) use `LineList` and with it `focusLine`, a source scan that every text box in `src` has `maxLength` or the shared limiter (and every counter's max is its box's maxLength), and the paste note in `FieldChecks`.
+- Checked in Edge against a separate server and database (port 3471, a throwaway schema): on Post, a key stops at 200 and Enter starts the next; a pasted block is cut line by line with the grey note; Product's paste is cut at 60 with its note; clicking key 2 / question 2 (after a blank line) puts the cursor at the end of that line. On Edit: the Free box holds only the free keys and lists them, a key stops at 200, Enter works, clicking key 1 goes to line 1, In use is its own list (not clickable), a pasted question is cut at 20,000, clicking question 3 goes to line 3; an older 1,500-character NDA loads whole, typing adds nothing, Backspace works.
+- **Pictures:** `docs/media/hard-limits/` (`post-keys-list.png`, `post-questions-list.png`, `post-product-cut-note.png`, `edit-keys-lists.png`, `edit-questions-list.png`).

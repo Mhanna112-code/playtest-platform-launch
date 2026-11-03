@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
+import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, KEY_TOO_LONG, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 
@@ -148,7 +148,7 @@ export function checkTypedKeys(v: unknown) {
   const dup = repeatedKeys(v);
   if (dup.length) throw new HttpError(400, "bad_keys", `${dup.join(", ")} ${dup.length === 1 ? "is" : "are"} typed more than once. Each key goes in once.`);
   const long = keys.find((k) => k.length > KEY_MAX_LENGTH);
-  if (long) throw new HttpError(400, "bad_keys", `A key can be at most ${KEY_MAX_LENGTH} characters.`);
+  if (long) throw new HttpError(400, "bad_keys", KEY_TOO_LONG);
   return keys;
 }
 

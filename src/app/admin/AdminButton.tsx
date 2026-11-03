@@ -74,7 +74,8 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
         // (Owner, Oct 30, batch 15 section 20) A reason ("note") box: up to 1,000 characters with a live counter; over it is red at the field (the server refuses it too).
         f.name === "note" ? (
           <span key={f.name} className="flex w-full flex-col">
-            <textarea id={`${action}-${id}-note`} aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} className={`input w-full max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`}
+            {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). */}
+            <textarea id={`${action}-${id}-note`} aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} maxLength={LIMITS.reason} className={`input w-full max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`}
               {...(action === "delete-account" || action === "suspend" ? { "data-required": "", "data-required-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).`, "data-min-chars": "3", "data-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).` } : {})} data-match="record why|keep it to"
               data-red-msg={(v[f.name] ?? "").length > LIMITS.reason ? reasonTooLong() : undefined} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
             <CharacterCount value={v[f.name] ?? ""} max={LIMITS.reason} min={action === "delete-account" || action === "suspend" ? 3 : 0} required data-reason-count="" />

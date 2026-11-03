@@ -83,7 +83,8 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
         <label className="text-sm" htmlFor={`note-${id}`}>Note to both</label>
         {/* (Batch 15 section 20) Up to 1,000 characters, a live counter, red when over. */}
         <span className="flex w-full flex-col">
-        <textarea id={`note-${id}`} rows={2} className={`input w-full max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} />
+        {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). */}
+        <textarea id={`note-${id}`} rows={2} maxLength={LIMITS.reason} className={`input w-full max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} />
         <span className={`block text-right text-xs ${note.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(note.length, LIMITS.reason)}</span>
         {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
         </span>

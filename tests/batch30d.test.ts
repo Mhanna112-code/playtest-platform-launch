@@ -187,7 +187,7 @@ describe("batch 30 §14: each written answer is at least 50 characters", () => {
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(form).toContain("minCount={chars} min={min ? ANSWER_MIN_CHARS : 0}");
     expect(form).toContain("answerShortLine(missing.chars ?? 0)");
-    expect(form).toContain('<AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} value={notes} onChange={setNotes} />'); // no minimum on Anything else
+    expect(form).toContain('<AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} total={length} value={notes} onChange={setNotes} />'); // no minimum on Anything else (batch 35 §140: `total`, the shared 50,000)
     expect(QUESTIONS_RULE_LINE).toBe("Testers answer at least one question. Tick Required on any they must answer. Each answer is at least 50 characters.");
     expect(ANSWER_MIN_LINE).toBe("Each answer is at least 50 characters.");
     expect(src("app/app/tests/TestForm.tsx")).toContain("{QUESTIONS_RULE_LINE}");
