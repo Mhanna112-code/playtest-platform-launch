@@ -31,7 +31,7 @@ import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
-import { PayLinesBox } from "@/components/ScrollList";
+import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/components/ScrollList";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
 import { ResizeBox } from "@/components/Panel";
@@ -60,7 +60,6 @@ import { KeyBox } from "./KeyBox";
 import { PageLoaded } from "@/components/PageLoaded";
 import { NdaBox } from "@/components/NdaBox";
 import { QuestionList } from "@/components/QuestionList";
-import { pastCallsBox } from "@/components/QuestionBox";
 import { ScrollText } from "@/components/ScrollText";
 import { PrevSetFolds } from "@/components/AnswerSets";
 import { carryOver, itemsFor, prevSetsOf, sameQuestions } from "@/lib/answerSets";
@@ -599,8 +598,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {overCalls.length > 0 && (
         <details className="card text-sm" id="call-history" data-call-history="">
           <summary className="fold-chevron cursor-pointer font-semibold text-white">Call history ({overCalls.length})</summary>
-          {/* (Batch 20 section 11) More than 3: a scroll box about 3 calls tall, newest first. */}
-          <ul className={`mt-2 space-y-2 ${pastCallsBox(overCalls.length, "tester")}`} data-calls-scroll={overCalls.length > 3 ? overCalls.length : undefined}>
+          {/* (Batch 20 section 11) More than 3: a scroll box about 3 calls tall, newest first. (Owner, Nov 3, §152) It is the draggable panel. */}
+          <div className="mt-2">
+          <PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label="Call history" defaultMax={LIST_PANEL.pastTester}>
+          <ul className="space-y-2" data-calls-scroll={overCalls.length > PAST_CALLS_SHOWN ? overCalls.length : undefined}>
             {overCalls.map((x) => {
               const shown = blockedPair && x.status !== "cancelled" ? { ...x, status: "cancelled", cancelledBy: "system", cancelNote: "not available" } : x;
               const badge = callOverBadge(shown, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, callMinutesOf(x));
@@ -617,6 +618,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               );
             })}
           </ul>
+          </PanelWhen>
+          </div>
         </details>
       )}
       {/* The full app's "Your recordings" card, then "The written part" (a card of its own). */}
@@ -696,10 +699,11 @@ function TesterReview({ timeZone, sessionId, kind, id, review, dispute, off = fa
   const may = check.ok && !review.teamClosedById;
   // (Batch 20 section 15) Nothing left to award: the button stays, greyed, with the line (the page's poll brings a Pay more).
   const full = !check.ok && check.message === NOTHING_TO_DISPUTE;
-  // (Owner, Oct 29, batch 30 §16) More than 4 payment lines: a plain scroll box about 4 lines tall (PayLinesBox); the lines under them stay outside it.
+  // (Owner, Oct 29, batch 30 §16) More than 4 payment lines: a box about 4 lines tall (PayLinesBox); the lines under them stay outside it. (Owner, Nov 3, §152) The
+  // box is the draggable panel.
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
-      <PayLinesBox count={1 + extras.length + (update ? 1 : 0)}>
+      <PayLinesBox id={id} count={1 + extras.length + (update ? 1 : 0)}>
       {review.rejected ? (
         // (Batch 15 section 30) Old rejections stay, and read "Rejected".
         <p><b>Rejected</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>

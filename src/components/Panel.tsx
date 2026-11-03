@@ -16,9 +16,9 @@ export const PANEL_MAX_SHARE = 0.6;
 /** One arrow-key press on the grip. */
 export const PANEL_STEP_PX = 24;
 
-/** A dragged height kept within the panel's limits for a screen `viewport` px tall. */
-export function clampPanel(px: number, viewport: number) {
-  const max = Math.max(PANEL_MIN_PX, Math.round(viewport * PANEL_MAX_SHARE));
+/** A dragged height kept within the panel's limits for a screen `viewport` px tall (`share`: the tallest it can be dragged, as a share of the screen). */
+export function clampPanel(px: number, viewport: number, share = PANEL_MAX_SHARE) {
+  const max = Math.max(PANEL_MIN_PX, Math.round(viewport * share));
   return Math.round(Math.min(max, Math.max(PANEL_MIN_PX, px)));
 }
 
@@ -52,19 +52,24 @@ function write(key: string, value: string) {
   }
 }
 
-export function ResizeBox({ id, children, label, className = "" }: { /** unique on the page, e.g. "needs-sub-<id>" */ id: string; children?: ReactNode; /** what's inside, for screen readers */ label: string; className?: string }) {
+/**
+ * (Owner, Nov 3, batch 35 §152) The call lists (call requests, booked and past calls, the dashboards' calls) and the payment lists sit in this same panel: `defaultMax`
+ * keeps each list's old height at first (a CSS max-height), and `tallest` is how tall the grip drags it (60% of the screen, unless the list was already taller).
+ */
+export function ResizeBox({ id, children, label, className = "", defaultMax = PANEL_DEFAULT_MAX, tallest = PANEL_MAX_SHARE }: { /** unique on the page, e.g. "needs-sub-<id>" */ id: string; children?: ReactNode; /** what's inside, for screen readers */ label: string; className?: string;
+  /** (§152) the height at first, a CSS max-height */ defaultMax?: string; /** (§152) the tallest the grip drags it, as a share of the screen */ tallest?: number }) {
   const box = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | null>(null);
   const drag = useRef<{ y: number; h: number } | null>(null);
   useLayoutEffect(() => {
     const kept = keptHeight(id);
-    if (kept != null) setHeight(clampPanel(kept, window.innerHeight));
-  }, [id]);
+    if (kept != null) setHeight(clampPanel(kept, window.innerHeight, tallest));
+  }, [id, tallest]);
   const set = useCallback((px: number, save: boolean) => {
-    const h = clampPanel(px, window.innerHeight);
+    const h = clampPanel(px, window.innerHeight, tallest);
     setHeight(h);
     if (save) keepHeight(id, h);
-  }, [id]);
+  }, [id, tallest]);
   const down = (e: ReactPointerEvent<HTMLSpanElement>) => {
     e.preventDefault();
     drag.current = { y: e.clientY, h: box.current?.getBoundingClientRect().height ?? 0 };
@@ -89,7 +94,7 @@ export function ResizeBox({ id, children, label, className = "" }: { /** unique 
     <div className={`relative rounded-lg border border-white/10 bg-white/[0.02] ${className}`} data-panel={id}>
       <div ref={box} tabIndex={0} aria-label={`${label} (scroll for more)`} data-panel-box="" data-panel-height={height ?? "default"}
         className="space-y-2 overflow-y-auto p-2 pb-4 pr-3"
-        style={height != null ? { height, maxHeight: `${PANEL_MAX_SHARE * 100}vh` } : { maxHeight: PANEL_DEFAULT_MAX }}>
+        style={height != null ? { height, maxHeight: `${tallest * 100}vh` } : { maxHeight: defaultMax }}>
         {children}
       </div>
       {/* The grip: drag it (or use the arrow keys on it) to make the panel taller or shorter. */}

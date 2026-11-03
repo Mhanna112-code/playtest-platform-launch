@@ -41,7 +41,8 @@ import { ReasonQuote } from "@/components/ScrollText";
 import { DisputeSide } from "./tests/[id]/DisputeSide";
 import { disputesForSide } from "@/lib/server/disputes";
 import { DismissRemoved } from "./DismissRemoved";
-import { ScrollList } from "@/components/ScrollList";
+import { LIST_PANEL, ScrollList } from "@/components/ScrollList";
+import { ResizeBox } from "@/components/Panel";
 import { DevSearch } from "./DevSearch";
 import { TestsVisited } from "./TestsVisited";
 import { devSearchRows } from "@/lib/server/testerSearch";
@@ -667,7 +668,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <section className="space-y-3" id="upcoming-calls">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Upcoming calls <span className="text-sm font-normal text-slate-400">next 7 days</span></h2>
           <div className="card p-3">
-            <ScrollList size="lines" className="divide-y divide-white/5">
+            {/* (Owner, Nov 3, batch 35 §152) In the draggable panel, like the developer's Calls box. */}
+            <ResizeBox id="dash-upcoming-calls" label="Upcoming calls" defaultMax={LIST_PANEL.dashCalls}>
+            <ul className="divide-y divide-white/5" data-upcoming-calls="">
               {upcoming.map(({ c, x }) => (
                 <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long). */}
@@ -678,7 +681,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   <CallCheck className="w-full" />
                 </li>
               ))}
-            </ScrollList>
+            </ul>
+            </ResizeBox>
           </div>
         </section>
       )}

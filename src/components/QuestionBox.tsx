@@ -29,8 +29,6 @@ export function scrollQuestionBoxTo(el: HTMLElement) {
   return true;
 }
 
-/**
- * (Owner, Oct 28, batch 20 section 11) A list of past calls (the tester's Call history, the developer's "Calls (N)"): more than 3 sit in a plain scroll box about 3
- * calls tall, newest first, every call inside with its controls; 3 or fewer show without a box. A bell link to a call scrolls the box to it (jumpTo / HashJump).
- */
-export const pastCallsBox = (count: number, size: "tester" | "developer") => (count > 3 ? `${size === "developer" ? "max-h-[27rem]" : "max-h-[16rem]"} overflow-y-auto pr-1` : "");
+// (Owner, Oct 28, batch 20 section 11) A list of past calls (the tester's Call history, the developer's "Calls (N)"): more than 3 sit in a box about 3 calls tall,
+// newest first, every call inside with its controls; 3 or fewer show without a box. A bell link to a call scrolls the box to it (jumpTo / HashJump). (Owner, Nov 3,
+// batch 35 §152) The box is now the draggable panel: PanelWhen with PAST_CALLS_SHOWN and LIST_PANEL.pastDeveloper / pastTester (components/ScrollList.tsx).

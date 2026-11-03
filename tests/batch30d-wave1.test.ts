@@ -147,16 +147,19 @@ describe("batch 30 §16: more than 4 payment lines under a paid part sit in a pl
   const lines = (n: number) => Array.from({ length: n }, (_, i) => createElement("p", { key: i, "data-pay-line": "" }, `Extra $${i + 1}.00: you get $0.80`));
   it("6 payments: everything in a box about 4 lines tall (no Show N more); 4: no box", () => {
     expect(PAY_LINES_SHOWN).toBe(4);
-    const six = renderToStaticMarkup(createElement(PayLinesBox, { count: 6, children: lines(6) }));
-    expect(six).toContain('data-scroll-list="four"');
-    expect(six).toContain("max-h-28 overflow-y-auto");
-    expect((six.match(/data-pay-line/g) ?? []).length).toBe(6);
+    const six = renderToStaticMarkup(createElement(PayLinesBox, { id: "s1", count: 6, children: lines(6) }));
+    // (Owner, Nov 3, batch 35 §152) The box is the draggable panel, about 4 lines tall at first (was max-h-28), kept by the part's id.
+    expect(six).toContain('data-panel="paylines-s1"');
+    expect(six).toContain("max-height:7rem");
+    expect(six).toContain("overflow-y-auto");
+    expect(six).toContain('data-pay-lines="panel"');
+    expect((six.match(/data-pay-line=""/g) ?? []).length).toBe(6);
     expect(six).not.toContain("Show");
-    const four = renderToStaticMarkup(createElement(PayLinesBox, { count: 4, children: lines(4) }));
-    expect(four).not.toContain("data-scroll-list");
+    const four = renderToStaticMarkup(createElement(PayLinesBox, { id: "s1", count: 4, children: lines(4) }));
+    expect(four).not.toContain("data-panel");
     // The session page: the Pay line and the extras inside; whether it can be paid more and the dispute after the box.
     const page = src("app/app/sessions/[id]/page.tsx");
-    const start = page.indexOf("<PayLinesBox count={1 + extras.length");
+    const start = page.indexOf("<PayLinesBox id={id} count={1 + extras.length");
     const end = page.indexOf("</PayLinesBox>");
     expect(start).toBeGreaterThan(0);
     expect(page.slice(start, end)).toContain("data-extra-line");

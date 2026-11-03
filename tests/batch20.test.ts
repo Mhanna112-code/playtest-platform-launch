@@ -7,7 +7,8 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { QuestionList } from "@/components/QuestionList";
-import { QuestionBox, pastCallsBox } from "@/components/QuestionBox";
+import { QuestionBox } from "@/components/QuestionBox";
+import { PAST_CALLS_SHOWN } from "@/components/ScrollList";
 import { questionLimitLine } from "@/lib/questions";
 import { isMissingNeedLine, missingNeedLine, missingNeedText, testerGapText } from "@/lib/gaps";
 import { OrList, MissingNeedWords } from "@/components/MissingNeeds";
@@ -525,12 +526,10 @@ describe("batch 20 section 10: Invite disabled while nobody can be invited", () 
 
 describe("batch 20 section 11: past calls in a scroll box past 3", () => {
   it("2 calls: no box; 6: a box about 3 calls tall; both pages use it; a bell link scrolls to the call", () => {
-    expect(pastCallsBox(2, "tester")).toBe("");
-    expect(pastCallsBox(3, "developer")).toBe("");
-    expect(pastCallsBox(6, "tester")).toContain("overflow-y-auto");
-    expect(pastCallsBox(6, "developer")).toContain("overflow-y-auto");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<ul className={`mt-2 space-y-2 ${pastCallsBox(overCalls.length, "tester")}`}');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('<ul className={`mt-2 space-y-2 ${pastCallsBox(overCalls.length, "developer")}`}');
+    // (Owner, Nov 3, batch 35 §152) The box is the draggable panel (PanelWhen: a panel only past 3; tests/batch35-list-panels.test.ts renders it).
+    expect(PAST_CALLS_SHOWN).toBe(3);
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label="Call history" defaultMax={LIST_PANEL.pastTester}>');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label={`Calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>');
     // Newest first, each with its own id (a bell link "#call-<id>" opens the fold, scrolls the box to it and marks it).
     expect(src("app/app/sessions/[id]/page.tsx")).toContain(".sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());");
     expect(src("lib/markJump.ts")).toContain('el.scrollIntoView({ block: "center", behavior: "smooth" });');

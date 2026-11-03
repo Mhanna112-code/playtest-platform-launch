@@ -11,7 +11,7 @@ const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "u
 
 describe("plain scroll boxes on the dashboards and the developer profile (section 14)", () => {
   it("no LongList (no Show N more) on these pages; every list panel uses ScrollList; the developer's test cards scroll in the cards box", () => {
-    for (const f of ["app/app/page.tsx", "app/app/CallsBox.tsx", "app/app/DevSearch.tsx", "app/app/developers/[id]/page.tsx", "components/TesterTests.tsx"]) {
+    for (const f of ["app/app/page.tsx", "app/app/DevSearch.tsx", "app/app/developers/[id]/page.tsx", "components/TesterTests.tsx"]) {
       const s = src(f);
       expect(s, f).not.toContain("LongList");
       expect(s, f).toContain("<ScrollList");
@@ -19,7 +19,7 @@ describe("plain scroll boxes on the dashboards and the developer profile (sectio
     const page = src("app/app/page.tsx");
     // The developer dashboard: disputes, excerpt requests, Needs review, Needs you, Your tests; the tester dashboard: removed, Charge or cancel, To do,
     // waiting, upcoming calls, invitations, Tests you left, History.
-    expect((page.match(/<ScrollList/g) ?? []).length).toBeGreaterThanOrEqual(10); // §106: two action lists now share DashboardActionBox.
+    expect((page.match(/<ScrollList/g) ?? []).length).toBeGreaterThanOrEqual(9); // (§152) upcoming calls (and CallsBox) moved to the draggable panel: tests/batch35-list-panels.test.ts // §106: two action lists now share DashboardActionBox.
     expect(src("app/app/DashboardActionBox.tsx")).toContain("<ScrollList");
     expect((page.match(/<DashboardActionBox/g) ?? []).length).toBe(2);
     expect(page).toContain('<ScrollList size="cards" className="grid gap-4 md:grid-cols-2">');

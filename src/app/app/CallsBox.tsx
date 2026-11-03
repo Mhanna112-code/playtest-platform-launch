@@ -5,7 +5,8 @@ import { ArrowRight, CalendarClock } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { CancelMenu } from "@/components/CancelMenu";
 import { JoinCall } from "@/components/JoinCall";
-import { ScrollList } from "@/components/ScrollList";
+import { LIST_PANEL } from "@/components/ScrollList";
+import { ResizeBox } from "@/components/Panel";
 import { usePress } from "@/lib/usePress";
 import { CallCheck } from "@/components/CallCheck";
 
@@ -25,7 +26,9 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
       <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Calls{/* (Owner, Nov 2) no "soonest first": the order speaks for itself */}</h2>
       {calls.length === 0 ? <p className="card text-sm text-slate-400">No booked calls.</p> : (
         <div className="card p-3">
-          <ScrollList size="lines" className="divide-y divide-white/5">
+          {/* (Owner, Nov 3, batch 35 §152) In the draggable panel (§139): it scrolls inside, and the grip drags it shorter or taller. */}
+          <ResizeBox id="dash-calls" label="Calls" defaultMax={LIST_PANEL.dashCalls}>
+          <ul className="divide-y divide-white/5" data-dash-calls="">
             {calls.map((c) => (
               <li key={c.id} className="space-y-1 py-2 text-sm" data-call-row={c.id}>
                 <div className="flex flex-wrap items-center gap-2">
@@ -43,7 +46,8 @@ export function CallsBox({ calls, seenAt, restricted }: { calls: DashCall[]; see
                 {at === c.id && <ChangesBox changes={changes} error={error} />}
               </li>
             ))}
-          </ScrollList>
+          </ul>
+          </ResizeBox>
         </div>
       )}
     </section>
