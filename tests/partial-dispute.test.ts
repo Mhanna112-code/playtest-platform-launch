@@ -76,8 +76,15 @@ const chargebackEvents = (testId: string) => db.testEvent.findMany({ where: { te
 const admin = async () => (await makeUser({ dev: true, name: "Team Admin" })).user.id;
 /** The admin's chargeback-hold row for this developer. */
 async function adminRow(devId: string) {
-  const page = (await adminPage("chargebacks", await admin(), null)) as { rows: { id: string; chargebacks: string[] }[] };
-  return page.rows.find((r) => r.id === devId);
+  // Every page of the list, not just the first: a full test run leaves many other chargeback holds ahead of this one.
+  const id = await admin();
+  for (let cursor: string | null = null, n = 0; n < 50; n++) {
+    const page = (await adminPage("chargebacks", id, cursor)) as { rows: { id: string; chargebacks: string[] }[]; next?: string | null };
+    const row = page.rows.find((r) => r.id === devId);
+    if (row || !page.next) return row;
+    cursor = page.next;
+  }
+  return undefined;
 }
 /** Clear a chargeback hold the way the developer and the team do: card verified, Pay what you owe reserves, the team approves (the reservation is captured). */
 async function clear(w: W) {

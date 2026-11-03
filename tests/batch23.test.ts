@@ -283,7 +283,14 @@ describe("batch 23 section 6: a chargeback hold's Pay what you owe reserves the 
     expect(RESERVE_EXPIRED).toBe("Your reservation expired: press Pay what you owe again so the team can approve it.");
     expect(await db.notification.count({ where: { userId: x.dev.user.id, text: RESERVE_EXPIRED } })).toBe(1);
     expect(await chargebackSteps(x.dev.user.id)).toMatchObject({ owedPaid: false, reservedCents: 0, expired: true });
-    const rows = (await adminPage("chargebacks", x.dev.user.id, null)).rows as ChargebackVM[];
+    // Every page, not just the first: a full test run leaves many other chargeback holds ahead of this one.
+    const rows: ChargebackVM[] = [];
+    for (let cursor: string | null = null, n = 0; n < 50; n++) {
+      const page = await adminPage("chargebacks", x.dev.user.id, cursor);
+      rows.push(...(page.rows as ChargebackVM[]));
+      if (!page.next) break;
+      cursor = page.next;
+    }
     expect(rows.find((c) => c.id === x.dev.user.id)).toMatchObject({ expired: true, owedPaid: false });
     expect(src("app/admin/PagedList.tsx")).toContain("Reservation expired");
     await expect(approveChargebackHold(x.dev.user.id)).rejects.toMatchObject({ message: "Not yet: nothing is reserved ($8.00 is owed)." });

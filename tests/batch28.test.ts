@@ -290,7 +290,14 @@ describe("batch 28 §8: Pay what you owe reserves once; what's added after is ch
     expect(again.status).toBe(409);
     expect(again.body.error.message).toBe(reservedAddedLine(800, 500));
     expect(reservedAddedLine(800, 500)).toBe("Reserved $8.00: it's taken when the team approves lifting your hold.");
-    const rows = (await adminPage("chargebacks", x.dev.user.id, null)).rows as ChargebackVM[];
+    // Every page, not just the first: a full test run leaves many other chargeback holds ahead of this one.
+    const rows: ChargebackVM[] = [];
+    for (let cursor: string | null = null, n = 0; n < 50; n++) {
+      const page = await adminPage("chargebacks", x.dev.user.id, cursor);
+      rows.push(...(page.rows as ChargebackVM[]));
+      if (!page.next) break;
+      cursor = page.next;
+    }
     expect(rows.find((c) => c.id === x.dev.user.id)?.owedLine).toBe(" ($8.00 reserved · $5.00 added since (charged after the hold lifts))");
     expect(src("components/OwedBox.tsx")).toContain("disabled={busy || verifyFirst || reservedOnce || (over && !over200)}"); // (§150) and the over-$200 tick
     // Approve goes through.
