@@ -44,8 +44,14 @@ export async function logTesterAction(userId: string, contractId: string, action
   switch (action) {
     case "leave": text = "left the test"; break;
     // (Owner, Oct 29, batch 29 section 13) "You sent your updated answers in another tab" (a part sent again replaces the sent one).
-    case "written": text = (await resent(contractId, "written")) ? "sent your updated answers" : "sent your written answers"; break;
-    case "recording-send": text = (await resent(contractId, "recording")) ? "sent your updated recording" : "sent your recording"; break;
+    case "written": text = (await resent(contractId, "written")) ? "sent your answers to the new questions" : "sent your written answers"; break;
+    // (Batch 35 §136) Adding to sent work: "You added to your written answers in another tab", "You added a recording …".
+    case "written-add": text = "added to your written answers"; break;
+    case "recording-send": {
+      const n = Number((result as { added?: number } | null)?.added ?? 0);
+      text = n ? (n === 1 ? "added a recording" : `added ${n} recordings`) : "sent your recording";
+      break;
+    }
     case "terms": text = body.choice === "switch" ? "switched to the new terms" : "kept your current terms"; break;
     case "choose": {
       // (Batch 29 section 13) "You charged Nora Lane $10.00 for your recording in another tab".

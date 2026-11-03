@@ -4,7 +4,8 @@ import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
-import { itemsFor, itemsOf, prevSetsOf, pushPrev, sameQuestions } from "@/lib/answerSets";
+import { itemsFor, sameQuestions } from "@/lib/answerSets";
+import { additionsOf, latestItems } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -28,9 +29,9 @@ import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
 import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
-import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
-import { withoutTags } from "@/lib/answerAttachments";
-import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, NOTHING_CHANGED_LINE, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS } from "@/lib/rules";
+import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
+import { withoutAttachmentMarkers } from "@/lib/answerAttachments";
+import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, ANSWER_NEW_QUESTIONS, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 
 type Tx = Prisma.TransactionClient;
@@ -1058,44 +1059,106 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     if (refusal) throw new HttpError(409, "closed", refusal);
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    // (Batch 30 §2) A paid part can be sent again (an updated version); only an old rejection or the team's $0 closure stays locked.
+    // (Batch 30 §2) Only an old rejection or the team's $0 closure stays locked against anything more.
     const locked = resendRefusal(existing?.review, "written");
     if (locked) throw new HttpError(409, "paid", locked);
     const paid = !!existing?.review;
-    // (Owner, Oct 29, batch 13 section 8) The whole set is stored: each question with its answer. Sending replaces the sent version; an earlier set it replaces (sent
-    // for questions the tester has since switched away from) moves to the developer's "Previous questions and answers", and (DEFAULT) the new set is priced at the
-    // current contract's written price.
     const items = itemsFor(qs, answers);
-    const before = existing ? itemsOf(existing.answers, qs) : [];
-    const replacesEarlier = !!existing && (!!existing.setUntil || !sameQuestions(before, items));
-    // (Owner, Oct 28, batch 20 section 26) A resend identical to the last send (the same answers and notes, no new attachment) is refused: no new piece, no bell.
-    // (Batch 35 §77) By content: a file removed and the same file placed again (a new tag in its marker) is no change either (no "updated" line, no email).
-    const sentFiles = existing ? await tx.recording.findMany({ where: { contractId, part: "written", submissionId: existing.id }, select: { filename: true, sizeBytes: true } }) : [];
-    if (existing && !replacesEarlier && items.every((x, i) => withoutTags(x.answer) === withoutTags(before[i]?.answer ?? "")) && notes === existing.notes
-      && (await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null } })).every((f) => sentFiles.some((g) => g.filename === f.filename && g.sizeBytes === f.sizeBytes))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
-    // (Batch 30 §3) An update of a late piece stays late; one sent after the deadline is late (and Charge, if it had opened, no longer applies).
+    // (Owner, Nov 3, batch 35 §136; replaces batch 13 §8's "sending replaces the sent version" and batch 20 §26's updated answers) What was sent is locked: a
+    // second Send is only for the answers to changed questions (after a switch), and those are ADDED under what was sent ("Added"), never in its place.
+    const before = existing ? latestItems(existing, qs) : [];
+    const newQuestions = !!existing && (!!existing.setUntil || !sameQuestions(before, items));
+    if (existing && !newQuestions) throw new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
+    // (Batch 30 §3) Added to a late piece, it stays late; added after the deadline, the piece is late (and Charge, if it had opened, no longer applies).
     const late = !!existing?.late || isLate(c.dueAt, now);
-    const data = {
-      answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now,
-      // (Batch 30 §2) An update of a paid piece keeps its price and review; it only marks the update (the developer's Pay more answers it).
-      ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
-      ...(replacesEarlier ? { setUntil: null, ...(paid ? {} : { agreedCents: c.writtenCents }), prevSets: pushPrev(prevSetsOf(existing!.prevSets), { until: (existing!.setUntil ?? now).toISOString(), items: before }) as unknown as Prisma.InputJsonValue } : {}),
-    };
+    const files = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
     const sub = existing
-      ? await tx.submission.update({ where: { id: existing.id }, data })
-      : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, ...data } });
+      ? await tx.submission.update({ where: { id: existing.id }, data: {
+          // (Batch 13 §8) While unpaid, the piece is priced at the current contract's written price; it no longer reads "Sent for the questions until".
+          additions: [...additionsOf(existing.additions), { at: now.toISOString(), items, notes: notes !== existing.notes ? notes : "", files: files.map((f) => f.id) }] as unknown as Prisma.InputJsonValue,
+          setUntil: null, late, updatedAt: now,
+          ...(paid ? { paidUpdateAt: now } : { agreedCents: c.writtenCents, payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+        } })
+      : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now, payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) } });
     // (Batch 11) Files and recordings attached to the written part go with it.
-    await tx.recording.updateMany({ where: { contractId, part: "written", uploadedAt: { not: null } }, data: { submissionId: sub.id } });
-    // (Batch 30 §2) An update after it was paid: below the cap it waits in Needs you (a "sent" line); at the cap a quiet line only.
-    const afterPaid = paid ? await paidUpdateRoom(tx, sub.id, c.testId) : null;
-    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "written answers"), false, {}, c.id, "", `part-${sub.id}`);
-    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} written answers`, false, {}, c.id, "", `part-${sub.id}`);
+    await tx.recording.updateMany({ where: { id: { in: files.map((f) => f.id) } }, data: { submissionId: sub.id } });
+    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: !!existing, paid });
     return { sub, updated: !!existing, afterPaid };
   });
-  await notify(tester.email, `Work sent: your written answers for “${c0.title}”`, [`Your written answers were ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-written`);
-  if (afterPaid) await notifyPaidUpdate(c0, tester, sub.id, "written answers", afterPaid);
-  else await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} written answers for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} written answers${sub.late ? " (late)" : ""}. Review them and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
+  await tellSentByBell(c0, tester, sub, "written answers", updated, afterPaid);
   return sub;
+}
+
+/**
+ * (Owner, Nov 3, batch 35 §136) "Add more" on sent written answers: more text (with files placed in it) is added under what was sent, headed "Added". Nothing sent
+ * before changes. The same windows as Send (not after the work ends, not while the test is paused, not while an offer of new terms is open) and the same
+ * stop-once; the developer is told the same way ("Ana added to their written answers"). Payments and reviews already made stay as they are; after a Pay, Pay more
+ * can pay for it (batch 30 §2's update row).
+ */
+export async function addWritten(tester: U, contractId: string, body: Record<string, unknown>) {
+  const c0 = await ownContract(tester.id, contractId);
+  const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
+  if (ended) throw new HttpError(409, "closed", ended);
+  await answerTermsFirst(contractId);
+  const text = typeof body.text === "string" ? body.text.trim() : "";
+  if ((await db.recording.count({ where: { contractId, part: "written", uploadedAt: null, createdAt: { gt: new Date(Date.now() - 3 * 3_600_000) } } })) || text.includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
+  if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
+  const files = await db.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
+  if (!withoutAttachmentMarkers(text).trim() && !files.length) throw new HttpError(400, "empty", NOTHING_TO_ADD);
+  await testerSendGate(contractId, body);
+  const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
+  const { sub, afterPaid } = await db.$transaction(async (tx) => {
+    const t = await lockTest(tx, c0.testId);
+    const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
+    await (await import("./workWindow")).assertWorkOpen(tx, t.id);
+    const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
+    if (refusal) throw new HttpError(409, "closed", refusal);
+    const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
+    if (!existing) throw new HttpError(409, "not_sent", "Send your answers first.");
+    const locked = resendRefusal(existing.review, "written");
+    if (locked) throw new HttpError(409, "paid", locked);
+    const qs = writtenQuestions(c);
+    if (existing.setUntil || !sameQuestions(latestItems(existing, qs), itemsFor(qs))) throw new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
+    // (Batch 14) At most 50,000 characters for the written part: the latest answers, the notes and everything added.
+    const long = checkWrittenLength([...latestItems(existing, qs).map((x) => x.answer), existing.notes, ...additionsOf(existing.additions).map((a) => a.text ?? ""), text]);
+    if (!long.ok) throw new HttpError(400, "too_long", long.message);
+    const now = new Date();
+    const paid = !!existing.review;
+    const late = existing.late || isLate(c.dueAt, now);
+    const fresh = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
+    const sub = await tx.submission.update({ where: { id: existing.id }, data: {
+      additions: [...additionsOf(existing.additions), { at: now.toISOString(), text, files: fresh.map((f) => f.id) }] as unknown as Prisma.InputJsonValue,
+      late, updatedAt: now,
+      ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+    } });
+    await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
+    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: true, paid });
+    return { sub, afterPaid };
+  });
+  await tellSentByBell(c0, tester, sub, "written answers", true, afterPaid);
+  return sub;
+}
+
+/** (Batch 35 §136) The developer's live line for a send or an addition (after a Pay: below the cap a stop-once "sent" line, at the cap a quiet one). */
+export async function tellSent(tx: Tx, p: { testId: string; contractId: string; subId: string; name: string; poss: string; part: "written answers" | "recording"; added: boolean; paid: boolean; n?: number }) {
+  const afterPaid = p.paid ? await paidUpdateRoom(tx, p.subId, p.testId) : null;
+  const text = afterPaid ? (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(p.name, p.poss, p.part, p.n) : p.added ? `${p.name} ${addedWhat(p.poss, p.part, p.n)}` : `${p.name} sent ${p.poss} ${p.part}`;
+  await recordEvent(tx, p.testId, afterPaid?.atCap ? "sentpaid" : "sent", text, false, {}, p.contractId, "", `part-${p.subId}`);
+  return afterPaid;
+}
+
+/** (Batch 35 §136) The bells for a send or an addition: "Work sent" to the tester; to the developer "Ana sent / added to …" (after a Pay, the update row's line). */
+export async function tellSentByBell(
+  c0: { id: string; testId: string; title: string; test: { developer: { email: string; name: string; deletedAt: Date | null } } },
+  tester: U, sub: { id: string; late: boolean }, part: "written answers" | "recording", added: boolean, afterPaid: { atCap: boolean; paidCents: number; roomCents: number } | null, n = 1,
+) {
+  const name = displayName(tester), poss = pronouns(tester.pronoun).poss, dev = displayName(c0.test.developer);
+  const anchor = part === "recording" ? "part-recording" : "part-written";
+  await notify(tester.email, `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added to your ${part} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
+  if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n);
+  const title = added ? `${name} ${addedWhat(poss, part, n)} for “${c0.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.title}”`;
+  const what = added ? addedWhat(poss, part, n) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;
+  await notify(c0.test.developer.email, title, [`${name} ${what}${sub.late ? " (late)" : ""}. ${part === "recording" ? "Watch it" : "Review them"} and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
 }
 
 export const eventLine = (e: { text: string; createdAt: Date }) => `${e.text} · ${fmtDateTime(e.createdAt)}`;

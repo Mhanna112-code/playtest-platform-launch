@@ -1,7 +1,6 @@
 import { Cut } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
-import { markerIds } from "@/lib/answerAttachments";
 import { hasPerks } from "@/lib/server/subscription";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
@@ -51,7 +50,8 @@ import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
 import { panelRows } from "@/lib/listingPanel";
 import { lastListingSave } from "@/lib/server/listingPanel";
 import { Fold, ResizeBox } from "@/components/Panel";
-import { AttachmentList } from "@/components/AttachmentList";
+import { SentWork } from "@/components/SentWork";
+import { additionsOf, latestItems } from "@/lib/additions";
 import { pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
@@ -66,8 +66,8 @@ import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
 import { pastCallsBox } from "@/components/QuestionBox";
 import { byQuestion } from "@/lib/byQuestion";
-import { AnswerWithAttachments, PrevSetFolds, SetView } from "@/components/AnswerSets";
-import { itemsOf, prevSetsOf } from "@/lib/answerSets";
+import { PrevSetFolds } from "@/components/AnswerSets";
+import { prevSetsOf } from "@/lib/answerSets";
 import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
@@ -473,7 +473,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
               <p className="text-sm font-medium">
-                <a href={`/app/testers/${x.c.testerId}`}><Cut text={displayName(x.c.tester)} /></a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `sent ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
+                <a href={`/app/testers/${x.c.testerId}`}><Cut text={displayName(x.c.tester)} /></a> · {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "updated" : "sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
               </p>
               {/* (Batch 17 §19) The last 7 days before close-out. */}
               {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
@@ -485,9 +485,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
                     {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                     {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
-                    {x.s!.kind === "written" && <SetView items={itemsOf(x.s!.answers, writtenQuestions(x.c))} attachments={x.s!.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />}
-                    {x.s!.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={x.s!.notes} attachments={x.s!.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
-                    <AttachmentList items={x.s!.recordings.filter((r) => r.uploadedAt)} inlineText={x.s!.kind === "written" ? itemsOf(x.s!.answers, writtenQuestions(x.c)).map((it) => it.answer) : []} inlineIds={[...markerIds(x.s!.notes, x.s!.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
+                    <SentWork kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
                   </ResizeBox>
                   </Fold>
                   <Fold id={`needs-pay-${x.s!.id}`} summary="Pay">
@@ -524,9 +522,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
               <Fold id={`update-body-${x.id}`} summary={x.kind === "written" ? "Their written answers" : "Their recording"}>
               <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
-                {x.kind === "written" && <SetView items={itemsOf(x.answers, writtenQuestions(c))} attachments={x.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />}
-                {x.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={x.notes} attachments={x.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
-                <AttachmentList items={x.recordings.filter((r) => r.uploadedAt)} inlineText={x.kind === "written" ? itemsOf(x.answers, writtenQuestions(c)).map((it) => it.answer) : []} inlineIds={[...markerIds(x.notes, x.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
+                <SentWork kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
               </ResizeBox>
               </Fold>
               <Fold id={`update-pay-${x.id}`} summary="Pay more">
@@ -592,7 +588,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     <li key={r.name} className="flex flex-wrap items-center gap-2 scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" {...(r.sub ? { id: `part-${r.sub.id}` } : {})}>
                       <b className="text-white">{r.name}</b>
                       <span className={`badge ${r.required ? "border-amber-300/40 text-amber-200" : ""}`}>{r.required ? "Required" : "Not required"}</span>
-                      <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? `Sent ${fmtDate(r.sub.sentAt)}` : "Not sent yet"}</span>
+                      <span className={r.sub ? "text-emerald-200" : "text-slate-400"}>{r.sub ? (additionsOf(r.sub.additions).length ? `Updated ${fmtDate(r.sub.updatedAt)}` : `Sent ${fmtDate(r.sub.sentAt)}`) : "Not sent yet"}</span>
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
                       {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
@@ -601,9 +597,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         <Fold id={`row-body-${r.sub.id}`} summary={r.sub.kind === "written" ? "Their written answers" : "Their recording"}>
                         <ResizeBox id={`row-${r.sub.id}`} label={r.sub.kind === "written" ? "Written answers" : "Recordings"}>
                           {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
-                          {r.sub.kind === "written" && <SetView items={itemsOf(r.sub.answers, writtenQuestions(c))} attachments={r.sub.recordings.filter((a) => a.uploadedAt).map((a) => ({ id: a.id, filename: a.filename, size: a.sizeBytes, contentType: a.contentType }))} />}
-                          {r.sub.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={r.sub.notes} attachments={r.sub.recordings.filter((a) => a.part === "written" && a.uploadedAt).map((a) => ({ id: a.id, filename: a.filename, size: a.sizeBytes, contentType: a.contentType }))} /></div>}
-                          <AttachmentList items={r.sub.recordings.filter((a) => a.uploadedAt)} inlineText={r.sub.kind === "written" ? itemsOf(r.sub.answers, writtenQuestions(c)).map((it) => it.answer) : []} inlineIds={[...markerIds(r.sub.notes, r.sub.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
+                          <SentWork kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} />
                         </ResizeBox>
                         </Fold>
                       </div>}
@@ -764,8 +758,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 .filter((s) => s.kind === "written")
                 .map((s) => ({
                   // (Batch 13 section 8) Grouped by the exact text of the question each answer was sent for.
-                  ...((items) => ({ questions: items.map((i) => qStored(i.question, i.required)), answers: items.map((i) => i.answer) }))(itemsOf(s.answers, writtenQuestions(c))),
-                  contractId: c.id, tester: displayName(c.tester), notes: s.notes, sentAt: s.updatedAt,
+                  ...((items) => ({ questions: items.map((i) => qStored(i.question, i.required)), answers: items.map((i) => i.answer) }))(latestItems(s, writtenQuestions(c))),
+                  // (Batch 35 §136) The latest answers per question; text added later joins the notes ("Other notes").
+                  contractId: c.id, tester: displayName(c.tester), notes: [s.notes, ...additionsOf(s.additions).flatMap((a) => [a.notes ?? "", a.text ?? ""])].filter((x) => x.trim()).join("\n\n"), sentAt: s.updatedAt,
                   attachments: s.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType })),
                   status: (!s.review ? "waiting" : s.review.rejected && !(s.dispute?.decidedCents) ? "rejected" : "paid") as "paid" | "rejected" | "waiting",
                   paidCents: Math.max(s.review?.amountCents ?? 0, s.dispute?.decidedCents ?? 0),

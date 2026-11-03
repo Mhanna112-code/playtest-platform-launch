@@ -174,12 +174,14 @@ describe("tester session", () => {
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).agreedCents).toBeNull();
   });
 
-  it("answers can be updated until paid; nobody else can send on a session", async () => {
+  // (Batch 35 §136; was "answers can be updated until paid") Sent answers are locked: only added to.
+  it("sent answers can't be changed, only added to; nobody else can send on a session", async () => {
     const { testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a2", "b2"] })).status).toBe(200);
-    expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).answers).toEqual([{ question: "What did you like?", required: false, answer: "a2" }, { question: "Where did you get stuck?", required: false, answer: "b2" }] /* (batch 26 section 14) not required unless ticked */);
+    expect((await sact(sessionId, "written", tester.cookie, { answers: ["a2", "b2"] })).status).toBe(409);
+    expect((await sact(sessionId, "written-add", tester.cookie, { text: "more" })).status).toBe(200);
+    expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).answers).toEqual([{ question: "What did you like?", required: false, answer: "a" }, { question: "Where did you get stuck?", required: false, answer: "b" }] /* (batch 26 section 14) not required unless ticked */);
     const other = await makeUser({ tester: true });
     expect((await sact(sessionId, "written", other.cookie, { answers: ["x", "y"] })).status).toBe(404);
     expect((await sact(sessionId, "leave", other.cookie)).status).toBe(404);

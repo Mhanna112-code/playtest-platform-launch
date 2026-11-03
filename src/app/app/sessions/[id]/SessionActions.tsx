@@ -14,7 +14,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ScrollText } from "@/components/ScrollText";
-import { NOTHING_CHANGED_LINE } from "@/lib/rules";
+import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
 import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
@@ -168,7 +168,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       setMissingAt(null);
       await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt });
       await keep.clear();
-      fin.finish(update ? "Sent your updated answers." : "Sent your answers.");
+      fin.finish(update ? "Sent your answers to the new questions." : "Sent your answers.");
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
       else {
@@ -186,7 +186,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   return (
     <form className="space-y-3" onSubmit={send}>
       {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
-      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my updated answers" : "Send my answers"}
+      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my answers to the new questions" : "Send my answers"}
         find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
@@ -219,7 +219,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my updated answers" : "Send my answers"}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my answers to the new questions" : "Send my answers"}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
@@ -227,6 +227,68 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg?.ok && <p className="ok">{msg.text}</p>}
     </form>
+  );
+}
+
+/** (Batch 35 §136) The Add button's name, in its refusals and mistakes list. */
+export const ADD_PRESS = "Add to my answers";
+
+/**
+ * (Owner, Nov 3, batch 35 §136) Sent written answers are locked: "Add more" opens a box for more text (Bold, Italic, Code block, 📎 files), sent with "Add to my
+ * answers" and added under what was sent ("Added"). Kept as a draft like the answers (`add:<session>`), editable until it's sent. `canSend` false (a paused test):
+ * the box and its draft stay, the button is hidden. `used`: the characters already sent (the 50,000 limit counts everything).
+ */
+export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known = [], lines = [] }: { sessionId: string; seenAt: string; canSend?: boolean; used: number; known?: AnswerAttachment[]; lines?: string[] }) {
+  const [text, setText] = useState("");
+  const [open, setOpen] = useState(false);
+  const [attachments, setAttachments] = useState(known);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  const [box, setBox] = useStopBox();
+  const [boxAt, setBoxAt] = useState("");
+  const fin = useFinished(() => { setBusy(false); setText(""); setOpen(false); setBox(null); setBoxAt(""); });
+  const keep = useKept(`add:${sessionId}`, { text }, text === "", (v) => { if (typeof v.text === "string" && v.text) { setText(v.text); setOpen(true); } });
+  const length = used + writtenLength([text]);
+  const empty = !withoutAttachmentMarkers(text).trim() && !attachments.some((a) => hasMarkerFor(text, a.id, attachments));
+  const remove = (id: string) => void api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true }).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setErr(errOf(e)));
+  async function add() {
+    if (!canSend || empty) return;
+    if (text.includes("[Uploading ")) return setErr(FIELD + "Wait for the upload to finish before sending.");
+    if (!offerShown() && length > WRITTEN_MAX_CHARS) return setErr(FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).`);
+    setBusy(true);
+    setErr("");
+    try {
+      await api(`/api/sessions/${sessionId}/written-add`, { text, seenAt, confirmed: !!boxAt, boxAt });
+      await keep.clear();
+      fin.finish("Added to your answers.");
+    } catch (e) {
+      const sb = stopBox(e);
+      if (sb) { setBox(sb); setBoxAt(sb.now); } else setErr(errOf(e));
+      setBusy(false);
+    }
+  }
+  if (!open && !fin.done) {
+    return <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => setOpen(true)}>Add more</button>;
+  }
+  return (
+    <div className="space-y-2 rounded-lg border border-white/10 p-3" data-add-box="written" data-mistakes-root="">
+      {!fin.done && <>
+        <label className="label" htmlFor={`add-${sessionId}`}>Add to your answers</label>
+        <p className="note">What you sent stays as it is. This is added under it.</p>
+        <AnswerBox id={`add-${sessionId}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} value={text} onChange={setText} />
+        {keep.restored && text !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
+        <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
+        {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
+      </>}
+      <div className="flex flex-wrap items-center gap-3">
+        {canSend && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? "Adding…" : ADD_PRESS}</button>}
+        {!fin.done && !busy && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}
+      </div>
+      {!canSend && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
+      <PressDone line={fin.line} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <FormMistakes text={err} press={ADD_PRESS} />
+    </div>
   );
 }
 

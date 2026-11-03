@@ -394,6 +394,9 @@ model Submission {
   /// (Batch 30 §2) When the developer last closed an update at $0, and their optional note (the tester reads both)
   paidUpdateZeroAt DateTime?
   paidUpdateNote   String    @default("")
+  /// (Owner, Nov 3, batch 35 §136) Sent work is locked: what the tester added afterwards, oldest first. Written answers: [{ at, text, files }] (the added text, with
+  /// markers for its files, and the ids of the uploads sent with it); a recording: [{ at, files }] (the recordings added). What was sent before stays as it was.
+  additions        Json      @default("[]")
 
   recordings Recording[]
   review     Review?
