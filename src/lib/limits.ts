@@ -7,6 +7,7 @@ export const LIMITS = {
   openUntilMinDays: 3,
   productName: 60,
   testName: 60,
+  buildUrl: 2048, // (Owner, Nov 3) the product or build link: the common web limit for links (long signed download links fit); over it is refused, never cut
   whatToDo: 20_000, // (Owner, Oct 30, batch 15 section 17; was 1,000)
   matureWhy: 500,
   nda: 1000, // (Owner, Oct 29, batch 13 section 9; was 20,000) older, longer NDAs stay, but a Save that changes the NDA must fit

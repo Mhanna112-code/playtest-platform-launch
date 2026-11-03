@@ -2,7 +2,7 @@
 // text (and in the list under the button, linked to it). Checked in order: the first pattern that fits wins. Every message checkListing and the
 // Post / Edit routes produce must land on a field (tests/batch16-form-fields.test.ts); a changed-field-limit line (criticalLine) belongs to no
 // field and stays under the button.
-import { CRITICAL_KEYS, criticalLine } from "@/lib/limits";
+import { CRITICAL_KEYS, LIMITS, criticalLine } from "@/lib/limits";
 
 /** The field keys; each is the id of its box (or group) in TestForm ("keys": accessKeys on Post, keysFree on Edit). */
 export type ListingField =
@@ -13,6 +13,8 @@ export type ListingField =
 export const BUILD_URL_LINE = "The build link must start with https://";
 /** (Batch 35 §27) What the box checks as it's left (FieldChecks data-pattern, case-insensitive), the same rule as the server's. */
 export const BUILD_URL_PATTERN = "^https://";
+/** (Owner, Nov 3) Over the limit: refused at the box and by the server, never cut. */
+export const BUILD_URL_TOO_LONG = `The build link can be up to ${LIMITS.buildUrl.toLocaleString("en-US")} characters.`;
 export const buildUrlOk = (url: string) => !url.trim() || new RegExp(BUILD_URL_PATTERN, "i").test(url.trim());
 
 export const LISTING_MISTAKES: [ListingField, RegExp][] = [

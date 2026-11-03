@@ -12,7 +12,7 @@ import { givenDeletedLine, keyGivenEventLine, keyGivenToYouLine, keyNeedLine, ke
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
-import { BUILD_URL_LINE, buildUrlOk } from "@/lib/listingFields";
+import { BUILD_URL_LINE, BUILD_URL_TOO_LONG, buildUrlOk } from "@/lib/listingFields";
 import { displayName, fmtDate, fmtDateTime, fmtDateTimeIn, pronouns, stopTimeIn, toCents } from "@/lib/server/dateFormat";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { T, safeZone, renderTimes } from "@/lib/tz";
@@ -115,7 +115,8 @@ export function parseListing(body: Record<string, unknown>, partial = false, tz?
   if (has("matureWhy")) out.matureWhy = str(body.matureWhy, 1000);
   if (has("ndaText")) out.ndaText = typeof body.ndaText === "string" ? body.ndaText.replace(/\r\n/g, "\n").trim().slice(0, 30_000) : "";
   if (has("buildUrl")) {
-    out.buildUrl = str(body.buildUrl, 500);
+    out.buildUrl = str(body.buildUrl, LIMITS.buildUrl + 1); // (Owner, Nov 3) one over is kept so the check below refuses it (a cut link would break)
+    if (out.buildUrl.length > LIMITS.buildUrl) throw new HttpError(400, "bad_url", BUILD_URL_TOO_LONG);
     // (Batch 15 section 35) https:// only, as the message says.
     if (out.buildUrl && !buildUrlOk(out.buildUrl)) throw new HttpError(400, "bad_url", BUILD_URL_LINE); // (batch 35 §27) the same rule and line as the box
   }

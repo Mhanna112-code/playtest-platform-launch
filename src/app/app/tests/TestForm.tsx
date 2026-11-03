@@ -703,7 +703,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {/* (Batch 14) The build link is a limited field with its own 3 changes. */}
         {/* (Owner, Oct 31, batch 35 §27) The link checks itself: red at the box as soon as it holds something not starting with https:// (on leaving it, then as it's
             typed in once red), and the server's same line lands here too. On Edit only once the link is changed (an older link never blocks saving another field). */}
-        {text("buildUrl", "Link to the product or build", { ph: "https://…", after: left("buildUrl"), disabled: fieldLocked("buildUrl"), attrs: { "data-match": "^The build link must start", ...(!edit || f.buildUrl !== base.buildUrl ? { "data-pattern": BUILD_URL_PATTERN, "data-msg": BUILD_URL_LINE } : {}) } })}
+        {text("buildUrl", "Link to the product or build", { ph: "https://…", max: LIMITS.buildUrl, after: left("buildUrl"), disabled: fieldLocked("buildUrl"), attrs: { "data-match": "^The build link must start", ...(!edit || f.buildUrl !== base.buildUrl ? { "data-pattern": BUILD_URL_PATTERN, "data-msg": BUILD_URL_LINE } : {}) } })}
         {lockNote("buildUrl")}
         {/* The full app's Categories: a row of tick boxes, at least one. */}
         <fieldset id="categories" data-field-group="" className="space-y-2">
