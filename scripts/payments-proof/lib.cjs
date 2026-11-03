@@ -53,6 +53,16 @@ async function newPage({ from, video = false, opts = V } = {}) {
   c.setDefaultNavigationTimeout(60000);
   await hideDevBadge(c);
   const p = await c.newPage();
+  // A page whose own reload (a redraw) is under way interrupts the next goto; the dev server can be slow to compile a page: try again.
+  const g = p.goto.bind(p);
+  p.goto = async (u, o) => {
+    for (let i = 0; ; i++) {
+      try { return await g(u, o); } catch (e) {
+        if (i >= 2 || !/ERR_ABORTED|interrupted by another navigation|Timeout/.test(String(e))) throw e;
+        await p.waitForTimeout(1500);
+      }
+    }
+  };
   p.t0 = Date.now();
   if (from) Object.assign(p, { email: from.email, name: from.name, uid: from.uid });
   return p;
@@ -156,7 +166,11 @@ async function addCard(page, number, { tds = false } = {}) {
   await page.waitForTimeout(800);
   await page.locator("[data-testid=hosted-payment-submit-button], button[type=submit]").first().click();
   if (tds) await threeDS(page, true, 60000);
-  await page.waitForURL(/localhost:3480/, { timeout: 90000 });
+  // (The dev server restarts its worker now and then: a refused connection on the way back is retried once it answers again.)
+  await page.waitForURL(/localhost:3480/, { timeout: 90000 }).catch(async (e) => {
+    if (!/ERR_CONNECTION_REFUSED/.test(String(e))) throw e;
+    for (let i = 0; i < 30; i++) { await page.waitForTimeout(2000); try { await page.reload(); if (!(await page.content()).includes("ERR_CONNECTION_REFUSED")) break; } catch { /* still down */ } }
+  });
   await page.waitForLoadState("networkidle").catch(() => {});
   await page.waitForTimeout(1000);
 }

@@ -1,0 +1,20 @@
+{
+  "status": 409,
+  "body": {
+    "error": {
+      "code": "stop_once",
+      "message": "Press again to go ahead.",
+      "changes": [
+        {
+          "text": "Added to what you owe meanwhile: Your bank reversed a $7 payment: $7 + $15 chargeback fee. New total $22.00. Press again to pay $22.00.",
+          "at": "2026-11-02T23:31:28.528Z"
+        }
+      ],
+      "totalCents": 2200,
+      "ids": [
+        "ipayb0534b41684c5720011b"
+      ],
+      "now": "2026-11-02T23:31:28.528Z"
+    }
+  }
+}

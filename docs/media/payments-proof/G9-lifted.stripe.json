@@ -1,0 +1,69 @@
+{
+  "at": "2026-11-02T23:58:00.691Z",
+  "note": "Pay what you owe, the combined payment, the reservation captured",
+  "customer": "rec+g-devr7@playtest.test",
+  "count": 4,
+  "succeeded": 3,
+  "paymentIntents": [
+    {
+      "id": "pi_3UXV3vAwolF8enxC1mwZCmOL",
+      "amount": "10.00",
+      "status": "canceled",
+      "description": "Playtest: written answers on “Harbor Run: first 3 levels” (charged by the tester)",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:54:51.000Z",
+      "canceled_at": "2026-11-02T23:55:00.000Z",
+      "cancellation_reason": null,
+      "amount_received": "0.00",
+      "captured": null,
+      "card": null,
+      "stripe_dispute": "none",
+      "app_rows": ""
+    },
+    {
+      "id": "pi_3UXV4KAwolF8enxC3qs62tDU",
+      "amount": "10.00",
+      "status": "succeeded",
+      "description": "Playtest: what you owe",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:55:16.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "10.00",
+      "captured": true,
+      "card": "3184",
+      "stripe_dispute": "none",
+      "app_rows": "review:charged:chargeback=resolved owed:bundled"
+    },
+    {
+      "id": "pi_3UXV4oAwolF8enxC2gJtKa0Y",
+      "amount": "10.00",
+      "status": "succeeded",
+      "description": "Playtest: charges made while you were away",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:55:46.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "10.00",
+      "captured": true,
+      "card": "3184",
+      "stripe_dispute": "none",
+      "app_rows": "review:charged:chargeback=resolved owed:bundled"
+    },
+    {
+      "id": "pi_3UXV6NAwolF8enxC1DwIDp09",
+      "amount": "50.00",
+      "status": "succeeded",
+      "description": "Playtest: what you owe, reserved until the team approves lifting your hold",
+      "last_payment_error": null,
+      "created": "2026-11-02T23:57:23.000Z",
+      "canceled_at": null,
+      "cancellation_reason": null,
+      "amount_received": "50.00",
+      "captured": true,
+      "card": "3184",
+      "stripe_dispute": "none",
+      "app_rows": "chargeback:charged chargeback:charged"
+    }
+  ]
+}

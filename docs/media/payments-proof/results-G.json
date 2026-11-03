@@ -1,0 +1,13 @@
+[
+  "Ben's Charge during the open check: review:failed $10.0000000000000000 covered_by=cmvzx2; owed:needs_action $10.0000000000000000; review:deferred $10.0000000000000000",
+  "approved; hold=|none; Pay what you owe cmvzx2e9x008p7kusu6ygcmfy bundled; then combined 10 needs_confirmation",
+  "chargeback #1 (Pay what you owe): true; hold=chargeback|2026-11-02 23:56:23.084",
+  "chargeback #2 (combined): true; hold=chargeback|2026-11-02 23:56:23.084; open chargebacks: 2",
+  "Ana Silva's tag: Paid",
+  "Ben Okafor's tag: Paid",
+  "Stripe: 3 PIs, 2 succeeded",
+  "admin Approve: 200 {\"ok\":true,\"lifted\":true,\"takenCents\":5000}",
+  "final: hold=|none; Stripe 4 PIs, 3 succeeded; rows: review:charged cb=resolved $10.0000000000000000 covered_by=cmvzx2; owed:bundled $10.0000000000000000; review:charged cb=resolved $10.0000000000000000 covered_by=cmvzx3; owed:bundled $10.0000000000000000; chargeback:charged $25.0000000000000000; chargeback:charged $25.0000000000000000",
+  "Ana Silva's tag after: Paid",
+  "Ben Okafor's tag after: Paid"
+]

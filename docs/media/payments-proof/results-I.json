@@ -1,0 +1,7 @@
+[
+  "[approve] chargeback on the older $7.00 payment: true; hold=chargeback|2026-11-02 23:32:11.954; open check cmvzw8xah00647kbkvq9mybup needs_action 10",
+  "[approve] the old page's press: {\"error\":{\"code\":\"stop_once\",\"message\":\"Press again to go ahead.\",\"changes\":[{\"text\":\"Added to what you owe meanwhile: Your bank reversed a $7 payment: $7 + $15 chargeback fee. New total $22.00. Press again to pay $22.00.\",\"at\":\"2026-11-02T23:32:36.263Z\"}],\"totalCents\":2200,\"ids\":[\"ipay6079ba8745831",
+  "[approve] one payment 10 bundled; Stripe 3 PIs, 2 succeeded; hold=chargeback|2026-11-02 23:32:11.954; rows: review:charged cb=open $7.0000000000000000; review:charged $10.0000000000000000 covered_by=cmvzw8; owed:bundled $10.0000000000000000",
+  "[verify] chargeback on the older $7.00 payment: true; hold=chargeback|2026-11-02 23:33:46.052; open check cmvzwaxnw00987kbkqmh46tyx needs_action 10",
+  "[verify] one payment now cancelled; its PI at Stripe: canceled; Stripe succeeded: 1"
+]

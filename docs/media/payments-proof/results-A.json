@@ -1,0 +1,10 @@
+[
+  "Ana's check ran out: hold=unpaid|2026-11-02 23:36:05.603; rows: review:failed $10.0000000000000000; review:deferred $10.0000000000000000; review:deferred $10.0000000000000000",
+  "old-tab Confirm on Ben's: HTTP 409 {\"error\":{\"code\":\"paused\",\"message\":\"This payment is paused until your tests resume.\"}}; shown under the button: true",
+  "PaymentIntents before/after the old tab's Confirm: 3 -> 3",
+  "one payment: bundled",
+  "final: hold=|none; Stripe 4 PIs, 1 succeeded; rows: review:charged $10.0000000000000000 covered_by=cmvzwe; review:charged $10.0000000000000000 covered_by=cmvzwe; review:charged $10.0000000000000000 covered_by=cmvzwe; owed:bundled $30.0000000000000000",
+  "Ana Silva's tag: Paid",
+  "Ben Okafor's tag: Paid",
+  "Cid Moreau's tag: Paid"
+]

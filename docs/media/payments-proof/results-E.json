@@ -1,0 +1,14 @@
+[
+  "E2: payment charged; Stripe 1 PIs, 1 succeeded",
+  "E3 clock: null",
+  "E3: payment charged; hold=|none; Stripe 1 succeeded",
+  "E4 retry #1: {\"cents\":0,\"lifted\":false}",
+  "E4 daily job: {\"autoPaid\":0,\"holds\":0,\"alerts\":0,\"headsUps\":0,\"choices\":0,\"retried\":0,\"closed\":0}",
+  "E4 another tab's press: 409 {\"error\":{\"code\":\"bank_waiting\",\"message\":\"What you owe is waiting for your bank: confirm it with your bank, or press Cancel this check to pay it now.\"}}",
+  "E4 PaymentIntents before/after daily job + press: 2 -> 2",
+  "E5 debts: review:failed $10.0000000000000000; review:deferred $10.0000000000000000",
+  "E5 chargeback x2: true false",
+  "E5: owed now owed 2000; Stripe 1 succeeded",
+  "E6: one payment bundled; hold=|none; Stripe 1 succeeded",
+  "E7: review:failed $10.0000000000000000; review:deferred $10.0000000000000000; owed:cancelled $20.0000000000000000; Stripe 0 succeeded; line: Your bank check ran out on Nov 2: nothing was charged. Pay again or change your card."
+]

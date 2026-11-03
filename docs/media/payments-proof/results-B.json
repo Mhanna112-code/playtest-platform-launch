@@ -1,0 +1,6 @@
+[
+  "combined payment 20 needs_confirmation (away:charges); rows: review:deferred $10.0000000000000000 covered_by=cmvzsk; review:deferred $10.0000000000000000 covered_by=cmvzsk; owed:needs_confirmation $20.0000000000000000",
+  "at Stripe now: succeeded",
+  "hold started: unpaid|2026-11-02 21:50:12.303; combined now bundled",
+  "combined final: bundled; succeeded at Stripe: 1; rows: review:charged $10.0000000000000000 covered_by=cmvzsk; review:charged $10.0000000000000000 covered_by=cmvzsk; owed:bundled $20.0000000000000000; review:failed $10.0000000000000000"
+]

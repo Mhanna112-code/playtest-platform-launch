@@ -1,0 +1,10 @@
+[
+  "Pay what you owe 10 bundled; chargeback #1 opened: true; hold=chargeback|2026-11-02 23:51:13.99",
+  "after reservation, two Charges: review:charged cb=open $10.0000000000000000 covered_by=cmvzww; owed:bundled $10.0000000000000000; review:deferred $10.0000000000000000; review:deferred $10.0000000000000000",
+  "lift: hold=|none; combined payment 20 needs_confirmation",
+  "combined approved; chargeback #2 opened: true; hold=chargeback|2026-11-02 23:52:41.286",
+  "Ana Silva's tag: Paid",
+  "Ben Okafor's tag: Paid",
+  "Cid Moreau's tag: Paid",
+  "Stripe: 4 PIs, 3 succeeded; rows: review:charged cb=resolved $10.0000000000000000 covered_by=cmvzww; owed:bundled $10.0000000000000000; review:charged $10.0000000000000000 covered_by=cmvzwy; review:charged $10.0000000000000000 covered_by=cmvzwy; chargeback:charged $25.0000000000000000; owed:bundled cb=open $20.0000000000000000"
+]
