@@ -95,7 +95,7 @@ export function ResizeBox({ id, children, label, className = "" }: { /** unique 
       {/* The grip: drag it (or use the arrow keys on it) to make the panel taller or shorter. */}
       <span role="separator" aria-orientation="horizontal" aria-label={`Resize ${label}: drag, or use the up and down arrow keys`} tabIndex={0} data-panel-grip=""
         onPointerDown={down} onPointerMove={move} onPointerUp={up} onPointerCancel={up} onKeyDown={key}
-        className="absolute bottom-0.5 right-0.5 flex h-4 w-4 cursor-ns-resize touch-none select-none items-end justify-end rounded-sm text-slate-500 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300">
+        className="absolute bottom-0.5 right-0.5 flex h-4 w-4 cursor-ns-resize [@media(pointer:coarse)]:h-9 [@media(pointer:coarse)]:w-9 touch-none select-none items-end justify-end rounded-sm text-slate-500 hover:text-slate-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-300">
         <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" aria-hidden="true"><path d="M9 3 3 9M9 6 6 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" /></svg>
       </span>
     </div>
