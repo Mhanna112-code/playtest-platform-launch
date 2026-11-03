@@ -80,3 +80,22 @@ describe("Moving Open until later skips deadlines that already passed (owner, No
     expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).dueAt.getTime()).toBe(ahead.getTime() + 2 * DAY);
   });
 });
+
+describe("A pause lift skips deadlines that had passed when it started (owner, Nov 2)", () => {
+  it("a deadline passed before the pause keeps it; one still ahead (or passing during the pause) moves by the pause", async () => {
+    const { joined } = await import("./fixtures");
+    const s = await setup();
+    const a = await joined(s.testId), b = await joined(s.testId), c = await joined(s.testId);
+    const now = Date.now(), start = new Date(now - 2 * DAY);
+    const before = new Date(now - 3 * DAY), during = new Date(now - DAY), ahead = new Date(now + 3 * DAY);
+    await db.contract.update({ where: { id: a.sessionId }, data: { dueAt: before } });
+    await db.contract.update({ where: { id: b.sessionId }, data: { dueAt: during } });
+    await db.contract.update({ where: { id: c.sessionId }, data: { dueAt: ahead } });
+    const t = await db.test.findUniqueOrThrow({ where: { id: s.testId } });
+    await db.$transaction((tx) => shiftAfterPause(tx, t, start, new Date(now)));
+    const due = async (id: string) => (await db.contract.findUniqueOrThrow({ where: { id } })).dueAt.getTime();
+    expect(await due(a.sessionId)).toBe(before.getTime());
+    expect(await due(b.sessionId)).toBe(during.getTime() + 2 * DAY);
+    expect(await due(c.sessionId)).toBe(ahead.getTime() + 2 * DAY);
+  });
+});

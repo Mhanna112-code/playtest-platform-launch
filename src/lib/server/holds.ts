@@ -175,7 +175,8 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   if (ms <= 0) return 0;
   const later = <T extends Date | null>(d: T, by = ms) => (d ? (new Date(d.getTime() + by) as T) : d);
   if (t.openUntil && t.status !== "stopped" && !t.workEndedAt) await tx.test.update({ where: { id: t.id }, data: { openUntil: later(t.openUntil), notified3d: false, notified1d: false } });
-  for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working" } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: later(c.dueAt) } });
+  // (Owner, Nov 2) Only deadlines that hadn't passed when the pause started (like moving Open until later): one already passed keeps it.
+  for (const c of await tx.contract.findMany({ where: { testId: t.id, status: "working", dueAt: { gt: start } } })) await tx.contract.update({ where: { id: c.id }, data: { dueAt: later(c.dueAt) } });
   for (const x of await tx.submission.findMany({ where: { contract: { testId: t.id }, review: null, payBy: { not: null } } })) {
     const by = pauseShiftMs(x.updatedAt > start ? x.updatedAt : start, now, others); // only the part of the pause after it was sent
     if (by > 0) await tx.submission.update({ where: { id: x.id }, data: { payBy: later(x.payBy, by), choiceBy: later(x.choiceBy, by) } });
