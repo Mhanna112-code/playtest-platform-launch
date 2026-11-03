@@ -32,7 +32,7 @@ export function VisitedCard({ testId, title, children }: { testId: string; title
         <button type="button" className="btn-ghost inline-flex items-center gap-1 px-2 py-1 text-xs" onClick={() => void remove()} aria-label={`Remove “${title}” from Tests visited`} data-remove-visit={testId}>
           <X className="h-3.5 w-3.5" /> Remove
         </button>
-        <Err text={err} />
+        <Err text={err} press="Remove" />
       </span>
     </li>
   );

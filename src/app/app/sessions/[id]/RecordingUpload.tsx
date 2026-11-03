@@ -47,7 +47,7 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
         )}
       </p>
       <PressDone line={fin.line} />
-      <Err text={err} />
+      <Err text={err} press="Remove" />
     </li>
   );
 }
@@ -59,6 +59,9 @@ function RecordingRow({ r, sessionId, canRemove }: { r: Rec; sessionId: string; 
  * (Owner, Oct 31, batch 35 §40, §41) An upload, a recording made here, Remove and Send redraw the page in place; until the redraw has landed the pressed button
  * stays greyed with its line.
  */
+/** (§156) The file box's press ("Or upload a recording"), named in its refusals. */
+const UPLOAD_PRESS = "Upload a recording";
+
 export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, seenAt, sendable = true, lines = [] }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; recordings: Rec[]; canSend: boolean; sentBefore: boolean; seenAt: string; /** (Batch 10) false while the test is paused: uploads (drafts) still work, Send is hidden */ sendable?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
@@ -78,8 +81,11 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
   const n = fresh.length;
   const press = sentBefore ? `Add my recording${n === 1 ? "" : "s"}` : `Send my recording${n === 1 ? "" : "s"}`;
 
+  // (§156) A refusal names the press it came from: the file box's upload, or Send / Add.
+  const [errPress, setErrPress] = useState("");
   async function upload(file: File) {
     setErr("");
+    setErrPress(UPLOAD_PRESS);
     if (file.size > 500 * 1024 * 1024) return setErr(FIELD + "Recordings can be at most 500 MB.");
     setBusy(true);
     try {
@@ -136,6 +142,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
             if (!offerShown() && !checkFields(e.currentTarget.parentElement)) return; // (batch 27 section 1) an open offer comes first
             setBusy(true);
             setErr("");
+            setErrPress(press);
             try {
               await api(`/api/sessions/${sessionId}/recording-send`, { seenAt, confirmed, boxAt, ...(sentBefore ? { add: true } : {}) });
               setBox(null);
@@ -155,7 +162,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       {sending(fin.line) && <PressDone line={fin.line} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {/* (Batch 16 section 10) A file mistake is red at the file box, and listed here. */}
-      <FormMistakes text={err} press={press} />
+      <FormMistakes text={err} press={err.startsWith(FIELD) ? press : errPress || press} />
     </div>
   );
 }

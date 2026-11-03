@@ -15,7 +15,7 @@ const FORMS: [file: string, uses: "FormMistakes" | "MistakeList", press: string]
   ["components/RateBox.tsx", "FormMistakes", 'press={p.working ? "Rate and finish" : "Rate"}'],
   ["app/app/tests/[id]/PayBox.tsx", "FormMistakes", 'press={more ? "Pay more" : "Pay"}'],
   ["app/app/sessions/[id]/ChoiceBox.tsx", "FormMistakes", 'press="Charge"'],
-  ["app/app/sessions/[id]/RecordingUpload.tsx", "FormMistakes", "press={press}"] /* (batch 35 §136) Send or Add */,
+  ["app/app/sessions/[id]/RecordingUpload.tsx", "FormMistakes", "press={err.startsWith(FIELD) ? press : errPress || press}"] /* (batch 35 §136) Send or Add; (§156) a refused upload names its own press */,
   ["app/admin/DisputeDecision.tsx", "FormMistakes", 'press="Decide"'],
   ["app/admin/AdminButton.tsx", "FormMistakes", "press={label}"],
   ["components/CancelMenu.tsx", "MistakeList", 'press={p.label ?? "Cancel this call"}'],

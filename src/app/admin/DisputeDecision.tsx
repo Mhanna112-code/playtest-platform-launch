@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ApiError, FIELD, api, errOf } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { LIMITS } from "@/lib/limits";
@@ -119,7 +120,7 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
         >
           Decide
         </button>
-        {msg && !msg.text.startsWith(FIELD) && <span className={msg.ok ? "ok" : stopped && msg.text.startsWith("Your Decide") ? "info" : "err"} data-decide-msg="">{msg.text}</span>}
+        {msg && !msg.text.startsWith(FIELD) && <span className={msg.ok ? "ok" : stopped && msg.text.startsWith("Your Decide") ? "info" : "err"} data-decide-msg="">{msg.ok ? msg.text : refusalLine("Decide", msg.text)}</span>}
       </div>
       {extra > 0 && (
         <label className="flex items-start gap-2 text-sm" data-decide-tick="">

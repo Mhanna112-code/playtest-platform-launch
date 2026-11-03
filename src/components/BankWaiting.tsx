@@ -6,6 +6,7 @@ import { type BankAction } from "@/lib/bankConfirm";
 import { MARKABLE } from "@/lib/markJump";
 import { usePress } from "@/lib/usePress";
 import { BANK_CONFIRMED, CONFIRM_WITH_BANK, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, bankAnchor } from "@/lib/rules";
+import { refusalLine } from "@/lib/pressLabels";
 
 /**
  * (Batch 17 §11) A charge made while the developer was away (a tester's Charge, a dispute decision, an automatic retry) that their bank wants confirmed: on the test page,
@@ -43,7 +44,8 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
       <button type="button" className={`btn px-3 py-1.5 text-sm${wide ? " w-full sm:w-auto" : ""}`} disabled={busy || bank.open || (over && !over200)} onClick={go}>{CONFIRM_WITH_BANK}</button>
       <ChangesBox changes={changes} error={error} press={CONFIRM_WITH_BANK} />
       {bank.view}
-      {err && <p className="info" data-bank-not-confirmed="">{err}</p>}
+      {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
+      {err && <p className="info" data-bank-not-confirmed="">{refusalLine(CONFIRM_WITH_BANK, err)}</p>}
       {doneLine && <p className="ok" data-bank-confirmed="">{doneLine}</p>}
     </div>
   );

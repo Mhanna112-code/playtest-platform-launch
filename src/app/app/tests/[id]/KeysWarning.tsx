@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { api, errOf } from "@/lib/client";
+import { api, errOf, FIELD } from "@/lib/client";
+import { pressLabelOf, refusalLine } from "@/lib/pressLabels";
 
 export type BrokenKey = { id: string; value: string; tester: string };
 
@@ -19,12 +20,15 @@ export function KeysWarning({ testId, rows }: { testId: string; rows: BrokenKey[
   const [hidden, setHidden] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
+  // (§156) The refusal names the press: "Your Dismiss selected didn't go through: …" ("Dismiss 2" for two).
+  const [errPress, setErrPress] = useState("");
   const shown = rows.filter((r) => !hidden.includes(r.id));
   if (!shown.length) return null;
   const all = shown.every((r) => picked.includes(r.id));
   async function dismiss() {
     setBusy(true);
     setErr("");
+    setErrPress(pressLabelOf(`/api/tests/${testId}/keys-dismiss`, { keyIds: picked }));
     try {
       await api(`/api/tests/${testId}/keys-dismiss`, { keyIds: picked, worksNow: works.filter((x) => picked.includes(x)) });
       setHidden((h) => [...h, ...picked]);
@@ -50,7 +54,7 @@ export function KeysWarning({ testId, rows }: { testId: string; rows: BrokenKey[
         ))}
       </ul>
       <button type="button" className="btn-secondary !px-2 !py-1 text-xs" disabled={busy || picked.length === 0} onClick={() => void dismiss()}>{picked.length > 1 ? `Dismiss ${picked.length}` : "Dismiss selected"}</button>
-      {err && <p className="text-rose-300">{err}</p>}
+      {err && <p className="text-rose-300" data-refusal="">{err.startsWith(FIELD) ? err.slice(1) : refusalLine(errPress, err)}</p>}
     </div>
   );
 }

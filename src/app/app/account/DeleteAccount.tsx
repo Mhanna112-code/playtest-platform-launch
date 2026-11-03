@@ -51,7 +51,7 @@ export function DeleteAccount({ testerLines, devLines = [], subscriptionLine = "
         onConfirm={() => api("/api/account/delete", { confirmed: true }).then(() => { announceAuth("out"); window.location.href = "/login?gone=1"; }).catch((e) => setErr(errOf(e)))}>
         Delete account
       </ConfirmButton>
-      <Err text={err} />
+      <Err text={err} press="Delete account" />
     </section>
   );
 }

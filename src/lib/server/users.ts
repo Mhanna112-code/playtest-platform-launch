@@ -5,6 +5,7 @@ import { sideFor, type Side } from "@/lib/sides";
 import { HttpError } from "./http";
 import { isAdmin, requireUser } from "./session";
 import { accountGate, listLabel, logAccountChange, sidesLabel } from "./accountChanges";
+import { pressLabelOf } from "@/lib/pressLabels";
 import { TERMS_CHANGED_HREF, TERMS_TICK_MISSING, TERMS_UPDATED_CODE, TERMS_VERSION, needsTermsAgain } from "@/lib/termsOfUse";
 
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
@@ -18,41 +19,36 @@ export const DEV_SUSPENDED = "Your account is suspended: your tests are paused. 
 export const DEV_HELD = "Your tests are paused until you pay what you owe. Open Payments to pay.";
 export const DEV_CHARGEBACK = "Your tests are paused after a chargeback. Open Payments to see the steps.";
 
-const VERBS: Record<string, string> = {
-  edit: "Save", stop: "Stop", "end-early": "End early", "next-round": "Next round", "go-next-round": "Go to the next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Call request", "answer-request": "Answer",
-  application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Message", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
-  leave: "Leave", rate: "Rating", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Dispute reply", "no-show": "Report", "cancel-call": "Cancel call",
-  "cancel-set": "Cancel calls", "pay-extra": "Pay", "key-broken": "Report", open: "Open", review: "Pay",
-  // (Owner, Nov 3, races) Without these both read "Save": the removed-from card's Dismiss, and adding to sent answers.
-  "dismiss-removed": "Dismiss", "written-add": "Add",
-};
-
-/** "Your Pay on Harbor Run didn't go through": what the red box on the dashboard names. */
+/**
+ * "Your Pay on Harbor Run didn't go through": what the red box on the dashboard names.
+ * (Owner, Nov 3, §156) The press is named with its button's own label, from the same table as the page's refusals (pressLabelOf, with the body where one route
+ * serves several buttons: Block / Unblock, Allow / Deny, Accept / Decline …). It used to fall back to "Save" for every press it had no word for (Block, Send to
+ * the team, Save profile, No thanks, Dismiss selected, Remove …) and to say "Stop", "Message", "Rating", "Call request", "Dispute reply" and "Open" for buttons
+ * that read otherwise.
+ */
 export async function failedLine(req: Request, what?: string, piece?: { kind: string; id: string }) {
-  const path = new URL(req.url).pathname.split("/").filter(Boolean); // api, tests, <id>, <action>
+  const url = new URL(req.url);
+  const path = url.pathname.split("/").filter(Boolean); // api, tests, <id>, <action>
   let verb = what ?? "", title = "";
   try {
+    // A copy of the body is peeked (small bodies only) for the presses it names; a route that read its body first passes `what` instead (Block / Unblock).
+    const peek = async () => { try { return await req.clone().json(); } catch { return null; } };
+    const body = verb || Number(req.headers.get("content-length") || 0) > 100_000 ? null : await peek();
+    verb = verb || pressLabelOf(url.pathname, body);
+    // (Owner, Nov 3, races) Dismiss all is sent from one card but covers every removed-from card: it names no one test.
+    if (verb === "Dismiss all") return "Your Dismiss all didn't go through";
     if (path[1] === "tests" && path[2]) {
-      verb = verb || VERBS[path[3]] || "Save";
       title = (await db.test.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
-    } else if (path[1] === "tests") verb = verb || "Post";
-    else if (path[1] === "sessions" && path[2]) {
-      verb = verb || VERBS[path[3]] || "Save";
-      // (Owner, Nov 3, races) Dismiss all is sent from one card but covers every removed-from card: it names no one test. (The body is still unread here.)
-      if (!what && path[3] === "dismiss-removed" && ((await req.clone().json().catch(() => null)) as { all?: unknown } | null)?.all === true) return "Your Dismiss all didn't go through";
+    } else if (path[1] === "sessions" && path[2]) {
       title = (await db.contract.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
-    } else if (path[1] === "review") {
-      verb = verb || "Pay";
-      if (piece) {
-        const contractId = piece.kind === "call" ? (await db.call.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId : (await db.submission.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId;
-        title = contractId ? (await db.contract.findUnique({ where: { id: contractId }, select: { title: true } }))?.title ?? "" : "";
-      }
+    } else if (path[1] === "review" && piece) {
+      const contractId = piece.kind === "call" ? (await db.call.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId : (await db.submission.findUnique({ where: { id: piece.id }, select: { contractId: true } }))?.contractId;
+      title = contractId ? (await db.contract.findUnique({ where: { id: contractId }, select: { title: true } }))?.title ?? "" : "";
     }
-    else verb = verb || "Save";
   } catch {
     // the name is a nicety
   }
-  return `Your ${verb}${title ? ` on ${title}` : ""} didn't go through`;
+  return `Your ${verb || "press"}${title ? ` on ${title}` : ""} didn't go through`;
 }
 
 /** (Batch 15 section 16) The side a press belongs to: `devSide: true` the developer side, `"auto"` the side in use, otherwise the tester side. An account without that side uses its other one. */

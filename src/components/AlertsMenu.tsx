@@ -6,6 +6,7 @@ import { ALERT_TYPES } from "@/lib/alerts";
 /** (Batch 16 section 21) The line under "Alerts". */
 export const ALERTS_INTRO_REST = "stop your buttons. A payment hold or pause, a stopped test and final refusals always stop.";
 import { api } from "@/lib/client";
+import { refusalLine } from "@/lib/pressLabels";
 import { publishIgnoredAlerts, useIgnoredAlerts } from "@/lib/testerAlerts";
 
 /**
@@ -26,9 +27,10 @@ export function AlertsMenu({ testId, ignored: start, keys }: { testId: string; i
       // (Owner, Oct 31, batch 35 §71) No "Saved." line: the tick itself shows it took; only a failure says so.
       publishIgnoredAlerts(testId, r.ignored);
       setSaved("");
-    }, () => {
+    }, (e) => {
       publishIgnoredAlerts(testId, shared, false);
-      setSaved("Couldn't save. Try again.");
+      // (§156) A tick that didn't save names its press, as every refusal does: "Your Alerts didn't go through: …".
+      setSaved(refusalLine("Alerts", (e as Error)?.message || "Couldn't save. Try again."));
     });
   }
   // (Owner, Oct 31, batch 35 §71) "All": ticks (or unticks) every type that can happen here at once; greyed types keep their ticks.
@@ -56,7 +58,7 @@ export function AlertsMenu({ testId, ignored: start, keys }: { testId: string; i
             </label>
           );
         })}
-        {saved && <p className="text-xs text-emerald-300" role="status">{saved}</p>}
+        {saved && <p className="err text-xs" role="status" data-alerts-refused="">{saved}</p>}
       </div>
     </details>
   );

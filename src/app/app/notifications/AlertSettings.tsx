@@ -63,7 +63,7 @@ export function AlertSettings({ emailPref, side = null }: { emailPref: string; s
           <button className="btn" disabled={busy}>Save</button>
           {saved && <span className="text-emerald-300" role="status">Your alert settings are saved.</span>}
         </div>
-        <Err text={err} />
+        <Err text={err} press="Save" />
       </form>
     </details>
   );

@@ -28,7 +28,7 @@ export function JoinCall({ callId }: { callId: string }) {
     };
   }, [callId]);
   // (Batch 15 section 38) A stale Join was refused because the call was cancelled: the refusal stays, the button leaves (the row follows with the page's live update).
-  if (gone) return err ? <span className="inline-flex flex-col gap-1" data-join-call="gone"><Err text={err} /></span> : null;
+  if (gone) return err ? <span className="inline-flex flex-col gap-1" data-join-call="gone"><Err text={err} press="Join call" /></span> : null;
   return (
     <span className="inline-flex flex-col gap-1" data-join-call="">
       <button
@@ -48,7 +48,7 @@ export function JoinCall({ callId }: { callId: string }) {
       >
         Join call
       </button>
-      <Err text={err} />
+      <Err text={err} press="Join call" />
       {termsAt && err && <a href={termsAt} className="text-sm" data-answer-terms-link="">Answer them on the session page →</a>}
     </span>
   );

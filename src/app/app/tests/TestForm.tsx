@@ -13,6 +13,7 @@ import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from 
 import { BUILD_URL_LINE, BUILD_URL_PATTERN, fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices, PICK_CHIP } from "@/components/Choices";
 import { api, ApiError, isFieldError } from "@/lib/client";
+import { pressLabelOf } from "@/lib/pressLabels";
 import { DRAFT_START_LINE, DraftButton, DraftTag, NotSentTag, START_EMPTY_LABEL, USE_SAVED_ALL_LABEL, useKeptUnits } from "@/lib/useKept";
 import { KEYS_UNIT, testFieldsOf, testUnitOf, type Units } from "@/lib/draftUnits";
 import { signInKeeps } from "@/lib/keptText";
@@ -181,6 +182,8 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   });
   const [saved, setSaved] = useState("");
   const [refusal, setRefusal] = useState("");
+  // (§156) The refusal names the press: Save / Post the test, or the draft's Delete.
+  const [refusalPress, setRefusalPress] = useState("");
   // (Batch 18 section 1) The account accepted an older Terms of Use: Post the test shows the box with its tick under the button; ticked, the next press posts.
   const [termsAsk, setTermsAsk] = useState(termsAgain);
   const [agreeTerms, setAgreeTerms] = useState(false);
@@ -547,6 +550,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     setBusy(true);
     setOrphans([]);
     setRefusal("");
+    setRefusalPress(edit ? "Save" : "Post the test");
     try {
       if (!edit) {
         // (Batch 15 section 32) The developer's time zone goes with the press: "today" and the 3 to 30 days are counted in it.
@@ -924,12 +928,12 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
             </p>
           );
         })}
-        <Err text={refusal} />
+        <Err text={refusal} press={refusalPress} />
         {refusal.includes("Add a card in Payments before posting") && <p className="text-sm"><a className="underline" href="/app/payments">Open Payments</a></p>}
         {draft && (
           <ConfirmButton className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title="Delete this draft?" confirmLabel="Delete the draft"
             body={<p>The draft and its details are deleted. Nobody has joined it, so nothing else changes. This can&apos;t be undone.</p>}
-            onConfirm={() => void api(`/api/tests/${draft.id}/delete-draft`, {}).then(async () => { await keep.clear(); window.location.href = "/app"; }).catch((e) => setRefusal((e as Error).message))}>
+            onConfirm={() => void api(`/api/tests/${draft.id}/delete-draft`, {}).then(async () => { await keep.clear(); window.location.href = "/app"; }).catch((e) => { setRefusalPress(pressLabelOf(`/api/tests/${draft.id}/delete-draft`)); setRefusal((e as Error).message); })}>
             Delete the draft
           </ConfirmButton>
         )}
