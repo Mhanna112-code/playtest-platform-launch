@@ -6,7 +6,7 @@ describe("home page, signed in", () => {
   const src = fs.readFileSync("src/app/page.tsx", "utf8");
   it("shows Get feedback on my build (developer) and Earn as a tester (tester), not one dashboard button", () => {
     expect(src).not.toContain(">Go to your dashboard <ArrowRight");
-    expect(src).toMatch(/action="\/app\/switch"><input type="hidden" name="to" value="developer" \/>[^\n]*Get feedback on my build/);
-    expect(src).toMatch(/action="\/app\/switch"><input type="hidden" name="to" value="tester" \/>[^\n]*Earn as a tester/);
+    expect(src).toMatch(/action="\/app\/switch\?to=developer&next=\/app"><button[^\n]*Get feedback on my build/);
+    expect(src).toMatch(/action="\/app\/switch\?to=tester&next=\/app"><button[^\n]*Earn as a tester/);
   });
 });

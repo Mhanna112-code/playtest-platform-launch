@@ -46,8 +46,8 @@ export default async function Home() {
             {u ? (
               // (Owner, Nov 2) Signed in: the same two buttons, each opening that side of the account (the side switch's POST; a side they don't have opens the app as it is).
               <>
-                <form method="post" action="/app/switch"><input type="hidden" name="to" value="developer" /><input type="hidden" name="next" value="/app" /><button className="btn px-6 py-3 text-base">Get feedback on my build <ArrowRight className="h-4 w-4" /></button></form>
-                <form method="post" action="/app/switch"><input type="hidden" name="to" value="tester" /><input type="hidden" name="next" value="/app" /><button className="btn-secondary px-6 py-3 text-base">Earn as a tester</button></form>
+                <form method="post" action="/app/switch?to=developer&next=/app"><button className="btn px-6 py-3 text-base">Get feedback on my build <ArrowRight className="h-4 w-4" /></button></form>
+                <form method="post" action="/app/switch?to=tester&next=/app"><button className="btn-secondary px-6 py-3 text-base">Earn as a tester</button></form>
               </>
             ) : (
               <>
