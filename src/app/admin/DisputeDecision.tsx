@@ -35,6 +35,8 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
   // (Owner, Nov 3, batch 35 §149) A Pay more since the page loaded took the pay above the decision: the stop moves the range up to what's paid and the page's time on.
   const [bounds, setBounds] = useState({ minCents: min0, maxCents: max0, range: range0, loaded: first });
   const { minCents, maxCents, range, loaded } = bounds;
+  // A redraw of the row with fresh numbers (the console loaded again) is followed too.
+  useEffect(() => setBounds((b) => ({ ...b, minCents: min0, maxCents: max0, range: range0 })), [min0, max0, range0]);
   const [side, setSide] = useState({ text: side0, at: sideAt0 });
   const [stopped, setStopped] = useState(false);
   useEffect(() => {
