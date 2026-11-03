@@ -159,8 +159,8 @@ async function D() {
 
 async function B() {
   const SC = "B";
-  const W = await world(`ca${L.TS}b`, CARD_ASK_DECLINE);
-  const pr = await L.pair(W.d, W.d, "Confirm all: the bank declines the total", [W.ana, W.ben]);
+  const W = await world(`ca${L.TS}b`, CARD_ASK);
+  const pr = await L.pair(W.d, W.d, "Confirm all: the bank refuses the one check", [W.ana, W.ben]);
   await payments(pr.app);
   await pr.app.locator("#confirm").evaluate((el) => el.scrollIntoView({ block: "start" }));
   await pr.app.waitForTimeout(2500);
@@ -168,10 +168,12 @@ async function B() {
   await L.pairShot(pr, "b1-payments-before", "Payments: the three charges waiting, each with its own date; Confirm all above them.", SC, "#confirm");
   await pressAll(pr.app, "#confirm");
   await pr.app.waitForTimeout(2500);
-  await L.threeDS(pr.app, true, 60000); // approved at the bank's page, then the card declines the total (insufficient funds)
+  // The bank's own page: "Fail" (the bank refuses the one payment). (Card 3178, which declines after the check, declines a charge made while away outright, so
+  // it can't have charges waiting for the bank; 3184's own refusal is used.)
+  await L.threeDS(pr.app, false, 60000);
   await L.waitSql(`select status from "Payment" where "developerId" = '${W.d.uid}' and kind = 'owed' order by "createdAt" desc limit 1`, (v) => v === "cancelled", 90000);
   await pr.app.waitForTimeout(3500);
-  await L.pairShot(pr, "b2-declined", "Declined at the bank: nothing charged; each charge back to its own Confirm with your bank (a new check each, same dates).", SC, "#confirm");
+  await L.pairShot(pr, "b2-declined", "The bank refused the $32.00 check: nothing charged; each charge back to its own Confirm with your bank (a new check each, same dates).", SC, "#confirm");
   await payments(pr.app);
   await pr.app.locator("#confirm").evaluate((el) => el.scrollIntoView({ block: "start" }));
   await pr.app.waitForTimeout(3000);
@@ -179,11 +181,11 @@ async function B() {
   await dash(pr.app);
   await pr.app.locator("#bank-to-confirm").evaluate((el) => el.scrollIntoView({ block: "start" }));
   await pr.app.waitForTimeout(2500);
-  await L.pairShot(pr, "b4-dashboard-back", "Dashboard: each charge is a new confirm again (original dates); Stripe: the $32.00 declined, a new Incomplete check per charge.", SC, "#bank-to-confirm");
+  await L.pairShot(pr, "b4-dashboard-back", "Dashboard: each charge is a new confirm again (original dates); Stripe: the $32.00 Canceled after the refusal, a new check per charge.", SC, "#bank-to-confirm");
   await pr.app.goto("/app/notifications");
   await pr.app.waitForTimeout(2000);
   await L.pairShot(pr, "b5-bell", "Notifications: the bank line for the three waiting charges, sent again (unread).", SC);
-  await L.pairVideo(pr, "b-confirm-all-declined", "Confirm all with card 3178: the bank declines the total; each back to its own Confirm.", SC);
+  await L.pairVideo(pr, "b-confirm-all-declined", "Confirm all with card 3184: the bank refuses the one check; each back to its own Confirm.", SC);
   const st = L.stripeOut(W.d, "b-stripe", SC, "after the decline");
   const after = sql(`select string_agg(id || '=' || "actionBy"::text, ',' order by "createdAt") from "Payment" where "developerId" = '${W.d.uid}' and kind = 'review'`);
   const states = sql(`select string_agg(status || ':' || coalesce(left("actionPi", 12), '-'), ', ' order by "createdAt") from "Payment" where "developerId" = '${W.d.uid}' and kind = 'review'`);
