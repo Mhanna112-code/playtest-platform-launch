@@ -57,8 +57,9 @@ describe("batch 35 §77 a re-send with nothing new isn't 'updated'", () => {
     expect(withoutTags("see [📎 map.png #k3f9]")).toBe(withoutTags("see [📎 map.png #z81c]"));
     expect(withoutTags("see [📎 map.png #k3f9]")).not.toBe(withoutTags("see [📎 other.png #k3f9]"));
   });
-  it("both Sends refuse an unchanged re-send with the nothing-changed line", () => {
-    expect(src("lib/server/recordings.ts")).toMatch(/sameFiles\(recs, .*NOTHING_CHANGED_LINE/);
-    expect(src("lib/server/tests.ts")).toMatch(/withoutTags\(x\.answer\)[\s\S]{0,400}NOTHING_CHANGED_LINE/);
+  // (Batch 35 §136) Replaced: sent work is locked, so a second Send is refused as locked (answers) or adds only new recordings.
+  it("both Sends refuse a re-send of what was sent: the answers as locked, the recordings with nothing to add", () => {
+    expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", existing ? NO_RECORDING_TO_ADD : "Upload a recording first.");');
+    expect(src("lib/server/tests.ts")).toContain('if (existing && !newQuestions) throw new HttpError(409, "locked", SENT_ANSWERS_LOCKED);');
   });
 });

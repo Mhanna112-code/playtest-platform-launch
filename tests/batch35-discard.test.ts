@@ -69,7 +69,7 @@ describe("batch 35 §10: Discard where nothing is saved", () => {
       "app/app/tests/[id]/DevCallPanel.tsx": { discard: 1, saved: 0 }, // the developer's Request a call
       "components/CallRequests.tsx": { discard: 1, saved: 0 }, // the tester's Propose times
       "app/app/find/[id]/JoinBox.tsx": { discard: 1, saved: 0 }, // the Apply / Ask to rejoin note
-      "app/app/sessions/[id]/SessionActions.tsx": { discard: 1, saved: 0 }, // the tester's dispute reason; written answers: kind={answerKind} (batch 35 §39: Use saved only once sent)
+      "app/app/sessions/[id]/SessionActions.tsx": { discard: 2, saved: 0 }, // (batch 35 §136) and Add more's box, // the tester's dispute reason; written answers: kind={answerKind} (batch 35 §39: Use saved only once sent)
       "app/app/tests/TestForm.tsx": { discard: 0, saved: 0 }, // Edit / Post (each field, and the access keys): kind={draftKind}, below (batch 35 §23)
       "app/app/tests/[id]/PayBox.tsx": { discard: 1, saved: 0 }, // Pay / Pay more (batch 35 §39: nothing saved, Discard)
       "app/app/profile/ProfileForm.tsx": { discard: 0, saved: 1 }, // the profile

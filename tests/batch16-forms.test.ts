@@ -15,7 +15,7 @@ const FORMS: [file: string, uses: "FormMistakes" | "MistakeList", press: string]
   ["components/RateBox.tsx", "FormMistakes", 'press={p.working ? "Rate and finish" : "Rate"}'],
   ["app/app/tests/[id]/PayBox.tsx", "FormMistakes", 'press={more ? "Pay more" : "Pay"}'],
   ["app/app/sessions/[id]/ChoiceBox.tsx", "FormMistakes", 'press="Charge"'],
-  ["app/app/sessions/[id]/RecordingUpload.tsx", "FormMistakes", "press={sentBefore"],
+  ["app/app/sessions/[id]/RecordingUpload.tsx", "FormMistakes", "press={press}"] /* (batch 35 §136) Send or Add */,
   ["app/admin/DisputeDecision.tsx", "FormMistakes", 'press="Decide"'],
   ["app/admin/AdminButton.tsx", "FormMistakes", "press={label}"],
   ["components/CancelMenu.tsx", "MistakeList", 'press={p.label ?? "Cancel this call"}'],
