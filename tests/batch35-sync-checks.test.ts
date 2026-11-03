@@ -176,7 +176,8 @@ describe("batch 35 §38: no Files and recordings box under the written answers",
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("<ScreenRecorder");
     expect(src("components/ScreenRecorder.tsx")).toContain("With my microphone");
     // Older answers whose files were only in that box still show them on every view (the sent view, the developer's piece, admin See the work).
-    expect(page).toContain("<AttachmentList items={c.recordings.filter((r) => r.part === \"written\" && r.uploadedAt && r.submissionId === written.id)} inlineText={");
+    // (Batch 35 §136) The sent files are listed by SentWork, from the files sent with the answers.
+    expect(page).toContain("files={c.recordings.filter((r) => r.part === \"written\" && r.submissionId === written.id)}");
   });
 
   it("the limits hold through 📎's upload (the written part): 5 files, 5 recordings, 500 MB each", async () => {
