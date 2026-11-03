@@ -224,9 +224,9 @@ async function T() {
   for (const [t, testId, cents] of [[ana, harbor, 9000], [ben, harbor, 9000], [ana, sky, 3000], [ben, deep, 25000]]) {
     const s = await L.join(t, testId);
     await L.sendWritten(t, s);
-    L.openCharge(s, testId);
     parts.push({ t, s, testId, cents, sub: L.subOf(s) });
   }
+  for (const p of parts) L.openCharge(p.s, p.testId);
   const charge = async (p) => { const r = await post(p.t, `/api/sessions/${p.s}/choose`, { choice: "charge", seenAt: L.nowIso(), confirmed: true, submissionId: p.sub, tickedCents: p.cents, over200: p.cents > 20000 }); log(`Charge ${p.t.name} $${p.cents / 100}: ${r.status}`); await L.waitAction(p.sub); };
   await charge(parts[0]);
   await charge(parts[1]);
