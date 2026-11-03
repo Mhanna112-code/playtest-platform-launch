@@ -1,5 +1,7 @@
 "use client";
 import Link from "next/link";
+import { CountedInput } from "@/components/CountedInput";
+import { EMAIL_MAX } from "@/lib/format";
 import { AuthForm } from "@/components/AuthForm";
 import { PasswordInput } from "@/components/PasswordInput";
 import { useSignedInElsewhere } from "@/components/SessionWatch";
@@ -20,7 +22,7 @@ export function LoginForm({ reset, google, next = "/app", nextFor }: { reset: bo
       )}
       <div>
         <label className="label req" htmlFor="email">Email</label>
-        <input className="input" id="email" name="email" type="email" autoComplete="email" required data-required="" data-required-msg="Enter a valid email" data-match="email$" />
+        <CountedInput maxLength={EMAIL_MAX} className="input" id="email" name="email" type="email" autoComplete="email" required data-required="" data-required-msg="Enter a valid email" data-match="email$" />
       </div>
       <div>
         <label className="label req" htmlFor="password">Password</label>

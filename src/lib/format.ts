@@ -55,7 +55,9 @@ export const roundedMoneyText = (typed: string) => {
   return c == null ? typed : `${Math.floor(c / 100)}.${String(c % 100).padStart(2, "0")}`;
 };
 
-export const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) && s.length <= 254;
+/** (Owner, Nov 3) An email's limit (the internet's maximum): the email boxes count to it. */
+export const EMAIL_MAX = 254;
+export const isEmail = (s: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(s) && s.length <= EMAIL_MAX;
 export const normEmail = (s: string) => s.trim().toLowerCase();
 
 /** A person's name for others to read: their name, or the part of their email before the @. */

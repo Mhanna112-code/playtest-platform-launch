@@ -1,4 +1,6 @@
 import Link from "next/link";
+import { CountedInput } from "@/components/CountedInput";
+import { EMAIL_MAX } from "@/lib/format";
 import { AuthForm } from "@/components/AuthForm";
 import { AuthShell } from "@/components/AuthShell";
 
@@ -23,7 +25,7 @@ export default function ForgotPage() {
       >
         <div>
           <label className="label req" htmlFor="email">Email</label>
-          <input className="input" id="email" name="email" type="email" required autoComplete="email" data-required="" data-required-msg="Enter a valid email" data-match="email" />
+          <CountedInput maxLength={EMAIL_MAX} className="input" id="email" name="email" type="email" required autoComplete="email" data-required="" data-required-msg="Enter a valid email" data-match="email" />
         </div>
       </AuthForm>
     </AuthShell>
