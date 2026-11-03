@@ -42,7 +42,7 @@ function bank() {
         pis.set(id, "succeeded");
         return { id, status: "succeeded" };
       },
-      retrieve: async (id: string) => ({ id, status: pis.get(id) ?? "requires_action", client_secret: `${id}_secret`, latest_charge: id.replace(/^pi_/, "ch_") }),
+      retrieve: async (id: string) => ({ id, status: pis.get(id) ?? "requires_action", client_secret: `${id}_secret`, latest_charge: id.replace(/^pi_/, "ch_"), ...((pis.get(id) ?? "requires_action") === "requires_action" ? { next_action: { type: "redirect_to_url", redirect_to_url: { url: "https://hooks.stripe.com/3ds" } } } : {}) }),
       confirm: async (id: string) => ({ id, status: pis.get(id) ?? "requires_action", client_secret: `${id}_secret`, next_action: { type: "redirect_to_url", redirect_to_url: { url: "https://hooks.stripe.com/3ds" } } }),
       cancel: async (id: string) => {
         if (pis.get(id) === "succeeded") throw Object.assign(new Error("This PaymentIntent already succeeded."), { type: "StripeInvalidRequestError", code: "payment_intent_unexpected_state" });
@@ -357,5 +357,28 @@ describe("§159: Pay what you owe already done in another tab names it", () => {
     expect(two.status).toBe(409);
     expect(two.body.error.message).toMatch(/^You already paid what you owe \(\$8\.00\) in another tab at \d{1,2}:\d{2} [AP]M\.$/);
     expect(st.made.length).toBe(n);
+  });
+});
+
+describe("§159 R4: Confirm with your bank in two tabs at the same moment", () => {
+  it("the check is started once at Stripe (one confirm), both tabs get the same bank page; processing is never read as “nothing was charged”", async () => {
+    const w = await world();
+    const st = bank();
+    const one = await waitingCharge(w, w.ana, w.anaSub.id, st);
+    st.pis.set(one.actionPi!, "requires_payment_method");
+    let confirms = 0;
+    const s = (await import("@/lib/server/stripe")).getStripe() as unknown as { paymentIntents: { confirm: (id: string) => Promise<unknown> } };
+    const orig = s.paymentIntents.confirm;
+    s.paymentIntents.confirm = async (id: string) => { confirms++; await new Promise((r) => setTimeout(r, 150)); st.pis.set(id, "requires_action"); return orig(id); };
+    const [a, b] = await Promise.all([confirm(w.dev.cookie, { paymentId: one.id, start: true }), confirm(w.dev.cookie, { paymentId: one.id, start: true })]);
+    expect([a.status, b.status], JSON.stringify([a.body, b.body])).toEqual([200, 200]);
+    expect(confirms).toBe(1);
+    expect(a.body.checkUrl).toBe(b.body.checkUrl);
+    // Complete: Stripe says "processing" first, then "succeeded": the finish waits and records it paid once.
+    st.pis.set(one.actionPi!, "processing");
+    setTimeout(() => st.pis.set(one.actionPi!, "succeeded"), 1500);
+    const fin = await confirm(w.dev.cookie, { paymentId: one.id });
+    expect(fin.status, JSON.stringify(fin.body)).toBe(200);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: one.id } })).status).toBe("charged");
   });
 });
