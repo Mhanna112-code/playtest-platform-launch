@@ -280,6 +280,21 @@ describe("(Nov 3, races) 5: the same email signing up in two tabs", () => {
     if (a.ok && b.ok) expect(a.v.user.id).toBe(b.v.user.id);
     expect(await db.user.count({ where: { email: e } })).toBe(1);
   });
+
+  it("an email sign-up made during Google's step (never confirmed) is cleared before Google's step signs into it, as Google's sign-in does", async () => {
+    const e = email("ghij");
+    const token = await startGoogleSignup(e);
+    await signUp(body(e), "http://localhost:3400");
+    const before = await db.user.findUniqueOrThrow({ where: { email: e } });
+    expect(before.passwordHash).not.toBe("");
+    expect(before.emailVerifiedAt).toBeNull();
+    const r = await finishGoogleSignup(token, { role: "tester", name: "Ana Silva", acceptTerms: true, over18: true });
+    const after = await db.user.findUniqueOrThrow({ where: { email: e } });
+    expect(r.user.id).toBe(before.id);
+    expect(after.passwordHash).toBe("");
+    expect(after.emailVerifiedAt).not.toBeNull();
+    expect(await db.session.count({ where: { userId: before.id } })).toBe(1); // only Google's new session
+  });
 });
 
 describe("(Nov 3, races) 6: the developer's Stop wins over the tester's Add", () => {

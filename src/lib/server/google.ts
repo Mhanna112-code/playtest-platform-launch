@@ -109,18 +109,22 @@ export async function finishGoogle(req: Request): Promise<{ pending: string } | 
   // (Batch 15 section 41, H2) Google proves the address. An existing account that never confirmed it may have been made by someone else first (a pre-hijack): before
   // Google signs into it, its password is cleared, every session ends, and any payout account is dropped; then the email counts as confirmed.
   const existing = await db.user.findUnique({ where: { email } });
-  if (existing && !existing.emailVerifiedAt) {
-    await db.$transaction([
-      db.session.deleteMany({ where: { userId: existing.id } }),
-      db.user.update({ where: { id: existing.id }, data: { passwordHash: "", stripeAccountId: null, payoutsReady: false, payoutProblemAt: null, payoutRemindedAt: null, emailVerifiedAt: new Date() } }),
-    ]);
-  }
+  if (existing) await claimUnconfirmed(existing);
   // (Owner, Oct 28, batch 20 section 5) A NEW account isn't made here: the browser goes to one short step (batch 35 §134: who you are and your name, then the
   // "I'm 18 or older." tick and the Terms agreement, then Continue), and the account is created only once all of them are given.
   if (!existing) return { pending: await startGoogleSignup(email) };
   const user = await db.user.findUniqueOrThrow({ where: { id: existing.id } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };
+}
+
+/** (Batch 15 section 41, H2) Before Google signs into an account that never confirmed its email: its password is cleared, every session ends, any payout account goes. */
+async function claimUnconfirmed(u: { id: string; emailVerifiedAt: Date | null }) {
+  if (u.emailVerifiedAt) return;
+  await db.$transaction([
+    db.session.deleteMany({ where: { userId: u.id } }),
+    db.user.update({ where: { id: u.id }, data: { passwordHash: "", stripeAccountId: null, payoutsReady: false, payoutProblemAt: null, payoutRemindedAt: null, emailVerifiedAt: new Date() } }),
+  ]);
 }
 
 // ---------- (Batch 20 section 5) Google's sign-up step for a new account ----------
@@ -172,6 +176,8 @@ export async function finishGoogleSignup(token: string | null | undefined, body:
       if (!isUniqueClash(e)) throw e;
       return db.user.findUniqueOrThrow({ where: { email: step.email } });
     });
+  // (Owner, Nov 3) An email sign-up made meanwhile may be someone else's (a pre-hijack): cleared before Google signs into it, as Google's sign-in does.
+  await claimUnconfirmed(user);
   if (existing && !existing.ageConfirmedAt) await db.user.update({ where: { id: existing.id }, data: { ageConfirmedAt: now } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };
