@@ -26,6 +26,8 @@ export default defineConfig({
       TZ: "UTC", DATABASE_URL: testDb, DIRECT_URL: testDb, RESEND_API_KEY: "", EMAIL_FROM: "", STRIPE_SECRET_KEY: "", STRIPE_PUBLISHABLE_KEY: "", STRIPE_CONNECT_WEBHOOK_SECRET: "", GOOGLE_CLIENT_ID: "", GOOGLE_CLIENT_SECRET: "",
       R2_ACCOUNT_ID: "", R2_ACCESS_KEY_ID: "", R2_SECRET_ACCESS_KEY: "", R2_BUCKET: "", UPLOAD_DIR: path.resolve(__dirname, ".test-uploads"),
       ADMIN_EMAILS: "owner@playtest.test", ANSWER_MIN_CHARS: "1", LISTING_MIN_CHARS: "1", SKIP_EMAIL_CONFIRM: "", APP_URL: "http://localhost:3400", STRIPE_WEBHOOK_SECRET: "whsec_test", CRON_SECRET: "cron-test",
+      // (Nov 3) Never the real Cloudflare relay from tests, even when the local .env has its key.
+      CLOUDFLARE_TURN_KEY_ID: "", CLOUDFLARE_TURN_API_TOKEN: "", TURN_URL: "", TURN_USERNAME: "", TURN_CREDENTIAL: "",
     },
     fileParallelism: false,
     testTimeout: 30_000,
