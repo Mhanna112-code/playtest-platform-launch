@@ -151,6 +151,8 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         // (Owner, Oct 28) After a reinstatement the "You were removed from this test" card stays on the dashboard until the tester asks to rejoin or dismisses it.
         const c = await db.contract.findUnique({ where: { id } });
         if (!c || c.testerId !== u.id || c.endKind !== "suspended") throw new HttpError(404, "not_found", "That card isn't there any more.");
+        // (Owner, Nov 3) Dismiss all: every removed-from card of this tester at once (sent from one of them).
+        if (body.all === true) return ok({ dismissed: (await db.contract.updateMany({ where: { testerId: u.id, endKind: "suspended", removedDismissedAt: null }, data: { removedDismissedAt: new Date() } })).count });
         await db.contract.update({ where: { id }, data: { removedDismissedAt: new Date() } });
         return ok({ dismissed: true });
       }

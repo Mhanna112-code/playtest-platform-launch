@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { GET as pulseGET } from "@/app/api/pulse/route";
 import { POST as testsPOST } from "@/app/api/tests/route";
 import { applyDeclinedLine, joinBackLine, joinInLine, joinPageV, rejoinDeclinedLine } from "@/lib/server/pulseV";
-import { LISTING_MIN_CHARS, checkListing, minCharsLine, minCounter } from "@/lib/rules";
+import { LISTING_MIN_CHARS, TITLE_MIN_CHARS, checkListing, minCharsLine, minCounter } from "@/lib/rules";
 import { PayLinesBox, PAY_LINES_SHOWN } from "@/components/ScrollList";
 import { json, makeUser, req } from "./helpers";
 import { act, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
@@ -99,9 +99,11 @@ describe("batch 30 §18: the test's name and what testers should do are at least
   };
 
   it("Post: 9 characters refused at each field with the line, 10 accepted", async () => {
-    const t9 = await post({ title: "Harbor Ru" });
-    expect(t9.r.status).toBe(400);
-    expect(t9.r.body.error.errors).toContain("Name of this test: at least 10 characters (9 so far).");
+    // (Owner, Nov 3) The test's name: at least 5 (was 10); What to do stays at 10.
+    const t4 = await post({ title: "Harb" });
+    expect(t4.r.status).toBe(400);
+    expect(t4.r.body.error.errors).toContain("Name of this test: at least 5 characters (4 so far).");
+    expect((await post({ title: "Harbo" })).r.status).toBe(200);
     // Trimmed: spaces around don't count.
     const d8 = await post({ description: "  Sail now  " });
     expect(d8.r.body.error.errors).toContain(minCharsLine("What should testers do", 8));
@@ -111,16 +113,16 @@ describe("batch 30 §18: the test's name and what testers should do are at least
     expect(ok.r.status).toBe(200);
   });
 
-  it("Edit: an old short title doesn't block saving another field; changing it needs 10", async () => {
+  it("Edit: an old short title doesn't block saving another field; changing it needs 5", async () => {
     process.env.LISTING_MIN_CHARS = "1";
     const { dev, testId } = await setup({ title: "Run", description: "Sail" });
     process.env.LISTING_MIN_CHARS = "10";
     const v = async () => (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { writtenCents: "12.00" }, seenAt: seen(), confirmed: true })).status).toBe(200);
-    const bad = await act(testId, "edit", dev.cookie, { version: await v(), fields: { title: "Run again" }, seenAt: seen(), confirmed: true });
+    const bad = await act(testId, "edit", dev.cookie, { version: await v(), fields: { title: "Runs" }, seenAt: seen(), confirmed: true });
     expect(bad.status).toBe(400);
-    expect(bad.body.error.errors).toEqual(["Name of this test: at least 10 characters (9 so far)."]);
-    expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { title: "Run it again" }, seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(bad.body.error.errors).toEqual(["Name of this test: at least 5 characters (4 so far)."]);
+    expect((await act(testId, "edit", dev.cookie, { version: await v(), fields: { title: "Run 2" }, seenAt: seen(), confirmed: true })).status).toBe(200);
   });
 
   it("the rule, the counter and the form: red on leaving and on the press, only for a changed field on Edit; product name unchanged", () => {
@@ -128,9 +130,11 @@ describe("batch 30 §18: the test's name and what testers should do are at least
     expect(minCounter(6)).toBe("6 / 10 minimum");
     const base = { ...listingBody({ description: long }), writtenCents: 1000, recordingCents: null, liveRateCents: 3000, productName: "Ab" } as unknown as Parameters<typeof checkListing>[0];
     expect(checkListing({ ...base, title: "Harbor Run" }).some((e) => /^Name of this test/.test(e))).toBe(false);
-    expect(checkListing({ ...base, title: "short" }, 0, new Date(), { changed: new Set(["writtenCents"]) }).some((e) => /^Name of this test/.test(e))).toBe(false);
+    expect(checkListing({ ...base, title: "shor" }, 0, new Date(), { changed: new Set(["writtenCents"]) }).some((e) => /^Name of this test/.test(e))).toBe(false);
     const form = src("app/app/tests/TestForm.tsx");
-    expect(form).toContain('{ "data-min-chars": String(LISTING_MIN_CHARS), "data-min-label": label }');
+    expect(form).toContain('{ "data-min-chars": String(k === "title" ? TITLE_MIN_CHARS : LISTING_MIN_CHARS), "data-min-label": label }');
+    expect(TITLE_MIN_CHARS).toBe(5);
+    expect(form).toContain("max: LIMITS.testName, min: TITLE_MIN_CHARS,");
     expect(form).toContain("!edit || f[k] !== base[k]");
     expect(form).toContain("min={!edit || f.description !== base.description ? LISTING_MIN_CHARS : 0} required data-steps-count");
     expect(src("components/FieldChecks.tsx")).toContain("`${el.dataset.minLabel}: at least ${min} characters (${v.length} so far).`");

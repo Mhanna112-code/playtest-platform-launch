@@ -395,19 +395,21 @@ export const partHighLine = (name: string) => `The ${name} price can be at most 
 export const rateLowLine = () => `The live call rate must be at least ${money(PRICE_LIMITS.rateMin)} an hour (or free).`;
 export const rateHighLine = () => `The live call rate can be at most ${money(PRICE_LIMITS.rateMax)} an hour.`;
 export const DESCRIPTION_REQUIRED = "Say what testers should do (What to do).";
-/** (Owner, Oct 29, batch 30 §18) "Name of this test" and "What should testers do?" are at least 10 characters (trimmed) on Post, Edit and posting a draft. */
+/** (Owner, Oct 29, batch 30 §18) "Name of this test" (5 since Nov 3: TITLE_MIN_CHARS) and "What should testers do?" (10) are a minimum length (trimmed) on Post, Edit and posting a draft. */
 export const LISTING_MIN_CHARS = 10;
+/** (Owner, Nov 3) "Name of this test" is at least 5 characters (was 10); What to do stays at LISTING_MIN_CHARS. */
+export const TITLE_MIN_CHARS = 5;
 /**
  * The minimum the server checks: LISTING_MIN_CHARS, except where the LISTING_MIN_CHARS setting says otherwise. Only the test suite sets it (to 1, since the tests written
  * before batch 30 post short titles such as "Run"; the batch 30 tests set it back to 10). Production never sets it.
  */
-export function listingMin() {
+export function listingMin(base: number = LISTING_MIN_CHARS) {
   // (Nov 2) Never lowered on the live site, even if the setting is left there.
   const v = typeof process !== "undefined" && process.env?.NODE_ENV !== "production" ? Number(process.env?.LISTING_MIN_CHARS) : NaN;
-  return Number.isInteger(v) && v >= 1 ? v : LISTING_MIN_CHARS;
+  return Number.isInteger(v) && v >= 1 ? Math.min(v, base) : base;
 }
 /** "Name of this test: at least 10 characters (6 so far)." / "What should testers do: at least 10 characters (6 so far)." (the field's red line, the server's refusal) */
-export const minCharsLine = (field: string, n: number) => `${field}: at least ${LISTING_MIN_CHARS} characters (${n} so far).`;
+export const minCharsLine = (field: string, n: number) => `${field}: at least ${field === TITLE_FIELD ? TITLE_MIN_CHARS : LISTING_MIN_CHARS} characters (${n} so far).`;
 export const TITLE_FIELD = "Name of this test";
 export const STEPS_FIELD = "What should testers do";
 /** The counter while a field is under its minimum: "6 / 10 minimum". */
@@ -438,7 +440,7 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
   if (!l.title.trim()) errs.push("Give the test a title.");
   else if (l.title.length > LIMITS.testName && isNew("title")) errs.push(`Keep the title to ${LIMITS.testName} characters.`);
   // (Batch 30 §18) At least 10 characters; an older test's shorter title or steps stay until that field is edited.
-  else if (l.title.trim().length < listingMin() && isNew("title")) errs.push(minCharsLine(TITLE_FIELD, l.title.trim().length));
+  else if (l.title.trim().length < listingMin(TITLE_MIN_CHARS) && isNew("title")) errs.push(minCharsLine(TITLE_FIELD, l.title.trim().length));
   if (!l.description?.trim()) { if (isNew("description")) errs.push(DESCRIPTION_REQUIRED); }
   else if (l.description.length > LIMITS.whatToDo && isNew("description")) errs.push(`Keep What to do to ${LIMITS.whatToDo.toLocaleString("en-US")} characters.`);
   else if (l.description.trim().length < listingMin() && isNew("description")) errs.push(minCharsLine(STEPS_FIELD, l.description.trim().length));
@@ -934,25 +936,26 @@ export const CHARGEBACK_FEE_CENTS = 1500;
 const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
 /** The Payments line of an open chargeback: "Your bank reversed a $X payment: $X + $15 chargeback fee." */
 // (Owner, Nov 2) With what it paid for, when known: "Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run” (Nov 2): $10 + $15 chargeback fee".
-// (Owner, Nov 2) The tester's and the test's names are cut at 10 characters with "…" so the line stays short.
-export const cut10 = (s: string) => (s.length > 10 ? `${s.slice(0, 10).trimEnd()}…` : s);
+// (Owner, Nov 2) The tester's and the test's names are cut with "…" so the line stays short: at NAME_CUT characters (owner, Nov 3: 12, was 10).
+export const NAME_CUT = 12;
+export const cut10 = (s: string) => cutTo(s);
 /**
- * (Owner, Nov 3) A name LISTED on a page (a person, a test, a product; components/Cut.tsx): the same rule as cut10, at `n` characters, counted by character so
+ * (Owner, Nov 3) A name LISTED on a page (a person, a test, a product; components/Cut.tsx): the same rule as cut10, at `n` characters (NAME_CUT unless given), counted by character so
  * an emoji is never split in half. Unchanged when it fits.
  */
-export const cutTo = (s: string, n = 10) => {
+export const cutTo = (s: string, n = NAME_CUT) => {
   const chars = Array.from(s);
   return chars.length > n ? `${chars.slice(0, n).join("").trimEnd()}…` : s;
 };
 /**
- * (Owner, Nov 3) An email listed on a page, cut in the middle: the part before "@" keeps its first 6 characters then "…" (only when it is longer than 7), and
- * the domain stays whole unless it is over 14 characters, then its first 14 and "…". "maximiliana.alexandrina@playtest.test" → "maximi…@playtest.test".
+ * (Owner, Nov 3) An email listed on a page, cut in the middle: the part before "@" keeps its first NAME_CUT characters then "…" (only when it is longer than NAME_CUT + 1; owner, Nov 3: 12, was 6), and
+ * the domain stays whole unless it is over 14 characters, then its first 14 and "…". "maximiliana.alexandrina@playtest.test" → "maximiliana.…@playtest.test".
  */
 export function cutEmail(email: string) {
   const at = email.lastIndexOf("@");
   if (at < 0) return cutTo(email);
   const local = Array.from(email.slice(0, at)), domain = Array.from(email.slice(at + 1));
-  return `${local.length > 7 ? `${local.slice(0, 6).join("")}…` : local.join("")}@${domain.length > 14 ? `${domain.slice(0, 14).join("")}…` : domain.join("")}`;
+  return `${local.length > NAME_CUT + 1 ? `${local.slice(0, NAME_CUT).join("")}…` : local.join("")}@${domain.length > 14 ? `${domain.slice(0, 14).join("")}…` : domain.join("")}`;
 }
 /** (Owner, Nov 2, §131) Which part of a tester's work a payment is for. "work": a payment that names no part (an extra pay with no part, an old row). */
 export type PiecePart = "written answers" | "recording" | "live call" | "work";
@@ -961,7 +964,7 @@ export const partOf = (callId: string | null | undefined, subKind: string | null
   callId ? "live call" : subKind === "recording" ? "recording" : subKind ? "written answers" : "work";
 /**
  * (Owner, Nov 2, §131) THE name of what a payment is for, in every developer-facing payment line: WHICH tester, WHICH part and WHICH test, the tester's and the
- * test's names cut at 10 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
+ * test's names cut at 12 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
  * “Harbor Run” (Oct 30)". `full`: the names uncut, for the hover (`title`) of a line shown on a page (emails and bells stay cut).
  */
 export const pieceName = ({ tester, part, test, when, full = false }: { tester: string; part: PiecePart | string; test: string; when?: string | null; full?: boolean }) => {

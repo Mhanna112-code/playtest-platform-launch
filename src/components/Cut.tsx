@@ -1,13 +1,13 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
-import { cutEmail, cutTo } from "@/lib/rules";
+import { NAME_CUT, cutEmail, cutTo } from "@/lib/rules";
 
 /** What a listed name is: a person, a test, a product, or an email. A linked one's pop-up offers "Open profile →" or "Open test →". */
 export type CutKind = "person" | "test" | "product" | "email";
 
-/** (Owner, Nov 3) How a listed name is drawn: cut at 10 characters with "…" (cutTo); an email in the middle (cutEmail). */
-export const cutText = (text: string, kind: CutKind = "person", n = 10) => (kind === "email" ? cutEmail(text) : cutTo(text, n));
+/** (Owner, Nov 3) How a listed name is drawn: cut at NAME_CUT (12) characters with "…" (cutTo); an email in the middle (cutEmail). */
+export const cutText = (text: string, kind: CutKind = "person", n = NAME_CUT) => (kind === "email" ? cutEmail(text) : cutTo(text, n));
 
 /** A screen with no hover (a phone or a tablet): there a cut name opens a small pop-up instead of a tooltip. */
 export const touchOnly = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none)").matches;
@@ -55,7 +55,7 @@ type At = { x: number; y: number; below: boolean; href: string | null };
  *   →" when the name is a link, and Copy ("Copied"). It closes on a tap outside it, on Escape or when the page scrolls, and it stays on the screen (at most 78% of
  *   its width). Tapping a name that isn't cut works as before.
  */
-export function Cut({ text, kind = "person", n = 10, className = "" }: { text: string; kind?: CutKind; n?: number; className?: string }) {
+export function Cut({ text, kind = "person", n = NAME_CUT, className = "" }: { text: string; kind?: CutKind; n?: number; className?: string }) {
   const full = text ?? "";
   const shown = cutText(full, kind, n);
   const cut = shown !== full;

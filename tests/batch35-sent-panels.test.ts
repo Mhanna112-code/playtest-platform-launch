@@ -27,7 +27,7 @@ afterEach(() => { delete (globalThis as unknown as { window?: unknown }).window;
 describe("the panel's height", () => {
   it("starts small: about 12rem (6–8 lines) and never more than 40% of the screen, so the Pay box under it shows", () => {
     expect(PANEL_DEFAULT_MAX).toBe("min(12rem, 40vh)");
-    const h = renderToStaticMarkup(createElement(ResizeBox, { id: "p1", label: "Written answers" }, createElement("p", null, "answer")));
+    const h = renderToStaticMarkup(createElement(ResizeBox, { id: "p1", label: "Written answers", children: createElement("p", null, "answer") }));
     expect(h).toContain("max-height:min(12rem, 40vh)");
     expect(h).toContain('data-panel-height="default"');
     expect(h).toContain("overflow-y-auto"); // the content scrolls inside at any height
@@ -44,7 +44,7 @@ describe("the panel's height", () => {
     expect(clampPanel(450, viewport)).toBe(450);
     expect(clampPanel(5000, viewport)).toBe(viewport * PANEL_MAX_SHARE);
     // The grip is a keyboard control too (a separator with the arrow keys).
-    const h = renderToStaticMarkup(createElement(ResizeBox, { id: "p2", label: "Recordings" }, "x"));
+    const h = renderToStaticMarkup(createElement(ResizeBox, { id: "p2", label: "Recordings", children: "x" }));
     expect(h).toMatch(/role="separator"[^>]*aria-label="Resize Recordings: drag, or use the up and down arrow keys"[^>]*tabindex="0"[^>]*data-panel-grip=""/);
     expect(src("components/Panel.tsx")).toContain('e.key === "ArrowUp" ? now - PANEL_STEP_PX');
   });
@@ -64,8 +64,8 @@ describe("the panel's height", () => {
 describe("two folds under each part", () => {
   it("each fold has its own toggle and starts open; its state is kept while the page redraws", () => {
     const h = renderToStaticMarkup(createElement("div", null,
-      createElement(Fold, { id: "needs-body-s1", summary: "Their written answers" }, "answers"),
-      createElement(Fold, { id: "needs-pay-s1", summary: "Pay" }, "pay box")));
+      createElement(Fold, { id: "needs-body-s1", summary: "Their written answers", children: "answers" }),
+      createElement(Fold, { id: "needs-pay-s1", summary: "Pay", children: "pay box" })));
     expect(h.match(/<details open=""[^>]*data-fold="needs-(body|pay)-s1"/g)).toHaveLength(2);
     expect(h).toContain(">Their written answers</summary>");
     expect(h).toContain(">Pay</summary>");

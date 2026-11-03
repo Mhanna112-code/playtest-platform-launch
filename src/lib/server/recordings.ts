@@ -11,6 +11,7 @@ import { additionsOf } from "@/lib/additions";
 import { answerTermsFirst, testerSendGate } from "./terms";
 import { resendRefusal } from "./paidUpdates";
 import { attachmentTag, hasMarkerFor } from "@/lib/answerAttachments";
+import { ATTACH_FORMATS_LINE, VIDEO_FORMATS_LINE, videoTypeOf } from "@/lib/videoFormats";
 
 type U = Parameters<typeof tellSentByBell>[1];
 
@@ -24,11 +25,14 @@ export async function startRecording(tester: U, contractId: string, body: Record
   if (refusal) throw new HttpError(409, "closed", refusal);
   const part = body.part === "written" ? "written" : "recording";
   const size = Number(body.size);
-  const type = typeof body.contentType === "string" ? body.contentType.split(";")[0].trim().toLowerCase() : "";
   const filename = (typeof body.filename === "string" ? body.filename : "recording").replace(/[^\w.\- ]/g, "_").slice(0, 120) || "recording";
-  const video = isVideo(type);
-  if (!video && (part !== "written" || !ATTACHMENT_TYPES.includes(type)))
-    throw new HttpError(400, "bad_type", part === "written" ? "Attach an image, a PDF, a text file, a zip or a video." : "Choose a video file (for example .mp4 or .webm).");
+  // (Owner, Nov 3) A video is one of the formats that play in the browser (MP4, WebM, MOV, M4V), by its name; any other video is refused with all of them named.
+  const given = typeof body.contentType === "string" ? body.contentType.split(";")[0].trim().toLowerCase() : "";
+  const videoType = videoTypeOf(filename, given);
+  const type = videoType ?? given;
+  const video = !!videoType;
+  if (!video && (part !== "written" || isVideo(type) || !ATTACHMENT_TYPES.includes(type)))
+    throw new HttpError(400, "bad_type", part === "written" && !isVideo(type) ? ATTACH_FORMATS_LINE : VIDEO_FORMATS_LINE);
   if (!Number.isFinite(size) || size <= 0) throw new HttpError(400, "empty", "That file is empty.");
   if (video && size > MAX_RECORDING_BYTES) throw new HttpError(413, "too_large", "Recordings can be at most 500 MB.");
   if (!video && size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, "too_large", "Files can be at most 500 MB.");

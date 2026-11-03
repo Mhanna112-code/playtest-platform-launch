@@ -20,7 +20,7 @@ function withEmails(s: string) {
   return <>{out}</>;
 }
 
-/** (Owner, Nov 3) A link's words: a person's name, or a test's quoted title, cut at 10 characters (the full name on hover, on a tap and when copied). */
+/** (Owner, Nov 3) A link's words: a person's name, or a test's quoted title, cut at 12 characters (the full name on hover, on a tap and when copied). */
 function linkWords(t: string, href: string) {
   if (/^\/app\/(developers|testers)\//.test(href)) return <Cut text={t} />;
   const q = /^“([\s\S]*)”$/.exec(t);

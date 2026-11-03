@@ -19,7 +19,7 @@ import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, TITLE_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
@@ -620,9 +620,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
     }
   }
 
-  // (Owner, Oct 29, batch 30 §18) Title and steps: at least 10 characters, red on leaving the field and on the press ("Name of this test: at least 10 characters (6 so
+  // (Owner, Oct 29, batch 30 §18) Title (at least 5; owner, Nov 3) and steps (at least 10), red on leaving the field and on the press ("Name of this test: at least 10 characters (6 so
   // far)."). On Edit only once that field is changed: an older test's short value never blocks saving another field.
-  const minAttrs = (k: "title" | "description", label: string): Record<string, string> => (!edit || f[k] !== base[k] ? { "data-min-chars": String(LISTING_MIN_CHARS), "data-min-label": label } : {});
+  const minAttrs = (k: "title" | "description", label: string): Record<string, string> => (!edit || f[k] !== base[k] ? { "data-min-chars": String(k === "title" ? TITLE_MIN_CHARS : LISTING_MIN_CHARS), "data-min-label": label } : {});
   // (Owner) Every box with a range says it next to it and is checked as soon as it's left (FieldChecks).
   const text = (k: keyof F, label: string, opts: { req?: boolean; ph?: string; type?: string; cls?: string; attrs?: Record<string, string>; hint?: string; max?: number; disabled?: boolean; after?: React.ReactNode; /** (batch 35 §30) a red line of the page's own, right under the box */ below?: React.ReactNode; /** (Batch 30 §18) the field's minimum: its counter shows it while under */ min?: number } = {}) => (
     <div>
@@ -692,7 +692,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       <div className="panel">
         <h2>What are testers trying?</h2>
         {text("productName", "Product", { req: true, ph: "Harbor Run", max: LIMITS.productName, attrs: { "data-required-msg": "Enter the product name." } })}
-        {text("title", "Name of this test", { req: true, ph: "First 3 levels", max: LIMITS.testName, min: LISTING_MIN_CHARS, attrs: { "data-required-msg": "Give the test a title.", "data-match": `^${TITLE_FIELD}: at least`, ...minAttrs("title", TITLE_FIELD) } })}
+        {text("title", "Name of this test", { req: true, ph: "First 3 levels", max: LIMITS.testName, min: TITLE_MIN_CHARS, attrs: { "data-required-msg": "Give the test a title.", "data-match": `^${TITLE_FIELD}: at least`, ...minAttrs("title", TITLE_FIELD) } })}
         <div>
           <label className="label req" htmlFor="description">What should testers do?{left("description")}{draftMark("description")}</label>
           <textarea id="description" rows={4} disabled={fieldLocked("description")} className={"input" + (bad("description") ? " field-bad" : "")} value={f.description} maxLength={LIMITS.whatToDo} data-required="" data-required-msg={DESCRIPTION_REQUIRED} data-match={`^${STEPS_FIELD}: at least`} {...minAttrs("description", STEPS_FIELD)} onBlur={() => leave("description")} onChange={(e) => set({ description: e.target.value })} />

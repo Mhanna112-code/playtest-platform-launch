@@ -343,6 +343,29 @@ describe("D) testers", () => {
     const dash = src("app/app/page.tsx");
     for (const w of ["Tests you were removed from", "Tests you left", "Send work", "Charge or cancel", "Needs review", "data-paused-tag"]) expect(dash, w).toContain(w);
   });
+  it("(owner, Nov 3) Dismiss all clears every 'Tests you were removed from' card of this tester at once, and nobody else's", async () => {
+    const a = await admin();
+    const one = await setup({ joinMode: "invite" });
+    const two = await setup({ joinMode: "invite" });
+    const t = await makeUser({ tester: true, name: "Ana Silva" });
+    const other = await makeUser({ tester: true, name: "Bo Lee" });
+    const ids: string[] = [];
+    for (const x of [one, two]) {
+      await act(x.testId, "invite", x.dev.cookie, { seenAt: seen(), testerIds: [t.user.id, other.user.id] });
+      ids.push((await act(x.testId, "join", t.cookie, { listingVersion: 1 })).body.sessionId as string);
+    }
+    const otherSid = (await act(one.testId, "join", other.cookie, { listingVersion: 1 })).body.sessionId as string;
+    for (const u of [t, other]) {
+      expect((await aact(a.cookie, "suspend", { id: u.user.id, note: "Testing" })).status).toBe(200);
+      expect((await aact(a.cookie, "unsuspend", { id: u.user.id })).status).toBe(200);
+    }
+    const r = await sact(ids[0], "dismiss-removed", t.cookie, { all: true });
+    expect(r.status).toBe(200);
+    expect(r.body.dismissed).toBe(2);
+    for (const id of ids) expect((await db.contract.findUniqueOrThrow({ where: { id } })).removedDismissedAt).not.toBeNull();
+    expect((await db.contract.findUniqueOrThrow({ where: { id: otherSid } })).removedDismissedAt).toBeNull();
+    expect(src("app/app/DismissRemoved.tsx")).toContain('{all ? "Dismiss all" : "Dismiss"}');
+  });
 
   it("rating reminders: every 3 days after a stop or close, for 2 weeks only", async () => {
     const { dev, testId, sessionId, tester, sub } = await sentWork();

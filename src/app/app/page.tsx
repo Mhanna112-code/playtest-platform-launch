@@ -489,7 +489,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <div className="min-w-[12rem] flex-1">
           {/* (Batch 16 section 28) The row opens the session page: while suspended, its limited view (parts, what was paid, Dispute, Charge, Let it go, Rate). */}
           <p className="truncate font-semibold text-white" title={c.title}><Link href={`/app/sessions/${c.id}`} className="text-white" data-removed-open={c.id}><Cut text={c.title} kind="test" /></Link> {pausedTest(c.test) && <PausedTag />}</p>
-          <p className="text-sm text-slate-400" data-removed-label="">You were removed from this test.</p>
         </div>
         {may && (
           <Link href={`/app/find/${c.testId}`} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-rejoin={c.id}><RotateCcw className="h-4 w-4" /> Ask to rejoin</Link>
@@ -527,7 +526,11 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       <DevSearch rows={devSearchRows(contracts, !suspended)}>
       {removed.length > 0 && (
         <section className="space-y-3" id="suspended-tests">
-          {sectionTitle(<RotateCcw className="h-5 w-5 text-rose-300" />, "Tests you were removed from", removed.length)}
+          {/* (Owner, Nov 3) The heading says it once: no "You were removed from this test." on each card; Dismiss all clears them together. */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {sectionTitle(<RotateCcw className="h-5 w-5 text-rose-300" />, "Tests you were removed from", removed.length)}
+            {!suspended && removed.length > 1 && <DismissRemoved contractId={removed[0].id} all />}
+          </div>
           <ScrollList className="space-y-2">{removed.map((c) => removedCard(c))}</ScrollList>
         </section>
       )}
@@ -550,7 +553,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       )}
 
       <section className="space-y-3" id="to-do">
-        {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do")}
+        {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do (all open tests)")}
         {todoParts.length === 0 && answers.length === 0 && allSent.length === 0 ? (
           <p className="card text-sm text-slate-400">{suspended ? "Nothing to do while your account is suspended." : "Nothing to finish. Pick up a new test below."}</p>
         ) : (
