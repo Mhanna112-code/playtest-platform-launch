@@ -627,8 +627,25 @@ export async function chargebackOpened(paymentIntentId: string) {
   // (Batch 35 §117) Pay what you owe's ONE payment covered several debts with one PaymentIntent: the dispute is on that payment as a whole, so its WHOLE amount is
   // owed again once, with one chargeback fee (the one payment itself carries the chargeback; its debts stay paid). Otherwise the payment the PaymentIntent belongs to.
   // When it paid a single debt, that debt carries it (the same amount, and its test page names the piece).
-  const one = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: "owed", status: "bundled" } });
-  const paid = one ? await db.payment.findMany({ where: { coveredById: one.id, kind: { not: "chargeback" } } }) : [];
+  let one = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: "owed", status: "bundled" } });
+  // (Owner, Nov 2) A chargeback hold's reservation, captured on the team's Approve, also paid several items with ONE PaymentIntent (each row carries its id). The
+  // dispute is on that one payment, so it's grouped the same way: one bundle row for its whole amount (the amount once + one fee), the items covered by it.
+  if (!one) {
+    const rows = await db.payment.findMany({ where: { stripePaymentIntentId: paymentIntentId, kind: { not: "owed" }, chargeback: { not: "open" } } });
+    if (rows.length > 1) {
+      one = await db.$transaction(async (tx) => {
+        await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${rows[0].developerId} FOR UPDATE`;
+        const again = await tx.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: "owed", status: "bundled" } });
+        if (again) return again;
+        const total = rows.reduce((a, r) => a + r.amountCents, 0);
+        const b = await tx.payment.create({ data: { kind: "owed", developerId: rows[0].developerId, testerId: rows[0].developerId, amountCents: total, feeCents: total, testerCents: 0, transferStatus: "none", status: "bundled", note: "reserve", stripePaymentIntentId: paymentIntentId } });
+        await tx.payment.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { coveredById: b.id } });
+        return b;
+      });
+    }
+  }
+  // Every row it covered counts (a reversed payment it repaid too): only a payment that covered exactly one item lets that item carry the chargeback.
+  const paid = one ? await db.payment.findMany({ where: { coveredById: one.id } }) : [];
   const p = (one && paid.length === 1 ? paid[0] : one)
     ?? (await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, kind: { not: "owed" } }, orderBy: { createdAt: "asc" } }));
   if (!p || p.chargeback === "open") return false;
