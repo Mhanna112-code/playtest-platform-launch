@@ -288,3 +288,22 @@ describe("batch 35 §18 (extended): Post / Edit mark every field a restored draf
     expect(form).not.toMatch(/keep\.signedIn \? draftMarks|keep\.signedIn && keysChanged/);
   });
 });
+
+describe("signing in as another account doesn't return to the old account's page (owner, Nov 2)", () => {
+  it("the login page link carries the tab's account; the login answer says whether it's the same one", async () => {
+    const fs = await import("node:fs");
+    expect(fs.readFileSync("src/lib/client.ts", "utf8")).toContain("&as=${encodeURIComponent(PAGE_USER)}");
+    expect(fs.readFileSync("src/components/AuthForm.tsx", "utf8")).toContain('const next = p.next && r?.sameAccount === false ? "/app" : p.next;');
+    const { POST } = await import("@/app/api/auth/login/route");
+    const { makeUser, req, json } = await import("./helpers");
+    const a = await makeUser({ tester: true, name: "Ana Silva" });
+    const { db } = await import("@/lib/db");
+    const { hashPassword } = await import("@/lib/server/passwords");
+    await db.user.update({ where: { id: a.user.id }, data: { passwordHash: await hashPassword("password123") } });
+    const login = (body: Record<string, unknown>) => POST(req("/api/auth/login", { body: { email: a.user.email, password: "password123", ...body } })).then(json);
+    const same = await login({ nextFor: a.user.id });
+    expect(same.status).toBe(200);
+    expect(same.body.sameAccount).toBe(true);
+    expect((await login({ nextFor: "someone-else" })).body.sameAccount).toBe(false);
+  });
+});

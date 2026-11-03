@@ -34,7 +34,8 @@ export const pageUser = () => PAGE_USER;
  * only /app and /admin pages), or `/login?gone=1` for a deleted account. Every way there (a refused request's 401, SessionWatch) goes through `toLogin`, ONCE
  * per page: a background request that beats SessionWatch never sends the tab on without `next`, and nothing redirects twice.
  */
-export const loginNext = (loc: { pathname: string; hash?: string }) => `/login?next=${encodeURIComponent(loc.pathname + (loc.hash ?? ""))}`;
+// (Owner, Nov 2) With the account the tab belonged to (`as`): signing in as ANOTHER account goes to its dashboard, not to a page of the old one ("This page doesn't exist").
+export const loginNext = (loc: { pathname: string; hash?: string }) => `/login?next=${encodeURIComponent(loc.pathname + (loc.hash ?? ""))}${PAGE_USER ? `&as=${encodeURIComponent(PAGE_USER)}` : ""}`;
 let LEAVING_FOR_LOGIN = false;
 export function toLogin(gone = false, w: { location: { pathname: string; hash: string; replace: (u: string) => void } } | undefined = typeof window === "undefined" ? undefined : window) {
   if (!w || LEAVING_FOR_LOGIN) return false;
