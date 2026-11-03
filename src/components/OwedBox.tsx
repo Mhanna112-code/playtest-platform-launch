@@ -8,7 +8,7 @@ import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
 import { type BankAction } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
-import { CANCEL_CHECK, OWED_BANK_WAITING, OWED_HOW, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
+import { CANCEL_CHECK, OVER_PAY_TICK_LINE, OWED_BANK_WAITING, OWED_HOW, PAY_TICK_CENTS, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 
 /** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string; /** (§133) part of Pay what you owe's one payment reversed: what that payment covered (the bank doesn't say which), each with its hover */ covers?: { text: string; full: string }[] };
@@ -63,6 +63,11 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
   const [shownIds, setShownIds] = useState(retry.map((o) => o.id));
   // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: with a reservation in place the button is disabled, and what was added since is charged after the lift.
   const reservedOnce = chargeback && reservedCents > 0;
+  // (Owner, Nov 3, §150) Over $200 (the amount on the button) the tick "I confirm this payment is over $200." shows next to it, and the button waits for it. It stays
+  // ticked through live redraws while the amount stays over $200, and clears when it drops to $200 or less.
+  const over = !reservedOnce && (changes ? total : seenTotal) > PAY_TICK_CENTS;
+  const [over200, setOver200] = useState(false);
+  if (!over && over200) setOver200(false);
   return (
     <div id="owed" className="space-y-2 rounded-lg border border-amber-400/40 bg-amber-500/10 p-3 text-sm text-amber-100">
       {onHold && chargeback ? (
@@ -99,16 +104,22 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
           ))}
         </ul>
       )}
-      {retry.length > 0 && <button
+      {retry.length > 0 && <div className="flex flex-wrap items-center gap-2">
+      {over && (
+        <label className="flex max-w-xs items-start gap-2 text-sm" data-over-tick="">
+          <input type="checkbox" className="mt-1" checked={over200} disabled={busy} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
+        </label>
+      )}
+      <button
         className="btn"
-        disabled={busy || verifyFirst || reservedOnce}
+        disabled={busy || verifyFirst || reservedOnce || (over && !over200)}
         aria-disabled={verifyFirst || reservedOnce}
         onClick={async () => {
           setBusy(true);
           setErr("");
           setFailing([]);
           try {
-            const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[]; reservedCents?: number }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null });
+            const r = await api<{ stillFailing: string[]; lifted: boolean; confirm?: BankAction[]; reservedCents?: number }>("/api/payments/owed", { seenTotalCents: total, seenIds: shownIds, confirmed: changes != null, over200: over && over200 });
             setChanges(null);
             // (Batch 11) Payments the bank wants confirmed: one check each, inline under the button; any it refused stay owed (nothing was charged for them).
             let refused = "";
@@ -142,11 +153,11 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
         }}
       >
         {reservedOnce ? `${money(changes ? total : seenTotal)} is charged after the team approves` : `Pay what you owe (${money(changes ? total : seenTotal)})`}
-      </button>}
+      </button></div>}
       {bank.view}
       {/* (Owner, Oct 28, batch 16 section 41) The chargeback steps in order: the card first. */}
       {verifyFirst && <p className="text-xs" data-verify-first="">Verify your card first (step 1): then you can pay what you owe.</p>}
-      <ChangesBox changes={changes} />
+      <ChangesBox changes={changes} tail={over && !over200 ? `Tick “${OVER_PAY_TICK_LINE}” and press again to go ahead.` : undefined} />
       {bankNote && <p className="info" data-bank-not-confirmed="">{bankNote}</p>}
       {done && <p className="ok">{done}</p>}
       {failing.length > 0 && (

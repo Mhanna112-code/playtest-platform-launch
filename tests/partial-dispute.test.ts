@@ -181,7 +181,7 @@ describe("§133 part of Pay what you owe's one combined payment", () => {
     const st = bank();
     const debts = [await debt(w, 0, 12000), await debt(w, 1, 20467), await debt(w, 2, 12000)];
     await startHold(w.dev.user.id, "unpaid");
-    expect((await press(w.dev.cookie)).body).toMatchObject({ paid: 3, lifted: true });
+    expect((await press(w.dev.cookie, { over200: true })).body).toMatchObject({ paid: 3, lifted: true }); // (§150) over $200: the tick
     const one = await db.payment.findFirstOrThrow({ where: { developerId: w.dev.user.id, kind: "owed" } });
     expect(one).toMatchObject({ amountCents: 44467, status: "bundled" });
     expect((await send("evt_" + randomUUID(), "charge.dispute.created", dispute(one.stripePaymentIntentId!, 9600))).status).toBe(200);

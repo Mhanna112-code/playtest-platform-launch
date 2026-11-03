@@ -1017,10 +1017,15 @@ export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's t
  * (Batch 35 §129) The end of Pay what you owe's stop-once line: what the second press does. Outside a chargeback hold it pays; during one it reserves (with the card
  * verified first when it isn't yet), and the team's Approve takes it.
  */
-export const pressAgainLine = (cents: number, chargeback: null | { cardVerified: boolean } = null) =>
-  !chargeback ? `Press again to pay ${money(cents)}.`
+export const pressAgainLine = (cents: number, chargeback: null | { cardVerified: boolean } = null, tick = false) => {
+  const line = !chargeback ? `Press again to pay ${money(cents)}.`
     : chargeback.cardVerified ? `Press again to reserve ${money(cents)} on your card: it's taken when the team approves lifting your hold.`
       : `Press again to verify your card, then reserve ${money(cents)} on it: it's taken when the team approves lifting your hold.`;
+  // (Owner, Nov 3, §150) Over $200 without the tick: "Tick “I confirm this payment is over $200.” and press again to pay $230.00."
+  return tick ? `Tick “${OVER_PAY_TICK_LINE}” and press${line.slice("Press".length)}` : line;
+};
+/** (Owner, Nov 3, §150) Pay what you owe over $200 pressed without the tick (the same words as Pay's). */
+export const OWED_OVER_TICK = `Tick “${OVER_PAY_TICK_LINE}” to pay.`;
 export const RESERVE_EXPIRED = "Your reservation expired: press Pay what you owe again so the team can approve it.";
 /** (Batch 34 §3) The developer's reservation line; added charges are explained by the disabled button. */
 export const reservedAddedLine = (reservedCents: number, addedCents: number) => {

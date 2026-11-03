@@ -292,7 +292,7 @@ describe("batch 28 §8: Pay what you owe reserves once; what's added after is ch
     expect(reservedAddedLine(800, 500)).toBe("Reserved $8.00: it's taken when the team approves lifting your hold.");
     const rows = (await adminPage("chargebacks", x.dev.user.id, null)).rows as ChargebackVM[];
     expect(rows.find((c) => c.id === x.dev.user.id)?.owedLine).toBe(" ($8.00 reserved · $5.00 added since (charged after the hold lifts))");
-    expect(src("components/OwedBox.tsx")).toContain("disabled={busy || verifyFirst || reservedOnce}");
+    expect(src("components/OwedBox.tsx")).toContain("disabled={busy || verifyFirst || reservedOnce || (over && !over200)}"); // (§150) and the over-$200 tick
     // Approve goes through.
     expect((await approveChargebackHold(x.dev.user.id)).takenCents).toBe(800);
     expect((await userOf(x.dev.user.id)).holdStartedAt).toBeNull();

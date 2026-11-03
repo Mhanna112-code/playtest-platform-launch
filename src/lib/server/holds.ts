@@ -18,7 +18,7 @@ import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
-import { callReference, dayIn, disputeDecisionName, disputedCentsOf, endOfDayIn, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords } from "@/lib/rules";
+import { callReference, dayIn, disputeDecisionName, disputedCentsOf, endOfDayIn, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
@@ -472,6 +472,9 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
       nowIds = nowIds.filter((i) => !waiting.has(i));
     }
   }
+  // (Owner, Nov 3, §150) Over $200 the press needs the tick "I confirm this payment is over $200.", like Pay: judged on what this press would pay or reserve (a
+  // tester's Charge left out above never counts).
+  const tickMissing = total > PAY_TICK_CENTS && body.over200 !== true;
   if (seen != null && (seen !== total || (Array.isArray(body.seenIds) && (seenIds.length !== nowIds.length || nowIds.some((i) => !seenIds.includes(i)))))) {
     const freshLines = lines.filter((l) => l.retry && !seenIds.includes(l.id));
     const fresh = freshLines.map((l) => l.text.replace(/ · card declined .*$/, ""));
@@ -480,7 +483,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     const goneIds = seenIds.filter((i) => !nowIds.includes(i));
     const won = goneIds.length ? await db.payment.findMany({ where: { id: { in: goneIds }, chargeback: "won" } }) : [];
     // (§129) During a chargeback hold the second press reserves (after verifying the card if it isn't yet): the line says so, never "pay".
-    const again = pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null);
+    const again = pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, tickMissing);
     const text = fresh.length
       ? `${freshLines.every((l) => l.source === "failed") ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh.join(", ")}. New total ${money(total)}. ${again}`
       : won.length
@@ -488,6 +491,8 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
         : `What you owe changed: now ${money(total)}. ${again}`;
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds });
   }
+  // (§150) Unchanged but over $200 without the tick (a page that never showed it, or a press without it): refused, stopping once with the tick's line; the box shows it.
+  if (tickMissing) throw new HttpError(409, "stop_once", OWED_OVER_TICK, { changes: [{ text: pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, true), at: new Date() }], totalCents: total, ids: nowIds });
   // (Owner, Oct 28, batch 16 section 41) A chargeback hold's steps go in order: a card verified with 3D Secure first, then paying (which never lifts it: the team's Approve does).
   // (Nov 2, payments proof) After the stop-once check: a page that hadn't shown a chargeback stops once naming it first ("Your bank reversed a $10 payment…").
   if (u.holdStartedAt && u.holdReason === "chargeback" && !u.chargebackCardVerifiedAt) throw new HttpError(409, "verify_first", VERIFY_FIRST);
