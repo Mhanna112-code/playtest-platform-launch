@@ -554,7 +554,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </ResizeBox>
               </Fold>
               <Fold id={`update-pay-${x.id}`} summary="Pay more">
-              <PayBox bankWaits={waitsOf(x.id)} more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+              <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                 room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
               </Fold>
             </div>
@@ -635,7 +635,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <Fold id={`row-more-${r.sub.id}`} className="w-full" summary="Pay more">
-                        <PayBox bankWaits={waitsOf(r.sub.id)} more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                         </Fold>
                       )}
@@ -698,7 +698,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {x.review?.teamClosedById && <p className="text-sm text-slate-300" data-team-closed="">{teamClosedLine(x.review.reason)}</p>}
                             {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                               <Fold id={`row-more-${x.id}`} summary="Pay more">
-                              <PayBox bankWaits={waitsOf(x.id)} more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />

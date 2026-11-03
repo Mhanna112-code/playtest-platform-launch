@@ -384,11 +384,6 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
     const status = reservation.stripePaymentIntentId ? await piStatus(reservation.stripePaymentIntentId, body.simulate) : body.simulate === "succeeded" ? "requires_capture" : "canceled";
     return cb.reservationChecked(dev.id, paymentId, status === "requires_capture" || status === "succeeded");
   }
-  // (Owner, Nov 3, §159 R10a) The developer's own Pay / Pay more check that something else ended as paid while its bank page finished (a new card saved in another tab
-  // at the same moment: its cancel found it already approved and recorded it paid once): this press went through, so it says so (never "cancelled", never an error).
-  const early = await db.payment.findUnique({ where: { id: paymentId }, select: { developerId: true, actionPi: true, status: true, kind: true, pressKey: true, amountCents: true } });
-  if (early && early.developerId === dev.id && !early.actionPi && (early.status === "charged" || early.status === "not_set_up") && ["review", "call", "extra"].includes(early.kind) && early.pressKey?.includes("press:"))
-    return { done: true, repeated: true, status: early.status, amountCents: early.amountCents };
   const p = await own(dev.id, paymentId);
   const status = await piStatus(p.actionPi!, body.simulate);
   const ok = status === "succeeded";

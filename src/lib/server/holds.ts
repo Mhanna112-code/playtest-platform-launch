@@ -1447,14 +1447,13 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
  * row lock, the lock Pay takes to reserve it: a Pay whose payment is on its way, at the bank or paid wins (refused here, naming it); else the review is made, and a
  * Pay pressed after that sees it. Null when the part was already settled.
  */
-async function claimChoice(testId: string, where: { submissionId: string } | { callId: string }, devName: string, data: Prisma.ReviewUncheckedCreateInput) {
+async function claimChoice(testId: string, where: { submissionId: string } | { callId: string }, _devName: string, data: Prisma.ReviewUncheckedCreateInput) {
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
       if (await tx.review.findFirst({ where })) return null;
-      const busy = await tx.payment.findFirst({ where: { ...where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action", "needs_confirmation", "charged", "not_set_up"] } }, orderBy: { createdAt: "desc" } });
-      if (busy && (busy.status === "charged" || busy.status === "not_set_up")) throw new HttpError(409, "done", `${devName} paid ${money(busy.amountCents)} for this meanwhile.`);
-      if (busy) throw new HttpError(409, "locked", PIECE_LOCKED);
+      // (A Pay that went through made its review in the same step: the check above. What's still on its way or at the bank holds the part.)
+      if (await tx.payment.findFirst({ where: { ...where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", PIECE_LOCKED);
       return tx.review.create({ data });
     });
   } catch (e) {

@@ -269,7 +269,9 @@ describe("batch 10 item 5: Pay what you owe updates live and never charges twice
     // Tab B presses with the old page: refused, nothing charged.
     const again = await press({ seenTotalCents: 1300, seenIds: stop.body.error.ids, confirmed: true });
     expect(again.status).toBe(409);
-    expect(again.body.error).toMatchObject({ code: "nothing_owed", message: "There's nothing to pay: what you owed is already paid." });
+    // (Owner, Nov 3, §159) The line names what happened: "You already paid what you owe ($13.00) in another tab at 3:20 PM."
+    expect(again.body.error.code).toBe("nothing_owed");
+    expect(again.body.error.message).toMatch(/^You already paid what you owe \(\$13\.00\) in another tab at \d{1,2}:\d{2} [AP]M\.$/);
     expect(charges).toBe(1);
   });
 

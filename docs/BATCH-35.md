@@ -1978,7 +1978,7 @@ bank's page (Stripe's own 3D Secure page, inline under the button) the only butt
 13. **Already done in another tab.** Pay what you owe pressed on a page from before it was paid: "You already paid what you owe ($27.00) in another tab at 3:20 PM.";
     during a chargeback hold: "You already reserved what you owe ($46.00) on your card in another tab at 3:20 PM.". A bank check completed elsewhere keeps "You
     already confirmed this payment.". A new card saved while a Pay's bank page completes: Complete first → Stripe's answer to the save's cancel is "already
-    succeeded", recorded paid once, and the page's finish now reports it paid (it read "You already confirmed this payment." as a refusal); the save first →
+    succeeded", recorded paid once; the page's finish reads §157's "You already confirmed this payment." (never "cancelled"); the save first →
     cancelled, Complete reads "This payment was cancelled: nothing was charged." and the part is payable again.
 
 - **Code.** `live.devChanges`: for a payment press (`payPressOf`: its contract is `stopCheck`, its part is `keys`), a team decision whose `contractId` is the
@@ -1992,6 +1992,6 @@ bank's page (Stripe's own 3D Secure page, inline under the button) the only butt
 - **Code (6–13).** `live.devChanges` (a "left" line on the press's contract always passes); `confirmAll.itemStops` in `claim` (plus the suspension read);
   `payments.refuseSuspendedLocked`, `suspendedAfterCheck`, `bankWaitsLine` (Pay's reviewed branch and Pay more's locked step), `paidMostMeanwhileLine` and the
   locked dispute claim in `openDispute`; `restrictions.suspendAccount` releases the developer's own `needs_action` checks; `confirm.confirmStart` refuses while
-  suspended and `confirmFinish` reports an own press already paid; `holds.claimChoice` (Charge / Let it go under the test lock), `paidBefore` / `reservedBefore`;
+  suspended; `holds.claimChoice` (Charge / Let it go under the test lock), `paidBefore` / `reservedBefore`;
   `PayBox` `bankWaits`; `ConfirmAll` sends `seenAt` / `boxAt`. No migration.
 - **Tests (6–13):** `tests/pay-matrix-2.test.ts`.

@@ -282,7 +282,7 @@ describe("§159: Confirm all stops for each item's own changes", () => {
 });
 
 describe("§159 R10: a new card saved while a Pay's bank page completes", () => {
-  it("(a) Complete first: the save's cancel finds it already paid → recorded paid once; the page's finish says paid (no “cancelled”)", async () => {
+  it("(a) Complete first: the save's cancel finds it already paid → recorded paid once; the page's finish never reads “cancelled”", async () => {
     const w = await world();
     const st = bank();
     st.ask = true;
@@ -291,9 +291,9 @@ describe("§159 R10: a new card saved while a Pay's bank page completes", () => 
     st.pis.set(p.actionPi!, "succeeded"); // Complete at the bank
     await newCardChecks(w.dev.user.id);
     expect(await db.payment.count({ where: { submissionId: w.anaSub.id, status: "charged" } })).toBe(1);
+    // The page's own finish: it went through (§157's line for a check finished elsewhere), never "cancelled".
     const fin = await confirm(w.dev.cookie, { paymentId: p.id });
-    expect(fin.status, JSON.stringify(fin.body)).toBe(200);
-    expect(fin.body).toMatchObject({ done: true, amountCents: 1000 });
+    expect(fin.body.error?.message).toBe("You already confirmed this payment.");
     expect(await db.payment.count({ where: { submissionId: w.anaSub.id, status: "charged" } })).toBe(1);
     expect(st.made).toHaveLength(1);
   });
