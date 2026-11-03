@@ -23,6 +23,7 @@ import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
+import { describedOnce, stripeDescription } from "./paymentRows";
 import { LATE_REMINDER_TAIL, NO_CHARGE_LATE } from "@/lib/moneyLines";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
@@ -246,7 +247,9 @@ async function chargeDeferredLocked(devId: string) {
     {
       // (Batch 28 §8) A reversed payment owed again, added after the reservation: charged to the platform right after the lift (the tester already got their share).
       try {
-        const r = await chargePlatform(dev, p.amountCents, serverKey("deferred", p.id), "Playtest: a payment reversed by your bank, charged again");
+        // (Owner, Nov 3) "Playtest: Repaid the reversed $39.00 Pay more for … ($39.00 + $15.00 chargeback fee)", as its "What you've paid" line.
+        const description = await describedOnce(p.id, () => stripeDescription({ payment: p }));
+        const r = await chargePlatform(dev, p.amountCents, serverKey("deferred", p.id), description);
         if (r.status === "requires_action") { await (await import("./confirm")).awayAction(p.id, r as NeedsAction); continue; }
         await db.payment.update({ where: { id: p.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, settledAt: new Date() } });
         await receipt(dev.email, await owedItemName(p), p.amountCents, r.status, "/app/payments");
@@ -1308,7 +1311,8 @@ export async function autoChargeCalls(now: Date) {
     const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
     let outcome = `${name}'s call was charged automatically: ${money(amount)}`;
     try {
-      const r = await charge(dev, c.tester, amount, payKey, `Playtest: live call on “${c.title}” (charged automatically after ${REVIEW_DAYS} days)`);
+      // (Owner, Nov 3) "Playtest: Ana Silva's live call on “Harbor Run”, charged automatically after 7 days", as its "What you've paid" line (its review is made first).
+      const r = await charge(dev, c.tester, amount, payKey, await describedOnce(row.id, () => stripeDescription({ payment: row })));
       if (r.status === "requires_action") {
         await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
         await tellDelayed();
@@ -1408,7 +1412,8 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const row = await db.payment.create({ data: { kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
   let status = "charged";
   try {
-    const r = await charge(dev, c.tester, amount, payKey, `Playtest: ${label} on “${c.title}” (charged by the tester)`);
+    // (Owner, Nov 3) "Playtest: Ana Silva's written answers on “Harbor Run”, charged by Ana Silva after 7 days without a review" (its review is made first).
+    const r = await charge(dev, c.tester, amount, payKey, await describedOnce(row.id, () => stripeDescription({ payment: row })));
     status = r.status;
     if (r.status === "requires_action") {
       // (Batch 11) The developer's bank wants them to confirm: it waits 3 days for their Confirm in Payments; the tester reads "Payment may be delayed".
@@ -1486,7 +1491,8 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
   let status = "charged";
   try {
-    const r = await charge(dev, c.tester, amount, payKey, `Playtest: ${label} on “${c.title}” (charged by the tester)`);
+    // (Owner, Nov 3) "Playtest: Ana Silva's written answers on “Harbor Run”, charged by Ana Silva after 7 days without a review" (its review is made first).
+    const r = await charge(dev, c.tester, amount, payKey, await describedOnce(row.id, () => stripeDescription({ payment: row })));
     status = r.status;
     if (r.status === "requires_action") {
       await (await import("./confirm")).awayAction(row.id, r as NeedsAction);

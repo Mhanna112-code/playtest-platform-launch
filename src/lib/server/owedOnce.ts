@@ -6,6 +6,7 @@ import { HttpError } from "./http";
 import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
+import { describedOnce, stripeDescription } from "./paymentRows";
 
 // (Owner, Nov 2, batch 35 §117) One card in play; bank checks never double-charge.
 // - Pay what you owe is ONE payment: a press, a daily retry and a new-card retry charge the TOTAL of what's owed at once, as a Payment of kind "owed" (the
@@ -192,8 +193,11 @@ async function chargeClaimed(u: Parameters<typeof chargePlatform>[0], one: Payme
   try {
     // (Batch 32 §15) No saved card: handled as a declined card, never sent to Stripe with an empty card.
     if (stripeOn() && (!u.stripeCustomerId || !u.stripePaymentMethodId)) throw new HttpError(402, "card_failed", "No card is saved on this account.");
-    // One key per payment: charged again with it (resumeStaleOwed), Stripe answers with what happened the first time.
-    r = await chargePlatform(u, one.amountCents, serverKey("owedall", one.id), forCharges(one) ? "Playtest: charges made while you were away" : "Playtest: what you owe", mode);
+    // One key per payment: charged again with it (resumeStaleOwed), Stripe answers with what happened the first time. (Owner, Nov 3) Its description lists what it
+    // covers as on the page, names in full: "Playtest: What you owe (Ana Silva's written answers on “Harbor Run” $8.00, …)"; fixed at the first try, so the same
+    // key always carries the same one.
+    const description = await describedOnce(one.id, async () => stripeDescription({ owed: await db.payment.findMany({ where: { coveredById: one.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }), charges: forCharges(one) }));
+    r = await chargePlatform(u, one.amountCents, serverKey("owedall", one.id), description, mode);
   } catch (e) {
     const why = (await import("./holds")).owedWhy(e);
     // (§130) Not a try on the card: its customer or card is unknown to Stripe (cleared: "Add a card"), or payments are switched off. No decline, no retry counted.

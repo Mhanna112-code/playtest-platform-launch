@@ -21,7 +21,7 @@ import { hasBoth, sideFor } from "@/lib/sides";
 import { OtherSidePage } from "@/components/OtherSidePage";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { LongList } from "@/components/LongList";
-import { paidOutTotal, paidRows } from "@/lib/server/paymentRows";
+import { paidOutTotal, paidRows, plainLabel } from "@/lib/server/paymentRows";
 import { testerShare } from "@/lib/rules";
 import { SubscriptionBox } from "./SubscriptionBox";
 import { launchState } from "@/lib/server/subscription";
@@ -166,7 +166,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="space-y-0.5 py-2">
-                  <span className="block text-slate-200" data-paid-what="">{rows.get(p.id) ? <>{rows.get(p.id)!.testId ? <a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`} title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</a> : <span title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</span>}{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
+                  <span className="block text-slate-200" data-paid-what="">{rows.get(p.id) ? <>{rows.get(p.id)!.testId ? <a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`} title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</a> : <span title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</span>}{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : plainLabel(p.kind)}</span>
                   {/* (§133) Part of a payment reversed: "your bank reversed $96.00 of this (chargeback)". */}
                   <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? (rows.get(p.id)?.reversedCents ? ` · your bank reversed ${money(rows.get(p.id)!.reversedCents!)} of this (chargeback)` : " · your bank reversed this (chargeback)") : ""}</span>
                 </li>

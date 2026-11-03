@@ -1277,3 +1277,34 @@ The bank-confirm box showed "Charges made while you were away $416.00 (the team'
   - an update before the dispute is recorded, and the claim refusing a changed amount.
   - `paid-list` follows the moved helpers.
 - **Proof:** `docs/media/partial-dispute/README.md`: real Stripe test-mode payments, a real full dispute (card 0259), and a partial dispute event signed like Stripe's.
+
+## §133 addition: every Stripe description reads like its Payments line (owner, Nov 3)
+
+- **The rule.** A Stripe PaymentIntent's `description` reads the same as the payment's line on the developer's Payments page ("What you've paid"), with the names in FULL (no 10-character cut; Stripe has room), after "Playtest: ". One shared builder makes it from what is being paid: `stripeDescription` in `src/lib/server/paymentRows.ts`. It is built on the page's own line (`devLine`: `pieceName` with `full: true`, `disputeDecisionName`, `repaidReversedLine`), so the page and Stripe can't drift.
+- **What it reads:**
+  - a Pay: "Playtest: Marc Hanna's written answers on “chargechargecharge”" (a recording or a live call names that part);
+  - a Pay more: "Playtest: Pay more for Marc Hanna's written answers on “chargechargecharge”";
+  - a team decision: "Playtest: The team's dispute decision on Marc Hanna's recording on “chargechargecharge”";
+  - a tester's Charge: "Playtest: JJJJ's written answers on “…”, charged by JJJJ after 7 days without a review";
+  - an automatic call charge: "Playtest: Marc Hanna's live call on “…”, charged automatically after 7 days";
+  - a repayment of a reversed payment: "Playtest: Repaid the reversed $39.00 Pay more for … ($39.00 + $15.00 chargeback fee)", or for part of one (§133) "Playtest: Repaid $96 reversed from your $444.67 payment … ($96 + $15 chargeback fee)".
+  - It follows the page word for word: the "how" comes after a comma ("…, charged by …"), as the page shows it. The examples in the request had it in brackets.
+- **Pay what you owe's one payment** lists each item as the page names it, with its amount: "Playtest: What you owe (Ana Silva's written answers on “Harbor Run” $244.67, Dee Lin's written answers on “Harbor Run” $200.00)". The one payment for charges made while away reads "Playtest: Charges made while you were away (…)". A reversed payment owed again is listed as its repayment will read.
+- **A chargeback hold's reservation:** "Playtest: Reserved for the team's review: <items>".
+- **A subscription keeps its own:** "Playtest subscription ($7/month)".
+- **Stripe's 1,000-character limit:** a list that would pass it ends "… and N more" (`listWithin`). There is a last safety cut in `stripe.ts`.
+- **Call sites.** Every charge and reservation in `src/lib/server` passes it:
+  - Pay, Pay more and the team decision in `payments.ts`;
+  - the tester's Charge (a part and a call), the automatic call charge and the repayment after the lift in `holds.ts`;
+  - Pay what you owe's one payment and the combined payment for charges made while away in `owedOnce.ts`;
+  - the reservation in `chargeback.ts` (`authorize` now takes the description).
+  - `confirm.ts` makes no PaymentIntents: it confirms existing ones, which keep the description they were made with.
+- **Fixed at the first charge.** `Payment.stripeDescription` (nullable; migration `20261113100000_payment_stripe_description`) keeps the description a payment was first charged with (`describedOnce`). A charge asked again with the same idempotency key always sends the same description, even if a tester renamed meanwhile, because Stripe refuses a key reused with other details. Without this, the one payment's resume (`resumeStaleOwed`) and the repayment after the lift could stay stuck.
+- **A page fix found on the way.** A Pay more or a team decision on a piece that the tester charged, or that was charged automatically, no longer repeats that piece's "charged by …" / "charged automatically …" in its own line: only the piece's own payment says how it was charged.
+- **Tests:** `tests/stripe-descriptions.test.ts` covers:
+  - each kind equal to its page line with the names uncut;
+  - the one payment, charges made while away, the reservation, and a reversed payment owed again;
+  - the 1,000-character end;
+  - the descriptions actually sent at Stripe (Pay, Pay more, the tester's Charge, Pay what you owe, the reservation, the repayment after the lift);
+  - the description kept on a retry after a rename;
+  - a scan that every call site uses the builder.

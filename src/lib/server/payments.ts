@@ -12,6 +12,7 @@ import { labelled, reportedOver3 } from "./reports";
 import { partAnchor } from "@/lib/links";
 import { isAdmin } from "./session";
 import { PAYMENTS_PROBLEM, cardRefusal, charge, type NeedsAction } from "./stripe";
+import { describedOnce, stripeDescription } from "./paymentRows";
 import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { testerGate } from "./testerGate";
@@ -146,7 +147,9 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
   let result;
   try {
     // (Owner, Oct 29, batch 11) The developer's own press: on-session, so the bank may ask them to confirm in the page.
-    const charging = (key: string) => charge(dev, c.tester, rev.amountCents, key, `Playtest: ${piece.label} on “${c.title}”`, "press");
+    // (Owner, Nov 3) Its Stripe description reads as its "What you've paid" line, names in full: "Playtest: Ana Silva's written answers on “Harbor Run”".
+    const description = await describedOnce(payment!.id, () => stripeDescription({ payment: payment! }));
+    const charging = (key: string) => charge(dev, c.tester, rev.amountCents, key, description, "press");
     try {
       result = await charging(payment!.payKey ?? payKey);
     } catch (e) {
@@ -350,7 +353,8 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.
     let result;
     try {
-      result = await charge(c.test.developer, c.tester, extra, serverKey("dispute", d.id), `Playtest: dispute decision on “${c.title}”`);
+      // (Owner, Nov 3) "Playtest: The team's dispute decision on Ana Silva's written answers on “Harbor Run”" (its row is made after the charge: one key, one try).
+      result = await charge(c.test.developer, c.tester, extra, serverKey("dispute", d.id), await stripeDescription({ payment: owedRow }));
       if (result.status === "requires_action") {
         // (Batch 11) The developer's bank wants them to confirm: it waits 3 days for their Confirm in Payments (the tester reads "Payment may be delayed").
         const row = await db.payment.create({ data: { ...owedRow, status: "needs_confirmation" } });
@@ -543,7 +547,9 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const { row, stripeKey } = reserved as { row: NonNullable<(typeof reserved)["row"]>; stripeKey: string };
   let result;
   try {
-    const charging = (key: string) => charge(dev, c.tester, amount!, key, `Playtest: extra pay for ${name} on “${c.test.title}”`, "press");
+    // (Owner, Nov 3) "Playtest: Pay more for Ana Silva's written answers on “Harbor Run”", as its "What you've paid" line.
+    const description = await describedOnce(row.id, () => stripeDescription({ payment: row }));
+    const charging = (key: string) => charge(dev, c.tester, amount!, key, description, "press");
     try {
       result = await charging(stripeKey);
     } catch (e) {

@@ -72,7 +72,7 @@ async function cancelPi(id: string | null) {
  * reservation is in place nothing more is reserved (what is added later is charged right after the lift); after it expired or was released, the full amount owed then.
  * Without Stripe it is recorded as reserved. Returns the reserved amount, the bank's inline check, or why it failed.
  */
-export async function reserveOwed(u: { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean }, rows: { id: string; amountCents: number }[]) {
+export async function reserveOwed(u: { id: string; email: string; stripeCustomerId: string | null; stripePaymentMethodId: string | null; stripeAccountId: string | null; payoutsReady: boolean }, rows: (import("./paymentRows").PayingRow & { id: string })[]) {
   const total = rows.reduce((a, p) => a + p.amountCents, 0);
   const now = new Date();
   // (Nov 2, payments proof: bug found) Two presses at the same moment (two tabs) both saw no reservation and each authorized the total. The reservation is now made
@@ -89,7 +89,8 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
     return { reservedCents: total };
   }
   try {
-    const a = await authorize(u, total, r.id);
+    // (Owner, Nov 3) "Playtest: Reserved for the team's review: <each item as on the page> $8.00, …".
+    const a = await authorize(u, total, r.id, await (await import("./paymentRows")).stripeDescription({ reserve: rows }));
     if (a.status === "requires_capture") {
       await reserved(a.stripePaymentIntentId);
       return { reservedCents: total };
