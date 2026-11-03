@@ -156,16 +156,17 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Your full card number and security code are entered on Stripe&apos;s page and never reach this site.</p>
           </section>
           <section className="card space-y-3">
-            <div className="flex items-center justify-between">
+            {/* (Owner, Nov 3, long text) The total is never split: it moves under the heading when there is no room beside it. */}
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <h2 className="font-semibold text-white">What you&apos;ve paid</h2>
-              <span className="text-sm text-slate-400">Total {money(paidOut.filter((p) => p.status !== "refunded" && !(p.chargebackAt && p.chargeback !== "won")).reduce((a, p) => a + p.amountCents, 0))}{/* (Owner, Nov 2) a payment your bank reversed counts once, as its repayment */}</span>
+              <span className="whitespace-nowrap text-sm text-slate-400">Total {money(paidOut.filter((p) => p.status !== "refunded" && !(p.chargebackAt && p.chargeback !== "won")).reduce((a, p) => a + p.amountCents, 0))}{/* (Owner, Nov 2) a payment your bank reversed counts once, as its repayment */}</span>
             </div>
             {/* Newest first: 8 rows, then "Show N more" opening a scroll box (the long-list rule). */}
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="space-y-0.5 py-2">
                   <span className="block text-slate-200" data-paid-what="">{rows.get(p.id) ? <><a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`} title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</a>{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
-                  <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? " · your bank reversed this (chargeback)" : ""}</span>
+                  <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · <span className="whitespace-nowrap">{money(p.amountCents)}</span>{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? " · your bank reversed this (chargeback)" : ""}</span>
                 </li>
               ))}
               {paidOut.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}
@@ -217,14 +218,14 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Bank details go to Stripe and never reach this site.</p>
           </section>
           <section className="card space-y-3">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
               <h2 className="font-semibold text-white">Your earnings</h2>
-              <span className="text-sm text-slate-400">Total {money(paidIn.reduce((a, p) => a + p.testerCents, 0))}</span>
+              <span className="whitespace-nowrap text-sm text-slate-400">Total {money(paidIn.reduce((a, p) => a + p.testerCents, 0))}</span>
             </div>
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidIn.map((p) => (
                 <li key={p.id} className="space-y-0.5 py-2">
-                  <span className="block text-slate-200" data-earned-what="">You get {money(p.testerCents)}{rows.get(p.id) ? ` ${rows.get(p.id)!.what}${rows.get(p.id)!.how ? `, ${rows.get(p.id)!.how}` : ""}` : p.kind === "extra" ? " · extra pay" : ""}</span>
+                  <span className="block text-slate-200" data-earned-what="">You get <span className="whitespace-nowrap">{money(p.testerCents)}</span>{rows.get(p.id) ? ` ${rows.get(p.id)!.what}${rows.get(p.id)!.how ? `, ${rows.get(p.id)!.how}` : ""}` : p.kind === "extra" ? " · extra pay" : ""}</span>
                   <span className="block text-slate-400">{fmtDateTime(p.createdAt)}{p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
                 </li>
               ))}

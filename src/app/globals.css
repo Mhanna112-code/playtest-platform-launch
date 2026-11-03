@@ -55,6 +55,8 @@ body {
   .btn-secondary, .btn-ghost { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl border border-white/[0.12] bg-white/[0.04] px-4 py-2 text-sm font-medium text-ink-100 no-underline shadow-[0_2px_0_0_rgba(0,0,0,0.35)] transition duration-100 hover:border-white/25 hover:bg-white/[0.08] hover:no-underline active:translate-y-px active:shadow-none disabled:cursor-not-allowed disabled:opacity-50; }
   .btn-danger { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl bg-punch-500 px-4 py-2 text-sm font-semibold text-white shadow-[0_3px_0_0_#a71345] transition duration-100 hover:bg-punch-400 active:translate-y-[2px] active:shadow-[0_1px_0_0_#a71345] disabled:opacity-50; }
   .btn-green { @apply inline-flex select-none items-center justify-center gap-2 rounded-xl bg-emerald-400 px-4 py-2 text-sm font-semibold text-ink-950 shadow-[0_3px_0_0_#047857] transition duration-100 hover:bg-emerald-300 disabled:opacity-50; }
+  /* (Owner, Nov 3, long text) A button is never wider than the space it sits in: a long label (a long name) wraps inside it instead of reaching past the page. */
+  .btn, .btn-secondary, .btn-ghost, .btn-danger, .btn-green { @apply max-w-full; }
   .input { @apply w-full rounded-xl border border-white/[0.12] bg-ink-950/80 px-3 py-2 text-sm text-ink-100 transition placeholder:text-ink-500 focus:border-volt-300/70 focus:outline-none focus:ring-4 focus:ring-volt-300/10; }
   .label { @apply mb-1 block text-sm font-medium text-ink-200; }
   .req::after { content: " *"; @apply text-punch-400; }

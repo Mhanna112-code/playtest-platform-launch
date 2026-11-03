@@ -16,7 +16,8 @@ export type Gone = { contractId: string; name: string; how: string; at: Date | n
 
 function TesterAvatar({ seat }: { seat: Seat }) {
   return (
-    <span className="group relative inline-block">
+    // (Owner, Nov 3, long text) On a phone the card opens from the row's left edge, never past the screen; from sm up under the avatar.
+    <span className="group inline-block sm:relative">
       <Link href={`/app/testers/${seat.testerId}`} aria-label={`${seat.name}: profile`}
         className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950 no-underline ring-2 ring-slate-950 hover:no-underline hover:ring-sky-300 focus:outline-none focus-visible:ring-sky-300">
         {seat.name.trim().charAt(0).toUpperCase()}
@@ -53,7 +54,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children, ti
         <span className="flex items-center gap-2 font-semibold text-white"><Users className="h-5 w-5 text-indigo-300" /> <h2 className="inline">Testers</h2></span>
         <span className="text-sm text-slate-400">{joined} of {spots}</span>
       </summary>
-      <div className="mt-3 flex flex-wrap items-center gap-1.5">
+      <div className="relative mt-3 flex flex-wrap items-center gap-1.5">
         {Array.from({ length: shown }, (_, i) => (seats[i] ? <TesterAvatar key={seats[i].testerId} seat={seats[i]} /> : <span key={i} className="h-9 w-9 rounded-full border-2 border-dashed border-slate-600" />))}
         {spots > shown && <span className="text-sm text-slate-400" data-seats-more="">{seatsOverflow(joined, spots, shown)}</span>}
       </div>

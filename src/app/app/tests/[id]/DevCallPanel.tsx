@@ -109,10 +109,14 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
       <span className="mr-auto">{t.name} · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
-      {c.joinable && <JoinCall callId={c.id} />}
-      {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
-      {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
-      {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
+      {/* (Owner, Nov 3, long text) The call's buttons stay together: beside the line when there is room, all on a line of their own when it is long
+          (never Add to calendar on one line and Cancel on the next). */}
+      <span className="flex max-w-full flex-wrap items-center gap-2" data-call-buttons="">
+        {c.joinable && <JoinCall callId={c.id} />}
+        {!c.started && <a href={`/api/calls/${c.id}/ics`} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline"><CalendarPlus className="h-3.5 w-3.5" /> Add to calendar</a>}
+        {!c.started && <CancelMenu needsReason={!c.canCancel} busy={busy} other={t.name} onCancel={(why) => go("cancel-call", { callId: c.id, reason: why }, "cancel-" + c.id)} />}
+        {c.started && <ReportProblem path={`/api/tests/${testId}/no-show`} callId={c.id} otherName={t.name} seenAt={seenAt} reported={c.report ?? null} />}
+      </span>
       {box("cancel-" + c.id)}
       {box("noshow-" + c.id)}
       <CallCheck className="w-full" />

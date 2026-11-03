@@ -13,6 +13,14 @@ import { PressDone } from "@/components/PressDone";
 import { useFinished } from "@/lib/usePress";
 
 /**
+ * (Owner, Nov 3, long text) "Charge <developer> $X": a long name (an unbroken one too) wraps inside the button instead of pushing it past the box, and the
+ * amount stays whole on one line.
+ */
+function ChargeLabel({ devName, cents }: { devName: string; cents: number | null }) {
+  return <span className="min-w-0 [overflow-wrap:anywhere]">Charge {devName} {cents == null ? "" : <span className="whitespace-nowrap">{money(cents)}</span>}</span>;
+}
+
+/**
  * Day 14 without a review: charge the developer (the lower of listing and asked, minus what's already been paid for this
  * part) or let it go. (Batch 16 section 39) Charge goes through on its own; above $200 it needs its tick. (Batch 32 §13) Let it go has its own tick instead of a pop-up. (Never shown when the part is paid in full.) (Batch 16 section 10) A mistake
  * is red at its box with the server's own line, and listed under the buttons.
@@ -58,7 +66,7 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
       {paused && <p className="note" data-paused-charge="">This test is paused right now. You can still charge or let it go; payment may be delayed until the test resumes.</p>}
       {fin.done ? (
         <div className="flex flex-wrap items-center gap-2" data-choice-done="">
-          <button className={pressed === "Charge" ? "btn" : "btn-secondary"} disabled>{pressed === "Charge" ? `Charge ${devName} ${typed == null ? "" : money(typed)}` : "Let it go"}</button>
+          <button className={pressed === "Charge" ? "btn" : "btn-secondary"} disabled>{pressed === "Charge" ? <ChargeLabel devName={devName} cents={typed} /> : "Let it go"}</button>
           <PressDone line={fin.line} />
         </div>
       ) : (
@@ -66,14 +74,14 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
           <label className="inline-flex items-center gap-1">
             $ <input className="input w-24" inputMode="decimal" data-money="" aria-label="Amount to charge" id={`charge-${submissionId ?? callId}`} data-min="0.5" data-max={String(cents / 100)} data-msg="Enter an amount like 5.00." data-min-msg="The smallest card charge is $0.50." data-max-msg={`At most ${money(cents)}.`}
               data-match="amount like|at most|smallest card charge" value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
-            <span className="note">(up to {money(cents)})</span>
+            <span className="note whitespace-nowrap">(up to {money(cents)})</span>
           </label>
           {over && (
             <label data-charge-tick="">
               <input type="checkbox" checked={ticked} data-match="^Tick “Charge" onChange={(e) => setTicked(e.target.checked)} /> {chargeTickLabel(devName, typed!)}
             </label>
           )}
-          <button className="btn" disabled={busy || typed == null || (over && !ticked)} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}>{`Charge ${devName} ${typed == null ? "" : money(typed)}`}</button>
+          <button className="btn" disabled={busy || typed == null || (over && !ticked)} onClick={(e) => checkFields(e.currentTarget.parentElement) && go("charge")}><ChargeLabel devName={devName} cents={typed} /></button>
           {/* (Owner, Oct 30, batch 32 §13) No pop-up: a tick next to Let it go, which stays disabled until it's ticked. */}
           <label className="inline-flex items-center gap-1" data-letgo-tick="">
             <input type="checkbox" checked={letGo} onChange={(e) => setLetGo(e.target.checked)} /> {letGoTickLabel(devName)}

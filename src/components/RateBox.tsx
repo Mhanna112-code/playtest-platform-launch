@@ -43,7 +43,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
           <option value="" disabled>Choose…</option>
           <option value="5">5 - excellent</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1 - poor</option>
         </select>}
-        {!done && <span className="min-w-0 flex-1"><input className="input w-full" maxLength={500} data-match="comment" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />
+        {!done && <span className="min-w-[min(100%,12rem)] flex-1"><input className="input w-full" maxLength={500} data-match="comment" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />
         <CharacterCount value={comment} max={500} /></span>}
         {p.working ? (
           <ConfirmButton live className="btn-secondary" disabled={busy || !!p.disabledLine} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}

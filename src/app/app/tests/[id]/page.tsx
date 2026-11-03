@@ -464,7 +464,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             const who = displayName(mine[0].c.tester);
             return (
               <details key={cid} open className="rounded-xl border border-white/10 p-2" data-needs-person={who}>
-                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white">{who} <span className="font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></summary>
+                {/* (Owner, Nov 3, long text) A long name wraps beside the arrow (never past the box); the count follows it, kept on one line. */}
+                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]">{who} <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
                 <div className="mt-2 space-y-3">
           {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
@@ -615,7 +616,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       <b className="text-white">Live call</b>
                       <span className={`badge ${c.liveRequired ? "border-amber-300/40 text-amber-200" : ""}`}>{c.liveRequired ? "Required" : "Not required"}</span>
                       <span className={done ? "text-emerald-200" : "text-slate-400"}>{done ? `${done} done` : "None done yet"}</span>
-                      <span className="ml-auto text-slate-300">paid {money(callPaid)}</span>
+                      <span className="ml-auto whitespace-nowrap text-slate-300">paid {money(callPaid)}</span>
                     </li>
                   )}
                 </ul>

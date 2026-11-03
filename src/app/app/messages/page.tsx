@@ -53,13 +53,14 @@ export default async function MessagesPage() {
           <li key={r.id} className="card card-hover relative flex items-center gap-3 p-4 hover:z-10 focus-within:z-10">
             <Link href={r.href} aria-label={`${r.other} · ${r.title}`} className="absolute inset-0 rounded-2xl no-underline hover:no-underline" />
             <div className="min-w-0 flex-1">
-              <p className="flex min-w-0 items-baseline gap-1 font-medium text-white">
-                {r.hover ? <span className="relative z-10 shrink-0" data-person-hover=""><PersonHover {...r.hover} className="text-white" /></span> : <span className="shrink-0">{r.other}</span>}
-                <span className="truncate text-sm font-normal text-slate-400" title={`${r.other} · ${r.title}`}>· {r.title}</span>
+              {/* (Owner, Nov 3, long text) A long name wraps inside the card (never past it); the test's name then goes under it, cut with "…". */}
+              <p className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-medium text-white">
+                {r.hover ? <span className="relative z-10 min-w-0 max-w-full" data-person-hover=""><PersonHover {...r.hover} className="text-white" /></span> : <span className="min-w-0 max-w-full">{r.other}</span>}
+                <span className="min-w-0 max-w-full truncate text-sm font-normal text-slate-400" title={`${r.other} · ${r.title}`}>· {r.title}</span>
               </p>
               <p className="truncate text-sm text-slate-400">{r.lastBody ? `${r.mine ? "You" : r.other}: ${r.lastBody}` : "No messages yet."}</p>
             </div>
-            {r.unread > 0 && <span className="rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{r.unread > 9 ? "9+" : r.unread}</span>}
+            {r.unread > 0 && <span className="shrink-0 rounded-full bg-fuchsia-500 px-2 py-0.5 text-xs text-white">{r.unread > 9 ? "9+" : r.unread}</span>}
           </li>
         ))}
         {rows.length === 0 && <li className="card text-sm text-slate-400">No conversations yet.</li>}

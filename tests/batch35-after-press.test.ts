@@ -117,7 +117,7 @@ describe("batch 35 §41: a finished press stays finished until the page has redr
     expect(code("app/app/tests/[id]/DisputeSide.tsx")).toContain("{!sent && <textarea");
     const rate = code("components/RateBox.tsx");
     expect(rate).toContain("{!done && <select");
-    expect(rate).toContain('{!done && <span className="min-w-0 flex-1"><input');
+    expect(rate).toContain('{!done && <span className="min-w-[min(100%,12rem)] flex-1"><input');
     const admin = code("app/admin/AdminButton.tsx");
     expect(admin).toContain("{!fin.done && fields.map((f) =>");
     expect(admin).toContain('fin.finish("Done.", { reload: true });');

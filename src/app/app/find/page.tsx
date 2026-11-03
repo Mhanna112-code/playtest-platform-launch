@@ -4,6 +4,7 @@ import { discoveryV } from "@/lib/server/pageFreshness";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { fmtIn } from "@/lib/tz";
 import Link from "next/link";
+import { keepAmounts } from "@/components/Amounts";
 import { Languages, Monitor, SearchX } from "lucide-react";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
@@ -159,19 +160,22 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
             const left = t.spots - t._count.contracts;
             const state = "state" in t ? t.state : null;
             return (
-              <li key={t.id}>
+              // (Owner, Nov 3, long text) min-w-0: a long title is cut with "…" inside the card instead of widening the grid past the screen.
+              <li key={t.id} className="min-w-0">
                 <Link href={`/app/find/${t.id}`} className="card card-hover flex h-full gap-4 text-ink-100 no-underline hover:no-underline">
                   <CategoryTile category={mainCategory(t.categories)} />
                   <div className="min-w-0 flex-1 space-y-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
+                    {/* (Owner, Nov 3, long text) The pay never shrinks or splits: beside the title when there is room (at most half the card), under it on a
+                        phone. The title keeps at least 10rem and is cut with "…". */}
+                    <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+                      <div className="min-w-[min(100%,10rem)] flex-1">
                         {t.productName && <p className="kicker">{t.productName}</p>}
                         <p className="truncate font-semibold text-white" title={t.title}>{t.title}</p>
                         <p className="truncate text-sm text-slate-400">by {displayName(t.developer)}{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="text-lg font-bold text-emerald-300">{fromText(t)}</p>
-                        <p className="text-xs text-slate-400">{termsLine(asListing(t), true)}</p>
+                      <div className="ml-auto max-w-full shrink-0 text-right sm:max-w-[50%]">
+                        <p className="whitespace-nowrap text-lg font-bold text-emerald-300">{fromText(t)}</p>
+                        <p className="text-xs text-slate-400">{keepAmounts(termsLine(asListing(t), true))}</p>
                         <p className="text-xs text-slate-500">{admin ? `${Math.max(0, left)} of ${t.spots} spots open` : `${plural(left, "spot")} open to you`}</p>
                       </div>
                     </div>

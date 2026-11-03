@@ -57,7 +57,7 @@ export function StatusPill({ status, full = false }: { status: string; full?: bo
 export function Seats({ total, people, plain = false }: { total: number; people: { id: string; name: string; contractId?: string }[]; plain?: boolean }) {
   const shown = Math.min(total, 12);
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="relative flex flex-wrap items-center gap-1.5">
       {Array.from({ length: shown }, (_, i) => {
         const p = people[i];
         if (p && plain)
@@ -68,7 +68,8 @@ export function Seats({ total, people, plain = false }: { total: number; people:
           );
         return p ? (
           // (Owner, Oct 26) The tester's hover card: their name, a link to the profile and "Chat with <name>" (the same per-test chat as the Testers panel's Chat button).
-          <span key={p.id} className="group relative z-10 inline-block">
+          // (Owner, Nov 3, long text) On a phone the card opens from the row's left edge, never past the screen; from sm up under the avatar.
+          <span key={p.id} className="group z-10 inline-block sm:relative">
             <Link href={`/app/testers/${p.id}`} aria-label={`${p.name}: profile`}
               className="flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950 no-underline ring-2 ring-slate-950 hover:no-underline hover:ring-sky-300">
               {p.name.trim().charAt(0).toUpperCase()}

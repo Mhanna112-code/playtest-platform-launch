@@ -53,6 +53,7 @@ import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
 import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
 import { GetStarted } from "./GetStarted";
+import { keepAmounts } from "@/components/Amounts";
 import { HistorySearch } from "./HistorySearch";
 
 export const metadata = { title: "Home · Playtest" };
@@ -284,13 +285,15 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               const inner = (
                 <>
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950">{initial(r.who)}</span>
-                  <p className="min-w-0 flex-1 text-slate-300"><span className="font-medium text-white">{r.who}</span> {r.text}</p>
-                  <span className="flex items-center gap-1 text-sm text-indigo-300">{r.cta} <ArrowRight className="h-4 w-4" /></span>
+                  {/* (Owner, Nov 3, long text) The words keep at least 12rem: with a long name the action drops onto its own line (right-aligned) instead of
+                      squeezing them into a narrow column. */}
+                  <p className="min-w-[min(100%,12rem)] flex-1 text-slate-300"><span className="font-medium text-white">{r.who}</span> {r.text}</p>
+                  <span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300">{r.cta} <ArrowRight className="h-4 w-4" /></span>
                 </>
               );
               return (
                 <li key={r.key}>
-                  <Link href={r.href} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">{inner}</Link>
+                  <Link href={r.href} className="rounded-lg border border-white/10 flex flex-wrap items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">{inner}</Link>
                 </li>
               );
             })}
@@ -572,7 +575,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                       {messages > 0 && <span className="badge border-fuchsia-300/40 text-fuchsia-200"><MessagesSquare className="h-3.5 w-3.5" /> {plural(messages, "unread message")}</span>}
                     </div>
                   </div>
-                  <span className="text-sm font-semibold text-emerald-300">{p.cents === 0 ? "free" : money(testerShare(p.cents))}</span>
+                  <span className="whitespace-nowrap text-sm font-semibold text-emerald-300">{p.cents === 0 ? "free" : money(testerShare(p.cents))}</span>
                   <Link href={`/app/sessions/${c.id}#part-${p.key}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
                 </li>
               );
@@ -657,7 +660,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             <ScrollList size="lines" className="divide-y divide-white/5">
               {upcoming.map(({ c, x }) => (
                 <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
-                  <Link href={`/app/sessions/${c.id}#live`} className="mr-auto min-w-0 truncate text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><b className="text-white">{displayName(c.test.developer)}</b> · {c.title} · {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></Link>
+                  {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long). */}
+                  <Link href={`/app/sessions/${c.id}#live`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><span className="min-w-0 max-w-full truncate"><b className="text-white">{displayName(c.test.developer)}</b> · {c.title}</span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
                   {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
                   {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
                   {/* (Batch 18 section 13; batch 21) The camera and microphone check, once per upcoming call. */}
@@ -717,7 +721,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           ) : (
             <ul className="grid gap-3 md:grid-cols-2">
               {more.map((t) => (
-                <li key={t.id}>
+                // (Owner, Nov 3, long text) min-w-0: a long title is cut with "…" inside the card instead of widening the grid past the screen.
+                <li key={t.id} className="min-w-0">
                   <Link href={`/app/find/${t.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
                     <CategoryTile category={mainCategory(t.categories)} size="h-10 w-10" />
                     <div className="min-w-[12rem] flex-1">
@@ -725,8 +730,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                       <p className="truncate font-semibold text-white" title={t.title}>{t.title}</p>
                       <div className="mt-1 flex flex-wrap gap-2"><PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} /><CategoryBadges categories={t.categories} /></div>
                     </div>
-                    <div className="ml-auto text-right">
-                      <p className="text-sm font-semibold text-emerald-300">{pays(asListing(t))}</p>
+                    <div className="ml-auto max-w-full text-right">
+                      <p className="text-sm font-semibold text-emerald-300">{keepAmounts(pays(asListing(t)))}</p>
                       <p className="text-xs text-slate-500">{plural(t.spots - t._count.contracts, "spot")} left</p>
                     </div>
                   </Link>
@@ -746,7 +751,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {working.map((c) => (
               <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
                 <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>
-                  <span className="min-w-0 flex-1 font-medium text-white">
+                  <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
                     <span className="block truncate" title={c.title}>{c.title}</span>
                     <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · joined {fmtDate(c.joinedAt)}</span>
                   </span>
@@ -760,7 +765,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               const tag = c.endKind === "rated" ? "Finished" : c.endKind === "stopped" ? "Stopped" : c.endKind === "closed" ? "Closed" : c.endKind === "suspended" ? "Removed" : c.endKind === "early" ? "Ended early" : c.status === "left" ? "You left" : "Ended";
               const inner = (
                 <>
-                  <span className="min-w-0 flex-1 font-medium text-white">
+                  <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
                     <span className="block truncate" title={c.title}>{c.title}</span>
                     <span className="block text-sm font-normal text-slate-400">by {displayName(c.test.developer)} · {tag === "You left" ? "left" : "ended"} {fmtDate(c.endedAt ?? c.joinedAt)}</span>
                   </span>
