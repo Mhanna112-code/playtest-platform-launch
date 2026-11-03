@@ -258,11 +258,12 @@ export async function finishCardVerification(userId: string, setupIntentId: stri
   if (!pm) throw new HttpError(400, "no_card", "The card wasn't saved. Try again.");
   // (§157) Verified once (claimed); the card it verified becomes the card on file, recorded like Change card's ("Card: Visa ending 1111 → Visa ending 4242"), so a
   // Payments page open elsewhere (Change card's gate) stops once for it.
-  const card = await stripe.paymentMethods.retrieve(pm).then((x) => x.card ?? null, () => null);
+  const cardOf = (id: string) => Promise.resolve().then(() => stripe.paymentMethods.retrieve(id)).then((x) => x.card ?? null, () => null);
+  const card = await cardOf(pm);
   await markVerified(userId, new Date(), { stripePaymentMethodId: pm, ...(card ? { cardExpMonth: card.exp_month ?? null, cardExpYear: card.exp_year ?? null } : {}) });
   if (user.stripeCustomerId) await stripe.customers.update(user.stripeCustomerId, { invoice_settings: { default_payment_method: pm } });
   if (user.stripePaymentMethodId !== pm) {
-    const before = user.stripePaymentMethodId ? cardLabel(await stripe.paymentMethods.retrieve(user.stripePaymentMethodId).then((x) => x.card ?? {}, () => ({}))) : "no card";
+    const before = user.stripePaymentMethodId ? cardLabel((await cardOf(user.stripePaymentMethodId)) ?? {}) : "no card";
     await logAccountChange(userId, "", { scopes: ["payments"], field: "card", label: "Card", before, after: card ? cardLabel(card) : "a card" });
   }
   // (Batch 35 §117 rule 1) One card in play: checks still waiting on the old card are cancelled (what they covered is payable again; a charge made while away is
