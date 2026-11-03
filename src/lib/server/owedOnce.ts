@@ -246,7 +246,7 @@ export async function coveredNames(ids: string[], full = false) {
   const out = new Map<string, string[]>();
   if (!ids.length) return out;
   const holds = await import("./holds");
-  for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: { createdAt: "asc" } })) {
+  for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
     const cents = p.chargeback === "open" ? reversedOf(p) + CHARGEBACK_FEE_CENTS : p.amountCents; // (§133) what the bank reversed + the fee
     out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), `${await holds.owedItemName(p, full)} ${money(cents)}`]);
   }

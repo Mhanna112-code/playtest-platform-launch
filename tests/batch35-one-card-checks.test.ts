@@ -95,9 +95,11 @@ async function world() {
 async function threeDebts() {
   const w = await world();
   const base = { contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, feeCents: 0, testerCents: 0 };
-  const a = await db.payment.create({ data: { ...base, kind: "review", submissionId: w.sub.id, amountCents: 800, status: "failed", owedUntil: new Date() } });
-  const b = await db.payment.create({ data: { ...base, kind: "dispute", amountCents: 300, status: "failed", owedUntil: new Date() } });
-  const c = await db.payment.create({ data: { ...base, kind: "review", amountCents: 500, status: "owed" } });
+  // Distinct creation times (a, b, c in this order): items are listed oldest first, and rows made in the same millisecond would tie.
+  const at = (n: number) => new Date(Date.now() - (4 - n) * 1000);
+  const a = await db.payment.create({ data: { ...base, kind: "review", submissionId: w.sub.id, amountCents: 800, status: "failed", owedUntil: new Date(), createdAt: at(1) } });
+  const b = await db.payment.create({ data: { ...base, kind: "dispute", amountCents: 300, status: "failed", owedUntil: new Date(), createdAt: at(2) } });
+  const c = await db.payment.create({ data: { ...base, kind: "review", amountCents: 500, status: "owed", createdAt: at(3) } });
   await startHold(w.dev.user.id, "unpaid");
   return { ...w, debts: [a, b, c] };
 }
