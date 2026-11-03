@@ -56,9 +56,9 @@ describe("batch 35 §86: answered changes never stop a later press", () => {
     const boxAt = seen(); await settle();
     expect((await press(testId, dev.cookie, { ...requestBody, startsAt: atHours(96), confirmed: true, boxAt })).status).toBe(200);
     await settle();
-    expect((await sact(a.sessionId, "written", a.tester.cookie, { answers: ["updated", "b"], confirmed: true })).status).toBe(200);
+    expect((await sact(a.sessionId, "written-add", a.tester.cookie, { text: "updated", confirmed: true })).status).toBe(200); // (batch 35 §136) an addition
     const changes = await devChanges(dev.user.id, testId, new Date(loaded), "page-a", db, { press: { acts: [], keys: [] } });
-    expect(changes.filter((e) => e.kind === "sent").map((e) => e.text)).toEqual(["Ben Okafor sent their written answers", expect.stringMatching(/^Ana Silva sent an updated version/)]);
+    expect(changes.filter((e) => e.kind === "sent").map((e) => e.text)).toEqual(["Ben Okafor sent their written answers", expect.stringMatching(/^Ana Silva added to (her|their) written answers/)]);
   });
 
   it("answering one request does not hide a second request from the same tester", async () => {
@@ -145,13 +145,13 @@ describe("batch 35 §86: answered changes never stop a later press", () => {
     expect((await devChanges(dev.user.id, testId, new Date(loaded), "", db, { press: { acts: [], keys: [] } })).filter((e) => e.kind === "applied")).toEqual([]);
   });
 
-  it("Pay more answers an updated piece without hiding an update after it", async () => {
+  it("Pay more answers a piece added to after a Pay without hiding an addition after it", async () => {
     const { dev, testId } = await setup(); const { tester, sessionId } = await joined(testId, "Ana Silva", "they");
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).status).toBe(200);
     const loaded = seen(); await settle();
-    expect((await sact(sessionId, "written", tester.cookie, { answers: ["changed", "b"], confirmed: true })).status).toBe(200);
+    expect((await sact(sessionId, "written-add", tester.cookie, { text: "changed", confirmed: true })).status).toBe(200);
     expect((await act(testId, "pay-extra", dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded, tab: "page-a" })).status).toBe(200);
     expect((await devChanges(dev.user.id, testId, new Date(loaded), "page-a", db, { press: { acts: [], keys: [] } })).filter((e) => e.kind === "sent")).toEqual([]);
   });

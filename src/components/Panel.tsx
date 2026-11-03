@@ -52,7 +52,7 @@ function write(key: string, value: string) {
   }
 }
 
-export function ResizeBox({ id, children, label, className = "" }: { /** unique on the page, e.g. "needs-sub-<id>" */ id: string; children: ReactNode; /** what's inside, for screen readers */ label: string; className?: string }) {
+export function ResizeBox({ id, children, label, className = "" }: { /** unique on the page, e.g. "needs-sub-<id>" */ id: string; children?: ReactNode; /** what's inside, for screen readers */ label: string; className?: string }) {
   const box = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | null>(null);
   const drag = useRef<{ y: number; h: number } | null>(null);
@@ -106,7 +106,7 @@ export function ResizeBox({ id, children, label, className = "" }: { /** unique 
  * (Owner, Nov 3, batch 35 §139) A fold under a part (its answers or recordings; its Pay or Pay more box): its own toggle, open by default. Opened or closed, it stays
  * that way while the page redraws (and in this tab's sessionStorage). A link to something inside it (or to it) opens it (markJump's jumpTo).
  */
-export function Fold({ id, summary, children, defaultOpen = true, className = "", summaryClassName = "" }: { id: string; summary: ReactNode; children: ReactNode; defaultOpen?: boolean; className?: string; summaryClassName?: string }) {
+export function Fold({ id, summary, children, defaultOpen = true, className = "", summaryClassName = "" }: { id: string; summary: ReactNode; children?: ReactNode; defaultOpen?: boolean; className?: string; summaryClassName?: string }) {
   const ref = useRef<HTMLDetailsElement>(null);
   useLayoutEffect(() => {
     const kept = keptFold(id);

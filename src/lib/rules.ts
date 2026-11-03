@@ -681,13 +681,16 @@ function overHalf(c: StopCtx, devName: string, fmt: (d: Date) => string) {
   return c.endKind === "stopped" ? `${devName} stopped the test on ${d}` : c.endKind === "closed" ? `This test ended on ${d}` : `${devName} ended your session early on ${d}`;
 }
 /** The presses that go once the work is over (hidden on the page, refused on the server); WORK_OVER_PRESSES are the names the refusal gives them. */
-export const WORK_OVER_ACTIONS = ["terms", "written", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"] as const;
-export const WORK_OVER_PRESSES = ["Switch", "Keep", "Send", "upload", "Remove", "Request a time", "Accept", "Decline", "Withdraw", "Cancel call", "“This key doesn't work”"] as const;
+export const WORK_OVER_ACTIONS = ["terms", "written", "written-add", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"] as const;
+export const WORK_OVER_PRESSES = ["Switch", "Keep", "Send", "Add", "upload", "Remove", "Request a time", "Accept", "Decline", "Withdraw", "Cancel call", "“This key doesn't work”"] as const;
 /** The press's name in the refusal: "Send", "Switch", "Request a time", "Cancel call", "“This key doesn't work”"… ("" for a press that isn't one of them). */
 export function workOverPress(action: string, body: Record<string, unknown> = {}): string {
   switch (action) {
     case "terms": return body.choice === "keep" ? "Keep" : "Switch";
-    case "written": case "recording-send": return "Send";
+    case "written": return "Send";
+    // (Batch 35 §136) Adding to sent work: "Add" (the recording part's Add sends `add: true`).
+    case "written-add": return "Add";
+    case "recording-send": return body.add === true ? "Add" : "Send";
     case "recording-start": case "recording-done": return "upload";
     case "recording-remove": return "Remove";
     case "request-time": return "Request a time";
@@ -1136,6 +1139,16 @@ export const WHY_TOO_SHORT = "Say a little more: at least 5 characters.";
 
 /** (Owner, Oct 28, batch 20 section 26) "Send my updated answers / recording" with nothing different from the last send: disabled (its tooltip), and the server's refusal. */
 export const NOTHING_CHANGED_LINE = "Nothing has changed since you sent it.";
+/**
+ * (Owner, Nov 3, batch 35 §136) Sent work is locked: what was sent can't be removed or replaced, only added to. The server's refusals for an older page's press
+ * (Send my updated answers, Remove on a sent recording) and an Add with nothing in it.
+ */
+export const SENT_ANSWERS_LOCKED = "Your answers were already sent, so they can't be changed. Use Add more to add to them.";
+export const SENT_RECORDING_LOCKED = "Recordings you sent can't be removed. You can add more.";
+export const NOTHING_TO_ADD = "Write something or attach a file to add.";
+export const NO_RECORDING_TO_ADD = "Upload or record a recording to add first.";
+/** (Batch 35 §136) Adding to written answers that were sent for questions since changed: the new questions are answered instead (their answers are added). */
+export const ANSWER_NEW_QUESTIONS = "Your questions changed: send your answers to the new questions, and they're added under what you sent.";
 
 /** (Owner, Oct 28, batch 20 section 16) An admin account never gets a developer or tester side. */
 export const ADMIN_ONLY_LINE = "An admin account is only for the admin console. To post or test, use a separate account.";

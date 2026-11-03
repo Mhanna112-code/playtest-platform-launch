@@ -1,11 +1,11 @@
 import type { Prisma } from "@prisma/client";
-import { TEAM_CLOSED_NO_CHANGE, updateRowLine, updatedAtCapLive } from "@/lib/moneyLines";
+import { TEAM_CLOSED_NO_CHANGE, addedWhat, updateRowLine, updatedAtCapLive } from "@/lib/moneyLines";
 
 type Tx = Prisma.TransactionClient;
 
 /**
- * (Batch 30 §2) After a part is paid, the tester can send an updated version (written answers or a recording, attachments included). Refused only for an old
- * rejection and for a piece the team closed at $0 (final). Returns the refusal, or "".
+ * (Batch 30 §2; batch 35 §136) After a part is paid, the tester can still ADD to it (more text or files, more recordings; what was sent stays). Refused only for an
+ * old rejection and for a piece the team closed at $0 (final). Returns the refusal, or "".
  */
 export function resendRefusal(review: { rejected: boolean; teamClosedById?: string | null } | null | undefined, part: "written" | "recording") {
   if (!review) return "";
@@ -37,15 +37,16 @@ export async function notifyPaidUpdate(
   submissionId: string,
   part: "written answers" | "recording",
   room: { atCap: boolean; paidCents: number; roomCents: number },
+  /** (Batch 35 §136) how many recordings were added */ n = 1,
 ) {
   const { displayName, pronouns } = await import("@/lib/format");
   const { notify } = await import("./notify");
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   if (room.atCap) {
-    await notify(c.test.developer.email, `${name} updated ${poss} ${part} for “${c.title}”`, [`${updatedAtCapLive(name, poss, part)}.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });
+    await notify(c.test.developer.email, `${name} ${addedWhat(poss, part, n)} for “${c.title}”`, [`${updatedAtCapLive(name, poss, part, n)}.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });
     return;
   }
-  await notify(c.test.developer.email, `${name} sent an updated version of ${poss} ${part} for “${c.title}”`, [`${updateRowLine(name, room.paidCents, room.roomCents)}.`, "Pay more for it, or close it at $0, in Needs you."], `/app/tests/${c.testId}#update-${submissionId}`, { about: tester.id });
+  await notify(c.test.developer.email, `${name} ${addedWhat(poss, part, n)} for “${c.title}”`, [`${updateRowLine(name, room.paidCents, room.roomCents)}.`, "Pay more for it, or close it at $0, in Needs you."], `/app/tests/${c.testId}#update-${submissionId}`, { about: tester.id });
 }
 
 /** (Batch 30 §2) Whether a waiting update can still be paid more (below its cap, Pay more open): the dashboard's Needs review counts it then. */

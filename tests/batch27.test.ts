@@ -186,10 +186,10 @@ describe("batch 27 section 2: Go to the next round stops once too", () => {
     expect(quiet.body.id).toBe(made.body.id);
     const loaded = seen();
     await later();
-    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a2", "b2"], seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "a2", seenAt: seen(), confirmed: true })).status).toBe(200); // (batch 35 §136) added, not updated
     const first = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded });
     expect(first.body.error.code).toBe("stop_once");
-    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toContain("fbbb updated their written answers");
+    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toContain("fbbb added to their written answers");
     await later();
     const second = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded, ...again() });
     expect(second.status).toBe(200);

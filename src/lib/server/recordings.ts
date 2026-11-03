@@ -3,17 +3,17 @@ import { db } from "@/lib/db";
 import { displayName, pronouns } from "@/lib/format";
 import { PAUSED_SEND, isLate, payByFrom, testerPaused } from "@/lib/rules";
 import { HttpError } from "./http";
-import { NOTHING_CHANGED_LINE } from "@/lib/rules";
-import { notify } from "./notify";
+import { NO_RECORDING_TO_ADD, SENT_RECORDING_LOCKED } from "@/lib/rules";
 import { ATTACHMENT_TYPES, MAX_ATTACHMENTS, MAX_ATTACHMENT_BYTES, MAX_RECORDING_BYTES, MAX_RECORDINGS, deleteObject, deleteStored, headObject, isVideo, listStored, r2On, uploadTarget } from "./storage";
-import { ownContract, recordEvent, sessionRefusal } from "./tests";
+import { ownContract, sessionRefusal, tellSent, tellSentByBell } from "./tests";
+import type { Prisma } from "@prisma/client";
+import { additionsOf } from "@/lib/additions";
 import { answerTermsFirst, testerSendGate } from "./terms";
-import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
-import { updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
-import { attachmentTag, hasMarkerFor, sameFiles } from "@/lib/answerAttachments";
+import { resendRefusal } from "./paidUpdates";
+import { attachmentTag, hasMarkerFor } from "@/lib/answerAttachments";
 import { ATTACH_FORMATS_LINE, VIDEO_FORMATS_LINE, videoTypeOf } from "@/lib/videoFormats";
 
-type U = { id: string; email: string; name: string; pronoun: string };
+type U = Parameters<typeof tellSentByBell>[1];
 
 /**
  * Start an upload: checks the session can still send, the size (500 MB) and the count (5 recordings per session). (Owner, Oct 29, batch 11) `part: "written"` attaches it
@@ -37,13 +37,14 @@ export async function startRecording(tester: U, contractId: string, body: Record
   if (video && size > MAX_RECORDING_BYTES) throw new HttpError(413, "too_large", "Recordings can be at most 500 MB.");
   if (!video && size > MAX_ATTACHMENT_BYTES) throw new HttpError(413, "too_large", "Files can be at most 500 MB.");
   const paid = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: part } }, include: { review: true } });
-  // (Batch 30 §2) A paid part takes an updated version too (attachments included); only an old rejection or the team's $0 closure stays locked.
+  // (Batch 30 §2; batch 35 §136) A paid part can still be added to (attachments included); only an old rejection or the team's $0 closure stays locked.
   const locked = resendRefusal(paid?.review, part);
   if (locked) throw new HttpError(409, "paid", locked);
   // (Owner, Oct 29, batch 13 section 7) The Recording part takes up to 5 recordings (a removed one frees its slot); videos attached to the written part count separately
   // (batch 11's limits: 5 videos and 5 files there).
-  const mine = await db.recording.findMany({ where: { contractId, part: { in: ["recording", "written"] } }, select: { contentType: true, part: true } });
-  if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", TOO_MANY_RECORDINGS);
+  const mine = await db.recording.findMany({ where: { contractId, part: { in: ["recording", "written"] } }, select: { contentType: true, part: true, submissionId: true } });
+  // (Batch 35 §136) Sent recordings count and can't be removed: with all 5 sent, the line doesn't offer Remove.
+  if (video && part === "recording" && mine.filter((r) => r.part === "recording").length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", mine.some((r) => r.part === "recording" && !r.submissionId) ? TOO_MANY_RECORDINGS : ALL_RECORDINGS_SENT);
   if (video && part === "written" && mine.filter((r) => r.part === "written" && isVideo(r.contentType)).length >= MAX_RECORDINGS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_RECORDINGS} recordings to your written answers.`);
   // (Batch 15 section 41, M6) At most 3 GB of uploads per account a day.
   const today = (await db.recording.aggregate({ where: { contract: { testerId: tester.id }, createdAt: { gt: new Date(Date.now() - 86_400_000) } }, _sum: { sizeBytes: true } }))._sum.sizeBytes ?? 0;
@@ -116,13 +117,15 @@ export async function purgeUploads(now = new Date()) {
 /** (Batch 15 section 6) An R2 upload whose stored object doesn't match what the browser claimed. */
 export const UPLOAD_UNFINISHED = "That upload didn't finish properly. Try again.";
 export const TOO_MANY_RECORDINGS = `You can add at most ${MAX_RECORDINGS} recordings. Remove one first.`;
+/** (Batch 35 §136) All 5 recordings sent: none can be removed, so no more can be added. */
+export const ALL_RECORDINGS_SENT = `You've sent ${MAX_RECORDINGS} recordings, the most this part takes.`;
 export const STILL_UPLOADING = "A recording is still uploading. Send once it's done.";
 /** An upload started this recently and not finished counts as still uploading (an abandoned one stops blocking Send after this). */
 const UPLOADING_MS = 3 * 3_600_000;
 
 /**
- * (Owner, Oct 29, batch 13 section 7) Remove a recording from the Recording part (with a confirm), until the part is paid or rejected. One not sent yet is deleted; one
- * already sent stays with the sent piece (the developer still sees it) until the next Send, which leaves it out. Either way its slot is free at once.
+ * (Owner, Oct 29, batch 13 section 7) Remove a recording from the Recording part (with a confirm): one not sent yet is deleted and its slot is free at once.
+ * (Batch 35 §136) One already sent is locked: refused.
  */
 export async function removeRecording(tester: U, contractId: string, body: Record<string, unknown>) {
   const owned = await ownContract(tester.id, contractId);
@@ -140,14 +143,10 @@ export async function removeRecording(tester: U, contractId: string, body: Recor
     return { removed: true };
   }
   if (!rec || rec.contractId !== contractId || rec.part !== "recording") throw new HttpError(404, "not_found", "That recording was already removed.");
-  const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
-  const locked = resendRefusal(sub?.review, "recording"); // (batch 30 §2) a paid recording can be updated
-  if (locked) throw new HttpError(409, "paid", locked);
-  if (rec.submissionId) await db.recording.update({ where: { id: rec.id }, data: { part: "removed" } });
-  else {
-    await db.recording.delete({ where: { id: rec.id } });
-    await deleteStored(rec.storageKey); // (batch 15 section 41, M6) the file goes too
-  }
+  // (Owner, Nov 3, batch 35 §136; replaces batch 13 §7's "a sent one stays until the next Send, which leaves it out") A sent recording is locked: never removed.
+  if (rec.submissionId) throw new HttpError(409, "locked", SENT_RECORDING_LOCKED);
+  await db.recording.delete({ where: { id: rec.id } });
+  await deleteStored(rec.storageKey); // (batch 15 section 41, M6) the file goes too
   return { removed: true };
 }
 
@@ -163,46 +162,36 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   await testerSendGate(contractId, body);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  const { updated, late, subId, gone: goneFiles, afterPaid } = await db.$transaction(async (tx) => {
+  const { updated, late, subId, afterPaid, n } = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c0.testId} FOR UPDATE`;
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     const t = await tx.test.findUniqueOrThrow({ where: { id: c.testId } });
     await (await import("./workWindow")).assertWorkOpen(tx, t.id);
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
-    const recs = await tx.recording.findMany({ where: { contractId, part: "recording", uploadedAt: { not: null } } });
     // (Batch 13 section 7) All of them go together as ONE piece; a Send from another tab while one is still uploading waits for it.
     if (await tx.recording.count({ where: { contractId, part: "recording", uploadedAt: null, createdAt: { gt: new Date(Date.now() - UPLOADING_MS) } } })) throw new HttpError(409, "uploading", STILL_UPLOADING);
-    if (recs.length === 0) throw new HttpError(400, "none", "Upload a recording first.");
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
-    const locked = resendRefusal(existing?.review, "recording"); // (batch 30 §2) a paid recording can be sent again
+    const locked = resendRefusal(existing?.review, "recording"); // (batch 30 §2) an old rejection or the team's closure only
     if (locked) throw new HttpError(409, "paid", locked);
+    // (Owner, Nov 3, batch 35 §136; replaces batch 13 §7's "send again" and batch 20 §26) Sent recordings are locked: a later Send ADDS the ones not sent yet
+    // under them ("Added"); nothing new to add is refused.
+    const fresh = await tx.recording.findMany({ where: { contractId, part: "recording", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
+    if (!fresh.length) throw new HttpError(400, "none", existing ? NO_RECORDING_TO_ADD : "Upload a recording first.");
     const paid = !!existing?.review;
-    // (Owner, Oct 28, batch 20 section 26) Nothing added or removed since the last send: refused (no new piece, no bell).
-    // (Batch 35 §77) By content: a recording removed and the same file uploaded again is no change either (no "updated" line, no email).
-    if (existing && sameFiles(recs, await tx.recording.findMany({ where: { contractId, submissionId: existing.id, part: { in: ["recording", "removed"] } } }))) throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);
     const now = new Date();
-    // (Batch 30 §3) An update of a late piece stays late; one sent after the deadline is late (Charge, if it had opened, no longer applies).
+    // (Batch 30 §3) Added to a late piece, it stays late; sent or added after the deadline, it's late (Charge, if it had opened, no longer applies).
     const lateNow = !!existing?.late || isLate(c.dueAt, now);
-    // (Batch 30 §2) An update of a paid piece keeps its price and review; it only marks the update.
     const data = { late: lateNow, updatedAt: now, ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(lateNow ? { choiceOfferedAt: null, choiceBy: null } : {}) }) };
     const sub = existing
-      ? await tx.submission.update({ where: { id: existing.id }, data })
+      ? await tx.submission.update({ where: { id: existing.id }, data: { ...data, additions: [...additionsOf(existing.additions), { at: now.toISOString(), files: fresh.map((r) => r.id) }] as unknown as Prisma.InputJsonValue } })
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
-    await tx.recording.updateMany({ where: { contractId, part: "recording", uploadedAt: { not: null } }, data: { submissionId: sub.id } });
-    // Recordings removed since the last Send leave the piece now (and storage: batch 15 section 41, M6).
-    const gone = await tx.recording.findMany({ where: { contractId, part: "removed" }, select: { storageKey: true } });
-    await tx.recording.deleteMany({ where: { contractId, part: "removed" } });
-    const afterPaid = paid ? await paidUpdateRoom(tx, sub.id, c.testId) : null;
-    if (afterPaid) await recordEvent(tx, c.testId, afterPaid.atCap ? "sentpaid" : "sent", (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(name, poss, "recording"), false, {}, c.id, "", `part-${sub.id}`);
-    else await recordEvent(tx, c.testId, "sent", `${name} ${existing ? "updated" : "sent"} ${poss} recording`, false, {}, c.id, "", `part-${sub.id}`);
-    return { updated: !!existing, late: data.late, subId: sub.id, gone, afterPaid };
+    await tx.recording.updateMany({ where: { id: { in: fresh.map((r) => r.id) } }, data: { submissionId: sub.id } });
+    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "recording", added: !!existing, paid, n: fresh.length });
+    return { updated: !!existing, late: data.late, subId: sub.id, afterPaid, n: fresh.length };
   });
-  for (const g of goneFiles) await deleteStored(g.storageKey);
-  await notify(tester.email, `Work sent: your recording for “${c0.title}”`, [`Your recording was ${updated ? "updated" : "sent"} to ${displayName(c0.test.developer)}.`], `/app/sessions/${c0.id}#part-recording`);
-  if (afterPaid) await notifyPaidUpdate(c0, tester, subId, "recording", afterPaid);
-  else await notify(c0.test.developer.email, `${name} ${updated ? "updated" : "sent"} a recording for “${c0.title}”`, [`${name} ${updated ? "updated" : "sent"} ${poss} screen recording${late ? " (late)" : ""}. Watch it and choose what to pay.`], `/app/tests/${c0.testId}#piece-${subId}`, { about: tester.id });
-  return { sent: true };
+  await tellSentByBell(c0, tester, { id: subId, late }, "recording", updated, afterPaid, n);
+  return { sent: true, ...(updated ? { added: n } : {}) };
 }
 
 /** Who may watch: the tester who made it, or the test's developer. */

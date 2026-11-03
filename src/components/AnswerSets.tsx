@@ -46,7 +46,8 @@ export function AnswerWithAttachments({ text, attachments, onRemove }: { text: s
 /** "Previous questions and answers (until <date>)": a read-only fold per earlier set, newest first. */
 // (Owner, Oct 30, batch 15 section 14) The tester's sets say whether each version was sent or a draft: "Sent <date>" first, then "Draft (not sent)", each a read-only
 // fold. The developer's sets (`developer`) only ever hold what was sent.
-export function PrevSetFolds({ sets, sentPart = true, developer = false, attachments = [], timeZone }: { timeZone?: string | null; sets: PrevSet[]; sentPart?: boolean; developer?: boolean; attachments?: AnswerAttachment[] }) {
+export function PrevSetFolds({ sets: all, sentPart = true, developer = false, attachments = [], timeZone, draftsOnly = false }: { timeZone?: string | null; sets: PrevSet[]; sentPart?: boolean; developer?: boolean; attachments?: AnswerAttachment[]; /** (batch 35 §136) only unsent drafts: what was sent shows once, in the part's own list */ draftsOnly?: boolean }) {
+  const sets = draftsOnly ? all.flatMap((s) => { const v = versionsOf(s, sentPart).filter((x) => x.kind === "draft"); return v.length ? [{ ...s, versions: v }] : []; }) : all;
   if (!sets.length) return null;
   return (
     <div className="space-y-2" data-prev-sets="">

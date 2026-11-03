@@ -12,23 +12,28 @@ export const lateBeforeSendLine = (date: string, dev: string) => `Your deadline 
 /** The tester, after sending late (while it's unpaid). */
 export const lateSentLine = (date: string, dev: string) => `Sent after the ${date} deadline: ${dev} decides what to pay. You can't charge for this part.`;
 
-// ---------- (Batch 30 §2) Sending a part again after it's paid ----------
+// ---------- (Batch 30 §2; batch 35 §136) Adding to a part after it's paid ----------
 
-/** The tester, above Send on a paid part: below its cap, at its cap, or after Pay more closed (close-out). */
+/**
+ * (Batch 35 §136) What an addition is called in the developer's lines: "added to their written answers", "added a recording" / "added 2 recordings". `n`: how
+ * many recordings were added.
+ */
+export const addedWhat = (poss: string, part: "written answers" | "recording", n = 1) => (part === "recording" ? (n === 1 ? "added a recording" : `added ${n} recordings`) : `added to ${poss} written answers`);
+/** The tester, above Add on a paid part: below its cap, at its cap, or after Pay more closed (close-out). */
 export function updateAboveSendLine(dev: string, paidCents: number, allCents: number, closedOn: string | null) {
-  if (allCents <= paidCents) return `This part is already paid the most it can be (${money(paidCents)}): ${dev} can't pay more for an update.`;
-  if (closedOn) return `${dev} has paid ${money(paidCents)} for this. Pay more closed on ${closedOn}, so ${dev} can't pay more for an update.`;
-  return `${dev} has paid ${money(paidCents)} for this. An update can be paid more, up to ${money(allCents)} in all.`;
+  if (allCents <= paidCents) return `This part is already paid the most it can be (${money(paidCents)}): ${dev} can't pay more for what you add.`;
+  if (closedOn) return `${dev} has paid ${money(paidCents)} for this. Pay more closed on ${closedOn}, so ${dev} can't pay more for what you add.`;
+  return `${dev} has paid ${money(paidCents)} for this. What you add can be paid more, up to ${money(allCents)} in all.`;
 }
-/** The developer's Needs you row for an update below the cap. */
-export const updateRowLine = (name: string, paidCents: number, moreCents: number) => `${name} sent an updated version after you paid (${money(paidCents)} paid · up to ${money(moreCents)} more)`;
-/** The developer's tester row when an update came at the cap. */
-export const UPDATED_AT_CAP = "Updated after you paid · already paid the most";
+/** The developer's Needs you row for an addition below the cap. */
+export const updateRowLine = (name: string, paidCents: number, moreCents: number) => `${name} added to this after you paid (${money(paidCents)} paid · up to ${money(moreCents)} more)`;
+/** The developer's tester row when an addition came at the cap. */
+export const UPDATED_AT_CAP = "Added to after you paid · already paid the most";
 /** The developer's live-box lines: below the cap (a stop-once "sent" line) and at the cap (quiet). */
-export const updatedAfterPaidLive = (name: string, poss: string, part: string) => `${name} sent an updated version of ${poss} ${part} after you paid`;
-export const updatedAtCapLive = (name: string, poss: string, part: string) => `${name} sent an updated version of ${poss} ${part} (already paid the most)`;
-/** The tester's line once the developer closed their update at $0. */
-export const updateClosedZeroLine = (dev: string) => `${dev} paid $0 more for your update.`;
+export const updatedAfterPaidLive = (name: string, poss: string, part: "written answers" | "recording", n = 1) => `${name} ${addedWhat(poss, part, n)} after you paid`;
+export const updatedAtCapLive = (name: string, poss: string, part: "written answers" | "recording", n = 1) => `${name} ${addedWhat(poss, part, n)} (already paid the most)`;
+/** The tester's line once the developer closed their addition at $0. */
+export const updateClosedZeroLine = (dev: string) => `${dev} paid $0 more for what you added.`;
 
 // ---------- (Batch 30 §5) The team closes open reviews at $0 ----------
 

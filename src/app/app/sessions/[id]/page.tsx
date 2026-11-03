@@ -1,7 +1,6 @@
 import { renderTimes } from "@/lib/tz";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
-import { markerIds } from "@/lib/answerAttachments";
 import { notFound, redirect } from "next/navigation";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
@@ -32,7 +31,11 @@ import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
 import { PayLinesBox } from "@/components/ScrollList";
-import { DisputeForm, LeaveButton, WrittenForm } from "./SessionActions";
+import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
+import { SentWork } from "@/components/SentWork";
+import { ResizeBox } from "@/components/Panel";
+import { additionsOf, latestItems } from "@/lib/additions";
+import { writtenLength } from "@/lib/rules";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
@@ -53,14 +56,13 @@ import { openOffer } from "@/lib/server/terms";
 import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lateSentLine, teamClosedLine, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
-import { AttachmentList } from "@/components/AttachmentList";
 import { PageLoaded } from "@/components/PageLoaded";
 import { NdaBox } from "@/components/NdaBox";
 import { QuestionList } from "@/components/QuestionList";
 import { pastCallsBox } from "@/components/QuestionBox";
 import { ScrollText } from "@/components/ScrollText";
-import { AnswerWithAttachments, PrevSetFolds, SetView } from "@/components/AnswerSets";
-import { carryOver, itemsFor, itemsOf, prevSetsOf, sameQuestions } from "@/lib/answerSets";
+import { PrevSetFolds } from "@/components/AnswerSets";
+import { carryOver, itemsFor, prevSetsOf, sameQuestions } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -122,7 +124,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const recording = c.submissions.find((s) => s.kind === "recording");
   // (Owner, Oct 29, batch 13 section 8) The written part as SETS: what was last sent (under the questions it answered), the form's current questions with carried-over
   // answers, and the previous sets kept when the tester switched to changed questions.
-  const sentItems = written ? itemsOf(written.answers, writtenQuestions(c)) : [];
+  // (Batch 35 §136) The latest set sent (answers to changed questions are added under the first ones); the form after a switch carries its answers over.
+  const sentItems = written ? latestItems(written, writtenQuestions(c)) : [];
+  const newQuestions = !!written && (!!written.setUntil || !sameQuestions(sentItems, itemsFor(writtenQuestions(c))));
   const prevSets = prevSetsOf(c.prevSets);
   // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
   const excerptPending = written ? (await db.excerpt.count({ where: { submissionId: written.id, status: "pending" } })) > 0 : false;
@@ -490,7 +494,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 <strong>{name}:</strong>
                 {sub && <TesterPaymentTag review={sub.review} confirming={confirmingBase.has(sub.id)} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
                   developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
-                <span className="text-slate-200">{sub ? <>Sent {fmtDateTime(sub.updatedAt)}</> : "Not sent yet"}</span>
+                <span className="text-slate-200">{sub ? <>{additionsOf(sub.additions).length ? "Updated" : "Sent"} {fmtDateTime(sub.updatedAt)}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
               <p className="text-slate-400">{cents == null ? NOT_LISTED : `In your contract · ${cents === 0 ? "free" : `${money(testerShare(cents))} for you`}`}{` · Paid so far ${money(sub ? partPaid.get(sub.id) ?? 0 : 0)}`}</p>
@@ -624,34 +628,40 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           lines={sendLines(recording, c.recordingCents)}
           sendable={!rulesPaused}
           sentBefore={!!recording}
-          removedSince={c.recordings.some((r) => r.part === "removed")}
-          recordings={c.recordings.filter((r) => r.part === "recording").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, sent: !!r.submissionId }))}
+          // (Batch 35 §136) Each sent recording's group: 0 = sent first, n = the nth addition ("Added").
+          recordings={c.recordings.filter((r) => r.part === "recording").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, sent: !!r.submissionId, group: recording ? additionsOf(recording.additions).findIndex((a) => a.files.includes(r.id)) + 1 : 0 }))}
         />
       </section>
 
       <section className="card space-y-3" id="written">
         <h2 className="font-semibold text-white">The written part</h2>
         {termLine("Written answers", c.writtenCents, c.writtenRequired, false, written ? partPaid.get(written.id) ?? 0 : 0)}
-        {/* (Owner, Oct 28 evening) Paid, or the test stopped / their work ended: the answers they sent stay readable (no Send). */}
-        {written && ((written.review && !canSendAgain(written)) || refusal || meOff) ? (
+        {/* (Owner, Nov 3, batch 35 §136) What was sent is locked: shown as one list (the first answers, then each addition under "Added"), never edited. */}
+        {written && (
           <div className="space-y-2" data-sent-answers="">
             {written.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(written.setUntil)}</p>}
-            <SetView items={sentItems} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
-            {written.notes && <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={written.notes} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} /></div>}
-            <AttachmentList items={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && r.submissionId === written.id)} inlineText={sentItems.map((it) => it.answer)} inlineIds={[...markerIds(written.notes, c.recordings.filter((r) => r.part === "written" && r.uploadedAt))]} />
+            {/* (Batch 35 §139) In the same small panel as the developer's view (drag the corner for more), so Add more stays close. */}
+            <ResizeBox id={`own-${written.id}`} label="Your sent answers">
+              <SentWork kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)} />
+            </ResizeBox>
           </div>
-        ) : refusal || meOff || !draftsShown ? (
-          !written ? <p className="note">Nothing sent.</p> : null
-        ) : (
+        )}
+        {!written && (refusal || meOff || !draftsShown) && <p className="note">Nothing sent.</p>}
+        {/* Not sent yet, or sent for questions that have changed since (a switch): the form for the current questions. Sent and still open: only Add more. */}
+        {canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions) && (
           <>
-            {written?.setUntil && <p className="note" data-set-until="">What you sent is for the questions until {fmtDate(written.setUntil)}: {dev} reviews it at the price it was sent at. Send again to send these questions instead.</p>}
+            {written?.setUntil && <p className="note" data-set-until-form="">What you sent is for the questions until {fmtDate(written.setUntil)}. Send your answers to these questions: they&apos;re added under what you sent.</p>}
             <WrittenForm canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={!!written}
-              sentSame={!!written && !written.setUntil && sameQuestions(sentItems, itemsFor(writtenQuestions(c)))} newFiles={c.recordings.some((r) => r.part === "written" && r.uploadedAt && !r.submissionId)} initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
-            {/* (Owner, Oct 31, batch 35 §38) No "Files and recordings" box here: files go in each answer with 📎 (WrittenForm lists any in no answer). */}
+              initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </>
         )}
+        {written && canSendAgain(written) && !refusal && !meOff && draftsShown && !newQuestions && (
+          <WrittenAddForm sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)}
+            used={writtenLength([...sentItems.map((x) => x.answer), written.notes, ...additionsOf(written.additions).map((x) => x.text ?? "")])}
+            known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+        )}
         {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. */}
-        <PrevSetFolds timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+        <PrevSetFolds draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
         {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for {dev}.</p>}

@@ -13,7 +13,7 @@ import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DE
 import { loadedOf, stopBox, testerPauseSince, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
 import { testerGate } from "@/lib/server/testerGate";
-import { leaveTest, sendWritten } from "@/lib/server/tests";
+import { addWritten, leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
 // (Owner, Oct 27) No press on a session needs a confirmed email any more (only Post a test, Join, Apply and accepting an invite do).
@@ -61,7 +61,7 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
  * rating, leaving and cancelling calls carry on under their own rules. Testers read only "paused". (Batch 15 section 1) Chat isn't closed by a paused test: only while a
  * person is restricted (messages.ts).
  */
-const SEND_ACTIONS = new Set(["written", "recording-send"]);
+const SEND_ACTIONS = new Set(["written", "written-add", "recording-send"]); // (batch 35 §136) adding follows Send's windows
 const DRAFT_ACTIONS = new Set(["recording-start", "recording-done", "recording-remove"]);
 async function pausedRefusal(userId: string, contractId: string, action: string) {
   if (!SEND_ACTIONS.has(action) && !DRAFT_ACTIONS.has(action)) return;
@@ -195,6 +195,11 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
       case "written": {
         const s = await sendWritten(u, id, body);
         return ok({ id: s.id });
+      }
+      // (Batch 35 §136) Add more on sent written answers.
+      case "written-add": {
+        const s = await addWritten(u, id, body);
+        return ok({ id: s.id, added: true });
       }
     }
     throw new HttpError(404, "not_found", "That action doesn't exist.");

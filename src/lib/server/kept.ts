@@ -11,7 +11,8 @@ import { isAdmin } from "./session";
 // boxes that replaced Reject in batch 15 kept under these keys, which this list never had, so their notes were never kept).
 // (Batch 35 §10) And the tester's Apply / Ask to rejoin note ("apply:<testId>") and the profile edits ("profile:<side>").
 // (Batch 35 §11) And the admin console's boxes ("admin:<action>:<id>": the reasons, notes and amounts, the dispute Decide, the team close-out): admins only.
-const KINDS = ["written:", "chat:", "dispute:", "rate:", "reject:", "pay:", "more:", "test:", "request:", "endearly:", "stop:", "apply:", "profile:", ADMIN_DRAFT_PREFIX];
+// (Batch 35 §136) And Add more on sent written answers ("add:<contractId>": `{ text }`).
+const KINDS = ["written:", "add:", "chat:", "dispute:", "rate:", "reject:", "pay:", "more:", "test:", "request:", "endearly:", "stop:", "apply:", "profile:", ADMIN_DRAFT_PREFIX];
 const MAX_BYTES = 1_100_000; // (batch 15 sections 3 and 17) room for 20 questions and the steps at 20,000 characters each, or a 50,000-character written part with its questions
 /** (Batch 15 section 41, L2) Kept forms per person. */
 export const MAX_KEPT = 50;

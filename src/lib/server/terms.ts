@@ -7,7 +7,8 @@ import { HttpError } from "./http";
 import { notify } from "./notify";
 import { testerGate } from "./testerGate";
 import { logEvent } from "./live";
-import { carryOver, itemsFor, itemsOf, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
+import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
+import { latestItems } from "@/lib/additions";
 import { qText } from "@/lib/questions";
 import { closeOffersOfEnded } from "./offerClose";
 export { closeOffersOfEnded };
@@ -150,7 +151,8 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
   const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId: c.id, kind: "written" } }, include: { review: true } });
   const kept = await db.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
   const draft = (kept?.data ?? null) as { answers?: unknown; notes?: unknown; questions?: unknown } | null;
-  const sent = sub ? itemsOf(sub.answers, old) : [];
+  // (Batch 35 §136) The latest set sent (the answers to changed questions are added under the first ones).
+  const sent = sub ? latestItems(sub, old) : [];
   const oldQs = old.length ? old : ["Your feedback"];
   const byText = new Map(sent.map((x) => [x.question, x.answer]));
   // (Batch 35 §120) A per-field draft lists only the questions typed since: the others count as what was sent.

@@ -1371,6 +1371,54 @@ Calls are browser to browser (WebRTC): on a strict network (some offices, mobile
 - **Tests:** `tests/batch35-signup-bio.test.ts` covers the email sign-up refused without a role (and with every part missing at once), the page's choice red for its line; each role's sides, both landing on the developer side (its Get started) and the tester side's gate after the switch (Get started, Join refused with "Save your tester profile first…"); Google's step refused without a role or a name, its page with the choice and the Name box, then made with its sides (both on the developer side); an older account with no side sent to Profile, where the side is required, and the admin's own setup; a developer adding the tester side (name and pronoun shown, its bio and fields empty, a pronoun changed there shown on the developer side, the two bios apart) and a tester adding the developer side; both bios cut at 2,000 with "x / 2,000"; the developer-side Save without the tester's devices, and another tab's changes stopping only their own side; each profile showing only its side's bio (testers, developers and admins), the live redraw and "No bio yet."; deletion clearing both; the migration (the column empty for everyone, nothing copied, the tester's bio where it was). The suites that signed up without a role now give one and a name (auth, batch15-signin, sides, batch20, batch26: Google's step refusals list the role and name lines first).
 
 
+## §136 Sent work is locked: only added to (owner, Nov 3)
+
+Once a part (written answers, a recording) has been sent, what was sent can't be removed or replaced. The tester can only ADD.
+
+Replaces: batch 13 §7 ("until the developer pays, the tester can still remove or add recordings and send again") and §8 ("sending sends the current set and
+replaces the sent version"); batch 20 §26 ("Send my updated answers / recording" waiting until something changed: there is no update to send any more);
+batch 30 §2 ("a paid part can be sent again: an updated version") becomes adding to a paid part; batch 35 §77 (a re-sent file counted by content) is moot; the
+design doc's "Recordings can be removed or added and sent again. Written answers … replace the sent version" and the recording row's Remove on sent ones.
+
+- **Written answers.** After Send, the answers show read-only (the same list the developer reads). "Add more" opens one box (Bold, Italic, Code block, 📎 files)
+  and "Add to my answers" sends it: the text, with any files placed in it, is added under what was sent. A box with nothing in it can't be sent ("Write something
+  or attach a file to add."). The 50,000 characters count everything. What's typed is kept as a draft (`add:<session>`, "Draft" + "Discard" after a sign-in),
+  editable until it's sent.
+  - An older page's "Send my updated answers" is refused: "Your answers were already sent, so they can't be changed. Use Add more to add to them." (409).
+  - A file sent with the answers is never deleted (the server keeps it whatever an older page asks); a file not sent yet can still be removed.
+  - **Changed questions** (the tester switched to new terms whose questions changed): the form for the new questions shows ("Send my answers to the new
+    questions"), and the answers are ADDED under what was sent, as one more block, never a separate "previous set". The piece is still priced at the current
+    written price while unpaid (batch 13 §8). Add more waits until then: "Your questions changed: send your answers to the new questions, and they're added
+    under what you sent."
+- **Recordings.** Sent recordings have no Remove (an older page's Remove: "Recordings you sent can't be removed. You can add more."). "Add more" opens the
+  upload / record tools; new ones show "not sent yet" with Remove, and "Add my recording(s)" adds them under the sent ones. Within the 5: with all 5 sent, the
+  6th reads "You've sent 5 recordings, the most this part takes." Nothing new: "Upload or record a recording to add first."
+- **One list per part, "Added".** Everywhere sent work is read (Needs you, the update row, the tester row, the admin's "See the work", the tester's own page),
+  a part is one list: what was sent first, then each addition under a small "Added" label (no time). The part's header line carries the time: "updated <time
+  of the latest addition>" in Needs you, "Updated <date>" on the tester row and the tester's part line. No old-and-new pair anywhere: the tester's
+  "Previous questions and answers" keeps only unsent drafts (what was sent shows once, in the list).
+- **The same windows as Send:** never after the tester's work ends (an older page's Add: "…, so your Add didn't go through."), never while the test is paused
+  (the box and its draft stay, the button is hidden: "What you add is kept as a draft. Adding comes back when the test resumes."), not while an offer of new
+  terms is open, and the same stop-once.
+- **Telling the developer, as a send does:** the live line "Ana added to her written answers" / "Ana added a recording" ("added 2 recordings"), the bell and email
+  "Ana added to her written answers for “Harbor Run”", and their Needs you shows it on the next poll (the panel keeps its height, scroll and folds). The
+  tester's own line in another tab: "You added to your written answers".
+- **Payments and reviews already made don't change.** Before a Pay, the piece's review clock and late rule work as an update's did (batch 30 §3: added after the
+  deadline, the piece is late). After a Pay, the addition gets batch 30 §2's Needs you row with Pay more: "Ana added to this after you paid ($5.00 paid · up to
+  $995.00 more)"; at the cap a quiet line "… (already paid the most)". The tester's line above Add: "Nora Lane has paid $10.00 for this. What you add can be
+  paid more, up to $1,000.00 in all."
+- **Storage:** `Submission.additions` (JSON, oldest first: `{ at, text?, items?, notes?, files }`), migration `20261115090000_sent_locked`; recordings an
+  earlier page had marked for removal at the next send stay with their piece. `src/lib/additions.ts`, `src/components/SentWork.tsx`.
+- **Tests:** `tests/batch35-sent-locked.test.ts`.
+
+## §138 Text boxes stop growing at 60% of the screen (owner, Nov 3)
+
+- Every text box that can be dragged taller (written answers and Add more, the steps, questions, notes, reasons, the bio, chat…) stops at
+  `min(60vh, 32rem)`; past that its text scrolls inside it. One rule in `src/app/globals.css` (`textarea { max-height: …; overflow-y: auto; }`), after the
+  utilities, so no box's own classes lift it. Nothing changed before this: a box could be dragged as tall as the page.
+- Checked in Chrome: a box dragged to 3,000 px stays 512 px (32rem) on a 900 px desktop and 506 px (60vh) on an 844 px phone, scrolling inside.
+- **Tests:** `tests/batch35-textarea-cap.test.ts` (the rule, its place after the utilities, no box opting out). **Pictures:** `docs/media/sent-locked/textarea-cap-*`.
+
 ## §139 Sent work in small panels, with folds for the body and Pay (owner, Nov 3)
 
 Replaces batch 10's 16-line scroll box (`AnswersBox`, `max-h-[20rem]`) for the developer's view of sent work on the test page. (The admin's "See the work" keeps it.)

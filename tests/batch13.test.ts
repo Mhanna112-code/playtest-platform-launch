@@ -3,6 +3,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import { latestItems } from "@/lib/additions";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as excerptsPOST } from "@/app/api/excerpts/route";
 import { POST as blocksPOST } from "@/app/api/blocks/route";
@@ -229,16 +230,12 @@ describe("batch 13 section 7: the Recording part, up to 5 recordings sent togeth
     const subs = await db.submission.findMany({ where: { contractId: j.sessionId, kind: "recording" }, include: { recordings: true } });
     expect(subs).toHaveLength(1);
     expect(subs[0].recordings).toHaveLength(5);
-    // A sent one removed stays with the sent piece until the next Send.
-    await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[1] });
+    // (Batch 35 §136; was "a sent one removed stays until the next Send") A sent recording is locked: Remove is refused, before and after a Pay.
+    expect((await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[1] })).status).toBe(409);
     expect(await db.recording.count({ where: { submissionId: subs[0].id } })).toBe(5);
     await settle();
-    expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect(await db.recording.count({ where: { submissionId: subs[0].id } })).toBe(4);
-    // Paid: (batch 30 §2) an updated version can still be sent, so a recording can still be removed (it leaves at the next Send).
-    await settle();
     await pay(s.dev.cookie, { kind: "submission", id: subs[0].id, amount: "12.00", tickedCents: 1200 });
-    expect((await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[2] })).status).toBe(200);
+    expect((await sact(j.sessionId, "recording-remove", j.tester.cookie, { recordingId: ids[2] })).status).toBe(409);
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain('title="Remove this recording?"');
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain("onLength={(s) => setLength(clock(s))}"); // (Nov 2, §119) the length from RecordingVideo (which also finds it for old recordings)
   });
@@ -260,11 +257,11 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const kept = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `written:${j.sessionId}` } } });
     expect((kept.data as { answers: string[] }).answers).toEqual(["My Q1 draft", "", ""]);
     expect(carryOver(prev[0].items, ["Q1?", "Q2 changed?", "Q3?"])).toEqual(["My Q1 draft", "", ""]);
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments=");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments="); // (batch 35 §136) what was sent shows once, in the list
     expect(src("components/AnswerSets.tsx")).toContain("Previous questions and answers (until {fmtDateIn(s.until, timeZone)})");
   });
 
-  it("sent, then switched: the developer sees it under its own questions, labelled, at its price; sending the new set replaces it and keeps the earlier one in a fold", async () => {
+  it("sent, then switched: the developer sees it under its own questions, labelled, at its price; (batch 35 §136) the answers to the new set are ADDED under it", async () => {
     const s = await setup({ questions: ["Q1?", "Q2?"] });
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["one", "two"] });
@@ -282,8 +279,10 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } });
     expect(sub.setUntil).toBeNull();
     expect(sub.agreedCents).toBe(1200);
-    expect(itemsOf(sub.answers)).toEqual([{ question: "Q1?", required: false, answer: "one" }, { question: "Q2 new?", required: false, answer: "new two" }]);
-    expect(prevSetsOf(sub.prevSets)[0].items.map((x) => x.answer)).toEqual(["one", "two"]);
+    // (Batch 35 §136) What was sent stays; the new set is added under it (no previous-set fold).
+    expect(itemsOf(sub.answers).map((x) => x.answer)).toEqual(["one", "two"]);
+    expect(latestItems(sub)).toEqual([{ question: "Q1?", required: false, answer: "one" }, { question: "Q2 new?", required: false, answer: "new two" }]);
+    expect(prevSetsOf(sub.prevSets)).toEqual([]);
     // Older rows (a list of answers) still read, paired by position.
     // (Batch 26 section 14) The old marker still reads as not required; unmarked is not required; "[required] " is.
     expect(itemsOf(["a", "b", "c"], ["[not required] X?", "Y?", "[required] Z?"])).toEqual([{ question: "X?", required: false, answer: "a" }, { question: "Y?", required: false, answer: "b" }, { question: "Z?", required: true, answer: "c" }]);

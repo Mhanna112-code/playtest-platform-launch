@@ -973,27 +973,25 @@ describe("batch 20 section 25: a tester's Switch / Keep never stops the develope
   });
 });
 
-describe("batch 20 section 26: Send my updated answers / recording waits until something changed", () => {
-  it("sent → refused identical; edit → goes; a new attachment → goes; the buttons grey with the tooltip", async () => {
-    const { NOTHING_CHANGED_LINE } = await import("@/lib/rules");
-    expect(NOTHING_CHANGED_LINE).toBe("Nothing has changed since you sent it.");
-    const { testId } = await setup();
+describe("batch 20 section 26 (replaced by batch 35 §136): sent work is locked, so there is no updated Send to wait for", () => {
+  it("a second Send of the same questions is refused as locked; a new attachment waits for Add more; the recording Send adds only new ones", async () => {
+    const { SENT_ANSWERS_LOCKED, NO_RECORDING_TO_ADD } = await import("@/lib/rules");
+    const { testId } = await setup({ recordingCents: "5.00" });
     const j = await joined(testId);
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], notes: "n", seenAt: seen(), confirmed: true })).status).toBe(200);
-    const same = await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], notes: "n", seenAt: seen(), confirmed: true });
-    expect(same.body.error).toMatchObject({ code: "unchanged", message: NOTHING_CHANGED_LINE });
-    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b2"], notes: "n", seenAt: seen(), confirmed: true })).status).toBe(200);
-    // A new attachment uploaded since: goes.
+    for (const answers of [["a", "b"], ["a", "b2"]]) {
+      const again = await sact(j.sessionId, "written", j.tester.cookie, { answers, notes: "n", seenAt: seen(), confirmed: true });
+      expect(again.body.error).toMatchObject({ code: "locked", message: SENT_ANSWERS_LOCKED });
+    }
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } });
-    await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "shot.png", sizeBytes: 10, contentType: "image/png", uploadedAt: new Date(), part: "written" } });
-    expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b2"], notes: "n", seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect(await db.recording.count({ where: { contractId: j.sessionId, submissionId: sub.id } })).toBe(1);
-    const form = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(form).toContain("const unchanged = update && sentSame && !newFiles && same;");
-    expect(form).toContain("title={unchanged ? NOTHING_CHANGED_LINE : undefined}");
-    const rec = src("app/app/sessions/[id]/RecordingUpload.tsx");
-    expect(rec).toContain("const unchanged = sentBefore && uploaded.every((r) => r.sent) && !removedSince;");
-    expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(409, "unchanged", NOTHING_CHANGED_LINE);');
+    const f = await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "shot.png", sizeBytes: 10, contentType: "image/png", uploadedAt: new Date(), part: "written" } });
+    expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "", seenAt: seen(), confirmed: true })).status).toBe(200); // a file alone is something to add
+    expect((await db.recording.findUniqueOrThrow({ where: { id: f.id } })).submissionId).toBe(sub.id);
+    const r = await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "run.mp4", sizeBytes: 10, contentType: "video/mp4", uploadedAt: new Date(), part: "recording" } });
+    expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true, add: true })).body.error.message).toBe(NO_RECORDING_TO_ADD);
+    expect((await db.recording.findUniqueOrThrow({ where: { id: r.id } })).submissionId).not.toBeNull();
+    expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).not.toContain("removedSince");
   });
 });
 

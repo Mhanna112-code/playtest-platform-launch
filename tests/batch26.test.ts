@@ -451,7 +451,9 @@ describe("batch 26 section 15: previous sets show each question as a label above
     expect(html).toContain('class="border-l border-white/10 pl-3" data-set-answer=""');
     expect(html).toContain('data-no-answer="">(no answer)</p>');
     expect(html).not.toContain("not required");
-    for (const f of ["app/app/sessions/[id]/page.tsx", "app/app/tests/[id]/page.tsx", "app/admin/DisputeWork.tsx"]) expect(src(f)).toMatch(/<(SetView|PrevSetFolds)/);
+    // (Batch 35 §136) Sent work is read through SentWork, which draws each set with SetView.
+    for (const f of ["app/app/sessions/[id]/page.tsx", "app/app/tests/[id]/page.tsx", "app/admin/DisputeWork.tsx"]) expect(src(f)).toMatch(/<(SetView|PrevSetFolds|SentWork)/);
+    expect(src("components/SentWork.tsx")).toContain("<SetView");
   });
 
   it("switching to terms that only tick Required doesn't move the current set into “Previous questions and answers”", async () => {
