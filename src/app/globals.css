@@ -5,9 +5,16 @@
 /* (NEWEST+7) The full Playtest Platform's look: dark ink background, lime (volt) actions, coral (punch) alerts, the
    bundled Bricolage Grotesque / Inter / JetBrains Mono fonts. Stop-once boxes and refusals stay BLUE (sky) under the
    pressed button; form mistakes stay RED at the field. */
+/* (Owner, Nov 3) The 📎 in answers (and anywhere in text) is drawn as a plain one-colour paperclip, the same on every device: Windows' colour emoji has eyes.
+   Only that one character uses this face; where none of these fonts exist (most phones) it falls back to the phone's own simple clip. */
+@font-face {
+  font-family: "Plain Clip";
+  src: local("Segoe UI Symbol"), local("Apple Symbols"), local("Noto Sans Symbols 2"), local("Noto Sans Symbols2");
+  unicode-range: U+1F4CE;
+}
 :root {
   --font-display: "Bricolage Grotesque Variable";
-  --font-sans: "Inter Variable";
+  --font-sans: "Plain Clip", "Inter Variable";
   --font-mono: "JetBrains Mono";
   --background: #0a0d18;
   --foreground: #e8ecf5;

@@ -1,5 +1,6 @@
 "use client";
 import { VIDEO_ACCEPT } from "@/lib/videoFormats";
+import { Paperclip } from "lucide-react";
 import { withoutAttachmentMarkers } from "@/lib/answerAttachments";
 import { CharacterCount } from "@/components/CharacterCount";
 import { refusalLine } from "@/lib/pressLabels";
@@ -47,7 +48,7 @@ function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: R
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs font-bold" title="Bold" onClick={() => apply("bold")}>B</button>
       <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")}>I</button>
       <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")}>{"</>"}</button>
-      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file">📎<input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept={`image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,${VIDEO_ACCEPT}`} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
+      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file"><Paperclip className="h-3.5 w-3.5" aria-hidden="true" /><input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept={`image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,${VIDEO_ACCEPT}`} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
       {/* (Owner, Oct 30) The form's mistake list shows once, at Send: an attach problem is one line here. */}
       <Err text={err} />
       {/* (Owner, Oct 30) No ⏺ in the written answers: recordings belong to the recorded part. 📎 attaches files (videos too). */}
