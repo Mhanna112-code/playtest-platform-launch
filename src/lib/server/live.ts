@@ -195,8 +195,14 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   const loud = await unanswered(devId, testId, all.filter((c) => !c.quiet), tx);
   // (Batch 35 §73) The ticks of this test's own Alerts menu.
   const ignored = new Set((await tx.test.findUnique({ where: { id: testId }, select: { ignoredAlerts: true } }))?.ignoredAlerts ?? []);
-  return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a); }) : loud;
+  // (Owner, Nov 3) The team's dispute decision always stops a payment press (Pay, Pay more, Confirm with your bank), whatever part it's on and even with
+  // "Decisions by the team" ticked: what was decided changes what is owed.
+  const payPress = !!opts.press?.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x));
+  return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a) || (payPress && isTeamDecision(c)); }) : loud;
 }
+
+/** (Owner, Nov 3) A line recording the team's dispute decision ("The team decided Ana Silva's dispute: …"). */
+export const isTeamDecision = (c: { kind: string; text: string }) => c.kind === "admin" && c.text.startsWith("The team decided ");
 
 /** (Batch 35 §34) A listing Save's consequence as its own line: "You re-sent fbbb's invite (the listing changed)". */
 export const consequenceLine = (x: string) => `You ${x}${/\)$/.test(x) ? "" : " (the listing changed)"}`;
