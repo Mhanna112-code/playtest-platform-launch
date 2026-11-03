@@ -1,0 +1,148 @@
+[
+  {
+    "id": 1,
+    "title": "Live request",
+    "proves": "A tester's request appears in the developer's Needs you without a reload, within one 20 s beat",
+    "pass": true,
+    "files": [
+      "01-live-request.mp4",
+      "01-live-request-developer.png",
+      "01-live-request-tester.png"
+    ],
+    "note": "appeared after 11 s, same page load: true"
+  },
+  {
+    "id": 2,
+    "title": "Live decision (Allow)",
+    "proves": "After Allow, the tester's session page (waiting note goes, Show an excerpt is back) and their profile (the excerpt, Shown) update without a reload",
+    "pass": true,
+    "files": [
+      "02-live-allow.mp4",
+      "02-live-allow-session.png",
+      "02-live-allow-profile.png"
+    ],
+    "note": "session page after 18.1 s, profile after 18.6 s, same page loads: true"
+  },
+  {
+    "id": 3,
+    "title": "Duplicates refused",
+    "proves": "The same text as a shown excerpt → \"This excerpt is already on your profile.\"; the same text as a pending one (another tab) → \"You already asked to show this excerpt.\"; no extra rows",
+    "pass": true,
+    "files": [
+      "03-duplicates.mp4",
+      "03-duplicate-shown.png",
+      "03-duplicate-pending.png"
+    ],
+    "note": "shown refusal: true, pending refusal: true, rows for the session: 2 (1 shown + 1 pending)"
+  },
+  {
+    "id": 4,
+    "title": "Same question replaces",
+    "proves": "A different text for a question already shown: the developer's row says \"Replaces the excerpt shown now:\" with the old text; Deny keeps the old one; Allow on the next one shows it and removes the old (profile updates live)",
+    "pass": true,
+    "files": [
+      "04-replacement.mp4",
+      "04-replaces-line.png",
+      "04-after-swap-profile.png"
+    ],
+    "note": "line: true, Deny kept old: true, profile swapped after 19.7 s; rows now: denied:The harbour level felt great | shown:felt great, but the second boss was far too hard"
+  },
+  {
+    "id": 5,
+    "title": "Files left out",
+    "proves": "An answer holding a file (shown on the developer's side): the trim box, the developer's request row, the stored text and the profile have no file and no \"[file]\"",
+    "pass": true,
+    "files": [
+      "05-no-files.mp4",
+      "05-trim-box-no-file.png",
+      "05-profile-no-file.png",
+      "05-developer-row.png"
+    ],
+    "note": "file in the answer: true; trim box starts \"The harbour level felt great but the second boss was far too…\"; stored: \"The harbour level felt great but the second boss was far too hard for me.\""
+  },
+  {
+    "id": 6,
+    "title": "Cap of 3",
+    "proves": "At 3 shown, a replacement for a shown question still goes through (still 3 after Allow); a new 4th is refused with \"You can show at most 3 excerpts. Remove one first.\"",
+    "pass": true,
+    "files": [
+      "06-cap.mp4",
+      "06-fourth-refused.png",
+      "06-three-after-replacement.png"
+    ],
+    "note": "before: 3, replacement accepted: true, after Allow: 3, 4th refused: true"
+  },
+  {
+    "id": 7,
+    "title": "Deny's bell",
+    "proves": "The tester's bell line after Deny opens their session page, which offers Show an excerpt on your profile",
+    "pass": true,
+    "files": [
+      "07-deny-bell.mp4",
+      "07-bell-session-page.png"
+    ],
+    "note": "opened /app/sessions/cmvzwz6d8007s7k10tx26mmny; Show an excerpt: true"
+  },
+  {
+    "id": 8,
+    "title": "NDA added: shown excerpt hidden",
+    "proves": "After the developer adds an NDA, the shown excerpt leaves the profile others see and the tester's own list says \"Allowed · hidden while … has an NDA\"; hover cards never list excerpts",
+    "pass": true,
+    "files": [
+      "08-10-nda-added.mp4",
+      "08-viewer-after-nda.png",
+      "08-tester-list-hidden.png",
+      "10-developer-nda-note.png"
+    ],
+    "note": "NDA saved: true; viewer's profile only after a reload; tester's list only after a reload; hover card text: \"\""
+  },
+  {
+    "id": 9,
+    "title": "New request under an NDA",
+    "proves": "A request pressed from a page loaded before the NDA is refused (\"This test now has an NDA, so its work can't be shown as an excerpt.\"), nothing is stored, and the picker then leaves the page",
+    "pass": true,
+    "files": [
+      "09-request-under-nda.mp4",
+      "09-refused-under-nda.png"
+    ],
+    "note": "refused: true; rows: 0; picker gone after 0 s"
+  },
+  {
+    "id": 10,
+    "title": "Waiting request when the NDA is added",
+    "proves": "The developer's row says \"[test] has an NDA now: if you allow this, it stays hidden while [test] has an NDA.\"; Allow puts it straight into hidden and the tester's bell says so",
+    "pass": true,
+    "files": [
+      "10-allowed-under-nda-bell.mp4",
+      "10-tester-bell-line.png",
+      "08-10-nda-added.mp4",
+      "10-developer-nda-note.png"
+    ],
+    "note": "note: \"Coral Code has an NDA now: if you allow this, it stays hidden while Coral Code has an NDA.\"; status after Allow: shown; bell: \"Your excerpt from Coral Code was allowed. It stays hidden while Coral Code has an NDA.\""
+  },
+  {
+    "id": 11,
+    "title": "NDA removed: both come back",
+    "proves": "Removing the NDA brings back both the excerpt hidden by it and the one allowed under it, on the profile others see and in the tester's own list",
+    "pass": true,
+    "files": [
+      "11-nda-removed.mp4",
+      "11-viewer-both-back.png",
+      "11-tester-both-shown.png"
+    ],
+    "note": "viewer only after a reload; tester's list only after a reload"
+  },
+  {
+    "id": 12,
+    "title": "Cap counts a hidden one",
+    "proves": "2 shown + 1 hidden (NDA) is 3: a new request is refused; after the tester removes the hidden one, the same request goes through",
+    "pass": true,
+    "files": [
+      "12-cap-with-hidden.mp4",
+      "12-refused-at-cap.png",
+      "12-request-after-remove.png",
+      "12-profile-after-remove.png"
+    ],
+    "note": "hidden row: true; refused: true; removed: true; pending after: 1; waiting note shown"
+  }
+]
