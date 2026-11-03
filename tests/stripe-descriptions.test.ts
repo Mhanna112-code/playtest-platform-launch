@@ -55,7 +55,7 @@ async function world(names = ["Marc Hanna"]) {
   return { ...s, t };
 }
 type W = Awaited<ReturnType<typeof world>>;
-const row = (w: W, i: number, data: Partial<PayingRow> & { kind: string; amountCents: number }) =>
+const row = (w: W, i: number, data: Partial<PayingRow> & { kind: string; amountCents: number; status?: string; chargebackAt?: Date }) =>
   db.payment.create({ data: { contractId: w.t[i].sessionId, submissionId: w.t[i].sub.id, developerId: w.dev.user.id, testerId: w.t[i].tester.user.id, feeCents: 0, testerCents: 0, status: "charged", ...data } as never });
 /** The row's line on the developer's Payments page, names in full, with its "how" after a comma: what its description must read (after "Playtest: "). */
 async function pageLine(p: Awaited<ReturnType<typeof row>>) {
