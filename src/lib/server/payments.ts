@@ -334,27 +334,45 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   // (Owner, Oct 30, batch 35 §1) A raise needs the tick naming exactly what it charges; a tick for another amount (the box changed) doesn't count.
   if (extra > 0 && body.tickCents !== extra) throw new HttpError(400, "needs_tick", decideTickLine(displayName(c.test.developer), extra, decided!));
   // Claim the dispute first so two admins can't charge twice.
-  const claimed = await db.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
-  if (claimed.count !== 1) {
+  // (Owner, Nov 3, races) The claim, what the piece is paid now and the decision's line on the test commit together under the test's lock (as Pay more's reservation
+  // takes it): a Pay more pressed meanwhile either reserved first (counted here: the decision charges only what is still due, never more than decided minus what's
+  // paid) or comes after and stops once naming the decision (its line is already on the test). One still at the bank is §70's refusal, read again here.
+  const claim = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
+    const claimed = await tx.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
+    if (claimed.count !== 1) return null;
+    const key = d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! };
+    if (await tx.payment.count({ where: { ...key, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", DECIDE_LOCKED); // the claim rolls back
+    const piece = await pieceOf(key, tx);
+    const paidNow = Math.max(review.amountCents, piece ? (await pieceRoom(piece, tx)).paidCents : review.amountCents);
+    const due = extra > 0 ? Math.max(0, decided! - paidNow) : 0;
+    const line = due > 0 ? `The team raised the pay to ${money(decided!)} (${money(due)} more).`
+      : extra > 0 ? `The team raised the pay to ${money(decided!)}, which was already paid: nothing more was charged.`
+        : `The team kept the pay at ${money(paidNow)}${review.rejected ? " (rejected)" : ""}.`;
+    const ev = await tx.testEvent.create({ data: { testId: c.testId, kind: "admin", text: `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, contractId: c.id } });
+    return { due, line, eventId: ev.id };
+  });
+  if (!claim) {
     // Any admin, first decision wins: the second press says who and when.
     const won = await db.dispute.findUnique({ where: { id: d.id } });
     throw new HttpError(409, "decided", await decidedByLine(won?.decidedById ?? null, won?.decidedAt ?? null));
   }
+  const { due, line } = claim;
   let delayed = false;
   let heldNow = false; // (batch 35 §82) this decision's own decline started a hold: the test is paused now
-  const owedRow = { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: extra, feeCents: 0, testerCents: 0 };
-  const waiting = extra > 0 ? await (await import("./holds")).deferIfHeld(owedRow) : null;
+  const owedRow = { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: due, feeCents: 0, testerCents: 0 };
+  const waiting = due > 0 ? await (await import("./holds")).deferIfHeld(owedRow) : null;
   // (Owner, Nov 2, §131) The developer's lines name the decision by its piece: "the team's dispute decision on Ana Silva's written answers on “Harbor Run”".
   const decision = disputeDecisionName((await (await import("./holds")).paymentPiece(owedRow)) ?? `${displayName(c.tester)}'s work on “${c.title}”`);
   if (waiting) {
-    await bell(c.test.developerId, `${decision.replace(/^the/, "The")} (${money(extra)} more) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+    await bell(c.test.developerId, `${decision.replace(/^the/, "The")} (${money(due)} more) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     delayed = true;
-  } else if (extra > 0) {
+  } else if (due > 0) {
     // Charged at once, also during an admin suspension with no hold (owner, Oct 28 afternoon): a declined card starts a payment hold and the raise is owed.
     let result;
     try {
       // (Owner, Nov 3) "Playtest: The team's dispute decision on Ana Silva's written answers on “Harbor Run”" (its row is made after the charge: one key, one try).
-      result = await charge(c.test.developer, c.tester, extra, serverKey("dispute", d.id), await stripeDescription({ payment: owedRow }));
+      result = await charge(c.test.developer, c.tester, due, serverKey("dispute", d.id), await stripeDescription({ payment: owedRow }));
       if (result.status === "requires_action") {
         // (Batch 11) The developer's bank wants them to confirm: it waits 3 days for their Confirm in Payments (the tester reads "Payment may be delayed").
         const row = await db.payment.create({ data: { ...owedRow, status: "needs_confirmation" } });
@@ -365,27 +383,26 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "card_failed")) {
         await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null, decidedById: null, decisionNote: "" } }); // (Nov 2, §119) no longer names who
+        await db.testEvent.deleteMany({ where: { id: claim.eventId } }); // (Owner, Nov 3, races) nothing was decided after all: its line goes with the claim
         // (§130) The developer's card was unknown to Stripe (cleared): the team reads why, not the developer's "Add a card".
         if (e instanceof HttpError && e.code === "no_card") throw new HttpError(409, "no_card", "The developer's saved card is no longer available, so nothing was charged and the dispute stays open. Decide again once they add a card.");
         throw e;
       }
       const failed = await db.payment.create({ data: { ...owedRow, status: "failed", failure: e.message, owedUntil: new Date() } });
-      await (await import("./holds")).declinedPayment(c.test.developerId, failed.id, extra, decision);
+      await (await import("./holds")).declinedPayment(c.test.developerId, failed.id, due, decision);
       delayed = true;
       heldNow = true;
     }
     if (result) {
-      await receipt(c.test.developer.email, decision, extra, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+      await receipt(c.test.developer.email, decision, due, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
       await db.payment.create({ data: { kind: "dispute", disputeId: d.id, submissionId: d.submissionId, callId: d.callId, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, ...result } });
     }
   }
-  const line = extra > 0 ? `The team raised the pay to ${money(decided!)} (${money(extra)} more).` : `The team kept the pay at ${money(min)}${review.rejected ? " (rejected)" : ""}.`;
-  await logEvent(c.testId, "admin", `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, c.id);
   await (await import("./ratings")).maybePromptRating(c.id);
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(delayed ? [heldNow || testPaused(c.test.developer, c.test) ? "Payment may be delayed until the test resumes." : "Payment may be delayed."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
   await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}#tester-${c.id}`, { group: "disputedecided" });
   await (await import("./live")).logAction(admin.id, c.testId, body, "decided a dispute", { a: "decide", k: [`dispute:${d.id}`], answers: { item: d.id } });
-  return { extraCents: extra };
+  return { extraCents: due };
 }
 
 /** "ben@playtest.test already decided this dispute at 3:10 PM." ("An admin (deleted)" once that account is gone). */

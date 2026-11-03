@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { Prisma } from "@prisma/client";
 import { AGE_LINE, TERMS_VERSION } from "@/lib/termsOfUse";
 import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
@@ -119,6 +120,10 @@ export function readNewAccount(body: Record<string, unknown>): { role: SignupRol
   return { role, name };
 }
 
+export const EMAIL_TAKEN = "An account with that email already exists";
+/** (Owner, Nov 3, races) The database's unique-constraint refusal (Prisma P2002): a row made at the same moment in another tab. */
+export const isUniqueClash = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
+
 /** Sign up: email + password. Signed in at once; a confirmation link is emailed. (Batch 15 section 7) At most 10 new accounts per network an hour. */
 export async function signUp(body: Record<string, unknown>, base: string, ip = "", now = new Date()) {
   const email = readEmail(body.email);
@@ -126,12 +131,16 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
   if (ip && (await db.loginAttempt.count({ where: { kind: "signup", ok: true, ip, at: { gt: new Date(now.getTime() - 3_600_000) } } })) >= SIGNUPS_PER_NETWORK_HOUR)
     throw new HttpError(429, "too_many", TOO_MANY_SIGNUPS);
   // (Owner, Oct 30) Sign-up keeps "An account with that email already exists".
-  if (await db.user.findUnique({ where: { email } })) throw field("An account with that email already exists");
+  if (await db.user.findUnique({ where: { email } })) throw field(EMAIL_TAKEN);
   // (NEXT-UI 15) The full app's sign-up form also asks who you are, your name and the Terms. (Batch 35 §134) All required: no account is made without its sides,
   // so the old "Welcome to Playtest · Tell us who you are" step never comes.
   const { role, name } = readNewAccount(body);
   const user = await db.user.create({
     data: { email, passwordHash: await hashPassword(password), name, timeZone: readTimeZone(body.timeZone), termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, ...sidesOf(role) },
+  }).catch((e) => {
+    // (Owner, Nov 3, races) The same email signed up in another tab between the check above and this create: the database's unique email refuses it, with the same line.
+    if (isUniqueClash(e)) throw field(EMAIL_TAKEN);
+    throw e;
   });
   await db.loginAttempt.create({ data: { email, ip, kind: "signup", ok: true, at: now } });
   await sendVerification(user.id, base);

@@ -5,7 +5,7 @@ import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
-import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, reversedWords, splitFee } from "@/lib/rules";
+import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
@@ -80,9 +80,22 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
   const r = await db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${u.id} FOR UPDATE`;
     if (await tx.reservation.count({ where: { developerId: u.id, status: { in: ["pending", "needs_action", "reserved"] } } })) return null;
+    // (Owner, Nov 3, races) The bank changed the disputed part after the press read what is owed (it takes this same lock): what the rows come to is read again
+    // here, and a total that changed reserves nothing (the press stops once on the new total, below).
+    const fresh = await tx.payment.findMany({ where: { id: { in: rows.map((p) => p.id) } }, select: { id: true, amountCents: true, reversedCents: true, chargeback: true } });
+    const nowTotal = rows.reduce((a, p) => {
+      const x = fresh.find((f) => f.id === p.id);
+      return a + (x?.chargeback === "open" ? reversedOf(x) + CHARGEBACK_FEE_CENTS : p.amountCents);
+    }, 0);
+    if (nowTotal !== total) return { changed: nowTotal };
     return tx.reservation.create({ data: { developerId: u.id, amountCents: total, covers: rows.map((p) => p.id), status: "pending", actionBy: new Date(now.getTime() + PRESS_ACTION_MS) } });
   });
   if (!r) throw new HttpError(409, "nothing_owed", (await import("./holds")).ALREADY_RESERVED);
+  if ("changed" in r) {
+    // (Owner, Nov 3, races) Pay what you owe's own stop-once line, with the new total; the second press reserves it.
+    const ids = (await (await import("./holds")).owedLines(u.id)).filter((l) => l.retry).map((l) => l.id);
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: `What you owe changed: now ${money(r.changed)}. ${pressAgainLine(r.changed, { cardVerified: true })}`, at: new Date() }], totalCents: r.changed, ids });
+  }
   const reserved = (pi: string | null) => db.reservation.update({ where: { id: r.id }, data: { status: "reserved", stripePaymentIntentId: pi, actionBy: null, expiresAt: new Date(Date.now() + RESERVE_DAYS * 86_400_000) } });
   if (!stripeOn()) {
     await reserved(null);

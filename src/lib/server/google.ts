@@ -5,7 +5,7 @@ import { isEmail, normEmail } from "@/lib/format";
 import { appUrl } from "./auth";
 import { createSession, readCookie, sessionCookie } from "./session";
 import { HttpError } from "./http";
-import { readNewAccount, readTimeZone, sidesOf } from "./passwords";
+import { isUniqueClash, readNewAccount, readTimeZone, sidesOf } from "./passwords";
 import { TERMS_VERSION } from "@/lib/termsOfUse";
 
 // Sign in with Google: plain OAuth 2.0 authorization-code flow with PKCE, no auth library.
@@ -166,7 +166,12 @@ export async function finishGoogleSignup(token: string | null | undefined, body:
   const now = new Date();
   const existing = await db.user.findUnique({ where: { email: step.email } });
   // Made meanwhile (another tab's sign-up): signed into it, as Google's sign-in would.
-  const user = existing ?? await db.user.create({ data: { email: step.email, name, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone), ...sidesOf(role) } });
+  // (Owner, Nov 3, races) Made at the same moment (two tabs' steps): the database's unique email refuses the second create, which signs into the one just made.
+  const user = existing ?? await db.user.create({ data: { email: step.email, name, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone), ...sidesOf(role) } })
+    .catch(async (e) => {
+      if (!isUniqueClash(e)) throw e;
+      return db.user.findUniqueOrThrow({ where: { email: step.email } });
+    });
   if (existing && !existing.ageConfirmedAt) await db.user.update({ where: { id: existing.id }, data: { ageConfirmedAt: now } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };

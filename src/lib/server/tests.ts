@@ -916,7 +916,7 @@ export const needsGap = (t: { devices: string[]; languages: string[] }, p: { dev
  * Join: the tester sends the listing version they saw. A changed listing stops once and returns the new terms;
  * the second press joins on them. Closed, stopped or full tests refuse for good. The contract is a snapshot.
  */
-export async function joinTest(tester: U, testId: string, body: Record<string, unknown>, options: { applicationId?: string; /** what the claimed application becomes (default "joined") */ applicationStatus?: "joined" | "accepted"; quietJoinEvent?: boolean } = {}) {
+export async function joinTest(tester: U, testId: string, body: Record<string, unknown>, options: { applicationId?: string; /** what the claimed application becomes (default "joined") */ applicationStatus?: "joined" | "accepted"; quietJoinEvent?: boolean; /** (Owner, Nov 3, races) the press's own stop-once, run again under the test's lock */ lockedGate?: () => Promise<void> } = {}) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   // (Owner, Nov 2) The tester's own press needs a saved profile (a developer accepting their application or ask doesn't: they pressed with one).
@@ -924,6 +924,9 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
   const seen = Number(body.listingVersion);
   const { contract, dev, filled } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
+    // (Owner, Nov 3, races) Join's "changed since your page loaded" check, again under the lock: an Edit that saved after the first check (before this lock) stops
+    // the press once naming it, instead of joining on a listing the page never showed.
+    if (options.lockedGate) await options.lockedGate();
     if (options.applicationId) {
       const application = await tx.application.findUnique({ where: { id: options.applicationId } });
       if (!application || application.testId !== testId || application.testerId !== tester.id || application.status !== "pending")
@@ -1123,6 +1126,8 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     const long = checkWrittenLength([...latestItems(existing, qs).map((x) => x.answer), existing.notes, ...additionsOf(existing.additions).map((a) => a.text ?? ""), text]);
     if (!long.ok) throw new HttpError(400, "too_long", long.message);
     const now = new Date();
+    // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
+    // payment once that Pay is recorded.
     const paid = !!existing.review;
     const late = existing.late || isLate(c.dueAt, now);
     const fresh = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });

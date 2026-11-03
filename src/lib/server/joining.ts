@@ -223,7 +223,8 @@ export async function join(tester: U, testId: string, body: Record<string, unkno
     throw new HttpError(409, "apply", "This test takes applications: press Apply to join.");
   }
   if (t.joinMode === "invite" && !(await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } }))) throw new HttpError(409, "invite_only", "This test is invite only.");
-  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true });
+  // (Owner, Nov 3, races) The check above ran before the test's lock: joinTest runs it again under the lock (an Edit saved in between stops the press once).
+  const c = await joinTest(tester, testId, { ...body, listingVersion: t.listingVersion, confirmed: true, anyway: body.anyway === true }, { lockedGate: () => listingGate(tester.id, testId, body, "join") });
   await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "joined", decidedAt: new Date() } });
   return c;
 }

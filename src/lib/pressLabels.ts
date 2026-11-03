@@ -7,6 +7,8 @@ export const PRESS_VERBS: Record<string, string> = {
   application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Send", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
   leave: "Leave", rate: "Rate", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Send your side", "no-show": "Report", "cancel-call": "Cancel call",
   "cancel-set": "Cancel calls", "pay-extra": "Pay more", "key-broken": "Report", open: "Accept testers again", review: "Pay", "post-draft": "Post the test", "delete-draft": "Delete", "withdraw-application": "Withdraw",
+  // (Owner, Nov 3, races) Adding to sent answers is "Add" (its refusal named no press: "Nora Lane stopped the test on Nov 3…" alone); the removed-from card's Dismiss.
+  "written-add": "Add", "dismiss-removed": "Dismiss",
 };
 
 /** (Batch 30 §20) The buttons on a call request. */
@@ -35,6 +37,10 @@ export function pressLabelOf(path: string, body?: unknown): string {
     if (v) return v;
   }
   if (p[1] === "calls" && p[3] === "join") return "Join call";
+  // (Owner, Nov 3, races) The recording part's Add (it sends `add: true`) and the removed-from cards' Dismiss all.
+  const b = body && typeof body === "object" ? (body as { add?: unknown; all?: unknown }) : {};
+  if (p[1] === "sessions" && p[3] === "recording-send" && b.add === true) return "Add";
+  if (p[1] === "sessions" && p[3] === "dismiss-removed" && b.all === true) return "Dismiss all";
   if ((p[1] === "tests" || p[1] === "sessions") && p[3]) return PRESS_VERBS[p[3]] ?? "press";
   if (p[1] === "tests" && !p[2]) return "Post the test";
   if (p[1] === "payments" && p[2] === "owed") return "Pay what you owe";

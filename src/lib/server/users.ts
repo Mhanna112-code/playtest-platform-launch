@@ -23,6 +23,8 @@ const VERBS: Record<string, string> = {
   application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Message", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
   leave: "Leave", rate: "Rating", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Dispute reply", "no-show": "Report", "cancel-call": "Cancel call",
   "cancel-set": "Cancel calls", "pay-extra": "Pay", "key-broken": "Report", open: "Open", review: "Pay",
+  // (Owner, Nov 3, races) Without these both read "Save": the removed-from card's Dismiss, and adding to sent answers.
+  "dismiss-removed": "Dismiss", "written-add": "Add",
 };
 
 /** "Your Pay on Harbor Run didn't go through": what the red box on the dashboard names. */
@@ -36,6 +38,8 @@ export async function failedLine(req: Request, what?: string, piece?: { kind: st
     } else if (path[1] === "tests") verb = verb || "Post";
     else if (path[1] === "sessions" && path[2]) {
       verb = verb || VERBS[path[3]] || "Save";
+      // (Owner, Nov 3, races) Dismiss all is sent from one card but covers every removed-from card: it names no one test. (The body is still unread here.)
+      if (!what && path[3] === "dismiss-removed" && ((await req.clone().json().catch(() => null)) as { all?: unknown } | null)?.all === true) return "Your Dismiss all didn't go through";
       title = (await db.contract.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
     } else if (path[1] === "review") {
       verb = verb || "Pay";
