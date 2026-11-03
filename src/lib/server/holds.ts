@@ -176,7 +176,8 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   const later = <T extends Date | null>(d: T, by = ms) => (d ? (new Date(d.getTime() + by) as T) : d);
   // (Owner, Nov 2) Open until stays the END of a day in the developer's zone (the nearest one to the moved time), so joining closing and Edit's lock (by calendar
   // day) always agree: a pause of 2 days and 1 minute moves "Nov 1, 11:59 PM" to "Nov 3, 11:59 PM", never "Nov 4, 12:01 AM".
-  if (t.openUntil && t.status !== "stopped" && !t.workEndedAt) {
+  // (Owner, Nov 2) Like deadlines: an Open until that had already passed when the pause started stays (joining never reopens).
+  if (t.openUntil && t.openUntil > start && t.status !== "stopped" && !t.workEndedAt) {
     const tz = (await tx.test.findUnique({ where: { id: t.id }, select: { developer: { select: { timeZone: true } } } }))?.developer.timeZone;
     const moved = later(t.openUntil);
     const day = dayIn(moved, tz);

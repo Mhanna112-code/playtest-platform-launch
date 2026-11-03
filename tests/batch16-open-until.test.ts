@@ -113,3 +113,20 @@ describe("A pause lift keeps Open until at the end of a day (owner, Nov 2)", () 
     expect(after.getTime()).toBe(endOfDayIn(dayIn(new Date(ou.getTime() + 2 * DAY)), null).getTime());
   });
 });
+
+describe("A pause lift leaves an Open until that had passed when it started (owner, Nov 2)", () => {
+  it("passed before the pause: unchanged; passing during it: moved", async () => {
+    const s = await setup();
+    const now = Date.now(), start = new Date(now - 2 * DAY);
+    const before = new Date(now - 3 * DAY);
+    await db.test.update({ where: { id: s.testId }, data: { openUntil: before } });
+    const t = await db.test.findUniqueOrThrow({ where: { id: s.testId } });
+    await db.$transaction((tx) => shiftAfterPause(tx, t, start, new Date(now)));
+    expect((await db.test.findUniqueOrThrow({ where: { id: s.testId } })).openUntil!.getTime()).toBe(before.getTime());
+    const during = R.endOfDayIn(R.dayIn(new Date(now - DAY)), null);
+    await db.test.update({ where: { id: s.testId }, data: { openUntil: during } });
+    const t2 = await db.test.findUniqueOrThrow({ where: { id: s.testId } });
+    await db.$transaction((tx) => shiftAfterPause(tx, t2, start, new Date(now)));
+    expect((await db.test.findUniqueOrThrow({ where: { id: s.testId } })).openUntil!.getTime()).toBe(R.endOfDayIn(R.dayIn(new Date(during.getTime() + 2 * DAY)), null).getTime());
+  });
+});
