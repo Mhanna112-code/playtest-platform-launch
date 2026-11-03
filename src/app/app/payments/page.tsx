@@ -123,7 +123,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       }))}
       {dev && waitingCharges.length > 0 && <section className="card space-y-3" id="waiting-charges" data-waiting-charges="">
         <h2>Charged once your tests resume</h2>
-        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><a href={p.href}>{p.what}</a> · {money(p.amountCents)}</li>)}</LongList>
+        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><a href={p.href} title={p.full}>{p.what}</a> · {money(p.amountCents)}</li>)}</LongList>
       </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {dev && <ConfirmList items={await confirmItems(u.id)} />}
@@ -163,7 +163,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
               {paidOut.map((p) => (
                 <li key={p.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                  <span className="text-slate-200" data-paid-what="">{rows.get(p.id) ? <><a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`}>{rows.get(p.id)!.what}</a>{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
+                  <span className="text-slate-200" data-paid-what="">{rows.get(p.id) ? <><a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`} title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</a>{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : p.kind === "call" ? "Live call" : p.kind === "dispute" ? "Dispute decision" : p.kind === "extra" ? "Extra pay" : p.kind === "chargeback" ? "A reversed payment, paid again" : p.kind === "subscription" ? "Subscription" : "Sent work"}</span>
                   <span className="text-slate-400">{fmtDateTime(p.createdAt)} · {money(p.amountCents)}{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? " · your bank reversed this (chargeback)" : ""}</span>
                 </li>
               ))}

@@ -1,4 +1,4 @@
-import { renderTimes } from "@/lib/tz";
+import { T, renderTimes } from "@/lib/tz";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
@@ -175,7 +175,8 @@ describe("call length and payment problems on a call", () => {
     const p = await db.payment.findFirstOrThrow({ where: { callId: call.id, status: "charged" } });
     const { chargebackOpened } = await import("@/lib/server/holds");
     await chargebackOpened(p.stripePaymentIntentId!);
-    expect(await db.testEvent.count({ where: { testId, kind: "chargeback", text: "Your bank reversed your $15.00 payment for Ana Silva's live call" } })).toBe(1);
+    // (§131) Which tester, part and test (and the call's day).
+    expect((await db.testEvent.findMany({ where: { testId, kind: "chargeback" } })).map((e) => e.text)).toEqual(["Your bank reversed your $15.00 payment for Ana Silva's live call on “Harbor Run” (" + T((await db.call.findUniqueOrThrow({ where: { id: call.id } })).startsAt, "date") + ")"]);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     const { payOwed } = await import("@/lib/server/holds");
     // (Owner, Oct 27) The reversed $15.00 is owed again: "Pay what you owe" charges it on the card (paying alone never lifts a chargeback hold).
@@ -251,7 +252,7 @@ describe("newest owner rules", () => {
     await startHold(dev.user.id, "unpaid");
     setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 2800) throw Object.assign(new Error("declined"), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     const { payOwed, owedLines } = await import("@/lib/server/holds");
-    expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual(expect.arrayContaining([expect.stringMatching(/^Ana Silva's written answers \$8\.00 · card declined /), expect.stringMatching(/\$20\.00 · card declined /)]));
+    expect((await owedLines(dev.user.id)).map((l) => l.text)).toEqual(expect.arrayContaining([expect.stringMatching(/^Ana Silva's written answers on “Harbor Run” \$8\.00 · card declined /), expect.stringMatching(/\$20\.00 · card declined /)]));
     const r = await payOwed(dev.user);
     expect(r).toMatchObject({ paid: 0, lifted: false, stillFailing: ["$28.00 (Your card was declined)"] });
     expect((await owedLines(dev.user.id))).toHaveLength(2);
@@ -274,7 +275,7 @@ describe("Pay what you owe stops once when the total changed", () => {
     const press = (body: Record<string, unknown>) => owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body })).then(json);
     const first = await press({ seenTotalCents: 800, seenIds: [seenOne.id] });
     expect(first.status).toBe(409);
-    expect(first.body.error.changes[0].text).toBe("Another payment failed meanwhile: Ana Silva's written answers $5.00. New total $13.00. Press again to pay $13.00.");
+    expect(first.body.error.changes[0].text).toBe("Another payment failed meanwhile: Ana Silva's written answers on “Harbor Run” $5.00. New total $13.00. Press again to pay $13.00.");
     setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 1600) throw Object.assign(new Error("Your card has insufficient funds."), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     // (NEXT-UI 12b) The second press names the total the box showed; something newer than the box stops it again.
     const third = await mk(300);

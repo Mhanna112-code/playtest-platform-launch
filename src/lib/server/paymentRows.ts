@@ -1,9 +1,10 @@
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { CHARGED_BY_TESTER, CHARGED_BY_TESTER_14 } from "@/lib/rules";
+import { CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, disputeDecisionName, pieceName } from "@/lib/rules";
 
 type Row = { id: string; kind: string; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null };
-export type PaidRow = { what: string; how: string; testId: string | null; reversed: boolean };
+/** `full` (§131): `what` with the names uncut, the row's hover on Payments. */
+export type PaidRow = { what: string; full: string; how: string; testId: string | null; reversed: boolean };
 
 /**
  * (Owner, Oct 30, batch 32 §18) What each line of Payments' paid lists was for: the tester (or developer), the part and the test, and how it was paid ("charged by Ana
@@ -29,13 +30,16 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     const byTester = r && (r.reason === CHARGED_BY_TESTER || r.reason === CHARGED_BY_TESTER_14);
     const how = p.kind === "chargeback" ? "" : p.settledAt || p.owedUntil ? "paid through Pay what you owe" : byTester ? (side === "developer" ? `charged by ${tester} after 7 days without a review` : "charged by you after 7 days without a review") : r?.auto ? "charged automatically after 7 days" : "";
     const on = `on “${c.title}”`;
-    const what = side === "developer"
-      ? p.kind === "extra" ? `Pay more to ${tester} for their ${part} ${on}`
-        : p.kind === "dispute" ? `Dispute decision: ${tester}'s ${part} ${on}`
-        : p.kind === "chargeback" ? `Paid again after your bank reversed a payment: ${tester}'s ${part} ${on}`
-        : `${tester}'s ${part} ${on}`
-      : `from ${dev} for your ${part} ${on}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
-    out.set(p.id, { what, how, testId: c.testId, reversed: side === "developer" && !!p.chargebackAt });
+    // (Owner, Nov 2, §131) The developer's rows name the piece by pieceName (the tester's and the test's names cut at 10 characters); the tester's rows are unchanged.
+    const devWhat = (full: boolean) => {
+      const piece = pieceName({ tester, part, test: c.title, full });
+      return p.kind === "extra" ? `Pay more for ${piece}`
+        : p.kind === "dispute" ? disputeDecisionName(piece).replace(/^the/, "The")
+        : p.kind === "chargeback" ? `Paid again after your bank reversed a payment: ${piece}`
+        : piece;
+    };
+    const what = side === "developer" ? devWhat(false) : `from ${dev} for your ${part} ${on}${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
+    out.set(p.id, { what, full: side === "developer" ? devWhat(true) : what, how, testId: c.testId, reversed: side === "developer" && !!p.chargebackAt });
   }
   return out;
 }

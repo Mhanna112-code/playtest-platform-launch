@@ -88,9 +88,9 @@ describe("batch 25 section 1: confirm-by times in the developer's own time zone"
     const by = new Date("2030-01-01T10:10:00Z"); // Tue 10:10 AM in UTC; Wed, Jan 2, 12:10 AM in Kiritimati
     const p = await waiting(x, { submissionId: x.sub.id, by });
     const onTest = (await bankWaitingOnTest(x.dev.user.id, x.testId)).find((r) => r.id === p.id)!;
-    expect(onTest.line).toBe("Your bank wants you to confirm a $12.50 payment for Ana Silva's written answers, made while you were away. Confirm it by Wed, Jan 2, 12:10 AM.");
+    expect(onTest.line).toBe("Your bank wants you to confirm a $12.50 payment for Ana Silva's written answers on “Harbor Run”, made while you were away. Confirm it by Wed, Jan 2, 12:10 AM.");
     const item = (await confirmItems(x.dev.user.id)).find((i) => i.id === p.id)!;
-    expect(item.text).toBe("A payment $12.50 on “Harbor Run” · confirm by Wed, Jan 2, 12:10 AM");
+    expect(item.text).toBe("A payment for Ana Silva's written answers on “Harbor Run” $12.50 · confirm by Wed, Jan 2, 12:10 AM");
   });
 });
 
@@ -102,10 +102,10 @@ describe("batch 25 section 2: a retried chargeback reads the same on the dashboa
     const repay = await waiting(x, { kind: "chargeback", repaysId: reversed.id, amountCents: 2500 });
     const owedRetry = await waiting(x, { status: "failed", submissionId: x.sub.id, amountCents: 1000 });
     const rows = await bankToConfirm(x.dev.user.id);
-    expect(rows.find((r) => r.id === repay.id)!.lead).toBe("$25.00 on “Harbor Run” · a payment your bank had reversed (Ana Silva's written answers)");
+    expect(rows.find((r) => r.id === repay.id)!.lead).toBe("$25.00 · a payment your bank had reversed (Ana Silva's written answers on “Harbor Run”)");
     expect(rows.find((r) => r.id === owedRetry.id)!.lead).toBe("$10.00 on “Harbor Run” · what you owe");
     const onTest = (await bankWaitingOnTest(x.dev.user.id, x.testId)).find((r) => r.id === repay.id)!;
-    expect(onTest.line).toContain("for a payment your bank had reversed (Ana Silva's written answers), made while you were away.");
+    expect(onTest.line).toContain("for a payment your bank had reversed (Ana Silva's written answers on “Harbor Run”), made while you were away.");
     expect(onTest.pieceId).toBe(x.sub.id);
   });
 });
@@ -173,11 +173,11 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     const before = new Date();
     expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 1000, lifted: true });
     const lines = await moneyLines(dev.user.id, before);
-    expect(lines.map((n) => n.text)).toEqual([`We charged your card $10.00 for what you owed: Ana Silva's call on ${day}.`]);
+    expect(lines.map((n) => n.text)).toEqual([`We charged your card $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}).`]);
     expect(lines[0]).toMatchObject({ groupKey: "payhold", payment: true, link: "/app/payments" });
     await sendSummaries(new Date(), [dev.user.id]);
     const mails = (await db.outboxEmail.findMany({ where: { to: dev.user.email } })).map((m) => m.text);
-    expect(mails.filter((t) => t.includes("for what you owed: Ana Silva's call on"))).toHaveLength(1);
+    expect(mails.filter((t) => t.includes("for what you owed: Ana Silva's live call on “Harbor Run” ("))).toHaveLength(1);
     expect(mails.join()).not.toContain("Receipt:");
   });
 
@@ -186,7 +186,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     fakeStripe();
     const before = new Date();
     expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 1800 });
-    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`We charged your card $18.00 for what you owed: Ana Silva's call on ${day} and Ben Okafor's written answers.`]);
+    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`We charged your card $18.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}) and Ben Okafor's written answers on “Harbor Run”.`]);
   });
 
   it("Pay what you owe keeps one receipt, naming the items", async () => {
@@ -195,7 +195,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     const before = new Date();
     const r = await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: { seenTotalCents: 1800, seenIds: rows.map((p) => p.id) } })).then(json);
     expect(r.status).toBe(200);
-    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $18.00 for what you owed: Ana Silva's call on ${day} and Ben Okafor's written answers`]);
+    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $18.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}) and Ben Okafor's written answers on “Harbor Run”`]);
   });
 
   it("a retry that waits for the bank sends no line; the bank's confirmation gives one receipt for that money, never two", async () => {
@@ -211,7 +211,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     const confirm = (body: Record<string, unknown>) => confirmPOST(req("/api/payments/confirm", { cookie: dev.cookie, body })).then(json);
     expect((await confirm({ paymentId: waitingRow.id, start: true })).status).toBe(200);
     expect((await confirm({ paymentId: waitingRow.id })).status).toBe(200);
-    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $10.00 for what you owed: Ana Silva's call on ${day}`]);
+    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day})`]);
     expect(await db.notification.count({ where: { userId: dev.user.id, createdAt: { gte: before }, text: { contains: "$10.00" }, NOT: { text: { startsWith: "Your bank wants you to confirm" } } } })).toBe(1);
   });
 

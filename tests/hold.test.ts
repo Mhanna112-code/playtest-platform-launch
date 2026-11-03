@@ -131,7 +131,7 @@ describe("chargebacks (Stripe dispute webhook)", () => {
     // (Owner, Oct 27) Every developer press is refused during a hold, except (batch 15 section 29) Stop, End early and Cancel call; the bank's reversal is on the test's list of events.
     const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded });
     expect(r.body.error.code).toBe("held");
-    expect((await db.testEvent.findMany({ where: { testId, kind: "chargeback" } })).map((e) => e.text)).toContain("Your bank reversed your $8.00 payment for Ana Silva's written answers");
+    expect((await db.testEvent.findMany({ where: { testId, kind: "chargeback" } })).map((e) => e.text)).toContain("Your bank reversed your $8.00 payment for Ana Silva's written answers on “Harbor Run”");
     const owner = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
     await db.user.update({ where: { id: owner.user.id }, data: { isAdmin: true } });
     const p = await db.payment.findFirstOrThrow({ where: { submissionId: sub.id } });

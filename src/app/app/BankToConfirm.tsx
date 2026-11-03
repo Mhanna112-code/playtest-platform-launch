@@ -24,7 +24,7 @@ export function BankToConfirmBox({ rows, seenAt = "" }: { rows: BankTopRow[]; se
     <DashboardActionBox id="bank-to-confirm" title="Your bank wants you to confirm" count={rows.length} kind="bank">
       {rows.map((r) => (
         <li key={r.id} className="rounded-lg border border-white/10 p-3 text-sm" data-bank-top-row={r.id}>
-          <BankWaiting wide paymentId={r.id} seenAt={seenAt} line={<>{r.lead} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
+          <BankWaiting wide paymentId={r.id} seenAt={seenAt} full={`${r.full} · ${r.by}`} line={<>{r.lead} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
         </li>
       ))}
     </DashboardActionBox>
