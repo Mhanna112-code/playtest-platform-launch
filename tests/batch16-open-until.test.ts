@@ -99,3 +99,17 @@ describe("A pause lift skips deadlines that had passed when it started (owner, N
     expect(await due(c.sessionId)).toBe(ahead.getTime() + 2 * DAY);
   });
 });
+
+describe("A pause lift keeps Open until at the end of a day (owner, Nov 2)", () => {
+  it("2 days and 1 minute of pause move 'end of day N' to 'end of day N+2', so joining and Edit's lock agree", async () => {
+    const s = await setup();
+    const { endOfDayIn, dayIn } = R;
+    const ou = endOfDayIn(dayIn(new Date(Date.now() + 2 * DAY)), null);
+    await db.test.update({ where: { id: s.testId }, data: { openUntil: ou } });
+    const t = await db.test.findUniqueOrThrow({ where: { id: s.testId } });
+    const now = Date.now();
+    await db.$transaction((tx) => shiftAfterPause(tx, t, new Date(now - 2 * DAY - 60_000), new Date(now)));
+    const after = (await db.test.findUniqueOrThrow({ where: { id: s.testId } })).openUntil!;
+    expect(after.getTime()).toBe(endOfDayIn(dayIn(new Date(ou.getTime() + 2 * DAY)), null).getTime());
+  });
+});
