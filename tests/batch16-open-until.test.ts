@@ -64,3 +64,19 @@ describe("Open until: at most 30 days from when the test opened (section 16)", (
     expect(src("app/app/tests/[id]/edit/page.tsx")).toContain("capDay: openUntilCapDay(t.createdAt, u.timeZone)");
   });
 });
+
+describe("Moving Open until later skips deadlines that already passed (owner, Nov 2)", () => {
+  it("a working tester whose deadline passed keeps it; one still ahead moves", async () => {
+    const { joined } = await import("./fixtures");
+    const s = await setup();
+    const a = await joined(s.testId), b = await joined(s.testId);
+    const passed = new Date(Date.now() - 3_600_000), ahead = new Date(Date.now() + 3 * DAY);
+    await db.contract.update({ where: { id: a.sessionId }, data: { dueAt: passed } });
+    await db.contract.update({ where: { id: b.sessionId }, data: { dueAt: ahead } });
+    const t = await db.test.findUniqueOrThrow({ where: { id: s.testId } });
+    const later = new Date(t.openUntil!.getTime() + 2 * DAY).toISOString().slice(0, 10);
+    expect((await editOU(s.testId, s.dev.cookie, later)).status).toBe(200);
+    expect((await db.contract.findUniqueOrThrow({ where: { id: a.sessionId } })).dueAt.getTime()).toBe(passed.getTime());
+    expect((await db.contract.findUniqueOrThrow({ where: { id: b.sessionId } })).dueAt.getTime()).toBe(ahead.getTime() + 2 * DAY);
+  });
+});

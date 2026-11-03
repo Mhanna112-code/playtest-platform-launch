@@ -492,11 +492,12 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       if (cs.length) await tx.contractNote.createMany({ data: cs.map((c) => ({ contractId: c.id, kind: "renamed", text })) });
     }
     // (Owner, Oct 30, batch 15 section 18) Moving Open until later by D days: tester days grow by D, and every working tester's deadline moves D days later.
+    // (Owner, Nov 2) Only deadlines that haven't passed: a tester whose deadline already passed keeps it.
     if (fields.includes("openUntil") && next.openUntil && current.openUntil) {
       const d = daysBetween(openUntilDay(current.openUntil, tzOf(body, dev)), openUntilDay(next.openUntil, tzOf(body, dev)));
       if (d > 0) {
         await tx.test.update({ where: { id: testId }, data: { testerDays: (t.testerDays ?? testerDaysOf(t.createdAt, current.openUntil, dev.timeZone)) + d } });
-        await tx.$executeRaw`UPDATE "Contract" SET "dueAt" = "dueAt" + ${d} * interval '1 day' WHERE "testId" = ${testId} AND status = 'working'`;
+        await tx.$executeRaw`UPDATE "Contract" SET "dueAt" = "dueAt" + ${d} * interval '1 day' WHERE "testId" = ${testId} AND status = 'working' AND "dueAt" > (now() AT TIME ZONE 'UTC')`; // dueAt is stored as UTC without a zone
       }
     }
     // (F) Listing info (description, devices, languages): shown to working testers and on the join page; stops once.
