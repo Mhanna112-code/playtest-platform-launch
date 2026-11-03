@@ -332,7 +332,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <h2 className="font-semibold text-white">Excerpts</h2>
               {excerptReqs.map((x) => (
                 <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
-                  <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+                  <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
                 {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                   <ExcerptQuestion question={x.question} />
                   <ClampText text={`“${x.text}”`} className="text-slate-200" />
@@ -447,7 +447,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
-              <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              <p className="text-slate-300"><b className="text-white">Excerpt request</b> · <Cut text={x.tester} /> would like to show this on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               <ExcerptQuestion question={x.question} />
               <ClampText text={`“${x.text}”`} className="text-slate-200" />

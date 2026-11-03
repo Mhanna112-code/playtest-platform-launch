@@ -144,7 +144,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         <DashboardActionBox id="excerpt-requests" title="Excerpt requests" count={excerptBox.length} kind="excerpts">
           {excerptBox.map((x) => (
             <li key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white"><Cut text={x.tester} /></b> would like to show this from “<Cut text={x.testTitle} kind="test" />” on their profile ({x.named ? `names the product: ${x.source}` : "doesn't name the product"}):</p>
+              <p className="text-slate-300"><b className="text-white"><Cut text={x.tester} /></b> would like to show this from “<Cut text={x.testTitle} kind="test" />” on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               {/* (Batch 16 section 37) The question it answers, above the quote. */}
               <ExcerptQuestion question={x.question} />
