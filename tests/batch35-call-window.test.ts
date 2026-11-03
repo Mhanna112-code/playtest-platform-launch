@@ -297,17 +297,20 @@ describe("§132 the forms offer only what's inside the window, and follow it liv
     expect(weekly.last).toBe("Until testers' work ends (Nov 20)");
     expect(weekly.offLine).toBe("");
     const html = unescape(render(h(RequestRows, { rows: [row("2026-11-05T15:00", "weekly")], setRows: () => {}, minNow: "", leadMinutes: 1, end })));
-    expect(html).toContain('<option value="2">2 calls</option><option value="3" selected="">3 calls</option><option value="forever">'); // the 8 picked shows as 3
+    // (Owner, Nov 3) Every count that fits, in weeks (or days) with the last call's day; no separate "until testers' work ends" choice when there's an end.
+    expect(html).toContain('<option value="2">2 weeks (to Nov 12)</option><option value="3" selected="">3 weeks (to Nov 19)</option></select>'); // the 8 picked shows as 3
     expect(html).not.toContain('<option value="4">');
-    expect(html).toContain(`<option value="forever">Until testers' work ends (Nov 20)</option>`);
+    expect(html).not.toContain('<option value="forever">');
     // What's sent is what's shown: 3, not the 8 that was picked before the time was.
     expect(rowsPayload([row("2026-11-05T15:00", "weekly")], end)).toEqual([{ startsAt: "2026-11-05T15:00:00.000Z", repeat: "weekly", count: 3 }]);
-    expect(rowsPayload([row("2026-11-05T15:00", "weekly", "forever")], end)[0].count).toBe(0);
+    expect(rowsPayload([row("2026-11-05T15:00", "weekly", "forever")], end)[0].count).toBe(3); // an older "forever" row: the most that fit
     // 4 days before the end: Daily fits (up to 5), Weekly doesn't.
     const near = rowOffer(row("2026-11-16T15:00", "weekly"), end);
     expect(near).toMatchObject({ daily: true, weekly: false, offLine: "Weekly isn't offered: only one call fits before testers' work ends (Nov 20)." });
     expect(near.shown.repeat).toBe("once");
     expect(rowOffer(row("2026-11-16T15:00", "daily"), end).counts).toEqual([2, 3, 4, 5]);
+    // (Owner, Nov 3) All that fit, past 8: Daily from Nov 5 lists 2 to 16 days.
+    expect(rowOffer(row("2026-11-05T15:00", "daily"), end).counts).toEqual(Array.from({ length: 15 }, (_, i) => i + 2));
     const nearHtml = unescape(render(h(RequestRows, { rows: [row("2026-11-16T15:00", "weekly")], setRows: () => {}, minNow: "", end })));
     expect(nearHtml).toContain('<option value="weekly" disabled="">Weekly</option>');
     expect(nearHtml).toContain('data-repeat-off=""');

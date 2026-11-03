@@ -28,7 +28,8 @@ export function fitRow(r: RowState, end: Date | null): RowState {
   if (isNaN(when.getTime()) || when.getTime() > end.getTime()) return r;
   const c = repeatChoices(when, r.repeat, end);
   if (!c.ok) return { ...r, repeat: "once" };
-  return r.count !== "forever" && Number(r.count) > c.fit ? { ...r, count: String(c.fit) } : r;
+  // (Owner, Nov 3) No "until testers' work ends" choice any more: an older "forever" row becomes the most calls that fit.
+  return r.count === "forever" || Number(r.count) > c.fit ? { ...r, count: String(c.fit) } : r;
 }
 
 /** The rows as the API wants them (empty rows left out); (batch 35 §132) each as the form offers it (fitRow). */
@@ -161,6 +162,14 @@ export function rowOffer(r: RowState, end: CallEnd | undefined) {
   };
 }
 
+/** (Owner, Nov 3) A count's words: "2 days (to Nov 5)" for Daily, "3 weeks (to Nov 19)" for Weekly (the last call's day). */
+export function countLabel(n: number, r: RowState) {
+  const unit = r.repeat === "daily" ? "day" : "week";
+  const start = r.when ? new Date(r.when) : null;
+  const last = start && !isNaN(start.getTime()) ? new Date(start.getTime() + (n - 1) * (r.repeat === "daily" ? 1 : 7) * 86_400_000) : null;
+  return `${n} ${unit}s${last ? ` (to ${last.toLocaleDateString("en-US", { month: "short", day: "numeric" })})` : ""}`;
+}
+
 export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][];
   /** (Batch 35 §132) The server's lead (the time box's red line) and when testers' work ends (its latest time; the calls drop-down). */
   leadMinutes?: number; end?: CallEnd }) {
@@ -179,9 +188,10 @@ export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end }: 
               <option value="weekly" disabled={!o.weekly}>Weekly</option>
             </select>
             {o.shown.repeat !== "once" && (
-              <select aria-label={`How many calls ${i + 1}`} className="input w-auto" data-match="repeat 2 to 8" value={o.shown.count} onChange={(e) => set(i, { count: e.target.value })}>
-                {o.counts.map((n) => <option key={n} value={String(n)}>{n} calls</option>)}
-                <option value="forever">{o.last}</option>
+              <select aria-label={`How many calls ${i + 1}`} className="input w-auto" data-match="repeat 2 to 8|repeat at least 2" value={o.shown.count} onChange={(e) => set(i, { count: e.target.value })}>
+                {/* (Owner, Nov 3) Every count that fits, named by days or weeks with the last call's day; "Forever" only when nothing ends the test's work. */}
+                {o.counts.map((n) => <option key={n} value={String(n)}>{countLabel(n, o.shown)}</option>)}
+                {!end && <option value="forever">{o.last}</option>}
               </select>
             )}
             {rows.length > 1 && <button type="button" className="btn-ghost text-xs" onClick={() => setRows(rows.filter((_, j) => j !== i))}>Remove</button>}

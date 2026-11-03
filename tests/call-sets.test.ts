@@ -39,8 +39,8 @@ describe("call request rows", () => {
     const { sessionId } = await joined(testId);
     const one = { startsAt: atHours(50), repeat: "weekly" };
     // (Batch 35 §132) Forever reads "until testers' work ends".
-    expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ ...one, count: 9 }] })).body.error.message).toBe("Weekly calls repeat 2 to 8 times, or until testers' work ends.");
-    expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ ...one, count: 1 }] })).status).toBe(400);
+    // (Owner, Nov 3) With an end (every test has one), any count from 2 that fits; the form lists them all.
+    expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ ...one, count: 1 }] })).body.error.message).toBe("Weekly calls repeat at least 2 times.");
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: [] })).status).toBe(400);
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: Array.from({ length: 4 }, (_, i) => ({ startsAt: atHours(50 + i * 30), repeat: "once" })) })).body.error.message).toBe("Offer up to 3 times to choose from.");
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ startsAt: new Date(Date.now() - 3_600_000).toISOString(), repeat: "once" }] })).status).toBe(400);

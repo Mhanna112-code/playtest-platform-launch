@@ -56,7 +56,7 @@ export const windowShut = (end: Date | string | null | undefined, leadMinutes: n
  */
 export const windowShutLine = (endText: string, minutes: number) => `No more calls can be requested: testers' work on this test ends ${endText}, less than ${leadWords(minutes)} from now.`;
 
-/** The calls drop-down's counts: 2 to 8 calls. */
+/** The calls drop-down's counts with no end to fit before: 2 to 8 calls. */
 export const REPEAT_COUNTS = [2, 3, 4, 5, 6, 7, 8] as const;
 
 /**
@@ -65,7 +65,9 @@ export const REPEAT_COUNTS = [2, 3, 4, 5, 6, 7, 8] as const;
  */
 export function repeatChoices(when: Date | null, repeat: RowRepeat, end: Date | null) {
   const fit = when && !isNaN(when.getTime()) ? callsUntil(when, repeat, end) : Number.POSITIVE_INFINITY;
-  return { fit, counts: REPEAT_COUNTS.filter((n) => n <= fit), ok: fit >= 2 };
+  // (Owner, Nov 3) With an end, EVERY count that fits is listed (2 up to the most), and there's no separate "until testers' work ends" choice.
+  const counts = Number.isFinite(fit) ? Array.from({ length: Math.max(0, fit - 1) }, (_, i) => i + 2) : [...REPEAT_COUNTS];
+  return { fit, counts, ok: fit >= 2 };
 }
 
 /** Why a repeat can't be picked at this time: "Weekly isn't offered: only one call fits before testers' work ends (Dec 3)." ("" when every repeat fits.) */
