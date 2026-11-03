@@ -211,7 +211,8 @@ describe("batch 35 §105: account-level direct conversations from profiles", () 
     const other = await setup();
     const member = await joined(own.testId, "Alex Morgan", "they");
     await db.user.update({ where: { id: own.dev.user.id }, data: { isTester: true, side: "tester" } });
-    await db.testerProfile.create({ data: { userId: own.dev.user.id, devices: [], languages: [], categories: [] } });
+    // (Owner, Nov 2) A saved tester profile (a device and a language) is needed to join.
+    await db.testerProfile.create({ data: { userId: own.dev.user.id, devices: ["Windows PC"], languages: ["English"], categories: [] } });
     const listing = await db.test.findUniqueOrThrow({ where: { id: other.testId } });
     expect((await act(other.testId, "join", own.dev.cookie, { listingVersion: listing.listingVersion })).status).toBe(200);
     await sendChat(member.tester.user, own.testId, member.tester.user.id, "On the developer side", randomUUID());

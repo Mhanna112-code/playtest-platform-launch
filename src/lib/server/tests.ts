@@ -903,6 +903,10 @@ export function gapStop(t: { devices: string[]; languages: string[] }, profile: 
   const shown = readGaps(body.gapsShown);
   if (shown && gapsUnseen(gaps, shown)) throw new HttpError(409, "needs", message, { gaps, changed: true, now: new Date().toISOString() });
 }
+/** (Owner, Nov 2) A tester's profile is saved once it names at least one device and one language (Save requires both; sign-up leaves it empty). */
+export const profileSaved = (p: { devices: string[]; languages: string[] } | null) => !!p && p.devices.length > 0 && p.languages.length > 0;
+/** (Owner, Nov 2) Like a developer's card before posting: Join, Apply, an invite's Join and Ask to rejoin need a saved profile. */
+export const PROFILE_FIRST = "Save your tester profile first: pick the devices and languages you test on in Profile.";
 /** Why this tester's profile doesn't fit the test's needs, or "" when it does (every unmet need). */
 export const needsGap = (t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) => needsLines(t, p).join(" ");
 
@@ -913,6 +917,8 @@ export const needsGap = (t: { devices: string[]; languages: string[] }, p: { dev
 export async function joinTest(tester: U, testId: string, body: Record<string, unknown>, options: { applicationId?: string; /** what the claimed application becomes (default "joined") */ applicationStatus?: "joined" | "accepted"; quietJoinEvent?: boolean } = {}) {
   if (!tester.isTester) throw new HttpError(403, "not_tester", "Turn on “test apps, games and more” in your profile to join tests.");
   const profile = await db.testerProfile.findUnique({ where: { userId: tester.id } });
+  // (Owner, Nov 2) The tester's own press needs a saved profile (a developer accepting their application or ask doesn't: they pressed with one).
+  if (!options.applicationId && !profileSaved(profile)) throw new HttpError(409, "profile_first", PROFILE_FIRST);
   const seen = Number(body.listingVersion);
   const { contract, dev, filled } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);

@@ -24,7 +24,7 @@ import { CategoryChips, CategoryTile, daysLeft, FeedbackBar, mainCategory, PartB
 import { callCharge, callJoinable, canAskToRejoin, chargeAmount, termsLine, testerShare, testPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensAt, chargeOpensNote } from "@/lib/rules";
 import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
-import { asListing, findTests } from "@/lib/server/tests";
+import { asListing, findTests, profileSaved } from "@/lib/server/tests";
 import { RestrictedBox } from "@/components/RestrictedBox";
 import { ClampText } from "@/components/ClampText";
 import { ExcerptDecision } from "@/components/Excerpts";
@@ -118,7 +118,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
           <p className="text-sm text-slate-400">Welcome back,</p>
           <h1 className="text-3xl font-bold tracking-tight text-white">{u.name || u.email}</h1>
           {side === "developer" && u.isDeveloper && <GetStarted steps={[{ label: "Add a card (needed to post a test)", done: !!u.stripePaymentMethodId }]} />}
-          {side === "tester" && u.isTester && <GetStarted steps={[{ label: "Set up payouts (to receive your pay)", done: !!(u.payoutsReady && u.stripeAccountId) }]} />}
+          {side === "tester" && u.isTester && <GetStarted steps={[{ label: "Save your profile (needed to join a test)", done: profileSaved(await db.testerProfile.findUnique({ where: { userId: u.id } })), href: "/app/profile" }, { label: "Set up payouts (to receive your pay)", done: !!(u.payoutsReady && u.stripeAccountId) }]} />}
         </div>
         <div className="flex flex-wrap gap-2">
           {side === "developer" && !devOff && <Link className="btn" href="/app/tests/new"><PlusCircle className="h-4 w-4" /> Post a test</Link>}

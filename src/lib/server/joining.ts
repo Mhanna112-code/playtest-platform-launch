@@ -6,7 +6,7 @@ import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE
 import { HttpError } from "./http";
 import { notify } from "./notify";
 import { unanswered, answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
-import { asListing, devGate, gapStop, joinTest, needsGap, ownTest } from "./tests";
+import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, PROFILE_FIRST, profileSaved } from "./tests";
 import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
 import { ratingSummary } from "./ratings";
 
@@ -239,6 +239,8 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   // of theirs closes as joined), instead of filing an application next to the invite. A page that showed the invite is refused ("… invited you: press Join").
   if (await inviteBeforePress(tester, testId, body, displayName(t.developer))) return { joined: true, sessionId: (await join(tester, testId, body)).id };
   await alreadyWaiting(tester.id, testId);
+  // (Owner, Nov 2) A saved tester profile first, like Join.
+  if (!profileSaved(await db.testerProfile.findUnique({ where: { userId: tester.id } }))) throw new HttpError(409, "profile_first", PROFILE_FIRST);
   await listingGate(tester.id, testId, body, "apply");
   if (t.joinMode !== "anyone" && t.joinMode !== "invite") gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Apply");
   if (t.joinMode === "anyone") return { joined: true, sessionId: (await join(tester, testId, { ...body, confirmed: true })).id };
@@ -439,6 +441,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   // (Batch 34 §16) An invite the page already showed: Join, not an ask. One it hadn't shown: the ask meets it below and they're back at once.
   await inviteBeforePress(tester, testId, body, displayName(t.developer));
   await alreadyWaiting(tester.id, testId);
+  if (!profileSaved(await db.testerProfile.findUnique({ where: { userId: tester.id } }))) throw new HttpError(409, "profile_first", PROFILE_FIRST);
   await listingGate(tester.id, testId, body, "ask");
   if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to ask to rejoin.");
   gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Ask");
