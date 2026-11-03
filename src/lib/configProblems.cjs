@@ -51,6 +51,8 @@ function configProblems(env, now = new Date()) {
     if (r2.length === 0) add("The R2 settings are missing: uploads would go to the server's own disk, which Vercel doesn't keep.", true);
     if (v("ALLOW_DEV_OUTBOX") === "1") add("ALLOW_DEV_OUTBOX=1 on the live site: /dev/outbox would show reset links. Remove it.", true);
     if (v("STRIPE_FAKE") === "1") add("STRIPE_FAKE=1 on the live site: remove it.", true);
+    // (Owner, Nov 2) Calls are browser to browser: without a TURN relay they can't connect on some strict networks (some offices, mobile carriers, VPNs).
+    if (!v("TURN_URL")) add("TURN_URL is missing: calls can't connect on some strict networks (some offices, mobile carriers, VPNs). Set TURN_URL, TURN_USERNAME and TURN_CREDENTIAL from a TURN provider.");
     // (Nov 2) Testing-only settings left on the live site: each is ignored there, but shouldn't be set.
     for (const k of ["SKIP_EMAIL_CONFIRM", "ANSWER_MIN_CHARS", "LISTING_MIN_CHARS", "CALL_MIN_AHEAD_MINUTES", "DISPUTE_WAIT_MS", "UPLOAD_DIR"]) if (v(k)) add(`${k} is a testing setting: remove it from the live site.`);
     if (placeholder(v("ADMIN_EMAILS"))) add(`ADMIN_EMAILS still has a placeholder ("${v("ADMIN_EMAILS")}"): put the real admins' emails.`, true);

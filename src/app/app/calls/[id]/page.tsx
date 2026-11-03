@@ -14,7 +14,9 @@ export const metadata = { title: "Live call · Playtest" };
 export const dynamic = "force-dynamic";
 
 /** (Batch 21) A live call held in the app, between the booked tester and the test's developer (the full app's call page). */
-export default async function CallPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function CallPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams?: Promise<{ relay?: string }> }) {
+  // (Owner, Nov 2) `?relay=1`: the call goes only through the TURN relay, as on a strict network, to check the relay works (on the live site too).
+  const relayOnly = (await searchParams)?.relay === "1";
   const { id } = await params;
   const u = await requirePageUser();
   return withDateZone(u.timeZone, async () => {
@@ -45,14 +47,16 @@ export default async function CallPage({ params }: { params: Promise<{ id: strin
     <div className="mx-auto max-w-5xl space-y-4">
       <div>
         <h1 className="text-2xl font-bold tracking-tight text-white">Call with {otherName}</h1>
-        <p className="text-sm text-slate-400">“{call.contract.title}” · {fmtDateTime(call.startsAt)} · booked for {call.minutes} minutes (paid up to {Math.floor(call.minutes * 1.5)}) · the length is measured while you&apos;re both connected.</p>
+        <p className="text-sm text-slate-400">{/* (Owner, Nov 2) the test opens in a new tab, so the call keeps going here */}<a href={amTester ? `/app/sessions/${call.contractId}` : `/app/tests/${call.contract.testId}`} target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-white" data-call-test-link="">“{call.contract.title}”</a> · {fmtDateTime(call.startsAt)} · booked for {call.minutes} minutes (paid up to {Math.floor(call.minutes * 1.5)}) · the length is measured while you&apos;re both connected.</p>
       </div>
+      {relayOnly && <p className="info" data-relay-only="">{process.env.TURN_URL ? "Relay-only check: this call goes only through the TURN relay, as it would on a strict network. If it connects, the relay works." : "Relay-only check: no TURN relay is set up (TURN_URL), so this call can't connect this way."}</p>}
       <CallRoom
         callId={id}
         role={amTester ? "tester" : "developer"}
         myName={displayName(u)}
         otherName={otherName}
         iceServers={iceServers()}
+        relayOnly={relayOnly}
         initialLine={s.line}
         opensAt={new Date(call.startsAt.getTime() - JOIN_OPENS_MIN * 60_000).toISOString()}
         back={amTester ? `/app/sessions/${call.contractId}#call-${call.id}` : `/app/tests/${call.contract.testId}#call-${call.id}`}

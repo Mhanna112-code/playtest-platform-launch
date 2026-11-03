@@ -20,6 +20,7 @@ describe("configProblems", () => {
       "APP_URL is missing: set it to the site's https address (links in emails and Stripe's return pages use it).",
       'STRIPE_SECRET_KEY is missing: every Pay would be recorded as "payments not set up" and testers told they were paid.',
       "The R2 settings are missing: uploads would go to the server's own disk, which Vercel doesn't keep.",
+      "TURN_URL is missing: calls can't connect on some strict networks (some offices, mobile carriers, VPNs). Set TURN_URL, TURN_USERNAME and TURN_CREDENTIAL from a TURN provider.",
       "EMAIL_FROM is missing or a placeholder: set an address on your verified Resend domain.",
     ]);
     expect(msgs({ FREE_UNTIL: "next spring" })).toEqual([`FREE_UNTIL isn't a valid date ("next spring"). Developers stay free until it's fixed.`]);
@@ -103,5 +104,18 @@ describe("testing-only settings on the live site (owner, Nov 2)", () => {
     const { listingMin } = await import("@/lib/rules");
     expect(answerMin()).toBe(50);
     expect(listingMin()).toBe(10);
+  });
+});
+
+describe("calls through a TURN relay (owner, Nov 2)", () => {
+  it("?relay=1 makes the call room use only the relay; the page says whether one is set up", async () => {
+    const fs = await import("node:fs");
+    const room = fs.readFileSync("src/app/app/calls/[id]/CallRoom.tsx", "utf8");
+    expect(room).toContain('new RTCPeerConnection({ iceServers, ...(relayOnly ? { iceTransportPolicy: "relay" as const } : {}) })');
+    expect(fs.readFileSync("src/app/app/calls/[id]/page.tsx", "utf8")).toContain('const relayOnly = (await searchParams)?.relay === "1";');
+    // (Owner, Nov 2) A browser with no microphone or camera still starts the connection (it asks to receive both).
+    expect(room).toContain('next.addTransceiver(kind, { direction: "recvonly" })');
+    // The test's name opens in a new tab.
+    expect(fs.readFileSync("src/app/app/calls/[id]/page.tsx", "utf8")).toContain('target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-white" data-call-test-link=""');
   });
 });

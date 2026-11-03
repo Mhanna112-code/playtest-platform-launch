@@ -12,7 +12,7 @@ import { STRICT_NETWORK_LINE } from "@/lib/callMeasure";
 import { TAB } from "@/lib/client";
 
 type Ice = { urls: string | string[]; username?: string; credential?: string }[];
-type Who = { callId: string; role: "tester" | "developer"; myName: string; otherName: string; iceServers: Ice };
+type Who = { callId: string; role: "tester" | "developer"; myName: string; otherName: string; iceServers: Ice; /** (Owner, Nov 2) only through the TURN relay (?relay=1) */ relayOnly?: boolean };
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 /** Sends one message from the room (never a press: connection messages, "connected", "left"). */
@@ -29,7 +29,7 @@ function NoVideo({ name, note }: { name: string; note: string }) {
   );
 }
 
-function Room({ callId, role, myName, otherName, iceServers, onEnded, onLeft }: Who & { onEnded: (line: string) => void; onLeft: (measured: number) => void }) {
+function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded, onLeft }: Who & { onEnded: (line: string) => void; onLeft: (measured: number) => void }) {
   const localRef = useRef<HTMLVideoElement>(null);
   const remoteRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -73,7 +73,7 @@ function Room({ callId, role, myName, otherName, iceServers, onEnded, onLeft }: 
     let pc: RTCPeerConnection | null = null;
     /** A fresh connection carrying this browser's camera and microphone (and the shared screen): at the start, and whenever the other person comes (back) into the room. */
     const connect = () => {
-      const next = new RTCPeerConnection({ iceServers });
+      const next = new RTCPeerConnection({ iceServers, ...(relayOnly ? { iceTransportPolicy: "relay" as const } : {}) });
       pc = next;
       pcRef.current = next;
       screenSender.current = null;
@@ -105,6 +105,9 @@ function Room({ callId, role, myName, otherName, iceServers, onEnded, onLeft }: 
       };
       const stream = streamRef.current;
       if (stream) for (const t of stream.getTracks()) next.addTrack(t, stream);
+      // (Owner, Nov 2) No microphone or camera here (none, or not allowed): still ask to receive both, so the connection always starts and this person sees and
+      // hears the other one (before, a browser with nothing to send never started the connection: both sides sat on "Connecting…").
+      for (const kind of ["audio", "video"] as const) if (!next.getSenders().some((x) => x.track?.kind === kind)) next.addTransceiver(kind, { direction: "recvonly" });
       const screen = screenTrack.current;
       if (screen && screen.readyState === "live") {
         const cameraSender = next.getSenders().find((x) => x.track?.kind === "video");
@@ -208,7 +211,7 @@ function Room({ callId, role, myName, otherName, iceServers, onEnded, onLeft }: 
       window.removeEventListener("pagehide", bye);
       hangUp();
     };
-  }, [callId, role, otherName, iceServers]);
+  }, [callId, role, otherName, iceServers, relayOnly]);
 
   const tell = (state: Partial<{ mic: boolean; cam: boolean; noCamera: boolean; sharing: boolean }>) => {
     media.current = { ...media.current, ...state };
