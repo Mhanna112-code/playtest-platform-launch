@@ -1186,3 +1186,16 @@ Against card testing (someone running stolen cards through "save a card" one aft
 - **3 a day to the same tester on the same test** (`INVITES_PER_TESTER_PER_TEST`; a cancel and re-invite counts each time; another test has its own 3). Over it, only that tester is skipped, with a line in the press's result like the other skip reasons: "<name>: you've invited them to this test 3 times today. You can invite them again tomorrow." The others in the press are invited.
 - **Cancel invite is never limited**: it works at 100.
 - **Tests:** `tests/invite-limits.test.ts` covers 100 then refused (and a day later working), a press of 3 with 2 left refused whole and naming 2, cancel and re-invite counting (the per-test 3 counted toward the 100), the skip line with the others invited, another test's own 3, cancel at the limit, and another developer unaffected.
+
+## §129 Two gaps from the proof recordings (Nov 2)
+
+- **An NDA redraws excerpts live.** Adding or removing an NDA on a test didn't redraw an open profile until a reload: the excerpt stayed (or stayed hidden). The profile's fingerprint (`publicProfileV` in `src/lib/server/pageFreshness.ts`) now includes each shown excerpt with whether its test has an NDA now. So, within the normal poll:
+  - another person viewing the tester's profile (a developer, another tester) sees the excerpt go when the NDA is added and come back when it's removed;
+  - the tester's own profile, where their accepted excerpts are listed, redraws to "Allowed · hidden while <test> has an NDA" and back to "Shown on your profile".
+  - The developer's dashboard (`dashboardV`) had the same gap for a pending request's note ("<test> has an NDA now: if you allow this, it stays hidden…"): its excerpts now carry the NDA state too. The test page and session page already redraw on the listing Save's event.
+- **The stop-once line says what the second press does.** During a chargeback hold, Pay what you owe's second press doesn't pay: it asks to verify the card (step 1) if that isn't done yet, then reserves the amount, and the team's Approve takes it. The stop-once line used to end "Press again to pay $22.00." It now ends (`pressAgainLine` in `src/lib/rules.ts`, used by `payOwed` in `src/lib/server/holds.ts`):
+  - card not verified yet: "Press again to verify your card, then reserve $22.00 on it: it's taken when the team approves lifting your hold."
+  - card verified: "Press again to reserve $22.00 on your card: it's taken when the team approves lifting your hold."
+  - outside a chargeback hold, unchanged: "Press again to pay $22.00."
+  - The wording follows the reservation line the chargeback steps already show ("Reserved $X: it's taken when the team approves lifting your hold.").
+- **Tests:** `tests/batch35-excerpt-live.test.ts` (§129) covers the tester's own profile, the developer's and another viewer's view changing on an NDA added and removed (the test's updatedAt kept, so only the NDA moves it), the excerpt hidden and back, and the dashboard's pending request. `tests/batch35-payment-proofs.test.ts` (the press from a page that hadn't shown the chargeback) checks both chargeback-hold endings, that the next press asks to verify first and, once verified, reserves with nothing taken, and that outside a hold the line still reads "Press again to pay $22.00."

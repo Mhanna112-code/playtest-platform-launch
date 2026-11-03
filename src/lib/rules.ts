@@ -939,6 +939,14 @@ export const chargebackReversedLine = (cents: number, backCents: number, refunde
  */
 export const RESERVE_DAYS = 7;
 export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's taken when the team approves lifting your hold.`;
+/**
+ * (Batch 35 §129) The end of Pay what you owe's stop-once line: what the second press does. Outside a chargeback hold it pays; during one it reserves (with the card
+ * verified first when it isn't yet), and the team's Approve takes it.
+ */
+export const pressAgainLine = (cents: number, chargeback: null | { cardVerified: boolean } = null) =>
+  !chargeback ? `Press again to pay ${money(cents)}.`
+    : chargeback.cardVerified ? `Press again to reserve ${money(cents)} on your card: it's taken when the team approves lifting your hold.`
+      : `Press again to verify your card, then reserve ${money(cents)} on it: it's taken when the team approves lifting your hold.`;
 export const RESERVE_EXPIRED = "Your reservation expired: press Pay what you owe again so the team can approve it.";
 /** (Batch 34 §3) The developer's reservation line; added charges are explained by the disabled button. */
 export const reservedAddedLine = (reservedCents: number, addedCents: number) => {

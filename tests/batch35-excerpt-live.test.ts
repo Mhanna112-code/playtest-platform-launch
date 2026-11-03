@@ -72,6 +72,47 @@ describe("§126.1 live: excerpt changes are in the pages' fingerprints", () => {
   });
 });
 
+describe("§129 an NDA added or removed redraws the profile and the dashboard live", () => {
+  /** The test's NDA changed with its updatedAt kept: only the NDA state can move the fingerprints. */
+  const setNda = async (testId: string, ndaText: string) => {
+    const t = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { updatedAt: true } });
+    await db.test.update({ where: { id: testId }, data: { ndaText, updatedAt: t.updatedAt } });
+  };
+  it("the tester's own profile and another viewer's both change when a shown excerpt's test gets an NDA, and again when it goes", async () => {
+    const s = await paidWork();
+    const id = (await ask(s.tester.cookie, s.sub.id, "the second boss was far too hard")).body.id as string;
+    expect((await decide(s.dev.cookie, id, "allow")).status).toBe(200);
+    const tester = await user(s.tester.user.id), dev = await user(s.dev.user.id);
+    const other = await user((await makeUser({ dev: true })).user.id);
+    const before = { own: await publicProfileV(tester, tester.id), dev: await publicProfileV(dev, tester.id), other: await publicProfileV(other, tester.id) };
+    expect((await X.shownExcerpts(tester.id)).map((x) => x.id)).toEqual([id]);
+    await setNda(s.testId, "Keep it secret.");
+    const nda = { own: await publicProfileV(tester, tester.id), dev: await publicProfileV(dev, tester.id), other: await publicProfileV(other, tester.id) };
+    expect(nda.own).not.toBe(before.own);
+    expect(nda.dev).not.toBe(before.dev);
+    expect(nda.other).not.toBe(before.other);
+    expect(await X.shownExcerpts(tester.id)).toEqual([]);
+    expect((await X.myExcerpts(tester.id, true))[0].state).toBe(X.allowedHiddenLine((await db.test.findUniqueOrThrow({ where: { id: s.testId } })).title));
+    await setNda(s.testId, "");
+    expect(await publicProfileV(tester, tester.id)).not.toBe(nda.own);
+    expect(await publicProfileV(other, tester.id)).toBe(before.other);
+    expect((await X.shownExcerpts(tester.id)).map((x) => x.id)).toEqual([id]);
+  });
+  it("the developer's dashboard changes with a pending request's NDA note", async () => {
+    const s = await paidWork();
+    await ask(s.tester.cookie, s.sub.id, "the second boss was far too hard");
+    const dev = await user(s.dev.user.id);
+    const before = await dashboardV(dev);
+    expect(await dashboardV(dev)).toBe(before);
+    await setNda(s.testId, "Keep it secret.");
+    const nda = await dashboardV(dev);
+    expect(nda).not.toBe(before);
+    expect((await X.pendingForDeveloper(dev.id))[0].ndaNote).not.toBe("");
+    await setNda(s.testId, "");
+    expect(await dashboardV(dev)).toBe(before);
+  });
+});
+
 describe("§126.2 no duplicates", () => {
   it("the same text (after squash) as a pending or shown excerpt for the same session and question is refused", async () => {
     const s = await paidWork();
