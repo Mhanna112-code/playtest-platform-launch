@@ -70,7 +70,8 @@ export async function publicProfileV(viewer: User, id: string) {
     db.testerProfile.findUnique({ where: { userId: id } }),
     db.rating.findMany({ where: { rateeId: id, ...revealedRatingsWhere() }, orderBy: { id: "asc" } }),
     db.contract.findMany({ where: { OR: [{ testerId: id }, { test: { developerId: id } }] }, orderBy: { id: "asc" }, select: { id: true, status: true, endKind: true, testerId: true, testId: true, submissions: { select: { id: true, updatedAt: true, review: true } }, calls: { select: { id: true, status: true, review: true, actualMinutes: true, measuredAt: true, dispute: true } } } }),
-    db.excerpt.findMany({ where: { testerId: id, status: "shown" }, orderBy: { id: "asc" } }),
+    // (Batch 35 §129) Each shown excerpt with whether its test has an NDA now: adding or removing one hides or brings back the excerpt live.
+    db.excerpt.findMany({ where: { testerId: id, status: "shown" }, orderBy: { id: "asc" }, include: { test: { select: { ndaText: true } } } }).then((rows) => rows.map(({ test, ...x }) => ({ ...x, nda: !!test.ndaText }))),
     db.report.findMany({ where: { reporterId: viewer.id, reportedId: id }, orderBy: { id: "asc" }, select: { id: true } }),
     db.payment.findMany({ where: { OR: [{ developerId: id }, { testerId: id }] }, orderBy: { id: "asc" }, select: { id: true, status: true, amountCents: true, testerCents: true } }),
   ]);
@@ -89,7 +90,8 @@ export async function dashboardV(u: User) {
     db.callRequest.findMany({ where: { contractId: { in: ids } }, orderBy: { id: "asc" }, select: { id: true, status: true, updatedAt: true, startsAt: true } }),
     db.termsOffer.findMany({ where: { contractId: { in: ids } }, orderBy: { id: "asc" }, select: { id: true, status: true, createdAt: true } }),
     db.invite.findMany({ where: sideFor(u) === "tester" ? { testerId: u.id } : { testId: { in: tests } }, orderBy: { id: "asc" }, select: { id: true, testId: true, status: true, updatedAt: true } }),
-    db.excerpt.findMany({ where: { testId: { in: tests } }, orderBy: { id: "asc" }, select: { id: true, status: true, decidedAt: true } }),
+    // (§129) With the test's NDA now (a request's row notes "it stays hidden while <test> has an NDA").
+    db.excerpt.findMany({ where: { testId: { in: tests } }, orderBy: { id: "asc" }, select: { id: true, status: true, decidedAt: true, test: { select: { ndaText: true } } } }).then((rows) => rows.map(({ test, ...x }) => ({ ...x, nda: !!test.ndaText }))),
     db.accessKey.groupBy({ by: ["testId", "status"], where: { testId: { in: tests } }, _count: { _all: true }, orderBy: [{ testId: "asc" }, { status: "asc" }] }),
     paymentsV(u), sideFor(u) === "tester" ? discoveryV(u) : "", messagesV(u),
   ]);
