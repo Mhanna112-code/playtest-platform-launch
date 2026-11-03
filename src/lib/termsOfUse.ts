@@ -66,7 +66,7 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
   },
   {
     heading: "Paying for work",
-    text: "The developer pays any amount from $0 up for each piece of work; there is no reject. Paying less than the listing, or $0, needs a reason the tester reads. A payment above $0 is charged to the developer's card at once. The tester can dispute a payment on each piece once; our team reads the work and both sides, and its decision is final and can only raise the pay (up to the piece's cap, the same one Pay more has, less what that piece was already paid). To decide a dispute, our team can read the chat between the tester and the developer.",
+    text: "The developer pays any amount from $0 up for each piece of work; there is no reject. Paying less than the listing, or $0, needs a reason the tester reads. A payment above $0 is charged to the developer's card at once. The tester can dispute a payment on each piece once; our team reads the work and both sides, and its decision is final and can only raise the pay up to the piece's cap. To decide a dispute, our team can read the chat between the tester and the developer.",
     example: "A $20 recording paid $12 with the reason “Only half the levels were covered”: the tester reads it and can dispute it once.",
   },
   {
