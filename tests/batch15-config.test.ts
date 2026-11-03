@@ -115,6 +115,8 @@ describe("calls through a TURN relay (owner, Nov 2)", () => {
     expect(fs.readFileSync("src/app/app/calls/[id]/page.tsx", "utf8")).toContain('const relayOnly = (await searchParams)?.relay === "1";');
     // (Owner, Nov 2) A browser with no microphone or camera still starts the connection (it asks to receive both).
     expect(room).toContain('next.addTransceiver(kind, { direction: "recvonly" })');
+    // Connected with no video reads "No video", never "Connecting…".
+    expect(room).toContain('!linked ? "Connecting…" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "No video"');
     // The test's name opens in a new tab.
     expect(fs.readFileSync("src/app/app/calls/[id]/page.tsx", "utf8")).toContain('target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-white" data-call-test-link=""');
   });

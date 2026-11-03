@@ -37,6 +37,8 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
   const screenSender = useRef<RTCRtpSender | null>(null);
   const [status, setStatus] = useState("Starting your camera…");
   const [otherHere, setOtherHere] = useState(false);
+  // (Owner, Nov 2) Whether the two browsers are connected: the other tile says "Connecting…" only until then (connected with no video reads "No video").
+  const [linked, setLinked] = useState(false);
   const [measured, setMeasured] = useState(0);
   const [warn, setWarn] = useState("");
   const [mic, setMic] = useState(true);
@@ -89,6 +91,7 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
         if (pc !== next) return;
         const s = next.connectionState;
         report(s === "connected");
+        setLinked(s === "connected");
         setStatus(s === "connected" ? "Connected" : s === "connecting" ? "Connecting…" : s === "failed" ? STRICT_NETWORK_LINE : s === "disconnected" ? `${otherName} lost connection…` : "Waiting…");
       };
       next.onnegotiationneeded = async () => {
@@ -190,6 +193,7 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
                 // They came (back) into the room: a fresh connection, and what they should show of us.
                 cur.close();
                 report(false);
+                setLinked(false);
                 if (remoteRef.current) remoteRef.current.srcObject = null;
                 setOtherVideo(false);
                 connect();
@@ -273,7 +277,7 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
       <div className="grid items-start gap-3 md:grid-cols-[2fr_1fr]">
         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">
           <video ref={remoteRef} autoPlay playsInline className="aspect-video w-full object-cover" aria-label={`${otherName}'s video`} />
-          {!(otherVideo && (otherCam || otherSharing)) && <NoVideo name={otherName} note={!otherHere ? "Not here yet" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "Connecting…"} />}
+          {!(otherVideo && (otherCam || otherSharing)) && <NoVideo name={otherName} note={!otherHere ? "Not here yet" : !linked ? "Connecting…" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "No video"} />}
           {otherSharing && <span className="absolute right-3 top-3 rounded-full bg-sky-500/80 px-2.5 py-1 text-xs font-medium text-white">Sharing their screen</span>}
           <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">{!otherMic && <MicOff className="h-3.5 w-3.5 text-rose-300" aria-label="muted" />}{otherName}{otherHere ? "" : " · not here yet"}</span>
         </div>
