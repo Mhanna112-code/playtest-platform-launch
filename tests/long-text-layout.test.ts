@@ -49,7 +49,8 @@ describe("buttons drop below instead of squeezing; nothing reaches past the scre
 
   it("the words beside a button keep 12rem, so the button wraps below them on a phone", () => {
     expect(src("app/app/page.tsx")).toContain('<p className="min-w-[min(100%,12rem)] flex-1 text-slate-300">');
-    expect(src("app/app/page.tsx")).toContain('<span className="ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300">{r.cta}');
+    // (Batch 35 §137) The action is now the row's link, laid over the card, with the same layout classes.
+    expect(src("app/app/page.tsx")).toContain('<Link href={r.href} className={`ml-auto flex shrink-0 items-center gap-1 whitespace-nowrap text-sm text-indigo-300 no-underline hover:no-underline ${CARD_LINK}`}>{r.cta}');
     expect(src("components/RateBox.tsx")).toContain('<span className="min-w-[min(100%,12rem)] flex-1"><input className="input w-full" maxLength={500}');
     expect(src("app/app/calls/[id]/CallRoom.tsx")).toContain('<span className="min-w-[min(100%,12rem)] flex-1 text-sm text-slate-300" role="status" data-call-status="">');
     expect(src("components/PayoutBanner.tsx")).toContain('<p className="min-w-[min(100%,12rem)] flex-1"><b>{PAYOUT_LINE}</b>');
