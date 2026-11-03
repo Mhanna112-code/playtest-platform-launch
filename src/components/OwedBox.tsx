@@ -11,6 +11,9 @@ import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, OWED_BANK_WAITING, OWED_HOW, PAY_TICK_CENTS, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 import { refusalLine } from "@/lib/pressLabels";
 
+/** (Owner, Nov 3) Lines shown before "Show all". */
+const OWED_FOLD = 4;
+
 /** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
 type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string; /** (§133) part of Pay what you owe's one payment reversed: what that payment covered (the bank doesn't say which), each with its hover */ covers?: { text: string; full: string }[] };
 
@@ -57,6 +60,9 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
   const [bankNote, setBankNote] = useState("");
   // (Batch 17 §11) The bank's check opens inline, under Pay what you owe (one after another when several need it).
   const bank = useBankCheck();
+  const [allLines, setAllLines] = useState(false);
+  // One check covers every debt it paid: its Cancel sits next to the first of them (shown even while the list is folded).
+  const cancelAt = (o: Line, i: number) => !!(o.waiting && o.checkId && owed.findIndex((x) => x.checkId === o.checkId) === i);
   const retry = owed.filter((o) => o.retry);
   const seenTotal = retry.reduce((s, o) => s + o.amountCents, 0);
   // What the page / the stop box showed last: every press (the second too) is checked against it.
@@ -86,24 +92,32 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
       {reservedOnce && <p data-reserved="">{reservedAddedLine(reservedCents, seenTotal)}</p>}
       {onHold && review && <p data-hold-review="">After you pay what you owe, the team will review your account before your tests resume.</p>}
       {owed.length > 0 && (
+        <div className={allLines ? "max-h-64 overflow-y-auto pr-1" : undefined} data-owed-lines={allLines ? "all" : "first"}>
         <ul className="list-disc pl-5">
-          {owed.map((o, i) => (
+          {owed.map((o, i) => !allLines && i >= OWED_FOLD && !cancelAt(o, i) ? null : (
             <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined} title={o.full}>
-              {o.text}
+              {allLines ? (o.full ?? o.text) : o.text}
               {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
               {o.after && <> · <b data-owed-after="">{o.after}</b></>}
               {/* One check covers every debt it paid: its Cancel sits next to the first of them. */}
-              {o.waiting && o.checkId && owed.findIndex((x) => x.checkId === o.checkId) === i && <> <CancelCheck id={o.checkId} /></>}
+              {cancelAt(o, i) && o.checkId && <> <CancelCheck id={o.checkId} /></>}
               {/* (Owner, Nov 3, §133) Part of a payment that paid for several items: what it covered, underneath (the bank gives only an amount, so none is named). */}
               {o.covers && o.covers.length > 0 && (
                 <div className="mt-1 text-xs" data-owed-covers={o.id}>
                   That payment covered:
-                  <ul className="list-[circle] pl-5">{o.covers.map((x, j) => <li key={j} title={x.full}>{x.text}</li>)}</ul>
+                  <ul className="list-[circle] pl-5">{o.covers.map((x, j) => <li key={j} title={x.full}>{allLines ? (x.full ?? x.text) : x.text}</li>)}</ul>
                 </div>
               )}
             </li>
           ))}
         </ul>
+        </div>
+      )}
+      {/* (Owner, Nov 3) A long list folds to its first lines; Show all opens every line with the names uncut, scrolling inside the box. */}
+      {owed.length > OWED_FOLD && (
+        <button type="button" className="text-xs underline" data-owed-toggle="" onClick={() => setAllLines(!allLines)}>
+          {allLines ? "Show fewer" : `Show all ${owed.length} lines`}
+        </button>
       )}
       {retry.length > 0 && <div className="flex flex-wrap items-center gap-2">
       {over && (
