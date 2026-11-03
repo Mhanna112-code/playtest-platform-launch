@@ -117,6 +117,8 @@ describe("calls through a TURN relay (owner, Nov 2)", () => {
     expect(room).toContain('next.addTransceiver(kind, { direction: "recvonly" })');
     // Connected with no video reads "No video", never "Connecting…".
     expect(room).toContain('!linked ? "Connecting…" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "No video"');
+    // Only a real refusal from the server ends the room; a blip is retried.
+    expect(room).toContain('if ((r.status === 403 || r.status === 404) && data?.error) {');
     // The test's name opens in a new tab.
     expect(fs.readFileSync("src/app/app/calls/[id]/page.tsx", "utf8")).toContain('target="_blank" rel="noreferrer" className="underline decoration-dotted hover:text-white" data-call-test-link=""');
   });

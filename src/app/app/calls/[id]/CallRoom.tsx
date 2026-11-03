@@ -152,7 +152,8 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
           const r = await fetch(`/api/calls/${callId}/room?after=${after}&connected=${connected ? 1 : 0}`, { cache: "no-store", headers: { "x-tab": TAB } });
           const data = await r.json().catch(() => null);
           if (!r.ok) {
-            if (r.status === 403 || r.status === 404) {
+            // (Owner, Nov 2) Only the server's own answer ends the room (a JSON refusal); a blip (the site reloading or deploying, a proxy's page) is retried.
+            if ((r.status === 403 || r.status === 404) && data?.error) {
               hangUp();
               ended.current((data?.error?.line as string) || (data?.error?.message as string) || "This call isn't available.");
               break;
