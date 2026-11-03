@@ -195,7 +195,9 @@ describe("batch 5 item 4: no automatic re-invite after a tester's suspension", (
     const dash = src("app/app/page.tsx");
     expect(dash).not.toContain("data-suspended-label");
     expect(dash).not.toContain('"Rejoin"');
-    expect(dash).toContain("You were removed from this test.");
+    // (Owner, Nov 3) The section's heading says it; the cards no longer repeat "You were removed from this test." (Dismiss all clears them).
+    expect(dash).not.toContain("data-removed-label");
+    expect(dash).toContain('"Tests you were removed from"');
     expect(dash).toContain("hasSpot(c) && askable(c)");
 
     const { dev, testId } = await setup({ spots: 1 });
