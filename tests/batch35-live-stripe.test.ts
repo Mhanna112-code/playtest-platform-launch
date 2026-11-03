@@ -11,14 +11,14 @@ import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as cardPOST } from "@/app/api/payments/card/route";
 import { POST as payoutPOST } from "@/app/api/payments/payout/route";
 import { POST as verifyPOST } from "@/app/api/payments/verify-card/route";
-import { owed, retryOwed, startHold } from "@/lib/server/holds";
+import { owed, startHold } from "@/lib/server/holds";
 import { awayAction, expireActions, STALE_CHECK } from "@/lib/server/confirm";
 import { dropCheck } from "@/lib/server/owedOnce";
 import { savedCardLine } from "@/lib/server/savedCard";
 import { cancelSubscription } from "@/lib/server/subscription";
 import { ADD_CARD_FIRST, PAYMENTS_OFF, PAYMENTS_PROBLEM, cardSetupUrl, payoutSetupUrl, refreshPayoutStatus, setStripeForTests } from "@/lib/server/stripe";
 import { MARKER_KEY, switchStripeMode } from "../scripts/stripe-mode-switch.mjs";
-import { json, makeUser, req } from "./helpers";
+import { json, legacyAwayOwed, makeUser, req } from "./helpers";
 import { joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 2, batch 35 §130) Stripe ids from the other mode (test ids under live keys, or live ids under test keys): Stripe answers resource_missing. A stale id is
@@ -113,13 +113,13 @@ describe("§130 a stale customer or card is 'no card saved', never a decline", (
     expect(await db.review.count({ where: { submissionId: w.sub.id } })).toBe(0);
   });
 
-  it("a new card's retry during a hold on a stale card: nothing more owed, the stale card cleared", async () => {
+  it("an away one payment (from before §148) during a hold on a stale card: nothing more owed, the stale card cleared", async () => {
     const w = await sentWork();
     const base = { contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, feeCents: 0, testerCents: 0 };
     const debt = await db.payment.create({ data: { ...base, kind: "review", submissionId: w.sub.id, amountCents: 800, status: "failed", owedUntil: new Date() } });
     await startHold(w.dev.user.id, "unpaid");
     liveStripe();
-    expect(await retryOwed(w.dev.user.id)).toMatchObject({ cents: 0 });
+    expect(await legacyAwayOwed(w.dev.user.id)).toMatchObject({ cents: 0 });
     expect(await userOf(w.dev.user.id)).toMatchObject(cardCleared);
     expect(await db.payment.findUniqueOrThrow({ where: { id: debt.id } })).toMatchObject({ status: "failed", coveredById: null });
     expect((await owed(w.dev.user.id)).map((p) => p.id)).toEqual([debt.id]);
@@ -259,14 +259,14 @@ describe("§130 live keys while payments are switched off (no STRIPE_ALLOW_LIVE)
     expect((await userOf(w.dev.user.id)).stripeCustomerId).not.toBeNull(); // the card is kept
   });
 
-  it("Pay what you owe says so, and a new card's retry charges nothing either", async () => {
+  it("Pay what you owe says so, and an away one payment (from before §148) charges nothing either", async () => {
     const w = await sentWork();
     const base = { contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, feeCents: 0, testerCents: 0 };
     const debt = await db.payment.create({ data: { ...base, kind: "review", submissionId: w.sub.id, amountCents: 800, status: "failed", owedUntil: new Date() } });
     await startHold(w.dev.user.id, "unpaid");
     const r = await owedPress(w.dev.cookie, { seenTotalCents: 800, seenIds: [debt.id] });
     expect(r.body.stillFailing).toEqual([expect.stringContaining(PAYMENTS_OFF.replace(/\.$/, ""))]);
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     expect(await db.payment.findUniqueOrThrow({ where: { id: debt.id } })).toMatchObject({ status: "failed", coveredById: null });
   });
 });

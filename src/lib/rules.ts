@@ -150,6 +150,12 @@ export const TESTER_CHOSE_LINE = "You settled this part yourself (Charge or Let 
 export const disputeLimitText = (roomCents: number) => `up to ${money(Math.max(0, roomCents))} more`;
 /** (Batch 28 §15) The admin form's range: "$20.00 paid · can raise up to $20.00 more". */
 export const disputeRangeLine = (paidCents: number, roomCents: number) => `${money(paidCents)} paid · can raise up to ${money(Math.max(0, roomCents))} more`;
+/**
+ * (Owner, Nov 3, batch 35 §149) Decide's stop when the developer's Pay more since the admin's page loaded took the piece's pay ABOVE the decision: "Ana Silva's pay
+ * changed since you opened this: the developer paid $3.00 more, now $12.00 paid, more than your $10.00 decision. A decision can only raise the pay: decide $12.00 or more."
+ */
+export const decidePayChangedLine = (tester: string, moreCents: number, paidCents: number, decidedCents: number) =>
+  `${tester}'s pay changed since you opened this: the developer paid ${money(moreCents)} more, now ${money(paidCents)} paid, more than your ${money(decidedCents)} decision. A decision can only raise the pay: decide ${money(paidCents)} or more.`;
 
 /**
  * An admin's decision can only raise pay. (Owner, Oct 29, batch 28 §15) The total for the piece runs from what it was already paid (`paidCents`, its Pay and every Pay
@@ -916,16 +922,11 @@ export const bankHref = (testId: string, paymentId: string) => `/app/tests/${tes
 /** (Batch 17 §11) The line above "Confirm with your bank" on the test page. */
 export const bankWaitingLine = (cents: number, what: string, by: string) => `Your bank wants you to confirm a ${money(cents)} payment for ${what}, made while you were away. Confirm it by ${by}.`;
 export const PIECE_LOCKED = "A payment for this is being confirmed right now.";
-/** (Owner, Nov 3, batch 35 §145) How what's owed gets paid during a payment hold: no daily retries, only Pay what you owe or a new card (Payments' owed box, the Terms). */
-export const OWED_HOW = "What you owe is charged when you press Pay what you owe, or as soon as you save a new card.";
+/** (Owner, Nov 3, batch 35 §145, §148) How what's owed gets paid during a payment hold: no daily retries and no new-card charge, only Pay what you owe (Payments' owed box, the Terms). */
+export const OWED_HOW = "What you owe is charged when you press Pay what you owe.";
 /** (Batch 25 section 5) Items named in one line: "A", "A and B", "A, B and C"; more than 3: "A, B, C and 2 more". */
 export const namesList = (names: string[]) =>
   names.length <= 1 ? (names[0] ?? "") : names.length <= 3 ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}` : `${names.slice(0, 3).join(", ")} and ${names.length - 3} more`;
-/**
- * (Owner, Oct 29, batch 25 section 5) A new card's charge of what's owed (§145: the only automatic one): ONE bell line, naming what was paid: "We charged your card $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (Oct 30)."
- * (It is a money line, so it also rides the payment email: that is the retry's receipt; no separate "Receipt:" line.)
- */
-export const retriedLine = (cents: number, names: string[] = []) => `We charged your card ${money(cents)} for what you owed${names.length ? `: ${namesList(names)}` : ""}.`;
 /** (Batch 25 section 5) What a receipt for paying what's owed names: "what you owed: Ana Silva's live call on “Harbor Run” (Oct 30) and Ben Okafor's written answers on “Sky Lab”" (§131: each named by pieceName). */
 export const owedReceiptWhat = (names: string[]) => (names.length ? `what you owed: ${namesList(names)}` : "an amount you owed");
 /** (Owner, Oct 29, batch 11) A written part (all its answers and notes together) is at most this many characters. */

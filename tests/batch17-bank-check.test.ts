@@ -13,13 +13,13 @@ import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { POST as verifyPOST } from "@/app/api/payments/verify-card/route";
 import { GET as bankReturn } from "@/app/api/payments/bank-return/route";
 import * as R from "@/lib/rules";
-import { owed, retryOwed, startHold, chargebackOpened } from "@/lib/server/holds";
+import { owed, startHold, chargebackOpened } from "@/lib/server/holds";
 import { bankWaitingOnTest, confirmItems } from "@/lib/server/confirm";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { BankCheckView } from "@/components/BankCheck";
 import { BankWaiting } from "@/components/BankWaiting";
 import { ConfirmList } from "@/app/app/payments/ConfirmList";
-import { json, req } from "./helpers";
+import { json, legacyAwayOwed, req } from "./helpers";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 
 // Batch 17 §11 (owner, Oct 28): the bank's check (3D Secure) opens INLINE, directly under the button that charges (Pay, Pay more, Pay what you owe, Subscribe, Verify a
@@ -297,13 +297,13 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
   });
 
-  it("an automatic retry during a hold: (batch 35 §117) ONE payment confirmed on Payments, listing what it covers; a renewal (no test) stays on Payments too", async () => {
+  it("an away one payment during a hold (before §148): (batch 35 §117) ONE payment confirmed on Payments, listing what it covers; a renewal (no test) stays on Payments too", async () => {
     const { dev, testId, sessionId, tester } = await sentWork();
     await withCard(dev.user.id);
     const row = await db.payment.create({ data: { kind: "review", contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
     await startHold(dev.user.id, "unpaid");
     fakeStripe({ mode: "away-action" });
-    await retryOwed(dev.user.id);
+    await legacyAwayOwed(dev.user.id);
     const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: { startsWith: "Your bank wants you to confirm a $8.00 payment by " } } });
     expect(n.link).toBe("/app#bank-to-confirm"); // (batch 29 §32)
     // (Batch 35 §117) What's owed is ONE payment (it can span tests): confirmed on Payments, its row naming each payment it covers; the debt is locked on the box.

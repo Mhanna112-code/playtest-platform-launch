@@ -9,12 +9,13 @@ import { receipt } from "./payments";
 import { describedOnce, stripeDescription } from "./paymentRows";
 
 // (Owner, Nov 2, batch 35 §117) One card in play; bank checks never double-charge.
-// - Pay what you owe is ONE payment: a press, a daily retry and a new-card retry charge the TOTAL of what's owed at once, as a Payment of kind "owed" (the
+// - Pay what you owe is ONE payment: a press (since §145/§148 the only way; an "away" one may remain from before) charges the TOTAL of what's owed at once, as a Payment of kind "owed" (the
 //   "one payment"; testerId is the developer, like a renewal's row). Each debt it covers points to it (coveredById): while it is being charged or waits for the
 //   bank, those debts are LOCKED (a press, a retry or a new card's retry never charges them again; the box shows "Waiting for your bank" and "Cancel this check");
 //   once it went through, every covered debt is paid by it (settleOwedRow: the tester's share is sent from that one charge) and keeps the link.
 // - Never an orphan check: whenever the app stops tracking a check it is cancelled at Stripe first (dropCheck); one that had already gone through is recorded as paid.
-// - Saving a new card cancels every waiting check (debts and new charges made while away) and tries each item again on the new card at once (newCardChecks).
+// - Saving a new card cancels every waiting check (debts and new charges made while away); charges made while away are made again on the new card, debts wait
+//   for Pay what you owe (§148: never charged on a card save) (newCardChecks).
 
 export const OWED_KIND = "owed";
 /** The one payment is being charged ("paying"), its press check is open ("needs_action"), or its check waits for the developer ("needs_confirmation"). */
@@ -190,7 +191,8 @@ export async function settleOwed(id: string, pi: string | null) {
 
 /**
  * (Rule 6) Charge what is owed as ONE payment on the saved card. "press": the developer's own Pay what you owe (on-session: the bank's check opens inline);
- * "away": a daily or new-card retry (the bank's check waits 3 days as one "Confirm with your bank" item).
+ * "away": made while the developer isn't there (charges made while away; before §145/§148 also a daily or new-card retry of debts): the bank's check waits 3 days
+ * as one "Confirm with your bank" item.
  */
 export async function chargeOwedTotal(u: Parameters<typeof chargePlatform>[0], rows: { id: string; amountCents: number; chargeback: string }[], mode: "press" | "away") {
   if (!rows.length) return { result: "skipped" as const };
@@ -298,10 +300,15 @@ export async function cancelOwedCheck(devId: string, id: string) {
 /**
  * (Rule 1) ONE CARD IN PLAY: a new card was saved. Every waiting bank check (debts and new charges made while away) is cancelled at Stripe and each item is tried
  * again on the new card at once: a new charge here (goes through: paid; the bank asks: a new 3-day "Confirm with your bank" item on the new card; declined: a debt);
- * debts by the new-card retry of what's owed (holds.retryOwed: since §145 the only automatic charge of what's owed). A check that had already gone through is recorded as paid. (A renewal's check is its invoice's:
+ * debts are payable again and wait for the developer's Pay what you owe (§148: saving a card never charges what's owed). A check that had already gone through is recorded as paid. (A renewal's check is its invoice's:
  * its Confirm uses the current card.)
  */
 export async function newCardChecks(devId: string) {
+  // (Owner, Nov 3, batch 35 §148) The developer's OWN press checks made on the old card (Pay, Pay more, a call's Pay: the 15-minute bank check) are cancelled at
+  // Stripe too and never made again: the piece is free and the developer presses again with the new card. One that had already gone through is recorded as paid
+  // (confirm.release: cancel first, never charged twice).
+  const own = await db.payment.findMany({ where: { developerId: devId, status: "needs_action", actionPi: { not: null }, kind: { in: ["review", "call", "extra"] } }, select: { id: true } });
+  for (const p of own) await (await import("./confirm")).release(p.id).catch((e) => console.error("[card] cancel own check:", (e as Error).message));
   // (Owner, Nov 2, payments proof) Pay what you owe's own press check (15 minutes, "needs_action") too: a new card (Payments, or the chargeback steps' Verify a
   // card) cancels it at Stripe first, so only the new card is in play.
   const waiting = await db.payment.findMany({ where: { developerId: devId, actionPi: { not: null }, kind: { not: "subscription" }, OR: [{ status: { in: ["needs_confirmation", "failed", "owed"] } }, { kind: OWED_KIND, status: "needs_action" }] }, orderBy: { createdAt: "asc" } });
@@ -313,10 +320,10 @@ export async function newCardChecks(devId: string) {
       if (end === "succeeded") await confirm.finishConfirmed(p.id);
       // (§147) Confirm all's one payment: the charges it covered wait again, and are made together on the new card (below).
       else if (isAll(p)) await (await import("./confirmAll")).releaseAll(p.id, "defer");
-      else if (p.kind === OWED_KIND) await releaseOwed(p.id); // its debts go with the retry of what's owed; its charges wait again (below)
+      else if (p.kind === OWED_KIND) await releaseOwed(p.id); // its debts wait for Pay what you owe (§148); its charges wait again (below)
       // (§122) A charge made while away waits again ("deferred"); all of them are then made TOGETHER as one payment (below, or after the lift during a hold, §113).
       else if (p.status === "needs_confirmation") await db.payment.updateMany({ where: { id: p.id, status: "needs_confirmation" }, data: { status: "deferred" } });
-      // else: a debt with a check of its own (before §117): it stays owed and goes with the retry of what's owed.
+      // else: a debt with a check of its own (before §117): it stays owed and waits for Pay what you owe (§148).
     } catch (e) {
       console.error("[card] new card checks:", (e as Error).message);
     }

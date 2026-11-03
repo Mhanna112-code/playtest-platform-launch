@@ -6,12 +6,12 @@ import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import * as R from "@/lib/rules";
 import { fmtDate, money } from "@/lib/format";
-import { chargeDeferred, chargebackOpened, deferredForBox, declinedPayment, liftHoldIfClear, owed, owedLines, payOwed, retryOwed, runDaily, startHold } from "@/lib/server/holds";
+import { chargeDeferred, chargebackOpened, deferredForBox, declinedPayment, liftHoldIfClear, owed, owedLines, payOwed, runDaily, startHold } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
 import { awayAction, confirmItems, expireActions } from "@/lib/server/confirm";
 import { saveCardFromCheckout, setStripeForTests } from "@/lib/server/stripe";
 import { OWED_PAID } from "@/lib/server/owedOnce";
-import { json, req } from "./helpers";
+import { json, legacyAwayOwed, req } from "./helpers";
 import { joined, sact, settle, setup } from "./fixtures";
 
 // (Nov 2, payments proof) One test per recorded scenario (docs/media/payments-proof/README.md): A pause on hold, B approve vs cancel race, C chargebacks on Pay what
@@ -319,7 +319,7 @@ describe("E. the five double-charge cases: one charge at Stripe each", () => {
     await debt(w, 0, 800);
     await startHold(w.dev.user.id, "unpaid");
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id); // a retry the bank asks about: one 3-day item
+    await legacyAwayOwed(w.dev.user.id); // a retry the bank asks about: one 3-day item
     const one = await oneOf(w.dev.user.id);
     expect(one.status).toBe("needs_confirmation");
     const n = st.made.length;
@@ -373,7 +373,7 @@ describe("§125: the whole box is locked while the one payment's check is open",
     expect(st.succeeded()).toEqual([1800]);
   });
 
-  it("a press's 15-minute check open: a new card cancels it at Stripe first and pays it once on the new card", async () => {
+  it("a press's 15-minute check open: a new card cancels it at Stripe first and charges nothing (§148); Pay what you owe then pays it once on the new card", async () => {
     const w = await world();
     const st = bank();
     await debt(w, 0, 800);
@@ -386,19 +386,23 @@ describe("§125: the whole box is locked while the one payment's check is open",
     st.card.next = "pm_new";
     await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
     expect(st.cancelled).toEqual([one.actionPi]);
+    expect(st.made.filter((m) => m.payment_method === "pm_new")).toEqual([]);
+    expect(st.succeeded()).toEqual([]);
+    expect((await devOf(w)).holdStartedAt).not.toBeNull();
+    expect((await press(w.dev.cookie, {})).body).toMatchObject({ lifted: true });
     expect(st.made.at(-1)).toMatchObject({ amount: 1800, payment_method: "pm_new" });
     expect(st.succeeded()).toEqual([1800]);
     expect((await devOf(w)).holdStartedAt).toBeNull();
   });
 
-  it("a retry's 3-day check open: a new card cancels it at Stripe first and pays it once on the new card", async () => {
+  it("an away 3-day check (from before §148) open: a new card cancels it at Stripe first and charges nothing (§148); Pay what you owe then pays it once on the new card", async () => {
     const w = await world();
     const st = bank();
     await debt(w, 0, 800);
     await startHold(w.dev.user.id, "unpaid");
     await waiting(w, 1, 1000);
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 1800 });
     expect((await press(w.dev.cookie, {})).body.error).toMatchObject({ code: "bank_waiting" });
@@ -406,6 +410,10 @@ describe("§125: the whole box is locked while the one payment's check is open",
     st.card.next = "pm_new";
     await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
     expect(st.cancelled).toEqual([one.actionPi]);
+    expect(st.made.filter((m) => m.payment_method === "pm_new")).toEqual([]);
+    expect(st.succeeded()).toEqual([]);
+    expect((await devOf(w)).holdStartedAt).not.toBeNull();
+    expect((await press(w.dev.cookie, {})).body).toMatchObject({ lifted: true });
     expect(st.made.at(-1)).toMatchObject({ amount: 1800, payment_method: "pm_new" });
     expect(st.succeeded()).toEqual([1800]);
     expect((await devOf(w)).holdStartedAt).toBeNull();
@@ -441,7 +449,7 @@ describe("§125: Pay what you owe's check against a new card, running out, and a
     await startHold(w.dev.user.id, "unpaid");
     await waiting(w, 1, 1000);
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     expect(one.status).toBe("needs_confirmation");
     st.approve(one.actionPi!);
@@ -461,7 +469,7 @@ describe("§125: Pay what you owe's check against a new card, running out, and a
     await startHold(w.dev.user.id, "unpaid");
     const a = await waiting(w, 1, 1000);
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     expect((await owedLines(w.dev.user.id)).every((l) => l.waiting)).toBe(true);
     await db.payment.update({ where: { id: one.id }, data: { actionBy: new Date(Date.now() - 1000) } });

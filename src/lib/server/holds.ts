@@ -4,7 +4,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, retriedLine, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, pressAgainLine, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
@@ -74,7 +74,7 @@ export async function owed(devId: string) {
 
 /**
  * (Owner, Nov 2, batch 35 §125) What Pay what you owe charges during a hold: what is owed (owed) AND every charge waiting for the lift ("Charged once your tests
- * resume": testers' Charges, team decisions, automatic call charges made during the hold), together as ONE payment (a press, the daily retry, a new card's retry), or
+ * resume": testers' Charges, team decisions, automatic call charges made during the hold), together as ONE payment (Pay what you owe's press), or
  * in the chargeback steps' one reservation. Waiting charges ride along only while something is owed (on its own, a waiting charge never makes a payment during a hold);
  * they never block a lift (liftHoldIfClear still counts only owed). A reversed payment's repay row waiting after a reservation (kind "chargeback") keeps its own handling.
  */
@@ -520,35 +520,8 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
 // (§130) A card Stripe doesn't know ("no_card": cleared, add a card) and payments switched off ("payments_off") say so in their own words; neither is a decline.
 export const owedWhy = (e: unknown) => (e instanceof HttpError && e.code === "card_failed" ? "Your card was declined." : e instanceof HttpError && (e.code === "payments_problem" || e.code === "no_card" || e.code === "payments_off") ? e.code === "payments_problem" ? PAYMENTS_PROBLEM : e.message : "It didn't go through. Try again shortly.");
 
-/**
- * (Owner, Oct 29, batch 11 section 4; owner, Nov 3, batch 35 §145) A new card saved during a payment hold: what is owed is charged on it at once. That is the ONLY
- * automatic charge of what's owed: there are no daily retries any more ("The only one to keep is changing the card"); otherwise what's owed is charged only when the
- * developer presses Pay what you owe. Called by stripe.saveCardFromCheckout after newCardChecks has cancelled every check still open at Stripe (one card in play).
- * (Owner, Oct 29, batch 22 section 1) Never during a CHARGEBACK hold (also one that started as a payment hold): what is owed is then paid only through Pay what you
- * owe, after the card check, and the hold lifts only on the team's Approve. Success: those lines are paid (an open Payments page updates live and a press stops
- * once), the developer gets ONE line (batch 25 section 5), "We charged your card $X for what you owed: <the items>." (no separate receipt line; it rides the payment email
- * as the receipt), and the hold lifts as if they had pressed Pay (the 4th hold on still needs Approve; a chargeback
- * hold still needs the card check and Approve; a suspension is never lifted by a payment). A decline sends nothing: what's owed stays in Pay what you owe.
- * (Owner, Nov 2, batch 35 §117) ONE payment for the total (its bank check, if the card asks, is one "Confirm with your bank" item); a debt already waiting for the
- * bank is left out (rule 3).
- */
-export async function retryOwed(devId: string) {
-  const u = await db.user.findUnique({ where: { id: devId } });
-  if (!u?.holdStartedAt || u.deletedAt) return null;
-  if (u.holdReason === "chargeback") return null; // (batch 22 section 1)
-  // No saved card (or payments not set up): nothing to charge on.
-  if (!stripeOn() || !u.stripeCustomerId || !u.stripePaymentMethodId) return null;
-  const once = await import("./owedOnce");
-  await once.resumeStaleOwed(devId, new Date());
-  const locks = await once.owedLocks(devId);
-  const list = withDebt((await payable(devId)).filter((p) => !locks.has(p.id)));
-  if (!list.length) return null;
-  const r = await once.chargeOwedTotal(u, list, "away");
-  const cents = r.result === "paid" ? r.cents : 0;
-  if (r.result === "paid" && cents > 0) await bell(devId, retriedLine(cents, r.names), "/app/payments", undefined, { side: "developer", payment: true, group: "payhold" });
-  const lifted = cents > 0 ? await liftHoldIfClear(devId) : false;
-  return { cents, lifted };
-}
+// (Owner, Nov 3, batch 35 §148) No automatic charge of what's owed at all: not daily (§145) and not when a new card is saved (that charge is gone). What is owed
+// during a payment hold is charged only when the developer presses Pay what you owe (payOwed, above).
 
 /** (Batch 11) An owed payment a "Pay what you owe" press is charging right now. */
 const PAYING = "paying";
@@ -860,8 +833,8 @@ async function runDailyLocked(now: Date) {
   await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message)); // (batch 23 section 1)
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message)); // (batch 23 section 6)
   await (await import("./calls")).sweepNobodyJoined(now);
-  // (Batch 11) Bank confirmations that timed out. (Owner, Nov 3, batch 35 §145) No daily retries of what is owed during a hold: it's charged only by Pay what you
-  // owe or a new card (retryOwed, from stripe.saveCardFromCheckout).
+  // (Batch 11) Bank confirmations that timed out. (Owner, Nov 3, batch 35 §145, §148) No retries of what is owed during a hold: it's charged only when the
+  // developer presses Pay what you owe (never daily, never on a new card).
   await (await import("./confirm")).expireActions(now);
   await chargeReadyDeferred();
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).

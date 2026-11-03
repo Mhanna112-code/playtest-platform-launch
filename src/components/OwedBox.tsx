@@ -78,7 +78,7 @@ export function OwedBox({ onHold, owed, chargeback = false, review = false, veri
         <p><b>A payment failed.</b> Pay {money(seenTotal)} to keep your tests running.</p>
       )}
       {ranOut && <p data-check-ran-out="">{ranOut}</p>}
-      {/* (Owner, Nov 3, batch 35 §145) No daily retries: only the press or a new card charges what's owed (a chargeback hold only reserves it, so not there). */}
+      {/* (Owner, Nov 3, batch 35 §145, §148) No daily retries and no new-card charge: only the press charges what's owed (a chargeback hold only reserves it, so not there). */}
       {onHold && !chargeback && <p className="text-xs" data-owed-how="">{OWED_HOW}</p>}
       {/* (Owner, Oct 29, batch 23 section 6) A chargeback hold: Pay what you owe reserves the money; the team's Approve takes it. */}
       {chargeback && reserveExpired && <p data-reserve-expired="">{RESERVE_EXPIRED}</p>}
