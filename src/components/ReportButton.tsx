@@ -25,7 +25,7 @@ export function ReportButton({ userId, name, reportedOn }: { userId: string; nam
       ) : (
         <div className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-report-box="">
           <label className="label req" htmlFor={`report-${userId}`}>What happened? (the team reads it)</label>
-          <textarea id={`report-${userId}`} rows={3} className="input" data-required="" data-required-msg="Say what happened (the team reads it)." data-min-chars="5" data-msg="Say what happened (the team reads it)." data-match="say what happened" value={note} onChange={(e) => setNote(e.target.value)} />
+          <textarea id={`report-${userId}`} rows={3} className="input" maxLength={2000} data-required="" data-required-msg="Say what happened (the team reads it)." data-min-chars="5" data-msg="Say what happened (the team reads it)." data-match="say what happened" value={note} onChange={(e) => setNote(e.target.value)} />
           <CharacterCount value={note} min={5} max={2000} required />
           <div className="flex gap-2">
             <button

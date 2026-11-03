@@ -16,6 +16,7 @@ import { useEffect, useRef, useState } from "react";
 import { roundedMoneyText } from "@/lib/format";
 import { scrollQuestionBoxTo } from "@/components/QuestionBox";
 import { digitsOnly, keyAllowed, moneyText, pastedNumber, typedMoney, wholeText } from "@/lib/numberInput";
+import { cutToLine, showCutNote } from "@/lib/typingLimit";
 
 type Field = HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement;
 const isField = (el: EventTarget | null): el is Field => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement;
@@ -265,6 +266,20 @@ export function roundMoneyBox(el: HTMLInputElement) {
   el.dispatchEvent(new Event("input", { bubbles: true }));
 }
 
+/**
+ * (Owner, Nov 3, batch 35 §140) A paste into a box with a maxLength that the browser will cut (more than the room left): the grey "Cut to the N-character limit."
+ * under it for a moment. The browser does the cutting itself (it counts as the counters and the server do); this only says so. The boxes with their own limiter
+ * (one per line, the written answers: data-typing-limit) show their own note.
+ */
+function pastedPastMax(el: EventTarget | null, text: string) {
+  if (!(el instanceof HTMLTextAreaElement || el instanceof HTMLInputElement) || el.maxLength <= 0 || el.dataset.typingLimit != null || el.readOnly || el.disabled) return;
+  const add = el instanceof HTMLTextAreaElement ? text.replace(/\r\n?/g, "\n") : text.replace(/[\r\n]/g, "");
+  let a: number | null = null, b: number | null = null;
+  try { a = el.selectionStart; b = el.selectionEnd; } catch { /* no selection (an email box): the whole value counts */ }
+  const kept = el.value.length - (a != null && b != null ? b - a : 0);
+  if (kept + add.length > el.maxLength) setTimeout(() => showCutNote(el, cutToLine(el.maxLength)), 0);
+}
+
 export function FieldChecks() {
   useEffect(() => {
     const groupOf = (el: Element) => el.closest("[data-field-group]");
@@ -321,7 +336,8 @@ export function FieldChecks() {
     const onPaste = (e: ClipboardEvent) => {
       const el = e.target;
       const kind = kindOf(el);
-      if (!kind || !(el instanceof HTMLInputElement)) return;
+      if (!kind) return pastedPastMax(el, e.clipboardData?.getData("text") ?? "");
+      if (!(el instanceof HTMLInputElement)) return;
       const text = e.clipboardData?.getData("text") ?? "";
       const [a, b] = selOf(el);
       const next = pastedNumber(kind, el.value, text, a, b, el.value);

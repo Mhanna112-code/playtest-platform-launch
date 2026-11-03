@@ -1,8 +1,10 @@
-import { CharacterCount } from "@/components/CharacterCount";
-import { KEY_MAX_LENGTH } from "@/lib/keys";
+import { LineList } from "@/components/LineList";
+import { KEY_MAX_LENGTH, KEY_TOO_LONG } from "@/lib/keys";
 
-/** Keys have a per-line limit, rather than a limit on the whole box. */
-export function KeyCounts({ value }: { value: string }) {
-  const keys = value.split("\n").map((s) => s.trim()).filter(Boolean);
-  return <div className="max-h-24 overflow-y-auto" data-key-counts="">{keys.map((key, i) => <div key={i} className="flex justify-end gap-2 text-xs"><span className="text-slate-500">Key {i + 1}</span><CharacterCount value={key} max={KEY_MAX_LENGTH} /></div>)}</div>;
+/**
+ * Keys have a per-line limit, rather than a limit on the whole box. (Owner, Nov 3, batch 35 §141) Listed under the box as they're typed, like the questions:
+ * each key with its count, a key typed twice marked, and a click on one puts the cursor on its line. `box`: the textarea's id (Post's box, or Edit's Free box).
+ */
+export function KeyCounts({ value, box = "accessKeys" }: { value: string; box?: string }) {
+  return <LineList box={box} text={value} max={KEY_MAX_LENGTH} label="Key" mono overLine={KEY_TOO_LONG} data-key-counts="" />;
 }

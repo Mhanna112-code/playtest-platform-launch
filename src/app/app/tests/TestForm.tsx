@@ -19,11 +19,12 @@ import { signInKeeps } from "@/lib/keptText";
 import { CATEGORIES, DEVICES, LANGUAGES } from "@/lib/options";
 import { LIMITS, changesLeftLine, counterOf, countersOf, countsOf, criticalLine, type CriticalCounts, type CriticalField } from "@/lib/limits";
 import { givenDeletedLine, keyGivenLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
-import { LISTING_MIN_CHARS, TITLE_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, counterText, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
+import { LISTING_MIN_CHARS, TITLE_MIN_CHARS, OPEN_UNTIL_PASSED, openUntilHasPassed, openUntilExtendLine, duplicateQuestion, duplicateQuestionLine, STEPS_FIELD, TITLE_FIELD, PART_PRICE_MISSING, PAY_RULES_LINK, PAY_RULES_TICK, PAYMENTS_TERMS_HREF, OPEN_UNTIL_MAX_LINE, openUntilCapHint, openUntilCapLine, DESCRIPTION_REQUIRED, HIGH_PART_CENTS, HIGH_PART_TICK, MATURE_WHY_MIN, MATURE_WHY_REQUIRED, MATURE_WHY_SHORT, NDA_TOO_LONG, OPEN_UNTIL_RANGE, QUESTION_TOO_LONG, daysBetween, partHighLine, partLowLine, rateHighLine, rateLowLine, openUntilLine, openUntilDay, MAX_SPOTS, SPOTS_MAX_LINE, spotsCap, spotsKeptLine, type Listing } from "@/lib/rules";
 /** The browser's own date (YYYY-MM-DD) and zone. */
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`; };
 const browserZone = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone ?? ""; } catch { return ""; } };
-import { ScrollText } from "@/components/ScrollText";
+import { LineList } from "@/components/LineList";
+import { KEY_RULE, QUESTION_RULE, limitedChange } from "@/lib/typingLimit";
 import { fmtDateTime, toCents } from "@/lib/format";
 import { KeyBoxes, freeBoxCheck, type KeysData } from "./KeyBoxes";
 import { FieldNote, GroupNote, NoteItems, TheirsNote, WasNote, type NoteItem } from "@/components/FieldNote";
@@ -807,25 +808,14 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         {f.written && (
           <div id="questions-group" data-locked={fieldLocked("questions") ? "" : undefined} className={`scroll-mt-24 rounded-xl data-[marked]:ring-2 data-[marked]:ring-sky-300 ${lockedKey("questions") ? "p-2 ring-1 ring-rose-400" : ""}`}>
             <label className="label req" htmlFor="questions">Your questions (one per line){left("questions")}{draftMark("questions")}</label>
-            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={!f.written ? undefined /* (batch 35 §24) the written part off: no question checks */ : f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : duplicateQuestion(f.questions.split("\n")) ? duplicateQuestionLine(duplicateQuestion(f.questions.split("\n"))) : undefined} value={f.questions} onChange={(e) => set({ questions: capQuestions(e.target.value) })} placeholder={"What did you like?\nWhere did you get stuck?"} />
-            {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).length > 0 && (
-              <ul className="mt-2 space-y-1">
-                {f.questions.split("\n").map((q) => q.trim()).filter(Boolean).map((q) => (
-                  <li key={q} className="flex items-start justify-between gap-3 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-1.5 text-sm">
-                    {/* (Batch 15 sections 3 and 32) A long question in a scroll box; its counter, and the red message at the field when it's over. */}
-                    <span className="min-w-0 flex-1 text-ink-200">
-                      <ScrollText text={q} label="Question" />
-                      <span className={`whitespace-nowrap text-xs ${q.length > LIMITS.question ? "text-rose-300" : "text-slate-500"}`} data-question-count="">{counterText(q.length, LIMITS.question)}</span>
-                      {q.length > LIMITS.question && <span className="err-field block" data-question-red="">{QUESTION_TOO_LONG}</span>}
-                    </span>
-                    <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
-                      {/* (Batch 26 section 14) Off by default: a question is required only when ticked. */}
-                      <input type="checkbox" disabled={fieldLocked("questions")} checked={f.requiredQs.includes(q)} onChange={(e) => set({ requiredQs: e.target.checked ? [...f.requiredQs, q] : f.requiredQs.filter((x) => x !== q) })} data-required-tick="" /> Required
-                    </label>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <textarea id="questions" rows={4} disabled={fieldLocked("questions")} className="input" data-red-msg={!f.written ? undefined /* (batch 35 §24) the written part off: no question checks */ : f.questions.split("\n").some((q) => q.trim().length > LIMITS.question) ? QUESTION_TOO_LONG : duplicateQuestion(f.questions.split("\n")) ? duplicateQuestionLine(duplicateQuestion(f.questions.split("\n"))) : undefined} value={f.questions} data-typing-limit="" onChange={(e) => set({ questions: capQuestions(limitedChange(e, f.questions, QUESTION_RULE)) })} placeholder={"What did you like?\nWhere did you get stuck?"} />
+            {/* (Owner, Nov 3, batch 35 §141) The questions listed live under the box (LineList, shared with the access keys): a click on one puts the cursor on its line. */}
+            <LineList box="questions" text={f.questions} max={LIMITS.question} label="Question" overLine={QUESTION_TOO_LONG} countAttr="data-question-count" aside={({ text: q }) => (
+              <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-ink-300">
+                {/* (Batch 26 section 14) Off by default: a question is required only when ticked. */}
+                <input type="checkbox" disabled={fieldLocked("questions")} checked={f.requiredQs.includes(q)} onChange={(e) => set({ requiredQs: e.target.checked ? [...f.requiredQs, q] : f.requiredQs.filter((x) => x !== q) })} data-required-tick="" /> Required
+              </label>
+            )} />
             {/* (Owner, Oct 28, batch 20 section 2) At 20 questions a notice under the last one (not a mistake: not red, Save and Post still work; the server still
                 refuses more than 20). Deleting a question removes it. */}
             <p className="mt-1 text-xs text-slate-400" data-questions-rule="">{QUESTIONS_RULE_LINE}</p>
@@ -874,8 +864,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
             <li>With or without one, <strong className="text-slate-200">you can always use the feedback you receive</strong> to improve your product.</li>
             <li>Testers can never show work from a test under an NDA as excerpts on their profile; without one, they can only with your permission.</li>
           </ul>
-          {/* (Batch 13 section 9) 1,000 characters; an older, longer NDA stays as it is until a Save changes it. */}
-          <textarea id="ndaText" rows={4} className={"input" + (f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? " field-bad" : "")} data-red-msg={f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? NDA_TOO_LONG : undefined} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave blank for no NDA. If filled, testers must accept it before joining." />
+          {/* (Batch 13 section 9) 1,000 characters; an older, longer NDA stays as it is until a Save changes it. (Owner, Nov 3, §140) Typing stops at 1,000 (maxLength): an
+              older, longer NDA loads whole and can only be shortened. */}
+          <textarea id="ndaText" rows={4} maxLength={LIMITS.nda} className={"input" + (f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? " field-bad" : "")} data-red-msg={f.ndaText.length > LIMITS.nda && f.ndaText !== base.ndaText ? NDA_TOO_LONG : undefined} value={f.ndaText} onChange={(e) => set({ ndaText: e.target.value })} placeholder="Leave blank for no NDA. If filled, testers must accept it before joining." />
           <CharacterCount value={f.ndaText} max={LIMITS.nda} data-nda-count="" />
           {note("ndaText")}
         </section>
@@ -884,8 +875,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         ) : (
           <div>
             <label className="label" htmlFor="accessKeys">Access keys (one per line; each joining tester gets one){keysDraft}</label>
-            <textarea id="accessKeys" rows={3} className={"input font-mono" + (keysBad ? " field-bad" : "")} data-red-msg={keysBad ? keyLine : undefined} value={keysText} onBlur={() => leave("keys")} onChange={(e) => setKeysText(e.target.value)} placeholder={"KEY-1111\nKEY-2222"} />
-          <KeyCounts value={keysText} />
+            <textarea id="accessKeys" rows={3} className={"input font-mono" + (keysBad ? " field-bad" : "")} data-red-msg={keysBad ? keyLine : undefined} value={keysText} data-typing-limit="" onBlur={() => leave("keys")} onChange={(e) => setKeysText(limitedChange(e, keysText, KEY_RULE))} placeholder={"KEY-1111\nKEY-2222"} />
+            {/* (Owner, Nov 3, §140 and §141) Each key stops at its own limit (Enter still starts the next); the keys are listed under the box, a click goes to its line. */}
+            <KeyCounts value={keysText} box="accessKeys" />
             <p className="mt-1 text-xs text-slate-500">Optional. With keys, there must be at least as many keys as spots.</p>
             {keysBad && redLine(keyLine)}
           </div>

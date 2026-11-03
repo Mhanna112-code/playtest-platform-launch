@@ -20,6 +20,7 @@ import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
 import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
+import { answerRule, limitEdit, limitedChange } from "@/lib/typingLimit";
 import { uploadToSession } from "@/lib/upload";
 import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
@@ -62,16 +63,20 @@ const isShortLine = (m: string) => /^\W?Write at least \d+ characters \(\d+ so f
 /** One answer box with its formatting toolbar. */
 /** (Batch 16 section 10) A required answer left empty is red at its box, with the server's own line. */
 export { ANSWER_REQUIRED };
-function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
+function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short, total }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; /** (Owner, Nov 3, §140) the whole written part's count now (writtenLength) */ total: number; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const chars = answerChars(value);
   // (Owner, Nov 3) The preview stays hidden until "Preview" is pressed (on phones it took the screen); the button names the files placed in the answer.
   const [preview, setPreview] = useState(false);
   const files = attachments.filter((a) => hasMarkerFor(value, a.id, attachments)).length;
+  // (Owner, Nov 3, batch 35 §140) Typing stops at the written part's limit: this box takes what the other answers and the notes leave of the 50,000 (counted
+  // without the file markers, as the counter and the server count). Bold / italic from the toolbar is held to it too; a file's marker never counts.
+  const rule = answerRule(total - withoutAttachmentMarkers(value).length);
+  const toolbar = (v: string) => onChange(limitEdit(ref.current?.value ?? value, v, rule).value);
   return (
     <div className="space-y-1">
-      <FormatBar target={ref} onChange={onChange} sessionId={sessionId} onAttach={onAttach} known={attachments} />
-      <textarea ref={ref} id={id} rows={rows} className="input" value={value} onChange={(e) => onChange(e.target.value)} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
+      <FormatBar target={ref} onChange={toolbar} sessionId={sessionId} onAttach={onAttach} known={attachments} />
+      <textarea ref={ref} id={id} rows={rows} className="input" value={value} data-typing-limit="" onChange={(e) => onChange(limitedChange(e, value, rule))} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
       {value.trim() && (
         <button type="button" className="btn-ghost px-2 py-0.5 text-xs" aria-expanded={preview} data-preview-toggle="" onClick={() => setPreview((p) => !p)}>
           {preview ? "Hide preview" : `Preview${files ? ` (${files} ${files === 1 ? "file" : "files"})` : ""}`}
@@ -208,14 +213,14 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
           <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
-          <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
+          <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} total={length} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
           {boxDraft(i)}
         </div>
       ))}
       </QuestionBox>
       <div>
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
-        <AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} value={notes} onChange={setNotes} />
+        <AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} total={length} value={notes} onChange={setNotes} />
         {notesDraft}
       </div>
       {loose.length > 0 && (
@@ -287,7 +292,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
       {!fin.done && <>
         <label className="label" htmlFor={`add-${sessionId}`}>Add to your answers</label>
         <p className="note">What you sent stays as it is. This is added under it.</p>
-        <AnswerBox id={`add-${sessionId}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} value={text} onChange={setText} />
+        <AnswerBox id={`add-${sessionId}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} value={text} onChange={setText} />
         {keep.restored && text !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
         <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
         {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}

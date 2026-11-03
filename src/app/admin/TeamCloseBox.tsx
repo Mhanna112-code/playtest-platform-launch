@@ -50,7 +50,7 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
         <>
           {tag}
           <span className="flex w-full flex-col">
-            <textarea id={`team-close-${scope}-${id}`} aria-label="Why (the testers read it)" placeholder="Why (the testers read it)" rows={2} className={`input w-full ${long ? "field-bad" : ""}`}
+            <textarea id={`team-close-${scope}-${id}`} aria-label="Why (the testers read it)" placeholder="Why (the testers read it)" rows={2} maxLength={LIMITS.reason} className={`input w-full ${long ? "field-bad" : ""}`}
               data-required="" data-required-msg={TEAM_CLOSE_REASON} data-min-chars="5" data-msg={TEAM_CLOSE_REASON} data-match="why the team closes|keep it to" data-red-msg={long ? reasonTooLong() : undefined}
               value={reason} onChange={(e) => setReason(e.target.value)} />
             <CharacterCount value={reason} min={5} max={LIMITS.reason} required data-reason-count="" />

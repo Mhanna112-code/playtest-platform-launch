@@ -24,7 +24,7 @@ export function WhyBox({ id, label, placeholder, requiredMsg, match, value, onCh
     <div>
       <label className="label req" htmlFor={id}>{label}</label>
       {/* (Batch 20 section 27) At least 5 characters: red "Say a little more: at least 5 characters." on leaving it or pressing. */}
-      <textarea id={id} rows={3} className="input" placeholder={placeholder} data-required="" data-required-msg={requiredMsg} data-min-chars={String(WHY_MIN_CHARS)} data-msg={WHY_TOO_SHORT} data-match={`${match}|say a little more`} value={value} onChange={(e) => onChange(e.target.value)} />
+      <textarea id={id} rows={3} className="input" maxLength={max} placeholder={placeholder} data-required="" data-required-msg={requiredMsg} data-min-chars={String(WHY_MIN_CHARS)} data-msg={WHY_TOO_SHORT} data-match={`${match}|say a little more`} value={value} onChange={(e) => onChange(e.target.value)} />
       <CharacterCount value={value} min={WHY_MIN_CHARS} max={max} required {...{ [countAttr]: "" }} />
     </div>
   );

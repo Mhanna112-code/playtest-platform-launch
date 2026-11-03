@@ -11,7 +11,8 @@ export function PasswordInput(props: Omit<InputHTMLAttributes<HTMLInputElement>,
   return (
     <div>
     <div className="relative" data-note-after="">
-      <input {...props} onChange={(e) => { setTyped(e.target.value); props.onChange?.(e); }} type={visible ? "text" : "password"} className="input pr-16" />
+      {/* (Owner, Nov 3, batch 35 §140) A new password stops at its limit (200, the server's) as its counter says. */}
+      <input {...props} maxLength={limited ? props.maxLength ?? 200 : props.maxLength} onChange={(e) => { setTyped(e.target.value); props.onChange?.(e); }} type={visible ? "text" : "password"} className="input pr-16" />
       <button type="button" onClick={() => setVisible((v) => !v)} className="absolute inset-y-0 right-0 flex w-16 items-center justify-center text-xs text-ink-400 hover:text-ink-200" aria-label={visible ? "Hide password" : "Show password"} aria-pressed={visible}>
         {visible ? "Hide" : "Show"}
       </button>

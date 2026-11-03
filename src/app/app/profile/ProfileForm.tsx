@@ -105,7 +105,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
     <form className="card space-y-5" onSubmit={save}>
       <div>
         <label className="label req" htmlFor="name">Name</label>
-        <input id="name" className="input" data-required="" data-required-msg="Enter your name (others see it)." data-match="your name" value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ana Silva" />
+        <input id="name" className="input" maxLength={80} data-required="" data-required-msg="Enter your name (others see it)." data-match="your name" value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ana Silva" />
         <CharacterCount value={v.name} min={1} max={80} required />
       </div>
       <div>

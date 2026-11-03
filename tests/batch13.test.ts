@@ -302,7 +302,9 @@ describe("batch 13 section 9: long text", () => {
     const f = src("app/app/tests/TestForm.tsx");
     expect(f).toContain("data-nda-count");
     expect(f).toContain("data-steps-count");
-    expect(f).toContain("{counterText(q.length, LIMITS.question)}");
+    // (Owner, Nov 3, batch 35 §141) Each question's count is in the shared list under the box (LineList, its CharacterCount); (§140) the NDA box stops at 1,000.
+    expect(f).toContain('<LineList box="questions" text={f.questions} max={LIMITS.question}');
+    expect(f).toContain("maxLength={LIMITS.nda}");
     expect(src("components/NdaBox.tsx")).toContain("max-h-[15rem] overflow-y-auto");
     for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx"]) expect(src(p)).toContain("<NdaBox");
     expect(f).not.toContain("<NdaBox"); // (batch 16 section 8) no "How testers see it" preview on Post / Edit

@@ -98,7 +98,7 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
           }}
         >
           <span className="min-w-0 flex-1">
-          <input id="chat-message" className="input" aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
+          <input id="chat-message" className="input" maxLength={4000} aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
           <CharacterCount value={text} min={1} max={4000} required />
           </span>
           <button className="btn" disabled={busy || !text.trim()}>Send</button>

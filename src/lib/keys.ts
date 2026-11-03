@@ -1,6 +1,8 @@
 // (Design doc 4 and 5) Access keys: one per line; each joining tester gets one. Pure helpers shared by the form and the server.
 
 export const KEY_MAX_LENGTH = 200;
+/** The refusal of a longer key (the server; the red line under it in the list). */
+export const KEY_TOO_LONG = `A key can be at most ${KEY_MAX_LENGTH} characters.`;
 
 /** The keys typed (one per line, or an array): trimmed, blank lines dropped, each once, in order. */
 export function parseKeys(v: unknown): string[] {

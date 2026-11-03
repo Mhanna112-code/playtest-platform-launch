@@ -1,6 +1,7 @@
 "use client";
 import { Cut } from "@/components/Cut";
 import { KeyCounts } from "@/components/KeyCounts";
+import { KEY_RULE, limitedChange } from "@/lib/typingLimit";
 import { FREE_KEYS_RULE, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 
 export type KeysData = {
@@ -65,8 +66,10 @@ export function KeyBoxes({ data, typed, onType, onBlur, openSpots, line, warning
         </div>
         <div className="space-y-1.5 rounded-xl border border-white/10 p-3" data-keys-free="">
           <label className="text-sm font-medium text-white" htmlFor="keysFree">Free <span className="font-normal text-slate-400" data-free-head="">({n} key{n === 1 ? "" : "s"} · {openSpots} open spot{openSpots === 1 ? "" : "s"})</span></label>
-          <textarea id="keysFree" rows={Math.min(8, Math.max(3, n + 1))} className={"input font-mono text-xs" + (line ? " field-bad" : "")} data-red-msg={line || undefined} value={typed} onBlur={onBlur} onChange={(e) => onType(e.target.value)} placeholder={"KEY-3333\nKEY-4444"} />
-          <KeyCounts value={typed} />
+          <textarea id="keysFree" rows={Math.min(8, Math.max(3, n + 1))} className={"input font-mono text-xs" + (line ? " field-bad" : "")} data-red-msg={line || undefined} value={typed} data-typing-limit="" onBlur={onBlur} onChange={(e) => onType(limitedChange(e, typed, KEY_RULE))} placeholder={"KEY-3333\nKEY-4444"} />
+          {/* (Owner, Nov 3, batch 35 §140 and §141) As on Post: each key stops at its own limit (Enter still starts the next), and the free keys are listed under
+              the box as they're typed; a click on one puts the cursor on its line. The keys In use stay in their own list (not clickable: they aren't in this box). */}
+          <KeyCounts value={typed} box="keysFree" />
           {/* (Owner, Oct 28, batch 17 section 13) The red line shows once, here under the Free box. */}
           {line && <p className="err-field" role="alert" data-keys-line="">{line}</p>}
           <p className="text-xs text-slate-500">One key per line. Delete a line to remove that key; type a new line to add one.</p>

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/server/dateFormat";
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
+import { LIMITS } from "@/lib/limits";
 import { notify } from "./notify";
 import { unanswered, answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, PROFILE_FIRST, profileSaved } from "./tests";
@@ -245,7 +246,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
   if (t.joinMode !== "anyone" && t.joinMode !== "invite") gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Apply");
   if (t.joinMode === "anyone") return { joined: true, sessionId: (await join(tester, testId, { ...body, confirmed: true })).id };
   if (t.joinMode === "invite") throw new HttpError(409, "invite_only", "This test is invite only.");
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
   const snap = listingSnapshot(t) as Prisma.InputJsonValue;
   // (7.3) The NDA is accepted when applying; the developer's Accept joins them on it.
   if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to apply.");
@@ -445,7 +446,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   await listingGate(tester.id, testId, body, "ask");
   if (t.ndaText && body.ndaAccepted !== true) throw new HttpError(400, "nda", "Accept the NDA to ask to rejoin.");
   gapStop(t, await db.testerProfile.findUnique({ where: { userId: tester.id } }), body, "Ask");
-  const note = typeof body.note === "string" ? body.note.trim().slice(0, 1000) : "";
+  const note = typeof body.note === "string" ? body.note.trim().slice(0, LIMITS.joinNote) : "";
   const ndaAcceptedAt = t.ndaText ? new Date() : null;
   const snap = listingSnapshot(t) as Prisma.InputJsonValue;
   const invited = await db.invite.findFirst({ where: { testId, testerId: tester.id, status: "sent" } });
