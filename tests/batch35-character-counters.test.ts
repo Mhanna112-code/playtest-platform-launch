@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import React, { createElement as h } from "react";
 import { renderToStaticMarkup as render } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
@@ -75,5 +76,17 @@ describe("owner: every limited text field shows its current count", () => {
     expect(html).toContain("What you sent is still reviewed and paid as usual.");
     expect(html).not.toContain("once your account is active again");
     expect(html).not.toContain("position:fixed");
+  });
+});
+
+// (Owner, Nov 3, later) Once a save turned the counter red, it stays red while typing until the text is within its limits (checked in Edge on /signup's password:
+// red after Sign up at 3 characters, still red at 4, grey at 8).
+describe("a red counter stays red until within limits", () => {
+  it("remembers its field was marked and clears only when the text fits", () => {
+    const src = readFileSync("src/components/CharacterCount.tsx", "utf8");
+    expect(src).toContain('"use client";');
+    expect(src).toContain("if (!bad) { setStuck(false); return; }");
+    expect(src).toContain("const look = () => { if (box.querySelector(FIELD_MARKED)) setStuck(true); };");
+    expect(src).toContain('${over || (stuck && bad) ? "text-rose-300" : "text-slate-500"}');
   });
 });

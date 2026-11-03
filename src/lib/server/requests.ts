@@ -129,7 +129,8 @@ function readRows(body: Record<string, unknown>, end: Date | null): CallRow[] {
       if (repeat === "once") return { startsAt, repeat, count: 1 };
       const forever = o.count === 0 || o.count === "0" || o.count === "forever" || o.forever === true;
       const n = Number(o.count);
-      if (!forever && (!Number.isInteger(n) || n < 2 || n > 8)) throw new HttpError(400, "bad_weeks", `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times, or until testers' work ends.`);
+      // (Owner, Nov 3) With an end, any count from 2 that fits (the form lists them all; calls past the end are dropped below); with no end, 2 to 8 or Forever.
+      if (!forever && (!Number.isInteger(n) || n < 2 || n > (end ? 366 : 8))) throw new HttpError(400, "bad_weeks", end ? `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat at least 2 times.` : `${repeat === "daily" ? "Daily" : "Weekly"} calls repeat 2 to 8 times.`);
       return { startsAt, repeat, count: forever ? 0 : n };
     });
   } else {

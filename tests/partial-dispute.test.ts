@@ -366,13 +366,13 @@ describe("§133 the line helpers", () => {
   it("whole and partial wording", () => {
     const paidFor = { name: "Marc Hanna", part: "written answers", test: "chargechargecharge", date: "Nov 3" };
     expect(R.chargebackOwedLine(9600, undefined, false, 44467)).toBe("Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee");
-    expect(R.chargebackOwedLine(9600, paidFor, false, 44467)).toBe("Your bank reversed $96 of the $444.67 you paid for Marc Hanna's written answers on “chargechar…” (Nov 3): $96 + $15 chargeback fee");
+    expect(R.chargebackOwedLine(9600, paidFor, false, 44467)).toBe("Your bank reversed $96 of the $444.67 you paid for Marc Hanna's written answers on “chargecharge…” (Nov 3): $96 + $15 chargeback fee");
     expect(R.chargebackOwedLine(9600, paidFor, true, 44467)).toBe("Your bank reversed $96 of the $444.67 you paid for Marc Hanna's written answers on “chargechargecharge” (Nov 3): $96 + $15 chargeback fee");
     expect(R.chargebackOwedLine(44467, undefined, false, 44467)).toBe("Your bank reversed a $444.67 payment: $444.67 + $15 chargeback fee");
     expect(R.chargebackOwedLine(1000)).toBe("Your bank reversed a $10 payment: $10 + $15 chargeback fee");
     expect(R.repaidReversedLine({ amountCents: 44467, reversedCents: 9600 }, " payment", null)).toBe("Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)");
-    expect(R.repaidReversedLine({ amountCents: 3900, reversedCents: 2000 }, " Pay more", "Marc Hanna's written answers on “chargechar…”")).toBe("Repaid $20 reversed from your $39 Pay more for Marc Hanna's written answers on “chargechar…” ($20 + $15 chargeback fee)");
-    expect(R.repaidReversedLine({ amountCents: 3900, reversedCents: null }, " Pay more", "Marc Hanna's written answers on “chargechar…”")).toBe("Repaid the reversed $39.00 Pay more for Marc Hanna's written answers on “chargechar…” ($39.00 + $15.00 chargeback fee)");
+    expect(R.repaidReversedLine({ amountCents: 3900, reversedCents: 2000 }, " Pay more", "Marc Hanna's written answers on “chargecharge…”")).toBe("Repaid $20 reversed from your $39 Pay more for Marc Hanna's written answers on “chargecharge…” ($20 + $15 chargeback fee)");
+    expect(R.repaidReversedLine({ amountCents: 3900, reversedCents: null }, " Pay more", "Marc Hanna's written answers on “chargecharge…”")).toBe("Repaid the reversed $39.00 Pay more for Marc Hanna's written answers on “chargecharge…” ($39.00 + $15.00 chargeback fee)");
     expect(R.repaidReversedLine({ amountCents: 3900, reversedCents: 3900 }, " payment", null)).toBeNull();
     expect([R.reversedOf({ amountCents: 1000, reversedCents: null }), R.reversedOf({ amountCents: 1000, reversedCents: 1200 }), R.reversedOf({ amountCents: 1000, reversedCents: 0 }), R.reversedOf({ amountCents: 1000, reversedCents: 400 })]).toEqual([1000, 1000, 1000, 400]);
     expect([R.disputedCentsOf(9600), R.disputedCentsOf("9600"), R.disputedCentsOf(-1), R.disputedCentsOf(1.5), R.disputedCentsOf(undefined)]).toEqual([9600, null, null, null, null]);

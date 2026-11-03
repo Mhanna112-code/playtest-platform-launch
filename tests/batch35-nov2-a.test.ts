@@ -185,7 +185,7 @@ describe("batch 35 §118 (3): Your actions jump to their row on the console", ()
     // The rows it jumps to carry their ids and the See it ring.
     expect(src("app/admin/PagedList.tsx")).toMatch(/id=\{`mypaused-\$\{t\.id\}`\}[^>]*data-\[marked\]:ring-2/);
     expect(src("app/admin/PagedList.tsx")).toMatch(/id=\{`suspension-\$\{u\.id\}`\}[^>]*data-\[marked\]:ring-2/);
-    const el = { parentElement: null, scrollIntoView: vi.fn(), setAttribute: vi.fn(), removeAttribute: vi.fn() };
+    const el = { parentElement: null, scrollIntoView: vi.fn(), setAttribute: vi.fn(), removeAttribute: vi.fn(), querySelectorAll: vi.fn(() => []) }; // (§139) folds under the row open too
     const assign = vi.fn();
     const ids = new Map<string, unknown>([["mypaused-t1", el]]);
     (globalThis as { document?: unknown }).document = { getElementById: (id: string) => ids.get(id) ?? null };

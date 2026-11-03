@@ -167,7 +167,7 @@ describe("batch 35 §38: no Files and recordings box under the written answers",
     expect(page).not.toContain("WrittenAttachments");
     const form = code("app/app/sessions/[id]/SessionActions.tsx");
     for (const gone of ["Files and recordings", "Attach a file (images, PDF, text or zip; 500 MB each, 5 at most) or a video", "Record your screen", "written-files:"]) expect(form).not.toContain(gone);
-    expect(form).toContain('title="Attach a file">📎');
+    expect(form).toContain('title="Attach a file"><Paperclip'); // (Owner, Nov 3) a plain icon, the same on every device
     expect(form).toContain("onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }}");
     expect(form).toContain("const loose = attachments.filter((a) => ![...answers, notes].some((t) => hasMarkerFor(t, a.id, attachments)));");
     expect(form).toContain("Files not in an answer (they go with your answers when you send them):");
