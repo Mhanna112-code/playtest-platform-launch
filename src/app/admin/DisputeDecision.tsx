@@ -28,10 +28,13 @@ export const decideFromDraft = (d: Record<string, unknown>) => ({ total: typeof 
  * Decide goes through; a stopped or refused Decide keeps it.
  * (Owner, Oct 31, batch 35 §41) Decided: the total, the note and the tick are hidden and Decide stays greyed with "Done." until the console has loaded again.
  */
-export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", sideAt: sideAt0 = null, dev = "The developer" }: { id: string; minCents: number; maxCents: number; side?: string; sideAt?: string | null; dev?: string }) {
+export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: range0 = "", side: side0 = "", sideAt: sideAt0 = null, dev = "The developer" }: { id: string; minCents: number; maxCents: number; range?: string; side?: string; sideAt?: string | null; dev?: string }) {
   const root = useRef<HTMLDivElement>(null);
   // (Owner, Oct 30, batch 15 section 27) The developer's side appears live ("added <time>"); a Decide pressed before reading one that arrived after the page loaded stops once.
-  const loaded = useMemo(() => new Date().toISOString(), []);
+  const first = useMemo(() => new Date().toISOString(), []);
+  // (Owner, Nov 3, batch 35 §149) A Pay more since the page loaded took the pay above the decision: the stop moves the range up to what's paid and the page's time on.
+  const [bounds, setBounds] = useState({ minCents: min0, maxCents: max0, range: range0, loaded: first });
+  const { minCents, maxCents, range, loaded } = bounds;
   const [side, setSide] = useState({ text: side0, at: sideAt0 });
   const [stopped, setStopped] = useState(false);
   useEffect(() => {
@@ -61,6 +64,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
   });
   return (
     <div ref={root} className="space-y-2" data-mistakes-root="">
+      {range && <p data-dispute-range="">{range}</p>}
       {/* (Batch 35 §43) The developer's side in the small quoted box. */}
       {side.text && <div data-dev-side="">Developer&apos;s side{side.at ? ` (added ${new Date(side.at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })})` : ""}:<ReasonQuote text={side.text} className="mt-0.5" /></div>}
       {fin.done ? (
@@ -103,6 +107,7 @@ export function DisputeDecision({ id, minCents, maxCents, side: side0 = "", side
               if (e instanceof ApiError && e.code === "stop_once") {
                 setStopped(true);
                 if (typeof e.data.devSide === "string") setSide((s) => ({ text: e.data.devSide as string, at: s.at ?? new Date().toISOString() }));
+                if (typeof e.data.minCents === "number" && typeof e.data.maxCents === "number") setBounds({ minCents: e.data.minCents, maxCents: e.data.maxCents, range: typeof e.data.range === "string" ? e.data.range : "", loaded: typeof e.data.seenAt === "string" ? e.data.seenAt : new Date().toISOString() });
                 setMsg({ ok: false, text: `Your Decide didn't go through. ${((e.data.changes as { text: string }[]) ?? []).map((c) => c.text).join(" ")}` });
               } else setMsg({ ok: false, text: errOf(e) });
             } finally {

@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import { POST as webhookPOST } from "@/app/api/stripe/webhook/route";
 import { adminPage, testRow, type TextVM, type TestVM } from "@/lib/server/adminLists";
-import { chargebackOpened, retryOwed, startHold } from "@/lib/server/holds";
+import { runDaily, startHold } from "@/lib/server/holds";
 import { refreshPayoutStatus, setStripeForTests } from "@/lib/server/stripe";
 import { PAYMENT_RULES } from "@/lib/termsOfUse";
 import { json, makeUser, req } from "./helpers";
@@ -71,27 +71,15 @@ describe("batch 22 section 1: no automatic retries during a chargeback hold", ()
     const s = await sentWork();
     await owedOn(s, "chargeback");
     const f = fakeStripe();
-    expect(await retryOwed(s.dev.user.id)).toBeNull(); // saving a card (§145: the daily job retries nothing at all)
+    await runDaily(new Date());
     expect(f.charges).toEqual([]);
-    expect(src("lib/server/holds.ts")).not.toMatch(/retryOwed\(u\.id/);
-    // (§145) The owed box's rule line ("…or as soon as you save a new card") shows only on a payment hold.
+    // (§148) Saving a card charges nothing of what's owed on any hold (stripe.saveCardFromCheckout has no such charge any more).
+    expect(src("lib/server/stripe.ts")).not.toContain("retryOwed");
+    expect(src("lib/server/holds.ts")).not.toMatch(/retryOwed/);
+    // (§145) The owed box's rule line ("What you owe is charged when you press Pay what you owe.") shows only on a payment hold.
     expect(src("components/OwedBox.tsx")).toContain("{onHold && !chargeback && <p");
   });
-
-  it("a payment hold still charges on a new card; one that turns into a chargeback hold stops that from then on", async () => {
-    const s = await sentWork();
-    await owedOn(s, "unpaid");
-    let f = fakeStripe({ decline: true });
-    expect(await retryOwed(s.dev.user.id)).toMatchObject({ cents: 0 }); // tried (and declined)
-    // An earlier payment is reversed by the bank: the payment hold becomes a chargeback hold.
-    const pi = "pi_" + randomUUID();
-    await db.payment.create({ data: { kind: "review", contractId: s.sessionId, developerId: s.dev.user.id, testerId: s.tester.user.id, amountCents: 500, feeCents: 100, testerCents: 400, status: "charged", stripePaymentIntentId: pi, transferStatus: "sent" } });
-    await chargebackOpened(pi);
-    expect((await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } })).holdReason).toBe("chargeback");
-    f = fakeStripe();
-    expect(await retryOwed(s.dev.user.id)).toBeNull();
-    expect(f.charges).toEqual([]);
-  });
+  // (§148) "A payment hold still charges on a new card" is retired: a new card charges nothing of what's owed on any hold.
 });
 
 describe("batch 22 section 2: a suspended tester is paid normally", () => {

@@ -39,3 +39,24 @@ const esc = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
  * page's NDA line keeps its words: "Nora Lane changed the NDA: read and accept it again below".
  */
 export const saveRe = (who: string, rest: string, verb = "edited the listing") => new RegExp(`^${esc(who)} ${verb}${verb === "edited the listing" ? "" : `: ${esc(rest)}`}$`);
+
+/**
+ * (Batch 35 §148) A one payment for what's owed made while the developer was away (the new-card charge of what's owed before §148, the daily retry before §145).
+ * The app no longer makes one, but rows like it may still be open (a 3-day "Confirm with your bank", a lost answer): tests that check how such a row ends set it up here.
+ */
+export async function legacyAwayOwed(devId: string) {
+  const u = await db.user.findUnique({ where: { id: devId } });
+  if (!u?.holdStartedAt || u.deletedAt || u.holdReason === "chargeback") return null;
+  const { stripeOn } = await import("@/lib/server/stripe");
+  if (!stripeOn() || !u.stripeCustomerId || !u.stripePaymentMethodId) return null;
+  const holds = await import("@/lib/server/holds");
+  const once = await import("@/lib/server/owedOnce");
+  await once.resumeStaleOwed(devId, new Date());
+  const locks = await once.owedLocks(devId);
+  const list = holds.withDebt((await holds.payable(devId)).filter((p) => !locks.has(p.id)));
+  if (!list.length) return null;
+  const r = await once.chargeOwedTotal(u, list, "away");
+  const cents = r.result === "paid" ? r.cents : 0;
+  const lifted = cents > 0 ? await holds.liftHoldIfClear(devId) : false;
+  return { cents, lifted };
+}

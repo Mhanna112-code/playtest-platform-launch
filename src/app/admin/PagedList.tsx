@@ -122,8 +122,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
               </ul>
             )}
           </details>
-          {d.open && d.range && <p data-dispute-range="">{d.range}</p>}
-          {d.open ? <DisputeDecision id={d.id} minCents={d.min} maxCents={d.max} side={d.devSide ?? ""} sideAt={d.devSideAt ?? null} dev={d.dev ?? "The developer"} /> : <>
+          {/* (§149) The range line is drawn by the decision box, so a stop can move it up to what's paid. */}
+          {d.open ? <DisputeDecision id={d.id} minCents={d.min} maxCents={d.max} range={d.range ?? ""} side={d.devSide ?? ""} sideAt={d.devSideAt ?? null} dev={d.dev ?? "The developer"} /> : <>
             {d.devSide && <div data-dev-side="">Developer&apos;s side:<ReasonQuote text={d.devSide} className="mt-0.5" /></div>}
             <div className="note" data-decided="">{d.decided}{d.decisionNote && <ReasonQuote text={d.decisionNote} className="mt-0.5" />}</div>
           </>}

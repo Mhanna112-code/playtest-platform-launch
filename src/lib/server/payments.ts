@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, toCents } from "@/lib/server/dateFormat";
-import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName } from "@/lib/rules";
+import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -326,13 +326,31 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   // A blank box keeps the pay as it is.
   const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
   const decided = blank ? min : toCents(body.total);
+  // (Owner, Nov 3, batch 35 §149) The developer's Pay more since the admin's page loaded: the decision is still the piece's TOTAL. Below what is paid now, Decide stops
+  // once naming it (nothing charged, the dispute stays open; the box's range moves up to what's paid); at or above it, it goes through charging only the difference.
+  const seenAt = seen && !isNaN(seen.getTime()) ? seen : null;
+  const key = d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! };
+  const paidSince = (tx: Prisma.TransactionClient = db) => (seenAt ? tx.payment.aggregate({ where: { ...key, kind: "extra", status: { in: COUNTED }, createdAt: { gt: seenAt } }, _sum: { amountCents: true } }).then((a) => a._sum.amountCents ?? 0) : Promise.resolve(0));
+  const payChanged = async (paidNow: number, more: number, testerName: string) => {
+    const at = new Date();
+    return new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: decidePayChangedLine(testerName, more, paidNow, decided!), at: at.toISOString(), kind: "stop" }], press: "Decide", minCents: paidNow, maxCents: Math.max(paidNow, max), range: disputeRangeLine(paidNow, Math.max(paidNow, max) - paidNow), seenAt: at.toISOString() });
+  };
+  const moreBefore = blank || decided == null ? 0 : await paidSince();
+  if (!blank && decided != null && Number.isInteger(decided) && decided < min && moreBefore > 0) {
+    const t = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true } });
+    throw await payChanged(min, moreBefore, displayName(t.tester));
+  }
+  // What the admin's page showed as paid: a decision above it is a raise, even when a Pay more since reached it (goes through, nothing more charged).
+  const raise = !blank && decided != null && decided > min - moreBefore;
   const check = checkDisputeDecision(decided, min, max, poolBinds);
   if (!check.ok) throw new HttpError(400, "bad_amount", check.message);
   const extra = check.extraCents!;
   const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, include: { tester: true, test: { include: { developer: true } } } });
   const note = readText(body.note, LIMITS.reason, "bad_note"); // (batch 15 section 20) the admin's decision note: 1,000
   // (Owner, Oct 30, batch 35 §1) A raise needs the tick naming exactly what it charges; a tick for another amount (the box changed) doesn't count.
-  if (extra > 0 && body.tickCents !== extra) throw new HttpError(400, "needs_tick", decideTickLine(displayName(c.test.developer), extra, decided!));
+  // (§149) A Pay more since the page loaded lowered what the raise charges: the tick the admin gave for what the page showed still counts (it charges less, never more).
+  const tickOk = body.tickCents === extra || (moreBefore > 0 && body.tickCents === decided! - (min - moreBefore));
+  if (extra > 0 && !tickOk) throw new HttpError(400, "needs_tick", decideTickLine(displayName(c.test.developer), extra, decided!));
   // Claim the dispute first so two admins can't charge twice.
   // (Owner, Nov 3, races) The claim, what the piece is paid now and the decision's line on the test commit together under the test's lock (as Pay more's reservation
   // takes it): a Pay more pressed meanwhile either reserved first (counted here: the decision charges only what is still due, never more than decided minus what's
@@ -341,13 +359,14 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     const claimed = await tx.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
     if (claimed.count !== 1) return null;
-    const key = d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! };
     if (await tx.payment.count({ where: { ...key, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", DECIDE_LOCKED); // the claim rolls back
     const piece = await pieceOf(key, tx);
     const paidNow = Math.max(review.amountCents, piece ? (await pieceRoom(piece, tx)).paidCents : review.amountCents);
-    const due = extra > 0 ? Math.max(0, decided! - paidNow) : 0;
+    // (§149) A Pay more that went through just now took the pay above the decision: the same stop (the claim rolls back).
+    if (!blank && decided! < paidNow) throw await payChanged(paidNow, Math.max(await paidSince(tx), paidNow - min), displayName(c.tester));
+    const due = raise ? Math.max(0, decided! - paidNow) : 0;
     const line = due > 0 ? `The team raised the pay to ${money(decided!)} (${money(due)} more).`
-      : extra > 0 ? `The team raised the pay to ${money(decided!)}, which was already paid: nothing more was charged.`
+      : raise ? `The team raised the pay to ${money(decided!)}, which was already paid: nothing more was charged.`
         : `The team kept the pay at ${money(paidNow)}${review.rejected ? " (rejected)" : ""}.`;
     const ev = await tx.testEvent.create({ data: { testId: c.testId, kind: "admin", text: `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, contractId: c.id } });
     return { due, line, eventId: ev.id };

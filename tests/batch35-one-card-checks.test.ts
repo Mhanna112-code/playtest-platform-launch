@@ -4,17 +4,19 @@ import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
+import { POST as reviewPOST } from "@/app/api/review/route";
 import * as R from "@/lib/rules";
-import { owed, owedLines, payOwed, retryOwed, runDaily, startHold } from "@/lib/server/holds";
+import { owed, owedLines, payOwed, runDaily, startHold } from "@/lib/server/holds";
 import { awayAction, confirmItems, expireActions } from "@/lib/server/confirm";
 import { saveCardFromCheckout, setStripeForTests } from "@/lib/server/stripe";
 import { OWED_PAID } from "@/lib/server/owedOnce";
-import { json, req } from "./helpers";
-import { joined, sact, settle, setup } from "./fixtures";
+import { json, legacyAwayOwed, req } from "./helpers";
+import { joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 2, batch 35 §117) One card in play; bank checks never double-charge: Pay what you owe is ONE payment for the total; a debt waiting for the bank is
 // locked (press, daily retry) until its check is confirmed or cancelled ("Cancel this check"); a check the app stops tracking is cancelled at Stripe first (one that
-// had already gone through is recorded as paid); a new card cancels every waiting check and tries each item again on it.
+// had already gone through is recorded as paid); a new card cancels every waiting check and makes the charges made while away again on it (§148: never what is
+// owed: that waits for Pay what you owe).
 
 const DAY = 86_400_000;
 afterEach(() => setStripeForTests(null));
@@ -144,11 +146,11 @@ describe("§117 rule 6: Pay what you owe is ONE payment", () => {
     expect(await receipts(w.dev.user.id)).toHaveLength(1);
   });
 
-  it("a new card's retry the bank asks about is ONE 'Confirm with your bank' item listing every payment it covers", async () => {
+  it("an away one payment for what's owed (a new card's charge before §148) the bank asks about is ONE 'Confirm with your bank' item listing every payment it covers", async () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    expect(await retryOwed(w.dev.user.id)).toMatchObject({ cents: 0 });
+    expect(await legacyAwayOwed(w.dev.user.id)).toMatchObject({ cents: 0 });
     expect(st.made).toHaveLength(1);
     const one = await oneOf(w.dev.user.id);
     expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 1600 });
@@ -228,21 +230,24 @@ describe("§117 rule 1: one card in play", () => {
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged", stripePaymentIntentId: pi, actionPi: null });
   });
 
-  it("debts waiting under a check: the check is cancelled and what's owed is charged again on the new card as one payment", async () => {
+  it("debts waiting under a check: the check is cancelled; (§148) what's owed is NOT charged on the new card: payable, Pay what you owe then pays it on the new card", async () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const old = await oneOf(w.dev.user.id);
     expect(old.status).toBe("needs_confirmation");
     await newCard(w, st, "pm_new");
     expect(st.cancelled).toEqual([old.actionPi]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ status: "cancelled", actionPi: null });
+    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_old"]]);
+    expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(w.debts.map((d) => [d.id, true, false]));
+    expect(await hold(w.dev.user.id)).not.toBeNull();
+    const p = await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: w.debts.map((d) => d.id) });
+    expect(p.body).toMatchObject({ paid: 3, lifted: true });
     expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_old"], [1600, "pm_new"]]);
     const fresh = await oneOf(w.dev.user.id);
-    expect(fresh.id).not.toBe(old.id);
     for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: "charged", coveredById: fresh.id });
-    expect(await hold(w.dev.user.id)).toBeNull();
   });
 
   it("Confirm with your bank on a check made on another card confirms it on the current card", async () => {
@@ -283,11 +288,11 @@ describe("§117 rule 2: a declined Confirm keeps waiting until its date", () => 
 });
 
 describe("§117 rule 3: a debt waiting for the bank is locked", () => {
-  it("skipped by a press and by a new card's retry (other debts are paid); Cancel this check cancels it at Stripe and it's payable at once", async () => {
+  it("skipped by a press (other debts are paid); Cancel this check cancels it at Stripe and it's payable at once", async () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     // A tester's Charge added meanwhile: the only thing a press pays.
     const extra = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 200, feeCents: 0, testerCents: 0, status: "owed" } });
@@ -299,10 +304,10 @@ describe("§117 rule 3: a debt waiting for the bank is locked", () => {
     expect(st.made.map((m) => m.amount)).toEqual([1600, 200]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: extra.id } })).toMatchObject({ status: "charged" });
     for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: d.status, coveredById: one.id, settledAt: null });
-    // Everything left waits for the bank: a press says so and charges nothing; the retry finds nothing it may charge.
+    // Everything left waits for the bank: a press says so and charges nothing.
     const all = await owedPress(w.dev.cookie, { seenTotalCents: 0, seenIds: [] });
     expect(all.body.error).toMatchObject({ code: "bank_waiting", message: R.OWED_ALL_WAITING });
-    expect(await retryOwed(w.dev.user.id)).toBeNull();
+    expect(await legacyAwayOwed(w.dev.user.id)).toBeNull();
     expect(st.made).toHaveLength(2);
     // Cancel this check: cancelled at Stripe; the three are payable again and one press pays them as one payment.
     const c = await owedPress(w.dev.cookie, { cancelCheck: one.id });
@@ -320,7 +325,7 @@ describe("§117 rule 3: a debt waiting for the bank is locked", () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     st.approve(one.actionPi!);
     const c = await owedPress(w.dev.cookie, { cancelCheck: one.id });
@@ -334,7 +339,7 @@ describe("§117 rule 3: a debt waiting for the bank is locked", () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     const extra = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 200, feeCents: 0, testerCents: 0, status: "owed" } });
     await db.user.update({ where: { id: w.dev.user.id }, data: { holdReason: "chargeback", chargebackCardVerifiedAt: new Date() } });
@@ -352,7 +357,7 @@ describe("§117 rule 4: never an orphan check", () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     await db.payment.update({ where: { id: one.id }, data: { actionBy: new Date(Date.now() - 1000) } });
     await expireActions();
@@ -365,7 +370,7 @@ describe("§117 rule 4: never an orphan check", () => {
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     st.approve(one.actionPi!);
     await db.payment.update({ where: { id: one.id }, data: { actionBy: new Date(Date.now() - 1000) } });
@@ -374,7 +379,7 @@ describe("§117 rule 4: never an orphan check", () => {
     for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: "charged", stripePaymentIntentId: one.actionPi });
     expect(await hold(w.dev.user.id)).toBeNull();
     await db.user.update({ where: { id: w.dev.user.id }, data: { holdStartedAt: new Date() } });
-    expect(await retryOwed(w.dev.user.id)).toBeNull();
+    expect(await legacyAwayOwed(w.dev.user.id)).toBeNull();
     expect(st.made).toHaveLength(1);
     expect(await receipts(w.dev.user.id)).toHaveLength(1);
   });
@@ -398,7 +403,7 @@ describe("§117 rule 5: a press and a check finishing at the same moment charge 
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     st.approve(one.actionPi!);
     st.ask.delete("pm_old");
@@ -414,7 +419,7 @@ describe("§117 rule 5: a press and a check finishing at the same moment charge 
     const w = await threeDebts();
     const st = bank();
     st.ask.add("pm_old");
-    await retryOwed(w.dev.user.id);
+    await legacyAwayOwed(w.dev.user.id);
     const one = await oneOf(w.dev.user.id);
     st.approve(one.actionPi!);
     await db.payment.update({ where: { id: one.id }, data: { actionBy: new Date(Date.now() - 1000) } });
@@ -445,7 +450,7 @@ describe("§117 with §113: new charges during a hold wait for the lift", () => 
     return { p, pi };
   }
 
-  it("a check made before the hold that runs out during it: cancelled at Stripe and waits (never a debt); (§125) a new card's retry pays it WITH what's owed as one payment", async () => {
+  it("a check made before the hold that runs out during it: cancelled at Stripe and waits (never a debt); (§148) a new card charges nothing; (§125) Pay what you owe pays it WITH what's owed as one payment, on the new card", async () => {
     const w = await world();
     const st = bank();
     const { p, pi } = await awayCheck(w, st);
@@ -456,16 +461,19 @@ describe("§117 with §113: new charges during a hold wait for the lift", () => 
     expect(st.cancelled).toEqual([pi]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "deferred", actionPi: null });
     expect((await owed(w.dev.user.id)).map((x) => x.id)).toEqual([debt.id]);
-    // A new card during the hold: (§125) what's owed and the waiting charge are ONE payment on the new card; the hold lifts with nothing left to charge.
+    // A new card during the hold: (§148) nothing is charged on it; then Pay what you owe: (§125) what's owed and the waiting charge are ONE payment on the new card.
     st.card.customer = w.customer;
     st.card.next = "pm_new";
     await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
+    expect(st.made).toEqual([]);
+    expect(await hold(w.dev.user.id)).not.toBeNull();
+    expect(await payOwed(w.dev.user, {})).toMatchObject({ lifted: true });
     expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1400, "pm_new"]]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
     expect(await hold(w.dev.user.id)).toBeNull();
   });
 
-  it("a new card during a hold cancels a waiting check made while away; declined, that charge keeps waiting (never a debt) and the debt stays owed", async () => {
+  it("a new card during a hold cancels a waiting check made while away; (§148) nothing is tried on it: that charge keeps waiting (never a debt) and the debt stays owed", async () => {
     const w = await world();
     const st = bank();
     const { p, pi } = await awayCheck(w, st);
@@ -477,7 +485,7 @@ describe("§117 with §113: new charges during a hold wait for the lift", () => 
     await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
     expect(st.cancelled).toEqual([pi]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "deferred", actionPi: null });
-    expect(st.made.map((m) => m.amount)).toEqual([1400]); // (§125) one payment for what's owed and the waiting charge, declined: the charge keeps waiting
+    expect(st.made).toEqual([]); // (§148) a card save charges nothing of what's owed (nor the charges waiting for the lift)
     expect((await owed(w.dev.user.id)).map((x) => x.amountCents)).toEqual([400]);
     expect(await hold(w.dev.user.id)).not.toBeNull();
   });
@@ -706,7 +714,7 @@ describe("§122: a hold starting pauses the charges still waiting for the bank",
   });
 });
 
-describe("§145 (owner, Nov 3): no daily retries; only a new card retries what's owed", () => {
+describe("§145, §148 (owner, Nov 3): no daily retries, and a new card charges nothing of what's owed: only Pay what you owe does", () => {
   async function newCard(w: { dev: { user: { id: string } }; customer: string }, st: ReturnType<typeof bank>, pm: string) {
     st.card.customer = w.customer;
     st.card.next = pm;
@@ -714,6 +722,7 @@ describe("§145 (owner, Nov 3): no daily retries; only a new card retries what's
   }
   const charged = (devId: string) => db.notification.findMany({ where: { userId: devId, text: { startsWith: "We charged your card" } } });
   const ids = (w: Awaited<ReturnType<typeof threeDebts>>) => w.debts.map((d) => d.id);
+  const payable = async (w: Awaited<ReturnType<typeof threeDebts>>) => expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
 
   it("the daily job never charges what's owed, today or on later days, even on a card that would go through", async () => {
     const w = await threeDebts();
@@ -722,82 +731,125 @@ describe("§145 (owner, Nov 3): no daily retries; only a new card retries what's
     await runDaily(new Date(Date.now() + DAY + 60_000));
     expect(st.made.filter((m) => (m as { customer?: string }).customer === w.customer)).toEqual([]);
     expect(await db.payment.count({ where: { developerId: w.dev.user.id, kind: "owed" } })).toBe(0);
-    expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
+    await payable(w);
     expect(await hold(w.dev.user.id)).not.toBeNull();
     expect(await charged(w.dev.user.id)).toEqual([]);
-  });
-
-  it("a new card that pays: what's owed is ONE charge on it at once, the hold lifts, one line naming the items", async () => {
-    const w = await threeDebts();
-    const st = bank();
-    await newCard(w, st, "pm_new");
-    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_new"]]);
-    const one = await oneOf(w.dev.user.id);
-    for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: "charged", coveredById: one.id });
-    expect(await hold(w.dev.user.id)).toBeNull();
-    expect((await charged(w.dev.user.id)).map((n) => n.text)).toEqual([expect.stringMatching(/^We charged your card \$16\.00 for what you owed: /)]);
-  });
-
-  it("a new card that declines: one try on it, nothing charged, still owed and payable, the hold stays, no line", async () => {
-    const w = await threeDebts();
-    const st = bank();
-    st.decline.add("pm_new");
-    await newCard(w, st, "pm_new");
-    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_new"]]);
-    expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
-    expect(await hold(w.dev.user.id)).not.toBeNull();
-    expect(await charged(w.dev.user.id)).toEqual([]);
-  });
-
-  it("a new card whose bank asks: ONE 3-day 'Confirm with your bank' for the total; approved, paid once and the hold lifts", async () => {
-    const w = await threeDebts();
-    const st = bank();
-    st.ask.add("pm_new");
-    await newCard(w, st, "pm_new");
-    const one = await oneOf(w.dev.user.id);
-    expect(one).toMatchObject({ status: "needs_confirmation", amountCents: 1600 });
-    expect(one.actionBy!.getTime()).toBeGreaterThan(Date.now() + 2.9 * DAY);
-    expect((await confirmItems(w.dev.user.id)).map((i) => i.id)).toEqual([one.id]);
-    expect((await owedLines(w.dev.user.id)).every((l) => l.waiting && l.checkId === one.id)).toBe(true);
-    expect(await hold(w.dev.user.id)).not.toBeNull();
-    st.approve(one.actionPi!);
-    expect((await confirm(w.dev.cookie, { paymentId: one.id })).status).toBe(200);
-    expect(await hold(w.dev.user.id)).toBeNull();
-    expect(st.made).toHaveLength(1);
-    expect(await receipts(w.dev.user.id)).toHaveLength(1);
   });
 
   for (const [card, outcome] of [["pm_new", "pays"], ["pm_ask", "asks"], ["pm_no", "declines"]] as const) {
-    for (const open of ["press", "retry"] as const) {
-      it(`a check already open (${open === "press" ? "Pay what you owe's own 15-minute check" : "a new card's 3-day check"}), then a card that ${outcome}: the old check is cancelled at Stripe FIRST, then one try on the new card`, async () => {
-        const w = await threeDebts();
-        const st = bank();
-        st.ask.add("pm_old").add("pm_ask");
-        st.decline.add("pm_no");
-        if (open === "press") expect((await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: ids(w) })).body.confirm).toHaveLength(1);
-        else await retryOwed(w.dev.user.id);
-        const old = await oneOf(w.dev.user.id);
-        expect(old.status).toBe(open === "press" ? "needs_action" : "needs_confirmation");
-        st.order.length = 0;
-        await newCard(w, st, card);
-        expect(st.order).toEqual([`cancel:${old.actionPi}`, `create:${card}`]);
-        expect(await db.payment.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ status: "cancelled", actionPi: null });
-        expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_old"], [1600, card]]);
-        if (outcome === "pays") {
-          expect(await hold(w.dev.user.id)).toBeNull();
-          expect([...st.pis.values()].filter((x) => x === "succeeded")).toHaveLength(1);
-        } else if (outcome === "asks") {
-          const fresh = await oneOf(w.dev.user.id);
-          expect(fresh).toMatchObject({ status: "needs_confirmation", amountCents: 1600 });
-          expect(fresh.id).not.toBe(old.id);
-          expect((await confirmItems(w.dev.user.id)).map((i) => i.id)).toEqual([fresh.id]);
-          expect(await hold(w.dev.user.id)).not.toBeNull();
-        } else {
-          expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
-          expect(await confirmItems(w.dev.user.id)).toEqual([]);
-          expect(await hold(w.dev.user.id)).not.toBeNull();
-        }
-      });
-    }
+    it(`saving a card during a hold (one that ${outcome}) charges nothing and changes nothing owed; Pay what you owe then charges the total on it`, async () => {
+      const w = await threeDebts();
+      const st = bank();
+      st.ask.add("pm_ask");
+      st.decline.add("pm_no");
+      await newCard(w, st, card);
+      expect(st.made).toEqual([]);
+      expect(await db.payment.count({ where: { developerId: w.dev.user.id, kind: "owed" } })).toBe(0);
+      await payable(w);
+      expect(await hold(w.dev.user.id)).not.toBeNull();
+      expect(await charged(w.dev.user.id)).toEqual([]);
+      expect(await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } })).toMatchObject({ stripePaymentMethodId: card });
+      // The developer's press: ONE payment for the total, on the new card.
+      const r = await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: ids(w) });
+      expect(r.status).toBe(200);
+      expect(st.made.map((m) => [m.amount, m.payment_method, !!m.off_session])).toEqual([[1600, card, false]]);
+      if (outcome === "pays") {
+        expect(r.body).toMatchObject({ paid: 3, lifted: true });
+        expect(await hold(w.dev.user.id)).toBeNull();
+        expect(await receipts(w.dev.user.id)).toHaveLength(1);
+      } else if (outcome === "asks") {
+        expect(r.body.confirm).toHaveLength(1); // the bank's check opens on the page (the press's own, 15 minutes)
+        expect(await oneOf(w.dev.user.id)).toMatchObject({ status: "needs_action", amountCents: 1600 });
+        expect(await hold(w.dev.user.id)).not.toBeNull();
+      } else {
+        expect(r.body.stillFailing).toHaveLength(1);
+        await payable(w);
+        expect(await hold(w.dev.user.id)).not.toBeNull();
+      }
+    });
   }
+
+  for (const open of ["press", "away"] as const) {
+    it(`a check already open on the old card (${open === "press" ? "Pay what you owe's own 15-minute check" : "an away 3-day check from before §148"}): a new card cancels it at Stripe and tries nothing; the debts are payable again`, async () => {
+      const w = await threeDebts();
+      const st = bank();
+      st.ask.add("pm_old");
+      if (open === "press") expect((await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: ids(w) })).body.confirm).toHaveLength(1);
+      else await legacyAwayOwed(w.dev.user.id);
+      const old = await oneOf(w.dev.user.id);
+      expect(old.status).toBe(open === "press" ? "needs_action" : "needs_confirmation");
+      st.order.length = 0;
+      await newCard(w, st, "pm_new");
+      expect(st.order).toEqual([`cancel:${old.actionPi}`]);
+      expect(await db.payment.findUniqueOrThrow({ where: { id: old.id } })).toMatchObject({ status: "cancelled", actionPi: null });
+      expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_old"]]);
+      await payable(w);
+      expect(await confirmItems(w.dev.user.id)).toEqual([]);
+      expect(await hold(w.dev.user.id)).not.toBeNull();
+      // An old tab finishing the old bank page: refused plainly, nothing charged.
+      const late = await confirm(w.dev.cookie, { paymentId: old.id });
+      expect(late.status).toBeGreaterThanOrEqual(400);
+      expect(st.made).toHaveLength(1);
+      // The press pays on the new card.
+      expect((await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: ids(w) })).body).toMatchObject({ paid: 3, lifted: true });
+      expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1600, "pm_old"], [1600, "pm_new"]]);
+    });
+  }
+
+  it("no retry code is left: saving a card never calls a charge of what's owed; the owed box and the Terms say how it's paid", async () => {
+    const fs = await import("node:fs");
+    const src = (f: string) => fs.readFileSync(`src/${f}`, "utf8");
+    expect(src("lib/server/stripe.ts")).not.toContain("retryOwed");
+    expect(src("lib/server/holds.ts")).not.toMatch(/export async function retryOwed/);
+    expect(R).not.toHaveProperty("retriedLine");
+    expect(R.OWED_HOW).toBe("What you owe is charged when you press Pay what you owe.");
+    expect(src("lib/termsOfUse.ts")).toContain(R.OWED_HOW);
+    expect(src("lib/termsOfUse.ts")).not.toContain("save a new card");
+  });
+});
+
+describe("§148: a new card cancels the developer's own open press checks (Pay, Pay more) and retries nothing", () => {
+  const pay = (w: Awaited<ReturnType<typeof world>>) => reviewPOST(req("/api/review", { cookie: w.dev.cookie, body: { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true, payKey: randomUUID() } })).then(json);
+  async function newCard(w: { dev: { user: { id: string } }; customer: string }, st: ReturnType<typeof bank>, pm: string) {
+    st.card.customer = w.customer;
+    st.card.next = pm;
+    await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
+  }
+
+  it("Pay's bank check open on the old card: cancelled at Stripe, nothing charged, the piece is payable again; an old tab's Confirm is refused; Pay again pays on the new card", async () => {
+    const w = await world();
+    const st = bank();
+    st.ask.add("pm_old");
+    const first = await pay(w);
+    expect(first.status).toBe(200);
+    const check = await db.payment.findFirstOrThrow({ where: { submissionId: w.sub.id, status: "needs_action" } });
+    st.order.length = 0;
+    await newCard(w, st, "pm_new");
+    expect(st.order).toEqual([`cancel:${check.actionPi}`]);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: check.id } })).toMatchObject({ status: "cancelled", actionPi: null });
+    expect(await db.review.count({ where: { submissionId: w.sub.id } })).toBe(0);
+    expect(st.made.map((m) => m.payment_method)).toEqual(["pm_old"]);
+    // An old tab finishing the bank's page: "This payment was cancelled: nothing was charged."
+    const late = await confirm(w.dev.cookie, { paymentId: check.id });
+    expect(late.body.error).toMatchObject({ code: "cancelled", message: "This payment was cancelled: nothing was charged." });
+    const again = await pay(w);
+    expect(again.status).toBe(200);
+    expect(st.made.map((m) => [m.amount, m.payment_method])).toEqual([[1000, "pm_old"], [1000, "pm_new"]]);
+    expect(await db.review.findFirstOrThrow({ where: { submissionId: w.sub.id } })).toMatchObject({ amountCents: 1000 });
+    expect(await db.payment.count({ where: { submissionId: w.sub.id, status: "charged" } })).toBe(1);
+  });
+
+  it("one that had already gone through at Stripe is recorded as paid (never charged again)", async () => {
+    const w = await world();
+    const st = bank();
+    st.ask.add("pm_old");
+    await pay(w);
+    const check = await db.payment.findFirstOrThrow({ where: { submissionId: w.sub.id, status: "needs_action" } });
+    st.approve(check.actionPi!);
+    await newCard(w, st, "pm_new");
+    expect(st.cancelled).toEqual([]);
+    expect(st.made).toHaveLength(1);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: check.id } })).toMatchObject({ status: "charged", stripePaymentIntentId: check.actionPi });
+    expect(await db.review.findFirstOrThrow({ where: { submissionId: w.sub.id } })).toMatchObject({ amountCents: 1000 });
+  });
 });

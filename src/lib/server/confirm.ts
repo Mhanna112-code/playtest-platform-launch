@@ -268,6 +268,8 @@ async function startable(devId: string, paymentId: string) {
 async function own(devId: string, paymentId: string) {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (p && p.developerId === devId && !p.actionPi) await refusePaused(p);
+  // (§148) A press's check a new card cancelled (an old tab finishing the bank's page): said plainly, nothing was charged.
+  if (p && p.developerId === devId && !p.actionPi && p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
   if (!p || p.developerId !== devId || !p.actionPi) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   return p;
 }

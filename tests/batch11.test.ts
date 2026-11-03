@@ -11,13 +11,13 @@ import { POST as webhookPOST } from "@/app/api/stripe/webhook/route";
 import * as R from "@/lib/rules";
 import { CALLS_TOTAL_CENTS, overCeilingLine } from "@/lib/callMeasure";
 import { parseFormatted, wrapSelection } from "@/lib/markdown";
-import { owed, owedLines, retryOwed, runDaily, startHold } from "@/lib/server/holds";
+import { owed, owedLines, payOwed, runDaily, startHold } from "@/lib/server/holds";
 import { expireActions } from "@/lib/server/confirm";
 import { deleteAccount } from "@/lib/server/restrictions";
 import { testerDeleteLines } from "@/lib/server/deletion";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { approveChargebackHold } from "@/lib/server/chargeback";
-import { json, req } from "./helpers";
+import { json, legacyAwayOwed, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 // Batch 11 (owner, Oct 29, later): deleted testers' sent work, the chargeback fee, bank confirmations, retries during holds, the paused banner's deadline line, Pay and
@@ -235,7 +235,7 @@ describe("batch 11 item 3: the bank wants to confirm a payment", () => {
   });
 });
 
-describe("batch 11 item 4 (batch 35 §145): what is owed during a hold is charged by Pay what you owe or a new card, never once a day", () => {
+describe("batch 11 item 4 (batch 35 §145, §148): what is owed during a hold is charged only by Pay what you owe: never once a day, never on a new card", () => {
   async function held(amounts = [800]) {
     const s = await sentWork();
     await withCard(s.dev.user.id);
@@ -244,42 +244,37 @@ describe("batch 11 item 4 (batch 35 §145): what is owed during a hold is charge
     return s;
   }
 
-  it("a successful retry pays, tells the developer and lifts the hold", async () => {
+  it("(§148) only Pay what you owe charges it: it pays, the developer gets one receipt and the hold lifts", async () => {
     const { dev } = await held();
     fakeStripe();
-    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 800, lifted: true });
-    // (Batch 25 section 5) The one line names what was paid.
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "We charged your card $8.00 for what you owed: Ana Silva's work on “Harbor Run”." } })).toBe(1);
+    expect(await payOwed(dev.user, {})).toMatchObject({ paid: 1, lifted: true });
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $8.00 for what you owed" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "We charged your card" } } })).toBe(0);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
 
-  it("a declined new-card charge sends nothing; the daily job never charges what's owed (any day, any number of days); a new card charges it at once; Payments says how", async () => {
+  it("the daily job never charges what's owed (any day, any number of days), nor does saving a card (§148); Payments says how", async () => {
     const { dev } = await held();
-    fakeStripe({ mode: "decline" });
-    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 0 });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "We charged your card" } } })).toBe(0);
     // (§145) The daily job (today, and a day later) with a card that would go through: nothing of what's owed is charged, the hold stays.
     const f = fakeStripe();
     const { stripeCustomerId } = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
-    const tries = await db.payment.count({ where: { developerId: dev.user.id, kind: "owed" } }); // the declined try above
     await runDaily(new Date());
     await runDaily(new Date(Date.now() + DAY + 60_000));
-    expect(await db.payment.count({ where: { developerId: dev.user.id, kind: "owed" } })).toBe(tries);
+    expect(await db.payment.count({ where: { developerId: dev.user.id, kind: "owed" } })).toBe(0);
     expect(f.made.filter((m) => (m as { customer?: string }).customer === stripeCustomerId)).toEqual([]);
     expect((await owed(dev.user.id)).map((p) => p.amountCents)).toEqual([800]);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     // The daily job's code has no retry step; the dev hook has no "retry" action; the old wording is gone.
-    expect(src("lib/server/holds.ts")).not.toMatch(/retryOwed\(u\.id/);
+    expect(src("lib/server/holds.ts")).not.toMatch(/retryOwed/);
     expect(src("app/api/dev/hook/route.ts")).not.toContain('"retry"');
     expect(R).not.toHaveProperty("HOLD_RETRY_MAX");
     expect(R).not.toHaveProperty("retryStatusLine");
-    // A new card: charged at once (stripe.saveCardFromCheckout calls it after cancelling open checks).
-    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 800, lifted: true });
-    expect(src("lib/server/stripe.ts")).toContain("retryOwed(userId)");
+    // (§148) Saving a card charges nothing of what's owed: stripe.saveCardFromCheckout no longer calls a charge of it.
+    expect(src("lib/server/stripe.ts")).not.toContain("retryOwed");
     // Payments' owed box states the one rule (payment holds only).
-    expect(R.OWED_HOW).toBe("What you owe is charged when you press Pay what you owe, or as soon as you save a new card.");
+    expect(R.OWED_HOW).toBe("What you owe is charged when you press Pay what you owe.");
     expect(src("components/OwedBox.tsx")).toContain("{onHold && !chargeback && <p className=\"text-xs\" data-owed-how=\"\">{OWED_HOW}</p>}");
-    for (const f of ["app/app/payments/page.tsx", "components/OwedBox.tsx", "lib/termsOfUse.ts"]) expect(src(f), f).not.toMatch(/next try|once a day|retryStatusLine|7 times/);
+    for (const f of ["app/app/payments/page.tsx", "components/OwedBox.tsx", "lib/termsOfUse.ts"]) expect(src(f), f).not.toMatch(/next try|once a day|retryStatusLine|7 times|save a new card/);
     expect(src("lib/termsOfUse.ts")).toContain(R.OWED_HOW);
   });
 
@@ -287,7 +282,7 @@ describe("batch 11 item 4 (batch 35 §145): what is owed during a hold is charge
     const { dev } = await held();
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date() } });
     fakeStripe({ mode: "away-action" });
-    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 0 });
+    expect(await legacyAwayOwed(dev.user.id)).toMatchObject({ cents: 0 });
     // (Batch 35 §117) The retry is ONE payment for what's owed; its check waits as one item, and the debt is locked under it.
     const p = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
     expect(p).toMatchObject({ status: "needs_confirmation" });

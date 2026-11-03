@@ -7,12 +7,12 @@ import { POST as owedPOST } from "@/app/api/payments/owed/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { confirmByText } from "@/lib/bankTop";
 import { awayAction, bankToConfirm, bankWaitingOnTest, confirmItems } from "@/lib/server/confirm";
-import { retryOwed, startHold } from "@/lib/server/holds";
-import { sendSummaries } from "@/lib/server/notify";
+import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { approveChargebackHold, approvedLiftedLine } from "@/lib/server/chargeback";
-import { namesList, owedReceiptWhat, retriedLine } from "@/lib/rules";
-import { json, req } from "./helpers";
+import * as R from "@/lib/rules";
+import { namesList, owedReceiptWhat } from "@/lib/rules";
+import { json, legacyAwayOwed, req } from "./helpers";
 import { bookCall, joined, sact, settle, setup } from "./fixtures";
 import { withCard } from "./b15";
 
@@ -143,7 +143,8 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     expect(namesList(["A", "B"])).toBe("A and B");
     expect(namesList(["A", "B", "C"])).toBe("A, B and C");
     expect(namesList(["A", "B", "C", "D", "E"])).toBe("A, B, C and 2 more");
-    expect(retriedLine(1000, ["Ana Silva's call on Oct 30"])).toBe("We charged your card $10.00 for what you owed: Ana Silva's call on Oct 30.");
+    // (§148) No automatic charge of what's owed is left, so its own line ("We charged your card $X for what you owed: …") is gone.
+    expect(R).not.toHaveProperty("retriedLine");
     expect(owedReceiptWhat(["Ana Silva's call on Oct 30"])).toBe("what you owed: Ana Silva's call on Oct 30");
   });
 
@@ -167,27 +168,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
   }
   const moneyLines = (userId: string, since: Date) => db.notification.findMany({ where: { userId, createdAt: { gte: since }, OR: [{ text: { startsWith: "Receipt:" } }, { text: { startsWith: "We charged your card" } }] } });
 
-  it("a retry of one item: one line in Payments and holds naming it, no receipt line, and one email", async () => {
-    const { dev, day } = await held();
-    fakeStripe();
-    const before = new Date();
-    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 1000, lifted: true });
-    const lines = await moneyLines(dev.user.id, before);
-    expect(lines.map((n) => n.text)).toEqual([`We charged your card $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}).`]);
-    expect(lines[0]).toMatchObject({ groupKey: "payhold", payment: true, link: "/app/payments" });
-    await sendSummaries(new Date(), [dev.user.id]);
-    const mails = (await db.outboxEmail.findMany({ where: { to: dev.user.email } })).map((m) => m.text);
-    expect(mails.filter((t) => t.includes("for what you owed: Ana Silva's live call on “Harbor Run” ("))).toHaveLength(1);
-    expect(mails.join()).not.toContain("Receipt:");
-  });
-
-  it("a retry of several items names them all in one line", async () => {
-    const { dev, day } = await held(true);
-    fakeStripe();
-    const before = new Date();
-    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 1800 });
-    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`We charged your card $18.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}) and Ben Okafor's written answers on “Harbor Run”.`]);
-  });
+  // (§148) "A retry of one item / several items: one 'We charged your card' line" are retired: nothing charges what's owed automatically any more.
 
   it("Pay what you owe keeps one receipt, naming the items", async () => {
     const { dev, rows, day } = await held(true);
@@ -198,11 +179,11 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $18.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}) and Ben Okafor's written answers on “Harbor Run”`]);
   });
 
-  it("a retry that waits for the bank sends no line; the bank's confirmation gives one receipt for that money, never two", async () => {
+  it("an away one payment from before §148 that waits for the bank sends no line; the bank's confirmation gives one receipt for that money, never two", async () => {
     const { dev, rows, day } = await held();
     fakeStripe("away-action");
     const before = new Date();
-    expect(await retryOwed(dev.user.id)).toMatchObject({ cents: 0 });
+    expect(await legacyAwayOwed(dev.user.id)).toMatchObject({ cents: 0 });
     expect(await moneyLines(dev.user.id, before)).toHaveLength(0);
     // (Batch 35 §117) The retry is ONE payment for what's owed: its check waits (the debt is locked under it).
     const waitingRow = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "owed" } });
