@@ -317,8 +317,8 @@ describe("§117 rule 3: a debt waiting for the bank is locked", () => {
     const p = await owedPress(w.dev.cookie, { seenTotalCents: 1600, seenIds: w.debts.map((d) => d.id) });
     expect(p.body).toMatchObject({ paid: 3, lifted: true });
     expect(st.made.map((m) => m.amount)).toEqual([1600, 200, 1600]);
-    // A second Cancel (another tab) is refused plainly.
-    expect((await owedPress(w.dev.cookie, { cancelCheck: one.id })).body.error.code).toBe("no_check");
+    // A second Cancel (another tab) is refused plainly. (Batch 35 §157) It says so: "You already cancelled this check."
+    expect((await owedPress(w.dev.cookie, { cancelCheck: one.id })).body.error).toMatchObject({ code: "cancelled", message: R.CHECK_ALREADY_CANCELLED });
   });
 
   it("Cancel this check on a check the bank had already confirmed records it as paid (nothing charged again)", async () => {

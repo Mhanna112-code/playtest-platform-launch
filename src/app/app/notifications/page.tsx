@@ -50,7 +50,7 @@ export default async function Notifications() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <AutoRefresh query="fresh=notifications" v={freshV} />
-      <AlertSettings emailPref={u.emailPref} side={side} />
+      <AlertSettings emailPref={u.emailPref} side={side} seenAt={new Date().toISOString()} />
       <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight text-white"><Bell className="h-7 w-7 text-indigo-300" /> Notifications</h1>
       </div>

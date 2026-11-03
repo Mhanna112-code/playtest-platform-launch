@@ -24,9 +24,9 @@ const dateOf = (v: unknown) => {
 };
 
 /** Records a change (no row when nothing changed). */
-export async function logAccountChange(userId: string, tab: string, c: AccountChange) {
+export async function logAccountChange(userId: string, tab: string, c: AccountChange, client: Pick<typeof db, "actionLog"> = db) {
   if (c.before !== undefined && c.after !== undefined && c.before === c.after) return;
-  await db.actionLog.create({ data: { userId, testId: ACCOUNT, tab: tab.slice(0, 64), text: JSON.stringify(c) } });
+  await client.actionLog.create({ data: { userId, testId: ACCOUNT, tab: tab.slice(0, 64), text: JSON.stringify(c) } });
 }
 
 /** The newest change (any tab), for the pages' silent refresh. */

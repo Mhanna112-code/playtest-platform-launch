@@ -1794,3 +1794,59 @@ sits in the §139 panel (`ResizeBox`): the content scrolls inside, the grip at t
   with no "added after you paid"; an addition the live check already showed doesn't stop; Pay more after an unseen addition stops once, a shown one goes
   straight through; Confirm with your bank stops once for an unseen addition; Accept on a call request that just arrived still goes through). §79's and §86's
   tests (`batch35-answering-press`, `batch35-answered-seen`) now expect Pay / Pay more to stop once for their own piece's unseen line.
+
+## §157 Presses already done in another tab or at the same moment: the last gaps (owner, Nov 3)
+
+The rule: every press is safe when the same action was already done in another tab, or by someone else at the same moment. Exactly one outcome, never a double
+effect, never "Something went wrong", and the press that loses reads what happened ("You already …" for your own other tab, "<name> already … at <time>" for
+someone else). The audit found 20 presses that broke it; each now uses one of the app's existing patterns (a claim that only changes a row still in the state
+the press read, a row lock, the unique key, or the stop-once gate).
+
+1. **Subscribe while another tab's Subscribe waits for the bank.** Refused: "Your Subscribe is already waiting for your bank: finish that check, or cancel it."
+   The bank-check row is made under the developer's row lock (two Subscribes at once: one check; the other's own check is dropped at Stripe unless it is the same
+   one). The bank's confirm records the payment once (claimed), so the subscription starts once, with one receipt and one "You're subscribed" line. Two
+   Subscribes that go straight through share one charge (the one-time key): recorded and receipted once; the other reads "You're already subscribed."
+2. **Contact us sent twice.** The same message (same topic and words) from the same account within 10 minutes goes to the team once; the other press reads
+   "You already sent this message." (Checked under the account's row lock, with the day's limit.)
+3. **A call request's Accept / Decline / Withdraw at the same moment.** Each is a claim on the request while it is still waiting. Two Accepts book once; the
+   other reads "You already accepted this request at 3:20 PM." Accept against Withdraw: one happens; the other reads "This time was booked at …" or "Nora Lane
+   withdrew this request at …". A booking that fails after the claim puts the request back.
+4. **Verify a card when it's already verified** (chargeback steps). Refused before it uses a card attempt: "Your card is already verified." Two bank checks
+   finishing at once: one verifies (claimed); the other is refused and changes nothing. The card it verifies replaces the card on file and is now recorded
+   like Change card's ("Card: Visa ending 1111 → Visa ending 4242"), so Payments open in another tab stops once for it.
+5. **Add a card in two tabs.** The developer's one Stripe customer is made under their row lock, so two first "Add a card" presses share it (before, the
+   earlier tab's return failed). Two checkouts finishing: the card saved first stays; the later return isn't saved and lands on Payments with Change card's box
+   naming that change (stop once); Change card again saves on top. Each checkout carries its press's time and tab.
+6. **Payout setup.** Pressed once the account is connected: "Your payout account is already connected." (no Stripe call). Stripe's update that connects it
+   (the webhook) is recorded like the return's ("Payout account: not connected → connected"), so a Payments page open elsewhere stops once. A first setup in
+   two tabs makes one Express account (made under the tester's row lock).
+7. **Confirm with your bank finished in a second tab** after the first: "You already confirmed this payment." (it read "There's nothing to confirm here.").
+8. **Report a problem with a call at the same moment** (two tabs, or both people): one report is kept; the other reads "A problem with this call was already
+   reported." (before, the later one overwrote it).
+9. **Dispute at the same moment:** the second reads "You already disputed this payment. A part can be disputed once." (it was an error 500).
+10. **Add your side at the same moment:** one side is kept; the other reads "You already added your side." This is now the line everywhere (the design doc's
+    wording; it read "You already sent your side."). A decision made meanwhile: "This dispute was already decided."
+11. **Rate at the same moment** (either side): one rating; the other reads "You already rated <name>." (it was an error 500).
+12. **Delete draft** in another tab, or both at once: "You already deleted this draft." (it read "That test doesn't exist or isn't yours.", or was a 500). Each
+    deleted draft is recorded (which draft, by whom) to say so.
+13. **Open (a draft) twice:** checked again under the test's lock; opened once (one "opened" line); the other reads "This test is already open."
+14. **Block at the same moment:** the block itself is the claim (its unique key): one press ends the sessions and sends the lines; the other reads "You already
+    blocked <name>." Two people blocking each other at once end each session once.
+15. **Allow / Deny after the tester removed the request:** "Ana Silva withdrew this request." (it read "This request was already decided."); a request a
+    developer's deletion closed gives that reason. Removing a pending request is recorded to say so.
+16. **The email setting** (How you're notified) now stops once like the other settings: a change saved in another tab or device since the page opened shows
+    "Email: Daily → Off" under Save; the second press saves. Each change is recorded for the other tabs.
+17. **The tester's Alerts** sends the state the button offers ("on" / "off"), never a flip: a stale page can't turn it back, and pressing for the state it
+    already has changes nothing.
+18. **Decide on a dispute from the same admin's other tab:** "You already decided this dispute in another tab at 3:20 PM." (like §45; it named the admin's
+    own email).
+19. **Close open reviews for $0 repeated:** says who settled them and when. All of it by one close-out: "You already closed 1 open review for $0 in another tab
+    at 3:20 PM." (or "bo@… already closed …"); otherwise "3 closed; 2 were settled meanwhile: bo@… closed 1 for $0 at 3:20 PM; Nora Lane settled 1 at 3:21 PM".
+20. **Cancel this check repeated** (another tab, or both at once): "You already cancelled this check." (it read "There's no bank check waiting here.", and the
+    press that lost the race read "Your bank already confirmed this payment: it's paid."). Each cancel is recorded with its claim.
+
+Not changed (by design): Send in chat across tabs (chat never stops), Unblock when already unblocked. No migration: the new records (a deleted draft, a removed
+excerpt request, a cancelled check) are ActionLog rows like the account changes.
+
+Tests: `tests/press-races.test.ts` (one race per gap, both presses fired at once; 21 of its 22 tests fail on master; Accept against Withdraw depends on timing
+there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/batch16-alerts.test.ts` now expect "You already added your side.".

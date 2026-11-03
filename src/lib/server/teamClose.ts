@@ -97,8 +97,49 @@ export async function teamClose(adminId: string, scope: TeamCloseScope, body: Re
   }
   const settled = asked.length - closed.length;
   if (closed.length) await tellEveryone(adminId, scope, closed, reason);
-  const result = settled ? `${closed.length} closed; ${settled} ${settled === 1 ? "was" : "were"} settled meanwhile` : `${closed.length} closed`;
+  const done = new Set(closed.map((p) => `${p.kind}:${p.id}`));
+  const by = settled ? await settledBy(asked.filter((a) => !done.has(`${a.kind}:${a.id}`)) as { kind: "submission" | "call"; id: string }[], race.presserOf(adminId, seen ?? body)) : [];
+  // (Owner, Nov 3, batch 35 §157) Who settled the rest, and when, like the other admin lines: all of it by one close-out already made → "You already closed 2 open
+  // reviews for $0 in another tab at 3:20 AM." / "bo@… already closed …"; else "3 closed; 2 were settled meanwhile: bo@… closed 1 for $0 at 3:20 AM; Nora Lane
+  // settled 1 at 3:21 AM".
+  const result = !settled ? `${closed.length} closed`
+    : !closed.length && by.length === 1 && by[0].already ? by[0].already
+      : `${closed.length} closed; ${settled} ${settled === 1 ? "was" : "were"} settled meanwhile${by.length ? `: ${by.map((g) => g.part).join("; ")}` : ""}`;
   return { closed: closed.length, settled, line: result };
+}
+
+/** (§157) The pieces a close-out found settled, grouped by who settled them (the team's $0 close by an admin, or the developer), each with the latest time. */
+async function settledBy(pieces: { kind: "submission" | "call"; id: string }[], presser: import("./adminRace").Presser | null) {
+  const race = await import("./adminRace");
+  const reviews = await db.review.findMany({
+    where: { OR: pieces.map((p) => (p.kind === "submission" ? { submissionId: p.id } : { callId: p.id })) },
+    select: { teamClosedById: true, createdAt: true, contractId: true },
+  });
+  const devs = new Map((await db.contract.findMany({ where: { id: { in: [...new Set(reviews.map((r) => r.contractId))] } }, select: { id: true, test: { select: { developer: true } } } })).map((c) => [c.id, displayName(c.test.developer)]));
+  const groups = new Map<string, { n: number; at: Date; adminId: string | null; dev: string }>();
+  for (const r of reviews) {
+    const k = r.teamClosedById ? `a:${r.teamClosedById}` : "dev";
+    const g = groups.get(k) ?? { n: 0, at: r.createdAt, adminId: r.teamClosedById, dev: devs.get(r.contractId) ?? "The developer" };
+    g.n += 1;
+    if (r.createdAt > g.at) g.at = r.createdAt;
+    groups.set(k, g);
+  }
+  const out: { part: string; already?: string }[] = [];
+  for (const g of groups.values()) {
+    const at = race.whenText(g.at);
+    if (!g.adminId) {
+      out.push({ part: `${g.dev} settled ${g.n} at ${at}` });
+      continue;
+    }
+    const own = await race.ownChange(presser, g.adminId, g.at);
+    const where = own === "other" ? " in another tab" : "";
+    const who = own ? "you" : await race.adminEmail(g.adminId);
+    out.push({
+      part: `${who} closed ${g.n} for $0${where} at ${at}`,
+      already: `${own ? "You" : who} already closed ${plural(g.n, "open review")} for $0${where} at ${at}.`,
+    });
+  }
+  return out;
 }
 
 /** Testers (one payment line per piece), the developer (one line), the tests' timelines and the admin history. */

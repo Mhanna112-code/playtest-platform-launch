@@ -121,15 +121,22 @@ const replacedBy = (x: { testerId: string; contractId: string; question: string 
 export async function decideExcerpt(dev: { id: string; name: string; email: string }, body: Record<string, unknown>) {
   const allow = body.decision === "allow";
   if (!allow && body.decision !== "deny") throw new HttpError(400, "bad_decision", "Choose Allow or Deny.");
-  const x = await db.excerpt.findUnique({ where: { id: String(body.excerptId ?? "") }, include: { test: true } });
-  if (!x || x.test.developerId !== dev.id) throw new HttpError(404, "gone", ALREADY_DECIDED);
+  const id = String(body.excerptId ?? "");
+  const x = await db.excerpt.findUnique({ where: { id }, include: { test: true } });
+  // (Owner, Nov 3, batch 35 §157) The tester removed the request meanwhile: "Ana Silva withdrew this request." (not "already decided").
+  if (!x) throw new HttpError(404, "gone", (await withdrawnLine(dev.id, id)) ?? ALREADY_DECIDED);
+  if (x.test.developerId !== dev.id) throw new HttpError(404, "gone", ALREADY_DECIDED);
   // (Owner, Oct 28, batch 16 section 21) The same press already made (in another tab): a plain refusal, no stop box.
-  if (x.status !== "pending") throw new HttpError(409, "decided", x.status === "shown" ? "You already allowed this excerpt." : x.status === "denied" ? "You already denied this excerpt." : ALREADY_DECIDED);
+  if (x.status !== "pending") throw new HttpError(409, "decided", decidedLine(x));
   // (Owner, Oct 29, batch 29 section 12) Your own changes in another tab never stop Allow / Deny (the same decision made elsewhere is the plain refusal above).
   // (Batch 35 §126) Allow on a replacement: the new one is shown and the one(s) shown now for that question go, in one transaction. Deny leaves them.
   await db.$transaction(async (tx) => {
     const done = await tx.excerpt.updateMany({ where: { id: x.id, status: "pending" }, data: { status: allow ? "shown" : "denied", decidedAt: new Date() } });
-    if (done.count !== 1) throw new HttpError(409, "decided", ALREADY_DECIDED);
+    if (done.count !== 1) {
+      // (§157) Lost to the same press in another tab, or to the tester's Remove at the same moment: say which.
+      const now = await tx.excerpt.findUnique({ where: { id: x.id } });
+      throw new HttpError(409, "decided", now ? decidedLine(now) : (await withdrawnLine(dev.id, x.id)) ?? ALREADY_DECIDED);
+    }
     if (allow) await tx.excerpt.deleteMany({ where: { ...replacedBy(x), id: { not: x.id } } });
   });
   const hidden = allow && !!x.test.ndaText;
@@ -145,10 +152,28 @@ export async function removeExcerpt(user: { id: string; name: string; email: str
   const x = await db.excerpt.findUnique({ where: { id: String(body.excerptId ?? "") }, include: { test: true } });
   if (x && x.testerId !== user.id && x.test.developerId === user.id) throw new HttpError(409, "tester_only", ONLY_TESTER_REMOVES);
   if (!x || x.testerId !== user.id) throw new HttpError(404, "gone", ALREADY_DOWN);
-  const gone = await db.excerpt.deleteMany({ where: { id: x.id } });
-  if (gone.count !== 1) throw new HttpError(404, "gone", ALREADY_DOWN);
+  // (§157) A pending request removed is recorded (which request, whose test, by whom) in the same commit, so the developer's Allow / Deny on an older page reads
+  // "Ana Silva withdrew this request."
+  const gone = await db.$transaction(async (tx) => {
+    const n = (await tx.excerpt.deleteMany({ where: { id: x.id } })).count;
+    if (n && x.status === "pending") await tx.actionLog.create({ data: { userId: x.test.developerId, testId: EXCERPT_WITHDRAWN, tab: x.id, text: displayName(user) } });
+    return n;
+  });
+  if (gone !== 1) throw new HttpError(404, "gone", ALREADY_DOWN);
   return { removed: true };
 }
+
+/** (§157) The ActionLog "test" recording a pending excerpt request the tester removed (its id in `tab`, the tester's name in `text`): never a real test id. */
+const EXCERPT_WITHDRAWN = "excerpt-withdrawn";
+/** "<name> withdrew this request." when the tester removed this pending request, else null. */
+async function withdrawnLine(devId: string, excerptId: string) {
+  if (!excerptId) return null;
+  const row = await db.actionLog.findFirst({ where: { userId: devId, testId: EXCERPT_WITHDRAWN, tab: excerptId }, select: { text: true } });
+  return row ? `${row.text} withdrew this request.` : null;
+}
+/** The plain refusal for a request no longer pending: decided in another tab ("You already allowed this excerpt."), or closed (its reason). */
+const decidedLine = (x: { status: string; closedReason?: string | null }) =>
+  x.status === "shown" ? "You already allowed this excerpt." : x.status === "denied" ? "You already denied this excerpt." : x.status === "closed" && x.closedReason ? `${x.closedReason}.` : ALREADY_DECIDED;
 
 /** Deleting an account (restrictions.deleteAccount): a tester's requests and excerpts go; a developer's pending requests close, with the reason the tester reads. */
 export async function excerptsOnDelete(userId: string) {

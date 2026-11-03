@@ -4,7 +4,8 @@ import { displayName, money } from "@/lib/format";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 import { bell, notify } from "./notify";
-import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
+import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, ensureCustomer, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
+import { cardLabel, logAccountChange } from "./accountChanges";
 import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
@@ -162,8 +163,16 @@ export async function releaseReservations(devId: string, status: "cancelled" | "
 
 const simulated = () => !stripeOn() || fakeOn();
 
-async function markVerified(userId: string, now = new Date()) {
-  await db.user.update({ where: { id: userId }, data: { chargebackCardVerifiedAt: now } });
+/** (Owner, Nov 3, §157) Verify a card pressed (or a second check finished) once the card is verified: another tab, or this one, already did it. */
+export const CARD_ALREADY_VERIFIED = "Your card is already verified.";
+/** Verified once: claimed while not verified yet (two checks finishing at once: one counts, the other is refused and changes nothing). */
+async function markVerified(userId: string, now = new Date(), data: { stripePaymentMethodId?: string; cardExpMonth?: number | null; cardExpYear?: number | null } = {}) {
+  if ((await db.user.updateMany({ where: { id: userId, chargebackCardVerifiedAt: null }, data: { chargebackCardVerifiedAt: now, ...data } })).count !== 1) throw new HttpError(409, "already_verified", CARD_ALREADY_VERIFIED);
+}
+/** (§157) Refused before a card attempt is used: the card is already verified. */
+export async function refuseVerified(userId: string) {
+  const u = await db.user.findUnique({ where: { id: userId }, select: { holdStartedAt: true, holdReason: true, chargebackCardVerifiedAt: true } });
+  if (u?.holdStartedAt && u.holdReason === "chargeback" && u.chargebackCardVerifiedAt) throw new HttpError(409, "already_verified", CARD_ALREADY_VERIFIED);
 }
 
 /**
@@ -173,6 +182,7 @@ async function markVerified(userId: string, now = new Date()) {
 export async function startCardVerification(user: { id: string; email: string; stripeCustomerId: string | null }, opts: { standIn?: boolean } = {}) {
   const steps = await chargebackSteps(user.id);
   if (!steps) throw new HttpError(409, "no_chargeback_hold", "Your account isn't on a chargeback hold, so there's nothing to verify.");
+  if (steps.cardVerified) throw new HttpError(409, "already_verified", CARD_ALREADY_VERIFIED); // (§157)
   if (simulated()) {
     // (Batch 17 §11) The page's "Verify a card" draws the stand-in for the bank's check under the button: verified only on its Confirm (finishCardCheck).
     if (opts.standIn) return { simulated: true as const, verified: false, standIn: true };
@@ -180,11 +190,6 @@ export async function startCardVerification(user: { id: string; email: string; s
     return { simulated: true as const, verified: true };
   }
   const stripe = getStripe();
-  const newCustomer = async () => {
-    const id = (await stripe.customers.create({ email: user.email, metadata: { userId: user.id } })).id;
-    await db.user.update({ where: { id: user.id }, data: { stripeCustomerId: id } });
-    return id;
-  };
   const setup = (customer: string) => stripe.setupIntents.create({
     customer,
     usage: "off_session",
@@ -192,11 +197,13 @@ export async function startCardVerification(user: { id: string; email: string; s
     payment_method_options: { card: { request_three_d_secure: "any" } },
     metadata: { userId: user.id, purpose: "chargeback-verify" },
   });
-  // (§130) The saved customer is unknown to Stripe (made in test mode): the stale card is cleared and the check runs on a new customer.
-  const si = await setup(user.stripeCustomerId ?? (await newCustomer())).catch(async (e) => {
-    if (!isMissing(e) || !user.stripeCustomerId) throw e;
+  // (§130) The saved customer is unknown to Stripe (made in test mode): the stale card is cleared and the check runs on a new customer. (§157) One customer,
+  // made under the developer's row lock (ensureCustomer).
+  const customer = await ensureCustomer(user);
+  const si = await setup(customer).catch(async (e) => {
+    if (!isMissing(e)) throw e;
     await forgetCard(user.id);
-    return setup(await newCustomer());
+    return setup(await ensureCustomer(user, customer));
   });
   return { simulated: false as const, clientSecret: si.client_secret!, setupIntentId: si.id, publishableKey: process.env.STRIPE_PUBLISHABLE_KEY?.trim() ?? "" };
 }
@@ -233,6 +240,7 @@ export async function finishCardCheck(userId: string, setupIntentId: string, sim
 export async function finishCardVerification(userId: string, setupIntentId: string) {
   const user = await db.user.findUniqueOrThrow({ where: { id: userId } });
   if (!user.holdStartedAt || user.holdReason !== "chargeback") throw new HttpError(409, "no_chargeback_hold", "Your account isn't on a chargeback hold.");
+  if (user.chargebackCardVerifiedAt) throw new HttpError(409, "already_verified", CARD_ALREADY_VERIFIED); // (§157) another tab's check got there first
   if (simulated()) {
     await markVerified(userId);
     return { verified: true };
@@ -248,8 +256,15 @@ export async function finishCardVerification(userId: string, setupIntentId: stri
   if (tds && tds.result !== "authenticated" && tds.result !== "attempt_acknowledged") throw new HttpError(409, "not_verified", "The bank didn't confirm it was you. Try again or use another card.");
   const pm = typeof si.payment_method === "string" ? si.payment_method : si.payment_method?.id;
   if (!pm) throw new HttpError(400, "no_card", "The card wasn't saved. Try again.");
+  // (§157) Verified once (claimed); the card it verified becomes the card on file, recorded like Change card's ("Card: Visa ending 1111 → Visa ending 4242"), so a
+  // Payments page open elsewhere (Change card's gate) stops once for it.
+  const card = await stripe.paymentMethods.retrieve(pm).then((x) => x.card ?? null, () => null);
+  await markVerified(userId, new Date(), { stripePaymentMethodId: pm, ...(card ? { cardExpMonth: card.exp_month ?? null, cardExpYear: card.exp_year ?? null } : {}) });
   if (user.stripeCustomerId) await stripe.customers.update(user.stripeCustomerId, { invoice_settings: { default_payment_method: pm } });
-  await db.user.update({ where: { id: userId }, data: { stripePaymentMethodId: pm, chargebackCardVerifiedAt: new Date() } });
+  if (user.stripePaymentMethodId !== pm) {
+    const before = user.stripePaymentMethodId ? cardLabel(await stripe.paymentMethods.retrieve(user.stripePaymentMethodId).then((x) => x.card ?? {}, () => ({}))) : "no card";
+    await logAccountChange(userId, "", { scopes: ["payments"], field: "card", label: "Card", before, after: card ? cardLabel(card) : "a card" });
+  }
   // (Batch 35 §117 rule 1) One card in play: checks still waiting on the old card are cancelled (what they covered is payable again; a charge made while away is
   // tried again on this card).
   if (user.stripePaymentMethodId !== pm) await (await import("./owedOnce")).newCardChecks(userId).catch((e) => console.error("[card] new card checks:", (e as Error).message));

@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtTime } from "@/lib/format";
 import { joinCallRefusal, testPaused } from "@/lib/rules";
 import { HttpError } from "./http";
+import { isUniqueClash } from "./passwords";
 import { fmtFor } from "@/lib/tz";
 import { notify } from "./notify";
 import { callClosedLine, callEndState, callLineFor, endIfClosed } from "./calls";
@@ -52,18 +53,26 @@ export async function blockUser(me: { id: string; email: string; name: string },
   if (!other) throw new HttpError(404, "not_found", "That person doesn't exist.");
   // (Owner, Oct 27) The only stop: already blocked (in another tab).
   if (await iBlocked(me.id, otherId)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
-  await db.block.upsert({ where: { blockerId_blockedId: { blockerId: me.id, blockedId: otherId } }, update: {}, create: { blockerId: me.id, blockedId: otherId } });
+  // (Owner, Nov 3, batch 35 §157) The block row is the claim (its unique key): of two Blocks at the same moment (two tabs) one goes on to end sessions and send the
+  // lines; the other reads "You already blocked <name>." and does nothing.
+  await db.block.create({ data: { blockerId: me.id, blockedId: otherId } }).catch((e) => {
+    if (isUniqueClash(e)) throw new HttpError(409, "already", `You already blocked ${displayName(other)}.`);
+    throw e;
+  });
   const now = new Date();
   const contracts = await db.contract.findMany({
     where: { status: "working", OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] },
     include: { tester: true, test: { include: { developer: true } } },
   });
+  const ended: typeof contracts = [];
   for (const c of contracts) {
     // (Owner, Oct 29, batch 26 section 2) A call already in progress between them ends at once, on both pages (like a pause, but whether or not they were connected).
     const by = c.testerId === me.id ? "tester" : "developer";
     const { endCallForBlock } = await import("./calls");
     for (const call of await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { lte: now }, endedAt: null, measuredAt: null, actualMinutes: null } })) await endCallForBlock(call.id, by, now);
-    await db.contract.update({ where: { id: c.id }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } });
+    // (§157) Each session ends once (both people blocking each other at the same moment: one of them ends it and sends its line).
+    if ((await db.contract.updateMany({ where: { id: c.id, status: "working" }, data: { status: "ended", endKind: "blocked", endedAt: now, endReason: "" } })).count !== 1) continue;
+    ended.push(c);
     const calls = await db.call.findMany({ where: { contractId: c.id, status: "booked", startsAt: { gt: now } } });
     for (const call of calls) {
       await db.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "system", cancelledAt: now, cancelNote: "" } });
@@ -73,8 +82,8 @@ export async function blockUser(me: { id: string; email: string; name: string },
     if (c.testerId === otherId) await notify(c.tester.email, `Your session on ${c.title} ended.`, [`Your session on ${c.title} ended. Work you sent is still reviewed.`], `/app/sessions/${c.id}`);
     else await notify(c.test.developer.email, `${displayName(c.tester)}'s session on ${c.title} ended.`, [`${displayName(c.tester)}'s session on ${c.title} ended.`], `/app/tests/${c.testId}#tester-${c.id}`);
   }
-  await (await import("./requests")).closeRequests({ contractIds: contracts.map((c) => c.id) }, "the session ended");
-  await closeOffersOfEnded(db, contracts.map((c) => c.id), now); // (batch 35 §118) the part ended: its offer closes
+  await (await import("./requests")).closeRequests({ contractIds: ended.map((c) => c.id) }, "the session ended");
+  await closeOffersOfEnded(db, ended.map((c) => c.id), now); // (batch 35 §118) the part ended: its offer closes
   const invitesClosed = await (await import("./invites")).openInviteIds({ OR: [{ testerId: otherId, test: { developerId: me.id } }, { testerId: me.id, test: { developerId: otherId } }] });
   await db.invite.updateMany({ where: { id: { in: invitesClosed }, status: "sent" }, data: { status: "cancelled" } });
   await (await import("./invites")).tellInvitesClosed(invitesClosed); // (batch 30 §6) the neutral line (never "blocked")
@@ -92,8 +101,8 @@ export async function blockUser(me: { id: string; email: string; name: string },
       if (tester) await notify(tester.email, appClosedLine(title), [appClosedLine(title)], `/app/find/${a.testId}`, { testId: a.testId, group: "apps" }); // (batch 29 §23)
     }
   }
-  for (const c of contracts) await (await import("./tests")).spotOpened(c.testId);
-  return { blocked: true, ended: contracts.length };
+  for (const c of ended) await (await import("./tests")).spotOpened(c.testId);
+  return { blocked: true, ended: ended.length };
 }
 
 /** The tester's line when a block closed their application: "“Harbor Run”: your application was closed." */
