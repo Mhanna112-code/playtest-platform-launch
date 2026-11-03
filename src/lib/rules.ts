@@ -1051,6 +1051,12 @@ export const reservedLine = (cents: number) => `Reserved ${money(cents)}: it's t
  * itself, not just a new total: "Your bank changed the amount it took back from your $40.00 payment for Ana Silva's written answers on “Harbor Run”: $12.00 →
  * $20.00 (now $20.00 + $15.00 fee = $35.00)".
  */
+/** (Owner, Nov 3) From an account's 2nd chargeback (counted over its whole life, this one included) the team reviews it before the developer can pay. */
+export const CHARGEBACKS_REVIEW_FROM = 2;
+/** "Your account has had 2 chargebacks: the team reviews it before you can pay. You'll get an email when you can." (Pay what you owe's line and the server's refusal.) */
+export const reviewFirstLine = (n: number) => `Your account has had ${n} chargebacks: the team reviews it before you can pay. You'll get an email when you can.`;
+/** The developer's bell and email when the team allows paying. */
+export const REVIEWED_LINE = "The team reviewed your account: you can pay what you owe now";
 export const bankChangedLine = (paidCents: number, piece: string | null, wasCents: number, nowCents: number) =>
   `Your bank changed the amount it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(wasCents)} → ${money(nowCents)} (now ${money(nowCents)} + ${money(CHARGEBACK_FEE_CENTS)} fee = ${money(nowCents + CHARGEBACK_FEE_CENTS)})`;
 export const pressAgainLine = (cents: number, chargeback: null | { cardVerified: boolean } = null, tick = false) => {

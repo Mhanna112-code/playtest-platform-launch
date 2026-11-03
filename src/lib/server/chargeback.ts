@@ -6,7 +6,7 @@ import { logEvent } from "./live";
 import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, ensureCustomer, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
 import { cardLabel, logAccountChange } from "./accountChanges";
-import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, RESERVE_DAYS, RESERVE_EXPIRED, bankChangedLine, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
+import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACKS_REVIEW_FROM, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, REVIEWED_LINE, RESERVE_DAYS, RESERVE_EXPIRED, bankChangedLine, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
@@ -31,6 +31,12 @@ export type ChargebackSteps = {
   /** The last reservation lapsed (about 7 days, no Approve): Payments asks for Pay what you owe again. */
   expired: boolean;
   approved: boolean;
+  /**
+   * (Owner, Nov 3) From the account's 2nd chargeback (its whole life, this one included) the team reviews it BEFORE the developer can pay: `approved` then means
+   * "allowed to pay", Pay what you owe CHARGES everything as one payment (no reservation), and paying lifts the hold (no second approval). `count`: chargebacks so far.
+   */
+  reviewFirst: boolean;
+  count: number;
   /** What is still to do, in the order they are shown ("Verify a card with 3D Secure", "Pay what you owe ($8.00)", "Wait for the team's approval"). */
   remaining: string[];
 };
@@ -45,13 +51,36 @@ export async function chargebackSteps(devId: string): Promise<ChargebackSteps | 
   const owedCents = owing.reduce((a, p) => a + p.amountCents, 0);
   const uncoveredCents = owing.filter((p) => !rs.covered.has(p.id)).reduce((a, p) => a + p.amountCents, 0);
   // (Owner, Oct 29, batch 28 §8) Pay what you owe reserves once: with a reservation in place the step is done; anything added since is charged after the lift.
-  const cardVerified = !!u.chargebackCardVerifiedAt, owedPaid = uncoveredCents === 0 || rs.reservedCents > 0, approved = !!u.chargebackApprovedAt;
-  const remaining = [
-    ...(cardVerified ? [] : ["Verify a card with 3D Secure"]),
-    ...(owedPaid ? [] : [`Pay what you owe (${money(uncoveredCents)})`]),
-    ...(approved ? [] : ["Wait for the team's approval"]),
-  ];
-  return { cardVerified, owedPaid, owedCents, reservedCents: rs.reservedCents, uncoveredCents, addedCents: rs.reservedCents > 0 ? uncoveredCents : 0, expired: rs.expired && !rs.reservedCents, approved, remaining };
+  const count = await chargebackCount(devId);
+  const reviewFirst = count >= CHARGEBACKS_REVIEW_FROM;
+  const cardVerified = !!u.chargebackCardVerifiedAt, owedPaid = uncoveredCents === 0 || (!reviewFirst && rs.reservedCents > 0), approved = !!u.chargebackApprovedAt;
+  // (Owner, Nov 3) From the 2nd chargeback: the team's review comes first, then the card, then paying (which lifts the hold).
+  const remaining = reviewFirst
+    ? [...(approved ? [] : ["Wait for the team's review"]), ...(cardVerified ? [] : ["Verify a card with 3D Secure"]), ...(owedPaid ? [] : [`Pay what you owe (${money(uncoveredCents)})`])]
+    : [
+      ...(cardVerified ? [] : ["Verify a card with 3D Secure"]),
+      ...(owedPaid ? [] : [`Pay what you owe (${money(uncoveredCents)})`]),
+      ...(approved ? [] : ["Wait for the team's approval"]),
+    ];
+  return { cardVerified, owedPaid, owedCents, reservedCents: reviewFirst ? 0 : rs.reservedCents, uncoveredCents, addedCents: !reviewFirst && rs.reservedCents > 0 ? uncoveredCents : 0, expired: !reviewFirst && rs.expired && !rs.reservedCents, approved, reviewFirst, count, remaining };
+}
+
+/** (Owner, Nov 3) Chargebacks on this account over its whole life (every payment the bank ever reversed: open, resolved, won or lost). */
+export async function chargebackCount(devId: string) {
+  return db.payment.count({ where: { developerId: devId, chargeback: { not: "" } } });
+}
+
+/**
+ * (Owner, Nov 3) Once the team allowed paying (from the 2nd chargeback), a reversed payment that is repaid is settled: its chargeback is resolved (as the team's
+ * Approve resolves it on a 1st chargeback), so paying lifts the hold. Called by liftHoldIfClear before it checks for open chargebacks.
+ */
+export async function resolveRepaidAfterReview(devId: string) {
+  for (const p of await db.payment.findMany({ where: { developerId: devId, chargeback: "open" } })) {
+    if (!(await db.payment.count({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up"] } } }))) continue;
+    if ((await db.payment.updateMany({ where: { id: p.id, chargeback: "open" }, data: { chargeback: "resolved" } })).count !== 1) continue;
+    const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
+    if (c) await logEvent(c.testId, "chargeback", `You repaid the bank reversal of ${reversedWords(p)}`, c.id);
+  }
 }
 
 // ---------- (Owner, Oct 29, batch 23 section 6) Pay what you owe reserves; the team's Approve takes it ----------
@@ -340,6 +369,11 @@ export async function settleOwedRow(dev: { id: string; name: string; email: stri
     if (coveredById) await db.payment.updateMany({ where: { id: p.id, coveredById }, data: { coveredById: null } });
     return;
   }
+  // (Owner, Nov 3) A reversed payment's repayment that waited for the lift, paid by the one payment: the money stays with the platform (no tester share).
+  if (p.kind === "chargeback" && p.repaysId) {
+    await db.payment.updateMany({ where: { id: p.id, settledAt: null, status: p.status, coveredById }, data: { status, settledAt: new Date(), stripePaymentIntentId: pi, feeCents: p.amountCents, testerCents: 0, transferStatus: "none" } });
+    return;
+  }
   if (p.actionPi) await cancelPi(p.actionPi);
   const split = splitFee(p.amountCents);
   const tester = await db.user.findUnique({ where: { id: p.testerId } });
@@ -405,6 +439,8 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   const steps = await chargebackSteps(devId);
   if (!steps) throw await approvedRefusal(devId, new HttpError(409, "no_chargeback_hold", "That account isn't on a chargeback hold."), p);
   if (steps.approved) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."), p);
+  // (Owner, Nov 3) From the 2nd chargeback the team's Approve comes FIRST and only allows paying: nothing is taken or lifted here.
+  if (steps.reviewFirst) return allowPaying(devId, adminId);
   // (Batch 35 §117 rule 3) A debt waiting for the bank is locked: never paid from the reservation or charged after the lift (its check pays it, or it's cancelled).
   const locks = await (await import("./owedOnce")).owedLocks(devId);
   const owing = (await payable(devId)).filter((x) => !locks.has(x.id)); // (§125) with the charges waiting for the lift
@@ -477,6 +513,24 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
     await notify(dev.email, line, [line, ...(still ? [] : ["Every deadline moved on by the pause."])], "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
   } else await notify(dev.email, APPROVED_LINE, [`${APPROVED_LINE}.`, ...(taken ? [`The ${money(taken)} reserved on your card was taken.`] : [])], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
   return { ok: true, lifted, takenCents: taken };
+}
+/**
+ * (Owner, Nov 3) The team allows a developer with 2+ chargebacks to pay: claimed once (with the admin's record), anything still reserved from before is released
+ * (nothing taken: paying charges everything as one payment), and the developer gets a bell and an email. A new chargeback before they pay un-approves it again
+ * (chargebackOpened clears the approval).
+ */
+async function allowPaying(devId: string, adminId: string | null) {
+  const race = await import("./adminRace");
+  const claimed = await db.$transaction(async (tx) => {
+    const r = await tx.user.updateMany({ where: { id: devId, chargebackApprovedAt: null, holdStartedAt: { not: null }, holdReason: "chargeback" }, data: { chargebackApprovedAt: new Date() } });
+    if (r.count === 1 && adminId) await race.recordAction(tx, adminId, "approve-chargeback", devId);
+    return r.count;
+  });
+  if (claimed !== 1) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."));
+  const released = await releaseReservations(devId);
+  const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
+  await notify(dev.email, REVIEWED_LINE, [`${REVIEWED_LINE}.`, "Pay what you owe charges everything you owe as one payment, and your tests resume as soon as it goes through.", ...(released ? [`The ${money(released)} reserved on your card earlier was released.`] : [])], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "admindecision" });
+  return { ok: true, lifted: false, takenCents: 0, allowedToPay: true };
 }
 export const APPROVED_LINE = "The team approved lifting your hold";
 /** "The team approved lifting your hold: the $8.00 reserved on your card was taken, and your tests are running again." */

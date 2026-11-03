@@ -594,20 +594,23 @@ describe("§122: after a lift, a card that asks the bank gives a confirm, not a 
     for (const x of w.waiting) expect(await db.payment.findUniqueOrThrow({ where: { id: x.id } })).toMatchObject({ status: "charged" });
   });
 
-  it("a hold restarting while the after-lift run goes on: every charge not yet made keeps waiting", async () => {
+  it("(Owner, Nov 3) a repayment that waited goes into the ONE after-lift payment; declined: the reversal is owed again (a chargeback hold) and each charge is a debt", async () => {
     const w = await waitingAfterHold(2);
     const st = bank();
-    // A reversed payment owed again waits too (made first, on its own) and is declined: a chargeback hold starts.
+    // A reversed payment owed again waits too: it is made TOGETHER with the waiting charges, as one payment, and that one payment is declined.
     const orig = await db.payment.create({ data: { kind: "review", contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 300, feeCents: 0, testerCents: 0, status: "charged", chargeback: "resolved" } });
-    await db.payment.create({ data: { kind: "chargeback", repaysId: orig.id, contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 300, feeCents: 300, testerCents: 0, transferStatus: "none", status: "deferred", createdAt: new Date(Date.now() - DAY) } });
+    const repay = await db.payment.create({ data: { kind: "chargeback", repaysId: orig.id, contractId: w.sessionId, developerId: w.dev.user.id, testerId: w.tester.user.id, amountCents: 300, feeCents: 300, testerCents: 0, transferStatus: "none", status: "deferred", createdAt: new Date(Date.now() - DAY) } });
     const pis = (await import("@/lib/server/stripe")).getStripe().paymentIntents as unknown as { create: (p: Record<string, unknown>) => Promise<unknown> };
     const create = pis.create;
-    pis.create = async (p) => (p.amount === 300 ? create({ ...p, payment_method: "pm_dead" }) : create(p));
+    pis.create = async (p) => create({ ...p, payment_method: "pm_dead" });
     st.decline.add("pm_dead");
     await liftOther(w);
-    expect(await hold(w.dev.user.id)).not.toBeNull();
-    expect(st.made.map((m) => m.amount)).toEqual([300]);
-    for (const x of w.waiting) expect(await db.payment.findUniqueOrThrow({ where: { id: x.id } })).toMatchObject({ status: "deferred", coveredById: null });
+    const total = 300 + w.waiting.reduce((a, x) => a + x.amountCents, 0);
+    expect(st.made.map((m) => m.amount)).toEqual([total]);
+    expect(await db.payment.findUnique({ where: { id: repay.id } })).toBeNull();
+    expect((await db.payment.findUniqueOrThrow({ where: { id: orig.id } })).chargeback).toBe("open");
+    expect((await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } })).holdReason).toBe("chargeback");
+    for (const x of w.waiting) expect(await db.payment.findUniqueOrThrow({ where: { id: x.id } })).toMatchObject({ status: "failed", coveredById: null });
   });
 
   it("a new card with three charges waiting: ONE Stripe payment for all three; the bank asks -> ONE confirm item listing each", async () => {

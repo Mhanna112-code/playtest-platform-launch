@@ -1934,3 +1934,44 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
   `lines` in the stop's data); `chargeback.reserveOwed` (the same on its re-read); `components/OwedBox.tsx` (`linesAfterStop`, `seenAmounts`). No migration.
 - **Tests:** `tests/owed-dispute-change.test.ts` (the wording; a page that sent its amounts stops once naming $12.00 → $20.00 with the new lines, then reserves
   $35.00; an older page gets the same line; the box draws the stop's lines). `partial-dispute` and `races-nov3` now expect the named change.
+
+## §159 From the 2nd chargeback the team reviews first; everything that waited for a lift is ONE payment (owner, Nov 3)
+
+**A. The 2nd chargeback: the team's review before paying.**
+- **Rule.** From an account's 2nd chargeback (counted over the account's whole life, this one included: every payment the bank ever reversed, open, resolved,
+  won or lost), the chargeback hold needs the team's approval BEFORE the developer can pay. The 1st chargeback keeps today's flow (verify a card, Pay what you
+  owe reserves, the team's Approve takes it and lifts the hold).
+- **Developer.** Pay what you owe is disabled with "Your account has had 2 chargebacks: the team reviews it before you can pay. You'll get an email when you
+  can." (the count stated). The server refuses the press with the same line, checked again inside the claim under the developer's row lock (an old page's
+  press too, and a press whose approval went away meanwhile charges nothing). The steps box reads: the team's review (with the count), a card verified with 3D
+  Secure, what you owe paid.
+- **Team.** The admin console's Chargebacks row shows "N chargebacks on this account: the team reviews it before they can pay" with **Approve (to allow
+  paying)**. The Approve allows paying only: nothing is taken or lifted; anything still reserved from before is released; the developer gets a bell and an
+  email ("The team reviewed your account: you can pay what you owe now", sent whatever the email setting).
+- **Then.** Pay what you owe (the card verified first, if it isn't) CHARGES everything owed as one payment (no reservation; the ordinary one-payment press:
+  one PaymentIntent, the bank's check inline if the card asks, one receipt). Paying lifts the hold at once: the reversed payments now repaid are resolved
+  (liftHoldIfClear) and no second approval is needed.
+- **A new chargeback after the approval, before paying,** un-approves it again (chargebackOpened clears the approval, as it clears the card check), with the
+  new count.
+- **Code.** `rules.CHARGEBACKS_REVIEW_FROM`, `reviewFirstLine`, `REVIEWED_LINE`; `chargeback.chargebackCount`, `chargebackSteps` (`reviewFirst`, `count`),
+  `approveChargebackHold` → `allowPaying`, `resolveRepaidAfterReview`; `holds.payOwed` (the refusal; charges instead of reserving) and `liftHoldIfClear`;
+  `owedOnce.claimOwed` (`reviewFirst`: re-checked under the lock); `OwedBox` (`reviewFirst` line, button disabled), `ChargebackSteps`, the Payments and test
+  pages, `adminLists` / `PagedList` (the row). No migration.
+
+**B. One payment for everything that waited for the lift.**
+- **Rule.** Everything that piled up while waiting for the team's approval is charged as ONE payment right after the lift: every chargeback repayment added
+  after the reservation (kind "chargeback", "deferred") TOGETHER with the testers' charges that waited (§122's after-lift payment): one PaymentIntent, one bank
+  check if the card asks (one "Confirm with your bank" item covering all of it), one receipt naming each. Each chargeback keeps its own $15 fee (only the
+  payment is combined). The money for a repayment stays with the platform; each tester's share is sent from that same payment (as the combined payments
+  already split shares). Declined: each reversal is owed again (its chargeback reopens: a chargeback hold) and each tester's charge is a debt. A deleted
+  developer's repayments still wait (§151); their testers' charges are made.
+- **Code.** `holds.chargeDeferredLocked` (no more one-by-one charges); `owedOnce.claimOwed` ("charges" now takes repayment rows), `settleOwed` (their names),
+  `chargesDeclined` (a declined repayment reopens its chargeback); `chargeback.settleOwedRow` (a repayment row: no tester share). No migration.
+- **Note.** With A, a chargeback that arrives after a 1st chargeback's reservation makes it the account's 2nd: the hold becomes "review first", so the team's
+  Approve then allows paying (and releases the reservation) rather than taking it; B applies to repayments already waiting from before.
+
+**Tests:** `tests/chargeback-review-first.test.ts` (the 1st keeps the reserve flow; the 2nd refused with the count, an old page too, the admin row and its
+Approve, a bell and email, then ONE charge and the hold lifted; verify still first; a new chargeback un-approves with the new count; the claim re-checks it;
+the box disabled with the line; after a lift: one PaymentIntent for a repayment and a tester's charge, shares split; declined: chargeback reopened and a debt;
+a card that asks: one confirm item; a deleted developer's repayment waits). `batch35-one-card-checks` (a declined one payment with a repayment in it),
+`stripe-descriptions` (a repayment in the one payment's description), and the OwedBox source checks in `batch16-chargeback-order` and `batch28` follow.

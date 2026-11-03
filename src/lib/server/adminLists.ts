@@ -80,7 +80,7 @@ export type LiftVM = { id: string; at: string; head: string; owed: string; paid:
 /** A profile report: who reported whom, when, why, with links to both profiles. */
 export type ReportVM = { id: string; at: string; reporter: string; reporterHref: string; reported: string; reportedHref: string; when: string; note: string; /** (Batch 33 §1) the email after each name */ reporterEmail?: string; reportedEmail?: string };
 export type PausedVM = { id: string; at: string; text: string; closure: string; extended: boolean; /** (Batch 33 §1) the test and the developer as links */ parts?: Rich };
-export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string; /** (Batch 23 section 6) money reserved on the card; the last reservation lapsed */ reservedCents: number; expired: boolean; /** (Batch 33 §1) the developer as a link, and each chargeback with its Stripe id as a Dashboard link */ who?: Rich; chargebackParts?: Rich[] };
+export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string; /** (Owner, Nov 3) from the 2nd chargeback: the team's review first (Approve allows paying) */ reviewFirst?: boolean; count?: number; approved?: boolean; /** (Batch 23 section 6) money reserved on the card; the last reservation lapsed */ reservedCents: number; expired: boolean; /** (Batch 33 §1) the developer as a link, and each chargeback with its Stripe id as a Dashboard link */ who?: Rich; chargebackParts?: Rich[] };
 
 export type Kind = "contact" | "disputes" | "decided" | "mine" | "users" | "tests" | "noshows" | "payments" | "payouts" | "paused" | "chargebacks" | "lifts" | "reports" | "u-payments" | "u-payouts" | "u-disputes" | "u-chargebacks" | "u-holds" | "u-tests" | "u-reports" | "u-parts" | "u-failures" | "mypaused" | "suspensions" | "t-timeline" | "t-contracts" | "t-payments";
 /** (Batch 15 section 21) An admin by email, as admin views name them ("an admin (deleted)" once the account is gone). */
@@ -508,6 +508,9 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     chargebackParts: cbs.map((p): Rich => [`Chargeback open: ${cbAmount(p)}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })]),
     cardVerified: steps.cardVerified,
     owedPaid: steps.owedPaid,
+    reviewFirst: steps.reviewFirst,
+    count: steps.count,
+    approved: steps.approved,
     // (Batch 23 section 6) Pay what you owe reserves: the row says how much is reserved against what is owed.
     // (Batch 28 §8) What was added since the reservation is charged after the hold lifts (it never blocks Approve).
     owedLine: steps.owedPaid ? (steps.reservedCents ? ` (${adminReservedLine(steps.reservedCents, steps.addedCents)})` : "") : ` (${money(steps.owedCents)} owed, ${money(steps.reservedCents)} reserved)`,

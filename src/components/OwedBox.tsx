@@ -57,7 +57,7 @@ function CancelCheck({ id }: { id: string }) {
  * (Batch 23 section 6) During a chargeback hold the box reserves rather than pays: Pay what you owe puts the amount on hold on the card ("Reserved $X: it's taken when
  * the team approves lifting your hold."), the team's Approve takes it, and it's released if they don't approve or after about 7 days.
  */
-export function OwedBox({ onHold, owed: drawn, chargeback = false, review = false, verifyFirst = false, reservedCents = 0, reserveExpired = false, ranOut = "" }: { /** (§125) "Your bank check ran out on Nov 5: nothing was charged. Pay again or change your card." */ ranOut?: string | null; onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
+export function OwedBox({ onHold, owed: drawn, chargeback = false, review = false, verifyFirst = false, reservedCents = 0, reserveExpired = false, ranOut = "", reviewFirst = "" }: { /** (Owner, Nov 3) from the 2nd chargeback, before the team's review: the line, and the button stays disabled */ reviewFirst?: string; /** (§125) "Your bank check ran out on Nov 5: nothing was charged. Pay again or change your card." */ ranOut?: string | null; onHold: boolean; owed: Line[]; chargeback?: boolean; review?: boolean; /** (Batch 16 section 41) a chargeback hold with no verified card yet: Pay waits for step 1 */ verifyFirst?: boolean; /** (Batch 23 section 6) a chargeback hold: what is reserved on the card already, and whether the last reservation lapsed */ reservedCents?: number; reserveExpired?: boolean }) {
   const [err, setErr] = useState("");
   const [failing, setFailing] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -140,8 +140,8 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
       )}
       <button
         className="btn"
-        disabled={busy || verifyFirst || reservedOnce || (over && !over200)}
-        aria-disabled={verifyFirst || reservedOnce}
+        disabled={busy || !!reviewFirst || verifyFirst || reservedOnce || (over && !over200)}
+        aria-disabled={!!reviewFirst || verifyFirst || reservedOnce}
         onClick={async () => {
           setBusy(true);
           setErr("");
@@ -189,7 +189,8 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
       </button></div>}
       {bank.view}
       {/* (Owner, Oct 28, batch 16 section 41) The chargeback steps in order: the card first. */}
-      {verifyFirst && <p className="text-xs" data-verify-first="">Verify your card first (step 1): then you can pay what you owe.</p>}
+      {reviewFirst && <p className="text-xs" data-review-first="">{reviewFirst}</p>}
+      {verifyFirst && !reviewFirst && <p className="text-xs" data-verify-first="">Verify your card first (step 1): then you can pay what you owe.</p>}
       <ChangesBox changes={changes} tail={over && !over200 ? `Tick “${OVER_PAY_TICK_LINE}” and press again to go ahead.` : undefined} />
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {bankNote && <p className="info" data-bank-not-confirmed="">{refusalLine("Pay what you owe", bankNote)}</p>}

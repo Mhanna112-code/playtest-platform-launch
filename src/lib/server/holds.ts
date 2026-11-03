@@ -4,14 +4,14 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, bankChangedLine, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
 import { appUrl } from "./auth";
 import { accountEvent, labelled, reportedOver3 } from "./reports";
 import { sendEmail } from "./email";
-import { PAYMENTS_PROBLEM, charge, chargePlatform, getStripe, stripeOn, type NeedsAction } from "./stripe";
+import { PAYMENTS_PROBLEM, charge, getStripe, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 import { testerTermsGate } from "./terms";
@@ -238,36 +238,18 @@ export async function chargeDeferred(devId: string) {
 async function chargeDeferredLocked(devId: string) {
   const once = await import("./owedOnce");
   await once.resumeStaleOwed(devId);
-  // (Batch 28 §8) Reversed payments owed again after a reservation: each to the platform, as before.
-  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "deferred", kind: "chargeback" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
-    const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
-    if (dev.holdStartedAt || dev.devSuspendedAt) break;
-    {
-      // (Batch 28 §8) A reversed payment owed again, added after the reservation: charged to the platform right after the lift (the tester already got their share).
-      try {
-        // (Owner, Nov 3) "Playtest: Repaid the reversed $39.00 Pay more for … ($39.00 + $15.00 chargeback fee)", as its "What you've paid" line.
-        const description = await describedOnce(p.id, () => stripeDescription({ payment: p }));
-        const r = await chargePlatform(dev, p.amountCents, serverKey("deferred", p.id), description);
-        if (r.status === "requires_action") { await (await import("./confirm")).awayAction(p.id, r as NeedsAction); continue; }
-        await db.payment.update({ where: { id: p.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, settledAt: new Date() } });
-        await receipt(dev.email, await owedItemName(p, true), p.amountCents, r.status, "/app/payments"); // (Owner, Nov 3) full names in receipts
-      } catch (e) {
-        // Declined: the reversal is owed again (its chargeback reopens), so a chargeback hold starts for it.
-        if (e instanceof HttpError && e.code === "card_failed") {
-          await db.payment.delete({ where: { id: p.id } });
-          if (p.repaysId) await db.payment.update({ where: { id: p.repaysId }, data: { chargeback: "open" } });
-          await startHold(devId, "chargeback");
-        }
-      }
-    }
-  }
+  // (Owner, Nov 3) Reversed payments owed again after a reservation (kind "chargeback", each with its own $15 fee) are no longer charged one by one: they go into the
+  // ONE payment below with every other waiting charge (one PaymentIntent, one bank check if the card asks, one receipt naming each); the money for them stays with the
+  // platform, the testers' shares are sent from that same payment. Declined: each reversal is owed again (its chargeback reopens, a chargeback hold).
   // (Owner, Nov 2, batch 35 §122) Every other waiting charge (testers' Charges, team decisions, auto-charged calls) is made TOGETHER as ONE payment on the card in use
   // now: goes through -> each is paid, one receipt; the bank asks (a card like 3184) -> ONE "Confirm with your bank" item listing each, never a debt; a real decline ->
   // each becomes a debt (a new hold); any other problem -> they all keep waiting. A hold or a suspension starting first keeps them all waiting (the claim re-checks it).
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
   // (Owner, Nov 3) A deleted developer's waiting charges go to their saved card even on a hold or a suspension (neither can ever clear).
   if (!dev.deletedAt && (dev.holdStartedAt || dev.devSuspendedAt)) return;
-  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", kind: { notIn: ["chargeback", "owed"] }, coveredById: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  // (§151) A deleted developer's repayments of reversed payments still wait (only an account with no hold or suspension pays them).
+  const repays = !dev.holdStartedAt && !dev.devSuspendedAt;
+  const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", coveredById: null, OR: [{ kind: { notIn: ["chargeback", "owed"] } }, ...(repays ? [{ kind: "chargeback", repaysId: { not: null } }] : [])] }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   const r = await once.chargeWaitingTotal(devId, rows);
   if (r?.result === "paid" && r.cents > 0) await receipt(dev.email, once.receiptWhat(r.names, true), r.cents, r.status !== "not_set_up" ? "charged" : "not_set_up", "/app/payments");
 }
@@ -338,6 +320,8 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   const dev = await db.user.findUnique({ where: { id: devId } });
   if (!dev?.holdStartedAt) return false;
   if ((await owed(devId)).length) return false;
+  // (Owner, Nov 3) From the 2nd chargeback, once the team allowed paying: the reversed payments now repaid are resolved, so paying lifts the hold.
+  if (dev.holdReason === "chargeback" && dev.chargebackApprovedAt && (await (await import("./chargeback")).chargebackCount(devId)) >= CHARGEBACKS_REVIEW_FROM) await (await import("./chargeback")).resolveRepaidAfterReview(devId);
   if (await db.payment.count({ where: { developerId: devId, chargeback: "open" } })) return false;
   if (dev.holdReason === "chargeback" && (!dev.chargebackCardVerifiedAt || !dev.chargebackApprovedAt)) return false;
   // (Owner, Oct 27) After the 3rd hold, every later hold needs an admin's Approve, even once everything owed is paid: the admins are told a lift is waiting.
@@ -437,7 +421,13 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   const u = await db.user.findUniqueOrThrow({ where: { id: dev.id } });
   // (Owner, Oct 29, batch 23 section 6) A chargeback hold: what is already reserved on the card is not asked for again (only what was added since).
   const cbHold = !!u.holdStartedAt && u.holdReason === "chargeback";
-  const rs = cbHold ? await (await import("./chargeback")).reserveState(dev.id) : null;
+  // (Owner, Nov 3) From the account's 2nd chargeback the team reviews it before the developer can pay (an old page's press too); once allowed, the press CHARGES
+  // everything as one payment (no reservation) and paying lifts the hold.
+  const cbCount = cbHold ? await (await import("./chargeback")).chargebackCount(dev.id) : 0;
+  const reviewFirst = cbHold && cbCount >= CHARGEBACKS_REVIEW_FROM;
+  if (reviewFirst && !u.chargebackApprovedAt) throw new HttpError(409, "review_first", reviewFirstLine(cbCount));
+  const reserving = cbHold && !reviewFirst;
+  const rs = reserving ? await (await import("./chargeback")).reserveState(dev.id) : null;
   const covered = rs?.covered ?? null;
   const locks = await once.owedLocks(dev.id);
   // (§125) What is owed and the charges waiting for the lift, as one payment.
@@ -483,7 +473,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     const goneIds = seenIds.filter((i) => !nowIds.includes(i));
     const won = goneIds.length ? await db.payment.findMany({ where: { id: { in: goneIds }, chargeback: "won" } }) : [];
     // (§129) During a chargeback hold the second press reserves (after verifying the card if it isn't yet): the line says so, never "pay".
-    const again = pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, tickMissing);
+    const again = pressAgainLine(total, reserving ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, tickMissing);
     // (Owner, Nov 3) The bank changed how much it took back (charge.dispute.updated) since the page drew: the stop names that change. The page sends what each line
     // showed (`seenAmounts`); an older page that didn't: the one chargeback line it showed explains the whole difference.
     const seenAmounts = body.seenAmounts && typeof body.seenAmounts === "object" && !Array.isArray(body.seenAmounts) ? (body.seenAmounts as Record<string, unknown>) : null;
@@ -502,18 +492,19 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds, lines });
   }
   // (§150) Unchanged but over $200 without the tick (a page that never showed it, or a press without it): refused, stopping once with the tick's line; the box shows it.
-  if (tickMissing) throw new HttpError(409, "stop_once", OWED_OVER_TICK, { changes: [{ text: pressAgainLine(total, cbHold ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, true), at: new Date() }], totalCents: total, ids: nowIds, lines });
+  if (tickMissing) throw new HttpError(409, "stop_once", OWED_OVER_TICK, { changes: [{ text: pressAgainLine(total, reserving ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, true), at: new Date() }], totalCents: total, ids: nowIds, lines });
   // (Owner, Oct 28, batch 16 section 41) A chargeback hold's steps go in order: a card verified with 3D Secure first, then paying (which never lifts it: the team's Approve does).
   // (Nov 2, payments proof) After the stop-once check: a page that hadn't shown a chargeback stops once naming it first ("Your bank reversed a $10 payment…").
   if (u.holdStartedAt && u.holdReason === "chargeback" && !u.chargebackCardVerifiedAt) throw new HttpError(409, "verify_first", VERIFY_FIRST);
   // (Owner, Oct 29, batch 23 section 6) A chargeback hold: one authorization for the total (the bank's check inline if it asks); nothing is taken until the team approves.
-  if (cbHold) {
+  if (reserving) {
     const r = await (await import("./chargeback")).reserveOwed(u, list);
     if ("failed" in r) return { paid: 0, stillFailing: [`${money(total)} (${r.failed!.replace(/.$/, "")})`], lifted: false, confirm: [] };
     return { paid: 0, stillFailing: [] as string[], lifted: false, reservedCents: total, confirm: "action" in r && r.action ? [r.action] : [] };
   }
   // (§117 rule 6) ONE payment for the total: one charge, one bank check if the card asks (inline under the button), one receipt naming every item.
-  const r = await once.chargeOwedTotal(u, list, "press");
+  // (Owner, Nov 3) Allowed to pay after the team's review: checked again inside the claim (a new chargeback meanwhile un-approves it).
+  const r = await once.chargeOwedTotal(u, list, "press", reviewFirst ? { reviewFirst: reviewFirstLine(cbCount + 1) } : {});
   if (r.result === "skipped") throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: "What you owe changed meanwhile. Press again to pay what's left.", at: new Date() }] });
   if (r.result === "action") return { paid: 0, stillFailing: [] as string[], lifted: false, confirm: [r.action] };
   if (r.result === "failed") {

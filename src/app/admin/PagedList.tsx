@@ -232,12 +232,20 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
         <div className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-chargeback-hold={c.id}>
           <p>{c.who ? <AdminRich parts={c.who} /> : <Cut text={c.email} kind="email" />} · on hold since {c.since}</p>
           {(c.chargebackParts ?? c.chargebacks).map((x, i) => <p key={i} className="text-slate-400">{typeof x === "string" ? x : <AdminRich parts={x} />}</p>)}
+          {c.reviewFirst ? (
+            /* (Owner, Nov 3) From the 2nd chargeback the team reviews the account BEFORE the developer can pay: Approve allows paying (Pay what you owe then charges
+               everything as one payment and lifts the hold; no second approval). */
+            <div data-chargeback-steps="" data-review-first={c.count}>
+              Chargeback hold · <b>{c.count} chargebacks</b> on this account: {c.approved ? <>allowed to pay ✓ (card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, waiting for the payment)</> : <>the team reviews it before they can pay.{" "}<AdminButton action="approve-chargeback" id={c.id} label="Approve (to allow paying)" extra={since(c)} /></>}
+            </div>
+          ) : (
           <div data-chargeback-steps="">
             Chargeback hold: card verified <b>{c.cardVerified ? "✓" : "✗"}</b>, owed reserved <b>{c.owedPaid ? "✓" : "✗"}</b>{c.owedLine}{" "}
             {/* (Batch 23 section 6) Approve takes the reservation and lifts the hold in one step; Don't approve releases it (nothing taken; the hold stays). */}
             <AdminButton action="approve-chargeback" id={c.id} label="Approve" disabled={!c.cardVerified || !c.owedPaid} extra={since(c)} />
             {c.reservedCents > 0 && <AdminButton action="decline-chargeback" id={c.id} label="Don't approve: release the reservation" danger fields={[{ name: "note", label: "Why (optional)" }]} extra={since(c)} />}
           </div>
+          )}
           {c.expired && <p className="text-amber-200" data-reserve-expired="">Reservation expired</p>}
         </div>
       );

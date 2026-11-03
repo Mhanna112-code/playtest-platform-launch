@@ -175,12 +175,17 @@ describe("every charge sends it", () => {
     const reversed = await row(w, 0, { kind: "extra", amountCents: 3900, chargeback: "resolved", chargebackAt: new Date(), reversedCents: 3900 });
     const repay = await row(w, 0, { kind: "chargeback", amountCents: 5400, status: "deferred", repaysId: reversed.id, submissionId: null });
     await chargeDeferred(w.dev.user.id);
-    const want = `Playtest: Repaid the reversed $39.00 Pay more for Marc Hanna's written answers on “${LONG}” ($39.00 + $15.00 chargeback fee)`;
+    // (Owner, Nov 3) A repayment that waited for the lift goes into the ONE after-lift payment, listed by its own words.
+    const one = await db.payment.findFirstOrThrow({ where: { developerId: w.dev.user.id, kind: "owed" } });
+    const want = await stripeDescription({ owed: [await db.payment.findUniqueOrThrow({ where: { id: repay.id } })], charges: true });
+    expect(want.startsWith("Playtest: Charges made while you were away (")).toBe(true);
+    expect(want).toContain("Repaid the reversed $39.00 Pay more");
     expect(made.map((m) => m.description)).toEqual([want]);
-    expect((await db.payment.findUniqueOrThrow({ where: { id: repay.id } })).stripeDescription).toBe(want);
+    expect(one.stripeDescription).toBe(want);
+    expect(await db.payment.findUniqueOrThrow({ where: { id: repay.id } })).toMatchObject({ status: "charged", coveredById: one.id, testerCents: 0 });
     // The tester renames meanwhile: a charge asked again with the same key keeps the description Stripe has.
     await db.user.update({ where: { id: w.t[0].tester.user.id }, data: { name: "Marcus Hanna-Smith" } });
-    const again = await (await import("@/lib/server/paymentRows")).describedOnce(repay.id, () => stripeDescription({ payment: repay }));
+    const again = await (await import("@/lib/server/paymentRows")).describedOnce(one.id, async () => "a new description");
     expect(again).toBe(want);
     expect(await stripeDescription({ payment: repay })).toContain("Marcus Hanna-Smith"); // a new charge would use the new name
   });
