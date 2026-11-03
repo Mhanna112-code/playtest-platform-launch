@@ -1411,6 +1411,14 @@ design doc's "Recordings can be removed or added and sent again. Written answers
   earlier page had marked for removal at the next send stay with their piece. `src/lib/additions.ts`, `src/components/SentWork.tsx`.
 - **Tests:** `tests/batch35-sent-locked.test.ts`.
 
+## §138 Text boxes stop growing at 60% of the screen (owner, Nov 3)
+
+- Every text box that can be dragged taller (written answers and Add more, the steps, questions, notes, reasons, the bio, chat…) stops at
+  `min(60vh, 32rem)`; past that its text scrolls inside it. One rule in `src/app/globals.css` (`textarea { max-height: …; overflow-y: auto; }`), after the
+  utilities, so no box's own classes lift it. Nothing changed before this: a box could be dragged as tall as the page.
+- Checked in Chrome: a box dragged to 3,000 px stays 512 px (32rem) on a 900 px desktop and 506 px (60vh) on an 844 px phone, scrolling inside.
+- **Tests:** `tests/batch35-textarea-cap.test.ts` (the rule, its place after the utilities, no box opting out). **Pictures:** `docs/media/sent-locked/textarea-cap-*`.
+
 ## §139 Sent work in small panels, with folds for the body and Pay (owner, Nov 3)
 
 Replaces batch 10's 16-line scroll box (`AnswersBox`, `max-h-[20rem]`) for the developer's view of sent work on the test page. (The admin's "See the work" keeps it.)

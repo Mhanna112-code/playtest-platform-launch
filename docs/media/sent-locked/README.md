@@ -21,3 +21,9 @@ Taken on a separate dev server (port 3486, its own schema `rec_sent`, the fake S
 | `added-update-row-*` | Something added after a Pay: its Needs you row ("fbbb added to this after you paid ($5.00 paid · up to $995.00 more)"), the list with "Added", and Pay more under it. |
 | `locked-written-*` | The tester's own page: what they sent, read-only in its panel (with what they added under "Added"), and "Add more" opened: one box, "Add to my answers". |
 | `locked-recording-*` | The tester's recordings: two sent (no Remove), one added under "Added", "3 of 5 recordings", and the tools to add more. |
+
+## §138 Text box cap
+
+| Picture | What it shows |
+|---|---|
+| `textarea-cap-*` | Add more's box with 80 lines, dragged to 3,000 px: it stops at 32rem on desktop and 60% of the screen on a phone, and scrolls inside. |
