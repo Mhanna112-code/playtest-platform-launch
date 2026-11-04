@@ -17,6 +17,13 @@ export const PRESS_VERBS: Record<string, string> = {
   "recording-remove": "Remove", "keys-dismiss": "Dismiss selected", "key-broken": "“This key doesn't work”",
 };
 
+/**
+ * (Owner, Nov 4, batch 35 §170) The tester's "Send the dispute" button is the press Dispute: its refusals read "Your Dispute didn't go through: …" (not "Your Send
+ * the dispute …"). Likewise the written answers' "Send my answers" button is the press Send, and "Add to my answer" the press Add (§146), as the server's
+ * own lines name them (FormMistakes' `named`).
+ */
+export const DISPUTE_PRESS = PRESS_VERBS.dispute;
+
 /** (Batch 30 §20) The buttons on a call request. */
 export const ANSWER_REQUEST_VERBS: Record<string, string> = { withdraw: "Withdraw", accept: "Accept", decline: "Decline" };
 

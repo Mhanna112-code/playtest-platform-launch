@@ -420,7 +420,9 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
     // declined and start a hold): it keeps waiting for the bank with its own date.
     else if (["needs_confirmation", "failed", "owed"].includes(p.status) && p.actionBy && p.actionBy > new Date()) {
       const tz = (await db.user.findUnique({ where: { id: dev.id }, select: { timeZone: true } }))?.timeZone ?? null;
-      throw new HttpError(402, "not_confirmed", (await import("@/lib/bankNotice")).stillWaitingLine(fmtDateTimeIn(p.actionBy, tz)));
+      // (Owner, Nov 4, batch 35 §170) Its date goes with the line (`by`), for Cancel this check's "Cancelled: … It still waits for your bank until <date>.".
+      const by = fmtDateTimeIn(p.actionBy, tz);
+      throw new HttpError(402, "not_confirmed", (await import("@/lib/bankNotice")).stillWaitingLine(by), { by });
     }
     // (§147) Confirm all's check: nothing was charged and each payment is back to its own Confirm with your bank.
     const all = (await import("./owedOnce")).isAll(p);

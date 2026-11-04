@@ -112,3 +112,8 @@ details[open] > summary.fold-chevron::before { transform: rotate(90deg); }
 
 /* (Owner, Nov 3) A counter under its minimum turns red only after a save was tried: when its field is marked (the press's check or the server's mistake). */
 :where(*):has(> .field-bad, > [aria-invalid="true"], > [data-note-after] .field-bad, > [data-note-after] [aria-invalid="true"]) > [data-count-under] { color: rgb(253 164 175); }
+
+/* (Owner, Nov 4, batch 35 §170) An open bank check is never squeezed by the panel holding it: a draggable panel (ResizeBox: its dragged height, or LIST_PANEL's
+   and the Needs you caps of 60-70% of the screen) or a scroll list holding one grows to fit the whole box (the bank's frame, Cancel and the blue notice) while it
+   is open, so Complete never sits inside a scroll box. The panel's own height comes back when the check closes. */
+[data-panel-box]:has([data-bank-check]), [data-scroll-list]:has([data-bank-check]) { max-height: none !important; height: auto !important; }

@@ -2522,3 +2522,49 @@ Owner: "Ticking All in Alerts doesn't tick everything, and removing one while Al
   - `alerts-all-before.webm`: one tick at a time;
   - `alerts-all-slow-poll-before.webm` and `alerts-all-slow-poll-fixed.webm`: the stale poll;
   - `alerts-all-fixed.webm`: tick All in two tabs through a poll, untick one, re-tick it, untick All.
+
+## §170 Five small fixes: sign-up all at once, a paid call's amount once, presses named, Cancel this check's line, the bank box's height (owner, Nov 4)
+
+- **(1) Sign-up shows every mistake on the first press (owner decision).** Pressing Sign up with everything empty showed only the name, email and password
+  lines; "Choose developer or tester.", the devices and languages lines, Terms and 18+ came a press later, once the email and password were valid. Now the server
+  (`signUp` in `src/lib/server/passwords.ts`) reads the email and password without stopping and hands their lines to `readNewAccount` (`credentialMistakes`), so
+  every line comes back at once, each red at its own field, in the form's order: choice, devices, languages, name, pronoun, bio, email, password, Terms, 18 or
+  older. A valid email already in use ("An account with that email already exists") is the email's line, listed with the others. The page already sent the press
+  with boxes red (§153's `allAtOnce`), so nothing changed there. Google's step (no email or password) was already all at once and keeps its order (choice,
+  devices, languages, name, pronoun, bio, Terms, 18 or older). **Replaces** §134's and §153's "Email and password mistakes still come first". (The network's
+  10-an-hour sign-up limit is checked once every line is fine, as before.)
+- **(2) A paid call's row says the amount once.** The developer's Testers panel showed a paid call as "Took place · 30 min · paid $15.00 … paid $15.00": the badge
+  (`callOverBadge`) and the row's right-hand amount. The badge now marks the labels that already name what was paid (`paidShown`: "paid $15.00", "Paid $0"), and
+  the row's right-hand amount (`data-call-paid`, `src/app/app/tests/[id]/page.tsx`) shows only when the badge doesn't ("not paid yet", Rejected, let go).
+- **(3) Refusals name the press, not the button's sentence.** The tester's dispute button reads "Send the dispute" and its refusals read "Your Send the dispute
+  didn't go through: …". They now name the press by its route's label (`DISPUTE_PRESS` = `PRESS_VERBS.dispute`): "Your Dispute didn't go through: …", under the
+  button and in the "meanwhile" line. `FormMistakes` takes `named` for this (the refusal's name; "press <button> again" keeps the button's words). The same
+  problem, found and fixed: the written answers' "Send my answers" / "Send my answers to the new questions" ("Your Send my answers didn't go through") now reads
+  "Your Send didn't go through", and "Add to my answer" reads "Your Add didn't go through" (§146's Add), as the server's own lines already named them. A guard
+  test keeps any refusal under a button from naming "Send the …" or "… my …". Not changed: the labels §156 settled (Keep my current terms, Confirm with your
+  bank, Switch to your … side, Send your side and the rest), which name the button as pressed.
+- **(4) Cancel this check in another tab says plainly that it worked.** A Pay or Pay more whose bank window is open in another tab shows "Confirming with your
+  bank" with Cancel this check (`BankWaiting own`, §160). Its successful cancel read "Your Confirm with your bank didn't go through: Your bank didn't confirm the
+  payment, so nothing was charged." (the wrong press, and a failure for a cancel that worked). Now (`cancelledCheckLine`, `src/lib/bankNotice.ts`):
+  - cancelled: "Cancelled: nothing was charged." (Confirm all's one check: "Cancelled: nothing was charged. Each payment is back to its own Confirm with your
+    bank.");
+  - a charge made while away, which Cancel keeps waiting (§160's exception): "Cancelled: nothing was charged. It still waits for your bank until Fri, Nov 6,
+    4:26 PM." (the server's still-waiting refusal now carries its date as `by`);
+  - Stripe says it had gone through: "Your bank already confirmed it: paid $10.00." (`alreadyConfirmedLine`). Pay what you owe's and Confirm all's Cancel this
+    check (`cancelOwedCheck`) already answered with success lines ("Check cancelled: nothing was charged. …"); their gone-through line now names the amount the
+    same way ("Your bank already confirmed it: paid $16.00.", was "Your bank already confirmed this payment: it's paid."; a second Cancel's refusal keeps that
+    wording). Read with §160's Cancel rules: nothing about what Cancel does changed, only what the pressing tab says.
+- **(5) The bank box fits on laptop screens.** The open bank check (`components/BankCheck.tsx`: title, the bank's frame at 28rem, the hint, Cancel and the blue
+  notice at its bottom, about 670px) sat inside panels capped at 60-70% of the screen (Needs you's list and each tester's parts, `ResizeBox`; the `LIST_PANEL`
+  caps), so at 1366×768 and 1280×720 Cancel, the notice and the bank's Complete were inside a scroll box. Approach (the simplest robust one): one CSS rule in
+  `src/app/globals.css`: a panel (`[data-panel-box]`) or scroll list (`[data-scroll-list]`) holding an open bank check (`:has([data-bank-check])`) drops its
+  height and max-height while the check is open, so it grows to fit the whole box; when the check closes, its own height (dragged or default) comes back. No
+  script, nothing kept, every panel and every kind of check (the stand-in too) at once. The page itself still scrolls normally (at 1280×720 the notice's last
+  line sits at the screen's bottom edge).
+- **Tests:** `tests/batch35-small-ui.test.ts`: an all-empty sign-up press returns every line at once (and a tester's, and every kind of line together in order,
+  the taken email among them, Google's step); the form's boxes take their lines; the paid call row with its amount once (the developer's page after a call's
+  Pay) and the badge's `paidShown`; the Dispute, Send and Add refusals and the guard; Cancel this check's lines from the server's real answers (cancelled, an away
+  charge still waiting with its date, already paid with its amount); the panel rule. `auth` (the short-password line with the rest given) and
+  `batch35-one-card-checks` (the gone-through line with its amount) updated.
+- **Pictures:** `playtest-lite-evidence/small-ui/before-1366x768.png`, `before-1280x720.png` (the box cut inside Needs you's panels) and `after-1366x768.png`,
+  `after-1280x720.png` (the whole box: frame, hint, Cancel and the notice).

@@ -700,7 +700,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             <Fold id={`row-call-${x.id}`} className="space-y-1" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={<>
                               <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
                               <span className={`badge ${badge.tone === "green" ? "border-emerald-400/40 text-emerald-200" : badge.tone === "amber" ? "border-amber-300/40 text-amber-200" : badge.tone === "rose" ? "border-rose-400/40 text-rose-200" : ""}`} data-call-badge="">{badge.label}</span>
-                              <span className="ml-auto text-slate-300">{tookPlace(x) ? `paid ${money(partPaid(x.id))}` : ""}</span>
+                              {/* (Owner, Nov 4, batch 35 §170) The paid amount once: not repeated here when the badge already reads "paid $15.00". */}
+                              <span className="ml-auto text-slate-300" data-call-paid="">{tookPlace(x) && !("paidShown" in badge) ? `paid ${money(partPaid(x.id))}` : ""}</span>
                             </>}>
                             {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
                             {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}

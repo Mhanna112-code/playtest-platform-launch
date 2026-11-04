@@ -3,7 +3,7 @@ import { VIDEO_ACCEPT } from "@/lib/videoFormats";
 import { Paperclip } from "lucide-react";
 import { withoutAttachmentMarkers } from "@/lib/answerAttachments";
 import { CharacterCount } from "@/components/CharacterCount";
-import { refusalLine } from "@/lib/pressLabels";
+import { DISPUTE_PRESS, PRESS_VERBS, refusalLine } from "@/lib/pressLabels";
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
@@ -204,7 +204,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   return (
     <form className="space-y-3" onSubmit={send}>
       {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
-      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my answers to the new questions" : "Send my answers"}
+      {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Send (as the server's own lines do), not "Your Send my answers didn't go through". */}
+      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my answers to the new questions" : "Send my answers"} named={PRESS_VERBS.written}
         find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
@@ -333,7 +334,8 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
       {!canSend && !full && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
       <PressDone line={fin.line} />
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      <FormMistakes text={err} press={ADD_PRESS} />
+      {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
+      <FormMistakes text={err} press={ADD_PRESS} named={PRESS_VERBS["written-add"]} />
     </div>
   );
 }
@@ -428,8 +430,9 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && reason !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setReason("")} />}
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
-      {meanwhile && <p className="info" data-dispute-meanwhile="">{refusalLine("Send the dispute", meanwhile)}</p>}
-      <FormMistakes text={err} press="Send the dispute" />
+      {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Dispute (its route's label), not the button's words: "Your Dispute didn't go through: …". */}
+      {meanwhile && <p className="info" data-dispute-meanwhile="">{refusalLine(DISPUTE_PRESS, meanwhile)}</p>}
+      <FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} />
     </details>
   );
 }

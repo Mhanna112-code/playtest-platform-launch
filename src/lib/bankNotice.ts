@@ -1,3 +1,5 @@
+import { ALL_BACK } from "./confirmAllText";
+
 // (Owner, Nov 3, batch 35 §160) Once the bank's page is open, Stripe's Complete can't be stopped by us. So while it is open, the box tells the developer (a blue
 // notice inside the bank check's box, directly above the bank's frame) what changed that would have stopped their press, or that the check was cancelled underneath
 // them, before they press Complete. Shared by the server's peek (lib/server/bankPeek.ts) and the box (components/BankCheck.tsx).
@@ -42,6 +44,20 @@ export const STILL_WAITS = "Nothing was charged: this payment still waits for yo
 export const stillWaitingLine = (by: string) => `${STILL_WAITS} Confirm with your bank by ${by}.`;
 /** (§160) The developer's own press with its bank window open elsewhere (another tab, or left): its Cancel there. */
 export const CANCEL_THIS_CHECK = "Cancel this check";
+/**
+ * (Owner, Nov 4, batch 35 §170) What "Cancel this check" (pressed in a tab other than the bank window's) says once it worked: a plain success line, never "Your
+ * Confirm with your bank didn't go through: …" (the wrong press, and a cancel that worked isn't a failure). A charge made while away isn't cancelled (§160): it
+ * keeps waiting with its own date. Stripe said it had gone through: paid, with the amount.
+ */
+export const CANCELLED_NOTHING_CHARGED = "Cancelled: nothing was charged.";
+export const cancelledStillWaitsLine = (by: string) => `${CANCELLED_NOTHING_CHARGED} It still waits for your bank until ${by}.`;
+export const alreadyConfirmedLine = (amount: string) => `Your bank already confirmed it: paid ${amount}.`;
+/** The cancel's finish answered "nothing was charged" (`not_confirmed`): its success line; `by` is the date a charge made while away still waits until. */
+export function cancelledCheckLine(message: string, by?: unknown) {
+  if (typeof by === "string" && by && message.startsWith(STILL_WAITS)) return cancelledStillWaitsLine(by);
+  // Confirm all's one check: each payment is back to its own Confirm with your bank.
+  return message.includes(ALL_BACK) ? `${CANCELLED_NOTHING_CHARGED} ${ALL_BACK}` : CANCELLED_NOTHING_CHARGED;
+}
 /**
  * (Owner, Nov 3, §160) Pay what you owe's check (its one payment, or a chargeback hold's reservation) is being made or waits for the bank in another tab: that tab's
  * box hides the button and says so (with Cancel this check); a press from an older page is refused with the same line (never a stop-once, never "already reserved").

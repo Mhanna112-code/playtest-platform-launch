@@ -2,13 +2,14 @@
 import { useState, type ReactNode } from "react";
 import { useBankCheck } from "@/components/BankCheck";
 import { ChangesBox } from "@/components/ChangesBox";
-import { finishPayment, type BankAction } from "@/lib/bankConfirm";
+import { type BankAction } from "@/lib/bankConfirm";
 import { money } from "@/lib/format";
 import { MARKABLE } from "@/lib/markJump";
 import { usePress } from "@/lib/usePress";
 import { BANK_CONFIRMED, CONFIRM_WITH_BANK, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, bankAnchor } from "@/lib/rules";
 import { refusalLine } from "@/lib/pressLabels";
-import { CANCEL_THIS_CHECK, STILL_WAITS } from "@/lib/bankNotice";
+import { CANCEL_THIS_CHECK, STILL_WAITS, alreadyConfirmedLine, cancelledCheckLine } from "@/lib/bankNotice";
+import { ApiError, api } from "@/lib/client";
 
 /**
  * (Batch 17 §11) A charge made while the developer was away (a tester's Charge, a dispute decision, an automatic retry) that their bank wants confirmed: on the test page,
@@ -29,11 +30,16 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
     setErr("");
     setCancelling(true);
     try {
-      const r = await finishPayment<{ amountCents?: number }>(paymentId);
-      finish(typeof r?.amountCents === "number" ? `Your bank already confirmed it: paid ${money(r.amountCents)}.` : BANK_CONFIRMED);
+      const r = await api<{ amountCents?: number }>("/api/payments/confirm", { paymentId });
+      finish(typeof r?.amountCents === "number" ? alreadyConfirmedLine(money(r.amountCents)) : BANK_CONFIRMED);
     } catch (e) {
-      setErr((e as Error).message);
-      finish("");
+      // (Owner, Nov 4, batch 35 §170) "Nothing was charged" is what Cancel this check is for: a plain success line here, never "Your Confirm with your bank didn't
+      // go through: Your bank didn't confirm the payment, …". A charge made while away keeps waiting (§160): said with its date.
+      if (e instanceof ApiError && e.code === "not_confirmed") finish(cancelledCheckLine(e.message, e.data.by));
+      else {
+        setErr((e as Error).message);
+        finish("");
+      }
     } finally {
       setCancelling(false);
     }

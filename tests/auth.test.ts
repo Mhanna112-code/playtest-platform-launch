@@ -25,7 +25,8 @@ const WHO = { role: "developer", name: "Ana Silva", acceptTerms: "yes", over18: 
 describe("sign up, confirm, log in, reset", () => {
   it("signs up with email + password (signed in at once), confirms the email by link, logs in; a wrong password is red", async () => {
     const addr = email("signup");
-    expect((await json(await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "short" } })))).body.error).toMatchObject({ code: "bad_field", message: "Password must be at least 8 characters" });
+    // (Batch 35 §170) Every mistake is listed at once: with the rest given, only the password's.
+    expect((await json(await signupPOST(req("/api/auth/signup", { body: { email: addr, password: "short", ...WHO } })))).body.error).toMatchObject({ code: "bad_field", message: "Password must be at least 8 characters" });
     const r = await signupPOST(req("/api/auth/signup", { body: { email: " " + addr.toUpperCase(), password: "harbor-run-1", ...WHO } }));
     expect(r.status).toBe(200);
     const u = await getUserFromRequest(req("/app", { cookie: cookieOf(r) }));
