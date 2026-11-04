@@ -333,7 +333,7 @@ describe("§159 rule 5: Pay what you owe stops once for chargeback changes", () 
     expect(await disputeAmountChanged(pi, 800)).toBe("followed");
     const second = await press({ seenTotalCents: first.body.error.totalCents, seenIds: first.body.error.ids, confirmed: true });
     expect(second.body.error?.code, JSON.stringify(second.body)).toBe("stop_once");
-    expect(texts(second)[0]).toMatch(/^What you owe changed: now \$23\.00\./);
+    expect(texts(second)[0]).toMatch(/^Your bank changed the amount it took back .*= \$23\.00\)/); // (A3) the stop names the bank's change
     const third = await press({ seenTotalCents: second.body.error.totalCents, seenIds: second.body.error.ids, confirmed: true });
     expect(third.body, JSON.stringify(third.body)).toMatchObject({ reservedCents: 2300 });
     expect((await owed(s.dev.user.id)).map((x) => x.id)).toEqual([p.id]);
