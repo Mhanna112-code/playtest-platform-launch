@@ -32,6 +32,7 @@ import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
 import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/components/ScrollList";
+import { Fold, ResizeBox } from "@/components/Panel";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
 import { ADDITIONS_MAX, additionsLeftLine, additionsOf, latestItems, questionKeys } from "@/lib/additions";
@@ -662,21 +663,30 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <h2 className="font-semibold text-white">The written part</h2>
         {termLine("Written answers", c.writtenCents, c.writtenRequired, false, written ? partPaid.get(written.id) ?? 0 : 0)}
         {/* (Owner, Nov 3, batch 35 §136) What was sent is locked, never edited. (§167) Shown as the developer reads it, a fold per question with its answer and
-            what was added to it (dated); while adding is open, each current question's fold ends with its own "Add to this answer" box. */}
+            what was added to it (dated); while adding is open, each current question's fold ends with the place its "Add to this answer" box opens.
+            (Owner, Nov 4, §182) In "Your written answers", a fold: every question in ONE panel (scrolls inside, the grip drags it); the Add to this answer
+            buttons sit below the panel, and a pressed one opens its box in the panel, directly under that question's latest part. */}
         {written && (
           <div className="space-y-2" data-sent-answers="">
             {written.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(written.setUntil)}</p>}
             {canAdd && addsMade > 0 && addsMade < ADDITIONS_MAX && <p className="note" data-additions-left="">{additionsLeftLine(addsMade)}</p>}
-            <SentWork id={`own-${written.id}`} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
-              addTo={canAdd ? ({ key }) => {
-                const at = currentKeys.indexOf(key);
-                if (at < 0) return null;
-                return (
-                  <WrittenAddForm key={key} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={sentItems[at].question} made={addsMade}
-                    used={writtenLength([...sentItems.map((x) => x.answer), written.notes, ...additionsOf(written.additions).map((x) => x.text ?? "")])}
-                    known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
-                );
-              } : undefined} />
+            <Fold id={`own-answers-${written.id}`} summary={<span className="font-medium text-white" data-own-answers-title="">Your written answers</span>}>
+              <div className="space-y-2">
+                <ResizeBox id={`own-answers-list-${written.id}`} label="Your written answers" defaultMax={LIST_PANEL.ownAnswers}>
+                  <SentWork id={`own-${written.id}`} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
+                    addTo={canAdd ? ({ key }) => (currentKeys.includes(key) ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined} />
+                </ResizeBox>
+                {canAdd && (
+                  <div className="space-y-2" data-add-buttons="">
+                    {currentKeys.map((key, at) => (
+                      <WrittenAddForm key={key} slot={`${c.id}:${key}`} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={sentItems[at].question} made={addsMade}
+                        used={writtenLength([...sentItems.map((x) => x.answer), written.notes, ...additionsOf(written.additions).map((x) => x.text ?? "")])}
+                        known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </Fold>
           </div>
         )}
         {!written && (refusal || meOff || !draftsShown) && <p className="note">Nothing sent.</p>}

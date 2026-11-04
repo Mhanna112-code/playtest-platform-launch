@@ -3,7 +3,7 @@ import { HelpCircle, MessageSquareText } from "lucide-react";
 import { fmtDateTimeIn, money } from "@/lib/format";
 import type { QuestionBlock } from "@/lib/byQuestion";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
-import { ScrollText } from "@/components/ScrollText";
+import { ANSWER_LINES, LongText, QUESTION_LINES } from "@/components/LongText";
 import { Fold, ResizeBox } from "@/components/Panel";
 import { QuestionSearch } from "./QuestionSearch";
 
@@ -35,12 +35,14 @@ export function ByQuestion({ testId, blocks, timeZone }: { testId: string; timeZ
               <section className="rounded-lg border border-white/10 p-2" data-question-block={key}>
                 <Fold id={`bq-${testId}-${key}`} defaultOpen={false} summaryClassName="!text-base" summary={
                   <span className="inline-flex min-w-0 max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 align-middle font-semibold text-white">
-                    <Icon className={`h-5 w-5 shrink-0 ${b.title === "Other notes" ? "text-slate-300" : "text-indigo-300"}`} /> <ScrollText text={b.title} className="min-w-0 flex-1" label="Question" />
+                    <Icon className={`h-5 w-5 shrink-0 ${b.title === "Other notes" ? "text-slate-300" : "text-indigo-300"}`} /> {/* (Owner, Nov 4, §182) The question's first 2 lines in the title; a longer one gets Show more inside, opening the whole question (the shared fold). */}
+                    <span className="line-clamp-2 min-w-0 flex-1 [overflow-wrap:anywhere]" data-question-title="">{b.title}</span>
                     {/* (Batch 26 section 14) Not required is the default: only a Required question is marked. */}
                     {b.required && <span data-required="" className="badge border-white/15 text-xs font-normal text-slate-400">required</span>}
                     <span className="text-sm font-normal text-slate-500">{b.answers.length} answer{b.answers.length === 1 ? "" : "s"}</span>
                   </span>
                 }>
+                  <div className="mb-2 text-xs text-slate-400 has-[[data-fold-text=short]]:hidden" data-set-question=""><LongText bare text={b.title} lines={QUESTION_LINES} id={`bq-${testId}-${key}-question`} label="Question" /></div>
                   <ResizeBox id={`by-question-${testId}-${key}`} label={`Answers to “${b.title.slice(0, 60)}”`}>
                     <ul className="divide-y divide-white/5">
                       {b.answers.map((a) => (
@@ -50,7 +52,8 @@ export function ByQuestion({ testId, blocks, timeZone }: { testId: string; timeZ
                             <span className="block text-xs text-slate-500">{fmtDateTimeIn(a.sentAt, timeZone)}</span>
                             <span className={`badge text-xs ${STATUS[a.status]}`}>{a.status === "paid" ? `Paid ${money(a.paidCents)}` : a.status === "rejected" ? "Rejected" : "Not reviewed yet"}</span>
                           </span>
-                          <AnswerWithAttachments text={a.text} attachments={a.attachments ?? []} />
+                          {/* (§182) Each answer: its first 3 lines, then Show more. */}
+                          <LongText className="flex-1" text={a.text} lines={ANSWER_LINES} id={`bq-${testId}-${key}-${a.contractId}`} label={`${a.tester}'s answer`}><AnswerWithAttachments text={a.text} attachments={a.attachments ?? []} /></LongText>
                         </li>
                       ))}
                     </ul>

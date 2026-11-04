@@ -1,5 +1,5 @@
 import { Formatted } from "@/components/Formatted";
-import { ScrollText } from "@/components/ScrollText";
+import { ANSWER_LINES, LongText, QUESTION_LINES } from "@/components/LongText";
 import { fileSize, fmtDateIn } from "@/lib/format";
 import { RecordingVideo } from "@/components/RecordingVideo";
 import { versionsOf, type PrevSet, type SetItem } from "@/lib/answerSets";
@@ -16,8 +16,9 @@ export function SetView({ items, attachments = [] }: { items: SetItem[]; attachm
     <>
       {items.map((it, i) => (
         <div key={i} className="space-y-0.5 text-sm" data-set-item="">
-          <div className="flex items-start gap-0.5 text-xs text-slate-400" data-set-question=""><ScrollText className="min-w-0" text={it.question} label="Question" />{it.required && <span className="shrink-0" aria-label="required"> *</span>}</div>
-          <div className="border-l border-white/10 pl-3" data-set-answer="">{it.answer.trim() ? <AnswerWithAttachments text={it.answer} attachments={attachments} /> : <p className="text-slate-500" data-no-answer="">(no answer)</p>}</div>
+          {/* (Owner, Nov 4, §182) The shared long-text fold: the question's first 2 lines, the answer's first 3, each with Show more when there's more. */}
+          <div className="flex items-start gap-0.5 text-xs text-slate-400" data-set-question=""><LongText className="flex-1" text={it.question} lines={QUESTION_LINES} label="Question" />{it.required && <span className="shrink-0" aria-label="required"> *</span>}</div>
+          <div className="border-l border-white/10 pl-3" data-set-answer="">{it.answer.trim() ? <LongText text={it.answer} lines={ANSWER_LINES} label="Answer"><AnswerWithAttachments text={it.answer} attachments={attachments} /></LongText> : <p className="text-slate-500" data-no-answer="">(no answer)</p>}</div>
         </div>
       ))}
     </>

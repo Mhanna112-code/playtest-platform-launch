@@ -3,9 +3,16 @@
  * A link to something on this page (the full app's "Needs you" link pattern): bring it to the middle of the view and
  * mark it a moment (a ring for 4 seconds, see `data-[marked]:` on the target).
  */
+/** (Owner, Nov 4, §182) Sent to a folded long text (LongText) that holds a jump's target: it opens at once. */
+export const OPEN_FOLD_TEXT = "fold-text:open";
+
 export function jumpTo(id: string) {
-  const el = document.getElementById(id);
+  let el = document.getElementById(id);
   if (!el) return;
+  // (§182) A target inside a folded long text (an answer, an addition) opens it first; it is drawn again open, so the target is found again.
+  let folded = false;
+  for (let p = el.parentElement; p; p = p.parentElement) if (p.dataset?.foldText === "closed") { p.dispatchEvent(new Event(OPEN_FOLD_TEXT)); folded = true; }
+  if (folded) el = document.getElementById(id) ?? el;
   // (Batch 15 section 42) A target inside a fold (a tester row's "Calls (N)", the tester's Call history) opens it first.
   for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement && !p.open) p.open = true;
   if (el instanceof HTMLDetailsElement && !el.open) el.open = true;

@@ -24,6 +24,8 @@ export const LIST_PANEL = {
   /** "By question"'s list of questions (no box before: about 8 closed questions) */ questions: "min(32rem, 60vh)",
   /** (Owner, Nov 4, §179) The tester's "Live call: N done" calls with their payment boxes, more than 3 (no box before; about 3 calls, as the developer's past calls) */
   liveTester: "min(27rem, 60vh)",
+  /** (Owner, Nov 4, §182) The tester's own recordings on their session page, in "Your recording" (about one and a half recordings) */ ownRecordings: "min(24rem, 60vh)",
+  /** (§182) The tester's own written answers, every question in one panel in "Your written answers" (about 10 closed questions) */ ownAnswers: "min(28rem, 60vh)",
 } as const;
 /** (§152) The testers' calls list on the developer's test page drags up to 2 screens (it was already that tall). */
 export const TESTERS_CALLS_TALLEST = 2;
