@@ -28,6 +28,17 @@ export const bringInViewHeld = (now = Date.now()) => now < heldUntil;
  */
 export function bringInView(el: HTMLElement | null) {
   if (!el || bringInViewHeld()) return;
+  // (Owner, Nov 4, §179) A notice inside a scrolling panel (a call's dispute box in the tester's Live call panel, a Pay more in the developer's Calls (N)): the
+  // panel scrolls to it first (the least scrolling, at once, so the page's step below measures where it landed), then the page.
+  const box = el.closest?.<HTMLElement>("[data-panel-box]");
+  if (box) {
+    const b = box.getBoundingClientRect();
+    const e = el.getBoundingClientRect();
+    let d = 0;
+    if (e.bottom > b.bottom) d = e.bottom - b.bottom;
+    if (e.top - d < b.top) d = e.top - b.top; // taller than the panel: its top first
+    if (Math.abs(d) > 1) box.scrollTop += d;
+  }
   const prev = el.previousElementSibling as HTMLElement | null;
   const r = el.getBoundingClientRect();
   const top = prev && prev.tagName === "BUTTON" ? Math.min(prev.getBoundingClientRect().top, r.top) : r.top;

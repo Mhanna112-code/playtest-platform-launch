@@ -11,6 +11,7 @@ import { PartPayments } from "@/components/PartPayments";
 import { partPaymentLines, partPayStatus, type PartPayLine } from "@/lib/server/partPayments";
 import { paidRows } from "@/lib/server/paymentRows";
 import { fmtDateTimeIn } from "@/lib/format";
+import { bringInView } from "@/lib/markJump";
 import { noQuestionsLine, questionMatches, QuestionSearch } from "@/app/app/tests/[id]/QuestionSearch";
 import { ByQuestion, questionKey } from "@/app/app/tests/[id]/ByQuestion";
 import { joined, sact, settle, setup } from "./fixtures";
@@ -20,7 +21,7 @@ import { joined, sact, settle, setup } from "./fixtures";
 // part on the developer's test page, that part's payments (Payments' "What you've paid" lines). And "By question": a search, the list in a panel, each question a fold.
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
-vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {} }));
+vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
 vi.mock("@/components/OtherSideNotice", () => ({ otherSideNotice: async () => null }));
 vi.mock("next/navigation", () => ({ usePathname: () => "/app/tests/test", useRouter: () => ({ refresh() {}, push() {}, replace() {} }), useSearchParams: () => new URLSearchParams(), notFound: () => { throw Error("not found"); }, redirect: () => { throw Error("redirect"); } }));
 (globalThis as unknown as { React: typeof React }).React = React;
@@ -178,5 +179,72 @@ describe("§152: By question — search, the list in a panel, each question a fo
     expect(html).toContain("1 answer<");
     expect(questionKey("Where did you get stuck?")).toBe(k); // stable
     expect(questionKey("Other notes")).not.toBe(k);
+  });
+});
+
+// (Owner, Nov 4, §179) "Scroll box needed for different charges": the tester's "Live call: N done" lists every call with its payment box; more than 3 sit in the
+// draggable panel (`live-calls-<sessionId>`, about 3 calls tall at first), like past calls. The developer's "Calls (N)" was already a panel past 3 (§152).
+describe("§179: the tester's Live call list in the draggable panel past 3 calls", () => {
+  it("the page wraps both kinds of rows (done and not yet paid, paid) in PanelWhen with the session's id; the developer's Calls (N) is already one", () => {
+    expect(LIST_PANEL.liveTester).toBe("min(27rem, 60vh)");
+    const page = src("app/app/sessions/[id]/page.tsx");
+    expect(page).toContain("<PanelWhen on={liveRowCount > PAST_CALLS_SHOWN} id={`live-calls-${c.id}`} label=\"Live calls and their payments\" defaultMax={LIST_PANEL.liveTester}>");
+    expect(page).toContain("const liveRowCount = unpaidLive.length + paidLive.length;");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label={`Calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>");
+  });
+
+  it("a notice inside a panel: the panel scrolls to it first, then the page (the least scrolling)", () => {
+    const scrolled: number[] = [];
+    const g = globalThis as unknown as { window?: unknown };
+    const had = g.window;
+    g.window = { innerHeight: 800, scrollBy: ({ top }: { top: number }) => scrolled.push(top) };
+    try {
+      // The panel shows 300–500 on the screen; the notice sits at 600–640 inside it (scrolled out of the panel's view).
+      const box = { scrollTop: 50, getBoundingClientRect: () => ({ top: 300, bottom: 500 }) };
+      let shift = 0;
+      Object.defineProperty(box, "scrollTop", { get: () => 50 + shift, set: (v: number) => void (shift = v - 50) });
+      const el = { closest: (q: string) => (q === "[data-panel-box]" ? box : null), previousElementSibling: null, getBoundingClientRect: () => ({ top: 600 - shift, bottom: 640 - shift }) };
+      bringInView(el as unknown as HTMLElement);
+      expect(shift).toBe(140); // its bottom at the panel's bottom
+      expect(scrolled).toEqual([]); // then on the screen already: the page doesn't move
+      // Not in a panel: as before (the page only).
+      const plain = { closest: () => null, previousElementSibling: null, getBoundingClientRect: () => ({ top: 900, bottom: 950 }) };
+      bringInView(plain as unknown as HTMLElement);
+      expect(scrolled).toEqual([162]);
+    } finally {
+      g.window = had;
+    }
+  });
+
+  it("on the tester's page: 3 paid calls are a plain list; a 4th makes it the panel (each row's hooks kept)", async () => {
+    const s = await setup();
+    const j = await joined(s.testId, "Ana Silva");
+    await settle();
+    const DAY = 86_400_000;
+    const call = async (i: number) => {
+      const startsAt = new Date(Date.now() - (10 - i) * DAY);
+      const slot = await db.callSlot.create({ data: { testId: s.testId, startsAt, minutes: 30, allowedTesterIds: [], status: "booked" } });
+      const x = await db.call.create({ data: { slotId: slot.id, contractId: j.sessionId, startsAt, minutes: 30, rateCents: 3100, actualMinutes: 30 } });
+      await db.review.create({ data: { callId: x.id, contractId: j.sessionId, amountCents: 1550, agreedCents: 1550, rateCents: 3100, payKey: "k-" + x.id } });
+      return x;
+    };
+    for (const i of [1, 2, 3]) await call(i);
+    auth.user = await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } });
+    const { default: SessionPage } = await import("@/app/app/sessions/[id]/page");
+    const page = async () => unescape(render(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
+    const three = await page();
+    expect(three).toContain('data-live-calls="3"');
+    expect(three).not.toContain(`data-panel="live-calls-${j.sessionId}"`);
+    await call(4);
+    const four = await page();
+    expect(four).toContain(`data-panel="live-calls-${j.sessionId}"`);
+    const panel = four.slice(four.indexOf(`data-panel="live-calls-${j.sessionId}"`));
+    expect(panel).toContain("max-height:min(27rem, 60vh)");
+    expect(panel).toContain('data-live-calls="4" data-live-calls-scroll="4"');
+    const inside = panel.slice(0, panel.indexOf("data-panel-grip"));
+    expect(inside.match(/data-call-row=""/g)).toHaveLength(4);
+    expect(inside.match(/Paid \$15\.50/g)).toHaveLength(4);
+    // Still inside the Live call part (#part-live links land on it).
+    expect(four.indexOf('id="part-live"')).toBeLessThan(four.indexOf(`data-panel="live-calls-${j.sessionId}"`));
   });
 });

@@ -2884,3 +2884,21 @@ chargeback fee" twice: two different calls (Oct 27, a few minutes apart), named 
   dispute arriving again never clear or reopen anything, a new dispute does; a 1st chargeback's Approve with a chargeback opening during it; two reversed calls'
   lines (date and time, the developer's zone, no marker), a receipt name and a covered item. Updated for the wording: `batch3`, `batch24`, `batch25`,
   `specific-lines-177`.
+## §179 The tester's Live call list in a scroll panel past 3 calls (owner, Nov 4)
+"Scroll box needed for different charges." On the tester's session page, "Live call: N done" lists every call with its payment box (the call's day and length
+with its tag, "Paid $15.50 ($31.00/h): you get $12.40 …", "Charged automatically 7 days after the call.", the team's decision, "… can be paid more, up to …"), and
+with several calls it ran very long.
+- **The panel.** More than 3 calls (the done calls not yet paid and the paid ones, counted together): the list sits in the §152 draggable panel (`PanelWhen`,
+  `live-calls-<sessionId>`), like past calls: the content scrolls inside, the grip drags it shorter or taller (up to 60% of the screen), and the dragged height is
+  kept by the session's id through live redraws and reloads (this tab). It starts at `LIST_PANEL.liveTester` = min(27rem, 60vh), about 3 calls with their payment
+  lines (the developer's past calls' height, which also carry payment boxes). 3 or fewer: a plain list, as before. The "Live call" heading, its rate line and the
+  calls-left warning stay above it, outside the panel; each row keeps its hooks (`data-call-row`, `data-call-length`, `data-auto-charge`; the list itself
+  `data-live-calls="N"`, plus `data-live-calls-scroll="N"` when it is a panel) and the part keeps `#part-live`.
+- **Developer side.** The tester row's "Calls (N)" (each call with its payments, `part-pays-<callId>`, and its Pay more) was already a panel past 3 (`past-calls-<contractId>`,
+  §152), and each call's payments a panel past 4: no change.
+- **Jumps inside a panel.** A link's jump (`jumpTo`: `scrollIntoView`) already scrolls the panel and the page to the target. `bringInView` (a notice after a press,
+  e.g. a dispute's error under a call in this panel, or a Pay more's in the developer's Calls (N)) moved only the page, so a notice scrolled out of its panel stayed
+  hidden: it now scrolls the panel to it first (the least scrolling, at once), then the page as before.
+- **Tests.** `tests/batch35-list-panels.test.ts` §179 (the source and height; `bringInView` inside a panel and outside one; the rendered tester page: 3 paid calls
+  plain, a 4th makes the panel with all 4 rows and their "Paid $15.50" inside). `batch20`, `batch35-sent-panels`, `batch35-small-ui`, `batch35-leave-stops`,
+  `batch35-tester-folds`, `batch16-tester-bugs`, `batch27` follow.
