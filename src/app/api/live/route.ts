@@ -11,6 +11,7 @@ import { renderTimes } from "@/lib/tz";
 import { ALERTS_OFF_KINDS, testerChanges } from "@/lib/server/testerGate";
 import { ownTest } from "@/lib/server/tests";
 import { inviteClosedLine } from "@/lib/server/invites";
+import { DROP_KINDS } from "@/lib/requestDrop";
 
 /** (Owner, Oct 28, batch 16 section 32) "Your invite to “Harbor Run” was closed." for each invite of theirs closed since `since` (never why). */
 async function invitesClosedSince(userId: string, since: Date, testId?: string) {
@@ -83,6 +84,8 @@ export async function GET(req: Request) {
     // (Owner, batch 14 section 4; batch 20 section 25) The developer's quiet lines (a tester's Switch, a key reported, a rating by a tester whose part had ended) are
     // live-box lines only: marked, so an open stop box under a button never takes them in (it lists only what stops a press).
     if (kind === "test") lines.forEach((l, i) => { if ((DEV_QUIET_KINDS as readonly string[]).includes(shown[i].kind)) Object.assign(l, { quiet: true }); });
+    // (Owner, Nov 4, §184) The tester's own requests dropped by a booking: a quiet live-box line too.
+    if (kind === "session") lines.forEach((l, i) => { if (shown[i].kind === DROP_KINDS.devQuiet) Object.assign(l, { quiet: true }); });
     // (Batch 15 section 26) A tester with Alerts Off: everything but their contract's changes shows greyed (it won't stop a press).
     if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!ALERTS_OFF_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
     return ok({ changes: [...lines, ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });

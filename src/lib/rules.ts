@@ -605,6 +605,8 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
  */
 export const DEV_STOP_KINDS = [
   ...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "withdrew_req", "declined_req",
+  // (Owner, Nov 4, §184) A request with a tester dropped because the tester got booked elsewhere at that time ("Ana Silva's request for … closed: she is no longer free at that time").
+  "req_closed",
   // (NEWEST+3) the full set: applications, disputes, invite answers, admin decisions, listing info (F). (Batch 14 section 4: a tester's Switch / Keep no longer stops.)
   "applied", "dispute", "invite", "admin", "info", "full",
   // (Batch 8) "Your subscription ended." (or the free launch ended): a page open at that moment stops once.
@@ -616,7 +618,8 @@ export const DEV_STOP_KINDS = [
 /** (Owner, Oct 29, batch 14) Kinds the developer's live box shows quietly (never a stop-once reason, never in the under-button notice, no bell). */
 // (Owner, Oct 28, batch 20 section 24) "rated": a tester whose part had ended rated you: a live-box line only, never a stop.
 // (Batch 30 §2) "sentpaid": a tester sent an updated version of a piece already paid the most it can be: a quiet line only (nothing more can be paid).
-export const DEV_QUIET_KINDS = ["terms", "key", "rated", "sentpaid"] as const;
+// (Owner, Nov 4, §184) "req_dropped": the developer's own requests dropped because they got a call at that time (their booking, or one they were told about).
+export const DEV_QUIET_KINDS = ["terms", "key", "rated", "sentpaid", "req_dropped"] as const;
 /** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
 export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 
@@ -643,6 +646,9 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
   lowered: "(batch 15 section 40) the developer's own Lower the length (reason E from another tab)",
   sentpaid: "(batch 30 §2) a tester updated a piece already paid the most it can be: one quiet line in the live box (DEV_QUIET_KINDS), never a stop; nothing more can be paid",
+  req_dropped: "(Owner, Nov 4, §184) the developer's own call requests dropped because they got a call at that time: one quiet line in the live box (DEV_QUIET_KINDS), never a stop",
+  t_req_closed: "(§184) the tester's line about a request dropped because the developer got a call at that time: read by the tester's session page only",
+  t_req_dropped: "(§184) the tester's own quiet line about her requests dropped by a call she got: read by the tester's session page only",
 };
 
 /** (Owner, NEWEST+3) A declined manual Pay, as the tester reads it (never "failed", "declined" or "card"). */
@@ -657,7 +663,8 @@ export const RENAMED = "renamed";
 // (Batch 15 section 24) renamedNote is gone: a rename never leaves a note under a press; it is recorded in the contract changes.
 
 /** The test events a tester's page reads directly; their other reasons come from their own contract's records. */
-export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open", "listing_save"] as const;
+// (Owner, Nov 4, §184) "t_req_closed" / "t_req_dropped": the tester's lines about her session's requests dropped when a call was booked.
+export const TESTER_EVENT_KINDS = ["info", "renamed", "full", "spot_open", "listing_save", "t_req_closed", "t_req_dropped"] as const;
 /** Every other recorded event kind, and why a tester never sees it as such (or sees it another way). */
 export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   payment: "the developer's own payments (batch 11: a chargeback reversed in their favour) are never shown to testers",
@@ -693,6 +700,8 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   resumed: "the paused banner goes away",
   subscription: "the developer's own subscription: testers never see it",
   sentpaid: "(batch 30 §2) the tester's own update of a paid piece (reason E from another tab)",
+  req_closed: "(Owner, Nov 4, §184) the developer's line about a dropped request; the tester reads her own (t_req_closed / t_req_dropped)",
+  req_dropped: "(§184) the developer's own quiet line; the tester reads her own (t_req_closed / t_req_dropped)",
 };
 export function devStopOnce(events: TestEventLike[], seenAt: Date, confirmed: boolean) {
   return stopOnce(events, seenAt, confirmed, DEV_STOP_KINDS);

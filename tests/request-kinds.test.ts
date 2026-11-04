@@ -117,7 +117,9 @@ describe("clash checks", () => {
     expect((await sact(sessionId, "request-time", tester.cookie, { times: [atHours(120)], minutes: 5 })).body.error).toMatchObject({ code: "bad_minutes", message: "A live call lasts from 10 to 180 minutes." });
   });
 
-  it("accepting: a clash with the developer's call with another tester → the tester sees only 'This time is no longer free.'", async () => {
+  // (Owner, Nov 4, §184) The developer's booking with Ana drops her overlapping request to Ben at once: his Accept is the single "already closed" refusal, still
+  // never naming who the call is with (it read "This time is no longer free." while the request stayed open).
+  it("accepting: a clash with the developer's call with another tester → the tester sees only that the developer is no longer free", async () => {
     const { dev, testId } = await setup();
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Carter", "he");
@@ -127,7 +129,7 @@ describe("clash checks", () => {
     const ra = await pending(a.sessionId, "developer");
     const rb = await pending(b.sessionId, "developer");
     await sact(a.sessionId, "answer-request", a.tester.cookie, { requestId: ra.id, action: "accept" });
-    expect((await sact(b.sessionId, "answer-request", b.tester.cookie, { requestId: rb.id, action: "accept" })).body.error.message).toBe("This time is no longer free.");
+    expect((await sact(b.sessionId, "answer-request", b.tester.cookie, { requestId: rb.id, action: "accept" })).body.error.message).toBe("This request closed: Nora Lane is no longer free at that time.");
   });
 
   it("weekly: any clashing week refuses the whole request and names the week", async () => {

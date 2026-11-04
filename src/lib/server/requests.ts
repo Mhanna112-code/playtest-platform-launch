@@ -26,6 +26,7 @@ import { CALL_ACTS } from "./live";
 import { clashNotes, localFmt } from "@/lib/callClash";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { dateZone } from "./dateZone";
+import { DROP_BOTH, DROP_DEV_BUSY, DROP_TESTER_BUSY, dropLine, dropReasonFor, isDropReason } from "@/lib/requestDrop";
 
 /** (Batch 15 section 34) The calls a request books if accepted: the most of any one row (a "choose one" row books 1; a set books all of its calls, up to the end). */
 const callsIfAccepted = (rows: CallRow[], end: Date | null) => Math.max(1, ...rows.map((r) => occurrences(r, end).length));
@@ -47,6 +48,8 @@ export const pageRows = (r: { rows?: unknown; times: Date[]; startsAt: Date; wee
 // The developer requests with one or more ticked testers (the first tester to accept takes the whole request); the
 // developer never sets a price, and neither does the tester (the "Ask $" was removed; every call is at the contract rate). Limit: 3 items per tester per test (both sides' pending requests and booked calls; a daily/weekly set = 1). Clash checks:
 // sending refuses overlaps with calls/requests between the same two; accepting refuses overlaps with anyone's calls.
+// (Owner, Nov 4, §184) And the moment a call is booked (any path: Accept, auto-match, the Forever top-up; all through bookAt), every other waiting request of
+// either person in it that overlaps it is dropped in the same transaction (dropOverlapping): an Accept on one afterwards is a single "already closed" refusal.
 
 type Side = "developer" | "tester";
 type U = { id: string; email: string; name: string; pronoun?: string };
@@ -80,9 +83,10 @@ export const devRateLabel = (rateCents: number | null, contractRate: number | nu
  * (Batch 26 section 10) A waiting call request that is no longer waiting, as its row says it live on an open page: "Closed: the tester finished their part",
  * "Withdrawn", "Declined", "Booked", or the taken line. "" while it waits.
  */
-export function requestGoneLine(r: { status: string; closedReason: string }, /** (§162) the tester's: "the tester finished her part" */ testerPronoun?: string | null) {
+export function requestGoneLine(r: { status: string; closedReason: string }, /** (§162) the tester's: "the tester finished her part" */ testerPronoun?: string | null,
+  /** (Owner, Nov 4, §184) the reader's side and the request's other person: a dropped request reads "Closed: fbbb is no longer free at that time" */ view?: { side: Side; other: string }) {
   if (r.status === "pending") return "";
-  const reason = r.closedReason === FINISHED_PART_REASON ? finishedPartReason(testerPronoun) : r.closedReason;
+  const reason = r.closedReason === FINISHED_PART_REASON ? finishedPartReason(testerPronoun) : view && isDropReason(r.closedReason) ? dropReasonFor(r.closedReason, view.side, view.other) : r.closedReason;
   if (r.status === "closed") return `Closed${reason ? `: ${reason}` : ""}`;
   if (r.status === "taken") return r.closedReason || "Taken";
   return r.status === "booked" ? "Booked" : r.status === "withdrawn" ? "Withdrawn" : r.status === "declined" ? "Declined" : "Closed";
@@ -235,10 +239,18 @@ async function createRequest({ data }: { data: Prisma.CallRequestUncheckedCreate
   });
 }
 
-/** Book one call at this time between the two, at the agreed rate. */
-async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null, byDeveloper = false, quiet = false) {
+/**
+ * Book one call at this time between the two, at the agreed rate.
+ * (Owner, Nov 4, §184) In the same transaction, every OTHER waiting request of either person that overlaps the call is dropped (`dropOverlapping`). `except`: the
+ * request this booking answers (an auto-match's, still waiting here) and its batch (the other copies close as taken, `closeBatch`). Each person's bookings take
+ * that person's lock first, so two bookings at once (on any tests) run one after the other and the second one's drop sees the first one's call and requests.
+ */
+async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null, byDeveloper = false, quiet = false, except: DropExcept = {}) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: true, tester: true } });
   return db.$transaction(async (tx) => {
+    // (Owner, Nov 4, §184) The two people's locks first, always in the same order, then the test's: two bookings sharing a person wait for each other before
+    // either holds a test (the drop writes lines on other tests, so holding a test while waiting for a person could deadlock).
+    for (const who of [...new Set([c.test.developerId, c.testerId])].sort()) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"calls:" + who}))`;
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     await assertWorkOpen(tx, c.testId);
     const fresh = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
@@ -246,8 +258,60 @@ async function bookAt(contractId: string, startsAt: Date, minutes: number, rateC
     const slot = await tx.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
     const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
     if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${T(startsAt)}` : `${displayName(c.tester)} booked a call for ${T(startsAt)}`, false, {}, contractId);
+    await dropOverlapping(tx, { startsAt, minutes, people: [c.test.developerId, c.testerId] }, except);
     return call;
   });
+}
+
+type DropExcept = { id?: string; batchId?: string };
+/**
+ * (Owner, Nov 4, §184) A call was just booked (inside its transaction): every other WAITING call request that involves either person in it (as the developer or as
+ * the tester, sent by either side, on any test) and has a time overlapping the call is dropped. A single time (or a daily / weekly set: accepting it would refuse
+ * the whole set) closes with a reason saying which of its two people is no longer free (never who the call is with); a "choose one" request loses only the
+ * overlapping times, closing when none is left. Each of its two people gets one line on that request's test: the one with the call a quiet live-box line (their
+ * booking, or the booking they were told about); the other one a Call changes line ("Ana Silva's request for … closed: she is no longer free at that time").
+ * Requests between the same two people are dropped too (they would be refused anyway).
+ */
+async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date; minutes: number; people: string[] }, except: DropExcept) {
+  const people = [...new Set(b.people)];
+  // Every working session either person is in, on either side (an account can be a developer and a tester).
+  const cons = new Map((await tx.contract.findMany({ where: { status: "working", OR: [{ testerId: { in: people } }, { test: { developerId: { in: people } } }] }, include: { tester: true, test: { include: { developer: true } } } })).map((c) => [c.id, c]));
+  const reqs = cons.size
+    ? await tx.callRequest.findMany({
+        where: { contractId: { in: [...cons.keys()] }, status: "pending", ...(except.id ? { id: { not: except.id } } : {}), ...(except.batchId ? { NOT: { batchId: except.batchId } } : {}) },
+        orderBy: { createdAt: "asc" },
+      })
+    : [];
+  const ends = new Map<string, Date | null>();
+  const now = new Date();
+  for (const r of reqs) {
+    const con = cons.get(r.contractId)!;
+    if (!ends.has(r.testId)) ends.set(r.testId, await workEndOf(tx, r.testId));
+    const end = ends.get(r.testId) ?? null;
+    const rows = rowsOf(r);
+    const hit = rows.filter((x) => occurrences(x, end).some((t) => overlaps(t, r.minutes, b.startsAt, b.minutes)));
+    if (!hit.length) continue;
+    const kept = rows.filter((x) => !hit.includes(x));
+    const dev = con.test.developer, tester = con.tester;
+    const devBusy = people.includes(dev.id), testerBusy = people.includes(tester.id);
+    const reason = devBusy && testerBusy ? DROP_BOTH : devBusy ? DROP_DEV_BUSY : DROP_TESTER_BUSY;
+    const partial = rows.length > 1 && kept.length > 0;
+    if (partial) {
+      // The times left, stored as a request sent with only them would be (readKind).
+      const single = kept.length === 1 && kept[0].repeat !== "once" && kept[0].count > 0 ? kept[0] : null;
+      const done = await tx.callRequest.updateMany({ where: { id: r.id, status: "pending" }, data: { rows: toJson(kept) as Prisma.InputJsonValue, times: kept.map((x) => x.startsAt), startsAt: kept[0].startsAt, weeks: single?.count ?? 0, repeat: single?.repeat ?? "" } });
+      if (!done.count) continue;
+    } else {
+      const done = await tx.callRequest.updateMany({ where: { id: r.id, status: "pending" }, data: { status: "closed", closedReason: reason, decidedAt: now } });
+      if (!done.count) continue;
+    }
+    const when = partial ? andList(hit.map((x) => T(x.startsAt))) : T(r.startsAt);
+    // The developer's line and the tester's (both on the request's test, for its contract): each names the request's other person, with their pronoun (§162).
+    const devText = dropLine({ reason, side: "developer", fromReader: r.fromSide === "developer", other: displayName(tester), otherPronoun: tester.pronoun, when, partial });
+    const testerText = dropLine({ reason, side: "tester", fromReader: r.fromSide === "tester", other: displayName(dev), otherPronoun: dev.pronoun, when, partial });
+    await recordEvent(tx, r.testId, devBusy ? "req_dropped" : "req_closed", `${devText}`, false, {}, r.contractId);
+    await recordEvent(tx, r.testId, testerBusy ? "t_req_dropped" : "t_req_closed", `${testerText}`, false, {}, r.contractId);
+  }
 }
 
 /** One request = one call (or one weekly run): once a copy of a developer batch books, the other copies close. */
@@ -265,6 +329,9 @@ export async function closeRequests(where: { contractIds?: string[] }, reason: s
 
 const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; fromSide: string; startsAt: Date }, otherName: string, mine: boolean) => {
   if (r.status === "taken") return `${r.closedReason}.`;
+  // (Owner, Nov 4, §184) Dropped when a call was booked: "This request closed: fbbb is no longer free at that time." (never with whom), or the reader's own
+  // "… you have another call at that time." The reader's side: the request's sender when it's theirs.
+  if (r.status === "closed" && isDropReason(r.closedReason)) return `This request closed: ${dropReasonFor(r.closedReason, (mine ? r.fromSide : r.fromSide === "developer" ? "tester" : "developer") as Side, otherName)}.`;
   if (r.status === "withdrawn") return mine ? "You already withdrew this request." : `${otherName} withdrew this request at ${fmtTime(r.updatedAt)}.`;
   if (r.status === "declined") return mine ? `${otherName} declined this request at ${fmtTime(r.updatedAt)}.` : "You already declined this request.";
   // (Owner, Nov 3, §157) Only the side that didn't ask books a request: booked when it isn't yours means your other tab's Accept.
@@ -357,7 +424,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
         if ((await bookedTimes(c.id)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("developer", displayName(c.tester)));
         await checkCeiling(c.id, bookRate(c.test, c), match.minutes, 1, displayName(c.tester));
-        const call = await bookAt(c.id, hit, match.minutes, bookRate(c.test, c), null, true);
+        const call = await bookAt(c.id, hit, match.minutes, bookRate(c.test, c), null, true, false, { id: match.id }); // (Owner, Nov 4, §184) its own match is booked below, never dropped
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
         const line = `Booked: you both picked ${T(hit)}`;
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
@@ -431,7 +498,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       if (clash.length) throw new HttpError(409, "clash", clash[0]);
       if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("tester", displayName(c.tester)));
       await checkCeiling(contractId, bookRate(c.test, c), m.minutes, 1, devName);
-      const call = await bookAt(contractId, hit, m.minutes, bookRate(c.test, c));
+      const call = await bookAt(contractId, hit, m.minutes, bookRate(c.test, c), null, false, false, { id: m.id, batchId: m.batchId }); // (Owner, Nov 4, §184) its batch closes as taken below
       await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
       await closeBatch(m.batchId, m.id);
       const line = `Booked: you both picked ${T(hit)}`;
@@ -474,7 +541,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: "its time passed" } });
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
   // (Batch 16 section 21) Answered or withdrawn in another tab: the developer's press stops once naming it, then it's already done.
-  if (fresh.status !== "pending" && side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
+  // (Owner, Nov 4, §184) A request dropped when a call was booked: refused at once (a single refusal), never a stop first.
+  if (fresh.status !== "pending" && side === "developer" && !(fresh.status === "closed" && isDropReason(fresh.closedReason))) await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
   // (Batch 35 §79) Accept / Decline never stops for the line about this request itself (the developer's: the tester's "requested …" on this contract).
@@ -530,7 +598,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       // A repeating pick is one CallSet (it counts as 1 of the 3 booked times); Forever keeps the next 4 ahead.
       const set = row.repeat === "once" ? null : await db.callSet.create({ data: { testId: c.testId, contractId, repeat: row.repeat, count: row.count, minutes: r.minutes, rateCents: rate, nextAt: new Date(row.startsAt.getTime() + times.length * stepMs(row.repeat)) } });
       for (const t of times) {
-        const call = await bookAt(contractId, t, r.minutes, rate, set?.id ?? null, side === "developer");
+        const call = await bookAt(contractId, t, r.minutes, rate, set?.id ?? null, side === "developer", false, { id: r.id, batchId: r.batchId }); // (Owner, Nov 4, §184) not this request, nor its batch (taken)
         first = first ?? call;
       }
     } catch (e) {
