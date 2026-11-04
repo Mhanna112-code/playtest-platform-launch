@@ -10,6 +10,7 @@ import { type BankAction } from "@/lib/bankConfirm";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, PAY_TICK_CENTS } from "@/lib/rules";
 import { ALL_BACK, CONFIRM_ALL, allConfirmedLine, allWaitingLine, confirmAllLabel } from "@/lib/confirmAllText";
 import { refusalLine } from "@/lib/pressLabels";
+import { useLoadTime } from "@/components/KeepLoadTime";
 
 /** What the server says Confirm all would cover now (src/lib/server/confirmAll.ts confirmAllState). */
 export type ConfirmAllProps = { ids: string[]; totalCents: number; leftOut: string | null; open: { id: string; cents: number; n: number } | null; /** (§159) the page's render time: each item's own stops count from it */ seenAt?: string };
@@ -20,7 +21,9 @@ export type ConfirmAllProps = { ids: string[]; totalCents: number; leftOut: stri
  * when the page showed other payments or another total; the second press goes ahead. A renewal keeps its own Confirm (the small line says so). While a Confirm all
  * check is open (another tab, or one left open), the box says so, with "Cancel this check".
  */
-export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt = "" }: ConfirmAllProps) {
+export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt: rendered = "" }: ConfirmAllProps) {
+  // (§176) On the dashboard: each item's stops count from its first load, never a redraw's render time (Payments: unchanged).
+  const seenAt = useLoadTime(rendered);
   const bank = useBankCheck();
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");

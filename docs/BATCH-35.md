@@ -2651,3 +2651,22 @@ Owner: "Ticking All in Alerts doesn't tick everything, and removing one while Al
   replaced, paid on another check; B5: cancelled, and already approved; B6 a and b: cancelled, and already approved (recorded once; refunded for a win), the
   reservation; B6 c: every change in one stop, then the new total paid; C: the Terms). Updated: `batch35-bank-notice` (another tester's ticked-off line isn't a
   line, this tester's is), `batch35-bank-peek` (the peek sends `pi`), `batch19` (the Terms' headings).
+
+## §176 The dashboard's Confirm with your bank stops once for the team's decision after a redraw (owner bug, Nov 4)
+- **Seen live (17:49-17:50 UTC).** fbbb's test excerpt, Nina Park; Alerts ticked off: payments, work, leaving, admin. A $5.00 charge made while away waited on
+  Nina's written answers. The owner pressed Confirm with your bank on the dashboard (17:34:50), cancelled that check (17:49:53); at 17:49:55 the team decided
+  Nina's call dispute ("The team decided Nina Park's dispute: raised the pay to $20.50 ($5.00 more)", Nina's contract) and its $5.00 charge on the call was
+  made (17:49:56). The second Confirm press (17:50:15) opened the bank's check with no stop box, though §159 rule 1 (kept by §171 item 7, `awayCharge`) says
+  the team's decision about that same tester always stops it once.
+- **Cause.** Not the gate: `confirmStart` runs the same `devGate` (`payPressOf` + `awayCharge`) on every press that sends a seen marker, a check opened before
+  included, and on the real rows it stops naming the decision (forced) for any seen time before 17:49:55. The seen marker was the problem: the dashboard
+  passed its server render time (`now`) as `seenAt`, and the box redraws on its own (`AutoRefresh` "bank=1": the decision's new charge row changed `bankTopV`;
+  "fresh=dashboard" too), so the press after the redraw sent a time after the decision. The dashboard has no top box or pill (and no `PageLoaded`), so the
+  decision line was never shown there: §90's "an update the page has shown counts as seen" didn't apply, it was a bug.
+- **Fix.** The dashboard's bank box keeps its first load's time across redraws (`components/KeepLoadTime.tsx`: the first render's time in state, given to the
+  box's presses through context; `BankToConfirm` wraps the box). Confirm with your bank (`BankWaiting`) and Confirm all (`ConfirmAll`) under it send the earlier
+  of that and the render time (batch 30's rule for pages whose redraws show no change lines); a row that appears after the load uses the same time; going back
+  to the dashboard is a new load. The test page and Payments (no wrapper) are unchanged. A press there may now also stop once for a line the box's own new row
+  stands for (a new charge's payment line, when Payments isn't ticked off): the box shows the row, not the line.
+- **Tests.** `tests/batch35-dash-confirm-decision.test.ts` (the redraw's time goes ahead, the first load's stops once naming the decision, forced, and the
+  second press goes ahead; another tester's charge follows the Decisions tick; Confirm all stops for it too; the wrapper and its readers).
