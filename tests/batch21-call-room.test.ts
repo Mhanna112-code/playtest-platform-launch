@@ -231,7 +231,7 @@ describe("batch 21 section 4: strict networks", () => {
     expect(c).toMatchObject({ status: "cancelled", cancelledBy: "system", cancelNote: R.COULD_NOT_CONNECT, measuredMinutes: null });
     expect(R.COULD_NOT_CONNECT).toBe("It couldn't connect, so the call was cancelled.");
     expect(M.callOverBadge({ ...c, review: null }, { developer: "Nora", tester: "Ana" }, "tester", (d) => d.toISOString(), 0, null).label).toBe("Couldn't connect");
-    expect(M.STRICT_NETWORK_LINE).toBe("Couldn't connect directly (a strict network?). Try another network, or reschedule.");
-    expect(src("app/app/calls/[id]/CallRoom.tsx")).toContain('s === "failed" ? STRICT_NETWORK_LINE');
+    expect(M.CANT_CONNECT_LINE).toBe("The call can't connect."); // (Owner, Nov 3, batch 35 §163) the owner's wording
+    expect(M.roomStatusLine({ setup: "ready", connection: "failed", otherHere: true, otherLeft: false, stuck: false, otherName: "Ana" })).toBe(M.CANT_CONNECT_LINE);
   });
 });

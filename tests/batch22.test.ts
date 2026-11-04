@@ -168,7 +168,7 @@ describe("batch 22 section 4: the admin's test timeline speaks about people", ()
     expect(texts).toContain(`${nora}'s tests are running again`);
     expect(texts.filter((t) => /disputed/.test(t))).toEqual([`${ana} disputed the pay for her written answers:`]);
     expect(rows.find((r) => /disputed/.test(r.text))?.em).toBe("I answered every question in full.");
-    expect(texts.filter((t) => /decided/.test(t))).toEqual([`${a.user.email} decided ${ana}'s dispute: kept the pay at $5.00`]);
+    expect(texts.filter((t) => /decided/.test(t))).toEqual([`${a.user.email} decided ${ana}'s dispute: kept the pay at $5.00, which was already paid: nothing more was charged`]);
     expect(texts.some((t) => /^You |^Your /.test(t))).toBe(false);
     expect(src("app/admin/PagedList.tsx")).toContain("{t.em && <ReasonQuote text={t.em} className=\"mt-0.5\" />}"); // (batch 35 §43) the reason in the quoted box
   });

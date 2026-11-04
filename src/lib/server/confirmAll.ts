@@ -1,6 +1,6 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
-import { money } from "@/lib/format";
+import { fmtTimeIn, money } from "@/lib/format";
 import { NO_CHECK_WAITING, OVER_PAY_TICK_LINE, PAY_TICK_CENTS } from "@/lib/rules";
 import * as T from "@/lib/confirmAllText";
 import { HttpError } from "./http";
@@ -146,8 +146,9 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
   if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
   const now = new Date();
   const waiting = (await confirm.waitingConfirmation(dev.id, undefined, now)).filter(inAll);
-  await stopIfChanged(waiting, body, now);
-  if (!waiting.length) throw new HttpError(409, "nothing", T.NOTHING_TO_CONFIRM);
+  // (Owner, Nov 3, batch 35 §163) Nothing left to confirm is refused on the first press: a "what's waiting changed" stop could only be followed by this refusal.
+  if (!waiting.length) throw new HttpError(409, "nothing", await nothingLeftLine(dev.id, body));
+  await stopIfChanged(waiting, body, now, dev.id);
   // (Owner, Nov 3) Over $200 in all: only with the tick "I confirm this payment is over $200." (as Pay's).
   if (sum(waiting) > PAY_TICK_CENTS && body.over200 !== true) throw new HttpError(400, "needs_tick", `Tick “${OVER_PAY_TICK_LINE}” to pay.`);
   const one = await claim(dev.id, waiting, body);
@@ -155,7 +156,8 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
     if (await openAll(dev.id)) throw new HttpError(409, "busy", T.ALL_BUSY);
     // Changed between the list and the claim (a single Confirm finished, a date passed): stops once on what's waiting now.
     const fresh = (await confirm.waitingConfirmation(dev.id, undefined, new Date())).filter(inAll);
-    await stopIfChanged(fresh, { seenTotalCents: sum(waiting), seenIds: waiting.map((p) => p.id) }, new Date());
+    if (!fresh.length) throw new HttpError(409, "nothing", await nothingLeftLine(dev.id, { ...body, seenIds: waiting.map((p) => p.id) })); // (§163) nothing left: refused, never a stop
+    await stopIfChanged(fresh, { seenTotalCents: sum(waiting), seenIds: waiting.map((p) => p.id), tab: body.tab }, new Date(), dev.id);
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: "What's waiting for your bank changed meanwhile.", at: new Date() }], totalCents: sum(fresh), ids: fresh.map((p) => p.id) });
   }
   // Each charge's own check is cancelled at Stripe FIRST, so an old bank page can't still complete it while the one payment goes through.
@@ -209,7 +211,23 @@ export async function confirmAllPress(dev: { id: string }, body: Seen & Record<s
 }
 
 /** (Stop once) The page showed other payments, or another total: each change named, oldest first; the next press goes ahead on what's waiting now. */
-async function stopIfChanged(now: Payment[], body: Seen, at: Date) {
+/**
+ * (Owner, Nov 4, batch 35 §163) Nothing the page showed waits any more: ONE refusal. Every one confirmed by this developer in another tab: "You already confirmed
+ * these payments in another tab at 3:20 PM." ("this payment" for one); otherwise "There's nothing waiting for your bank to confirm."
+ */
+async function nothingLeftLine(devId: string, body: Seen & Record<string, unknown>) {
+  const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : [];
+  const tab = typeof body.tab === "string" ? body.tab : "";
+  if (!seenIds.length || !tab) return T.NOTHING_TO_CONFIRM;
+  const { ownOtherTabAction } = await import("./live");
+  const mine = await Promise.all(seenIds.map((id) => ownOtherTabAction(devId, `pay:${id}`, tab, ["pay", "pay-more"])));
+  if (mine.some((m) => !m)) return T.NOTHING_TO_CONFIRM;
+  const last = new Date(Math.max(...mine.map((m) => m!.at.getTime())));
+  const tz = (await db.user.findUnique({ where: { id: devId }, select: { timeZone: true } }))?.timeZone ?? null;
+  return `You already confirmed ${seenIds.length === 1 ? "this payment" : "these payments"} in another tab at ${fmtTimeIn(last, tz)}.`;
+}
+
+async function stopIfChanged(now: Payment[], body: Seen & { tab?: unknown }, at: Date, devId = "") {
   const seen = typeof body.seenTotalCents === "number" ? body.seenTotalCents : null;
   const seenIds = Array.isArray(body.seenIds) ? (body.seenIds as unknown[]).map(String) : null;
   if (seen == null || !seenIds) return;
@@ -220,9 +238,13 @@ async function stopIfChanged(now: Payment[], body: Seen, at: Date) {
   for (const p of now.filter((x) => !seenIds.includes(x.id))) changes.push({ text: `Also waiting for your bank now: ${await nameOf(p)}`, at: p.createdAt });
   const gone = seenIds.filter((i) => !ids.includes(i));
   const rows = gone.length ? await db.payment.findMany({ where: { id: { in: gone } } }) : [];
+  const { ownOtherTabAction } = await import("./live");
   for (const id of gone) {
     const p = rows.find((x) => x.id === id) ?? null;
-    changes.push({ text: `${p ? await nameOf(p) : "A payment"}: ${await goneWhy(p)}`, at: p?.settledAt ?? at });
+    // (Owner, Nov 4, batch 35 §163) Confirmed by this developer in another tab: its own line ("You confirmed Ana Silva's $10.00 charge for her written answers with
+    // your bank in another tab"); the total drops and the second press pays the rest.
+    const mine = devId && p && typeof body.tab === "string" ? await ownOtherTabAction(devId, `pay:${id}`, body.tab, ["pay", "pay-more"]) : null;
+    changes.push({ text: mine ? `You ${mine.text} in another tab` : `${p ? await nameOf(p) : "A payment"}: ${await goneWhy(p)}`, at: p?.settledAt ?? at });
   }
   changes.sort((a, b) => a.at.getTime() - b.at.getTime());
   // (Owner, Nov 3) Over $200 now and the press had no tick: the line says so (the tick shows under the button).

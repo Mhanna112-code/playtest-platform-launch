@@ -255,7 +255,7 @@ describe("§159 rule 4: Charge / Let it go — a payment on that part and the te
     const loaded = seen(); await settle();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.written.id, amount: "10.00", tickedCents: 1000, seenAt: seen(), confirmed: true })).status).toBe(200);
     const r = await choose(w, "charge", { seenAt: loaded, loadedAt: loaded });
-    expect([r.status, r.body.error?.code, r.body.error?.message]).toEqual([409, "done", "Nora Lane paid $10.00 for this meanwhile."]);
+    expect([r.status, r.body.error?.code, r.body.error?.message]).toEqual([409, "done", "Nora Lane paid $10.00 for this meanwhile: you can dispute it if you think it should be more."]); // (batch 35 §163) one final refusal, with the way to more
   });
 
   it("the same-part rule itself: a paid line on the part being charged stops even with Alerts Off; one on another part doesn't (owedChange)", async () => {

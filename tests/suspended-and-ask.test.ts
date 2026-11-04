@@ -63,7 +63,7 @@ describe("a suspended developer keeps Cancel call, End early and Stop, with or w
   });
 });
 
-describe("no Ask $ on sends (owner, Oct 26): the Pay box starts at the listing; the Charge cap is the listing minus what was paid", () => {
+describe("no Ask $ on sends (owner, Oct 26): the Pay box starts at the listing; the Charge is the listing (batch 35 §163: none once the developer paid anything)", () => {
   async function sent() {
     const s = await setup();
     const j = await joined(s.testId);
@@ -84,9 +84,9 @@ describe("no Ask $ on sends (owner, Oct 26): the Pay box starts at the listing; 
     expect(await db.testEvent.count({ where: { testId, text: { contains: "asks" } } })).toBe(0);
   });
 
-  it("an old ask in the database is unused: the cap is the listing minus what was paid", async () => {
+  it("an old ask in the database is unused: the cap is the listing", async () => {
     expect(chargeAmount(1000, 0)).toBe(1000);
-    expect(chargeAmount(1000, 400)).toBe(600);
+    expect(chargeAmount(1000, 400)).toBe(0); // (batch 35 §163) replaces "the listing minus what was paid": nothing once the developer paid anything
     const { sessionId, tester, sub, testId } = await sent();
     await db.submission.update({ where: { id: sub.id }, data: { askedCents: 300, payBy: new Date(Date.now() - 1000) } }); // old data
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline) // Charge opens after Open until

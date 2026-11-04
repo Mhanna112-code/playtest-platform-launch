@@ -4,7 +4,7 @@ import { displayName, fmtDate, fmtDateTime, renderDateText, money, pronouns } fr
 import { pauseCountdownLine } from "@/lib/pause";
 import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
-import { NOT_LISTED, termsLine, testTitleOf } from "@/lib/rules";
+import { NOT_LISTED, decisionWhat, termsLine, testTitleOf } from "@/lib/rules";
 import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/limits";
 import { SUBSCRIPTION_ENDED, adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
@@ -244,8 +244,32 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
     const jump = e.kind === "suspended" && !p.deletedAt ? mineJump({ suspendedUserId: p.id }) : undefined;
     all.push({ id: `acct-${e.id}`, testId: "", href: profileHref(p), ...(jump ? { jump } : {}), date: e.createdAt, at: e.createdAt.toISOString(), title: p.email, dev: displayName({ ...p, deletedAt: null }), why, when: fmtDateTime(e.createdAt), parts: [{ t: displayName({ ...p, deletedAt: null }), href: profileHref(p) }, ...closeParts(e, p.email)] });
   }
+  // (Owner, Nov 3, batch 35 §163) Each dispute this admin decided, with what the decision did (Decide's own result line): it stays visible here once its row has
+  // left Open disputes. "Ana Silva (ana@…) · dispute decided by you: raised the pay to $10.00 ($3.00 more charged) · Nov 3, 3:10 PM"; it opens the dispute's row.
+  for (const d of await db.dispute.findMany({ where: { decidedById: adminId, status: "decided", decidedAt: { not: null } }, orderBy: { decidedAt: "desc" }, take: 500 })) {
+    const c = await db.contract.findUnique({ where: { id: d.contractId }, include: { tester: true } });
+    if (!c) continue;
+    const why = `dispute decided by you: ${await decidedResult(d)}`;
+    all.push({ id: `dispute-${d.id}`, testId: c.testId, href: `/admin?dispute=${d.id}#dispute-${d.id}`, date: d.decidedAt!, at: d.decidedAt!.toISOString(), title: c.title, dev: displayName(c.tester), why, when: fmtDateTime(d.decidedAt!), parts: [testLink({ id: c.testId, title: c.title }), " · ", ...person(c.tester), ` · ${why} · ${fmtDateTime(d.decidedAt!)}`] });
+  }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
   return slice(all, (r) => r.date, cursor);
+}
+
+/**
+ * (Owner, Nov 3, batch 35 §163) What a decided dispute did, as Decide's result said it: a raise "($3.00 more charged)", or "($3.00 more, not charged yet)" while its
+ * charge waits (a payment hold, the developer's bank, a declined card); otherwise the decision's own line on the test ("kept the pay at $12.00, which was already
+ * paid: nothing more was charged").
+ */
+async function decidedResult(d: { id: string; contractId: string; decidedCents: number | null; decidedAt: Date | null; submissionId: string | null; callId: string | null }) {
+  const row = await db.payment.findFirst({ where: { disputeId: d.id, kind: "dispute" }, orderBy: { createdAt: "desc" } });
+  if (row && row.amountCents > 0) return decisionWhat({ paidNowCents: 0, dueCents: row.amountCents, decidedCents: d.decidedCents ?? 0, rejected: false }, row.status === "charged" || row.status === "not_set_up" || !!row.settledAt);
+  const at = d.decidedAt?.getTime() ?? 0;
+  const events = await db.testEvent.findMany({ where: { contractId: d.contractId, kind: "admin", text: { startsWith: "The team decided" }, createdAt: { gte: new Date(at - 60_000), lte: new Date(at + 60_000) } } });
+  const ev = events.sort((a, b) => Math.abs(a.createdAt.getTime() - at) - Math.abs(b.createdAt.getTime() - at))[0];
+  if (ev) return ev.text.replace(/^The team decided [^:]*: /, "");
+  const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId ?? "none" } });
+  return decisionWhat({ paidNowCents: d.decidedCents ?? 0, dueCents: 0, decidedCents: d.decidedCents ?? 0, rejected: !!r?.rejected });
 }
 
 /** (Batch 17 §5) Name or email, any part, case-insensitive; ticks: a role group (Developer / Tester) and a state group (Suspended / On a hold / Deleted), each matching ANY ticked box. */

@@ -47,7 +47,7 @@ describe("Charge / Let it go at day 14", () => {
     const { tester, sessionId, sub, dev } = await waiting14();
     await cron();
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "8.00", tickedCents: 800, reason: "Fair for two short answers", confirmed: true });
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Nora Lane paid $8.00 for this meanwhile.");
+    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" })).body.error.message).toBe("Nora Lane paid $8.00 for this meanwhile: you can dispute it if you think it should be more.");
   });
 
   it("let it go closes it with nothing charged", async () => {
@@ -117,7 +117,7 @@ describe("charge amount and a second failure", () => {
   it("charge cap = listing minus what's already been paid for that part (no Ask $)", async () => {
     const R = await import("@/lib/rules");
     expect(R.chargeAmount(1000, 0)).toBe(1000);
-    expect(R.chargeAmount(1000, 400)).toBe(600);
+    expect(R.chargeAmount(1000, 400)).toBe(0); // (batch 35 §163) the developer paid something: no Charge (Dispute instead)
     expect(R.chargeAmount(1000, 1000)).toBe(0); // paid in full: no Charge / Let it go at all
     expect(R.chargeAmount(700, 1200)).toBe(0); // paid more than the listing: nothing left to charge
     expect(R.chargeAmount(null, 0)).toBe(0); // not in the contract

@@ -89,7 +89,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
 
       {/* 2. Your actions. */}
       <section className="card scroll-mt-24 space-y-3" id="mine" data-console-section="mine">
-        <p className="note">Tests you paused or stopped, or whose developer you suspended. Newest first.</p>
+        <p className="note">Tests you paused or stopped, or whose developer you suspended, and disputes you decided (with what the decision did). Newest first.</p>
         <PagedList kind="mine" title="Your actions" initial={rows(mine)} />
       </section>
 

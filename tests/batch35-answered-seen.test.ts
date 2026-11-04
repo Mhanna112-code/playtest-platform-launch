@@ -86,7 +86,7 @@ describe("batch 35 §86: answered changes never stop a later press", () => {
     await settle();
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped half the questions" })).status).toBe(200);
     const admin = await makeUser(); const u = await db.user.update({ where: { id: admin.user.id }, data: { isAdmin: true } });
-    expect(await decideDispute(u, d.id, { seenAt: loaded, total: "", load: "admin-a" })).toEqual({ extraCents: 0 });
+    expect(await decideDispute(u, d.id, { seenAt: loaded, total: "", load: "admin-a" })).toEqual({ extraCents: 0, line: "Done: kept the pay at $4.00, which was already paid: nothing more was charged." });
     const side = await db.dispute.findUniqueOrThrow({ where: { id: d.id } });
     await expect(stopForUnanswered(u.id, testId, "Another press", [{ item: d.id, text: "The developer added their side", at: side.devSideAt! }])).resolves.toBeUndefined();
     await expect(stopForUnanswered(u.id, testId, "Another press", [

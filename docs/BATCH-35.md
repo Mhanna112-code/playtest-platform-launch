@@ -2389,3 +2389,98 @@ tester's own sent answers (their question folds now hold the boxes, which a 12re
 - **Tests:** `tests/batch35-added-per-question.test.ts` (the folds, count and dates; old additions in the last fold; changed questions; the per-question add, its
   key and draft key; the general Add refused; the live line, bell, email and own line naming the question; reaching 10, the 11th refused from an older page and at
   the same moment; the note and the remaining count). `batch35-sent-locked` and the tests that added to written answers now add under a question.
+
+## §163 "The call can't connect."; one Decide wording; the admin sees Decide's result; Pay refused at once after the tester's choice; other-tab Confirms are own lines; no Charge once the developer paid (owner, Nov 3)
+
+- **The call room (`app/app/calls/[id]/CallRoom.tsx`, `lib/callMeasure.ts`).** When the browsers can't find any usable path (a strict network with no relay, or
+  a relay that can't be reached), Chrome never reaches "failed": the connection stays "new" or "connecting", and both people saw "Waiting for <name>…" next to
+  a black tile, as if the other hadn't joined.
+  - The owner's wording, replacing "Couldn't connect directly (a strict network?). Try another network, or reschedule.": **"The call can't connect."**
+    (`CANT_CONNECT_LINE`). It shows when the connection fails, and when both are in the room (the room's polls say the other person is here) and this
+    connection hasn't connected within 20 seconds (`CANT_CONNECT_MS`). Each fresh connection (the start, the other person coming back) gets its own 20
+    seconds. Connecting later clears it ("Connected").
+  - "Waiting for <name>…" shows only while the other person really isn't in the room; in the room but not connected yet reads "Connecting…". "<name> left
+    the call" and "<name> lost connection…" are as before. The status line is now made from the room's state (`roomStatusLine`).
+  - The other tile says "Connecting…" until media flows (the connection reached "connected"), not just because `ontrack` fired (which set the picture before
+    any media came, so the note was skipped). Leave, Rejoin and the fresh connection when either comes back are unchanged.
+  - (Owner-approved, Nov 4) A redraw of the call page no longer hangs up the call. The room's effect listed the `iceServers` array prop among its
+    dependencies, so any redraw that handed it a new array of the same servers (`router.refresh()`: `TimeZoneSync` refreshes once when the account's saved time
+    zone differs from the browser's, and a new account's is empty; a hot reload on the dev server) hung up and rejoined, and the other side rebuilt too (seen
+    about 10 seconds after connecting in a baseline run). The page's ICE servers are now held in a ref (`pageIce`); the effect re-runs only for a new call,
+    side, name or relay mode. The join's answer still supplies the servers it connects with (§135).
+- **One wording when the decision equals what's paid now (`rules.decisionWhat`, `payments.decideDispute`).** It read "raised the pay to $10.00, which was
+  already paid: nothing more was charged" after a Pay more, and "kept the pay at $12.00" when $12.00 was decided after §149's "paid more than your decision"
+  stop. Every decision that equals what's paid now (those two, and a blank box keeping the pay) now reads **"kept the pay at $12.00, which was already paid:
+  nothing more was charged"**: the developer's test page line ("The team decided Ana Silva's dispute: kept the pay at $12.00, which was already paid: nothing
+  more was charged"), the stop a later Pay or Pay more shows naming it, the admin's test timeline, both emails' lines and the admin's result. A raise that
+  charges is unchanged ("raised the pay to $10.00 ($3.00 more)"); a rejected piece kept at nothing still reads "kept the pay at $0.00 (rejected)". The tester's
+  own live line ("The team decided your dispute about your written answers: the pay stays at …" / "was raised to …") and the session page's "The team decided:
+  $12.00 in all" don't reuse this line and are unchanged.
+- **The admin sees the result, not just "Done." (`admin/DisputeDecision.tsx`, `rules.decideDoneLine`).** Decide's answer carries the server's result line and
+  the box shows it in place of "Done.": "Done: raised the pay to $10.00 ($3.00 more charged).", "Done: kept the pay at $12.00, which was already paid: nothing
+  more was charged.", or "Done: raised the pay to $10.00 ($3.00 more, not charged yet)." when the charge waits (a payment hold, the developer's bank, a declined
+  card). After the console loads again the row has left Open disputes; like the admin's other actions, the result stays in **Your actions**: "<test> · Ana
+  Silva (ana@…) · dispute decided by you: raised the pay to $10.00 ($3.00 more charged) · Nov 3, 3:10 PM", opening the dispute's row
+  (`/admin?dispute=<id>`). Read from the server's records (the decision's payment row and its line on the test), only for the admin who decided it.
+- **Pay on an old page after the tester's Charge or Let it go is refused on the FIRST press (`payments.review`).** The gate ran before those refusals, so with
+  the developer's Alerts letting the Charge line through the first press stopped once ("Since you opened this page: Ana Silva charged $10.00…") and the second
+  was refused ("Ana Silva already charged $10.00 for her written answers."). The tester's Charge, the tester's Let it go and the team's close-out are now
+  refused before the gate, as §159 item 12: a stop is never shown when its second press could only be refused. "Confirm … with your bank first." (a Charge
+  waiting for the bank) is still first.
+  - Audit of the other payment presses for the same pattern: **Confirm all** stopped once ("what's waiting changed") when nothing was waiting any more, and its
+    second press was refused "There's nothing waiting for your bank to confirm."; that is now the first press's refusal (also when the claim finds nothing
+    left). **Pay more**: its refusals that can't be fixed (team closed, closed for Pay more, a payment waiting for the bank) already come before the gate.
+    **Confirm with your bank**: every final refusal (confirmed, cancelled, ran out, paused, in Confirm all) comes before the gate.
+- **The developer's own press in another tab that settled the SAME thing is ONE refusal (owner, Nov 4; replaces batch 16 §21's "another tab's Pay on this
+  piece stops this press once, BEFORE it is refused as already done").** A stop is never shown when its second press could only be refused.
+  - **Pay** on a part this developer already settled in another tab is refused on the first press, naming the tab and the time (`live.ownOtherTabAction`, the
+    part's latest own Pay, Reject or Confirm): "You already paid $10.00 for Ana Silva's written answers in another tab at 3:20 PM.", "You already rejected Ana
+    Silva's written answers in another tab at 3:20 PM.", and after a Confirm with your bank there: "You already confirmed Ana Silva's $10.00 charge for her
+    written answers with your bank in another tab at 3:20 PM." From the same tab, or a part settled otherwise, the plain refusals as before ("You already paid
+    $10.00 for Ana Silva's written answers."). Every refusal of an already settled part now comes without the gate first.
+  - **Pay more** on that part still stops once ("You paid Ana Silva $10.00 for the written answers in another tab"), then goes ahead within what's left. More
+    than what's left before the most is refused with its usual line on the first press, never after a stop (Pay's over-the-cap refusal likewise).
+  - **Confirm with your bank** on a charge already confirmed in another tab: "You already confirmed this payment in another tab at 3:20 PM." (the plain "You
+    already confirmed this payment." from the same tab), on the start and on an old bank page's finish.
+  - **Confirm all** from an old tab covering a charge confirmed in another tab: it can still go ahead for the rest, so it stops once naming that item ("You
+    confirmed Ana Silva's $10.00 charge for her written answers with your bank in another tab", then "Confirm all now covers 1 payment: $30.00.") and the second
+    press pays the rest. Every item it covered confirmed in another tab: ONE refusal, "You already confirmed these payments in another tab at 3:20 PM." ("this
+    payment" for one).
+  - Unchanged: every other own action in another tab (another part, another charge, any other press) stops every press once, whatever the Alerts (§61/§67); a
+    Confirm in another tab feeds that too (above). Pay what you owe's §159 item 13 lines ("You already paid what you owe ($27.00) in another tab at 3:20 PM.")
+    were already single refusals.
+- **A Confirm with your bank or a Confirm all in ANOTHER tab is one of the developer's own other-tab lines (`actionText.logConfirmed`, the confirm and
+  confirm-all routes).** Every charge made while the developer was away that they confirm with their bank (a tester's Charge on written answers or a recording, a
+  call's charge, the team's decision, a Pay more, a retried chargeback; one by one, in Confirm all, or in Pay what you owe's one payment) writes ONE own line per
+  item: "You confirmed Ana Silva's $10.00 charge for her written answers with your bank in another tab" ("… for her live call", "You confirmed the team's $6.00
+  dispute decision on Ana Silva's written answers …", "You confirmed your $5.00 Pay more for …", "You confirmed your $10.00 payment again for …" for a retried
+  chargeback). The other tabs show it wherever a Pay made there shows: every developer press's stop box (own other-tab actions always stop once) and §160's blue
+  notice inside an open bank box; the tab that pressed never does. It touches its piece and answers it (§86) as a Pay does.
+  - Before: a call's charge wasn't logged at all (the route needed a written part), and the others read "You paid Ana Silva $10.00 for the written answers in
+    another tab", next to a second line for the same item, "Payment went through on Harbor Run: $10.00 to Ana Silva for the written answers" (in every tab,
+    the pressing one included). That second line is now left out for a charge the developer confirmed themselves on this test (`devPaymentChanges`), so each
+    item is one line. Confirm all lists one line per item, as Pay what you owe's one payment does.
+- **Charge and Let it go are gone once the developer paid anything on the part (`rules.chargeAmount`, `holds.chooseOutcome` / `claimChoice` /
+  `devPaidRefusal`).** Replaces the owner's Oct 26 rule that Charge offers "the listing minus what was paid": Charge offers the listing, and nothing once a
+  developer Pay or Pay more went through on that part. The tester's way to more is Dispute (within the dispute rules). A payment still at the bank or on its way
+  keeps "A payment for this is being confirmed right now."; a payment cancelled or declined that left nothing paid doesn't count (Charge as before, for the
+  full listing).
+  - The tester's page shows no Charge or Let it go on such a part and offers Dispute; the daily job never opens Charge for it, and no "Charge or let go" line,
+    "Pay now" line, email or To do item offers it (all read `chargeAmount`).
+  - A press from an older page, or at the same moment, gets ONE final refusal, decided under the test's row lock in `claimChoice` (and again before any stop):
+    "Nora Lane paid $6.00 for this meanwhile: you can dispute it if you think it should be more." ("paid $6.00 and $2.00 more" after a Pay more; paid in full:
+    "Nora Lane paid $10.00 for this meanwhile: you can dispute it …"). It replaces §159 item 4's stop-once for a developer payment on the part being charged and
+    §146/§159's "Charge stops once, the next press charges what's left" (a same-moment Pay that landed first read "This was already settled."). The team's
+    decision on her disputes still stops Charge once, where Charge still exists.
+  - The automatic charge of a listed call (batch 28 §21, the call's stand-in for Charge): it already runs only for calls with no developer Pay (any Pay makes the
+    call's review, and the sweep takes only calls without one), so it never tops up a call the developer paid. Its amount reads the same `chargeAmount`, so money
+    recorded on the call any other way now closes it with nothing more charged instead of charging the rest.
+- **Tests:** `tests/batch35-call-decide-lines.test.ts` (the line and its 20-second timer, failed, cleared on connect, "Waiting…" only while the other isn't
+  there, the tile's "Connecting…"; the one wording after a Pay more, after the §149 stop and for a blank box, with Pay more's stop naming it; the route's result
+  line and Your actions after the reload; Pay on an old page after a Charge and after a Let it go refused on the first press; Confirm
+  all with nothing waiting refused at once; a Confirm in tab B in tab A's open bank box and its next Pay's stop box, for written answers and a call, Confirm
+  all naming each item once, the other kinds' wording, nothing in the pressing tab; own other-tab Pay and Reject on the same part refused at once with the tab and time, Pay more stopping once then going ahead and refused at once past the most, another part stopping once then going ahead, an old tab's Confirm and Pay after a Confirm there refused at once, Confirm all naming an item confirmed elsewhere then paying the rest, and one refusal when all were; the ICE servers held in a ref). `tests/batch35-charge-after-pay.test.ts` (no Charge after a partial Pay
+  and Dispute offered on the tester's page, the daily job offering nothing, an older page's Charge and Let it go refused once with the line, a Pay more in the
+  line, Charge and Pay at the same moment in both orders, a cancelled or declined payment leaving Charge for the full listing). Updated for the new lines:
+  `batch21-call-room`, `batch35-decide-paid-above`, `races-nov3`, `batch22`, `batch10`, `batch12`, `batch17-close-out`, `batch35-answered-seen`,
+  `batch35-decide-tick`, `pay`, `batch35-admin-drafts`, `choice`, `suspended-and-ask`, `pay-matrix`.

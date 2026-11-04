@@ -243,5 +243,31 @@ export async function logReview(userId: string, body: B, result: { amountCents?:
   await logAction(userId, piece.c.testId, body, text, { a: "pay", k: [`${body.kind === "call" ? "call" : "sub"}:${id}`, `c:${piece.c.id}`], ...(body.kind !== "call" ? { answers: sentAnswer(id, piece.c.id, piece.label) } : {}) });
 }
 
+/**
+ * (Owner, Nov 3, batch 35 §163) A charge made while the developer was away, confirmed with their bank (Confirm with your bank, Confirm all, Pay what you owe's one
+ * payment): ONE own line per item, which the developer's other tabs show like a Pay made there (every press's stop box, §160's notice in an open bank box):
+ * "You confirmed Ana Silva's $10.00 charge for her written answers with your bank in another tab" (a tester's Charge, an automatic call charge: "her live call"),
+ * "You confirmed the team's $6.00 dispute decision on Ana Silva's written answers with your bank in another tab", "You confirmed your $5.00 Pay more for Ana
+ * Silva's written answers with your bank in another tab", "You confirmed your $10.00 payment again for Ana Silva's written answers with your bank in another tab"
+ * (a retried chargeback). It touches its piece and answers it (§86) as a Pay on it does. Calls included (they weren't logged before).
+ */
+export async function logConfirmed(userId: string, body: B, p: { id: string; kind: string; contractId: string | null; submissionId: string | null; callId: string | null; amountCents: number; repaysId?: string | null }) {
+  if (!p.contractId) return;
+  const orig = !p.submissionId && !p.callId && p.repaysId ? await db.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
+  const submissionId = p.submissionId ?? orig?.submissionId ?? null, callId = p.callId ?? orig?.callId ?? null;
+  if (!submissionId && !callId) return;
+  const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } });
+  if (!c) return;
+  const sub = submissionId ? await db.submission.findUnique({ where: { id: submissionId }, select: { kind: true } }) : null;
+  const label = callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
+  const name = displayName(c.tester), poss = pronouns(c.tester.pronoun).poss, amount = money(p.amountCents);
+  const what = p.kind === "dispute" ? `the team's ${amount} dispute decision on ${name}'s ${label}`
+    : p.kind === "extra" ? `your ${amount} Pay more for ${name}'s ${label}`
+      : p.kind === "chargeback" ? `your ${amount} payment again for ${name}'s ${label}`
+        : `${name}'s ${amount} charge for ${poss} ${label}`;
+  const piece = callId ? `call:${callId}` : `sub:${submissionId}`;
+  await logAction(userId, c.testId, body, `confirmed ${what} with your bank`, { a: p.kind === "extra" ? "pay-more" : "pay", k: [piece, `c:${c.id}`, `pay:${p.id}`], ...(submissionId && !callId ? { answers: sentAnswer(submissionId, c.id, label) } : {}) });
+}
+
 /** §86: exact piece, with §79 fallback for older event lines. */
 const sentAnswer = (item: string, contractId: string, label: string): Answers => ({ item, contractId, label, kinds: ["sent", "sentpaid"] });

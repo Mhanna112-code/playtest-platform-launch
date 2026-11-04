@@ -3,7 +3,7 @@ import { requireUser } from "@/lib/server/session";
 import { confirmFinish, confirmStart } from "@/lib/server/confirm";
 import { peekBankCheck } from "@/lib/server/bankPeek";
 import { heartbeat } from "@/lib/server/bankHeartbeat";
-import { logPayMore, logReview } from "@/lib/server/actionText";
+import { logConfirmed, logPayMore, logReview } from "@/lib/server/actionText";
 import { db } from "@/lib/db";
 
 // (Owner, Oct 29, batch 11) "Your bank wants to confirm this payment": `start` hands the page what Stripe's pop-up needs (Confirm on Payments); otherwise the pop-up
@@ -23,23 +23,20 @@ export async function POST(req: Request) {
     }
     // (Batch 23 section 9) The start runs the stop-once check (the page's seen marker) and the plain refusals first.
     if (body.start === true) return ok(await confirmStart(u, paymentId, body));
-    const p = await db.payment.findUnique({ where: { id: paymentId }, select: { kind: true, submissionId: true, callId: true, status: true, contractId: true, amountCents: true } });
+    const p = await db.payment.findUnique({ where: { id: paymentId }, select: { id: true, kind: true, submissionId: true, callId: true, status: true, contractId: true, amountCents: true, repaysId: true } });
     const r = await confirmFinish(u, paymentId, body);
     if (p && p.status === "needs_action" && (p.kind === "review" || p.kind === "call") && "reviewId" in r) await logReview(u.id, { ...body, action: "pay", kind: p.callId ? "call" : "submission", id: p.callId ?? p.submissionId ?? "" }, r as { amountCents?: number });
     // (Batch 20 section 12) A Pay more the bank confirmed: another tab's presses stop once for it, as for one that went through at once.
     if (p && p.status === "needs_action" && p.kind === "extra" && (r as { paid?: boolean }).paid) await logPayMore(u.id, body, p);
     // (§86) Confirm of a Charge / dispute payment made while away also answers the piece.
     // The ordinary Pay / Pay more paths above already log their answer; a repeated finish is not another action.
-    if (p?.submissionId && ["needs_confirmation", "failed", "owed", "paying"].includes(p.status) && !("repeated" in r && r.repeated)) {
-      if (p.kind === "extra") await logPayMore(u.id, body, p);
-      else await logReview(u.id, { ...body, kind: "submission", id: p.submissionId }, { amountCents: p.amountCents });
-    }
-    // (Batch 35 §117) Pay what you owe's one payment confirmed: each sent part it paid is answered the same way.
-    if (p?.kind === "owed" && !("repeated" in r && r.repeated)) {
-      for (const d of await db.payment.findMany({ where: { coveredById: paymentId, submissionId: { not: null } }, select: { kind: true, submissionId: true, callId: true, status: true, contractId: true, amountCents: true } })) {
-        if (d.kind === "extra") await logPayMore(u.id, body, d);
-        else await logReview(u.id, { ...body, kind: "submission", id: d.submissionId! }, { amountCents: d.amountCents });
-      }
+    // (Owner, Nov 3, batch 35 §163) One own line per confirmed charge, calls included: "You confirmed Ana Silva's $10.00 charge for her written answers with your
+    // bank in another tab" (the other tabs' stop boxes and open bank boxes show it; this tab never does).
+    const went = (r as { done?: boolean }).done === true && !("repeated" in r && r.repeated);
+    if (p?.contractId && ["needs_confirmation", "failed", "owed", "paying"].includes(p.status) && went) await logConfirmed(u.id, body, p);
+    // (Batch 35 §117) Pay what you owe's one payment confirmed (and Confirm all's, §147): one line for each charge it paid.
+    if (p?.kind === "owed" && went) {
+      for (const d of await db.payment.findMany({ where: { coveredById: paymentId, contractId: { not: null } }, select: { id: true, kind: true, submissionId: true, callId: true, contractId: true, amountCents: true, repaysId: true } })) await logConfirmed(u.id, body, d);
     }
     return ok(r);
   });

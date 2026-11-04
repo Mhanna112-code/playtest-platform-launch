@@ -28,6 +28,7 @@ export const decideFromDraft = (d: Record<string, unknown>) => ({ total: typeof 
  * puts it back to blank (keep the pay as it is) and the note's "Discard" empties it. A restored raise needs the tick again (§1: the tick is never kept). Cleared when
  * Decide goes through; a stopped or refused Decide keeps it.
  * (Owner, Oct 31, batch 35 §41) Decided: the total, the note and the tick are hidden and Decide stays greyed with "Done." until the console has loaded again.
+ * (Owner, Nov 3, batch 35 §163) "Done." names what the decision did, from the server ("Done: kept the pay at $12.00, which was already paid: nothing more was charged.").
  */
 export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: range0 = "", side: side0 = "", sideAt: sideAt0 = null, dev = "The developer" }: { id: string; minCents: number; maxCents: number; range?: string; side?: string; sideAt?: string | null; dev?: string }) {
   const root = useRef<HTMLDivElement>(null);
@@ -103,9 +104,11 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
             setBusy(true);
             setMsg(null);
             try {
-              await api("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
+              const r = await api<{ line?: string }>("/api/admin/decide", { id, total, note, seenAt: loaded, confirmed: stopped, ...(ticked ? { tickCents: extra } : {}) });
               await keep.clear();
-              fin.finish("Done.", { reload: true });
+              // (Owner, Nov 3, batch 35 §163) The server's own result, not "Done.": "Done: raised the pay to $10.00 ($3.00 more charged)." After the reload the
+              // row has left Open disputes; the same line stays in Your actions.
+              fin.finish(typeof r?.line === "string" && r.line ? r.line : "Done.", { reload: true });
             } catch (e) {
               if (e instanceof ApiError && e.code === "stop_once") {
                 setStopped(true);
