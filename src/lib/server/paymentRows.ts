@@ -49,7 +49,9 @@ type Ctx = Awaited<ReturnType<typeof lineContext>>;
  * line (`stripeDescription`), so the two can't drift. `full`: the names uncut (Stripe, and the page's hover). Null for a row with no test to name (the page shows its
  * plain label).
  */
-function devLine(ctx: Ctx, p: PayingRow, full: boolean, via: Via = "") {
+function devLine(ctx: Ctx, p: PayingRow, full: boolean, viaKnown?: Via) {
+  // A caller that doesn't know what paid it (the Stripe description of a debt Pay what you owe repays) keeps the earlier reading: settled or owed is Pay what you owe.
+  const via: Via = viaKnown ?? (p.settledAt || p.owedUntil ? "owed" : "");
   const o = ctx.src(p);
   const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
   if (!c) {

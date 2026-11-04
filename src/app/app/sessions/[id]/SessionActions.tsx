@@ -315,7 +315,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
         <p className="sr-only">{question}</p>
         {full ? (
           // (§167) At 10 the draft is kept, read-only.
-          <textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} data-add-readonly="" />
+          <textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly="" />
         ) : (
           <>
             <p className="note">What you sent stays as it is. This is added under this answer.</p>
