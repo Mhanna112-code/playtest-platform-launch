@@ -51,7 +51,10 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     const benDrop = benLines.filter((l) => / closed: /.test(l.text));
     expect(benDrop).toHaveLength(1);
     expect(benDrop[0].text).toMatch(new RegExp(`^Nora Lane's request for ${T_} closed: she is no longer free at that time$`));
-    expect(benDrop[0].quiet).toBeUndefined();
+    expect(benDrop[0].quiet).toBe(true); // (Owner, Nov 4, §185) quiet now, with a bell
+    const benBell = await db.notification.findMany({ where: { userId: ben.tester.user.id, groupKey: `reqclosed:${testId}` } });
+    expect(benBell.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane's request for .+ closed: she is no longer free at that time$/)]);
+    expect(await db.notification.count({ where: { userId: dev.user.id, groupKey: `reqclosed:${testId}` } })).toBe(0); // the developer has the call: no bell
     expect(benLines.map((l) => l.text).join(" | ")).not.toContain("Ana");
     // The developer (her booking was Ana's Accept): her own dropped request, a quiet line.
     const devLines = await live(`test:${testId}`, dev.cookie, devLoaded);
@@ -67,10 +70,9 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     const gone = async (cookie: string) => (await json(await pulseGET(req(`/api/pulse?requests=${rb.id}`, { cookie, method: "GET" })))).body.gone[0].line as string;
     expect(await gone(ben.tester.cookie)).toBe("Closed: Nora Lane is no longer free at that time");
     expect(await gone(dev.cookie)).toBe("Closed: you have another call at that time");
-    // Ben's next press stops once for the line (Alerts on); the developer's never does for her quiet one.
+    // (Owner, Nov 4, §185) Ben's next press no longer stops for the line (quiet, with his bell); the developer's never did for her quiet one.
     const press = await sact(ben.sessionId, "request-time", ben.tester.cookie, { times: [atHours(90)], minutes: 30, seenAt: benLoaded });
-    expect(press.body.error.code).toBe("stop_once");
-    expect(press.body.error.changes.map((c: Line) => c.text)).toEqual(expect.arrayContaining([expect.stringMatching(/^Nora Lane's request for .+ closed: she is no longer free at that time$/)]));
+    expect(press.status).toBe(200);
     const devPress = await act(testId, "request-time", dev.cookie, { contractIds: [ben.sessionId], times: [atHours(100)], minutes: 30, seenAt: devLoaded });
     expect(JSON.stringify(devPress.body)).not.toContain("closed: you have another call");
   });
@@ -147,12 +149,13 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     expect((await sact(ana.sessionId, "answer-request", ana.tester.cookie, { requestId: nr.id, action: "accept", seenAt: seen(), confirmed: true })).body.booked).toBe(true);
     expect(await row(fromAna.id)).toMatchObject({ status: "closed", closedReason: DROP_TESTER_BUSY });
     expect(await row(fromOmar.id)).toMatchObject({ status: "closed", closedReason: DROP_TESTER_BUSY });
-    // Omar: an ordinary call-change line on each test (Alerts: Call changes), with Ana's pronoun, never naming Nora.
+    // Omar: a line on each test, with Ana's pronoun, never naming Nora; (Owner, Nov 4, §185) quiet now, with a bell stacked per test and day.
     const onY = (await live(`test:${Y}`, omar.cookie, loaded)).filter((l) => / closed: /.test(l.text));
     expect(onY).toHaveLength(1);
     expect(onY[0].text).toMatch(new RegExp(`^Ana Silva's request for ${T_} closed: she is no longer free at that time$`));
-    expect(onY[0]).toMatchObject({ alert: "calls" });
-    expect(onY[0].quiet).toBeUndefined();
+    expect(onY[0].quiet).toBe(true);
+    expect(await db.notification.count({ where: { userId: omar.user.id, groupKey: `reqclosed:${Y}` } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: omar.user.id, groupKey: `reqclosed:${Z}` } })).toBe(1);
     const onZ = (await live(`test:${Z}`, omar.cookie, loaded)).filter((l) => / closed: /.test(l.text));
     expect(onZ.map((l) => l.text)).toEqual([expect.stringMatching(new RegExp(`^Your request to Ana Silva for ${T_} closed: she is no longer free at that time$`))]);
     for (const l of [...onY, ...onZ]) expect(l.text).not.toContain("Nora");

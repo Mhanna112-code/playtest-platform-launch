@@ -19,8 +19,20 @@ export type ClashTarget = {
 export type ClashLine = { tone: "red" | "blue"; text: string };
 export type Fmt = { range: (start: Date, minutes: number) => string; times: (start: Date, minutes: number) => string; day: (d: Date) => string };
 
-export const MAX_WAITING = 3;
-export const MAX_BOOKED_TIMES = 3;
+/**
+ * (Owner, Nov 4, §185) The limit per developer–tester pair on a test: booked times and waiting requests (both sides) together, at most 3. A daily / weekly set (and a
+ * Forever set while it runs) is one booked time; a "one of" request is one request. It replaces "up to 3 booked + up to 3 requests". The same for both sides.
+ */
+export const MAX_CALLS = 3;
+/** (§185) The refusal (and the form's red line), naming the pair's other person: "You already have 3 calls booked or requested with Nina Park. …". */
+/**
+ * (Owner, Nov 4, §185) And each side SENDS at most 3 call requests a day to the same person on a test, counted on the sender's calendar day in their saved zone:
+ * every request sent counts (later withdrawn, declined, dropped or closed too; an auto-match that books directly is one); withdrawing never counts.
+ */
+export const MAX_SENT_PER_DAY = 3;
+/** (§185) "You've sent 3 call requests to Nina Park today. You can send more tomorrow." */
+export const sentTodayLine = (name: string) => `You've sent ${MAX_SENT_PER_DAY} call requests to ${name} today. You can send more tomorrow.`;
+export const callLimitLine = (name: string) => `You already have ${MAX_CALLS} calls booked or requested with ${name}. Wait until one is answered, over or cancelled, or withdraw a request.`;
 const DAY = 86_400_000;
 /** The starts a row covers for the checks: one; a set's calls; Forever: its first 8; (batch 35 §132) none after the end (`until`) but the first. */
 export const rowStarts = (r: RowJson) => {
@@ -50,6 +62,8 @@ function inSet(k: number, at: Date, text: string, f: Fmt) {
 export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "developer" | "tester"; targets: ClashTarget[]; elsewhere: (Slot & { name: string })[]; fmt: Fmt }) {
   const rows: ClashLine[][] = p.rows.map(() => []);
   const limits: string[] = [];
+  // (§185) The people a row matches exactly (their waiting request at that very time): the press books it, so it adds nothing toward their limit.
+  const exactWith = new Set<string>();
   const m = p.minutes;
   if (!m || !Number.isFinite(m) || m <= 0) return { rows, limits };
   p.rows.forEach((row, i) => {
@@ -58,7 +72,10 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
     for (const t of p.targets) {
       // Exact match with their waiting request (a single time, the same length): not a clash; the press books it.
       const exact = row.repeat === "once" ? t.requests.find((q) => !q.mine && q.minutes === m && q.rows.some((x) => x.repeat === "once" && new Date(x.startsAt).getTime() === new Date(row.startsAt).getTime())) : undefined;
-      if (exact) rows[i].push({ tone: "blue", text: `${t.name} asked for exactly this: Request a time books it.` });
+      if (exact) {
+        rows[i].push({ tone: "blue", text: `${t.name} asked for exactly this: Request a time books it.` });
+        exactWith.add(t.name);
+      }
       if (red) continue;
       starts.forEach((at, k) => {
         if (red) return;
@@ -88,8 +105,8 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
     if (red) rows[i].unshift({ tone: "red", text: red });
   });
   for (const t of p.targets) {
-    if ((t.pending ?? 0) >= MAX_WAITING) limits.push(`You already have ${MAX_WAITING} requests waiting with ${t.name}. Withdraw one or wait for an answer.`);
-    else if ((t.booked ?? 0) >= MAX_BOOKED_TIMES) limits.push(p.side === "developer" ? `${t.name} already has ${MAX_BOOKED_TIMES} booked times with you. Wait until one is over or cancel one.` : `You already have ${MAX_BOOKED_TIMES} booked times in this test.`);
+    // (Owner, Nov 4, §185) Booked times and waiting requests together, at most 3 (an exact match books their request instead: nothing new).
+    if ((t.pending ?? 0) + (t.booked ?? 0) >= MAX_CALLS && !exactWith.has(t.name)) limits.push(callLimitLine(t.name));
     else if (t.leftCents != null && p.rows.length) {
       const one = t.rateCents == null ? Math.round((UNLISTED_CALL_RATE_CENTS * m) / 60) : callCharge(t.rateCents, m);
       const n = callsIfAccepted(p.rows);

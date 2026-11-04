@@ -38,7 +38,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
 
 /**
  * The developer's live-call panel (owner layout): the rate line; one tick row per tester with their terms and
- * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
+ * "N of 3 booked or requested" ((§185) booked times + waiting requests, the pair's limit); [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
  * request when nothing is ticked): booked calls, daily/weekly sets as one line ((§181) the waiting requests are the page's Call requests box). Boxes under the button.
  */
 export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", elsewhere = [], leadMinutes, end }: { testId: string; seenAt: string; /** (Batch 29 section 20) the server's call lead, passed down */ leadMinutes: number; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; elsewhere?: OtherCall[];
@@ -145,7 +145,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           <label className="block font-medium"><input type="checkbox" checked={all} onChange={() => setTicked(all ? [] : testers.map((t) => t.contractId))} /> Select all ({testers.length})</label>
           {testers.map((t) => (
             <label key={t.contractId} className="block">
-              <input type="checkbox" checked={ticked.includes(t.contractId)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.contractId] : ticked.filter((x) => x !== t.contractId))} /> <b><Cut text={t.name} /></b> · {t.terms} · {t.booked} of 3 booked
+              <input type="checkbox" checked={ticked.includes(t.contractId)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.contractId] : ticked.filter((x) => x !== t.contractId))} /> <b><Cut text={t.name} /></b> · {t.terms} · {t.booked + (t.pending ?? 0)} of 3 booked or requested
               {t.warning && <span className="block pl-5 text-xs text-amber-200" data-calls-warning="">{t.warning}</span>}
             </label>
           ))}

@@ -3109,3 +3109,94 @@ time is no longer free.").
   tester's quiet lines; both Accepts single refusals), the developer's auto-match plus a request between the same two on another test, the Forever top-up, and
   a batch's copies still "taken" with a non-overlapping request left alone. Updated: `request-kinds` (Ben's Accept now reads "This request closed: Nora Lane is
   no longer free at that time." instead of "This time is no longer free.").
+## §185 Calls with one person: 3 in total, 3 sends a day, two request boxes, withdrawals never stop (owner, Nov 4)
+
+- **The limit: 3 in total per developer–tester pair on a test.** Booked times + waiting requests, both sides together, at most 3 (`MAX_CALLS`,
+  `src/lib/callClash.ts`). A daily / weekly set is one booked time (a Forever set too, while it runs, even with none of its calls ahead); a "one of" request is
+  one request. It replaces "up to 3 booked + up to 3 requests" (`MAX_BOOKED` / `MAX_REQUESTS` are gone). The same for both sides. Refused on the first press
+  (checked before the stop-once gate: a single refusal, never a stop first) with one line naming the pair:
+  `You already have 3 calls booked or requested with Nina Park. Wait until one is answered, over or cancelled, or withdraw a request.` (the developer; the
+  tester's names the developer: `… with Nora Lane. …`). Every path:
+  - **Send** (`devRequestTime`, `testerRequestTime`): refused at 3. Re-checked under the test's lock when the request is created (`createRequest`), so two sends
+    at once never pass 3. The developer ticking several testers: every one at the limit → refused at once (`… with Ana Silva and Ben Carter. …`); only some →
+    the existing "Press again to send to the others" box, now reading `You already have 3 calls booked or requested with Ana Silva.`
+  - **Auto-match** (a send at exactly the other side's waiting single time) books THEIR request: one request becomes one booked time, so it goes at 3. It is
+    refused (same line) only for a pair already over 3 from before the limit.
+  - **Accept**: the same (a request becomes a booked time: the count doesn't move); refused only for a pair over 3 from before (checked before the gate, and
+    again once claimed: the other bookings must leave room for it).
+  - **Daily / weekly sets**: one booked time, as before.
+  - **Forever top-up** (the daily job): no check needed and none added: a running Forever set already counts as one booked time (`bookedTimes`), so adding its
+    next calls never goes past 3.
+  - The forms (both sides) show the same line in red while filled (`clashNotes`, booked + waiting from the page), except when a row is an exact match with the
+    other side's request (the press books it). The developer's tick row reads "N of 3 booked or requested".
+- **Sends a day: at most 3 call requests a day to the same person on a test, each side** (owner, later the same day). Developer → that tester, tester → that
+  developer (`MAX_SENT_PER_DAY`, `sentToday`). Every request sent counts, whatever became of it (withdrawn, declined, dropped, closed: "requesting after
+  cancelling counts"); an auto-match that books directly counts as one (the request it books is marked `matched`, now on both sides' auto-matches); a "one of"
+  request is one; a developer request to several testers is one per tester. Withdrawing (and cancelling) is never limited and never counts. "Per day" is the
+  sender's calendar day in their saved zone (it resets at their midnight). The 4th send that day is refused on the first press:
+  `You've sent 3 call requests to Nina Park today. You can send more tomorrow.` (the tester's: `… to Nora Lane today. …`). With several ticked testers it works
+  like the limit (all of them: refused; some: named in the "Press again to send to the others" box, `You've sent 3 call requests to Ana Silva today.`).
+  Re-checked under the test's lock. No schema change: counted from the rows' `createdAt` (and `decidedAt` for `matched`).
+- **Two request boxes on the developer's test page** (`CallRequestsBox`, replacing §181's single box), right under Needs you, each open at first, shown when it
+  has something:
+  - **Requests to you (N)**: the testers' requests waiting for your answer (Accept, an Accept per time for a "one of" request, Decline). Panel
+    `call-requests-<testId>`; section `#call-requests`; a person's drop-down `call-requests-person-<contractId>` (Needs you's "N call requests ↓" lands here).
+  - **Your requests (N)**: your own waiting requests (Withdraw). Panel `your-requests-<testId>`; section `#your-requests`; a person's drop-down
+    `your-requests-person-<contractId>`.
+  - Each as §181: one drop-down per person (closed; the green name, then "· N requests"), people ordered by their oldest request, requests oldest first in a
+    panel of their own (`<panel>-<contractId>`). A **name search** sits above each box's people (inside the box, above its scroll panel): as you type, only the
+    people whose name (as shown) contains it, any case; nobody: `No one matches “zed”`. Filtered people are hidden, not removed (an open drop-down stays open);
+    a person with a press under way, its stop box or refusal is never hidden; a link to someone the search hides (Needs you's line, `#req-<id>`) clears the
+    search and shows them before the jump scrolls. Not remembered. Auto-open on jumps, presses, stop boxes and refusals as §181.
+  - Hooks: `data-requests-to-you` / `data-your-requests` on the boxes (both keep `data-call-requests-box` and `data-call-requests-count`),
+    `data-request-search="to-you"` / `"yours"` on the inputs, `data-request-search-empty` on the no-match line; the people keep `data-call-requests-person`.
+- **The tester's session page had one combined list** (the Live session's Requests: the developer's requests to answer and her own, together). It is split the
+  same way: "Requests to you (N)" (`#call-requests`, panel `call-requests-<session>`) and "Your requests (N)" (`#your-requests`, panel
+  `your-requests-<session>`), each shown when it has something ("No call requests waiting." when neither). No name search there: only one person (the
+  developer).
+- **Withdrawals** (both sides). The other side withdrawing a request is never a stop-once for the other person (whatever their Alerts; a bell too, below): a quiet live-box line
+  (like §184's quiet lines): the developer's `Ana Silva withdrew a call request for …` (kind `withdrew_req`, moved from DEV_STOP_KINDS to DEV_QUIET_KINDS), the
+  tester's `Nora Lane withdrew the request for …` (§184's quiet kind). It matters only when they try to answer it: ONE refusal, never a stop first (the
+  developer's gate is skipped for it): `Ana Silva withdrew this request.` / `Nora Lane withdrew this request.` (no time in it any more). Your own withdrawal
+  in another tab still stops as before (the action log, reason E).
+- **Unchanged: a new request, an answer to yours (Accept / Decline) and cancelling a booked call** still follow the Alerts / stop rules (Call changes; the
+  tester's call kinds unchanged).
+- **Join or Cancel on a call already cancelled**, from an old page: refused once. Join and the tester's Cancel already were; the developer's Cancel stopped
+  first for the tester's cancellation (batch 16 §21) and then refused: now a single refusal (`The call with Ana Silva was already cancelled.`). Every 409
+  refusal redraws the page (client.ts, batch 28 §9; the line kept where the button was, KeptRefusal), so the row then leaves the booked list; the call is in
+  Call history with its Cancelled badge.
+- **Terms**: they don't state the call limits, so no edit.
+- **Code.** `src/lib/callClash.ts` (`MAX_CALLS`, `callLimitLine`, `MAX_SENT_PER_DAY`, `sentTodayLine`, the form's line), `src/lib/server/requests.ts`
+  (`bookedTimes` with Forever sets, `callsTaken`, `sentToday`, `autoMatchOf`, the checks on every path, `createRequest`'s locked re-check, `refusalFor`, the
+  tester's auto-match marked `matched`; the tester's Length is now checked before her gate, as the developer's already was), `src/lib/server/testerGate.ts`
+  (quiet withdrawal), `src/lib/rules.ts` (kinds), `src/lib/server/calls.ts` (Cancel on a cancelled call), `CallRequestsBox.tsx`,
+  `components/CallRequestsPanel.tsx` (`title`, `sectionId`, `anchor`, `search`, `showCount`, `matchesName`, `noMatchLine`, `yourRequestsAnchor`),
+  `components/CallRequests.tsx` (the tester's split), `DevCallPanel.tsx` ("of 3 booked or requested"), both pages' booked counts. No migration.
+- **Tests.** New `tests/call-limit-request-boxes-185.test.ts` (2 booked + 2 requests: the first goes, the second refused, both sides, no stop first; auto-match
+  and Accept at 3; a pair over 3 refused at Accept; a Forever set counts one; the form's line; 3 sends incl. a withdrawn one then the 4th refused, withdrawals
+  unlimited, the next day allowed; the developer's 4th incl. a declined one and an auto-match, another tester unaffected, the several-testers box; the
+  sender's own day in their zone; withdrawals both sides: no stop, one refusal, quiet line; a new request / a decline / a cancel still stop, Alerts "Call
+  changes" ticked doesn't; Join / Cancel on a cancelled call refused once, Call history; the two boxes and the tester's split rendered). Updated:
+  `request-kinds` (the limit), `batch16-calls-live` (the form's line), `requests` and `press-races` (the withdrawal line), `batch35-list-panels` (panel ids),
+  `batch14` (DEV_QUIET_KINDS, which already missed §184's `req_dropped`), `batch18-misc` (Ben had 3 with the developer: its request is withdrawn first).
+- **Withdrawn and closed requests, withdrawn applications: a bell, never a stop** (owner, later the same day; part of §185).
+  - **A call request the other side withdrew** (either side) and **a call request a booking closed** (§184's `req_closed` / `t_req_closed`, the request's other
+    person, the one without the call): a quiet live-box line for that person (never a stop, whatever the Alerts: `req_closed` moved to DEV_QUIET_KINDS, the
+    tester's `t_req_closed` read as quiet), plus a **bell** (and its email per their notification settings) in the words of the line (`Ana Silva withdrew a call
+    request for …`, `Nora Lane's request for … closed: she is no longer free at that time`, `Your request to Ana Silva for … closed: …`), linking to the test
+    page / the session. The bells stack per test and day: group `reqclosed:<testId>`, titled `Call requests · 3 closed today` (`lib/bell.ts`: a group key may
+    name its test after a colon, `groupBase`). The person with the call keeps §184's quiet line and gets no bell. A booking's bells go out after its transaction
+    (never for a booking that rolled back). Acting on such a request from an older page (Accept / Decline / Withdraw) is one refusal naming what happened, no
+    stop first (as above and §184).
+  - **A tester withdrawing her application** (`withdrawApplication`): no live line and no stop at all any more (it wrote a Joins-type `applied` line,
+    "<name> withdrew their application"; no event is written now): a bell to the developer, `Ana Silva withdrew her application to “Harbor Run”`, stacked per
+    test and day (group `appwithdrawn:<testId>`, `Applications · 2 withdrawn today`). Accept / Decline on it: the existing single refusal (`Ana Silva withdrew
+    her application.`).
+  - **A developer cancelling an invite**: unchanged (the tester's bell; the join refused on an invite-only test; on an apply test they can still apply).
+  - New requests, answers to your requests and cancelling a booked call keep following the Alerts / stop rules as before.
+  - Code: `requests.ts` (`dropOverlapping`'s bells, `bookAt` sends them; the withdrawal's bell), `testerGate.ts`, `rules.ts`, `joining.ts`, `lib/bell.ts`
+    (`reqclosed`, `appwithdrawn`, `groupBase`), the Notifications page (counted titles by base). Tests: the §185 file (both sides' withdrawal bells, the stack's
+    key and titles, the application: no event, no live line, the bell, one refusal); `drop-overlapping-requests` (the other person's line is quiet now, with
+    one bell; Ben's next press goes; Omar's bells on each test).
+- **Not ours, failing on master already** (left as they are): `batch35-fixes` §7 and `batch24` section 1 check source strings of the test page that §181 /
+  §175 changed (`id={x.kind === "sub" ? …}`, `{rows.map((b) => <BankWaiting …`).

@@ -23,7 +23,8 @@ import { callsLeftCents, ceilingRefusal, checkCeiling } from "./callMoney";
 import { CALL_MIN_MINUTES } from "@/lib/rules";
 import { bookableMinutes, lengthCapLine } from "@/lib/callMeasure";
 import { CALL_ACTS } from "./live";
-import { clashNotes, localFmt } from "@/lib/callClash";
+import { MAX_CALLS, MAX_SENT_PER_DAY, callLimitLine, clashNotes, localFmt, sentTodayLine } from "@/lib/callClash";
+import { dayIn } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { dateZone } from "./dateZone";
 import { DROP_BOTH, DROP_DEV_BUSY, DROP_TESTER_BUSY, dropLine, dropReasonFor, isDropReason } from "@/lib/requestDrop";
@@ -46,7 +47,7 @@ export const pageRows = (r: { rows?: unknown; times: Date[]; startsAt: Date; wee
 //   "Choose one": up to 3 possible times; the other side picks one → 1 call.
 //   "Daily"/"Weekly": 1 time repeated 2–8 times; accepting books them all (each an ordinary call afterwards).
 // The developer requests with one or more ticked testers (the first tester to accept takes the whole request); the
-// developer never sets a price, and neither does the tester (the "Ask $" was removed; every call is at the contract rate). Limit: 3 items per tester per test (both sides' pending requests and booked calls; a daily/weekly set = 1). Clash checks:
+// developer never sets a price, and neither does the tester (the "Ask $" was removed; every call is at the contract rate). Limit (§185): 3 in total per tester per test (both sides' pending requests and booked times; a daily/weekly set = 1). Clash checks:
 // sending refuses overlaps with calls/requests between the same two; accepting refuses overlaps with anyone's calls.
 // (Owner, Nov 4, §184) And the moment a call is booked (any path: Accept, auto-match, the Forever top-up; all through bookAt), every other waiting request of
 // either person in it that overlaps it is dropped in the same transaction (dropOverlapping): an Accept on one afterwards is a single "already closed" refusal.
@@ -54,10 +55,11 @@ export const pageRows = (r: { rows?: unknown; times: Date[]; startsAt: Date; wee
 type Side = "developer" | "tester";
 type U = { id: string; email: string; name: string; pronoun?: string };
 const DAY_MS = 86_400_000;
-/** Limits per tester per test: up to 3 booked times (a single call = 1, a daily/weekly set = 1) and up to 3 pending
- * requests (both sides together). */
-export const MAX_BOOKED = 3;
-export const MAX_REQUESTS = 3;
+// (Owner, Nov 4, §185) The limit per developer–tester pair on a test is MAX_CALLS (3) in total: booked times + waiting requests, both sides together (it replaces
+// "up to 3 booked + up to 3 requests"). Checked on every press that makes a request or a booking (send, auto-match, Accept), before the press's stop-once gate (a
+// single refusal, never a stop first) and again where it books or creates. A booking that answers a request (Accept, auto-match) turns one request into one booked
+// time, so it never raises the count; the Forever top-up adds calls to a set that already counts as one booked time, so it never does either.
+export { MAX_CALLS };
 
 async function ctx(userId: string, contractId: string) {
   let c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
@@ -217,24 +219,61 @@ async function acceptClash(c: Ctx["c"], side: Side, times: Date[], minutes: numb
   return clashes;
 }
 
-/** Booked times still ahead with this tester (a single call = 1, a daily/weekly set = 1). */
-export async function bookedTimes(contractId: string) {
-  const calls = await db.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: new Date() } }, select: { setId: true, id: true } });
-  return new Set(calls.map((c) => c.setId ?? c.id)).size;
+type Tx = Prisma.TransactionClient | typeof db;
+/**
+ * Booked times still ahead with this tester (a single call = 1, a daily/weekly set = 1). (Owner, Nov 4, §185) A Forever set counts as one booked time while it
+ * runs, even when none of its calls is ahead at the moment (it waits at the end, or a pause): its top-up never adds a booked time past the limit.
+ */
+export async function bookedTimes(contractId: string, tx: Tx = db) {
+  const [calls, forever] = await Promise.all([
+    tx.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: new Date() } }, select: { setId: true, id: true } }),
+    tx.callSet.findMany({ where: { contractId, status: "active", count: 0 }, select: { id: true } }),
+  ]);
+  return new Set([...calls.map((c) => c.setId ?? c.id), ...forever.map((s) => s.id)]).size;
 }
 /** Pending requests with this tester (both sides together). */
-export const pendingRequests = (contractId: string) => db.callRequest.count({ where: { contractId, status: "pending", startsAt: { gt: new Date() } } });
-const requestLimitLine = (name: string) => `You already have ${MAX_REQUESTS} requests waiting with ${name}. Withdraw one or wait for an answer.`;
-const bookedLimit = (side: Side, testerName: string) =>
-  side === "developer" ? `${testerName} already has ${MAX_BOOKED} booked times with you. Wait until one is over or cancel one.` : `You already have ${MAX_BOOKED} booked times in this test.`;
+export const pendingRequests = (contractId: string, tx: Tx = db) => tx.callRequest.count({ where: { contractId, status: "pending", startsAt: { gt: new Date() } } });
+/**
+ * (Owner, Nov 4, §185) The call requests `side` sent on this contract on the sender's calendar day (in their saved zone `tz`): every request row they created that
+ * day, whatever became of it (withdrawn, declined, dropped, closed), plus each auto-match of theirs that day (it books the other side's request directly, which
+ * is then marked "matched"). Withdrawing never counts. No schema change: read from the rows' createdAt / decidedAt.
+ */
+export async function sentToday(contractId: string, side: Side, tz: string | null | undefined, tx: Tx = db, now = new Date()) {
+  const since = new Date(now.getTime() - 2 * DAY_MS); // wide enough for any zone's "today"; the day itself is compared in the sender's zone
+  const today = dayIn(now, tz);
+  const [made, matched] = await Promise.all([
+    tx.callRequest.findMany({ where: { contractId, fromSide: side, createdAt: { gt: since } }, select: { createdAt: true } }),
+    tx.callRequest.findMany({ where: { contractId, fromSide: side === "developer" ? "tester" : "developer", closedReason: "matched", decidedAt: { gt: since } }, select: { decidedAt: true } }),
+  ]);
+  return made.filter((r) => dayIn(r.createdAt, tz) === today).length + matched.filter((r) => r.decidedAt && dayIn(r.decidedAt, tz) === today).length;
+}
+/** (Owner, Nov 4, §185) What counts toward the pair's limit: booked times + waiting requests (both sides). */
+export const callsTaken = async (contractId: string, tx: Tx = db) => (await bookedTimes(contractId, tx)) + (await pendingRequests(contractId, tx));
+/**
+ * (§185) The single exact match an auto-match would book: the other side's waiting single-time request (same length) at one of these "once" times. The same test
+ * the auto-match itself makes, read before the gate so a send that would only book their request is never refused for the limit.
+ */
+async function autoMatchOf(contractId: string, theirSide: Side, onceStarts: Date[], minutes: number | null) {
+  if (!onceStarts.length || minutes == null) return null;
+  const reqs = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: theirSide, weeks: 0, minutes, startsAt: { gt: new Date() } }, orderBy: { createdAt: "asc" } });
+  for (const m of reqs) {
+    const hit = onceTimes(m).find((t) => onceStarts.some((x) => x.getTime() === t.getTime()));
+    if (hit) return { match: m, hit };
+  }
+  return null;
+}
 
 /** A deadline crossed during the stop check cannot create a new request. */
 async function createRequest({ data }: { data: Prisma.CallRequestUncheckedCreateInput }) {
   return db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${data.testId} FOR UPDATE`;
     await assertWorkOpen(tx, data.testId);
-    const c = await tx.contract.findUniqueOrThrow({ where: { id: data.contractId } });
+    const c = await tx.contract.findUniqueOrThrow({ where: { id: data.contractId }, include: { tester: true, test: { include: { developer: true } } } });
     if (c.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
+    // (Owner, Nov 4, §185) Re-checked under the test's lock: two sends at once (two tabs, both sides) never pass 3 together, nor 3 sent today.
+    const sender = data.fromSide === "developer" ? c.test.developer : c.tester;
+    if ((await sentToday(c.id, data.fromSide as Side, sender.timeZone, tx)) >= MAX_SENT_PER_DAY) throw new HttpError(409, "limit", sentTodayLine(displayName(data.fromSide === "developer" ? c.tester : c.test.developer)));
+    if ((await callsTaken(c.id, tx)) >= MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(data.fromSide === "developer" ? c.tester : c.test.developer)));
     return tx.callRequest.create({ data });
   });
 }
@@ -247,7 +286,8 @@ async function createRequest({ data }: { data: Prisma.CallRequestUncheckedCreate
  */
 async function bookAt(contractId: string, startsAt: Date, minutes: number, rateCents: number | null, setId: string | null = null, byDeveloper = false, quiet = false, except: DropExcept = {}) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId }, include: { test: true, tester: true } });
-  return db.$transaction(async (tx) => {
+  const bells: DropBell[] = [];
+  const booked = await db.$transaction(async (tx) => {
     // (Owner, Nov 4, §184) The two people's locks first, always in the same order, then the test's: two bookings sharing a person wait for each other before
     // either holds a test (the drop writes lines on other tests, so holding a test while waiting for a person could deadlock).
     for (const who of [...new Set([c.test.developerId, c.testerId])].sort()) await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${"calls:" + who}))`;
@@ -258,10 +298,15 @@ async function bookAt(contractId: string, startsAt: Date, minutes: number, rateC
     const slot = await tx.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
     const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
     if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${T(startsAt)}` : `${displayName(c.tester)} booked a call for ${T(startsAt)}`, false, {}, contractId);
-    await dropOverlapping(tx, { startsAt, minutes, people: [c.test.developerId, c.testerId] }, except);
+    await dropOverlapping(tx, { startsAt, minutes, people: [c.test.developerId, c.testerId] }, except, bells);
     return call;
   });
+  // (Owner, Nov 4, §185) The bells for the requests it closed, once the booking is in (never for a booking that rolled back).
+  for (const b of bells) await bell(b.userId, b.text, b.link, undefined, { testId: b.testId, group: `reqclosed:${b.testId}` });
+  return booked;
 }
+/** (§185) A bell owed to the other person of a request a booking closed. */
+type DropBell = { userId: string; text: string; link: string; testId: string };
 
 type DropExcept = { id?: string; batchId?: string };
 /**
@@ -272,7 +317,7 @@ type DropExcept = { id?: string; batchId?: string };
  * booking, or the booking they were told about); the other one a Call changes line ("Ana Silva's request for … closed: she is no longer free at that time").
  * Requests between the same two people are dropped too (they would be refused anyway).
  */
-async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date; minutes: number; people: string[] }, except: DropExcept) {
+async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date; minutes: number; people: string[] }, except: DropExcept, bells: DropBell[] = []) {
   const people = [...new Set(b.people)];
   // Every working session either person is in, on either side (an account can be a developer and a tester).
   const cons = new Map((await tx.contract.findMany({ where: { status: "working", OR: [{ testerId: { in: people } }, { test: { developerId: { in: people } } }] }, include: { tester: true, test: { include: { developer: true } } } })).map((c) => [c.id, c]));
@@ -311,6 +356,10 @@ async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date
     const testerText = dropLine({ reason, side: "tester", fromReader: r.fromSide === "tester", other: displayName(dev), otherPronoun: dev.pronoun, when, partial });
     await recordEvent(tx, r.testId, devBusy ? "req_dropped" : "req_closed", `${devText}`, false, {}, r.contractId);
     await recordEvent(tx, r.testId, testerBusy ? "t_req_dropped" : "t_req_closed", `${testerText}`, false, {}, r.contractId);
+    // (Owner, Nov 4, §185) The request's other person (the one without the call) is no longer stopped by it (req_closed / t_req_closed are quiet live-box lines
+    // now, like the person with the call's): they get a bell instead (and its email, per their settings), stacked per test and day ("Call requests · 3 closed today").
+    if (!devBusy) bells.push({ userId: dev.id, text: devText, link: `/app/tests/${r.testId}`, testId: r.testId });
+    if (!testerBusy) bells.push({ userId: tester.id, text: testerText, link: `/app/sessions/${r.contractId}`, testId: r.testId });
   }
 }
 
@@ -332,7 +381,8 @@ const refusalFor = (r: { status: string; updatedAt: Date; closedReason: string; 
   // (Owner, Nov 4, §184) Dropped when a call was booked: "This request closed: fbbb is no longer free at that time." (never with whom), or the reader's own
   // "… you have another call at that time." The reader's side: the request's sender when it's theirs.
   if (r.status === "closed" && isDropReason(r.closedReason)) return `This request closed: ${dropReasonFor(r.closedReason, (mine ? r.fromSide : r.fromSide === "developer" ? "tester" : "developer") as Side, otherName)}.`;
-  if (r.status === "withdrawn") return mine ? "You already withdrew this request." : `${otherName} withdrew this request at ${fmtTime(r.updatedAt)}.`;
+  // (Owner, Nov 4, §185) The other side's withdrawal is said only here, once: "Ana Silva withdrew this request."
+  if (r.status === "withdrawn") return mine ? "You already withdrew this request." : `${otherName} withdrew this request.`;
   if (r.status === "declined") return mine ? `${otherName} declined this request at ${fmtTime(r.updatedAt)}.` : "You already declined this request.";
   // (Owner, Nov 3, §157) Only the side that didn't ask books a request: booked when it isn't yours means your other tab's Accept.
   if (r.status === "booked") return mine ? `This time was booked at ${fmtTime(r.updatedAt)}.` : `You already accepted this request at ${fmtTime(r.updatedAt)}.`;
@@ -407,22 +457,39 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for each ticked tester's calls (red at the box).
   const overCap = await lengthOverCap(reqMinutes, all.map((x) => ({ contractId: x.c.id, rateCents: bookRate(x.c.test, x.c), name: displayName(x.c.tester) })));
   if (overCap) throw new HttpError(400, "bad_minutes", overCap);
+  const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
+  const sameAgain = async (contractId: string) => !!(await db.callRequest.findFirst({ where: { contractId, fromSide: "developer", status: "pending", startsAt: kind.startsAt } }));
+  // (Owner, Nov 4, §185) Every ticked tester already at 3 (booked + waiting, both sides): refused on the first press, never a stop first. One that this press would
+  // only auto-match (their own request at that time), or that already has this very time requested (said below), is left to the checks after the gate.
+  // (§185) Likewise every ticked tester already sent 3 requests today (by the developer's own day): "You've sent 3 call requests to Ana Silva today. …".
+  const devZone = all[0].me.timeZone;
+  const cappedToday = new Set<string>();
+  for (const { c } of all) if ((await sentToday(c.id, "developer", devZone)) >= MAX_SENT_PER_DAY) cappedToday.add(c.id);
+  {
+    const capped: string[] = [], full: string[] = [];
+    for (const { c } of all) {
+      if (cappedToday.has(c.id)) capped.push(displayName(c.tester));
+      else if ((await callsTaken(c.id)) >= MAX_CALLS && !(await autoMatchOf(c.id, "tester", onceStarts, reqMinutes)) && !(await sameAgain(c.id))) full.push(displayName(c.tester));
+    }
+    if (capped.length + full.length === all.length) throw new HttpError(409, "limit", [...(capped.length ? [sentTodayLine(andList(capped))] : []), ...(full.length ? [callLimitLine(andList(full))] : [])].join(" "));
+  }
   // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
   await db.$transaction((tx) => devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: ids.map((id) => `c:${id}`) }));
   // (Batch 16 section 21) The same time again (e.g. requested in another tab meanwhile): already done, said plainly; the request shows in the panel.
   const again: string[] = [];
-  for (const { c } of all) if (await db.callRequest.findFirst({ where: { contractId: c.id, fromSide: "developer", status: "pending", startsAt: kind.startsAt } })) again.push(displayName(c.tester));
+  for (const { c } of all) if (await sameAgain(c.id)) again.push(displayName(c.tester));
   if (again.length) throw new HttpError(409, "already", alreadyRequestedLine(again));
   // Auto-match ("choose one" only): a tester already requested one of these exact times at the contract rate.
-  const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
   if (onceStarts.length) {
     for (const { c } of all) {
-      const match = await db.callRequest.findFirst({ where: { contractId: c.id, status: "pending", fromSide: "tester", weeks: 0, minutes: reqMinutes, startsAt: { gt: new Date() } } });
-      const hit = match ? onceTimes(match).find((t) => onceStarts.some((x) => x.getTime() === t.getTime())) : undefined;
-      if (match && hit) {
+      if (cappedToday.has(c.id)) continue; // (§185) an auto-match is a send too
+      const found = await autoMatchOf(c.id, "tester", onceStarts, reqMinutes);
+      if (found) {
+        const { match, hit } = found;
         const clash = await acceptClash(c, "developer", [hit], match.minutes);
         if (clash.length) throw new HttpError(409, "clash", clash[0]);
-        if ((await bookedTimes(c.id)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("developer", displayName(c.tester)));
+        // (Owner, Nov 4, §185) Booking their request turns one request into one booked time: refused only for a pair already over 3 (from before the limit).
+        if ((await callsTaken(c.id)) > MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(c.tester)));
         await checkCeiling(c.id, bookRate(c.test, c), match.minutes, 1, displayName(c.tester));
         const call = await bookAt(c.id, hit, match.minutes, bookRate(c.test, c), null, true, false, { id: match.id }); // (Owner, Nov 4, §184) its own match is booked below, never dropped
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
@@ -436,23 +503,30 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes, end);
     if (own) throw new HttpError(409, "clash", own);
   }
-  // Clashes and the 2-pending limit, per tester.
-  const blocked: string[] = [], atLimit: string[] = [], ok: Ctx[] = [];
+  // Clashes and (§185) the limit of 3 booked + waiting, per tester.
+  const blocked: string[] = [], atLimit: string[] = [], ok: Ctx[] = [], dayCap: string[] = [];
   for (const x of all) {
     const minutes = reqMinutes;
+    // (§185) 3 sent to them today: not sent to them (named in the box with the others).
+    if (cappedToday.has(x.c.id)) {
+      dayCap.push(displayName(x.c.tester));
+      continue;
+    }
     const clash = await sendClash(x.c.id, requestTimes(kind, end), minutes, displayName(x.c.tester), undefined, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined, end);
     // (Batch 15 section 34) Over the $1,000 for this tester's calls: refused for them (named with what's left).
     const ceiling = await ceilingRefusal(x.c.id, bookRate(x.c.test, x.c), minutes, callsIfAccepted(kind.rows, end), displayName(x.c.tester));
     if (clash) blocked.push(clash);
     else if (ceiling) blocked.push(ceiling);
-    else if ((await pendingRequests(x.c.id)) >= MAX_REQUESTS) atLimit.push(displayName(x.c.tester));
+    else if ((await callsTaken(x.c.id)) >= MAX_CALLS) atLimit.push(displayName(x.c.tester));
     else ok.push(x);
   }
   if (all.length === 1 && blocked.length) throw new HttpError(409, "clash", blocked[0]);
-  if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", requestLimitLine(atLimit[0]));
-  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...atLimit.map(requestLimitLine)].join(" "));
-  if (blocked.length || atLimit.length) {
-    const text = [...blocked, ...(atLimit.length ? [`${atLimit.join(" and ")} already ${atLimit.length === 1 ? "has" : "have"} ${MAX_REQUESTS} requests waiting with you.`] : [])].join(" ");
+  if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", callLimitLine(atLimit[0]));
+  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...(atLimit.length ? [callLimitLine(andList(atLimit))] : []), ...(dayCap.length ? [sentTodayLine(andList(dayCap))] : [])].join(" "));
+  if (blocked.length || atLimit.length || dayCap.length) {
+    // (§185) "You already have 3 calls booked or requested with Ana Silva and Ben Carter." / "You've sent 3 call requests to Cara Diaz today." (the others go on
+    // the second press).
+    const text = [...blocked, ...(atLimit.length ? [`You already have ${MAX_CALLS} calls booked or requested with ${andList(atLimit)}.`] : []), ...(dayCap.length ? [`You've sent ${MAX_SENT_PER_DAY} call requests to ${andList(dayCap)} today.`] : [])].join(" ");
     // (Owner, NEXT-UI 12b) The second press names what the box said (limitSeen); if who is blocked / at the limit changed
     // since, it stops again with the new line.
     if (body.confirmed !== true || body.limitSeen !== text) {
@@ -481,12 +555,21 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   // (Batch 35 §132) Every time inside the call window: at least the lead ahead, and no later than when testers' work on this test ends.
   const end = await workEndOf(db, c.testId);
   const kind = readKind(body, end);
-  await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
-  const minutes = readMinutes(body);
   const devName = displayName(c.test.developer);
+  // (Owner, Nov 4, §185) Already 3 with the developer (booked + waiting, both sides): refused on the first press, never a stop first (unless this press would only
+  // auto-match the developer's own request at that time: it books it, which adds nothing). The form's own mistakes (the length, red at its box) come first, now
+  // before the gate as on the developer's side.
+  const minutes = readMinutes(body);
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for their calls (red at the box).
   const overCap = await lengthOverCap(minutes, [{ contractId, rateCents: bookRate(c.test, c), name: devName }]);
   if (overCap) throw new HttpError(400, "bad_minutes", overCap);
+  {
+    const onceNow = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
+    // (§185) 3 sent to the developer today (her own day; an auto-match counts too): "You've sent 3 call requests to Nora Lane today. …".
+    if ((await sentToday(contractId, "tester", x.me.timeZone)) >= MAX_SENT_PER_DAY) throw new HttpError(409, "limit", sentTodayLine(devName));
+    if ((await callsTaken(contractId)) >= MAX_CALLS && !(await autoMatchOf(contractId, "developer", onceNow, minutes))) throw new HttpError(409, "limit", callLimitLine(devName));
+  }
+  await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
   // Auto-match ("choose one", rates match): a developer request with one of these exact times books it.
   const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
   if (onceStarts.length) {
@@ -496,10 +579,12 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       if (!hit) continue;
       const clash = await acceptClash(c, "tester", [hit], m.minutes);
       if (clash.length) throw new HttpError(409, "clash", clash[0]);
-      if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit("tester", displayName(c.tester)));
+      // (Owner, Nov 4, §185) Booking their request turns one request into one booked time: refused only for a pair already over 3 (from before the limit).
+      if ((await callsTaken(contractId)) > MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(devName));
       await checkCeiling(contractId, bookRate(c.test, c), m.minutes, 1, devName);
       const call = await bookAt(contractId, hit, m.minutes, bookRate(c.test, c), null, false, false, { id: m.id, batchId: m.batchId }); // (Owner, Nov 4, §184) its batch closes as taken below
-      await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date() } });
+      // (Owner, Nov 4, §185) "matched": the tester's auto-match counts as one of her sends today (sentToday), as the developer's does.
+      await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
       await closeBatch(m.batchId, m.id);
       const line = `Booked: you both picked ${T(hit)}`;
       await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId });
@@ -510,7 +595,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   if (own) throw new HttpError(409, "clash", own);
   const clash = await sendClash(contractId, requestTimes(kind, end), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
   if (clash) throw new HttpError(409, "clash", clash);
-  if ((await pendingRequests(contractId)) >= MAX_REQUESTS) throw new HttpError(409, "limit", requestLimitLine(devName));
+  if ((await callsTaken(contractId)) >= MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(devName)); // (§185) changed since the first check
   await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(kind.rows, end), devName);
   const r = await createRequest({
     data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
@@ -542,9 +627,14 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
   // (Batch 16 section 21) Answered or withdrawn in another tab: the developer's press stops once naming it, then it's already done.
   // (Owner, Nov 4, §184) A request dropped when a call was booked: refused at once (a single refusal), never a stop first.
-  if (fresh.status !== "pending" && side === "developer" && !(fresh.status === "closed" && isDropReason(fresh.closedReason))) await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
+  // (Owner, Nov 4, §185) Likewise one the OTHER side withdrew: never a stop for anyone; answering it is ONE refusal, "Ana Silva withdrew this request."
+  const theyWithdrew = fresh.status === "withdrawn" && !mine;
+  if (fresh.status !== "pending" && side === "developer" && !(fresh.status === "closed" && isDropReason(fresh.closedReason)) && !theyWithdrew) await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
+  // (Owner, Nov 4, §185) Accepting with the pair already over 3 (booked + waiting, from before the limit): refused at once, before the gate. An Accept turns this
+  // request into one booked time, so it never raises the count.
+  if (action === "accept" && (await callsTaken(contractId)) > MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(other)));
   // (Batch 35 §79) Accept / Decline never stops for the line about this request itself (the developer's: the tester's "requested …" on this contract).
   if (side === "developer") await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`], answers: { item: r.id, kinds: ["requested"], contractId } }));
   else await testerGate(c.testerId, contractId, c.testId, body, undefined, { ...CALL_PRESS, answers: { item: r.id } });
@@ -589,7 +679,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
         const clashes = await acceptClash(c, side, times, r.minutes);
         if (clashes.length) throw new HttpError(409, "clash", clashes[0]);
       }
-      if ((await bookedTimes(contractId)) >= MAX_BOOKED) throw new HttpError(409, "limit", bookedLimit(side, displayName(c.tester)));
+      // (Owner, Nov 4, §185) Claimed, this request no longer counts as waiting: booking it makes one more booked time, so the others must leave room for it.
+      if ((await callsTaken(contractId)) >= MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(other)));
       // (Batch 18 section 6) A request longer than what's left of the $1,000 allows: "At most 95 minutes: ...".
       const overCap = await lengthOverCap(r.minutes, [{ contractId, rateCents: rate, name: side === "developer" ? displayName(c.tester) : displayName(c.test.developer) }]);
       if (overCap) throw new HttpError(409, "calls_ceiling", overCap);
@@ -618,7 +709,15 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   const verb = status === "withdrawn" ? "withdrew" : "declined";
   const when = T(r.startsAt);
   const text = side === "developer" ? `You ${verb} ${status === "withdrawn" ? "a" : `${displayName(other)}'s`} call request for ${when}` : `${displayName(user)} ${verb} a call request for ${when}`;
+  // (Owner, Nov 4, §185) A tester's withdrawal ("withdrew_req") is a quiet live-box line for the developer (DEV_QUIET_KINDS), never a stop; a decline (an answer
+  // to the developer's request) stops as a Call change.
   await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId));
+  // (Owner, Nov 4, §185) A withdrawal is never a stop for the other person (a quiet live-box line): they get a bell instead (and its email, per their settings),
+  // stacked per test and day with the requests a booking closed ("Call requests · 3 closed today").
+  if (status === "withdrawn") {
+    const line = `${displayName(user)} withdrew a call request for ${when}`;
+    await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}` : `/app/tests/${c.testId}`, undefined, { testId: c.testId, group: `reqclosed:${c.testId}` });
+  }
   return { [status]: true };
 }
 
@@ -700,6 +799,7 @@ export async function topUpForeverSets(now = new Date()) {
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
         continue;
       }
+      // (Owner, Nov 4, §185) No limit check: the set already counts as one booked time while it runs (bookedTimes), so a call added to it never goes past 3.
       await bookAt(c.id, at, set.minutes, set.rateCents, set.id, true, true);
       booked++;
       ahead++;

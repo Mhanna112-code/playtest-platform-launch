@@ -69,7 +69,9 @@ export async function testerChanges(testerId: string, contractId: string, testId
     const when = fmtDateTime(r.startsAt);
     const what = requestWords(r, when);
     if (r.status === "pending" && r.createdAt > seenAt) out.push({ kind: "requested", text: `${dev} requested ${what}`, createdAt: r.createdAt, item: r.id });
-    else if (r.status === "withdrawn") out.push({ kind: "requested", text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt });
+    // (Owner, Nov 4, §185) The developer withdrawing their request is a quiet live-box line, never a stop (whatever her Alerts); answering it is one refusal
+    // ("Nora Lane withdrew this request."). The quiet kind is §184's (the live box marks it quiet; no tester press stops for it).
+    else if (r.status === "withdrawn") out.push({ kind: DROP_KINDS.devQuiet, text: `${dev} withdrew the request for ${what}`, createdAt: r.updatedAt });
     else if (r.status === "taken") out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available: another tester took it`, createdAt: r.updatedAt });
     // (Owner, Nov 4, §184) One dropped when a call was booked has its own line (below), never this one too.
     else if (r.status === "closed" && !CLOSED_BY_TESTER.has(r.closedReason) && !CLOSED_BY_END.has(r.closedReason) && !isDropReason(r.closedReason)) out.push({ kind: "requested", text: `The call time with ${dev} on ${when} is no longer available`, createdAt: r.updatedAt });
@@ -85,7 +87,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
   // free at that time" (a call change, ordinary Alerts); the tester's own (her booking, or the one she was told about) is a quiet live-box line ("… closed: you
   // have another call at that time"), never a stop.
   for (const e of await db.testEvent.findMany({ where: { testId, contractId, kind: { in: [DROP_KINDS.testerClosed, DROP_KINDS.testerQuiet] }, createdAt: { gt: seenAt } }, orderBy: { createdAt: "asc" } }))
-    out.push({ kind: e.kind === DROP_KINDS.testerClosed ? "requested" : DROP_KINDS.devQuiet, text: e.text, createdAt: e.createdAt });
+    // (Owner, Nov 4, §185) Both quiet now: the developer's side of it ("Nora Lane's request for … closed: she is no longer free") comes with a bell instead.
+    out.push({ kind: DROP_KINDS.devQuiet, text: e.text, createdAt: e.createdAt });
   for (const call of calls.filter((x) => !(x.cancelledBy === "system" && byTheEnd(c, x.cancelledAt)))) out.push({ kind: "cancelled", text: `Your call with ${dev} on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt! });
   // (Owner, Oct 30, batch 15 section 45) The developer marked this tester's key as working: a change to their contract (it stops even with Alerts Off; no bell).
   const fixed = await db.accessKey.findFirst({ where: { contractId, fixedAt: { gt: seenAt }, status: "inuse" } });

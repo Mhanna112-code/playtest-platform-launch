@@ -604,9 +604,10 @@ export function stopOnce(events: TestEventLike[], seenAt: Date, confirmed: boole
  * Next round), the live-call panel (offer/remove times, cancel a call) and Pay / Reject on each piece. Test-wide.
  */
 export const DEV_STOP_KINDS = [
-  ...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "withdrew_req", "declined_req",
-  // (Owner, Nov 4, §184) A request with a tester dropped because the tester got booked elsewhere at that time ("Ana Silva's request for … closed: she is no longer free at that time").
-  "req_closed",
+  // (Owner, Nov 4, §185) Not "withdrew_req": a tester withdrawing her request is a quiet line (DEV_QUIET_KINDS); it matters only when answered (one refusal).
+  ...STOP_ONCE_KINDS, "paid", "rejected", "chargeback", "choice", "requested", "declined_req",
+  // (Owner, Nov 4, §184) "req_closed" (a request with a tester dropped because the tester got booked elsewhere) stopped here; (Owner, Nov 4, §185) now a quiet line
+  // (DEV_QUIET_KINDS) and a bell.
   // (NEWEST+3) the full set: applications, disputes, invite answers, admin decisions, listing info (F). (Batch 14 section 4: a tester's Switch / Keep no longer stops.)
   "applied", "dispute", "invite", "admin", "info", "full",
   // (Batch 8) "Your subscription ended." (or the free launch ended): a page open at that moment stops once.
@@ -619,7 +620,11 @@ export const DEV_STOP_KINDS = [
 // (Owner, Oct 28, batch 20 section 24) "rated": a tester whose part had ended rated you: a live-box line only, never a stop.
 // (Batch 30 §2) "sentpaid": a tester sent an updated version of a piece already paid the most it can be: a quiet line only (nothing more can be paid).
 // (Owner, Nov 4, §184) "req_dropped": the developer's own requests dropped because they got a call at that time (their booking, or one they were told about).
-export const DEV_QUIET_KINDS = ["terms", "key", "rated", "sentpaid", "req_dropped"] as const;
+// (Owner, Nov 4, §185) "withdrew_req": a tester withdrew her call request ("Ana Silva withdrew a call request for …"): a quiet line, never a stop; an Answer on it
+// is refused once ("Ana Silva withdrew this request."). The developer's own withdrawals ("You withdrew …") come only through the action log, as before.
+// (§185) "req_closed": a request with a tester closed because the tester got a call at that time ("Ana Silva's request for … closed: she is no longer free at that
+// time"): quiet too, with a bell (stacked per test and day).
+export const DEV_QUIET_KINDS = ["terms", "key", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed"] as const;
 /** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
 export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 
@@ -647,6 +652,8 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   lowered: "(batch 15 section 40) the developer's own Lower the length (reason E from another tab)",
   sentpaid: "(batch 30 §2) a tester updated a piece already paid the most it can be: one quiet line in the live box (DEV_QUIET_KINDS), never a stop; nothing more can be paid",
   req_dropped: "(Owner, Nov 4, §184) the developer's own call requests dropped because they got a call at that time: one quiet line in the live box (DEV_QUIET_KINDS), never a stop",
+  withdrew_req: "(Owner, Nov 4, §185) a tester withdrew her call request: one quiet line in the live box (DEV_QUIET_KINDS), never a stop; answering it is a single refusal (\"Ana Silva withdrew this request.\")",
+  req_closed: "(Owner, Nov 4, §185) a request with a tester closed because the tester got a call at that time: one quiet line in the live box (DEV_QUIET_KINDS) and a bell, never a stop",
   t_req_closed: "(§184) the tester's line about a request dropped because the developer got a call at that time: read by the tester's session page only",
   t_req_dropped: "(§184) the tester's own quiet line about her requests dropped by a call she got: read by the tester's session page only",
 };
@@ -676,7 +683,7 @@ export const TESTER_EXEMPT_KINDS: Record<string, string> = {
   booked: "read from their own call requests (reason C), never other testers' calls",
   cancelled: "read from their own calls (reason C)",
   requested: "read from their own call requests (reason C)",
-  withdrew_req: "read from their own call requests (reason C)",
+  withdrew_req: "(Owner, Nov 4, §185) read from their own call requests: the developer withdrawing one is a quiet live-box line, never a stop; answering it is one refusal",
   declined_req: "read from their own call requests (reason C)",
   paid: "read from the developer's review of their own work (reason B)",
   rejected: "read from the developer's review of their own work (reason B)",

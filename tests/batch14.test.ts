@@ -90,7 +90,7 @@ describe("batch 14 section 3: applicants and invited testers are told, stacked",
 describe("batch 14 section 4: a quieter Switch / Keep", () => {
   it("Keep tells the developer nothing; Switch is one quiet live-box line (stacked per day) and never stops a press", async () => {
     expect(R.DEV_STOP_KINDS).not.toContain("terms");
-    expect(R.DEV_QUIET_KINDS).toEqual(["terms", "key", "rated", "sentpaid", "req_dropped"]); // (batch 20 section 24) a rating by a tester whose part had ended; (batch 30 §2) an update at the cap; (batch 35 §184) a request dropped because you have the overlapping call
+    expect(R.DEV_QUIET_KINDS).toEqual(["terms", "key", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed"]); // (§184 req_dropped; §185 a tester's withdrawal) (batch 20 section 24) a rating by a tester whose part had ended; (batch 30 §2) an update at the cap
     const { dev, testId } = await setup();
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Ward", "he");

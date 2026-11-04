@@ -11,7 +11,7 @@ import { sideFor, sideForPath, sideLink } from "@/lib/sides";
 import { closedForSuspended } from "@/lib/closedPages";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
-import { GROUP_COUNT_TITLES, bellKeyIn, dayKey, groupTitle } from "@/lib/bell";
+import { GROUP_COUNT_TITLES, bellKeyIn, dayKey, groupBase, groupTitle } from "@/lib/bell";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -42,7 +42,7 @@ export default async function Notifications() {
   const entries: BellEntry[] = [...groups.entries()].map(([key, g]) => ({
     key,
     title: g[0].groupKey ? groupTitle(g[0].groupKey, new Set(g.map((n) => n.testId ?? n.id)).size, g.length) : g[0].testId ? titles.get(g[0].testId) : undefined,
-    counted: !!(g[0].groupKey && GROUP_COUNT_TITLES[g[0].groupKey]),
+    counted: !!(g[0].groupKey && GROUP_COUNT_TITLES[groupBase(g[0].groupKey)]), // (§185) "reqclosed:<test>" counts as "reqclosed"
     test: !g[0].groupKey && !!g[0].testId,
     day: dayKey(g[0].createdAt, u.timeZone) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
     lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone) })),

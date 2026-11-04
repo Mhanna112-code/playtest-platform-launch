@@ -177,7 +177,7 @@ describe("§157 3: a call request answered at the same moment", () => {
       expect(lost.message).toMatch(/^This time was booked at /);
     } else {
       expect(q.status).toBe("withdrawn");
-      expect(lost.message).toMatch(/^Nora Lane withdrew this request at /);
+      expect(lost.message).toBe("Nora Lane withdrew this request."); // (§185) said once, no time
       expect(await db.call.count({ where: { contractId: w.sessionId } })).toBe(0);
     }
   });

@@ -40,8 +40,9 @@ describe("clash checks (section 33)", () => {
       { name: "B", calls: [], requests: [], booked: 3 },
       { name: "C", calls: [], requests: [], leftCents: 400, rateCents: 3000 }, // (batch 18 section 6) under 10 minutes left: nothing can be booked
     ], elsewhere: [], fmt });
-    expect(lim.limits[0]).toBe("You already have 3 requests waiting with A. Withdraw one or wait for an answer.");
-    expect(lim.limits[1]).toBe("B already has 3 booked times with you. Wait until one is over or cancel one.");
+    // (Owner, Nov 4, §185) One limit: booked + waiting together, at most 3.
+    expect(lim.limits[0]).toBe("You already have 3 calls booked or requested with A. Wait until one is answered, over or cancelled, or withdraw a request.");
+    expect(lim.limits[1]).toBe("You already have 3 calls booked or requested with B. Wait until one is answered, over or cancelled, or withdraw a request.");
     expect(lim.limits[2]).toMatch(/^Calls with C on this test can come to at most \$1,000; \$4\.00 is left, so this call can't be booked\.$/);
   });
 });
@@ -75,7 +76,8 @@ describe("live panels, the one Call requests panel, and the server's re-check (s
 
   it("the panel, the forms and Needs you (source)", () => {
     const panel = src("components/CallRequestsPanel.tsx");
-    expect(panel).toContain('<h3 className="text-sm font-semibold text-white">Call requests</h3>');
+    // (Owner, Nov 4, §185) Its heading is its list's name: "Requests to you (N)" / "Your requests (N)" on the tester's page.
+    expect(panel).toContain('<h3 className="text-sm font-semibold text-white">{title}{showCount && <span className="font-normal text-slate-400"> ({sorted.length})</span>}</h3>');
     expect(panel).toContain("id={`req-${r.id}`}");
     expect(panel).toContain("asked by {r.mine ? \"you\" : r.asker}");
     expect(src("app/app/tests/[id]/CallRequestsBox.tsx")).toContain('<CallRequestsPanel byPerson side="developer"'); // (§181) the test page's own Call requests box
