@@ -178,6 +178,24 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
   // (Owner, Oct 31, batch 35 §80) Confirmed in Needs you (where the dashboard's box, Payments and the bell link); under the piece only a link up to it.
   const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>);
+  // (Owner, Nov 4, §175) Needs you (and the restricted view's "Your bank wants you to confirm") lists the waiting charges under each tester's name, the green profile
+  // link: one group per tester, in the order of their oldest charge, and under it every charge about them, oldest first (bankRows comes oldest first), each with its own
+  // Confirm with your bank. The links up from the tester's row still land on the charge itself, inside its group.
+  const bankGroups: { c: (typeof t.contracts)[number]; rows: typeof bankRows }[] = [];
+  for (const b of bankRows) {
+    const g = bankGroups.find((x) => x.c.id === b.contractId);
+    if (g) g.rows.push(b);
+    else {
+      const c = t.contracts.find((x) => x.id === b.contractId);
+      if (c) bankGroups.push({ c, rows: [b] });
+    }
+  }
+  const bankGrouped = bankGroups.map(({ c, rows }) => (
+    <div key={c.id} className="space-y-2" data-bank-group={c.id}>
+      <h3 className="font-semibold text-white" data-bank-group-name=""><NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} /></h3>
+      {rows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
+    </div>
+  ));
   // (Batch 23, a batch 21 leftover) A call whose two browsers never connected reads "Waiting to connect", not "In progress".
   const connectedCalls = new Set((await db.callPresence.findMany({ where: { call: { contract: { testId: t.id } } }, select: { callId: true }, distinct: ["callId"] })).map((p) => p.callId));
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
@@ -334,7 +352,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {bankRows.length > 0 && (
             <section className="space-y-2" data-restricted-bank="">
               <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
-              {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
+              {bankGrouped}
             </section>
           )}
           {bookedAhead.length > 0 && <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} embedded />}
@@ -458,7 +476,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
-          {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
+          {bankGrouped}
           <Applications needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
           {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}

@@ -145,3 +145,52 @@ it("the own profile shows accepted excerpts only, and hides the box when none ar
   expect(await profile()).not.toContain('aria-label="Your excerpts"');
 });
 
+
+// (Owner, Nov 4, §175) The charges waiting for the bank are grouped under each tester's name (the green profile link): groups in the order of their oldest charge,
+// charges oldest first inside a group, each with its own Confirm with your bank; the line names the piece by the tester's pronoun.
+describe("§175 Confirm with your bank grouped by tester", () => {
+  async function twoTesters(state: "active" | "held") {
+    const f = await fixture("active");
+    const b = await joined(f.testId, "Bea Stone", "she");
+    await sact(b.sessionId, "written", b.tester.cookie, { answers: ["Her answer", "Her other answer"] });
+    const bSub = await db.submission.findFirstOrThrow({ where: { contractId: b.sessionId } });
+    const at = (ms: number) => new Date(f.payment.createdAt.getTime() + ms);
+    const wait = (contractId: string, submissionId: string, testerId: string, cents: number, createdAt: Date) =>
+      db.payment.create({ data: { kind: "extra", contractId, submissionId, developerId: f.dev.user.id, testerId, amountCents: cents, feeCents: 0, testerCents: cents, status: "needs_confirmation", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 2 * 86_400_000), createdAt } });
+    const bea1 = await wait(b.sessionId, bSub.id, b.tester.user.id, 700, at(1000));
+    const alex2 = await wait(f.sessionId, f.sub.id, f.tester.user.id, 800, at(2000));
+    if (state === "held") auth.user = await db.user.update({ where: { id: f.dev.user.id }, data: { holdStartedAt: new Date(), holdReason: "payment" } });
+    const { default: Page } = await import("@/app/app/tests/[id]/page");
+    const html = renderToStaticMarkup(await serverTree(await Page({ params: Promise.resolve({ id: f.testId }), searchParams: Promise.resolve({}) })));
+    return { f, b, bea1, alex2, html };
+  }
+
+  it.each(["active", "held"] as const)("one group per tester under their green name, oldest first (%s)", async (state) => {
+    const { f, b, bea1, alex2, html } = await twoTesters(state);
+    const where = state === "held" ? html.indexOf('data-restricted-bank=""') : html.indexOf('id="needs-you"');
+    expect(where).toBeGreaterThan(0);
+    const alexGroup = html.indexOf(`data-bank-group="${f.sessionId}"`);
+    const beaGroup = html.indexOf(`data-bank-group="${b.sessionId}"`);
+    expect(alexGroup).toBeGreaterThan(where);
+    // Alex's oldest charge is the oldest of all: Alex's group first, then Bea's.
+    expect(beaGroup).toBeGreaterThan(alexGroup);
+    expect(html.match(/data-bank-group="/g)).toHaveLength(2);
+    // Each heading is the tester's green profile link.
+    expect(html.slice(alexGroup, beaGroup)).toMatch(new RegExp(`<a href="/app/testers/${f.tester.user.id}"[^>]*data-name-link="person"`));
+    expect(html.slice(beaGroup)).toMatch(new RegExp(`<a href="/app/testers/${b.tester.user.id}"[^>]*data-name-link="person"`));
+    // Alex's two charges inside Alex's group, oldest first; Bea's in hers.
+    const p1 = html.indexOf(`data-bank-waiting="${f.payment.id}"`), p2 = html.indexOf(`data-bank-waiting="${alex2.id}"`), p3 = html.indexOf(`data-bank-waiting="${bea1.id}"`);
+    expect(p1).toBeGreaterThan(alexGroup);
+    expect(p2).toBeGreaterThan(p1);
+    expect(beaGroup).toBeGreaterThan(p2);
+    expect(p3).toBeGreaterThan(beaGroup);
+    // The lines name the piece by the pronoun, not the name the heading carries.
+    expect(html).toContain("Your bank wants you to confirm a $7.00 payment for her written answers on");
+    expect(html).toContain("Your bank wants you to confirm a $6.00 payment for their written answers on");
+    if (state === "active") {
+      // The links up from each tester's row still land on the charge (inside its group).
+      expect(html).toContain(`href="#bank-${bea1.id}"`);
+      expect(html).toContain(`data-bank-up="${bea1.id}"`);
+    }
+  });
+});
