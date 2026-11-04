@@ -492,7 +492,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Nov 3, long text) A long name wraps beside the arrow (never past the box); the count follows it, kept on one line. (Owner, Nov 3) The name is the
                     tester's link (green), shown here only, not again on each part. */}
                 <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><a href={`/app/testers/${mine[0].c.testerId}`}><Cut text={who} /></a> <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
-                <div className="mt-2 space-y-3">
+                {/* (Owner, Nov 3) Each name's drop-down is its own panel holding all their parts (it scrolls inside; the grip drags it taller). */}
+                <div className="mt-2">
+                <ResizeBox id={`needs-person-${cid}`} label={`${who}'s parts`} defaultMax="min(30rem, 60vh)">
+                <div className="space-y-3">
           {mine.map((x) => (
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="rounded-lg border border-white/10 p-3 scroll-mt-24">
               {/* (Owner, Nov 3) Each part is its own drop-down (open at first): its line, then inside its payments, the answers or recordings, and its Pay box. */}
@@ -536,6 +539,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </Fold>
             </div>
           ))}
+                </div>
+                </ResizeBox>
                 </div>
               </details>
             );
