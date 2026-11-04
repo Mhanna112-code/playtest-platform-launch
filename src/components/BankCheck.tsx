@@ -22,7 +22,7 @@ export function addNews(n: Notice, r: PeekResult): Notice {
 }
 
 /**
- * (Owner, Nov 3, §160) The blue notice INSIDE the bank check's box, directly above the bank's frame, so it is read before Complete: what changed while the bank's page
+ * (Owner, Nov 3, §160; Nov 4: at the bottom) The blue notice INSIDE the bank check's box, at its bottom under the bank's frame and Cancel: what changed while the bank's page
  * was open that would have stopped the press ("While your bank's page was open: Ana Silva disputed the pay for her recording.", then "Complete still pays $10.00 as
  * pressed; or press Close."), or that the check was cancelled underneath it ("This bank check was cancelled: … Pressing Complete won't charge anything.").
  */
@@ -50,7 +50,7 @@ export function BankNotice({ notice }: { notice: Notice }) {
  * (Owner, Nov 3, §158) The return page can be blocked (on localhost Chrome stops Stripe's public page from sending the frame back: Private Network Access), so while the
  * bank's page is open the page also asks the server every few seconds whether Stripe still waits (`peek`, read-only); once it doesn't, the check ends as the return
  * message would (first one wins). "Close" under the frame ends it too; the server decides how it ended.
- * (Owner, Nov 3, §160) Each answer also says what changed since the press, or that the check was cancelled: shown in the blue notice above the frame as it arrives.
+ * (Owner, Nov 3, §160) Each answer also says what changed since the press, or that the check was cancelled: shown in the blue notice at the bottom of the box as it arrives.
  * Plain changes never close the box (the developer decides: Complete still pays as pressed, or Close); a cancelled check stays open with its notice until the
  * bank's return or Close ends it with the usual finish.
  */
@@ -110,10 +110,11 @@ export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", 
   return (
     <div ref={box} role="group" aria-label={BANK_CHECK_TITLE} className="basis-full space-y-2 rounded-lg border border-sky-300/40 bg-sky-500/10 p-3 text-sm" data-bank-check="bank">
       <p className="font-semibold text-white">{BANK_CHECK_TITLE}</p>
-      <BankNotice notice={notice} />
       <iframe src={action.checkUrl} title={BANK_CHECK_TITLE} className="h-[28rem] w-full rounded-lg border border-white/10 bg-white" />
       <p className="text-xs text-sky-100/80" data-bank-close-hint="">{CANCEL_HINTS[action.cancel ?? "press"]}</p>
       <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end()} data-bank-close="">{BANK_CANCEL}</button>
+      {/* (Owner, Nov 4) The notice sits at the bottom of the box, under the frame and Cancel. */}
+      <BankNotice notice={notice} />
     </div>
   );
 }

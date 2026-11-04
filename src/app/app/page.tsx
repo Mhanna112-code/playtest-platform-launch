@@ -531,34 +531,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
 
       {/* (Owner, Oct 28, batch 16 section 13) "Search by developer" over every test this tester has been in; typing replaces the sections below with the results. */}
       <DevSearch rows={devSearchRows(contracts, !suspended)}>
-      {removed.length > 0 && (
-        <section className="space-y-3" id="suspended-tests">
-          {/* (Owner, Nov 3) The heading says it once: no "You were removed from this test." on each card; Dismiss all clears them together. */}
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            {sectionTitle(<RotateCcw className="h-5 w-5 text-rose-300" />, "Tests you were removed from", removed.length)}
-            {!suspended && removed.length > 1 && <DismissRemoved contractId={removed[0].id} all />}
-          </div>
-          <ScrollList className="space-y-2">{removed.map((c) => removedCard(c))}</ScrollList>
-        </section>
-      )}
-
-      {chargeable.length > 0 && (
-        <section className="space-y-3" id="charge-or-cancel">
-          {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
-          <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
-          <ScrollList className="space-y-2">
-            {chargeable.map(({ c, parts }) => (
-              <li key={c.id}>
-                <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={`${c.title} · ${plural(parts.length, "part")}`}><Cut text={c.title} kind="test" /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
-                  <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
-                </Link>
-              </li>
-            ))}
-          </ScrollList>
-        </section>
-      )}
-
+      {/* (Owner, Nov 4) The tester dashboard's order: To do first, then Ratings to give, then Waiting for the developer; the rest below as before. */}
       <section className="space-y-3" id="to-do">
         {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do (all open tests)")}
         {todoParts.length === 0 && answers.length === 0 && allSent.length === 0 ? (
@@ -608,6 +581,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           </ScrollList>
         )}
       </section>
+
+      {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
+      {!suspended && <RatingsToGive user={user} side="tester" />}
 
       {(waiting.length > 0 || waitingCalls.length > 0 || waitingApps.length > 0 || inviteOnlyApps.length > 0) && (
         <section className="space-y-3">
@@ -668,6 +644,34 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         </section>
       )}
 
+      {removed.length > 0 && (
+        <section className="space-y-3" id="suspended-tests">
+          {/* (Owner, Nov 3) The heading says it once: no "You were removed from this test." on each card; Dismiss all clears them together. */}
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            {sectionTitle(<RotateCcw className="h-5 w-5 text-rose-300" />, "Tests you were removed from", removed.length)}
+            {!suspended && removed.length > 1 && <DismissRemoved contractId={removed[0].id} all />}
+          </div>
+          <ScrollList className="space-y-2">{removed.map((c) => removedCard(c))}</ScrollList>
+        </section>
+      )}
+
+      {chargeable.length > 0 && (
+        <section className="space-y-3" id="charge-or-cancel">
+          {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
+          <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
+          <ScrollList className="space-y-2">
+            {chargeable.map(({ c, parts }) => (
+              <li key={c.id}>
+                <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
+                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={`${c.title} · ${plural(parts.length, "part")}`}><Cut text={c.title} kind="test" /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
+                  <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
+                </Link>
+              </li>
+            ))}
+          </ScrollList>
+        </section>
+      )}
+
       {upcoming.length > 0 && (
         <section className="space-y-3" id="upcoming-calls">
           <h2 className="flex items-center gap-2 text-lg font-semibold text-white"><CalendarClock className="h-5 w-5 text-amber-300" /> Upcoming calls <span className="text-sm font-normal text-slate-400">next 7 days</span></h2>
@@ -692,8 +696,6 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       )}
 
       {/* (Owner, Oct 28, batch 16 section 32) Invitations follow every close live: the page refreshes on its poll, and the live box says which invite closed. */}
-      {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
-      {!suspended && <RatingsToGive user={user} side="tester" />}
       {!suspended && <AutoRefresh query="invites=1" v={invitesFp} />}
       {!suspended && <LiveTop scope="invites:me" seenAt={now.toISOString()} />}
       {!suspended && invites.length > 0 && (
