@@ -2775,3 +2775,24 @@ review clocks move on at the lift, reminders wait, excerpt Allow / Deny, the tes
   stands for (a new charge's payment line, when Payments isn't ticked off): the box shows the row, not the line.
 - **Tests.** `tests/batch35-dash-confirm-decision.test.ts` (the redraw's time goes ahead, the first load's stops once naming the decision, forced, and the
   second press goes ahead; another tester's charge follows the Decisions tick; Confirm all stops for it too; the wrapper and its readers).
+
+## §174 Pay more on a call: the box greyed above its own bank check (owner bug, Nov 4)
+
+Owner, Nov 4 (17:34 UTC): Pay more $2.00 on Nina Park's live call with a card that asks the bank every time; the bank box opened, Nina disputed that call 17 s
+later, and the Pay more box above the open bank box turned grey with "Your $2.00 payment for this part is waiting for your bank: finish or cancel it first.".
+The owner also saw no blue notice for the dispute, and the box stay open after Cancel.
+
+- **Cause (the grey box, fixed).** A redraw of the test page that reads the payments while the box's own check is open (a poll or refused-press redraw already on
+  its way when the press answered, or one drawn just before the check ended) sends the box its OWN waiting row as `bankWaits` (§159), and PayBox showed every
+  `bankWaits`. Reproduced on a local server (port 3471, test schema): a redraw landed about 4 s after the bank box opened and greyed it; after Cancel the line
+  stayed until the next redraw (16 s with a slow page). Now the page sends the waiting payment's id with the line (`bankWaitsOf` in payments.ts;
+  `bankWaitsLine` is unchanged for the server's refusals) and the box ignores it while its bank box is open, and for the check it just ended
+  (`payMoreWaits` in bankNotice.ts). Another payment's wait on the part still greys it, as §159 says; the server still refuses a second Pay more while one waits.
+- **The notice and Cancel (not reproduced).** On the real rows, the peek's gate for this call and payment returns "Nina Park disputed the pay for her live call"
+  (forced: same tester, §171 A3); a test of the same flow (Pay more on a call open at the bank, then the tester's dispute) gets the line from the peek, and its
+  Cancel answers 402 "nothing was charged" at once (the 3400 log has a 402 answered in 255 ms at about that point, most likely this Cancel). On the local server with the stand-in bank page
+  the notice showed the dispute within 3 s and Cancel closed the box, with and without a slow redraw landing meanwhile. So the server side is right; what kept the
+  owner's box from updating wasn't found. Seen at the same time on that account: another bank window (the $5.00 dispute-decision charge on Nina's written
+  answers, "Confirm with your bank") was open and peeking every few seconds for over 20 minutes, and the test page took 12 to 16 s to draw.
+- **Tests:** `tests/batch35-bank-box-call.test.ts` (the call's dispute is a peek line and reaches the notice; Cancel answers at once and cancels at Stripe; the
+  waiting line names its payment; the box never greys itself for its own check, another payment's wait still does; every Pay more on the page gets the id).
