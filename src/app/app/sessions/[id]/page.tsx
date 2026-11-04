@@ -35,8 +35,7 @@ import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/componen
 import { Fold, ResizeBox } from "@/components/Panel";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
-import { ADDITIONS_MAX, additionsLeftLine, additionsOf, latestItems, questionKeys } from "@/lib/additions";
-import { writtenLength } from "@/lib/rules";
+import { ADDITIONS_FULL, ADDITIONS_MAX, additionsLeftLine, additionsOf, latestItems, questionKeys } from "@/lib/additions";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
@@ -538,33 +537,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             </p>
             <p className="text-slate-400">{c.liveRateCents == null ? NOT_LISTED : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
             {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
-            {/* (Owner, Nov 4, §179) "Scroll box needed for different charges": more than 3 calls sit in the draggable panel (about 3 calls with their payment
-                lines tall at first; the grip drags it shorter or taller, up to 60% of the screen; the height kept by the session's id). */}
-            <PanelWhen on={liveRowCount > PAST_CALLS_SHOWN} id={`live-calls-${c.id}`} label="Live calls and their payments" defaultMax={LIST_PANEL.liveTester}>
-            <div className="space-y-1.5" data-live-calls={liveRowCount} data-live-calls-scroll={liveRowCount > PAST_CALLS_SHOWN ? liveRowCount : undefined}>
-            {unpaidLive.map((x) => (
-              <div key={x.id} className="space-y-1">
-                <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="" data-call-length="">
-                  {fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min
-                  <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id) || failedCalls.has(x.id)} paidCents={partPaid.get(x.id) ?? 0}
-                    developerDeleted={devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? devRealName : null} developerPronoun={c.test.developer.pronoun} closedOn={chargeShut(x.id) ? shutOn(x.id) : null} />
-                </p>
-                {/* A listed call is charged automatically after its review date; no Charge or Let it go. */}
-                {x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}
-                {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
-              </div>
-            ))}
-            {paidLive.map((x) => (
-              <div key={x.id} className="space-y-2">
-                <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="">
-                  {fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min
-                  <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id)} paidCents={partPaid.get(x.id) ?? 0} />
-                </p>
-                {!owedCalls.has(x.id) && !pendingBase.has(x.id) && <TesterReview timeZone={u.timeZone} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
-              </div>
-            ))}
-            </div>
-            </PanelWhen>
+            {/* (Owner, Nov 4, §186; replaces §179's list here) Each call with its payments is listed once, in the Call history's "Booked (N)" under the call
+                requests (§179's panel moved there with it); this part keeps its count, rate and "Paid so far". */}
+            {liveRowCount > 0 && <a href={`#calls-booked-${c.id}`} className="block text-xs" data-live-calls-below={liveRowCount}>Each call and what it was paid: Call history, Booked ↓</a>}
           </li>
         </ul>
       </section>
@@ -575,16 +550,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           {termLine("Live call", c.liveRateCents, c.liveRequired, true, liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}
           {!listedCall && c.liveRateCents != null && <p className="note" data-unlisted-call="">New calls: {NOT_LISTED}</p>}
           {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
-          <TesterCallPanel
-            sessionId={c.id}
-            seenAt={seenAt}
-            refusal={refusal}
-            devName={dev}
-            mine={mineCalls}
-            sets={mineSets}
-            noReport={meOff}
-            lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
-          />
+          {/* (Owner, Nov 4, §186) The booked calls (Join call, Cancel) are no longer listed here: they head the Call history's "Booked (N)" right below. */}
+          {mineCalls.length > 0 && now > c.dueAt && !refusal && <p className="note">{`Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.`}</p>}
+          {mineCalls.length > 0 && <a href={`#calls-booked-${c.id}`} className="block text-sm" data-booked-below={mineCalls.length}>Your booked calls (Join call, Cancel): Call history, Booked ↓</a>}
           {(canRequestCall || (pendingReqs.length > 0 && !paused && !refusal)) && (
             <section className="space-y-1.5" aria-label="Call requests" data-live-section="Requests">
               <h3 className="text-sm font-semibold text-white">Requests</h3>
@@ -613,34 +581,83 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           )}
         </LivePanel>
       )}
-      {/* (Batch 15 section 42) Call history: every call that's over, newest first, with its outcome badge (the same badges as the developer's tester row). */}
-      {overCalls.length > 0 && (
-        <details className="card text-sm" id="call-history" data-call-history="">
-          <summary className="fold-chevron cursor-pointer font-semibold text-white">Call history ({overCalls.length})</summary>
-          {/* (Batch 20 section 11) More than 3: a scroll box about 3 calls tall, newest first. (Owner, Nov 3, §152) It is the draggable panel. */}
-          <div className="mt-2">
-          <PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label="Call history" defaultMax={LIST_PANEL.pastTester}>
-          <ul className="space-y-2" data-calls-scroll={overCalls.length > PAST_CALLS_SHOWN ? overCalls.length : undefined}>
-            {overCalls.map((x) => {
-              const shown = blockedPair && x.status !== "cancelled" ? { ...x, status: "cancelled", cancelledBy: "system", cancelNote: "not available" } : x;
-              const badge = callOverBadge(shown, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, callMinutesOf(x));
-              return (
-                <li key={x.id} id={`call-${x.id}`} data-over-call={x.id} className="scroll-mt-24 space-y-1 rounded-lg border border-white/5 p-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
-                    <span className={`badge ${TONE[badge.tone]}`} data-call-badge="">{badge.label}</span>
-                  </div>
-                  {shown.status !== "cancelled" && <p className="text-xs text-slate-400">{callLengthLine(x, fmtTime)}</p>}
-                  {badge.reason && <ReasonQuote text={badge.reason} />}
-                  {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
-                </li>
-              );
-            })}
-          </ul>
-          </PanelWhen>
-          </div>
-        </details>
-      )}
+      {/* (Owner, Nov 4, §186; replaces batch 15 section 42's one "Call history (N)" fold) Call history, directly under the call requests (the Live session above),
+          in the developer's format: two drop-downs, both closed at first. "Booked (N)": every call booked and not cancelled, the ones still ahead (or running)
+          first, soonest first, with Join call / Cancel as before (they were the Live session's "Booked"; it opens by itself while a call can be joined or is
+          running, so Join is never hidden), then the ones that took place, newest first, each with its length and its payments as you saw them in "Live
+          call" (§179: its list moved here, so no call shows twice). "Cancelled (N)": the calls actually cancelled (by either of you, or by the app), newest
+          first, with the length they were booked for and who cancelled and why; requests never show here. Past 3 rows, each list is the draggable panel. */}
+      {(() => {
+        const ahead = limited ? [] : mineCalls;
+        // A blocked pair's calls read "Cancelled: not available" (batch 15 section 42), except the ones that took place: they keep their length and payments.
+        const pastBooked = overCalls.filter((x) => x.status !== "cancelled" && !(blockedPair && callMinutesOf(x) == null));
+        const cancelled = overCalls.filter((x) => !pastBooked.includes(x));
+        const bookedN = ahead.length + pastBooked.length;
+        if (!bookedN && !cancelled.length) return null;
+        const pastRow = (x: (typeof overCalls)[number]) => {
+          const m = callMinutesOf(x);
+          const badge = callOverBadge(x, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, m);
+          const reviewShown = !!x.review && !owedCalls.has(x.id) && !pendingBase.has(x.id);
+          return (
+            <li key={x.id} id={`call-${x.id}`} data-over-call={x.id} className="scroll-mt-24 space-y-1 rounded-lg border border-white/5 p-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
+              <div className="flex flex-wrap items-center gap-2" data-call-row="" data-call-length="">
+                <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
+                {/* The payment is said once: by its tag (and the paid line below), not again in the badge. */}
+                <span className={`badge ${TONE[badge.tone]}`} data-call-badge="">{`Took place${m != null ? ` · ${m} min` : ""}`}</span>
+                {x.review ? <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id)} paidCents={partPaid.get(x.id) ?? 0} />
+                  : <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id) || failedCalls.has(x.id)} paidCents={partPaid.get(x.id) ?? 0}
+                      developerDeleted={devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? devRealName : null} developerPronoun={c.test.developer.pronoun} closedOn={chargeShut(x.id) ? shutOn(x.id) : null} />}
+              </div>
+              <p className="text-xs text-slate-400" data-call-length-line="">{callLengthLine(x, fmtTime)}</p>
+              {/* A listed call is charged automatically after its review date; no Charge or Let it go. */}
+              {!x.review && <>{x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}</>}
+              {badge.reason && !reviewShown && <ReasonQuote text={badge.reason} />}
+              {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
+              {reviewShown && <TesterReview timeZone={u.timeZone} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
+            </li>
+          );
+        };
+        const cancelledRow = (x: (typeof overCalls)[number]) => {
+          const shown = x.status !== "cancelled" ? { ...x, status: "cancelled", cancelledBy: "system", cancelNote: "not available" } : x;
+          const badge = callOverBadge(shown, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, callMinutesOf(x));
+          return (
+            <li key={x.id} id={`call-${x.id}`} data-over-call={x.id} className="scroll-mt-24 space-y-1 rounded-lg border border-white/5 p-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
+                <span className="text-slate-400" data-call-booked-length="">· {x.minutes} min</span>
+                <span className={`badge ${TONE[badge.tone]}`} data-call-badge="">{badge.label}</span>
+              </div>
+              {badge.reason && <ReasonQuote text={badge.reason} />}
+            </li>
+          );
+        };
+        return (
+          <section className="card space-y-2 text-sm" id="call-history" data-call-history="">
+            <h2 className="font-semibold text-white">Call history</h2>
+            <details open={ahead.some((x) => x.joinable || x.started) || undefined} id={`calls-booked-${c.id}`} className="scroll-mt-24 rounded-lg border border-white/10 p-2" data-calls-booked={bookedN}>
+              <summary className="fold-chevron cursor-pointer font-medium text-white">Booked ({bookedN})</summary>
+              <div className="mt-2">
+              {!bookedN && <p className="note">No booked calls.</p>}
+              <PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`} label="Booked calls and their payments" defaultMax={LIST_PANEL.liveTester}>
+              <div className="space-y-2" data-calls-scroll={bookedN > PAST_CALLS_SHOWN ? bookedN : undefined}>
+                {ahead.length > 0 && <TesterCallPanel sessionId={c.id} seenAt={seenAt} refusal={refusal} devName={dev} mine={ahead} sets={mineSets} noReport={meOff} />}
+                {pastBooked.length > 0 && <ul className="space-y-2" data-calls-history="" data-live-calls={pastBooked.length}>{pastBooked.map(pastRow)}</ul>}
+              </div>
+              </PanelWhen>
+              </div>
+            </details>
+            <details id={`calls-cancelled-${c.id}`} className="scroll-mt-24 rounded-lg border border-white/10 p-2" data-calls-cancelled={cancelled.length}>
+              <summary className="fold-chevron cursor-pointer font-medium text-white">Cancelled ({cancelled.length})</summary>
+              <div className="mt-2">
+              {!cancelled.length && <p className="note">No cancelled calls.</p>}
+              <PanelWhen on={cancelled.length > PAST_CALLS_SHOWN} id={`cancelled-calls-${c.id}`} label="Cancelled calls" defaultMax={LIST_PANEL.pastTester}>
+              <ul className="space-y-2" data-calls-history="" data-calls-scroll={cancelled.length > PAST_CALLS_SHOWN ? cancelled.length : undefined}>{cancelled.map(cancelledRow)}</ul>
+              </PanelWhen>
+              </div>
+            </details>
+          </section>
+        );
+      })()}
       {/* The full app's "Your recordings" card, then "The written part" (a card of its own). */}
       <section className="card space-y-3" id="recording">
         <h2 className="flex flex-wrap items-center gap-2 font-semibold text-white"><Clapperboard className="h-5 w-5 text-fuchsia-300" /> Your recordings
@@ -676,11 +693,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   <SentWork id={`own-${written.id}`} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
                     addTo={canAdd ? ({ key }) => (currentKeys.includes(key) ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined} />
                 </ResizeBox>
+                {/* (Owner, Nov 4, §186) At 10 additions: the grey note once, directly under the panel, in place of the Add to this answer rows (was once per question). */}
+                {canAdd && addsMade >= ADDITIONS_MAX && <p className="note" data-additions-full="">{ADDITIONS_FULL}</p>}
                 {canAdd && (
                   <div className="space-y-2" data-add-buttons="">
                     {currentKeys.map((key, at) => (
                       <WrittenAddForm key={key} slot={`${c.id}:${key}`} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={sentItems[at].question} made={addsMade}
-                        used={writtenLength([...sentItems.map((x) => x.answer), written.notes, ...additionsOf(written.additions).map((x) => x.text ?? "")])}
                         known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
                     ))}
                   </div>

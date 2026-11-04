@@ -178,12 +178,12 @@ describe("the tester adds under one question", () => {
     expect(page).toContain("addTo={canAdd ? ({ key }) =>");
     expect(page).toContain("<WrittenAddForm key={key}");
     expect(page).not.toMatch(/<WrittenAddForm sessionId=\{c\.id\} seenAt=\{seenAt\} canSend=\{!rulesPaused\} lines=\{sendLines\(written, c\.writtenCents\)\}\s+used=/);
-    const h = renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), used: 0, questionKey: "qabc", question: Q1, made: 3 }));
+    const h = renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: "qabc", question: Q1, made: 3 }));
     expect(h).toContain(`data-add-more="written">${ADD_OPEN}</button>`);
     expect(ADD_PRESS).toBe("Add to my answer");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(actions).toContain("api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt })");
-    // The same box as before: the editor with Bold, Italic, Code block and 📎, the 50,000 count, the paused draft line.
+    // The same box as before: the editor with Bold, Italic, Code block and 📎, the 20,000 count (§186: the addition's own), the paused draft line.
     const form = actions.slice(actions.indexOf("export function WrittenAddForm"), actions.indexOf("export function LeaveButton"));
     for (const s of ["<AnswerBox ", "data-written-count", "What you add is kept as a draft. Adding comes back when the test resumes.", "<ChangesBox side=\"tester\""]) expect(form).toContain(s);
   });
@@ -225,12 +225,15 @@ describe("at most 10 additions per part", () => {
     expect(additionsOf((await written(j.sessionId)).additions)).toHaveLength(10);
   });
 
-  it("the remaining count once there is one; at 10 every box shows the grey note instead of its button, and a draft stays read-only", () => {
+  it("the remaining count once there is one; at 10 the grey note once under the panel (§186) instead of every box's button, and a draft stays read-only", () => {
     expect(additionsLeftLine(7)).toBe("3 of 10 additions left");
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain("{canAdd && addsMade > 0 && addsMade < ADDITIONS_MAX && <p className=\"note\" data-additions-left=\"\">{additionsLeftLine(addsMade)}</p>}");
-    const full = renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), used: 0, questionKey: "qabc", question: Q1, made: 10 }));
-    expect(full).toContain(`<p class="note" data-additions-full="">${ADDITIONS_FULL.replace("'", "&#x27;")}</p>`);
+    const full = renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: "qabc", question: Q1, made: 10 }));
+    // (Owner, Nov 4, §186) Not once per question any more: the page shows it once under the panel (tests/limits-call-history.test.ts renders it).
+    expect(full).not.toContain("data-additions-full");
+    expect(full).toContain('hidden=""');
+    expect(page).toContain("{canAdd && addsMade >= ADDITIONS_MAX && <p className=\"note\" data-additions-full=\"\">{ADDITIONS_FULL}</p>}");
     expect(full).not.toContain("data-add-more");
     expect(full).not.toContain("data-add-send");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");

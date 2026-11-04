@@ -969,11 +969,18 @@ export const namesList = (names: string[]) =>
 /** (Batch 25 section 5) What a receipt for paying what's owed names: "what you owed: Ana Silva's live call on “Harbor Run” (Oct 30) and Ben Okafor's written answers on “Sky Lab”" (§131: each named by pieceName). */
 export const owedReceiptWhat = (names: string[]) => (names.length ? `what you owed: ${namesList(names)}` : "an amount you owed");
 /** (Owner, Oct 29, batch 11) A written part (all its answers and notes together) is at most this many characters. */
-export const WRITTEN_MAX_CHARS = 50_000; // (Owner, Oct 29, batch 14 section 5; was 10,000)
+export const WRITTEN_MAX_CHARS = 20_000; // (Owner, Oct 29, batch 14 section 5; was 10,000) (Owner, Nov 4, §186) 20,000, was 50,000
 export const writtenLength = (texts: string[]) => texts.reduce((a, t) => a + withoutAttachmentMarkers(t ?? "").length, 0);
 export function checkWrittenLength(texts: string[]): Check {
   const n = writtenLength(texts);
   return n > WRITTEN_MAX_CHARS ? no(`Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${n.toLocaleString("en-US")}).`) : yes;
+}
+// (Owner, Nov 4, §186) An addition ("Add to this answer", §167) has the same limit as the answers sent first: WRITTEN_MAX_CHARS for its own text (counted without
+// the file markers, as everywhere), whatever the answers sent before and the other additions hold. Text already stored stays as it is; only a new press is limited.
+export const additionTooLongLine = (n: number) => `Your addition can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters (now ${n.toLocaleString("en-US")}).`;
+export function checkAdditionLength(text: string): Check {
+  const n = writtenLength([text]);
+  return n > WRITTEN_MAX_CHARS ? no(additionTooLongLine(n)) : yes;
 }
 /**
  * (Owner, Oct 29, batch 11) A tester who deleted their account: work they sent is still reviewed when their payout account was connected (Pay reaches their Stripe

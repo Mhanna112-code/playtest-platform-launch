@@ -61,7 +61,7 @@ Build docs/BATCH-27.md §3 ("Files placed at the cursor in written answers") exa
 - Limits (batch 31 §2 replaces the batch 27 numbers): every file up to 500 MB; at most 5 files and 5 recordings across the whole
   written part. Keep the existing upload route, storage (R2) and limit checks: search src/ for WrittenAttachments.tsx and the
   upload API it calls, and reuse them.
-- Markers don't count toward the 50,000-character limit or the 50-character minimum per answer (batch 30 §14).
+- Markers don't count toward the 20,000-character limit or the 50-character minimum per answer (batch 30 §14).
 - Every place that shows written answers renders the markers as attachments in place: the developer's piece view and By question,
   previous question sets, admin "See the work", the emails. Search src/ for where written answers are rendered and route them all
   through one renderer. Old answers (attachments only in the box under the answers) still show exactly as today.

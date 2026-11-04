@@ -156,7 +156,7 @@ export const pieceTime = (sub: { updatedAt: Date; additions?: unknown }) => last
 /** The ids of every upload sent with an addition (the rest of a piece's uploads were sent with it first). */
 export const addedFiles = (adds: Addition[]) => new Set(adds.flatMap((a) => a.files));
 
-/** Every text in a written piece, for the 50,000-character limit: the first answers and notes, then each addition's text, answers and notes. */
+/** Every text in a written piece, for the written part's character count ((Owner, Nov 4, §186) no longer one limit over all of them: each send and each addition has its own 20,000): the first answers and notes, then each addition's text, answers and notes. */
 export function writtenTexts(sub: { answers: unknown; notes: string; additions?: unknown }): string[] {
   return [
     ...itemsOf(sub.answers).map((x) => x.answer), sub.notes,

@@ -51,9 +51,10 @@ describe("batch 35 §97: payment tags replace blue payment-state notices", () =>
   async function parts(sessionId: string) {
     const { default: Page } = await import("@/app/app/sessions/[id]/page");
     const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ id: sessionId }) }));
+    // (Owner, Nov 4, §186) Each call's payment tag is in the Call history's "Booked (N)" now (the Live call part lists them no more): both sections.
     const body = html.match(/<section id="parts"[\s\S]*?<\/section>/)?.[0];
     expect(body).toBeTruthy();
-    return body!;
+    return body! + (html.match(/<section [^>]*id="call-history"[\s\S]*?<\/section>/)?.[0] ?? "");
   }
 
   it("a paid written part shows Paid and no blue delay notice", async () => {

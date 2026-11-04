@@ -4,3 +4,8 @@
 
 /** The session page's part for what a payment label names ("written answers", "recording", "live call"). */
 export const partAnchor = (label: string) => (label === "recording" ? "part-recording" : label === "live call" || label === "call" ? "part-live" : "part-written");
+/**
+ * (Owner, Nov 4, §186) A payment line about one call opens that call's row in the session's Call history "Booked (N)" (`call-<id>`, where its payments are now
+ * listed; the drop-down opens for the jump); anything else opens its part as before.
+ */
+export const pieceAnchor = (label: string, callId?: string | null) => (callId ? `call-${callId}` : partAnchor(label));

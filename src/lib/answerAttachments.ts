@@ -56,7 +56,7 @@ export function markerIds(text: string, uploads: readonly { id: string; filename
 /** Does `text` (an answer, or a whole draft or set as JSON) hold a marker for upload `id`? `uploads`: the contract's uploads (without them, only `id` itself). */
 export const hasMarkerFor = (text: string, id: string, uploads: readonly { id: string; filename?: string }[] = [{ id }]) => markerIds(text, uploads).has(id);
 
-/** Markers don't count toward the 50,000-character limit or the 50-character minimum; nor does an "[Uploading …]" placeholder. */
+/** Markers don't count toward the 20,000-character limit (§186; was 50,000) or the 50-character minimum; nor does an "[Uploading …]" placeholder. */
 export function withoutAttachmentMarkers(text: string) { return text.replace(markerPattern, "").replace(/\[Uploading [^\]\n]+… \d+%\]/g, ""); }
 /** An excerpt shows "[file]" where a marker was. */
 export function excerptWithFiles(text: string) { return text.replace(markerPattern, "[file]"); }

@@ -13,7 +13,7 @@ import { isAdmin } from "./session";
 // (Batch 35 §11) And the admin console's boxes ("admin:<action>:<id>": the reasons, notes and amounts, the dispute Decide, the team close-out): admins only.
 // (Batch 35 §136) And Add more on sent written answers ("add:<contractId>": `{ text }`); (§167) one per question ("add:<contractId>:<questionKey>").
 const KINDS = ["written:", "add:", "chat:", "dispute:", "rate:", "reject:", "pay:", "more:", "test:", "request:", "endearly:", "stop:", "apply:", "profile:", ADMIN_DRAFT_PREFIX];
-const MAX_BYTES = 1_100_000; // (batch 15 sections 3 and 17) room for 20 questions and the steps at 20,000 characters each, or a 50,000-character written part with its questions
+const MAX_BYTES = 1_100_000; // (batch 15 sections 3 and 17) room for 20 questions and the steps at 20,000 characters each, or a 20,000-character written part with its questions (§186; was 50,000)
 /** (Batch 15 section 41, L2) Kept forms per person. */
 export const MAX_KEPT = 50;
 

@@ -641,7 +641,7 @@ export async function tellArrived(p: { contractId: string | null; submissionId: 
   const part = title && (p.submissionId || p.callId) ? await partOnTest(p, "your", title) : null;
   const label = p.kind === "dispute" ? "dispute" : p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
   const line = part ? `${devName} paid ${money(p.amountCents)} for ${p.kind === "dispute" ? `your dispute about ${part}` : part}` : `${devName} paid ${money(p.amountCents)} for your ${label}`;
-  await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? "part-live" : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { side: "tester", payment: true, group: "tarrived" });
+  await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? `call-${p.callId}` : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { side: "tester", payment: true, group: "tarrived" });
 }
 
 /** (§125) A charge that came in while the one payment is in flight. */

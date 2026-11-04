@@ -530,8 +530,11 @@ describe("batch 20 section 11: past calls in a scroll box past 3", () => {
   it("2 calls: no box; 6: a box about 3 calls tall; both pages use it; a bell link scrolls to the call", () => {
     // (Owner, Nov 3, batch 35 §152) The box is the draggable panel (PanelWhen: a panel only past 3; tests/batch35-list-panels.test.ts renders it).
     expect(PAST_CALLS_SHOWN).toBe(3);
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label="Call history" defaultMax={LIST_PANEL.pastTester}>');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label={`Calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>');
+    // (Owner, Nov 4, §186) Two drop-downs on both sides, "Booked (N)" and "Cancelled (N)", each a panel past 3 rows (tests/limits-call-history.test.ts renders them).
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`} label="Booked calls and their payments" defaultMax={LIST_PANEL.liveTester}>');
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<PanelWhen on={cancelled.length > PAST_CALLS_SHOWN} id={`cancelled-calls-${c.id}`} label="Cancelled calls" defaultMax={LIST_PANEL.pastTester}>');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('<PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`} label={`Booked calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('<PanelWhen on={cancelled.length > PAST_CALLS_SHOWN} id={`cancelled-calls-${c.id}`} label={`Cancelled calls with ${name}`} defaultMax={LIST_PANEL.pastTester}>');
     // Newest first, each with its own id (a bell link "#call-<id>" opens the fold, scrolls the box to it and marks it).
     expect(src("app/app/sessions/[id]/page.tsx")).toContain(".sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());");
     expect(src("lib/markJump.ts")).toContain('el.scrollIntoView({ block: "center", behavior: "smooth" });');

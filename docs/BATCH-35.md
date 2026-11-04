@@ -3109,3 +3109,88 @@ time is no longer free.").
   tester's quiet lines; both Accepts single refusals), the developer's auto-match plus a request between the same two on another test, the Forever top-up, and
   a batch's copies still "taken" with a non-overlapping request left alone. Updated: `request-kinds` (Ben's Accept now reads "This request closed: Nora Lane is
   no longer free at that time." instead of "This time is no longer free.").
+
+## §186 Text limits 20,000; an addition has an answer's limit; call history as Booked / Cancelled on both sides (owner, Nov 4)
+
+### A. Every 50,000-character limit is 20,000
+
+| Limit | Before | After | Where |
+| --- | --- | --- | --- |
+| A written part (all its answers and "Anything else" together): `WRITTEN_MAX_CHARS` | 50,000 | 20,000 | `src/lib/rules.ts`; the form's "N / 20,000" counter, Send greyed and refused over it, the typing limit (`answerRule`), the server's `checkWrittenLength` ("Your written answers can be at most 20,000 characters in all (now 20,001).") |
+| Contact us: `LIMITS.contact.max` | 50,000 | 20,000 | `src/lib/limits.ts`; the form's maxLength and "N / 20,000" counter, the server (`readText`, refused never cut) |
+| One addition ("Add to this answer", §167) | the part's 50,000 shared with the answers and every earlier addition | 20,000 of its own | below |
+
+Nothing else in `src` was 50,000 (the other mentions were comments: the admin's Contact us scroll box, the request size notes of `/api/kept`, `/api/sessions/…`
+and `server/kept.ts`, `additions.ts`, `answerAttachments.ts`: reworded in place; the byte limits of those requests are unchanged, they only had room to spare).
+The Terms and the help page don't state the number. DESIGN-DOC.md, HANDOVER.md and CODEX-TASKS.md now say 20,000 (edited in place; no version bump).
+
+**An addition has the same limit as an original answer.** Before, `addRefusal` checked the latest answers + the notes + every addition + the new text against
+the one 50,000, so a long first send left little room for additions. Now each addition is limited like one send of answers: at most 20,000 characters of its own
+text (file markers not counted, as everywhere), whatever the answers sent before and the other additions hold (`checkAdditionLength`, `rules.ts`). It is refused
+on the first press, before any stop box (addRefusal runs before the stop-once): **"Your addition can be at most 20,000 characters (now 20,001)."** (`additionTooLongLine`,
+the same words on the page and from the server). The add form's counter counts only the addition ("N / 20,000"), its box stops typing at 20,000 (`additionRule`;
+a cut paste says "Cut to the 20,000-character limit for this addition."), and the `used` prop (the part's characters so far) is gone.
+
+**Text already stored stays as it is.** A sent part, an addition or a Contact us message longer than 20,000 is never cut or refused after the fact; only new
+presses are limited. An old **draft** over the limit (kept from before): the box shows it whole (the browser never cuts a value already longer than maxLength,
+and our limiter only lets it shrink), the counter is red ("25,000 / 20,000"), Send / Add to my answer is greyed and a press is refused with the line above
+until it fits; a read-only draft at 10 additions (maxLength 20,000) still shows it whole.
+
+**At 10 additions the grey note shows once** (owner's fix on §167 / §182). Before: "You've added to this part 10 times, the most it takes." showed in each
+question's "Add to this answer" row under the answers panel (twice with 2 questions). After: once, directly under the answers panel (`data-additions-full`),
+in place of the rows: no Add buttons and no per-question note (a kept draft still opens read-only in its question). Same words. The developer's side never
+showed it.
+
+### B. Call history, developer side: each tester's row in the TESTERS panel
+
+| Before | After |
+| --- | --- |
+| One fold "Calls (N)": every call that's over (took place, cancelled, nobody joined, missed …), newest first; the calls ahead only in the Live session | Two drop-downs, both closed at first: **"Booked (N)"** and **"Cancelled (N)"** (`data-calls-booked="N"`, `data-calls-cancelled="N"`, ids `calls-booked-<contractId>` / `calls-cancelled-<contractId>`, both inside the old `data-calls-fold` wrapper) |
+
+- **Booked (N):** every call booked and not cancelled. First the ones still ahead (or running), soonest first: time · length · rate, "Upcoming" (or the
+  measuring / in-progress tag), with the Live session row's own buttons and rules (Join call while it can be joined, Add to calendar, Cancel with a reason
+  within 24 hours, Report a problem once started; `BookedAhead.tsx`, rows `booked-call-<id>`, the same `/cancel-call` press and stop-once). Then the ones that
+  took place, newest first, exactly as before: each call its own fold with its badge ("Took place · 30 min · paid $15.50", the amount once, §170), its length,
+  its payments (`part-pays-<id>`), Pay more / "paid the most", the waiting bank check. Empty: "No booked calls."
+- **Cancelled (N):** the calls actually cancelled, by either side or by the app (Nobody joined, Couldn't connect, Missed: the site was down / the test was
+  paused), newest first: time · the length it was booked for · the existing badge ("Cancelled by you · 3:05 PM", "Cancelled by Ana Silva · …") and the reason
+  quoted under it. Call requests (waiting, withdrawn, declined, closed) never show here. Empty: "No cancelled calls."
+- **Panels (§152 rules):** past 3 rows each list is the draggable panel: Booked `booked-calls-<contractId>` at `LIST_PANEL.pastDeveloper` (27rem, rows carry
+  payments), Cancelled `cancelled-calls-<contractId>` at `LIST_PANEL.pastTester` (16rem, short rows). 3 or fewer: a plain list.
+- **Jumps:** `#call-<id>` of a call that's over lands on its row and opens the drop-down it is in (jumpTo opens every enclosing fold); a call's charge waiting
+  for the bank opens its drop-down by itself, as before. A call still ahead keeps `#call-<id>` in the Live session (with its timer), so the Live session is
+  unchanged; its copy in Booked is `booked-call-<id>`. (Read this way, check: the developer's Live session panel spans all testers and holds the request form,
+  so its booked list stays; the calls ahead therefore show there and in the tester's row.)
+
+### C. Call history, tester side: under the call requests
+
+| Before | After |
+| --- | --- |
+| Live session: "Booked" (calls ahead, Join call / Cancel, panel `booked-<sessionId>`), then Requests. "Live call: N done" (part list, §179) listed every done call with its payment box (panel `live-calls-<sessionId>` past 3). A closed card "Call history (N)" with every call that's over and its badge | Live session: the rate, warnings, Requests, and the line "Your booked calls (Join call, Cancel): Call history, Booked ↓" when any. "Live call: N done" keeps its count, rate, "Paid so far" and warning, with "Each call and what it was paid: Call history, Booked ↓". A card **"Call history"** right under the Live session (where the call requests are) with **"Booked (N)"** and **"Cancelled (N)"** |
+
+- **Booked (N):** the calls ahead first, soonest first, with Join call / Add to calendar / Cancel / Report a problem as before (the Live session's rows moved
+  here: `TesterCallPanel`, rows `call-<id>`, sets with Show calls / Cancel the remaining calls). The drop-down opens by itself while a call can be joined or is
+  running, so Join is never hidden. Then the calls that took place, newest first, each with its time, "Took place · 30 min", its payment tag (Paid / Waiting
+  for review / Payment delayed / …), its length line, "Charged automatically …" for an unpaid listed call, and its payment box as in "Live call" (Paid $15.50
+  ($31.00/h): you get …, extras, the dispute and Pay more lines, Dispute the pay).
+- **Cancelled (N):** as on the developer side, in the tester's words ("Cancelled by Nora Lane", "Cancelled by you", "Nobody joined" …). A blocked pair's calls
+  read "Cancelled: not available" as before, except a call that took place: it stays in Booked with its payments.
+- **Merged, so nothing shows twice:** the Live session's "Booked" list and §179's per-call list in "Live call" are gone; both are now the Call history's Booked
+  (§179's panel became Booked's panel: `booked-calls-<sessionId>` at `LIST_PANEL.liveTester`, 27rem, past 3 rows; Cancelled `cancelled-calls-<sessionId>` at
+  16rem). The old Call history badge no longer repeats the amount ("Took place · 30 min", the tag and the paid line say it). Hooks kept: `data-call-row` +
+  `data-call-length` (each row's line), `data-auto-charge`, `data-over-call`, `data-call-badge`, `data-live-calls="N"` (the calls that took place),
+  `data-call-history`, `id="part-live"`, `id="calls"`; new `data-calls-booked`, `data-calls-cancelled`, `data-calls-ahead`, `data-booked-below`,
+  `data-live-calls-below`. Gone: the panel ids `booked-<sessionId>` and `live-calls-<sessionId>`.
+- **Links:** the tester dashboard's Upcoming calls open `…#calls-booked-<sessionId>` (was `#live`); a payment bell or email about a call (paid, Pay more,
+  delayed, a dispute decided, the team's $0 closure, a payment arriving after a hold) opens that call's own row `#call-<id>` (was `#part-live`; `pieceAnchor`,
+  `src/lib/links.ts`). Written answers and recordings keep `#part-written` / `#part-recording`.
+- **Not touched:** call request logic and the request boxes (another branch); the request section stays where it is, the Call history card follows it.
+
+### Tests
+New `tests/limits-call-history.test.ts`: the 20,000 limits (rules, Contact us 20,001 refused), an addition at 20,000 accepted and 20,001 refused on the first
+press with no stop box while the part already holds 20,000 (and a second 20,000 one after that), the typing rule and an older over-limit draft that may only
+shrink; both sides rendered: only cancelled calls with closed requests (Booked (0), Cancelled (2) newest first, the badges and reasons, no request), and 2 ahead +
+2 that took place + 1 cancelled (the order, the buttons, the payments in Booked, each call once on the tester's page, the panels). Updated: `batch11`,
+`batch14` (20,000), `batch20`, `batch35-list-panels` (§152 ids, §179 now in Booked), `batch35-payment-tags`, `batch35-pending-pay-state` (a call's tag is in the
+Call history), `batch35-added-per-question`, `batch35-parts-fold` (no `used`; the 10-additions note no longer in each form). New: 2 questions at 10 additions
+render the note exactly once, under the panel, with no Add button.

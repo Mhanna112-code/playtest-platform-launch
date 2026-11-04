@@ -7,10 +7,9 @@ import { CalendarPlus } from "lucide-react";
 import { CallTimer } from "@/components/CallTimer";
 import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence, CallTimelineLine } from "@/components/CallPresence";
-import { LIVE_SECTIONS, LiveSection } from "@/components/LivePanel";
+import { LIVE_SECTIONS } from "@/components/LivePanel";
 import { CancelMenu } from "@/components/CancelMenu";
 import { CallCheck } from "@/components/CallCheck";
-import { LIST_PANEL } from "@/components/ScrollList";
 
 export type TesterSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; callIds: string[] };
 type Mine = { id: string; setId?: string | null; when: string; minutes: number; canCancel: boolean; started: boolean; ended?: boolean; reported: boolean; cancelled: string; late?: string; rate?: string; joinable?: boolean; devJoinedAt?: string | null; testerJoinedAt?: string | null; joined?: string; outcome?: { label: string; tone: "grey" | "amber" | "green" | "rose" }[]; logged?: number | null; lengthText?: string; report?: { byMe: boolean; note: string } | null };
@@ -19,9 +18,10 @@ const TONE = { grey: "", amber: "border-amber-300/40 text-amber-200", green: "bo
 const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 
 /**
- * The tester's calls inside the Live session panel: Booked (still ahead or running: Join call while it can be joined,
- * Cancel). (Batch 15 section 42) Calls that are over are in the page's "Call history". Cancel and Report a problem stop once for call changes since the page
- * loaded (box under the button).
+ * The tester's calls still ahead or running (Join call while it can be joined, Cancel). (Batch 15 section 42) Calls that are over are in the page's "Call
+ * history". Cancel and Report a problem stop once for call changes since the page loaded (box under the button).
+ * (Owner, Nov 4, §186) No longer a "Booked" section of the Live session: these rows head the Call history's "Booked (N)" drop-down (under the call requests),
+ * soonest first, so a call never shows twice; that list is the draggable panel past 3 rows, so these have no panel of their own (was `booked-<sessionId>`).
  */
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
   const { press, changes, error, busy, at, finish } = usePress(p.seenAt);
@@ -65,10 +65,9 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
   );
   if (!p.mine.length) return null;
   return (
-    <div className="space-y-4" id="calls">
+    <div className="space-y-2" id="calls" data-calls-ahead={booked.length + sets.length}>
       {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
-      {/* (Owner, Nov 3, batch 35 §152) The booked calls in the draggable panel (scrolls inside; the grip drags it shorter or taller). */}
-      <LiveSection title={LIVE_SECTIONS.booked} show={booked.length > 0 || sets.length > 0} panel={`booked-${p.sessionId}`} panelMax={LIST_PANEL.testerBooked}>
+      <ul className="divide-y divide-white/5" data-live-section={LIVE_SECTIONS.booked}>
         {booked.map(row)}
         {sets.map((st) => {
           const calls = p.mine.filter((m) => st.callIds.includes(m.id));
@@ -88,7 +87,7 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
             </li>
           );
         })}
-      </LiveSection>
+      </ul>
     </div>
   );
 }

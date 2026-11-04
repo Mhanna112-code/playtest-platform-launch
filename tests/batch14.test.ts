@@ -113,10 +113,10 @@ describe("batch 14 section 4: a quieter Switch / Keep", () => {
   });
 });
 
-describe("batch 14 section 5: written answers up to 50,000 characters", () => {
+describe("batch 14 section 5: written answers up to 20,000 characters (owner, Nov 4, §186; was 50,000)", () => {
   it("the limit and the counter", () => {
-    expect(R.WRITTEN_MAX_CHARS).toBe(50_000);
-    expect(R.checkWrittenLength(["a".repeat(50_001)])).toMatchObject({ ok: false, message: "Your written answers can be at most 50,000 characters in all (now 50,001)." });
+    expect(R.WRITTEN_MAX_CHARS).toBe(20_000);
+    expect(R.checkWrittenLength(["a".repeat(20_001)])).toMatchObject({ ok: false, message: "Your written answers can be at most 20,000 characters in all (now 20,001)." });
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("{WRITTEN_MAX_CHARS.toLocaleString(\"en-US\")}");
   });
 });
