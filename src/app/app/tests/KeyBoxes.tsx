@@ -1,5 +1,5 @@
 "use client";
-import { Cut } from "@/components/Cut";
+import { NameLink } from "@/components/Cut";
 import { KeyCounts } from "@/components/KeyCounts";
 import { KEY_RULE, limitedChange } from "@/lib/typingLimit";
 import { FREE_KEYS_RULE, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
@@ -7,7 +7,7 @@ import { FREE_KEYS_RULE, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/ke
 export type KeysData = {
   free: { id: string; value: string; reused?: { from: string; broken: boolean } }[];
   /** Working testers' keys; keys of testers who left or finished come last, greyed ("(left)" / "(finished)"): those can be typed back into Free. */
-  inUse: { id: string; value: string; broken: boolean; tester: string; contractId: string; gone?: "left" | "finished" }[];
+  inUse: { id: string; value: string; broken: boolean; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; contractId: string; gone?: "left" | "finished" }[];
   open: number;
   /** The working testers now (the open spots follow them live). */
   testersIn?: number;
@@ -58,7 +58,7 @@ export function KeyBoxes({ data, typed, onType, onBlur, openSpots, line, warning
               {inUse.map((k) => (
                 <li key={k.id} className={`flex flex-wrap items-center justify-between gap-2 ${k.gone ? "text-slate-500" : k.broken ? "text-slate-500 line-through" : "text-slate-200"}`} data-key-gone={k.gone} title={k.broken ? `${k.tester} reported this key as not working` : undefined}>
                   <span className={`font-mono ${k.broken ? "line-through" : ""}`}>{k.value}</span>
-                  <span className="text-xs no-underline"><Cut text={k.tester} />{k.gone ? ` (${k.gone})` : ""}{k.broken ? " · not working" : ""}</span>
+                  <span className="text-xs no-underline"><NameLink text={k.tester} href={k.testerHref} />{k.gone ? ` (${k.gone})` : ""}{k.broken ? " · not working" : ""}</span>
                 </li>
               ))}
             </ul>

@@ -44,7 +44,8 @@ describe("batch 35 §124: profile hovers in Messages and chats", () => {
     expect(list).toContain(`href="/app/developers/${dev.user.id}"`);
     expect(list).toContain('role="tooltip"');
     expect(list).toContain("No ratings yet");
-    expect(list).toContain("See their profile");
+    expect(list).not.toContain("See their profile"); // (owner, Nov 3, §166) the card's name is the link
+    expect(list).toContain(`data-name-link="person"`);
     expect(list).toContain(`href="/app/direct/${dev.user.id}"`); // the row still opens the chat
     const open = await directAs(tester.user, dev.user);
     expect(hovers(open)).toBe(2); // the header and Nora's one message; "You" has none

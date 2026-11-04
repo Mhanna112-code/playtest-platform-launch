@@ -2268,3 +2268,39 @@ sign-up.
   in-flight line (and "already reserved" only once reserved); a new chargeback during a reservation is named with what happens to it; the Owed box follows a
   redraw while an undrawn change still stops once. `batch35-payment-proofs` expects the in-flight line where another tab presses during the press's check.
 - **Recordings:** halted by the owner (Nov 3) before a final set; none belong to this section yet.
+
+## §166 The name is the green profile link everywhere; no "See her profile" (owner, Nov 3)
+
+Owner, on the developer's test page (Testers, under a tester's fold): "remove see her profile — I've said the name itself should be green everywhere." Then, on
+the same fold: remove the "On BB's profile: “…”" lines above Chat, and the "bb: 1.0 ★ (1 rating)" line at the bottom.
+
+- **One helper:** §137's `NameLink` (`src/components/Cut.tsx`), now for a person's name in headings, rows and hover cards as well as sentences. Two options:
+  `whole` (a hover card's own heading: the full name, wrapping anywhere, as the card showed it before) and `newTab` (the Invite box's rows, which opened the
+  profile in a new tab so the ticks stay).
+- **Removed, every separate profile link next to a person:** the tester's fold summary ("See her profile", `data-tester-profile`); the Testers circle's card;
+  `PersonHover`'s card (Messages, chat, the session page's developer); the developer dashboard's seats card (`Seats`, `Ui.tsx`); the join page's "See his
+  profile and other tests". `PersonHoverInfo.poss` and `Seats`' `pronoun` went with them (nothing else read them).
+- **Now the green name link:**
+  - the developer's test page: the tester's fold heading (a press on the name opens the profile; a press anywhere else on the heading, the arrow, the badges or
+    the space after the name, still opens or closes the fold, since a link inside a `<summary>` doesn't toggle it); Needs you's person panels and update rows
+    (were links already, now `NameLink`); Applications; the Invite box's rows, search reasons and Invited list (the rows were `text-inherit`, white or grey);
+    the testers' calls (the name heading and the booked call and set rows); Call requests' tester; the paused view's Booked calls; the Access keys notice's
+    "Given" list and Edit's "In use" list (`keyBoxes` now gives each key's `testerHref`);
+  - hover cards: the trigger name (`PersonHover`: no longer painted white or grey by Messages and chat) and the card's heading;
+  - the join page: "by <developer>" and "How <developer> reviews" (new tab, as the removed link did).
+  - No link for a deleted account (the cut name alone), as §137.
+- **Removed from the tester's fold:** the "On <name>'s profile (hidden while this test has an NDA): “…”" lines (the excerpts stay on the tester's profile, and the
+  requests and Allow / Deny in Needs you are unchanged); and the "<name>: 1.0 ★ (1 rating)" line (`rateInfo`'s `avg` is gone; the circle's card keeps the
+  rating summary, and the Rate box, "… rated you" and "You rated …" stay).
+- **Unchanged:** the paused (restricted) view's "Shown excerpts" card ("On a tester's profile: “…”", no name); "Edit profile", "Your profile", "See it as testers
+  do" and "How developers see you" (your own profile); "← Back to the profile"; rows that are one link to their item (the tester's History cards, Find cards,
+  Tests visited, the Messages row's last line, "Rate <name> · 14 days left" in Needs you, the testers' calls' "<name> requested …" links to the request); names
+  inside a tick box's label (End early's and the call panel's tick lists, the keys warning), where a link would steal the tick; "By question"'s names and the
+  "No longer working" list, which link to the tester's row on the page; the admin's chat transcripts; server-built text (bells, emails, live lines).
+- **Tests:** `tests/batch35-green-names.test.ts` (no source file draws a "See her / his / their profile" link or `data-tester-profile`; `NameLink`'s `whole` and
+  `newTab`; the hover cards, the circle's card and the seats card render the name as the link with no profile line; the join page; every name on the test page
+  and its panels is a `NameLink`; in the app, the fold's heading is her green link inside the toggle, Chat stays, and no "See her profile", "On …'s profile" or
+  rating line shows, while her profile still lists the excerpt). Updated: `batch35-tester-folds`, `batch35-name-links`, `long-text-cut`,
+  `batch35-messages-hover`, `batch35-answering-press`. **Pictures:** `C:/Users/march/Projects/playtest-lite-evidence/green-names/` (desktop and phone: the
+  tester fold, the circle's hover card, the whole test page; `checks.json`: the name's colour is the green rgb(216, 252, 82) in the fold and on the card, a press
+  on the heading beside the name still opens and closes the fold, and no "See her profile" or "On BB's profile" shows).

@@ -1,5 +1,5 @@
 "use client";
-import { Cut } from "@/components/Cut";
+import { Cut, NameLink } from "@/components/Cut";
 import { inviteAvailabilityV } from "@/lib/inviteAvailability";
 import { LIVE_TICK, rideLiveClock } from "@/lib/liveSync";
 import { SubscribersTag } from "@/components/SubscribeLink";
@@ -284,7 +284,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   const row = (t: Tester, key: string) => (
     <li key={key + t.id} data-invite-row={t.id} className={`flex flex-wrap items-center gap-2 ${t.grey ? "text-slate-500" : "text-slate-300"}`}>
       <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
-      <span className="min-w-[8rem] flex-1 truncate" title={t.name}><a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline"><Cut text={t.name} /></a></span>
+      <span className="min-w-[8rem] flex-1 truncate" title={t.name}><NameLink text={t.name} href={`/app/testers/${t.id}`} newTab /></span>
       {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
       {/* (Batch 15 section 35) 3 items, then "+N more" which opens the rest in place. */}
       {t.tag && <span className="badge border-amber-300/40 text-amber-200">{t.tag}</span>}
@@ -308,7 +308,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
     setTimeout(() => (inviteId ? jumpTo(`invited-${inviteId}`) : document.getElementById("invited-list")?.scrollIntoView({ block: "center", behavior: "smooth" })), 50);
   };
   const whyRow = (t: Tester) => {
-    const name = <a href={`/app/testers/${t.id}`} target="_blank" rel="noopener" className="text-inherit underline-offset-2 hover:underline"><Cut text={t.name} /></a>;
+    const name = <NameLink text={t.name} href={`/app/testers/${t.id}`} newTab />;
     const [lead, link] = t.whyKind === "applied" ? (t.why ?? "").split(": ") : [t.why ?? "", ""];
     return (
       <li key={"f" + t.id} data-invite-row={t.id} data-invite-why={t.whyKind} className="text-slate-500">
@@ -347,7 +347,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
           <LongList shown={allSent ? p.sent.length : 3} tall="max-h-48" className="space-y-1 text-sm">
             {p.sent.map((s) => (
               <li key={s.id} id={`invited-${s.id}`} className={`flex flex-wrap items-center gap-2 ${MARKABLE}`}>
-                <span className="mr-auto"><Cut text={s.name} /> · {s.status}</span>
+                <span className="mr-auto"><NameLink text={s.name} href={`/app/testers/${s.testerId}`} newTab /> · {s.status}</span>
                 {s.tag && <span className="badge border-amber-300/40 text-amber-200">{s.tag}</span>}
                 <span className="text-xs text-slate-500">{s.detail}</span>
                 {/* (Batch 35 §162) "waiting for her / him / them to join", in the tester's pronoun. */}

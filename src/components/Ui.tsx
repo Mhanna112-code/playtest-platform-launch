@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { pronouns } from "@/lib/format";
+import { NameLink } from "@/components/Cut";
 import { FileText, Radio, Video } from "lucide-react";
 import { CategoryIcon, CATEGORY_STYLE } from "@/components/Category";
 import { ChatWithButton } from "@/components/ChatWithButton";
@@ -55,7 +55,7 @@ export function StatusPill({ status, full = false }: { status: string; full?: bo
  * One circle per spot: a tester's initial (linking to their profile), or a dashed empty seat. `plain` (owner, Oct 28: a restricted account's dashboard): the initial
  * with the name on hover as plain text, no hover card, so no profile link, Chat with, Report or Block.
  */
-export function Seats({ total, people, plain = false }: { total: number; people: { id: string; name: string; contractId?: string; /** (batch 35 §162) */ pronoun?: string }[]; plain?: boolean }) {
+export function Seats({ total, people, plain = false }: { total: number; people: { id: string; name: string; contractId?: string }[]; plain?: boolean }) {
   const shown = Math.min(total, 12);
   return (
     <div className="relative flex flex-wrap items-center gap-1.5">
@@ -68,7 +68,8 @@ export function Seats({ total, people, plain = false }: { total: number; people:
             </span>
           );
         return p ? (
-          // (Owner, Oct 26) The tester's hover card: their name, a link to the profile and "Chat with <name>" (the same per-test chat as the Testers panel's Chat button).
+          // (Owner, Oct 26) The tester's hover card: their name and "Chat with <name>" (the same per-test chat as the Testers panel's Chat button). (Owner, Nov 3,
+          // §166) The card's name is the green link to the profile; no "See her profile" line.
           // (Owner, Nov 3, long text) On a phone the card opens from the row's left edge, never past the screen; from sm up under the avatar.
           <span key={p.id} className="group z-10 inline-block sm:relative">
             <Link href={`/app/testers/${p.id}`} aria-label={`${p.name}: profile`}
@@ -77,8 +78,7 @@ export function Seats({ total, people, plain = false }: { total: number; people:
             </Link>
             <span role="tooltip" data-tester-card={p.id}
               className="invisible absolute left-0 top-full z-40 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
-              <span className="block font-semibold text-white">{p.name}</span>
-              <Link href={`/app/testers/${p.id}`} className="mt-1 block text-sky-300 hover:underline">See {pronouns(p.pronoun).poss} profile</Link>
+              <span className="block font-semibold text-white" data-card-name=""><NameLink text={p.name} href={`/app/testers/${p.id}`} whole /></span>
               {p.contractId && <span className="mt-3 block border-t border-white/10 pt-2"><ChatWithButton contractId={p.contractId} name={p.name} /></span>}
             </span>
           </span>

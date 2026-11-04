@@ -47,7 +47,7 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
   return (
     <div className="card flex h-[70vh] flex-col p-0" data-mistakes-root="">
       <div className="border-b border-white/10 px-5 py-3">
-        <p className="font-semibold text-white">{otherHover ? <span data-person-hover=""><PersonHover {...otherHover} className="text-white" /></span> : other}</p>
+        <p className="font-semibold text-white">{otherHover ? <span data-person-hover=""><PersonHover {...otherHover} /></span> : other}</p>
         <p className="text-xs text-slate-400">{title}</p>
       </div>
       <div className="relative flex-1 space-y-3 overflow-y-auto px-5 py-4" tabIndex={0} role="log" aria-label="Messages" aria-live="polite">
@@ -57,7 +57,7 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
             {(i === 0 || day(messages[i - 1].at) !== day(m.at)) && <p className="my-2 text-center text-xs text-slate-500">{day(m.at)}</p>}
             <div className={`flex ${m.mine ? "justify-end" : "justify-start"}`}>
               <div className="max-w-[78%] space-y-1">
-                {!m.mine && <p className="px-1 text-xs text-slate-400">{m.hover ? <span data-person-hover=""><PersonHover {...m.hover} className="text-slate-400" /></span> : <Cut text={m.who} />}</p>}
+                {!m.mine && <p className="px-1 text-xs text-slate-400">{m.hover ? <span data-person-hover=""><PersonHover {...m.hover} /></span> : <Cut text={m.who} />}</p>}
                 <div className={`rounded-2xl px-3.5 py-2 text-sm ${m.mine ? "bg-volt-300 text-ink-950" : "bg-white/[0.07] text-slate-100"}`}>
                   <div className="whitespace-pre-wrap break-words">{m.body}</div>
                   <p className={`mt-1 text-[10px] ${m.mine ? "text-ink-950/75" : "text-slate-500"}`}>{time(m.at)}</p>

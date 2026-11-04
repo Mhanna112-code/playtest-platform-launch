@@ -97,10 +97,10 @@ describe("names listed on pages use <Cut>", () => {
     expect(page).toContain('<b className="text-white"><Cut text={r.title} kind="test" /></b>');
     expect(page).toContain('<p className="kicker"><Cut text={t.productName} kind="product" /></p>');
     const test = src("app/app/tests/[id]/page.tsx");
-    expect(test).toContain('<h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><Cut text={name} /></h3>'); // (batch 35 §140) the name folds the row; "See their profile" sits under it
+    expect(test).toContain('<h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><NameLink text={name} href={personHref} /></h3>'); // (batch 35 §140) the name folds the row; (§166) it is the green profile link
     expect(src("app/app/find/page.tsx")).toContain("by <Cut text={displayName(t.developer)} />");
     expect(src("app/app/messages/page.tsx")).toContain('<Cut text={r.title} kind="test" />');
-    expect(src("components/PersonHover.tsx")).toContain("><Cut text={p.name} /></Link>");
+    expect(src("components/PersonHover.tsx")).toContain("<NameLink text={p.name} href={p.href}"); // (§166) NameLink cuts it too
     expect(src("app/app/CallsBox.tsx")).toContain('<b className="text-white"><Cut text={c.who} /></b> · <Cut text={c.test} kind="test" />');
     expect(src("app/app/calls/[id]/page.tsx")).toContain('“<Cut text={call.contract.title} kind="test" />”');
     expect(src("app/admin/AdminRich.tsx")).toContain("<Cut");

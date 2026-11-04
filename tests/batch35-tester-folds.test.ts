@@ -40,19 +40,20 @@ describe("each tester folds by their name", () => {
     const fold = r.indexOf("<Fold id={`tester-${c.id}`}"), end = r.indexOf("</Fold>\n                <div className=\"space-y-1\" data-tester-summary=\"\">");
     expect(fold).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(fold);
-    expect(r.slice(fold, fold + 400)).toContain("<Cut text={name} /></h3>"); // the name is the toggle
+    expect(r.slice(fold, fold + 800)).toContain("<NameLink text={name} href={personHref} /></h3>"); // the name heads the toggle (§166: the green profile link)
     const inside = r.slice(fold, end), summary = r.slice(end);
     for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', "<PrevSetFolds"]) expect(inside).toContain(s);
-    for (const s of ["<b>Paid in all:</b>", "{ri?.avg && <p", "rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);
+    for (const s of ["<b>Paid in all:</b>", "rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);
     // Open by default only when there's one tester; the state is kept like every fold (sessionStorage, through redraws).
     expect(r).toContain("defaultOpen={t.contracts.length === 1}");
   });
 
-  it("buttons in the closed summary still work: Rate, Chat and the profile link are outside the fold; a request's buttons are outside its fold", () => {
+  it("buttons in the closed summary still work: Rate and Chat are outside the fold; a request's buttons are outside its fold", () => {
     const r = row();
     const end = r.indexOf('data-tester-summary=""');
     expect(r.indexOf("rateBoxOf(c)")).toBeGreaterThan(end);
-    expect(r.indexOf('data-tester-profile=""')).toBeGreaterThan(end);
+    expect(r.indexOf("/app/chat/${c.id}")).toBeGreaterThan(end);
+    expect(r).not.toContain('data-tester-profile=""'); // (owner, Nov 3, §166) no "See her profile": the name in the heading is the link
     const p = page();
     for (const [f, button] of [["needs-excerpt-${x.id}", "<ExcerptDecision"], ["needs-dispute-${d.id}", "<DisputeSide"], ["needs-part-${x.id}", "<PayBox"]]) {
       const at = p.indexOf(`<Fold id={\`${f}\`}`);

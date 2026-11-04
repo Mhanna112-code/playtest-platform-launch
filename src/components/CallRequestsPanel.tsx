@@ -1,5 +1,5 @@
 "use client";
-import { Cut } from "@/components/Cut";
+import { NameLink } from "@/components/Cut";
 import { useEffect, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
@@ -11,7 +11,7 @@ import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL } from "@/components/ScrollList";
 
 /** One waiting call request: `tester` (whose test session it is), `asker` (who asked: "you" when it's yours). */
-export type PanelReq = { id: string; contractId: string; tester: string; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string };
+export type PanelReq = { id: string; contractId: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string };
 
 /**
  * (Owner, Oct 28, batch 16 sections 33 and 35) The one "Call requests" panel: every waiting request on this test in both directions, soonest first: the tester, the
@@ -81,7 +81,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
           {sorted.map((r) => (
             <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 ${MARKABLE}`} data-request-row={r.mine ? "mine" : "theirs"}>
               <span className="mr-auto text-slate-300">
-                {side === "developer" && <><b className="text-white"><Cut text={r.tester} /></b> · </>}
+                {side === "developer" && <><b className="text-white"><NameLink text={r.tester} href={r.testerHref} /></b> · </>}
                 {describeRows(r.rows)} · {r.minutes} min · {r.rate} · asked by {r.mine ? "you" : r.asker}
               </span>
               {gone[r.id] ? (

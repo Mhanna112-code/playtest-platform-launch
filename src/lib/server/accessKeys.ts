@@ -33,7 +33,7 @@ export async function keyBoxes(testId: string) {
     .filter((k) => (k.status === "inuse" || k.status === "broken" || k.status === "held") && k.contract)
     .map((k) => {
       const working = k.contract!.status === "working";
-      return { id: k.id, value: k.value, broken: k.status === "broken", tester: displayName(k.contract!.tester), contractId: k.contractId!, ...(working ? {} : { gone: k.contract!.status === "left" ? ("left" as const) : ("finished" as const) }) };
+      return { id: k.id, value: k.value, broken: k.status === "broken", tester: displayName(k.contract!.tester), testerHref: k.contract!.tester.deletedAt ? null : `/app/testers/${k.contract!.tester.id}`, contractId: k.contractId!, ...(working ? {} : { gone: k.contract!.status === "left" ? ("left" as const) : ("finished" as const) }) };
     })
     .sort((a, b) => Number(!!a.gone) - Number(!!b.gone));
   const broken = keys

@@ -1,5 +1,5 @@
 "use client";
-import { Cut } from "@/components/Cut";
+import { NameLink } from "@/components/Cut";
 import { MARKABLE } from "@/lib/markJump";
 import { ChangesBox } from "@/components/ChangesBox";
 import { PressDone } from "@/components/PressDone";
@@ -31,7 +31,7 @@ export function Applications({ testId, seenAt, apps, needs }: { needs: Needs; te
       <ul className="space-y-3 text-sm">
         {apps.map((a) => (
           <li key={a.id} id={`item-app-${a.id}`} className={`space-y-1 ${MARKABLE}`}>
-            {a.line ? <p><a href={`/app/testers/${a.userId}`}><b><Cut text={a.name} /></b></a> {a.line.replace(a.name, "").trim()}</p> : <p><a href={`/app/testers/${a.userId}`}><b><Cut text={a.name} /></b></a></p>}
+            {a.line ? <p><b><NameLink text={a.name} href={`/app/testers/${a.userId}`} /></b> {a.line.replace(a.name, "").trim()}</p> : <p><b><NameLink text={a.name} href={`/app/testers/${a.userId}`} /></b></p>}
             {/* (Owner, Nov 3, batch 35 §140) The request's details in its own fold (open at first), in a panel; Accept / Decline stay under it. */}
             <Fold id={`needs-app-${a.id}`} summary="Details">
               <ResizeBox id={`app-${a.id}`} label="Their application">

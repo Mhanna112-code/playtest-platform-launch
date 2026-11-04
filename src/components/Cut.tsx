@@ -128,8 +128,15 @@ function CutPopup({ full, kind, at, onClose }: { full: string; kind: CutKind; at
 /**
  * (Owner, Nov 3, batch 35 §137) A person's or a test's name inside a SENTENCE: cut like a listed name (hover / title, the tap pop-up with "Open profile →" /
  * "Open test →" and Copy) and a link to their profile or to the test. No `href` (a deleted account, someone whose profile isn't open to you): the cut name only.
+ * (Owner, Nov 3, §166) "The name itself should be green everywhere": also a person's name in a heading, a row or a hover card, never a separate "See her
+ * profile" link next to it.
  */
-export function NameLink({ text, href, kind = "person", className = "" }: { text: string; href?: string | null; kind?: CutKind; className?: string }) {
-  if (!href) return <Cut text={text} kind={kind} className={className} />;
-  return <a href={href} className={`relative z-10 ${className}`} data-name-link={kind}><Cut text={text} kind={kind} /></a>;
+export function NameLink({ text, href, kind = "person", className = "", whole = false, newTab = false }: { text: string; href?: string | null; kind?: CutKind; className?: string;
+  /** (Owner, Nov 3, §166) The name drawn whole (a hover card's own heading, which is there to show the full name), wrapping anywhere instead of cut. */
+  whole?: boolean;
+  /** (Owner, Nov 3, §166) Opens in a new tab (the Invite box's rows, so the ticks stay). */
+  newTab?: boolean }) {
+  const words = whole ? <span className="[overflow-wrap:anywhere]">{text}</span> : <Cut text={text} kind={kind} />;
+  if (!href) return whole ? <span className={className || undefined}>{words}</span> : <Cut text={text} kind={kind} className={className} />;
+  return <a href={href} className={`relative z-10 ${className}`} data-name-link={kind} {...(newTab ? { target: "_blank", rel: "noopener" } : {})}>{words}</a>;
 }

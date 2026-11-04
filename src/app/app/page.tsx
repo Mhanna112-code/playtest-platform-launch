@@ -375,7 +375,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                       <div className="space-y-1.5">
                         <p className="text-xs uppercase tracking-wide text-slate-500">Testers · {num(inIt.length)} of {num(t.spots)}</p>
                         {/* (Owner, Oct 28) Restricted: names are plain text (no hover card: no Chat with, Report, Block or profile link). */}
-                        <Seats total={t.spots} plain={restricted} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester), pronoun: c.tester.pronoun, contractId: restricted ? undefined : c.id }))} />
+                        <Seats total={t.spots} plain={restricted} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester), contractId: restricted ? undefined : c.id }))} />
                       </div>
                       <div className="space-y-1.5">
                         <p className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">

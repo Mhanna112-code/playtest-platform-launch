@@ -1,9 +1,9 @@
-import { Cut } from "@/components/Cut";
+import { NameLink } from "@/components/Cut";
 import { KeyRound } from "lucide-react";
 import { FREE_KEYS_HINT } from "@/lib/keys";
 import { KeysWarning, type BrokenKey } from "./KeysWarning";
 
-export type KeysView = { free: { id: string; value: string; reused?: { from: string; broken: boolean } }[]; inUse: { id: string; value: string; broken: boolean; tester: string; gone?: "left" | "finished" }[]; open: number; broken?: BrokenKey[] };
+export type KeysView = { free: { id: string; value: string; reused?: { from: string; broken: boolean } }[]; inUse: { id: string; value: string; broken: boolean; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; gone?: "left" | "finished" }[]; open: number; broken?: BrokenKey[] };
 
 /**
  * (Owner, Oct 29, batch 14 section 6) The read-only "Access keys" notice where the yellow keys box was (shown only when the test uses keys; no buttons). Two compact
@@ -34,7 +34,7 @@ export function KeysNotice({ testId, keys }: { testId: string; keys: KeysView | 
           <ul className="max-h-[5.5rem] space-y-0.5 overflow-y-auto pr-1 text-xs" data-given-keys="">
             {keys.inUse.filter((k) => !k.gone).length ? keys.inUse.filter((k) => !k.gone).map((k) => (
               <li key={k.id} className="truncate" title={`${k.value} · ${k.tester}${k.broken ? " (reported as not working)" : ""}`}>
-                <span className={`font-mono ${k.broken ? "line-through opacity-60" : ""}`}>{k.value}</span> · <Cut text={k.tester} />
+                <span className={`font-mono ${k.broken ? "line-through opacity-60" : ""}`}>{k.value}</span> · <NameLink text={k.tester} href={k.testerHref} />
               </li>
             )) : <li className="text-amber-100/70">None yet</li>}
           </ul>

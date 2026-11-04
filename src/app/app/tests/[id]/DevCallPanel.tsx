@@ -1,5 +1,5 @@
 "use client";
-import { Cut } from "@/components/Cut";
+import { Cut, NameLink } from "@/components/Cut";
 import { useEffect, useRef, useState } from "react";
 import { lengthCap } from "@/lib/callMeasure";
 import { useRouter } from "next/navigation";
@@ -30,7 +30,7 @@ export type DevCall = { id: string; when: string; minutes: number; rate: string;
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
 export type DevSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; calls: DevCall[] };
 export type DevReq = { id: string; rows: RowJson[]; mine: boolean; rate: string; minutes?: number };
-export type DevTester = { contractId: string; name: string; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string;
+export type DevTester = { contractId: string; name: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string;
   /** (Batch 16 section 33) For the clash checks: waiting requests with them (both sides), what's left of the $1,000 and the rate a call books at. */
   pending?: number; leftCents?: number | null; rateCents?: number | null };
 /** (Batch 16 section 33) The developer's other calls (any tester, any test): "You have a call with Ana Silva then (1:30–2:00 PM)." */
@@ -115,7 +115,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const rowsNamed = (t: DevTester) => (t.calls.length > 0 || t.sets.length > 0 || t.requests.length > 0) && t.requests.every((r) => !r.mine);
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
-      <span className="mr-auto"><Cut text={t.name} /> · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
+      <span className="mr-auto"><NameLink text={t.name} href={t.testerHref} /> · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
       {/* (Owner, Nov 3, long text) The call's buttons stay together: beside the line when there is room, all on a line of their own when it is long
           (never Add to calendar on one line and Cancel on the next). */}
       <span className="flex max-w-full flex-wrap items-center gap-2" data-call-buttons="">
@@ -189,7 +189,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           {/* (Batch 35 §79, owner Oct 31) No name heading when every row already starts with it ("fbbb · Daily · Sat 9:46 PM (4 left) · …", "fbbb requested …"). */}
-          {!rowsNamed(t) && <h3><Cut text={t.name} /></h3>}
+          {!rowsNamed(t) && <h3><NameLink text={t.name} href={t.testerHref} /></h3>}
           {!t.calls.length && !t.sets.length && !t.requests.length && <p className="note">No calls or requests</p>}
           {t.warning && <p className="text-xs text-amber-200" data-calls-warning="">{t.warning}</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}
@@ -201,7 +201,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             {t.sets.map((s) => (
               <li key={s.id} className="space-y-1" data-call-set="">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="mr-auto"><Cut text={t.name} /> · {s.label} · {s.minutes} min · {s.rate}</span>
+                  <span className="mr-auto"><NameLink text={t.name} href={t.testerHref} /> · {s.label} · {s.minutes} min · {s.rate}</span>
                   <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [s.id]: !(open[s.id] ?? s.calls.some((c) => c.joinable)) })}>{(open[s.id] ?? s.calls.some((c) => c.joinable)) ? "Hide calls" : "Show calls"}</button>
                   <CancelMenu needsReason={s.needsReason} busy={busy} other={t.name} label="Cancel the remaining calls"
                     rule={`Cancels every call still ahead and ${t.name} is told.${s.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}

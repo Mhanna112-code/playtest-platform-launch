@@ -50,7 +50,9 @@ describe("the sentences that name someone link them", () => {
 
   it("tester rows, the tester's invitations and the session page's lines", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    for (const s of ["<NameLink text={name} href={personHref} />: {ri.avg}", "<NameLink text={name} href={personHref} /> rated you:", "You rated <NameLink text={name} href={personHref} />", "You blocked <NameLink text={name} href={personHref} />", "On <NameLink text={name} href={personHref} />&apos;s profile"]) expect(page).toContain(s);
+    for (const s of ["<NameLink text={name} href={personHref} /> rated you:", "You rated <NameLink text={name} href={personHref} />", "You blocked <NameLink text={name} href={personHref} />"]) expect(page).toContain(s);
+    // (Owner, Nov 3, §166) The "On <name>'s profile: “…”" lines left the tester's row (the excerpts stay on the profile).
+    expect(page).not.toContain("On <NameLink text={name} href={personHref} />&apos;s profile");
     expect(src("app/app/page.tsx")).toContain("invited you to “<NameLink text={i.test.title} kind=\"test\" href={`/app/find/${i.testId}`} />”");
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).toContain("const devHref = devGone ? null : `/app/developers/${c.test.developerId}`;");

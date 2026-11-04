@@ -1,4 +1,4 @@
-import { Cut, NameLink } from "@/components/Cut";
+import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
 import { hasPerks } from "@/lib/server/subscription";
@@ -243,7 +243,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     });
     const booked = new Set(c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id)).size;
     return {
-      contractId: c.id, name: displayName(c.tester), terms, booked, warning: callsWarn.get(c.id) ?? "",
+      contractId: c.id, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, terms, booked, warning: callsWarn.get(c.id) ?? "",
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
       // (Batch 16 section 33) Their waiting requests and yours, as they arrive (answered in the Call requests panel).
@@ -266,7 +266,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   };
   const rateInfo = new Map(
     await Promise.all(
-      t.contracts.map(async (c) => [c.id, { ...(await contractRatings(c.id, now)), state: rateStates.get(c.id)!, avg: (await ratingSummary(c.testerId)).line }] as const),
+      t.contracts.map(async (c) => [c.id, { ...(await contractRatings(c.id, now)), state: rateStates.get(c.id)! }] as const),
     ),
   );
   // (NEXT-UI 21) Needs you: sent work and held calls waiting for Pay / Reject, the testers' call requests, disputes waiting for the developer's side.
@@ -288,7 +288,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `${pronouns(c.tester.pronoun).poss} ${x.kind === "written" ? "written answers" : "recording"}`, reason: x.dispute!.reason })),
     ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
   ]);
-  // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (shown in the row; batch 29 section 30: only the tester removes one).
+  // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (batch 29 section 30: only the tester removes one; owner, Nov 3, §166: listed only in the restricted view, no longer in the tester's row).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
   const shownEx = await db.excerpt.findMany({ where: { testId: t.id, status: "shown" }, orderBy: { decidedAt: "desc" } });
   // (Owner, Oct 30, batch 34 §14) The Listing panel (it replaces the Contract changes fold): the current listing, the fields the most recent save changed tagged.
@@ -301,7 +301,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const stopEntry = stopEvent && stopReasonOf(stopEvent.text) ? { at: stopEvent.createdAt.toISOString(), reason: stopReasonOf(stopEvent.text) } : null;
   const bannerReason = bannerCause === "stopped" && stopEntry ? stopEntry.reason : bannerCauseReason;
   // (Batch 15 section 29) The restricted view: Booked calls (ahead) with Cancel, and the open disputes waiting for the developer's side.
-  const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
+  const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), whoHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
   const banner = bannerCause ? (
     <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
       allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open") }) : allowedLine(false, { nextRound: !t.adminStoppedAt && !next })} />
@@ -492,7 +492,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <details key={cid} open className="rounded-xl border border-white/10 p-2" data-needs-person={who}>
                 {/* (Owner, Nov 3, long text) A long name wraps beside the arrow (never past the box); the count follows it, kept on one line. (Owner, Nov 3) The name is the
                     tester's link (green), shown here only, not again on each part. */}
-                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><a href={`/app/testers/${mine[0].c.testerId}`}><Cut text={who} /></a> <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
+                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><NameLink text={who} href={mine[0].c.tester.deletedAt ? null : `/app/testers/${mine[0].c.testerId}`} /> <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
                 {/* (Owner, Nov 3) Each name's drop-down is its own panel holding all their parts (it scrolls inside; the grip drags it taller). */}
                 <div className="mt-2">
                 <ResizeBox id={`needs-person-${cid}`} label={`${who}'s parts`} defaultMax="min(30rem, 60vh)">
@@ -548,7 +548,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           })}
           {updates.map(({ c, s: x }) => (
             <div key={`update-${x.id}`} id={`update-${x.id}`} className="rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
-              <Fold id={`update-part-${x.id}`} className="space-y-2" summaryClassName="!text-sm" summary={<span className="font-medium"><a href={`/app/testers/${c.testerId}`}><Cut text={displayName(c.tester)} /></a> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</span>}>
+              <Fold id={`update-part-${x.id}`} className="space-y-2" summaryClassName="!text-sm" summary={<span className="font-medium"><NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} /> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</span>}>
               <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
               {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
               <PartPayments id={x.id} lines={partPays.get(x.id)} />
@@ -609,7 +609,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Nov 3, batch 35 §140) Each tester folds by their name: closed, only the summary under it (paid in all, ratings, Rate); open, all their
                     parts, each in its own panel. Kept open or closed through the live redraws; a link into it (#part-, #call-…) opens it. */}
                 <Fold id={`tester-${c.id}`} defaultOpen={t.contracts.length === 1} className="space-y-2" summaryClassName="flex flex-wrap items-baseline gap-2 !text-base" summary={<>
-                  <h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><Cut text={name} /></h3>
+                  {/* (Owner, Nov 3, §166) The name is the green link to their profile (no "See her profile" any more). A press on the name opens the profile; a press
+                      anywhere else on the heading (the arrow, the badges, the space after the name) still opens or closes the fold. */}
+                  <h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><NameLink text={name} href={personHref} /></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
                 </>}>
@@ -738,12 +740,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     listed under the developer's row. */}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
                 <PrevSetFolds timeZone={u.timeZone} developer attachments={c.submissions.flatMap((s) => s.recordings).filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
-                {/* (Batch 13) Excerpts shown from this test. (Batch 29 section 30) Only the tester removes one (Remove on their profile): no Take down here. */}
-                {shownEx.filter((e) => e.contractId === c.id).map((e) => (
-                  <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
-                    <span className="min-w-0 flex-1"><span className="text-slate-400">On <NameLink text={name} href={personHref} />&apos;s profile{t.ndaText ? " (hidden while this test has an NDA)" : ""}: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
-                  </div>
-                ))}
+                {/* (Owner, Nov 3, §166) No "On <name>'s profile: “…”" lines here any more: the excerpts stay on the tester's profile (and the requests in Needs you). */}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
                 {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun)}</p>}
                 </Fold>
@@ -752,10 +749,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
                       {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
                     </a>}
-                    <a href={`/app/testers/${c.testerId}`} className="text-xs" data-tester-profile="">See {pronouns(c.tester.pronoun).poss} profile</a>
+                    {/* (Owner, Nov 3, §166) No "See her profile": the name above is the link. */}
                   </div>
                   <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
-                  {ri?.avg && <p className="note"><NameLink text={name} href={personHref} />: {ri.avg}</p>}
+                  {/* (Owner, Nov 3, §166) No "<name>: 1.0 ★ (1 rating)" line here any more: the circle's hover card and the profile show the rating. */}
                   {ri?.tester && (ri.testerRevealed ? (
                     <p className="note"><NameLink text={name} href={personHref} /> rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
                   ) : (
@@ -785,7 +782,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         // (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request, both directions (Needs you's rows open it here).
         requests={restricted ? [] : reqs.flatMap((r) => {
           const c = working.find((x) => x.id === r.contractId);
-          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined }] : [];
+          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined }] : [];
         })}
         elsewhere={otherCalls}
       />

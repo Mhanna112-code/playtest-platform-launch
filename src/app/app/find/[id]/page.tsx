@@ -1,4 +1,5 @@
 import { withDateZone } from "@/lib/server/dateZone";
+import { NameLink } from "@/components/Cut";
 import { notFound, redirect } from "next/navigation";
 import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, HelpCircle, Languages, Lock, Monitor, Radio, Timer, Users, Video } from "lucide-react";
 import { CategoryBadges } from "@/components/Category";
@@ -149,7 +150,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             {t.productName && <p className="kicker">{t.productName}</p>}
             <h1 className="text-2xl font-bold tracking-tight text-white">{t.title}</h1>
             <p className="text-sm text-slate-400">
-              by <a href={`/app/developers/${t.developerId}`} className="text-slate-200">{dev}</a>{devRating.line && ` · ${devRating.line}`}
+              by <NameLink text={dev} href={`/app/developers/${t.developerId}`} />{devRating.line && ` · ${devRating.line}`}
               {invite ? <span className="badge ml-2 border-emerald-400/40 text-emerald-200">Invited</span> : t.joinMode === "apply" && <span className="badge ml-2 border-sky-300/40 text-sky-200">{dev} approves each tester</span>}
             </p>
           </div>
@@ -246,13 +247,13 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
 
       <section className="card space-y-2">
         <div className="space-y-2">
-          <h2 className="flex items-center gap-2 font-semibold text-white"><BarChart3 className="h-5 w-5 text-sky-300" /> How {dev} reviews</h2>
+          <h2 className="flex items-center gap-2 font-semibold text-white"><BarChart3 className="h-5 w-5 text-sky-300" /> <span>How <NameLink text={dev} href={`/app/developers/${t.developerId}`} newTab /> reviews</span></h2>
           <ul className="space-y-1 text-sm text-slate-300">
             {/* (Owner, Oct 30, batch 35 §14) The average-pay line is gone from here: only the developer's own dashboard shows it. */}
             <li>Typical review: {devStats.review.value}</li>
             <li>Rating: {devRating.line || "no ratings yet"}</li>
           </ul>
-          <a href={`/app/developers/${t.developerId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-sky-300">See {pronouns(t.developer.pronoun).poss} profile and other tests <ArrowRight className="h-4 w-4" /></a>
+          {/* (Owner, Nov 3, §166) No "See his profile and other tests": the developer's name (above and in this heading) is the green link to the profile. */}
         </div>
       </section>
 
