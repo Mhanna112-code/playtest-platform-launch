@@ -105,8 +105,17 @@ export async function GET(req: Request) {
       const { requestGoneLine } = await import("@/lib/server/requests");
       const rows = reqIds.length ? await db.callRequest.findMany({ where: { id: { in: reqIds } }, select: { id: true, status: true, closedReason: true, contractId: true } }) : [];
       // (Batch 35 §162) With the tester's pronoun ("Closed: the tester finished her part").
-      const mine = new Map((await db.contract.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.contractId))] }, OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { id: true, tester: { select: { pronoun: true } } } })).map((c) => [c.id, c.tester.pronoun]));
-      return ok({ gone: rows.filter((r) => mine.has(r.contractId) && r.status !== "pending").map((r) => ({ id: r.id, line: requestGoneLine(r, mine.get(r.contractId)) })), restricted: false });
+      // (Owner, Nov 4, §184) And the reader's side with the request's other person: a request dropped when a call was booked reads "Closed: fbbb is no longer free at
+      // that time" (or the reader's own "Closed: you have another call at that time").
+      const { displayName } = await import("@/lib/server/dateFormat");
+      const person = { name: true, email: true, deletedAt: true } as const;
+      const cons = await db.contract.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.contractId))] }, OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { id: true, testerId: true, tester: { select: { pronoun: true, ...person } }, test: { select: { developer: { select: person } } } } });
+      const mine = new Map(cons.map((c) => [c.id, c]));
+      return ok({ gone: rows.filter((r) => mine.has(r.contractId) && r.status !== "pending").map((r) => {
+        const c = mine.get(r.contractId)!;
+        const side = c.testerId === u.id ? ("tester" as const) : ("developer" as const);
+        return { id: r.id, line: requestGoneLine(r, c.tester.pronoun, { side, other: displayName(side === "tester" ? c.test.developer : c.tester) }) };
+      }), restricted: false });
     }
     let testId = q.get("test") ?? "";
     const sessionId = q.get("session") ?? "";

@@ -3057,3 +3057,55 @@ count; then "the parts should have big drop down with their name then part and p
   goes; a payment on the written answers doesn't stop a recording add with Alerts Off; nothing new to add is refused at once; the Terms). Updated: `batch20`
   (§12's list of tester presses had a second Send of the same answers, which used to stop and then be refused; it is now a single refusal, so the list uses Add
   to this answer).
+## §184 A booked call drops the other waiting requests that overlap it (owner, Nov 4)
+
+Before: sending refused a time overlapping a booked call or a waiting request between the same two people, and Accept refused a time overlapping any booked call
+of either person; but when a call got booked, the other waiting requests at an overlapping time stayed open and only failed when someone pressed Accept ("This
+time is no longer free.").
+
+- **Rule.** The moment a call is booked, every OTHER waiting call request that involves either person in it (the developer or the tester, as the developer or the
+  tester of that request: an account can be both), sent by either side, on any test, whose time overlaps the call is dropped, in the booking's own transaction
+  (`dropOverlapping`, `src/lib/server/requests.ts`):
+  - a single time (or a daily / weekly set: accepting it would refuse the whole set) **closes**, with a reason saying which of its two people is no longer free
+    (`DROP_DEV_BUSY` / `DROP_TESTER_BUSY` / `DROP_BOTH`, `src/lib/requestDrop.ts`), never who the call is with;
+  - a "choose one" request **loses only the overlapping times** (rows, times and first time rewritten as a request sent with only those would be); none left:
+    it closes;
+  - requests between the same two people that overlap it close too (they'd be refused anyway).
+- **Every booking path** goes through `bookAt`, so all of them drop: the other side's Accept (single call and each call of a daily / weekly / Forever set),
+  the developer's auto-match ("Booked: you both picked …", `devRequestTime`), the tester's auto-match (`testerRequestTime`), and the daily job's Forever top-up
+  (`topUpForeverSets`). Not dropped: the request the booking answers (an auto-match's is still waiting at that moment) and the other copies of a developer
+  request sent to several testers (they close as before: "Another tester took this time at …").
+- **Two bookings at once.** Each booking takes both people's locks first (in the same order: no deadlock), then the test's, then books and drops: a second booking
+  sharing a person waits, and its drop sees the first one's call and requests. An Accept that loses to a drop reads the closed request (one refusal).
+- **Who is told, and how** (each line on the dropped request's test; times in the reader's zone; the other person by pronoun, §162):
+
+| Reader | Line | Kind |
+| --- | --- | --- |
+| Tester, the developer got the call (her request to him) | `Your request to Nora Lane for Thu, Nov 5, 3:00 PM closed: she is no longer free at that time` | Call change (stops once; Alerts Off greys it) |
+| Tester, the developer got the call (his request to her) | `Nora Lane's request for Thu, Nov 5, 3:00 PM closed: she is no longer free at that time` | Call change |
+| Developer, the tester got the call (her request to him) | `Ana Silva's request for Thu, Nov 5, 3:00 PM closed: she is no longer free at that time` | Call change (`req_closed`, Alerts: Call changes) |
+| Developer, the tester got the call (his request to her) | `Your request to Ana Silva for Thu, Nov 5, 3:00 PM closed: she is no longer free at that time` | Call change (`req_closed`) |
+| The person with the call (their own booking, or the one they were told about) | `Your request to Ben Carter for … closed: you have another call at that time` / `Ben Carter's request for … closed: you have another call at that time` | Quiet live-box line, never a stop (`req_dropped`; the tester's: marked quiet on the session page) |
+| Both people, a request between the same two | `Your request to Ana Silva for … closed: you have a call with her at that time` / `Nora Lane's request for … closed: you have a call with her at that time` | Quiet (both know about the call) |
+| A "choose one" request that only lost times | `Your request to Nora Lane no longer offers Thu, Nov 5, 3:00 PM: she is no longer free at that time` (and the same heads for the other readers, `… no longer offers …`) | As above, by reader |
+
+  Call requests are still not bell lines (owner rule): no bell, no email. Not specified by the owner, read this way (check): the person with the call who
+  didn't press (the requester of the booked call) gets the same quiet line for their dropped requests, since they're told about the booking itself.
+- **Accept on a dropped request** is a single refusal, as for any closed request, never a stop first (the developer's gate is skipped for it):
+  `This request closed: Nora Lane is no longer free at that time.` (the other person has the call), `This request closed: you have another call at that time.`
+  (the reader has it), `This request closed: you have a call with Nora Lane at that time.` (both). The open Call requests panel's row reads the same reason:
+  `Closed: Nora Lane is no longer free at that time` (pulse route, in the reader's words). A stale page's Accept of a time taken out of a "choose one" request
+  reads "Pick one of the times." as before (the panel redraws without it).
+- **Kinds.** Developer: `req_closed` (DEV_STOP_KINDS, Alerts "Call changes"), `req_dropped` (DEV_QUIET_KINDS). Tester: `t_req_closed` / `t_req_dropped`, read
+  by `testerChanges` for that session only (shown as `requested` / quiet). The tester's older line "The call time with … is no longer available" is no longer
+  written for a dropped request (it has its own).
+- **Unchanged.** Sending still allows a time overlapping the other person's call with someone else (only the same two are checked); Accept's clash checks stay
+  (a request sent after the booking is still refused at Accept: "This time is no longer free."). No schema change. Terms: they don't describe call requests
+  closing, so no edit.
+- **Tests.** New `tests/drop-overlapping-requests.test.ts`: single time (the developer's request to another tester; the tester's line never names who; the
+  developer's own quiet line; Accept a single refusal; the panel row in both readers' words; the tester's next press stops once, the developer's never for her
+  quiet line), "choose one" with one time taken out (both told; the time left still books), "choose one" fully overlapping (closes; the developer's Accept a
+  single refusal with no stop first), a tester's requests on another developer's tests both ways (that developer told without naming the other developer; the
+  tester's quiet lines; both Accepts single refusals), the developer's auto-match plus a request between the same two on another test, the Forever top-up, and
+  a batch's copies still "taken" with a non-overlapping request left alone. Updated: `request-kinds` (Ben's Accept now reads "This request closed: Nora Lane is
+  no longer free at that time." instead of "This time is no longer free.").
