@@ -8,11 +8,12 @@ import { joined, act, sact, setup } from "./fixtures";
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 describe("stop again when something new happened since the box", () => {
+  // (Batch 35 §168) Shown with Stop: Next round no longer stops once.
   it("developer: a second press with the box's time goes ahead; something newer stops it again with only that line", async () => {
     const { dev, testId } = await setup({ spots: 5 });
     const seenAt = new Date(Date.now() - 1000).toISOString();
     const a = await joined(testId, "Ana Silva");
-    const first = await act(testId, "next-round", dev.cookie, { seenAt, closeThis: false });
+    const first = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt, closeThis: false });
     expect(first.status).toBe(409);
     expect(first.body.error.code).toBe("stop_once");
     const boxAt = first.body.error.now as string;
@@ -20,13 +21,13 @@ describe("stop again when something new happened since the box", () => {
     // Something new after the box: the second press stops again, listing only the new line.
     await wait(20);
     await joined(testId, "Ben Ito");
-    const second = await act(testId, "next-round", dev.cookie, { seenAt, confirmed: true, boxAt, closeThis: false });
+    const second = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt, confirmed: true, boxAt, closeThis: false });
     expect(second.status).toBe(409);
     const lines = (second.body.error.changes as { text: string }[]).map((c) => c.text);
     expect(lines.some((l) => l.includes("Ben Ito"))).toBe(true);
     expect(lines.some((l) => l.includes("Ana Silva"))).toBe(false);
     // Nothing new since that box: the next press goes ahead.
-    const third = await act(testId, "next-round", dev.cookie, { seenAt, confirmed: true, boxAt: second.body.error.now, closeThis: false });
+    const third = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt, confirmed: true, boxAt: second.body.error.now, closeThis: false });
     expect(third.status).toBe(200);
     expect(a).toBeTruthy();
   });

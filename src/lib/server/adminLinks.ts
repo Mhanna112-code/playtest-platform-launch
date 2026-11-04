@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
 import type { Rich, Seg } from "@/lib/rich";
 import { REPORTED_LABEL } from "./reports";
+import { testTitleOf } from "@/lib/rules";
 
 // (Owner, Oct 30, batch 33 §1) The links of the admin console and the admin boxes: every developer or tester named opens their profile (with its admin box), shown as
 // "Nora Lane (nora@…)" with the name as the link; every test named opens its page (with its admin box); every Stripe id opens that object in the Stripe Dashboard.
@@ -23,7 +24,8 @@ export function person(u: Who | null | undefined, flagged = false): Seg[] {
 export const personName = (u: Who | null | undefined): Seg => (u ? { t: displayName(u), href: profileHref(u) } : "a deleted account");
 
 /** “Harbor Run”, opening the test's page. */
-export const testLink = (t: { id: string; title: string } | null | undefined): Seg => (t ? { t: `“${t.title}”`, href: testHref(t.id) } : "“?”");
+/** (Owner, Nov 3, batch 35 §168) A Next round's draft with no name yet reads “Untitled draft (round 2)”. */
+export const testLink = (t: { id: string; title: string; round?: number | null } | null | undefined): Seg => (t ? { t: `“${testTitleOf(t)}”`, href: testHref(t.id) } : "“?”");
 
 /** The accounts by id, for the links (deleted ones too: they still open their profile's admin box). */
 export async function whoById(ids: (string | null | undefined)[]) {

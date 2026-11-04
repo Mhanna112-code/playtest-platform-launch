@@ -72,11 +72,12 @@ export const payPressOf = (contractId: string, piece: { callId?: string | null; 
 export const INVITE_ACTS = ["invite", "cancel-invite"] as const;
 /**
  * (Owner, Oct 29, batch 29 section 12) The developer's own changes made in another tab or device that stop EVERY developer press on the test page and on Edit once:
- * an Edit save (any field), Pay, Pay more (and Confirm with your bank, logged as the Pay it finishes), End early, Stop, Next round (the draft made), any call change
+ * an Edit save (any field), Pay, Pay more (and Confirm with your bank, logged as the Pay it finishes), End early, Stop, any call change
  * (request, withdraw, accept, decline, cancel), Invite / Cancel invite, Accept / Decline of an application or rejoin ask. Ratings and excerpt decisions are never lines
- * (they only race with the same press). Not in Alerts (your own actions can't be switched off).
+ * (they only race with the same press). Not in Alerts (your own actions can't be switched off). (Owner, Nov 3, batch 35 §168) Next round is no longer one: it
+ * never changes this test.
  */
-export const BIG_OWN_ACTS = ["end-early", "stop", "edit", "next-round", ...PAY_ACTS, ...CALL_CHANGE_ACTS, ...INVITE_ACTS, "application"] as const;
+export const BIG_OWN_ACTS = ["end-early", "stop", "edit", ...PAY_ACTS, ...CALL_CHANGE_ACTS, ...INVITE_ACTS, "application"] as const;
 /** (Batch 29 section 12) The same changes show in the live top box at once (and raise the pill), on the test page and on Edit. */
 export const LIVE_OWN_ACTS = BIG_OWN_ACTS;
 const has = (list: readonly string[], a?: string) => !!a && list.includes(a);

@@ -443,6 +443,14 @@ export function listingMin(base: number = LISTING_MIN_CHARS) {
 /** "Name of this test: at least 10 characters (6 so far)." / "What should testers do: at least 10 characters (6 so far)." (the field's red line, the server's refusal) */
 export const minCharsLine = (field: string, n: number) => `${field}: at least ${field === TITLE_FIELD ? TITLE_MIN_CHARS : LISTING_MIN_CHARS} characters (${n} so far).`;
 export const TITLE_FIELD = "Name of this test";
+/**
+ * (Owner, Nov 3, batch 35 §168) A Next round's draft starts with no name (the developer types it in Post a test): wherever a draft is listed or named before it is
+ * posted, it reads "Untitled draft (round 2)" instead of a blank. A test with a name keeps it.
+ */
+export const untitledDraft = (round: number) => `Untitled draft (round ${round})`;
+export const testTitleOf = (t: { title: string; round?: number | null }) => t.title.trim() || untitledDraft(t.round ?? 1);
+/** (§168) A closed test (no new joiners; every tester's work ended) can't be edited: the Edit page and Save (an older page's too) say so. */
+export const TEST_CLOSED_NO_EDIT = "This test is closed, so it can't be edited.";
 export const STEPS_FIELD = "What should testers do";
 /** The counter while a field is under its minimum: "6 / 10 minimum". */
 export const minCounter = (n: number) => `${n} / ${LISTING_MIN_CHARS} minimum`;
@@ -612,7 +620,7 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   auto_joined: "(Task 2) a waiting application accepted while switching to instant joins; the developer sees the single accepted-applications line",
   stopped: "the developer's own Stop (reason E from another tab)",
   ended: "the developer's own End early (reason E from another tab)",
-  next_round: "the developer's own Next round (reason E from another tab)",
+  next_round: "(Owner, Nov 3, batch 35 §168) the developer's own Next round: it never changes this round, so it never stops a press (not from another tab either)",
   invited: "the developer's own invites (reason E from another tab)",
   rated: "(batch 20 section 24) a tester whose part had ended rated you: one quiet line in the live box (DEV_QUIET_KINDS) with your own window, never a stop (a working tester who rates leaves: \"left\")",
   key: "(batch 14 section 6) an access key reported as not working: one quiet line in the live box (DEV_QUIET_KINDS), never a stop, no bell",

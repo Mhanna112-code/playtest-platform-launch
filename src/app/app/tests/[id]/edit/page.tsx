@@ -1,6 +1,6 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import { hasPerks } from "@/lib/server/subscription";
-import { openUntilCapDay, testerDaysOf } from "@/lib/rules";
+import { openUntilCapDay, testerDaysOf, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
@@ -40,6 +40,9 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
       </div>
       {t.status === "stopped" ? (
         <p className="err-field" role="alert" data-stopped="">This test was stopped.</p>
+      ) : t.status === "closed" ? (
+        // (Owner, Nov 3, batch 35 §168) A closed test has no Edit: the page says so plainly (no form).
+        <p className="err-field" role="alert" data-closed="">{TEST_CLOSED_NO_EDIT}</p>
       ) : (
         <>
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>

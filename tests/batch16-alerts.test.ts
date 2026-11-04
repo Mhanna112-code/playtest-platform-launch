@@ -141,18 +141,18 @@ describe("big changes from another tab stop every press once (section 21)", () =
     expect(log.text.split("\u001f")[0]).toBe("ended Ben Okafor's work early");
   });
 
-  it("Next round when another tab already made the draft: stops once, the line links to the draft; then refused", async () => {
+  // (Owner, Nov 3, batch 35 §168; replaces this section's "another tab already made the draft") Another tab's Next round is never detected: this tab's press makes
+  // its own draft at once, with no stop and no refusal.
+  it("Next round when another tab already made a draft: no stop, no refusal; a second draft", async () => {
     const { dev, testId } = await setup();
     await later();
     const loaded = seen();
     await later();
-    const made = await act(testId, "next-round", dev.cookie, { seenAt: seen(), confirmed: true, tab: "A" });
+    const made = await act(testId, "next-round", dev.cookie, { seenAt: seen(), tab: "A" });
     expect(made.status).toBe(200);
     const r = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "B" });
-    expect(r.body.error.code).toBe("stop_once");
-    expect(r.body.error.changes).toEqual([expect.objectContaining({ text: "You started the next round in another tab", link: `/app/tests/new?draft=${made.body.id}` })]);
-    await later(); // (Windows' clock can lag: the box's time must clearly follow the other tab's draft)
-    expect((await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "B", ...again() })).body.error.message).toMatch(/^This test already has a next round\./);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect(r.body.id).not.toBe(made.body.id);
     expect(src("components/ChangesBox.tsx")).toContain('<a href={c.link} data-stop-link="">{c.text}</a>');
   });
 

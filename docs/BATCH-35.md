@@ -2268,3 +2268,45 @@ sign-up.
   in-flight line (and "already reserved" only once reserved); a new chargeback during a reservation is named with what happens to it; the Owed box follows a
   redraw while an undrawn change still stops once. `batch35-payment-proofs` expects the in-flight line where another tab presses during the press's check.
 - **Recordings:** halted by the owner (Nov 3) before a final set; none belong to this section yet.
+
+## §168 Next round is one tap with an empty name; a closed test has no Edit (owner, Nov 3)
+
+The owner: "Round 2 to be a one tap button that opens a draft each time with no name (name field empty); shouldn't do any weird detection if previous drafts
+were open (it is up to [the developer] to take care of naming them differently) but rest filled in with saved edit info — also closed tests to have no edit."
+
+Replaces batch 16 §21's and batch 27 §2's next-round rules and the Oct 28 one-draft rule ("Only one next round per test").
+
+### Next round: one tap, a new draft every press
+- Pressing **Next round** makes a new draft at once and opens it in Post a test (`/app/tests/new?draft=<id>`), every time. There is no box ("A copy of this test for
+  your next build…"), no **Start the next round**, no stop-once gate, no **Go to the next round**, and no "This test already has a next round." Drafts made
+  before (in this tab or another) are never looked for: several drafts from one test are fine, and the developer names them.
+- The draft's name is **empty**: Post a test shows the name field empty, and Post refuses it with the form's own line (**Give the test a title.**). Everything
+  else is this test's saved details, as before: the listing, questions, devices, languages, parts and prices, deadline, Open until, join mode, NDA and Mature,
+  spots capped at 10 (batch 31); `round` is this test's round + 1 and `previousId` this test. Access keys are not copied (they never were): Post asks for them.
+- Kept: the subscriber perk (`requirePerk "nextRound"`, "Next round needs a subscription ($7/month).", the Subscribers tag), the hold refusal
+  ("… Your tests are paused until then."), the suspended / held / team-paused / team-stopped refusals, and no Next round on a draft or in the restricted view.
+- Kept: "Starting a next round never changes this round". Its "Round N was started" event is recorded **once per press** (two drafts: two lines). It no longer
+  moves this test's version, so it never stops an Edit Save either.
+- Another tab's Next round is no longer one of the developer's own-action lines (`BIG_OWN_ACTS`, the action log's "started the next round"): it stops no
+  press and shows no live line, since it never changes this test.
+- Removed: `goNextRound`, `NO_NEXT_ROUND`, the "go-next-round" press, its route action and its suspended / team-pause exceptions, its press label, the
+  `nextRoundId` lookup on the test page, and the "exists" refusal. A "go-next-round" press from an old page gets "That action doesn't exist."
+
+### Where a draft with no name shows: "Untitled draft (round 2)"
+`testTitleOf` / `untitledDraft` (`lib/rules.ts`): the dashboard's test card, Post a test's note ("A draft: Untitled draft (round 2). Give it a name, check the
+details, then press Post the test to open it for testers."), the team's test lists and user activity (`testLink`, `testRow`), the team's view of the test
+(`/app/find/<id>`), and a refused press's line ("Your Post the test on Untitled draft (round 2) didn't go through"). A draft has no testers, so it is never in
+History, Payments, the bell or an email.
+
+### A closed test has no Edit
+- A closed test (Open until passed and every tester's work ended) hides Edit like a stopped one: no Edit button, the join-mode badge is plain text (not a link
+  to Edit), no "Change in Edit" by the spots, and no "delete a free key in Edit" hint in the Access keys notice. The Invite panel ("Add spots in Edit") was
+  already hidden once the work ended.
+- `/app/tests/<id>/edit` on a closed test shows **This test is closed, so it can't be edited.** instead of the form, and Save (an older page's too, confirmed or
+  not) is refused with the same line (`closed`), never a stop-once.
+- Nothing a closed test needed from Edit is lost: a test only closes after its Open until has passed, which §112 already locks, and a test with no Open until
+  can't be given one (Open until can only be extended, design doc 5 / §54). What goes is wording-only edits (name, instructions, prices, spots, keys) on a test
+  nobody can join any more.
+
+Tests: `tests/batch35-next-round-one-tap.test.ts`, with the older next-round tests updated (flow, batch 7, 8, 16, 27, 29, 30) and the stop-once tests that
+used Next round as their press now using Stop (calls, stop-again, batch 4, 30c, 35 numbers-notes, one-rename-line, current-timezone).

@@ -499,7 +499,7 @@ describe("follow-up 5, 7, 8, 9, 10) cards, the mistakes line, End early, profile
 
   it("a draft has no Next round and no End early", () => {
     const top = src("app/app/tests/[id]/TopPanel.tsx");
-    expect(top).toContain('p.restricted || p.teamStopped || p.status === "draft" ? null');
+    expect(top).toContain('{!(p.restricted || p.teamStopped || p.status === "draft") && (');
     expect(top).toContain('p.status !== "draft" && !stopped && !p.workEnded && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "end"');
   });
 });
@@ -511,8 +511,8 @@ describe("follow-up 6) one Save in another tab is one line in one voice, and 'Ch
     const loaded = seen();
     await new Promise((r) => setTimeout(r, 30));
     expect((await act(testId, "edit", dev.cookie, { version: v, tab: "tab-2", fields: { description: "Sail further", liveRateCents: "40.00" } })).status).toBe(200);
-    // (Batch 29 section 12) A Save in another tab stops every press once: Next round here stops with one line, in one voice.
-    const next = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "tab-1" });
+    // (Batch 29 section 12) A Save in another tab stops every press once: Stop here stops with one line, in one voice (batch 35 §168: Next round no longer stops).
+    const next = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded, tab: "tab-1" });
     expect(next.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["You saved the listing in another tab"]); // (batch 35 §34) one line, no field list
     const log = await db.actionLog.findFirstOrThrow({ where: { testId, tab: "tab-2" } });
     expect(log.text.split("\u001f")[0]).toBe("You saved the listing in another tab: description, live call rate");

@@ -191,23 +191,18 @@ describe("batch 30 §6: leftovers from the batch 29 design doc check", () => {
     expect(src("lib/usePress.ts")).toContain("{ ...body, seenAt, confirmed:");
   });
 
-  it("Go to the next round stops once after Open until passed too (no skip)", async () => {
+  // (Owner, Nov 3, batch 35 §168) Go to the next round is gone; Next round after Open until passed makes a draft at once (no stop-once, no skip rule).
+  it("Next round after Open until passed: a new draft at once (no Go to the next round)", async () => {
     const s = await setup();
     const j = await joined(s.testId, "fbbb", "they");
-    const made = await act(s.testId, "next-round", s.dev.cookie, { seenAt: seen(), confirmed: true });
-    expect(made.status).toBe(200);
     await settle();
     const loaded = seen();
     await later();
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ANSWERS, seenAt: seen(), confirmed: true })).status).toBe(200);
     await db.test.update({ where: { id: s.testId }, data: { openUntil: new Date(Date.now() - 60_000) } });
-    const first = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded });
-    expect(first.body.error.code).toBe("stop_once");
-    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toContain("fbbb sent their written answers");
-    await later();
-    const second = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded, ...again() });
-    expect(second.status).toBe(200);
-    expect(second.body.id).toBe(made.body.id);
+    const r = await act(s.testId, "next-round", s.dev.cookie, { seenAt: loaded });
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
+    expect((await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded })).status).toBe(404);
     expect(src("lib/server/tests.ts")).not.toContain("const closed = !!t.openUntil && t.openUntil.getTime() < Date.now();");
   });
 

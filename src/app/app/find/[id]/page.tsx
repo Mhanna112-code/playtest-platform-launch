@@ -26,7 +26,7 @@ import { LongList } from "@/components/LongList";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
-import { canAskToRejoin, leftText } from "@/lib/rules";
+import { canAskToRejoin, leftText, testTitleOf } from "@/lib/rules";
 import { heldBrokenKey } from "@/lib/server/accessKeys";
 import { profileTestRefusal } from "@/lib/server/profileOpenTests";
 import { needsTermsAgain } from "@/lib/termsOfUse";
@@ -147,7 +147,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />
           <div className="min-w-0 flex-1">
             {t.productName && <p className="kicker">{t.productName}</p>}
-            <h1 className="text-2xl font-bold tracking-tight text-white">{t.title}</h1>
+            {/* (Owner, Nov 3, batch 35 §168) The team opening a Next round's draft with no name yet: "Untitled draft (round 2)". */}
+            <h1 className="text-2xl font-bold tracking-tight text-white">{testTitleOf(t)}</h1>
             <p className="text-sm text-slate-400">
               by <a href={`/app/developers/${t.developerId}`} className="text-slate-200">{dev}</a>{devRating.line && ` · ${devRating.line}`}
               {invite ? <span className="badge ml-2 border-emerald-400/40 text-emerald-200">Invited</span> : t.joinMode === "apply" && <span className="badge ml-2 border-sky-300/40 text-sky-200">{dev} approves each tester</span>}

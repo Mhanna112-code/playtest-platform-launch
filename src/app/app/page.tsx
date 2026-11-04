@@ -51,7 +51,7 @@ import { pronouns } from "@/lib/format";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PAUSE_CLOSE_DAYS, pauseReasons } from "@/lib/pause";
 import { HOLD_APPROVAL_AFTER, REVIEW_DAYS, joiningClosedLine, testerPayable } from "@/lib/rules";
-import { closeOutSoon, payClosesLine } from "@/lib/rules";
+import { closeOutSoon, payClosesLine, testTitleOf } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 import { updateRoomLeft } from "@/lib/server/paidUpdates";
 import { lateSentLine, pieceDay, updateWaiting } from "@/lib/moneyLines";
@@ -339,7 +339,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               // (Batch 9) Every reason: "Paused: payment hold · paused by the team".
               const why = pauseReasons(user, t);
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
-              const title = <span className="text-lg font-semibold text-white"><Cut text={t.title} kind="test" /></span>;
+              // (Owner, Nov 3, batch 35 §168) A Next round's draft not named yet: "Untitled draft (round 2)".
+              const title = <span className="text-lg font-semibold text-white" {...(t.title.trim() ? {} : { "data-untitled-draft": "" })}><Cut text={testTitleOf(t)} kind="test" /></span>;
               return (
                 <li key={t.id}>
                   {/* The whole card opens the test (its title's link stretches over it); a suspended developer's cards don't open. */}

@@ -136,7 +136,7 @@ export async function logTestAction(userId: string, testId: string, action: stri
       about = { a: "end-early", k: ended.map((id) => `c:${id}`) };
       break;
     }
-    case "next-round": text = "started the next round"; about = { a: "next-round", k: ["test"] }; break;
+    // (Owner, Nov 3, batch 35 §168) Next round is no longer a line: it never changes this test, so another tab's Next round stops no press (its draft opens in Post).
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), true)}`; about = { a: "cancel-call", k: await callKeys(s(body.callId)) }; break;
     case "cancel-set": text = `cancelled the rest of a daily / weekly set of calls with ${await contractName(s(body.contractId))}`; about = { a: "cancel-set", k: [`set:${s(body.setId)}`, `c:${s(body.contractId)}`] }; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), true)}`; about = { a: "no-show", k: await callKeys(s(body.callId)) }; break;

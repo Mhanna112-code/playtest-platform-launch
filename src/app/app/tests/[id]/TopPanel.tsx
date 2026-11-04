@@ -34,9 +34,12 @@ async function stillRestricted() {
 }
 
 /** (Batch 35 §75) The name each top press's box says ("Your End early didn't go through."). */
-export const TOP_PRESS = { "next-round": "Next round", "go-next-round": "Go to the next round", stop: "Stop the test", "end-early": "End early", open: "Accept testers again" } as const;
+export const TOP_PRESS = { "next-round": "Next round", stop: "Stop the test", "end-early": "End early", open: "Accept testers again" } as const;
 
-export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
+/** The join-mode badge's words. */
+const joinModeLabel = (m: string) => (m === "apply" ? "You approve each tester" : m === "invite" ? "Invite only" : "Anyone who matches joins instantly");
+
+export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const router = useRouter();
@@ -47,7 +50,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   const { press, changes, error, busy, at, finish, clear } = usePress(p.seenAt, () => router.refresh(), { perKey: true, onFresh: () => { setPicked([]); setReason(""); setStopReason(""); setOpen(""); } });
   // (Batch 16 section 10) End early's mistakes are red at their box and listed under its button, not as a plain line.
   const box = (k: keyof typeof TOP_PRESS) => (at === k ? <ChangesBox press={TOP_PRESS[k]} changes={changes} error={k === "end-early" && error.startsWith(FIELD) ? "" : error} didntGo={k === "stop" || k === "end-early"} /> : null);
-  const [open, setOpen] = useState<"" | "end" | "next">("");
+  const [open, setOpen] = useState<"" | "end">("");
   // End early: the full app's ticks and "All", one reason, and a confirm dialog before it presses.
   const [picked, setPicked] = useState<string[]>([]);
   const [noTick, setNoTick] = useState(false);
@@ -61,6 +64,8 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   const keepStop = useKept<{ reason: string }>(`stop:${p.id}`, { reason: stopReason }, !stopReason.trim(), (v) => setStopReason(typeof v.reason === "string" ? v.reason : ""));
   const [openErr] = useState("");
   const stopped = p.status === "stopped";
+  // (Owner, Nov 3, batch 35 §168) A closed test (no new joiners; testers' work ended) has no Edit, like a stopped one: no Edit button, and nothing else links to it.
+  const noEdit = stopped || p.status === "closed";
   const ahead = p.working.reduce((n, w) => n + w.ahead, 0);
   const chosen = p.working.filter((w) => picked.includes(w.contractId));
   const chosenAhead = chosen.reduce((n, w) => n + w.ahead, 0);
@@ -71,10 +76,8 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
     if (!r) return;
     if (action === "end-early") await keepEnd.clear();
     if (action === "stop") await keepStop.clear();
-    // (Owner, Oct 28 evening) Next round creates the draft and goes straight to Post a test with it.
+    // (Owner, Oct 28 evening) Next round creates the draft and goes straight to Post a test with it. (§168) One tap, a new draft every time.
     if (action === "next-round" && r.id) window.location.href = `/app/tests/new?draft=${r.id}`;
-    // (Batch 27 section 2) Go to the next round: past the stop-once gate, its draft opens.
-    else if (action === "go-next-round" && r.id) window.location.href = `/app/tests/${r.id}`;
     // (Batch 15 section 29) A restricted developer's Stop / End early: the dashboard top says it's done.
     // (Owner, Oct 31, batch 35 §72) Only while the account is still restricted: reinstated meanwhile, the page just redraws here with the full view.
     else if (p.doneTo && (action === "stop" || action === "end-early") && (await stillRestricted()))
@@ -85,7 +88,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
 
   return (
     <div className="space-y-2">
-      {/* The full app's test header: title, badges (status; who can join, linking to Edit; deadline), then the actions. */}
+      {/* The full app's test header: title, badges (status; who can join, linking to Edit while the test can be edited; deadline), then the actions. */}
       <section className="panel relative z-20 !space-y-5" aria-label="Test">
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1 space-y-2">
@@ -98,24 +101,26 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
               {p.nda && <span className="badge">NDA</span>}
               {p.keysLeft != null && <span className="badge"><KeyRound className="h-3.5 w-3.5" /> {p.keysLeft} key{p.keysLeft === 1 ? "" : "s"} left</span>}
               <CategoryBadges categories={p.categories ?? []} />
-              {p.joinMode && (
-                <a href={`/app/tests/${p.id}/edit`} className={`badge no-underline hover:no-underline ${p.joinMode === "apply" ? "border-sky-300/40 text-sky-200" : ""}`} title="Change who can join in Edit">
-                  {p.joinMode === "apply" ? "You approve each tester" : p.joinMode === "invite" ? "Invite only" : "Anyone who matches joins instantly"}
+              {p.joinMode && (noEdit ? (
+                // (§168) Stopped or closed: the same badge, not a link.
+                <span className={`badge ${p.joinMode === "apply" ? "border-sky-300/40 text-sky-200" : ""}`} data-join-mode="">{joinModeLabel(p.joinMode)}</span>
+              ) : (
+                <a href={`/app/tests/${p.id}/edit`} className={`badge no-underline hover:no-underline ${p.joinMode === "apply" ? "border-sky-300/40 text-sky-200" : ""}`} title="Change who can join in Edit" data-join-mode="">
+                  {joinModeLabel(p.joinMode)}
                 </a>
-              )}
+              ))}
             </div>
           </div>
           {/* The full app's header: the buttons at the top right (Edit, Next round, End early, Stop the test). */}
           {/* (Owner, Oct 28 evening) A stopped test shows only what still works: Alerts and Next round (it starts a new draft from this test); no Edit, End early or Stop. */}
+          {/* (Owner, Nov 3, batch 35 §168) A closed test has no Edit either. */}
           {(
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
-              {!p.restricted && !stopped && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
+              {!p.restricted && !noEdit && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
               {(!p.restricted || p.alertKeys) && <AlertsMenu testId={p.id} ignored={p.ignoredAlerts ?? []} keys={p.alertKeys} />}
-              {p.restricted || p.teamStopped || p.status === "draft" ? null : p.nextRoundId ? (
-                // (Owner, Oct 29, batch 27 section 2) A press, not a plain link: it stops once like Next round (the box under these buttons); the second press opens the draft.
-                <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} data-go-next-round="" onClick={() => void go("go-next-round")}><Repeat className="h-4 w-4" /> Go to the next round</button>
-              ) : (
-                <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "next" ? "" : "next"); }}><Repeat className="h-4 w-4" /> Next round{p.perks === false && <SubscribersTag />}</button>
+              {/* (Owner, Nov 3, batch 35 §168) One tap: every press makes a new draft and opens it in Post a test (no box, no stop-once, no second button for an earlier draft). */}
+              {!(p.restricted || p.teamStopped || p.status === "draft") && (
+                <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} data-next-round="" onClick={() => { clear(); setOpen(""); void go("next-round"); }}><Repeat className="h-4 w-4" /> Next round{p.perks === false && <SubscribersTag />}</button>
               )}
               {/* (Owner, Oct 28) A draft (a next round not opened yet) has no Next round and no End early. */}
               {p.status !== "draft" && !stopped && !p.workEnded && <button className="btn-secondary px-3 py-1.5 text-sm" onClick={() => { clear(); setOpen(open === "end" ? "" : "end"); }} disabled={p.working.length === 0}>
@@ -147,7 +152,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
                 onConfirm={() => go("stop", { reason: stopReason })}>
                 <OctagonX className="h-4 w-4" /> Stop the test
               </ConfirmButton>}
-              {box("go-next-round")}
+              {box("next-round")}
               {box("stop")}
             </div>
           )}
@@ -165,7 +170,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
               {box("open")}
             </span>
           )}
-          {/* (Owner, Oct 26) Open until is shown here as a date only; it changes through Edit. */}
+          {/* (Owner, Oct 26) Open until is shown here as a date only; it changes through Edit (§168: not on a stopped or closed test). */}
           {/* (Batch 15 section 18) Open until is the last day to join; after it: "Joining closed · testers working until Dec 3". */}
           {p.openUntil && (p.joinClosedLine ? <p className="text-xs text-amber-200" data-joining-closed="">{p.joinClosedLine}</p> : <p className="text-xs text-slate-400" data-open-until="">Open until (last day to join) {fmtDateIn(p.openUntil, p.timeZone)}</p>)}
         </div>
@@ -217,13 +222,6 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
             </div>
             {box("end-early")}
             <FormMistakes text={at === "end-early" && error.startsWith(FIELD) ? error : ""} press="End their work now" />
-          </div>
-        )}
-        {open === "next" && (
-          <div className="space-y-2 rounded-lg border border-white/10 p-3">
-            <p className="text-sm">A copy of this test for your next build, saved as a draft so you can put in the new build&apos;s link first.</p>
-            <button className="btn" disabled={busy} onClick={() => go("next-round", {})}>Start the next round</button>
-            {box("next-round")}
           </div>
         )}
       </section>

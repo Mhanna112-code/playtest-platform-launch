@@ -108,7 +108,8 @@ describe("batch 8 items 1-2: the free plan and the perks", () => {
     const app = await db.application.findFirstOrThrow({ where: { testId: t.body.id, testerId: ann.user.id } });
     expect((await act(t.body.id, "application", dev.cookie, { applicationId: app.id, decision: "accept", seenAt: seen(), confirmed: true })).status).toBe(200);
     // Switching another test to Approved-only is a new use.
-    const other = await db.test.create({ data: { developerId: dev.user.id, title: "B", spots: 2, deadlineDays: 7, devices: [], languages: [], categories: ["Game"], writtenCents: 1000, questions: ["Q?"], status: "closed" } });
+    // (Batch 35 §168) An open one: a closed test can't be edited at all.
+    const other = await db.test.create({ data: { developerId: dev.user.id, title: "B", spots: 2, deadlineDays: 7, devices: [], languages: [], categories: ["Game"], writtenCents: 1000, questions: ["Q?"], status: "open" } });
     expect((await act(other.id, "edit", dev.cookie, { version: other.version, fields: { joinMode: "apply" } })).body.error.message).toBe("Approved-only testers need a subscription ($7/month).");
     // The tags.
     expect(src("app/app/tests/TestForm.tsx")).toContain("{!perks && <>");

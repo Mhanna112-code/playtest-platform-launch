@@ -63,7 +63,7 @@ describe("Pay more closes with the test's last Pay / Charge (Batch 17 §19 repla
 
 // (Owner, Oct 29, batch 29 section 11) Section 25's "goes through on the first press" is replaced: what still works follows the same stop-once rules as on a running test.
 describe("developer, stopped / closed or paused / held: what still works follows the running test's stop-once rules (batch 29 section 11)", () => {
-  it("stopped: Pay, Pay more and Next round stop once for news and other tabs; the side of a dispute keeps its rules; Rate keeps its own list", async () => {
+  it("stopped: Pay and Pay more stop once for news and other tabs (Next round: at once, batch 35 §168); the side of a dispute keeps its rules; Rate keeps its own list", async () => {
     const w = await paidWork({ recordingCents: "5.00" });
     const b = await joined(w.testId, "Ben Carter", "he");
     await sact(b.sessionId, "written", b.tester.cookie, { answers: ["a", "b"] });
@@ -87,9 +87,8 @@ describe("developer, stopped / closed or paused / held: what still works follows
     // Rate Ben: its own short list (everything was settled before the developer's Rate opened; your own changes never stop it).
     const rate = await act(w.testId, "rate", w.dev.cookie, { contractId: b.sessionId, stars: 4, ...B });
     expect(rate.status, JSON.stringify(rate.body)).toBe(200);
-    // Next round on the stopped test: stops once, then goes ahead.
-    expect((await act(w.testId, "next-round", w.dev.cookie, B)).body.error.code).toBe("stop_once");
-    expect((await act(w.testId, "next-round", w.dev.cookie, { ...B, confirmed: true, boxAt: seen() })).status).toBe(200);
+    // (Batch 35 §168) Next round on the stopped test: one tap, no stop-once.
+    expect((await act(w.testId, "next-round", w.dev.cookie, B)).status).toBe(200);
     // Repeats are plain refusals.
     expect((await act(w.testId, "dispute-side", w.dev.cookie, { disputeId: d.id, text: "Again", ...B })).body.error.message).toBe("You already added your side.");
   });

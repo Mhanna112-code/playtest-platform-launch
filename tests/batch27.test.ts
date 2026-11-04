@@ -173,45 +173,34 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
   });
 });
 
-describe("batch 27 section 2: Go to the next round stops once too", () => {
-  it("updated answers after the page loaded: the first press stops naming them, the second opens the draft; nothing new opens at once", async () => {
+// (Owner, Nov 3, batch 35 §168) Section 2 is replaced: there is no "Go to the next round" any more. Next round is one tap and makes a new draft every press, even
+// after updated answers (no stop-once), and its box under the buttons shows only refusals.
+describe("batch 27 section 2 (replaced by batch 35 §168): Go to the next round is gone", () => {
+  it("updated answers after the page loaded: Next round makes a new draft at once; the old press doesn't exist", async () => {
     const s = await setup();
     const j = await joined(s.testId, "fbbb", "they");
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
-    const made = await act(s.testId, "next-round", s.dev.cookie, { seenAt: seen(), confirmed: true });
+    const made = await act(s.testId, "next-round", s.dev.cookie, { seenAt: seen() });
     expect(made.status).toBe(200);
     await settle();
-    const quiet = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: seen() });
-    expect(quiet.status).toBe(200);
-    expect(quiet.body.id).toBe(made.body.id);
     const loaded = seen();
     await later();
     expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "a2", seenAt: seen(), confirmed: true })).status).toBe(200); // (batch 35 §136) added, not updated
-    const first = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded });
-    expect(first.body.error.code).toBe("stop_once");
-    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toContain("fbbb added to their written answers");
-    await later();
-    const second = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded, ...again() });
-    expect(second.status).toBe(200);
-    expect(second.body.id).toBe(made.body.id);
+    const again1 = await act(s.testId, "next-round", s.dev.cookie, { seenAt: loaded });
+    expect(again1.status, JSON.stringify(again1.body)).toBe(200);
+    expect(again1.body.id).not.toBe(made.body.id);
+    const gone = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded });
+    expect(gone.status).toBe(404);
+    expect(gone.body.error.message).toBe("That action doesn't exist.");
   });
 
-  it("on a stopped test it opens at once; the button is a press with its box under the buttons", async () => {
-    const s = await setup();
-    const j = await joined(s.testId, "fbbb", "they");
-    const made = await act(s.testId, "next-round", s.dev.cookie, { seenAt: seen(), confirmed: true });
-    expect((await act(s.testId, "stop", s.dev.cookie, { reason: "We have what we need.", seenAt: seen(), confirmed: true })).status).toBe(200);
-    await settle();
-    const loaded = seen();
-    await later();
-    await sact(j.sessionId, "rate", j.tester.cookie, { stars: 5, seenAt: seen(), confirmed: true }).catch(() => null);
-    const r = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded });
-    expect(r.status).toBe(200);
-    expect(r.body.id).toBe(made.body.id);
+  it("the button is one press with its box under the buttons; no Go to the next round", () => {
     const panel = src("app/app/tests/[id]/TopPanel.tsx");
-    expect(panel).toContain("onClick={() => void go(\"go-next-round\")}><Repeat className=\"h-4 w-4\" /> Go to the next round</button>");
-    expect(panel).toContain("{box(\"go-next-round\")}");
-    expect(panel).toContain("else if (action === \"go-next-round\" && r.id) window.location.href = `/app/tests/${r.id}`;");
+    expect(panel).toContain("void go(\"next-round\"); }}><Repeat className=\"h-4 w-4\" /> Next round{p.perks === false && <SubscribersTag />}</button>");
+    expect(panel).toContain("{box(\"next-round\")}");
+    expect(panel).not.toContain("go-next-round");
+    expect(panel).not.toContain("Go to the next round");
+    expect(panel).not.toContain("Start the next round");
   });
 });
 

@@ -6,6 +6,7 @@ import { HttpError } from "./http";
 import { isAdmin, requireUser } from "./session";
 import { accountGate, listLabel, logAccountChange, sidesLabel } from "./accountChanges";
 import { pressLabelOf } from "@/lib/pressLabels";
+import { testTitleOf } from "@/lib/rules";
 import { TERMS_CHANGED_HREF, TERMS_TICK_MISSING, TERMS_UPDATED_CODE, TERMS_VERSION, needsTermsAgain } from "@/lib/termsOfUse";
 
 export const SUSPENDED = "Your account is paused. Contact support if you think this is a mistake.";
@@ -38,7 +39,9 @@ export async function failedLine(req: Request, what?: string, piece?: { kind: st
     // (Owner, Nov 3, races) Dismiss all is sent from one card but covers every removed-from card: it names no one test.
     if (verb === "Dismiss all") return "Your Dismiss all didn't go through";
     if (path[1] === "tests" && path[2]) {
-      title = (await db.test.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
+      // (Owner, Nov 3, batch 35 §168) A Next round's draft with no name yet: "Your Post the test on Untitled draft (round 2) didn't go through".
+      const t = await db.test.findUnique({ where: { id: path[2] }, select: { title: true, round: true } });
+      title = t ? testTitleOf(t) : "";
     } else if (path[1] === "sessions" && path[2]) {
       title = (await db.contract.findUnique({ where: { id: path[2] }, select: { title: true } }))?.title ?? "";
     } else if (path[1] === "review" && piece) {

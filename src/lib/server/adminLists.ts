@@ -4,7 +4,7 @@ import { displayName, fmtDate, fmtDateTime, renderDateText, money, pronouns } fr
 import { pauseCountdownLine } from "@/lib/pause";
 import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
-import { NOT_LISTED, termsLine } from "@/lib/rules";
+import { NOT_LISTED, termsLine, testTitleOf } from "@/lib/rules";
 import { CRITICAL_FIELDS, CRITICAL_KEYS, countsOf, lockedFields } from "@/lib/limits";
 import { SUBSCRIPTION_ENDED, adminSubLine } from "@/lib/subscription";
 import { pausedTestsForAdmin } from "./pauseClosure";
@@ -329,7 +329,7 @@ export async function testRow(t: Awaited<ReturnType<typeof db.test.findMany<{ in
   return {
     id: t.id,
     at: t.createdAt.toISOString(),
-    line: `${fmtDateTime(t.createdAt)} · “${t.title}” · ${state} · ${displayName(t.developer)} · ${tail}`,
+    line: `${fmtDateTime(t.createdAt)} · “${testTitleOf(t)}” · ${state} · ${displayName(t.developer)} · ${tail}`,
     // (Batch 33 §1) The test and its developer as links.
     parts: [`${fmtDateTime(t.createdAt)} · `, testLink(t), ` · ${state} · `, ...person(t.developer), ` · ${tail}`],
     href: `/app/find/${t.id}`,

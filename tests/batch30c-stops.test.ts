@@ -48,7 +48,7 @@ describe("batch 30 §10: one line per listing save for testers", () => {
     const ls = await live(tester.cookie, `session:${sessionId}`, pageLoaded);
     expect(ls.body.changes.filter((c: { text: string }) => /edited the listing|changed the|renamed/.test(c.text)).map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(saveRe("Nora Lane", "product name, title (now “lllllq”), description, build link"))]);
     // The developer's own pages are unchanged.
-    const d = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-x" });
+    const d = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, tab: "tab-x" }); // (batch 35 §168) Stop: Next round no longer stops once
     expect(d.body.error.changes.map((c: { text: string }) => c.text).join(" | ")).not.toMatch(/edited the listing at/);
   });
 
@@ -69,7 +69,7 @@ describe("batch 30 §10: one line per listing save for testers", () => {
     const pageLoaded = seen();
     await later();
     expect((await edit(testId, dev.cookie, { title: "Harbor Run 9", description: "Sail on" }, { tab: "tab-a" })).status).toBe(200);
-    const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-b" });
+    const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, tab: "tab-b" }); // (batch 35 §168)
     expect(texts(r)).toEqual(["You saved the listing in another tab"]); // (batch 35 §34) no field list
     const l = await live(dev.cookie, `test:${testId}`, pageLoaded);
     expect(l.body.changes.map((c: { text: string }) => c.text)).toEqual(texts(r));

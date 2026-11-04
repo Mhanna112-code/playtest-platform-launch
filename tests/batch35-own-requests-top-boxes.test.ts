@@ -51,7 +51,7 @@ describe("batch 35 §75: one box at a time in the top panel, named after its own
     expect(t).toContain('"end-early": "End early"');
     expect(t).toContain("<ChangesBox press={TOP_PRESS[k]}");
     expect(t).toContain("{ perKey: true, onFresh:");
-    expect(t).toContain('onClick={() => { clear(); setOpen(open === "next" ? "" : "next"); }}');
+    expect(t).toContain('onClick={() => { clear(); setOpen(""); void go("next-round"); }}'); // (batch 35 §168) Next round presses at once, clearing the other boxes
     expect(t).toContain('onClick={() => { clear(); setOpen(open === "end" ? "" : "end"); }}');
     expect(t).toContain('before={() => { if (at !== "stop") clear(); return true; }}');
   });
