@@ -87,7 +87,8 @@ describe("two folds under each part", () => {
     }
     // No separate folds for the body or the Pay box any more.
     for (const old of ["needs-body-", "needs-pay-", "update-body-", "update-pay-", "row-body-"]) expect(page).not.toContain(`<Fold id={\`${old}`);
-    expect(page).toContain('<Fold id={`row-more-${x.id}`} summary="Pay more">'); // a call's Pay more under the Calls fold stays
+    expect(page).toContain('<Fold id={`row-call-${x.id}`}'); // each call under the Calls fold is its own drop-down too, its Pay more inside
+    expect(page).not.toContain('<Fold id={`row-more-');
     expect(page).not.toContain("<AnswersBox>");
   });
 

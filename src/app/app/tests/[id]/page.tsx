@@ -610,7 +610,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <ul className="space-y-1 text-sm" data-parts-sent="">
                   {partRows.filter((r) => r.on || r.sub).map((r) => (
                     // (Batch 35 §7) A bell or email link to a piece ("#piece-<id>") that has left Needs you (paid) lands on this line (HashJump's fallback).
-                    <li key={r.name} className="scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" {...(r.sub ? { id: `part-${r.sub.id}` } : {})}>
+                    <li key={r.name} className={`scroll-mt-24 rounded-lg transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300 ${r.sub ? "border border-white/10 p-3" : ""}`} {...(r.sub ? { id: `part-${r.sub.id}` } : {})}>
                       {(() => {
                       const line = <>
                       <b className="text-white">{r.name}</b>
@@ -619,10 +619,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && <span className="text-slate-300">· paid {money(partPaid(r.sub.id))} of {r.sub.agreedCents != null ? money(r.sub.agreedCents) : `(${NOT_LISTED.toLowerCase()})`}</span>}
                       {r.sub?.review?.rejected && <span className="badge border-rose-400/40 text-rose-200">Rejected</span>}
                       </>;
-                      // (Owner, Nov 3) A part that wasn't sent is its line only; a sent part is its own drop-down: its payments, the answers or recordings, then Pay more.
+                      // (Owner, Nov 3) A part that wasn't sent is its line only; a sent part is its own drop-down like Needs you's (open at first): its payments, the answers or
+                      // recordings, then Pay more.
                       if (!r.sub) return <div className="flex flex-wrap items-center gap-2">{line}</div>;
                       return (
-                      <Fold id={`row-part-${r.sub.id}`} defaultOpen={false} className="space-y-2" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={line}>
+                      <Fold id={`row-part-${r.sub.id}`} className="space-y-2" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={line}>
                       {/* (Owner, Nov 3, batch 35 §152) Under the paid total: this part's payments (a panel above 4). */}
                       {r.sub && <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />}
                       {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
@@ -687,11 +688,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         const inNeeds = tookPlace(x) && !x.review && !restricted && testerPayable(c.tester) && !payShut(x.id);
                         return (
                           <li key={x.id} id={inNeeds ? `callrow-${x.id}` : `call-${x.id}`} className={`space-y-1 rounded-lg border border-white/5 p-2 ${"scroll-mt-24 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300"}`} data-over-call={x.id}>
-                            <div className="flex flex-wrap items-center gap-2">
+                            {/* (Owner, Nov 3) Each call is its own drop-down, like a part: its line, then inside its length, payments and Pay more. */}
+                            <Fold id={`row-call-${x.id}`} className="space-y-1" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={<>
                               <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
                               <span className={`badge ${badge.tone === "green" ? "border-emerald-400/40 text-emerald-200" : badge.tone === "amber" ? "border-amber-300/40 text-amber-200" : badge.tone === "rose" ? "border-rose-400/40 text-rose-200" : ""}`} data-call-badge="">{badge.label}</span>
                               <span className="ml-auto text-slate-300">{tookPlace(x) ? `paid ${money(partPaid(x.id))}` : ""}</span>
-                            </div>
+                            </>}>
                             {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : "In their contract"}</p>}
                             {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
                             <PartPayments id={x.id} lines={partPays.get(x.id)} />
@@ -702,16 +704,18 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {bankAt(x.id)}
                             {x.review?.teamClosedById && <p className="text-sm text-slate-300" data-team-closed="">{teamClosedLine(x.review.reason)}</p>}
                             {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
-                              <Fold id={`row-more-${x.id}`} summary="Pay more">
+                              <div className="space-y-1" data-call-pay-more="">
+                              <p className="text-sm font-medium text-white">Pay more</p>
                               <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
-                              </Fold>
+                              </div>
                             )}
                             {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
                               <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
                             )}
+                            </Fold>
                           </li>
                         );
                       })}
