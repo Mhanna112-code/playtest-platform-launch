@@ -839,8 +839,6 @@ async function runDailyLocked(now: Date) {
   const co = closeOutMemo(now);
   await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message)); // (batch 23 section 1)
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message)); // (batch 23 section 6)
-  // (§160) Bank checks of the developer's own presses whose page went away (no heartbeat for 3 minutes): ended like Cancel.
-  await (await import("./bankHeartbeat")).endAllStaleChecks(now).catch((e) => console.error("[bank check] sweep:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);
   // (Batch 11) Bank confirmations that timed out. (Owner, Nov 3, batch 35 §145, §148) No retries of what is owed during a hold: it's charged only when the
   // developer presses Pay what you owe (never daily, never on a new card).

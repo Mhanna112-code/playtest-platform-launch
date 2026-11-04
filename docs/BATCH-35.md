@@ -1942,10 +1942,12 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
     with the same press (`payPressOf` on the payment's piece; a retried chargeback's row checks the reversed payment's piece, as `confirmStart` does), so the
     Alerts ticks and "the team's dispute decision always stops a payment press" apply as for Pay, and this tab's own actions never count (the peek sends the
     page's tab). Only lines after `since`.
-  - Pay what you owe (its one payment, or a chargeback hold's reservation): a debt added since (a payment declined: "Another payment failed meanwhile: …"; a
-    chargeback or an owed charge: "Added to what you owe meanwhile: …"), and a disputed amount the bank changed ("Your bank changed the disputed amount of your
-    $444.67 payment from $96.00 to $80.00"). What the one payment covers isn't a line; a tester's Charge that came in during the hold waits for the lift and
-    never stopped the press (§125), so it isn't either.
+  - Pay what you owe (its one payment, or a chargeback hold's reservation): every new debt or charge that arrived after the press, named with its amount and
+    what happens to it; none is ever added to the open check. A new chargeback or a declined payment: "<its line, with the amount and fee>: it isn't in this
+    payment; pay it with Pay what you owe after this one." (an unpaid hold), or "…: it isn't in this reservation; it's charged right after the team approves
+    lifting your hold." (a chargeback hold: the reservation reserves once, batch 28 §8). A tester's Charge or a team decision: "Ben Okafor charged $10.00
+    meanwhile: it's charged right after this payment goes through" (or the reservation's tail). A disputed amount the bank changed is said too. Once the check
+    ends, the page's live checks run at once, so the redrawn list shows the new line.
   - Confirm all: a new charge made while away it doesn't cover is never added to it: "Ben Okafor charged $10.00 meanwhile: it isn't in this payment; confirm it on its
     own, or with Confirm all after this one."
   - Pay what you owe (owner's §125 rule, unchanged): a charge arriving while its check is open isn't added either: "Ben Okafor charged $10.00 meanwhile: it's charged
@@ -1969,9 +1971,27 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
   Hints under Cancel: "Already finished with your bank? It's recorded as paid; otherwise nothing is charged." (own presses), "…; otherwise nothing is charged and
   it keeps waiting for your bank." (Confirm with your bank), "…; otherwise nothing is charged and each payment keeps waiting for your bank." (Confirm all),
   "Already finished with your bank? Your card is verified; otherwise nothing is saved." (Verify a card). The stand-in (fake Stripe) keeps Confirm / Cancel.
-- **Leaving the page.** Closing or reloading the page with the window open does what Cancel does: on `pagehide` the box sends the same finish request with
-  `navigator.sendBeacon` (`POST /api/payments/confirm { paymentId, leave: true }`, or Verify a card's `{ finish, setupIntent, cancel }`), which outlives the
-  page. Only a crash leaves it open; then the 15-minute clock ends it.
+- **Leaving the page.** Closing or reloading the page (or navigating away) with the window open does what Cancel does: on `pagehide` (not
+  visibilitychange) the box sends the same finish request with `navigator.sendBeacon` (`POST /api/payments/confirm { paymentId, leave: true }`, or Verify a
+  card's `{ finish, setupIntent, cancel }`), which outlives the page.
+- **Heartbeat (owner, Nov 3): an open bank check stays open only while the page showing it is open.** Each 3-second peek from the page holding the window
+  records that it is still open (a kept row `bankcheck:<id>`, no new column; written by the route, the peek itself stays read-only). A check of the
+  developer's OWN press (Pay, Pay more, Pay what you owe and a chargeback hold's reservation, Confirm all, Subscribe, Verify a card) with no heartbeat for
+  3 minutes is ended like Cancel: Stripe first (went through: recorded paid; otherwise cancelled at Stripe, nothing charged). 3 minutes, not seconds: on a
+  phone the bank's approval can happen in the bank's app while the browser is in the background and sends nothing. The sweep runs on every signed-in page's
+  status check (on load and every ~20 s, so another tab opening Payments ends a dead check at once) and in the 5-minute timers sweep
+  (`lib/server/bankHeartbeat.ts`). The single "Confirm with your bank" on a tester's charge made while away is never cancelled (closing only).
+- **Cancel this check in other tabs.** Every open check shows its Cancel elsewhere: a chargeback hold's reservation's rows now carry its Cancel this check
+  (they had none: `owedLines` gave them an empty check id); on a reservation it asks Stripe first (authorized: reserved as usual; otherwise cancelled at
+  Stripe). A Pay or Pay more whose window is open in another tab shows "Confirming with your bank" with Cancel this check. Confirm all's open check and Pay
+  what you owe's one payment already had theirs.
+- **Pay what you owe in flight in another tab (the owner's two-tab screenshot).** While its reservation or its one payment is being made or waits for the
+  bank, other tabs hide the button and say "Pay what you owe ($91.00) is waiting for your bank in another tab or window: finish that check, or cancel it."
+  (Cancel this check sits on its rows); a press from an older page is REFUSED with the same line (`owed_in_flight`, checked in `payOwed` and inside the
+  reservation's locked step), never a stop-once; "already reserved" only once it really is reserved. An away one payment (3 days, a new card's) still locks
+  only what it covers.
+- **A redraw counts as seen (Owed box).** The box's seen total and ids follow each redraw (they kept the first render's, so a press after a live redraw
+  stopped once for a change the page already showed); while a stop box shows, its values still win.
 - **The box stays put (bug found while recording).** A redraw while the window was open replaced the box and the bank's page under the developer (the
   Invite panel's availability poll redrew without checking for an open bank check, and a redrawn Pay box turned into "Confirming with your bank"). Now the
   Invite panel waits while a bank check is open, a Pay box keeps its own open check through a redraw, and when the check ends the page's live checks run at
@@ -1980,7 +2000,10 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
   `watchBank(…, onNews)`, `leaveBeacon`), `components/BankCheck.tsx` (`BankNotice`, `addNews`; `useBankCheck` sends the box's open time; a custom peek gets it
   too: ChargebackSteps' Verify a card; Cancel and its hint per `BankAction.cancel`; the pagehide beacon), `lib/server/confirm.ts` `confirmFinish` (processing
   counts as paid; paid-at-cancel; the still-waiting line), `api/payments/verify-card` (cancel the SetupIntent), `BankWaiting` / `ConfirmAll` /
-  `ChargebackSteps` (their Cancel kinds), `InvitePanel` and `PayBox` (the box stays put). No migration.
+  `ChargebackSteps` (their Cancel kinds), `InvitePanel` and `PayBox` (the box stays put), `lib/server/bankHeartbeat.ts` (heartbeat, stale-check sweep,
+  the reservation's Cancel), `api/account/status` and `holds.runSweep` (the sweeps), `holds.ts` `owedInFlight` / `refuseOwedInFlight` and the reservation's
+  check id on its rows, `chargeback.ts` `reserveOwed` (in flight vs reserved), `owedOnce.cancelOwedCheck` (a reservation id), `OwedBox` (the in-flight line,
+  seen values follow redraws), `BankWaiting` (`own`: Cancel this check). No migration.
 - **Tests:** `tests/batch35-bank-notice.test.ts` (a change after the press is a line with what Complete still does, one before isn't, asked twice the same;
   Alerts-ignored types aren't lines but the team's dispute decision is, another tab's own action is and this tab's isn't; Confirm all's and Pay what you owe's
   changes; a hold or a new card cancels with its reason and the box stays open; still-open or paid checks are never cancelled; the peek changes nothing (rows,
@@ -1989,8 +2012,8 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
   beacon charges nothing); a cancel that finds it just succeeded records it paid once; Cancel on a charge made while away never cancels it (same date, no
   hold); Pay what you owe's notice names a charge that waits instead of being added; the page has Cancel with its hint and the pagehide beacon).
   `batch35-bank-peek` follows the new peek answer and watch; `batch17-bank-check` expects Cancel under the frame and the still-waiting line.
-- **Recorded (real Stripe test mode, card 4000 0027 6000 3184, the Stripe viewer beside the app):** every rule clip with the window open (the same tester's
-  decision, another tester's decision with Decisions on / off, work on the same part with Work sent off, work on another part on / off, the tester's dispute
-  on / off), the cancelled check (hold, new card in another tab, ran out), the tester's dispute during a Pay more, Charge / Let it go before and during the
-  check and at the same moment, Cancel / reload / Confirm with your bank, Confirm all with new charges stacking. The suspension cancel (feat/pay-matrix) is not
-  recorded: not on master yet.
+- **Tests (later additions):** the heartbeat (a peek records it; 2 minutes stays, 3+ ends like Cancel; a stale one that went through is recorded paid; an
+  away charge stays); the reservation's rows carry its Cancel this check and it cancels at Stripe; an older page's Pay what you owe press is refused with the
+  in-flight line (and "already reserved" only once reserved); a new chargeback during a reservation is named with what happens to it; the Owed box follows a
+  redraw while an undrawn change still stops once. `batch35-payment-proofs` expects the in-flight line where another tab presses during the press's check.
+- **Recordings:** halted by the owner (Nov 3) before a final set; none belong to this section yet.
