@@ -176,7 +176,7 @@ describe("call length and payment problems on a call", () => {
     const { chargebackOpened } = await import("@/lib/server/holds");
     await chargebackOpened(p.stripePaymentIntentId!);
     // (§131) Which tester, part and test (and the call's day).
-    expect((await db.testEvent.findMany({ where: { testId, kind: "chargeback" } })).map((e) => e.text)).toEqual(["Your bank reversed your $15.00 payment for Ana Silva's live call on “Harbor Run” (" + T((await db.call.findUniqueOrThrow({ where: { id: call.id } })).startsAt, "date") + ")"]);
+    expect((await db.testEvent.findMany({ where: { testId, kind: "chargeback" } })).map((e) => e.text)).toEqual(["Your bank reversed your $15.00 payment for Ana Silva's live call on “Harbor Run” (" + T((await db.call.findUniqueOrThrow({ where: { id: call.id } })).startsAt) + ")"]); // (§178) its date and time
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).not.toBeNull();
     const { payOwed } = await import("@/lib/server/holds");
     // (Owner, Oct 27) The reversed $15.00 is owed again: "Pay what you owe" charges it on the card (paying alone never lifts a chargeback hold).

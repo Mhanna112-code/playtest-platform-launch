@@ -31,7 +31,8 @@ export const openAll = (devId: string) => db.payment.findFirst({ where: { develo
 
 const sum = (rows: { amountCents: number }[]) => rows.reduce((a, p) => a + p.amountCents, 0);
 // (Owner, Nov 4, §177) A call's date is a time token in the piece's name: written here, in the developer's saved zone ("Ana Silva's live call on “Harbor Run” (Oct 27)").
-const nameOf = async (p: Payment) => renderFor(p.developerId, `${await (await import("./holds")).owedItemName(p)} ${money(p.amountCents)}`);
+// (Owner, Nov 4, §178) With its date and time: "Ana Silva's live call on “Harbor Run” (Tue, Oct 27, 7:15 AM)".
+const nameOf = async (p: Payment) => { const h = await import("./holds"); return renderFor(p.developerId, `${await h.owedItemName(p, false, await h.pageCallDay(p.developerId))} ${money(p.amountCents)}`); };
 
 export type ConfirmAllState = { ids: string[]; totalCents: number; leftOut: string | null; open: { id: string; cents: number; n: number } | null };
 

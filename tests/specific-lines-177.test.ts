@@ -116,12 +116,12 @@ describe("§177 time markers never reach a page unrendered (the dashboard's “C
     for (const t of [row.lead, row.full]) {
       noTokens(t);
       expect(t).toContain(`the team's dispute decision on`);
-      expect(t).toContain(`live call on “Harbor Run” (${w.day}) $5.00`);
+      expect(t).toContain(`live call on “Harbor Run” (${w.when}) $5.00`); // (Owner, Nov 4, §178) a call by its date and time
     }
     const item = (await confirmItems(dev)).find((i) => i.id === one.id)!;
     for (const t of [item.text, item.full]) {
       noTokens(t);
-      expect(t).toMatch(/^Charges made while you were away \$5\.00 \(.*live call on “Harbor Run” \(\w+ \d+\) \$5\.00\)/);
+      expect(t).toMatch(/^Charges made while you were away \$5\.00 \(.*live call on “Harbor Run” \(\w+, \w+ \d+, \d+:\d\d [AP]M\) \$5\.00\)/); // (§178)
     }
     // An automatic call charge waiting for the lift: its call's date, written.
     const b2 = await bookCall(w.testId, w.dev.cookie, w.sessionId, w.tester.cookie, 72);
@@ -132,7 +132,7 @@ describe("§177 time markers never reach a page unrendered (the dashboard's “C
     const box = (await deferredForBox(dev)).find((p) => p.id === waiting.id)!;
     for (const t of [box.what, box.full]) {
       noTokens(t);
-      expect(t).toContain(`(${start2.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" })}, charged automatically after`);
+      expect(t).toContain(`(${fmtDateTimeIn(start2, "UTC")}, charged automatically after`); // (§178) its date and time
     }
   });
 });

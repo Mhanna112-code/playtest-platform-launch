@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, fmtTimeIn, money, pronouns } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
 import { awayFromTest, onTestLine } from "@/lib/rules"; // (§177)
-import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
+import { bankTopLead, confirmByText, pieceWords, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
 import { notify, renderFor } from "./notify";
@@ -156,7 +156,7 @@ ${x.href}`, x])).values()];
 export async function confirmItems(devId: string) {
   const waiting = await waitingConfirmation(devId);
   const tz = waiting.length ? await zoneOf(devId) : null;
-  const named = await piecesNamed(waiting, (d) => shortDay(d, tz));
+  const named = await piecesNamed(waiting, (d) => fmtDateTimeIn(d, tz)); // (Owner, Nov 4, §178) a call by its date and time
   // (Batch 35 §117 rule 6) Pay what you owe's one payment lists every payment it covers (name and amount); it's confirmed right here (no test).
   const owedIds = waiting.filter((p) => p.kind === "owed").map((p) => p.id);
   const once = await import("./owedOnce");
@@ -191,7 +191,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
   const allRow: BankTopRow[] = all ? [{ id: all.id, lead: (await import("@/lib/confirmAllText")).allWaitingLine(await db.payment.count({ where: { coveredById: all.id } }), all.amountCents), full: "", by: "", soon: false, href: "/app/payments#confirm", at: all.actionBy?.getTime() ?? 0, all: true }] : [];
   if (!waiting.length) return allRow;
   const tz = await zoneOf(devId);
-  const named = await piecesNamed(waiting, (d) => shortDay(d, tz));
+  const named = await piecesNamed(waiting, (d) => fmtDateTimeIn(d, tz)); // (Owner, Nov 4, §178) a call by its date and time
   const owedIds = waiting.filter((p) => p.kind === "owed").map((p) => p.id);
   const once = await import("./owedOnce");
   const [covers, coversFull] = await Promise.all([once.coveredNames(owedIds), once.coveredNames(owedIds, true)]);

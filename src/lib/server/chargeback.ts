@@ -461,9 +461,13 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   // (Batch 34 §1) Another admin's Don't approve since the page loaded (the developer reserved again since): the Approve stops once; the second press takes it.
   if (from && adminId) race.stopIfChanged("Approve", await race.holdChangesSince(devId, adminId, from, seen?.tab));
   // (Nov 2, §119) The claim and the admin's record (who, when) commit together, so a second admin's refusal always names the one who approved it.
+  // (Owner, Nov 4, §178) Under the developer's row lock (chargebackOpened's claim takes it too): the chargebacks this Approve resolves are the ones open now. One
+  // that opens after it is a new chargeback: it stays open (so the hold stays on, now reviewed first), never resolved unpaid by this press.
   const claimed = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${devId} FOR UPDATE`;
     const r = await tx.user.updateMany({ where: { id: devId, chargebackApprovedAt: null, holdStartedAt: { not: null }, holdReason: "chargeback" }, data: { chargebackApprovedAt: new Date() } });
-    return { count: r.count, record: r.count === 1 && adminId ? await race.recordAction(tx, adminId, "approve-chargeback", devId) : null };
+    const open = r.count === 1 ? (await tx.payment.findMany({ where: { developerId: devId, chargeback: "open" }, select: { id: true } })).map((x) => x.id) : [];
+    return { count: r.count, open, record: r.count === 1 && adminId ? await race.recordAction(tx, adminId, "approve-chargeback", devId) : null };
   });
   if (claimed.count !== 1) throw await approvedRefusal(devId, new HttpError(409, "already", "That hold was already approved."), p);
   const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
@@ -496,8 +500,8 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   // (Batch 28 §8) What was added after the reservation waits for the lift, then is charged as an ordinary charge.
   await deferAfterLift(devId, after);
 
-  for (const p of await db.payment.findMany({ where: { developerId: devId, chargeback: "open" } })) {
-    await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
+  for (const p of await db.payment.findMany({ where: { id: { in: claimed.open }, chargeback: "open" } })) {
+    if ((await db.payment.updateMany({ where: { id: p.id, chargeback: "open" }, data: { chargeback: "resolved" } })).count !== 1) continue;
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
     // (§133) "The team resolved the bank reversal of $96.00 of your $444.67 payment" when the bank reversed part of it.
     if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of ${reversedWords(p)}${await reversalFor(p)}`, c.id); // (§177) which payment

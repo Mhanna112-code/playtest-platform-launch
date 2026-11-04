@@ -2849,3 +2849,38 @@ to $20.50 ($5.00 more)". Nina has three live calls on that test and parts on two
   `batch35-dash-confirm-decision` (Confirm with your bank pressed on the dashboard names the test). Updated for the new wording: `batch10`, `batch11`,
   `batch28`, `batch29`, `batch23` (source check), `batch35-call-decide-lines`, `batch35-decide-paid-above`, `races-nov3`, `partial-dispute`, `pay-matrix`,
   `other-tab`, `stopped`, `addition`.
+
+## §178 Chargeback races: a chargeback on the payment lifting the hold, an approval undone, two owed lines alike (owner, Nov 4)
+
+Seen on the local site (developer fbbb, times UTC). (1) 19:44:52 Pay what you owe paid $67.50 on the 0259 card (every payment on it is disputed); its dispute
+arrived 19:44:53 (Stripe's `charge.dispute.created`, answered 19:44:55). The chargeback was recorded on that one payment at 19:44:55.155 and the hold lifted at
+19:44:55.213: no hold followed, with a chargeback open. (2) 19:47:35.770 a new chargeback hold started; the team approved at 19:47:35.991; a minute later the steps
+read "not approved", with no new chargeback. (3) Payments listed "Your bank reversed $15.50 you paid for bb's live call on “excerptexcer…” (Nov 4): $15.50 + $15
+chargeback fee" twice: two different calls (Oct 27, a few minutes apart), named by the day they were PAID.
+
+- **Root causes.** (1) `liftHoldIfClear` checked "nothing owed, no chargeback open, approved" and then cleared the hold in a separate write; `chargebackOpened`
+  recorded the chargeback in between (on the one payment the lift's own Pay what you owe had just made), found the hold still on (so `startHold` started none)
+  and the lift then cleared it. (2) `chargebackOpened` cleared the card check and the approval once more at its very END, after starting the hold, the admins'
+  emails and the bells (2 s in that case: Stripe's CLI log shows the webhook answered at 19:47:37), so the team's approval made the moment the hold showed was
+  wiped. Only one `charge.dispute.created` came for that dispute; no `updated` in that window. Also: a retried `created` for a chargeback the team had resolved
+  (or that was won) reopened it (the claim was "not open", not "never"). (3) `owedLines` named a reversed payment's piece with the payment's date
+  (`p.createdAt`), and the other owed / receipt lines named a call by its day only (`T(d, "date")`).
+- **Fix.** One lock decides the order: the developer's row lock (`SELECT … FOR UPDATE`, as Pay what you owe's claim takes it). `chargebackOpened` records the
+  chargeback under it, and in the same transaction turns a hold that is on into a chargeback hold with no card check and no approval; `liftHoldIfClear` checks
+  again under it (hold unchanged, nothing open or owed, steps done) before clearing. A chargeback that lands first stops the lift; one that lands after the lift
+  finds no hold and starts a new chargeback hold. The late clear at the end is gone: a new chargeback hold starts with both empty in `startHold`'s own claim
+  (reason "chargeback"), so an approval made while the opening is still being processed stands. A dispute is recorded once, ever: a delivery about a
+  PaymentIntent that already carries a chargeback (open, resolved, won) changes nothing; if that chargeback is open and no hold is on (the old race left one), its
+  chargeback hold starts. The one payment carries a dispute itself unless it covered exactly ONE ordinary item (never a reversed payment it was repaying: that
+  one's own chargeback is open until the repayment is recorded, so a dispute arriving then was taken for the old one and dropped). The team's Approve of a 1st
+  chargeback resolves only the chargebacks open when it is claimed (read under the lock): one that opens during the press stays open, and the hold stays.
+- **Call names.** A call is named by its date AND time everywhere a payment line names it (§177's rule): Payments' owed lines and a reversed call payment's line
+  ("… bb's live call on “excerptexcer…” (Tue, Oct 27, 7:15 AM): $15.50 + $15 chargeback fee") in the developer's saved zone, written, never a raw marker; what
+  Pay what you owe / Confirm all / a waiting charge covers, the dashboard's and Payments' Confirm with your bank rows the same; receipts, declined-payment bells,
+  the chargeback's test event, "charged automatically" lines, the tester's "paid you … for your call on …", and the Pay / Pay more receipts as a time token
+  (each reader's zone, the zone named, as other bells). A sent part keeps its plain name (and a reversed one keeps the payment's day). Amounts and format unchanged.
+- **Tests.** New `tests/chargeback-races-178.test.ts`: the chargeback after the lift (the owner's case) and before it; both orders at the same moment, forced
+  with a held row lock; the open-with-no-hold repair; an approval made while the opening is processed; repeated `created` / `updated` notices and a resolved
+  dispute arriving again never clear or reopen anything, a new dispute does; a 1st chargeback's Approve with a chargeback opening during it; two reversed calls'
+  lines (date and time, the developer's zone, no marker), a receipt name and a covered item. Updated for the wording: `batch3`, `batch24`, `batch25`,
+  `specific-lines-177`.

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { fmtIn } from "@/lib/tz";
 import type Stripe from "stripe";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
@@ -163,7 +164,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
       rows.push(await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: b.sessionId, developerId: dev.user.id, testerId: b.tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } }));
     }
     await startHold(dev.user.id, "unpaid");
-    const day = call.startsAt.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: "UTC" });
+    const day = fmtIn("UTC", call.startsAt, "datetime"); // (Owner, Nov 4, §178) a call by its date and time (a receipt names the zone)
     return { dev, rows, day };
   }
   const moneyLines = (userId: string, since: Date) => db.notification.findMany({ where: { userId, createdAt: { gte: since }, OR: [{ text: { startsWith: "Receipt:" } }, { text: { startsWith: "We charged your card" } }] } });
