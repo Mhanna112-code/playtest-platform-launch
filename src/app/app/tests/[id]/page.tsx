@@ -789,6 +789,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {!t.workEndedAt && t.status !== "stopped" && !restricted && (
         <InvitePanel
           testId={t.id}
+          userId={u.id}
           seenAt={seenAt}
           options={{ devices: t.devices, languages: t.languages }}
           perks={perks}
