@@ -21,10 +21,12 @@ export const LIST_PANEL = {
   /** A part's payment lines on the tester's session page (was max-h-28, about 4 lines) */ payLines: "7rem",
   /** A part's payments on the developer's test page (new; two lines each: the §139 panel's own height) */ devPayLines: "min(12rem, 40vh)",
   /** "By question"'s list of questions (no box before: about 8 closed questions) */ questions: "min(32rem, 60vh)",
+  /** (Owner, Nov 4, §179) The tester's "Live call: N done" calls with their payment boxes, more than 3 (no box before; about 3 calls, as the developer's past calls) */
+  liveTester: "min(27rem, 60vh)",
 } as const;
 /** (§152) The testers' calls list on the developer's test page drags up to 2 screens (it was already that tall). */
 export const TESTERS_CALLS_TALLEST = 2;
-/** (Batch 20 section 11) Past calls: more than this many sit in a panel. */
+/** (Batch 20 section 11) Past calls: more than this many sit in a panel. (Owner, Nov 4, §179) The tester's "Live call: N done" calls too. */
 export const PAST_CALLS_SHOWN = 3;
 
 /** (§152) A list that is a panel only when it is long (`on`); otherwise just the list. */

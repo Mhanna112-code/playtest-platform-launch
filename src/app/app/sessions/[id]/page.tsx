@@ -211,6 +211,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 15 sections 31 and 40) "held" became "done": a call that took place (its length is final).
   const heldCalls = liveCalls.filter((x) => callMinutesOf(x) != null);
   const aheadCalls = liveCalls.filter((x) => x.startsAt > now);
+  // (Owner, Nov 4, §179) "Live call: N done"'s calls, each with its payment box: the ones done and not yet paid, then the paid (reviewed) ones. More than 3 sit
+  // in the draggable panel (`live-calls-<sessionId>`), like past calls.
+  const unpaidLive = c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null);
+  const paidLive = c.calls.filter((x) => x.review);
+  const liveRowCount = unpaidLive.length + paidLive.length;
   // (Batch 15 section 42) Calls that are over (took place, cancelled, nobody joined, missed …) go in "Call history"; the Live session keeps the ones ahead or in progress.
   const overCalls = c.calls.filter((x) => callIsOver(x) || blockedPair).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
   const callsWarning = callsLeftWarning(await callsLeftCents(c.id), listedCall ? c.liveRateCents : null, "tester", displayName(u));
@@ -532,7 +537,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             </p>
             <p className="text-slate-400">{c.liveRateCents == null ? NOT_LISTED : `In your contract · ${c.liveRateCents === 0 ? "free" : `${money(testerShare(c.liveRateCents))}/h for you`}`}{` · Paid so far ${money(liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}`}</p>
             {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
-            {c.calls.filter((x) => !x.review && x.status === "booked" && callMinutesOf(x) != null).map((x) => (
+            {/* (Owner, Nov 4, §179) "Scroll box needed for different charges": more than 3 calls sit in the draggable panel (about 3 calls with their payment
+                lines tall at first; the grip drags it shorter or taller, up to 60% of the screen; the height kept by the session's id). */}
+            <PanelWhen on={liveRowCount > PAST_CALLS_SHOWN} id={`live-calls-${c.id}`} label="Live calls and their payments" defaultMax={LIST_PANEL.liveTester}>
+            <div className="space-y-1.5" data-live-calls={liveRowCount} data-live-calls-scroll={liveRowCount > PAST_CALLS_SHOWN ? liveRowCount : undefined}>
+            {unpaidLive.map((x) => (
               <div key={x.id} className="space-y-1">
                 <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="" data-call-length="">
                   {fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min
@@ -544,7 +553,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
               </div>
             ))}
-            {c.calls.filter((x) => x.review).map((x) => (
+            {paidLive.map((x) => (
               <div key={x.id} className="space-y-2">
                 <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="">
                   {fmtDateTime(x.startsAt)} · {callMinutesOf(x) ?? x.minutes} min
@@ -553,6 +562,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 {!owedCalls.has(x.id) && !pendingBase.has(x.id) && <TesterReview timeZone={u.timeZone} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
               </div>
             ))}
+            </div>
+            </PanelWhen>
           </li>
         </ul>
       </section>
