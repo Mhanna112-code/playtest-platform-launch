@@ -73,13 +73,14 @@ describe("batch 19 section 1: close-out reminders stack under a heading", () => 
   });
 });
 
-describe("batch 19 section 2: the paused-test banner mentions Rate", () => {
-  it("“rate testers” joins the line when Rate is available, built from what's shown", () => {
-    expect(allowedLine(true, { stop: true, endEarly: true, cancelCalls: true, rate: true })).toBe("For now you can stop this test, end testers' work early, cancel calls, or rate testers.");
-    expect(allowedLine(true, { stop: true, rate: true })).toBe("For now you can stop this test, or rate testers.");
-    expect(allowedLine(true, { stop: true, rate: false })).toBe("For now you can stop this test.");
-    // The test page passes Rate only when an open Rate box shows (the team's pause, nobody held or suspended).
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open")');
+// (Owner, Nov 4, §172; replaces batch 19 section 2) A paused test never offers Rate (the team's pause hides it as a suspension does); the side of a dispute joins the line.
+describe("§172: the paused-test banner lists the side of a dispute, never Rate", () => {
+  it("“add your side of a dispute” joins the line when a dispute waits, built from what's shown", () => {
+    expect(allowedLine(true, { stop: true, endEarly: true, cancelCalls: true, disputes: true })).toBe("For now you can stop this test, end testers' work early, cancel calls, or add your side of a dispute.");
+    expect(allowedLine(true, { stop: true, disputes: true })).toBe("For now you can stop this test, or add your side of a dispute.");
+    expect(allowedLine(true, { stop: true, disputes: false })).toBe("For now you can stop this test.");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("disputes: disputesWaiting.length > 0");
+    expect(src("app/app/tests/[id]/page.tsx")).not.toContain("data-restricted-rate");
   });
 });
 

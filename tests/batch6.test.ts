@@ -201,7 +201,7 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
   });
 
   for (const kind of ["hold", "chargeback", "suspension", "team"] as const) {
-    it(`(${kind}) Send is refused, drafts still upload; (batch 15) chat pauses only for a restricted person; dispute, rate and leave still work`, async () => {
+    it(`(${kind}) Send is refused, drafts still upload; (§172) chat pauses for a restricted person or the team's pause; dispute, rate and leave still work`, async () => {
       const { dev, testId, tester, sessionId } = await chargeOpen({ recordingCents: "5.00" });
       if (kind === "hold") await startHold(dev.user.id, "unpaid");
       if (kind === "chargeback") await startHold(dev.user.id, "chargeback");
@@ -214,15 +214,11 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
       // Drafts: a recording can still be uploaded (sent later).
       expect((await sact(sessionId, "recording-start", tester.cookie, { size: 1000, contentType: "video/mp4", filename: "a.mp4" })).status).toBe(200);
       const m = await sact(sessionId, "message", tester.cookie, { body: "Hello?" });
-      if (kind === "team") {
-        // (Batch 15 section 1) The team pausing a test never closes the chat, both ways.
-        expect(m.status).toBe(200);
-        expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hi" })).status).toBe(200);
-      } else {
-        // The developer is restricted: the tester's Send is turned back neutrally (never why).
-        expect(m.body.error.message).toBe(R.CHAT_NOT_SENT);
-        expect(m.body.error.message).not.toMatch(/hold|suspend|fail/i);
-      }
+      // (Owner, Nov 4, §172; replaces batch 15 section 1 for the team's pause) The developer is restricted, or the team paused this test (the same rules as a
+      // developer suspension): the tester's Send is turned back neutrally (never why).
+      expect(m.body.error.message).toBe(R.CHAT_NOT_SENT);
+      expect(m.body.error.message).not.toMatch(/hold|suspend|fail/i);
+      if (kind === "team") expect((await act(testId, "message", dev.cookie, { contractId: sessionId, body: "Hi" })).body.error.code).toBe("admin_paused");
       expect(src("app/app/chat/[id]/page.tsx")).toContain("closedNote={!blocked && paused ? CHAT_PAUSED_NOTE : undefined}");
       // Leave still works.
       expect((await sact(sessionId, "leave", tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);

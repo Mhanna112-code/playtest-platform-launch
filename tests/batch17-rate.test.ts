@@ -256,10 +256,13 @@ describe("section 14: Rate stops only for changes about that person", () => {
     expect(r.body.error.changes[0].text).toBe("Nora Lane paid $10.00 for your written answers");
   });
 
-  it("a test the team paused: both sides rate, straight through", async () => {
+  // (Owner, Nov 4, §172; replaces batch 17 §14) A team pause is a developer suspension for that test: the developer's Rate waits (its own refusal, the team's wording);
+  // the tester still rates (a developer suspension never stops the tester's Rate).
+  it("a test the team paused: the developer's Rate waits for the lift; the tester rates straight through", async () => {
     const x = await bothCanRate();
     await pauseTest((await admin()).id, x.testId, "Checking");
-    expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() })).status).toBe(200);
+    const refused = await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5, seenAt: seen() });
+    expect(refused.body.error).toMatchObject({ code: "inactive", message: "The team paused this test: you can rate once the pause is lifted." });
     const y = await sent();
     await pay(y.dev.cookie, { kind: "submission", id: y.sub.id, amount: "10.00", tickedCents: 1000 });
     await pauseTest((await admin()).id, y.testId, "Checking");

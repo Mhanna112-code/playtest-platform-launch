@@ -2651,3 +2651,70 @@ Owner: "Ticking All in Alerts doesn't tick everything, and removing one while Al
   replaced, paid on another check; B5: cancelled, and already approved; B6 a and b: cancelled, and already approved (recorded once; refunded for a win), the
   reservation; B6 c: every change in one stop, then the new total paid; C: the Terms). Updated: `batch35-bank-notice` (another tester's ticked-off line isn't a
   line, this tester's is), `batch35-bank-peek` (the peek sends `pi`), `batch19` (the Terms' headings).
+
+## §172 Team pause = developer suspension (owner, Nov 4)
+
+The owner: "Make the team's pause of a test the same exact rules as a developer suspension." This replaces batch 15 sections 1, 23 and 37 (chat and the
+pair of presses on a team-paused test), batch 17 §14 ("both sides rate a test the team paused"), batch 19 section 2 (the banner's "rate testers") and the old
+split where Pay worked on a team-paused test but Pay more didn't. For the ONE test the team paused, everything follows what a developer suspension does to each
+of that developer's tests, for both sides, with the team's wording ("The team paused this test…", never "suspended" or "hold"). The developer's other tests,
+their account, their subscription and their Payments page are unaffected.
+
+"Paused by the team" now means `adminPausedAt` is set and the test isn't stopped (`teamPausedNow`, lib/restricted.ts): a stopped or closed test isn't paused
+any more (the team can't lift a pause on a stopped test, so nothing may wait for that lift).
+
+### Developer: before → after, per press or item
+| Press / item on the team-paused test | Before | After (§172) |
+|---|---|---|
+| Stop, End early, Cancel call, their side of a dispute | Allowed (stop-once; the pause stops an older page once) | Unchanged (`TEAM_PAUSED_OK_ACTIONS` is now `RESTRICTED_OK_ACTIONS`) |
+| Rate | Allowed straight through; Rate box in the restricted view | Hidden; refused `409 inactive` "The team paused this test: you can rate once the pause is lifted." Its 14 days pause while the team's pause is on (as a suspended developer's). Ratings to give and the reminders leave it out |
+| Chat: Send | Allowed | Refused, back to the test's banner ("Your Send on … didn't go through: the team paused this test."). That test's chat page sends the developer to the test; "Chat with <name>" for that test's tester: "Unable to chat with this tester." |
+| Pay (test page, dashboard) | Went through (`/api/review` had no check) | Refused `409 admin_paused` "The team paused this test: Pay waits until the pause is lifted.", back to the test's banner (`testId` in the refusal; client.ts follows it). Backstop under the test's lock; a Pay whose bank check came back as the pause landed is cancelled and refused (as a suspension's) |
+| Pay more | Refused with the old banner line | Refused, the new line; backstops "…extra pay waits until the pause is lifted." |
+| Confirm with your bank (that test's waiting charges) | Allowed | Refused under the button: "The team paused this test: Confirm with your bank waits until the pause is lifted." A check already open still finishes (§159 rule 4b) |
+| Confirm all | Covered that test's charges | Leaves that test's charges out; one the team paused after the page loaded stops once ("…: the team paused its test") |
+| Edit, invites (and their search / check), Accept / Decline an application, call requests and answers, a call set's Cancel, a broken key's dismiss, a no-show report, Next round | Refused | Refused (new line: "The team paused this test: you can stop it, end testers' work early, cancel calls, or add your side of a dispute.") |
+| Their own Pay / Pay more whose bank page is open at the pause | Left open | Cancelled at Stripe first (one already approved is recorded as paid once), as §159 rule 9 / §171 B5 do at a suspension; the window says "This bank check was cancelled: the team paused this test. Pressing Complete won't charge anything." |
+| Calls on that test | Kept | Within 3 days: cancelled with no fault at the pause (both told, the suspension's line); later ones 3 days before they start if the pause still lasts (the daily job) |
+| A listed call's automatic charge (7 days after) | Skipped while paused | Made, then waiting (as under a suspension): "…charged automatically: $15.00, charged when the team lifts the pause on this test"; charged at the lift |
+| Waiting charges ("deferred") on that test | Charged by the 5-minute sweep | Wait for the lift (or the test's stop or close), as a suspended developer's wait for the reinstatement |
+| Pause email | "For now you can stop it, end testers' work early, or cancel calls." | "For now you can stop it, end testers' work early, cancel calls, or add your side of a dispute. Chat, Pay, Pay more, Confirm with your bank and Rate on this test wait until the team lifts the pause." (+ "2 calls in the next 3 days were cancelled. Later calls are cancelled 3 days before they start if the pause still lasts." when any were) |
+| The red banner's last line (any pause) | "…cancel calls, or rate testers." | "…cancel calls, or add your side of a dispute." (when a dispute waits for their side; Rate never shows on a paused test) |
+| Lift (Lift the pause) | Clocks moved on; developer told | Also: that test's waiting charges are made now (one payment, `chargeDeferred`; not while a hold or suspension is on) and its working testers are told "“…” is running again. Your deadline moved on by the pause.", as a reinstatement does |
+
+Already identical before (unchanged): requests close at the pause, open invites close (`markPaused`), applications wait, one 7-day closing clock, deadlines and
+review clocks move on at the lift, reminders wait, excerpt Allow / Deny, the tester's Charge (charged at once, as under a suspension).
+
+### Tester: before → after
+| Item | Before | After (§172) |
+|---|---|---|
+| Send work, request calls, join | Refused (paused) | Unchanged |
+| Chat: Send | Allowed | Turned back: "Messages are paused for now, so this wasn't sent." The chat page shows "Messages are paused for now. You can still read this chat." |
+| Rate | Allowed | Unchanged (a developer suspension never stops the tester's Rate) |
+| Charge / Let it go, dispute, leave, cancel calls, drafts | Allowed | Unchanged |
+| Booked calls | Kept | Cancelled within 3 days (later ones 3 days before), with the neutral "paused" line |
+| A listed call's automatic charge | Not made while paused | Made; "Payment for your call may be delayed" until the lift |
+| At the lift | No line | "“…” is running again. Your deadline moved on by the pause." |
+
+### Open questions (built as below; the owner may want otherwise)
+1. **A stopped or closed test is no longer team-paused.** Before, the route kept refusing presses (Pay more, chat…) on a test the developer stopped while the team
+   had paused it. Now a stopped test follows a stopped test's rules, and its waiting charges are made by the next sweep. Related, not changed: the close-out
+   (`closeOut.ts testSpans`) still counts a pause recorded on a stopped test as still running, so Pay more and the tester's Rate on such a test never close.
+2. **Account-wide parts of a suspension are not applied** (billing pause, Post a test, Block / Report, direct messages, Payments page): the decision is scoped to
+   the one test.
+3. **Confirm all** leaves the paused test's charges out without a "not in Confirm all" line (a suspension refuses Confirm all outright); each still shows its own
+   Confirm with your bank, which is refused with the team's line.
+4. **A waiting charge's 3 days to confirm keep running** during the pause, as under a suspension: if they run out it counts as declined (a payment hold). A team
+   pause can run longer than a suspension usually does.
+5. **The developer's chat page of that test** sends them to the test page (a suspended developer's chat pages send them to the dashboard top).
+6. **Pay what you owe** during a hold still includes that test's waiting charges (as it does a suspended and held developer's).
+7. **Terms and help:** no text describes a team pause, so nothing was edited (no Terms version bump).
+
+- **Code.** `restricted.ts` (`TEAM_PAUSED_OK_ACTIONS`, `teamPausedNow`, the lines), new `teamPause.ts`, `/api/tests/[id]/[action]` (`adminRefusal`),
+  `/api/review`, `payments.ts` (Pay / Pay more backstops, `suspendedAfterCheck`), `confirm.ts`, `confirmAll.ts`, `messages.ts`, the chat page, `ratings.ts`,
+  `closeOut.ts` (`teamPauseSpans` exported, ends at a stop), `holds.ts` (`autoChargeCalls`, `chargeDeferredLocked`), `restrictions.ts` (`pauseTest`,
+  `unpauseTest`, `cancelCallsNearPause`, `cancelLatePauseCalls`), `bankNotice.ts` / `bankPeek.ts` (the cancelled window's reason), `TestBanner.tsx`, the test page
+  (no Rate in the restricted view), `client.ts`, `rules.ts` (comments), `BLUE-NOTICES.md`. No migration.
+- **Tests:** `tests/batch35-team-pause-suspension.test.ts` (new). Updated: `batch17-rate` (the developer's Rate waits; the tester rates), `batch19` (the banner
+  line), `batch6` and `batch15-sides` (a team pause pauses that test's chat), `batch16-tester-states` (the developer's Pay after the page loaded is made with the pause
+  lifted for that moment, since a team pause now refuses it).

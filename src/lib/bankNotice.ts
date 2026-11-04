@@ -16,6 +16,8 @@ export const cancelledLine = (why: string, card = false) => `This bank check was
 /** Why a check was cancelled underneath the open bank page (the plain reason after "This bank check was cancelled: "). */
 export const CANCELLED_WHY = {
   hold: "your tests were paused (a payment hold started)",
+  // (Owner, Nov 4, §172) The team paused the test this payment is on.
+  teamPaused: "the team paused this test",
   card: "you saved a new card",
   pressRanOut: "its 15 minutes ran out",
   awayRanOut: "the 3 days to confirm it ran out",

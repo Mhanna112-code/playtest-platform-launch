@@ -11,7 +11,7 @@ import { countingState, asListing, deleteDraft, editTest, endEarly, nextRound, o
 import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
-import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_OK_ACTIONS } from "@/lib/restricted";
+import { RESTRICTED_OK_ACTIONS, TEAM_PAUSED_LINE, TEAM_PAUSED_OK_ACTIONS, teamPausedNow } from "@/lib/restricted";
 import { bodyPressVerb } from "@/lib/pressLabels";
 
 // (Owner, Oct 27) Email confirmation is needed only for Post a test (its own route), Join (which is also accepting an invite) and Apply. A blocked press is a blue notice under the button with Resend the link.
@@ -60,25 +60,27 @@ export async function POST(req: Request, { params }: Ctx) {
   });
 }
 
-/** The tester-side and read-only presses on this route: the team's pause or stop of the test never refuses them here. */
+/** What a test the team STOPPED still allows on this route (a team pause allows only TEAM_PAUSED_OK_ACTIONS and Rate's own refusal: §172). */
 const STOPPED_ALLOWS = new Set(["message", "rate", "dispute-side", "pay-extra", "no-show"]);
 const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-application", "my-gaps"]);
 
 /**
- * (Design doc 6; batch 15 sections 23 and 37) The team paused the test: the developer can stop it, end testers' work early or cancel calls. The team stopped it: every press the developer made
- * fails and they are sent back to the test, where a permanent banner says so and names the press that failed.
+ * (Design doc 6; owner, Nov 4, §172) The team paused the test: exactly what a developer suspension allows, for this test (Stop, End early, Cancel call, the side of a
+ * dispute; Rate reaches its own refusal). The team stopped it: every press the developer made fails and they are sent back to the test, where a permanent banner says
+ * so and names the press that failed.
  */
 async function adminRefusal(req: Request, userId: string, testId: string, action: string, what?: string) {
   if (TESTER_SIDE.has(action)) return;
-  const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, adminPausedAt: true, adminStoppedAt: true } });
+  const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, status: true, adminPausedAt: true, adminStoppedAt: true } });
   if (!t || t.developerId !== userId) return;
   // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
   // and problem report) goes on under its own rules.
   if (t.adminStoppedAt && !STOPPED_ALLOWS.has(action)) throw new HttpError(409, "admin_stopped", "The team stopped this test.", { failed: await failedLine(req, what) });
   if (t.adminStoppedAt) return;
-  // (Batch 15 section 1) Chat is never closed by a paused test.
-  // (Batch 15 sections 23 and 37) A test the team paused: Stop, End early and Cancel call (and chat, and the side of a dispute); every other press goes to the banner.
-  if (t.adminPausedAt && !TEAM_PAUSED_OK_ACTIONS.has(action)) throw new HttpError(409, "admin_paused", "The team paused this test: you can stop it, end testers' work early, or cancel calls.", { failed: await failedLine(req, what) });
+  // (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37) A test the team paused follows a developer suspension's rules: Stop, End early, Cancel call and the
+  // side of a dispute go on; Rate goes on to its own refusal (as a suspended developer's does: batch 17 section 2); every other press, chat included, goes to the
+  // banner. A stopped or closed test isn't paused any more.
+  if (teamPausedNow(t) && !TEAM_PAUSED_OK_ACTIONS.has(action) && action !== "rate") throw new HttpError(409, "admin_paused", TEAM_PAUSED_LINE, { failed: await failedLine(req, what), testId });
 }
 
 /**

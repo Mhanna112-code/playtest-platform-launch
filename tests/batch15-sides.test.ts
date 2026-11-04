@@ -45,13 +45,14 @@ describe("chat (section 1)", () => {
     expect((await sact(sessionId, "message", tester.cookie, { body: "Back?" })).status).toBe(200);
   });
 
-  it("a tester-side suspension pauses the tester's chats only; a team pause never closes chat", async () => {
+  // (Owner, Nov 4, §172; replaces "a team pause never closes chat") A team pause closes that test's chat as a developer suspension does.
+  it("a tester-side suspension pauses the tester's chats only; a team pause pauses that test's chat as a developer suspension does", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const a = await admin();
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: new Date() } });
-    expect((await msg(testId, dev.cookie, sessionId, "Paused but chatting")).status).toBe(200);
-    expect((await sact(sessionId, "message", tester.cookie, { body: "Me too" })).status).toBe(200);
+    expect((await msg(testId, dev.cookie, sessionId, "Paused but chatting")).body.error.code).toBe("admin_paused");
+    expect((await sact(sessionId, "message", tester.cookie, { body: "Me too" })).body.error).toMatchObject({ code: "chat_paused", message: R.CHAT_NOT_SENT });
     await db.test.update({ where: { id: testId }, data: { adminPausedAt: null } });
     await suspendAccount(a.user.id, tester.user.id, "Checking");
     expect((await sact(sessionId, "message", tester.cookie, { body: "Hi" })).body.error.code).toBe("suspended");

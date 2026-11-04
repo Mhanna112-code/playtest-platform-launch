@@ -59,7 +59,7 @@ async function finalRefusal(userId: string, contractId: string, action: string, 
  * (Owner, Oct 28 afternoon) A paused test (the developer's payment hold, chargeback hold or suspension; the team's pause too, PAUSE_DEFAULTS.teamPauseSameRules): testers can't send
  * work. Drafts can still be written and saved (PAUSE_DEFAULTS.draftsEditable: the written answers are kept as typed, recordings can be uploaded); Charge / Let it go, disputes,
  * rating, leaving and cancelling calls carry on under their own rules. Testers read only "paused". (Batch 15 section 1) Chat isn't closed by a paused test: only while a
- * person is restricted (messages.ts).
+ * person is restricted, or (owner, Nov 4, §172) the team paused the test (messages.ts).
  */
 const SEND_ACTIONS = new Set(["written", "written-add", "recording-send"]); // (batch 35 §136) adding follows Send's windows
 const DRAFT_ACTIONS = new Set(["recording-start", "recording-done", "recording-remove"]);

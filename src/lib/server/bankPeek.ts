@@ -156,6 +156,9 @@ async function whyCancelled(p: Payment, devId: string, since: Date) {
   if (p.failure === once.OWED_WON_MEANWHILE) return CANCELLED_WHY.won;
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, stripePaymentMethodId: true } });
   if (u?.holdStartedAt && u.holdStartedAt >= since) return CANCELLED_WHY.hold;
+  // (Owner, Nov 4, §172) The team paused this payment's test since the press: its Pause cancelled the open check.
+  const t = p.contractId ? (await db.contract.findUnique({ where: { id: p.contractId }, select: { test: { select: { adminPausedAt: true } } } }))?.test : null;
+  if (t?.adminPausedAt && t.adminPausedAt >= since) return CANCELLED_WHY.teamPaused;
   const { RAN_OUT } = await import("./owedOnce");
   if (p.failure === RAN_OUT || (p.status === "failed" && p.owedUntil)) return CANCELLED_WHY.awayRanOut;
   const { STALE_CHECK } = await import("./confirm");

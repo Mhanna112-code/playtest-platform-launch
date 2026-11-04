@@ -121,8 +121,10 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
     // TOP of the dashboard, where a blue box names the press that didn't go through and says how to resume.
     // The team stopped (or paused) the test: back to the test, where its banner names the press that failed.
     if ((data?.error?.code === "admin_stopped" || data?.error?.code === "admin_paused") && typeof window !== "undefined" && typeof data.error.failed === "string") {
+      // (Owner, Nov 4, §172) A Pay refused on a test the team paused (its path doesn't name the test) carries the test's id.
       const m = /\/api\/tests\/([^/]+)\//.exec(path);
-      if (m) window.location.href = `/app/tests/${m[1]}?failed=${encodeURIComponent(data.error.failed)}`;
+      const testId = m?.[1] ?? (typeof data.error.testId === "string" ? data.error.testId : "");
+      if (testId) window.location.href = `/app/tests/${testId}?failed=${encodeURIComponent(data.error.failed)}`;
     }
     // (Owner, Oct 28, batch 16 section 24) The test stopped, closed or the tester's work was ended while this page was open: a press of what's gone (Send,
     // Switch / Keep, a call action, an upload, "This key doesn't work") reloads the session page at its TOP, where the stopped line names the press.

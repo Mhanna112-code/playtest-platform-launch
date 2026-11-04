@@ -9,15 +9,17 @@ import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpen
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerStopSince, testerPauseSince } from "./stopMoment";
-import { closeOutOf, closedOut, devPauseSpans, windowEnd, type Span } from "./closeOut";
+import { closeOutOf, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { closeOffersOfEnded } from "./offerClose";
+import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
 
 // (Owner, Oct 22, NEWEST+5) Ratings. (Owner, Oct 28, batch 17 sections 1, 2, 14, 16 and 17: the rules below replace the earlier ones where they differ.)
 // TESTER rates the developer once some work was sent or a call took place. Rate is DISABLED (shown, with one grey line) while they can still Charge or Let it go of a
 // piece, while a dispute of theirs is open, or while work they sent is inside its review window; HIDDEN (and refused) while their tester side is suspended. No end date.
 // Rating finishes their part like Leave (no rejoin ever); Dispute stays.
 // DEVELOPER rates a tester only once the tester has rated them AND everything that tester sent is settled (paid, charged or let go); until then Rate is hidden. Their
-// 14 days start then and pause while they can't rate (their developer side suspended, a payment or chargeback hold). A dispute opened later disables Rate until decided.
+// 14 days start then and pause while they can't rate (their developer side suspended, a payment or chargeback hold, or (owner, Nov 4, §172) the team paused that test).
+// A dispute opened later disables Rate until decided.
 // BLIND REVEAL: the tester's rating stays hidden (from the developer, profiles and averages) until the developer rates or their 14 days end (see revealAt).
 
 export type Side = "tester" | "developer";
@@ -89,7 +91,8 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
   for (const c of cs) {
     const dev = c.test.developer;
     const name = displayName(c.tester);
-    if (!spans.has(dev.id)) spans.set(dev.id, devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now));
+    // (Owner, Nov 4, §172) The window also pauses while the team paused this test (as under a developer suspension), for this test only.
+    if (!spans.has(c.testId)) spans.set(c.testId, mergeSpans([...devPauseSpans(events.filter((e) => e.userId === dev.id), dev, now), ...(await teamPauseSpans(c.testId, c.test.adminPausedAt, now, c.test.status === "stopped" ? c.test.stoppedAt ?? now : null))]));
     const mine = ratings.find((r) => r.contractId === c.id && r.side === "developer");
     const theirs = ratings.find((r) => r.contractId === c.id && r.side === "tester");
     // Everything they sent is settled: every part and every call that took place has its Pay, Charge or Let it go.
@@ -100,13 +103,15 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     const closeOut = closeOuts.get(c.testId) ?? null;
     const lastSettled = Math.max(0, ...pieces.map((x) => x.review?.createdAt.getTime() ?? 0));
     const opensAt = !settled ? null : theirs ? new Date(Math.max(theirs.createdAt.getTime(), lastSettled)) : closedOut(closeOut, now) && pieces.length > 0 ? new Date(Math.max(closeOut!.getTime(), lastSettled)) : null; // (DEFAULT) only a tester who sent something or had a call
-    const w = opensAt ? windowEnd(opensAt, spans.get(dev.id)!, now, WINDOW_DAYS) : null;
+    const w = opensAt ? windowEnd(opensAt, spans.get(c.testId)!, now, WINDOW_DAYS) : null;
     // The tester's rating shows once the developer rates or their 14 days end. A window that hadn't opened 14 days after the tester rated (the developer left work
     // unsettled that long) doesn't hold it back past those 14 days.
     const revealAt = !theirs ? null : (theirs.revealedAt ?? (opensAt && w && opensAt.getTime() <= theirs.createdAt.getTime() + WINDOW_DAYS * DAY ? w.end : new Date(theirs.createdAt.getTime() + WINDOW_DAYS * DAY)));
     const base = { opensAt, endsAt: w?.end ?? null, paused: w?.paused ?? false, revealAt };
     if (mine) out.set(c.id, { kind: "rated", line: "", ...base });
     else if (dev.devSuspendedAt || dev.holdStartedAt) out.set(c.id, { kind: "hidden", line: RATE_INACTIVE, ...base });
+    // (Owner, Nov 4, §172; replaces batch 17 §14) A test the team paused: hidden and refused like a suspended developer's Rate, with the team's wording.
+    else if (teamPausedNow(c.test)) out.set(c.id, { kind: "hidden", line: RATE_TEAM_PAUSED, ...base });
     else if (!opensAt) out.set(c.id, { kind: "hidden", line: ratePendingLine(name, c.tester.pronoun), ...base });
     else if (w && w.end.getTime() <= now.getTime()) out.set(c.id, { kind: "hidden", line: `The ${WINDOW_DAYS} days to rate ${name} have passed.`, ...base });
     else if (open.has(c.id)) out.set(c.id, { kind: "disabled", line: rateTheirDisputeLine(name), ...base });
@@ -227,7 +232,7 @@ const ratedOnce = (already: string) => (e: unknown): never => {
 };
 function refuse(s: RateState, already: string): never {
   if (s.kind === "rated") throw new HttpError(409, "rated", already);
-  throw new HttpError(409, s.line === RATE_INACTIVE ? "inactive" : "not_yet", s.line);
+  throw new HttpError(409, s.line === RATE_INACTIVE || s.line === RATE_TEAM_PAUSED ? "inactive" : "not_yet", s.line);
 }
 
 /** Tester rates the developer. Like Leave (no rejoin ever); Dispute stays. Hidden until revealed. */

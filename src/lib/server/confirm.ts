@@ -324,8 +324,12 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   // chargeback's row checks the piece of the payment the bank reversed), so whatever stops Pay on it stops Confirm, and the same Alerts types are ignored.
   // (Owner, Nov 3, §159) Pressed while the developer is suspended: refused like Pay, under the developer's row lock (a check already open still finishes: §159 rule 4b).
   // Pay what you owe's own payments and a renewal stay open (unchanged).
-  if (p.contractId && p.kind !== "owed" && p.kind !== "chargeback" && p.kind !== "subscription")
+  // (Owner, Nov 4, §172) The same on a test the team paused, for that test's waiting charges ("The team paused this test: Confirm with your bank waits until the
+  // pause is lifted."); a check already open still finishes, as under a suspension.
+  if (p.contractId && p.kind !== "owed" && p.kind !== "chargeback" && p.kind !== "subscription") {
     await db.$transaction(async (tx) => (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank"));
+    await (await import("./teamPause")).refuseTeamPaused(db, p.contractId, "Confirm with your bank");
+  }
   if (p.contractId && seenOf(body.seenAt)) {
     const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } });
     if (c) {
@@ -336,6 +340,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
       await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
         if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank");
+        if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./teamPause")).refuseTeamPausedTest(tx, c.testId, "Confirm with your bank"); // (§172) under the test's lock
         // (Owner, Nov 4, §171 item 7) The press-time gate stays as it was (`awayCharge`: §159's rules, not §171 A1/A2) while the owner decides the waiting-charge rules.
         await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true });
       });

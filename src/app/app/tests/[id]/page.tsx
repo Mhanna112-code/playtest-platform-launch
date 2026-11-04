@@ -303,10 +303,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), whoHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
   const banner = bannerCause ? (
     <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
-      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open") }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
+      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, disputes: disputesWaiting.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
   ) : null;
   if (restricted) {
-    const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + (!accountPaused ? t.contracts.filter((c) => rateBoxOf(c)).length : 0) + disputesWaiting.length;
+    // (Owner, Nov 4, §172; replaces batch 17 §14) No Rate here: a test the team paused hides Rate as a suspension does.
+    const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + disputesWaiting.length;
     return (
       <>
         <AutoRefresh query={`test=${t.id}`} v={pageV} />
@@ -357,13 +358,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </div>
               ))}
 
-            </section>
-          )}
-          {/* (Batch 17 section 14) A test the team paused (nobody held or suspended): the developer still rates, straight through. */}
-          {!accountPaused && t.contracts.some((c) => rateBoxOf(c)) && (
-            <section className="space-y-2" data-restricted-rate="">
-              <h2 className="font-semibold text-white">Rate your testers</h2>
-              {t.contracts.map((c) => rateBoxOf(c))}
             </section>
           )}
           {/* (Batch 15 section 27) The developer's side of a dispute: optional, never stopped, works while paused or restricted. */}
