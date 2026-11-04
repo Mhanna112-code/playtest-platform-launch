@@ -2,7 +2,7 @@
 import { useState } from "react";
 import { alertLabel } from "@/lib/alerts";
 import { api } from "@/lib/client";
-import { alertsTestNow, publishIgnoredAlerts, publishTesterAlertsOff, setTesterAlertsOff, useIgnoredAlerts, useTesterAlertsOff } from "@/lib/testerAlerts";
+import { alertsTestNow, publishTesterAlertsOff, setTesterAlertsOff, startIgnoredAlertsSave, useIgnoredAlerts, useTesterAlertsOff } from "@/lib/testerAlerts";
 
 /**
  * (Design doc 6) Under a developer's stop box: how to stop being stopped for what is listed ("You can turn these stops off in Alerts on the test
@@ -15,7 +15,11 @@ export function QuickIgnore({ alerts }: { alerts: string[] }) {
   const testId = alertsTestNow();
   const done = useIgnoredAlerts(testId);
   if (!alerts.length) return null;
-  const off = (k: string) => api<{ ignored?: string[] }>("/api/account/alerts/add", { testId, key: k }).then((r) => publishIgnoredAlerts(testId, Array.isArray(r.ignored) ? r.ignored : [...new Set([...done, k])])).catch(() => null);
+  // (Owner, Nov 4, §169) The chip shows "(off)" at once and stays so over a poll asked before the press; the saved list and its version replace it.
+  const off = (k: string) => {
+    const end = startIgnoredAlertsSave(testId, [k], true);
+    return api<{ ignored?: string[]; v?: number }>("/api/account/alerts/add", { testId, key: k }).then((r) => end({ ignored: Array.isArray(r.ignored) ? r.ignored : [...new Set([...done, k])], v: r.v })).catch(() => end());
+  };
   return (
     <div className="mt-1 space-y-1 text-xs text-sky-200/90" data-quick-ignore="">
       <p>You can turn these stops off in Alerts on the test page.</p>

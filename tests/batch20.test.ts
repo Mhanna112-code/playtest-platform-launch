@@ -420,7 +420,8 @@ describe("batch 20 section 8: the chip, the Alerts menu, other boxes and other t
     expect(un.body.ignored).toEqual(["joins"]);
     // Other tabs and devices: the page's poll carries the saved setting.
     const p = await json(await pulseGET(req(`/api/pulse?test=${testId}`, { cookie: dev.cookie, method: "GET" })));
-    expect(p.body.alerts).toEqual({ ignored: ["joins"] });
+    // (§169) With the list's version: three saves so far.
+    expect(p.body.alerts).toEqual({ ignored: ["joins"], v: 3 });
   });
 
   it("in the tab: the chip's press reaches the menu at once (an event), and other tabs (storage); the menu's tick reaches the chips", () => {
@@ -444,9 +445,9 @@ describe("batch 20 section 8: the chip, the Alerts menu, other boxes and other t
     expect(testerAlertsAreOff()).toBe(false);
     // The components read the shared setting.
     expect(src("components/QuickIgnore.tsx")).toContain("const done = useIgnoredAlerts(testId);");
-    expect(src("components/AlertsMenu.tsx")).toContain("const shared = useIgnoredAlerts(testId, start);");
+    expect(src("components/AlertsMenu.tsx")).toContain("const shared = useIgnoredAlerts(testId, start, startV);");
     expect(src("components/TesterAlertsToggle.tsx")).toContain("const off = useTesterAlertsOff(start);");
-    expect(src("components/AutoRefresh.tsx")).toContain("publishIgnoredAlerts(testId, alerts.ignored, false)");
+    expect(src("components/AutoRefresh.tsx")).toContain("publishIgnoredAlerts(testId, alerts.ignored, false, alerts.v)");
   });
 
   it("the tester's Turn off alerts: saved, and the session page's poll carries it", async () => {

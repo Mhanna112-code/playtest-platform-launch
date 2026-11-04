@@ -13,6 +13,8 @@ describe("batch 35 §71: Alerts menu", () => {
   it("an All tick covering the types that can happen here (greyed ones keep their ticks)", () => {
     expect(src).toContain('data-alerts-all=""');
     expect(src).toContain("const open = ALERT_TYPES.filter((a) => !keys || keys.includes(a.key));");
-    expect(src).toContain("for (const a of open) if (ignored.includes(a.key) !== on) await toggle(a.key, on);");
+    // (Owner, Nov 4, §169) One request for All's types (no longer one save per type).
+    expect(src).toContain("return save(ks, on, { keys: ks, off: on });");
+    expect(src).not.toContain("await toggle(a.key, on)");
   });
 });

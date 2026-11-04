@@ -124,7 +124,8 @@ export async function GET(req: Request) {
     // (Batch 15 section 16) Each side's own suspension: the tester side on a session page, the developer side on a test page.
     // (Batch 20 section 8) The viewer's own Alerts setting (the developer's ignored types, the tester's Off): an Alerts menu, toggle or stop box chip open in another
     // tab or browser follows a change made elsewhere on this poll (no refresh needed).
-    const alerts = sessionId ? { testerOff: u.testerAlertsOff } : { ignored: t.ignoredAlerts } /* batch 35 §73: this test's */;
+    // (Owner, Nov 4, §169) With the list's version (`v`): an answer read before a save that lands after it is older than that save, and the tab ignores it.
+    const alerts = sessionId ? { testerOff: u.testerAlertsOff } : { ignored: t.ignoredAlerts, v: t.alertsV } /* batch 35 §73: this test's */;
     return ok({ v, adminStopped: !!t.adminStoppedAt, restricted: !!(sessionId ? u.testerSuspendedAt : u.devSuspendedAt || t.developer.holdStartedAt), alerts });
   });
 }

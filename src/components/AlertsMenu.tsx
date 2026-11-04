@@ -7,38 +7,47 @@ import { ALERT_TYPES } from "@/lib/alerts";
 export const ALERTS_INTRO_REST = "stop your buttons. A payment hold or pause, a stopped test and final refusals always stop.";
 import { api } from "@/lib/client";
 import { refusalLine } from "@/lib/pressLabels";
-import { publishIgnoredAlerts, useIgnoredAlerts } from "@/lib/testerAlerts";
+import { startIgnoredAlertsSave, useIgnoredAlerts } from "@/lib/testerAlerts";
+
+/** (§169) "All" is ticked exactly while every type that can be changed here (`open`) is ticked: unticking one unticks it, ticking that one again ticks it. */
+export const allAlertsOn = (open: string[], ignored: string[]) => open.length > 0 && open.every((k) => ignored.includes(k));
 
 /**
  * (Design doc 6) "Alerts": tick the update types that should NOT interrupt your buttons any more. They still show (greyed) in the live
  * box. A payment hold, a stopped test and final refusals always stop. (Batch 16 section 21) A stored tick for a type no longer in the menu (the old
  * "Your saves and presses in another tab") is ignored.
  */
-export function AlertsMenu({ testId, ignored: start, keys }: { testId: string; ignored: string[]; keys?: string[] }) {
+export function AlertsMenu({ testId, ignored: start, v: startV, keys }: { testId: string; ignored: string[]; /** (§169) the version of `ignored` */ v?: number; keys?: string[] }) {
   // (Owner, Oct 31, batch 35 §73) The ticks are this test's own (a new test and a Next round start with every alert on).
   // (Batch 20 section 8) The one shared setting: a stop box's "Don't stop me for" chip ticks it here at once (and in other tabs); un-ticking here turns the chip back.
-  const shared = useIgnoredAlerts(testId, start);
+  const shared = useIgnoredAlerts(testId, start, startV);
   const ignored = shared.filter((k) => ALERT_TYPES.some((a) => a.key === k));
   const [saved, setSaved] = useState("");
-  async function toggle(key: string, on: boolean) {
-    // One type at a time (the server adds or removes just it), so a menu drawn earlier never saves its old list over a chip's press.
-    publishIgnoredAlerts(testId, on ? [...new Set([...shared, key])] : shared.filter((x) => x !== key), false);
-    await api<{ ignored: string[] }>("/api/account/alerts", { testId, key, off: on }).then((r) => {
+  // (Owner, Nov 4, §169) One save for one type or for All's types: they tick (or untick) at once on the ticks shown NOW (never a list this click was drawn with:
+  // the old loop's copy showed one tick at a time), stay so over any poll or redraw answered meanwhile, and the saved list (with its version) replaces them.
+  async function save(change: string[], on: boolean, body: Record<string, unknown>) {
+    const end = startIgnoredAlertsSave(testId, change, on);
+    await api<{ ignored: string[]; v?: number }>("/api/account/alerts", { testId, ...body }).then((r) => {
       // (Owner, Oct 31, batch 35 §71) No "Saved." line: the tick itself shows it took; only a failure says so.
-      publishIgnoredAlerts(testId, r.ignored);
+      end(r);
       setSaved("");
     }, (e) => {
-      publishIgnoredAlerts(testId, shared, false);
+      end(); // only these types go back (another save's ticks stay)
       // (§156) A tick that didn't save names its press, as every refusal does: "Your Alerts didn't go through: …".
       setSaved(refusalLine("Alerts", (e as Error)?.message || "Couldn't save. Try again."));
     });
   }
+  // One type at a time (the server adds or removes just it), so a menu drawn earlier never saves its old list over a chip's press.
+  const toggle = (key: string, on: boolean) => save([key], on, { key, off: on });
   // (Owner, Oct 31, batch 35 §71) "All": ticks (or unticks) every type that can happen here at once; greyed types keep their ticks.
+  // (Owner, Nov 4, §169) ONE request with every open type (`keys`), saved together: every box ticks at once and stays. All is ticked exactly while every open
+  // type is, so unticking one unticks All and ticking it again ticks All.
   const open = ALERT_TYPES.filter((a) => !keys || keys.includes(a.key));
-  const allOn = open.length > 0 && open.every((a) => ignored.includes(a.key));
-  async function toggleAll(on: boolean) {
-    for (const a of open) if (ignored.includes(a.key) !== on) await toggle(a.key, on);
-  }
+  const allOn = allAlertsOn(open.map((a) => a.key), ignored);
+  const toggleAll = (on: boolean) => {
+    const ks = open.map((a) => a.key);
+    return save(ks, on, { keys: ks, off: on });
+  };
   return (
     <details className="relative" data-alerts-menu="">
       <summary className="btn-secondary cursor-pointer list-none px-3 py-1.5 text-sm"><BellOff className="h-4 w-4" /> Alerts{ignored.length ? ` (${ignored.length} off)` : ""}</summary>

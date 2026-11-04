@@ -36,7 +36,7 @@ async function stillRestricted() {
 /** (Batch 35 §75) The name each top press's box says ("Your End early didn't go through."). */
 export const TOP_PRESS = { "next-round": "Next round", "go-next-round": "Go to the next round", stop: "Stop the test", "end-early": "End early", open: "Accept testers again" } as const;
 
-export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
+export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string; id: string; title: string; status: string; workEnded?: boolean; terms: string; spotsLine: string; seenAt: string; working: Tester[]; nextRoundId: string | null; joinMode?: string; deadlineDays?: number; categories?: string[]; openUntil?: string | null; version?: number; productName?: string; mature?: boolean; nda?: boolean; keysLeft?: number | null; parts?: { written: boolean; recording: boolean; live: boolean }; paused?: boolean; ignoredAlerts?: string[]; /** (§169) the version of ignoredAlerts */ alertsV?: number; restricted?: boolean; /** The team stopped it: no Next round either. */ teamStopped?: boolean; /** (Batch 8) false on the free plan: "Subscribers" on Next round */ perks?: boolean; /** (Owner, Oct 28 afternoon) every spot taken: "Full" instead of "Accepting testers" */ full?: boolean;
   /** (Batch 15 section 39) The Alerts types this state can still have (a paused or stopped test shows fewer); omitted: all. */ alertKeys?: string[];
   /** (Batch 15 section 29) After Stop / End early from the restricted view: on to the dashboard top with "Done: …". */ doneTo?: string }) {
   const router = useRouter();
@@ -110,7 +110,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
           {(
             <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto">
               {!p.restricted && !stopped && <a className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" href={`/app/tests/${p.id}/edit`}><Pencil className="h-4 w-4" /> Edit</a>}
-              {(!p.restricted || p.alertKeys) && <AlertsMenu testId={p.id} ignored={p.ignoredAlerts ?? []} keys={p.alertKeys} />}
+              {(!p.restricted || p.alertKeys) && <AlertsMenu testId={p.id} ignored={p.ignoredAlerts ?? []} v={p.alertsV} keys={p.alertKeys} />}
               {p.restricted || p.teamStopped || p.status === "draft" ? null : p.nextRoundId ? (
                 // (Owner, Oct 29, batch 27 section 2) A press, not a plain link: it stops once like Next round (the box under these buttons); the second press opens the draft.
                 <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} data-go-next-round="" onClick={() => void go("go-next-round")}><Repeat className="h-4 w-4" /> Go to the next round</button>
