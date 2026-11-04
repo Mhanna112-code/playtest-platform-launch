@@ -116,8 +116,10 @@ export async function startHold(devId: string, reason: string) {
   await (await import("./owedOnce")).pauseAwayChecks(devId).catch((e) => console.error("[hold] pause bank checks:", (e as Error).message));
   // (Owner, Nov 2) A Pay the developer pressed whose bank page is still open is cancelled too (at Stripe first; one the bank already approved is recorded as paid,
   // never charged again): nothing is charged on a card during a hold, and the piece is unpaid again (the tester can still Charge it later).
+  // (Owner, Nov 4, §171 B5; as §159 rule 9 does at a suspension) A Pay more whose bank page is open too: cancelled at Stripe first (one that already went through is
+  // recorded as paid once); its window reads "This bank check was cancelled: your tests were paused (a payment hold started). Pressing Complete won't charge anything."
   const { release } = await import("./confirm");
-  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "needs_action", kind: { in: ["review", "call"] } }, select: { id: true } }))
+  for (const p of await db.payment.findMany({ where: { developerId: devId, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
     await release(p.id).catch((e) => console.error("[hold] cancel open Pay check:", (e as Error).message));
   // (Batch 9) One closing clock per paused test: it starts now unless the test was already paused.
   await markPaused({ developerId: devId }, now);
@@ -486,15 +488,17 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     const seenAmounts = body.seenAmounts && typeof body.seenAmounts === "object" && !Array.isArray(body.seenAmounts) ? (body.seenAmounts as Record<string, unknown>) : null;
     const cbLines = lines.filter((l) => l.retry && l.source === "chargeback" && seenIds.includes(l.id));
     let moved = cbLines.flatMap((l) => { const was = seenAmounts?.[l.id]; return typeof was === "number" && was !== l.amountCents ? [{ l, was }] : []; });
-    if (!seenAmounts && !goneIds.length && cbLines.length === 1 && total !== seen && cbLines[0].amountCents - (total - seen) > CHARGEBACK_FEE_CENTS) moved = [{ l: cbLines[0], was: cbLines[0].amountCents - (total - seen) }];
+    if (!seenAmounts && !goneIds.length && !fresh.length && cbLines.length === 1 && total !== seen && cbLines[0].amountCents - (total - seen) > CHARGEBACK_FEE_CENTS) moved = [{ l: cbLines[0], was: cbLines[0].amountCents - (total - seen) }];
     const movedText = moved.map(({ l, was }) => ("cb" in l && l.cb ? bankChangedLine(l.cb.paidCents, l.cb.piece, was - CHARGEBACK_FEE_CENTS, l.cb.reversedCents) : "")).filter(Boolean).join("; ");
-    const text = fresh.length
-      ? `${freshLines.every((l) => l.source === "failed") ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh.join(", ")}. New total ${money(total)}. ${again}`
-      : won.length
-        ? `${won.map((w) => `Your bank's chargeback of ${money(reversedOf(w))} was reversed`).join("; ")}. Now ${money(total)}. ${again}` /* (§133) what it reversed */
-        : movedText
-          ? `${movedText}. ${again}`
-          : `What you owe changed: now ${money(total)}. ${again}`;
+    // (Owner, Nov 4, §171 B6c) EVERY change since the page drew, each with its amount, in one stop (they no longer replace each other): what was added, a chargeback
+    // won (taken off), an amount the bank raised or lowered; then the new total and the press-again line with it.
+    const parts = [
+      ...(fresh.length ? [`${freshLines.every((l) => l.source === "failed") ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh.join(", ")}`] : []),
+      // (§133) what it reversed; what leaves the total: what the page showed for it, else what the bank reversed + the fee.
+      ...won.map((w) => { const was = seenAmounts?.[w.id]; return `Your bank's chargeback of ${money(reversedOf(w))} was reversed in your favour: ${money(typeof was === "number" ? was : reversedOf(w) + CHARGEBACK_FEE_CENTS)} taken off`; }),
+      ...(movedText ? [movedText] : []),
+    ];
+    const text = parts.length ? `${parts.join(". ")}. ${fresh.length || won.length ? `New total ${money(total)}. ` : ""}${again}` : `What you owe changed: now ${money(total)}. ${again}`;
     // (Owner, Nov 3) The lines come with the stop, so the box redraws them with the new total (a bullet never disagrees with the button).
     throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds, lines });
   }
@@ -727,6 +731,13 @@ export async function chargebackOpened(paymentIntentId: string, disputedCents: u
     else await bell(p.developerId, line, "/app/payments#chargeback-steps", undefined, { side: "developer", payment: true, group: "payhold" });
   }
   await db.user.update({ where: { id: p.developerId }, data: { chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
+  // (Owner, Nov 4, §171 B6a) A review-first account (§161: the team had approved paying) whose Pay what you owe check is open in the bank's window: the approval is
+  // gone, so its Complete must not charge. The check is cancelled at Stripe first (one that had already gone through is recorded as paid, once); the window reads
+  // "This bank check was cancelled: a new chargeback arrived, so the team reviews your account again before you can pay. Pressing Complete won't charge anything."
+  if (before.holdStartedAt && before.holdReason === "chargeback" && before.chargebackApprovedAt) {
+    const once = await import("./owedOnce");
+    await once.cancelOpenOwed(p.developerId, once.OWED_REVIEW_AGAIN);
+  }
   return true;
 }
 
@@ -738,11 +749,26 @@ export async function chargebackOpened(paymentIntentId: string, disputedCents: u
  */
 export async function chargebackWon(paymentIntentId: string) {
   // (Batch 35 §117) The payment carrying the chargeback: Pay what you owe's one payment when the dispute was on it.
-  const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, chargeback: { in: ["open", "resolved"] } }, orderBy: { createdAt: "asc" } });
+  let p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, chargeback: { in: ["open", "resolved"] } }, orderBy: { createdAt: "asc" } });
   if (!p || (p.chargeback !== "open" && p.chargeback !== "resolved")) return false;
   const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
   // (§133) What the bank had reversed (part of the payment, or all of it): the lines name it, and what was repaid for it is what's refunded.
   const rev = reversedOf(p);
+  // (Owner, Nov 4, §171 B6b) Won while Pay what you owe's check covering it is open in the bank's window: its Complete must not charge for it. The open check is
+  // cancelled at Stripe FIRST (nothing charged; the developer pays the new total); one the bank had already approved is recorded as paid once, and the part it paid
+  // for this chargeback is refunded just below with any other repayment (the Terms' refund rule: a chargeback the platform wins after the developer paid it goes back
+  // to their card). A chargeback hold's reservation whose bank check is open is cancelled the same way (nothing is reserved; Pay what you owe reserves the new total).
+  if (p.chargeback === "open") {
+    const once = await import("./owedOnce");
+    const cover = p.coveredById ? await db.payment.findUnique({ where: { id: p.coveredById }, select: { id: true, kind: true } }) : null;
+    if (cover?.kind === once.OWED_KIND) await once.cancelOpenOwed(p.developerId, once.OWED_WON_MEANWHILE, [cover.id]);
+    for (const r of await db.reservation.findMany({ where: { developerId: p.developerId, status: "needs_action", covers: { has: p.id } } })) {
+      if ((await db.reservation.updateMany({ where: { id: r.id, status: "needs_action" }, data: { status: "cancelled", endedAt: new Date() } })).count !== 1) continue;
+      if (r.stripePaymentIntentId && stripeOn()) await getStripe().paymentIntents.cancel(r.stripePaymentIntentId).catch((e) => console.error("[won] cancel reservation check:", (e as Error).message));
+    }
+    // A check that had gone through repaid it (and may have resolved it, §161): the win goes on from what it is now.
+    p = await db.payment.findUniqueOrThrow({ where: { id: p.id } });
+  }
   // Already paid back with "Pay what you owe": refund that charge (the amount and, since batch 11, the fee) to their card. Refunds come first (idempotent at Stripe), so
   // a webhook retried after a failed refund still refunds.
   let refunded = 0;
@@ -1018,7 +1044,7 @@ async function openCharges(now: Date, co: CloseOuts) {
       const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
       await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
       // (Owner, Oct 29, batch 29 §22) No line of its own: the tester's ONE daily "Charge or let go" line (testerChargeLines) starts today.
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of ${pronouns(c.tester.pronoun).poss} ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of ${pronouns(c.tester.pronoun).poss} ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id, "", `part-${s.id}`));
       await (await import("./ratings")).maybePromptRating(c.id);
       n++;
       continue;
@@ -1296,7 +1322,7 @@ export async function autoChargeCalls(now: Date) {
     const review = await db.review.create({ data: { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: callReference(x.rateCents, minutes).cents, rateCents: x.rateCents, reason: amount ? AUTO_CHARGED_CALL : AUTO_NOTHING_CALL, payKey, auto: true } }).catch(() => null);
     if (!review) continue; // paid (or charged) meanwhile
     if (!amount) {
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call on ${fmtDateTime(x.startsAt)} closed with nothing to pay`, false, {}, c.id));
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call on ${fmtDateTime(x.startsAt)} closed with nothing to pay`, false, {}, c.id, "", `call-${x.id}`));
       continue;
     }
     // (§131) The developer's payment lines name the tester, the part and the test (pieceName).
@@ -1305,7 +1331,7 @@ export async function autoChargeCalls(now: Date) {
     // (Batch 29 §37) The tester's call reads "may be delayed" (never "failed" or "hold") while the money waits: the same line as for a declined charge.
     const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     // (Batch 29 §37) The developer's event says what really happened (charged, waiting for the bank, declined, owed, waiting for the account).
-    const logged = (text: string) => db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${text}`, false, {}, c.id));
+    const logged = (text: string) => db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${text}`, false, {}, c.id, "", `call-${x.id}`));
     if (!gone && dev.devSuspendedAt && !dev.holdStartedAt) {
       // During a suspension: it waits and is charged when the account is clear (chargeDeferred on the reinstatement); the tester is paid then.
       await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "deferred" } });
@@ -1412,14 +1438,14 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const review = await claimChoice(c.testId, { submissionId: s.id }, displayName(dev), { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} ${label} go: nothing charged`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} ${label} go: nothing charged`, false, {}, c.id, "", `part-${s.id}`));
     return { choice, amountCents: 0 };
   }
   // (Batch 35 §113) During a hold the tester's choice waits separately until the hold lifts; it never grows Pay what you owe.
   // During an admin suspension with no hold, or the team's pause, it is charged at once below.
   if (await deferIfHeld({ kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
     await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id, "", `part-${s.id}`));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   // (Batch 15 section 9) The payment row is reserved (pending) before the charge, so a lost answer from Stripe can be found and finished or cleared later.
@@ -1452,7 +1478,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { side: "tester", payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title }));
   }
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id, "", `part-${s.id}`));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
@@ -1538,12 +1564,12 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id, "", `call-${x.id}`));
     return { choice, amountCents: 0 };
   }
   if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
     await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt, "date") })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id, "", `call-${x.id}`));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
@@ -1572,7 +1598,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt, "date") }));
   }
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id, "", `call-${x.id}`));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
@@ -1583,7 +1609,7 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
   const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
   // (§131) The receipt names the tester, the part and the test (pieceName).
   await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title, full: true })} (charged by ${pronouns(c.tester.pronoun).obj} after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${label}`, false, {}, c.id));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${label}`, false, {}, c.id, "", p.callId ? `call-${p.callId}` : p.submissionId ? `part-${p.submissionId}` : ""));
   return { choice: "charge" as const, amountCents: p.amountCents, status: r.status };
 }
 

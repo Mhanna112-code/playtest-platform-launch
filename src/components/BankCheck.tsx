@@ -2,7 +2,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { bringInView } from "@/lib/markJump";
 import { liveBeat } from "@/lib/liveSync";
-import { countBankCheck, finishPayment, leaveBeacon, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type PeekResult, type Simulate } from "@/lib/bankConfirm";
+import { checkPiOf, countBankCheck, finishPayment, leaveBeacon, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type PeekResult, type Simulate } from "@/lib/bankConfirm";
 import { BANK_CANCEL, CANCEL_HINTS, NOTICE_HEAD, noticeLine } from "@/lib/bankNotice";
 import { BANK_CHECK_TITLE, BANK_STAND_IN, BANK_STAND_IN_NOTE } from "@/lib/rules";
 
@@ -137,7 +137,8 @@ export function useBankCheck() {
   }, [open]);
   const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate) => Promise<T>, peek?: Peek, leave?: () => void): Promise<T> => {
     const fin = finish ?? ((s?: Simulate) => finishPayment<T>(a.paymentId, s));
-    const look: Peek | undefined = peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId }, since) : undefined);
+    // (Owner, Nov 4, §171 B4) The peek names this window's own check (its PaymentIntent, from the client secret): the server says when it is no longer the live one.
+    const look: Peek | undefined = peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId, ...(checkPiOf(a.clientSecret) ? { pi: checkPiOf(a.clientSecret) } : {}) }, since) : undefined);
     if (a.needs === "none") return fin();
     if (!a.checkUrl && !a.simulated) return stripePopup(a).then(() => fin());
     return new Promise<T>((resolve, reject) => {

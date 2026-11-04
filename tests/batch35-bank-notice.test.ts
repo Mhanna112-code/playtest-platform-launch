@@ -116,10 +116,13 @@ describe("§160 the peek's changes: what would have stopped the press since it",
     expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since })).body).toMatchObject({ status: "done", changes: ["Ana Silva disputed the pay for her recording"] });
   });
 
-  it("Alerts-ignored types aren't lines, but the team's dispute decision is (as for Pay); another tab's own action is, this tab's isn't", async () => {
+  it("Alerts-ignored types about ANOTHER tester aren't lines; everything about this payment's tester is (§171 A3); another tab's own action is, this tab's isn't", async () => {
     const o = await payOpen();
-    await db.test.update({ where: { id: o.testId }, data: { ignoredAlerts: ["disputes", "admin"] } });
-    await logEvent(o.testId, "dispute", "Ana Silva disputed the pay for her recording", o.sessionId);
+    await db.test.update({ where: { id: o.testId }, data: { ignoredAlerts: ["disputes", "admin", "joins"] } });
+    // (Owner, Nov 4, §171 A3) Another tester's dispute follows the ticks (off): not a line.
+    const ben = await joined(o.testId, "Ben Okafor", "he");
+    await settle();
+    await logEvent(o.testId, "dispute", "Ben Okafor disputed the pay for his recording", ben.sessionId);
     expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since })).body).toEqual({ status: "waiting" });
     await settle();
     await logEvent(o.testId, "admin", "The team decided Ana Silva's dispute: $5.00 more for her recording", o.sessionId);
@@ -130,6 +133,10 @@ describe("§160 the peek's changes: what would have stopped the press since it",
     await db.actionLog.create({ data: { userId: o.dev.user.id, testId: o.testId, text: "invited Lee Park", tab: "another-tab" } });
     const r = await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since });
     expect(r.body.changes).toEqual(["The team decided Ana Silva's dispute: $5.00 more for her recording", "You invited Lee Park in another tab"]);
+    // (§171 A3) This payment's own tester: her dispute is a line with Disputes ticked off.
+    await settle();
+    await logEvent(o.testId, "dispute", "Ana Silva disputed the pay for her recording", o.sessionId);
+    expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since })).body.changes).toContain("Ana Silva disputed the pay for her recording");
   });
 
   it("Confirm all: a charge made while away that came in after the press is a line (not added to it)", async () => {

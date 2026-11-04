@@ -100,6 +100,12 @@ export const ALERTS_OFF_KINDS = new Set([...CONTRACT_KINDS, "own"]);
 /** (§159 rule 4) What stops Charge / Let it go on `piece` whatever the tester's Alerts: a payment on that very part ("paid": Pay, Pay more, an automatic call charge,
  * the team's $0 closure, a delayed payment going through) or the team's decision on any of their disputes in this test (lines about other tests carry no `piece`). */
 export const owedChange = (e: TestEventLike, piece: string) => (e.kind === "paid" && e.piece === piece) || (e.kind === "admin" && !!e.piece);
+/**
+ * (Owner, Nov 4, §171 A2) The team's decision on one of her disputes on this test ("admin" lines here are only those: they carry the part), or the developer adding
+ * their side to it ("dispute"): it stops EVERY press of hers on the test once, whatever her Alerts (Send, Add to this answer, a recording's add, Charge, Let it go,
+ * Dispute, Leave, call requests, Rate). Excerpt requests keep their own rules (their own route).
+ */
+export const disputeChange = (e: TestEventLike) => e.kind === "dispute" || (e.kind === "admin" && !!e.piece);
 
 const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute"];
 /**
@@ -141,13 +147,14 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // (Owner, Nov 3, batch 35 §159 rule 4) Charge / Let it go (`owedPiece`): a developer payment on THAT part (Pay, Pay more, an automatic call charge) and the team's
   // decision on ANY of this tester's disputes change what they're owed: one the page hasn't shown stops the press once even with Alerts Off. A payment on their
   // other parts follows their Alerts as before.
-  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || (!!opts.piece && e.piece === opts.piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece))) : r.changes;
+  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e) || (!!opts.piece && e.piece === opts.piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece))) : r.changes;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
   const list = withRenamed((await unanswered(testerId, testId, [...terms, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt)])).filter((e) => !answersIt(e, opts.answers)), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, a key marked working, their own other-tab
   // actions, a stop or pause, and the piece rules (Dispute's payment on that piece; Charge / Let it go's payment on that part and any team decision) always stop.
-  const forced = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.kind) || e.kind === "stop" || (!!opts.piece && e.piece === opts.piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece));
+  // (§171 A2) And the team's decision on her dispute, or the developer's side added to it, on every press.
+  const forced = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.kind) || e.kind === "stop" || disputeChange(e) || (!!opts.piece && e.piece === opts.piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece));
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: terms.length > 0, alertsOff: !!off });
 }
 

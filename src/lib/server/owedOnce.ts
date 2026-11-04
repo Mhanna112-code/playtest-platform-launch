@@ -429,3 +429,35 @@ export async function ranOutLine(devId: string, tz: string | null = null) {
   const on = (last.warnedAt ?? last.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric", ...zoneOpt(tz ?? u.timeZone) });
   return checkRanOutLine(on);
 }
+
+/**
+ * (Owner, Nov 4, §171 B6) Why Pay what you owe's open bank check was cancelled underneath its window, kept as the one payment's `failure` so the window's peek can
+ * say it: a new chargeback on a review-first account (the team reviews it again before paying), or a chargeback it covered won meanwhile.
+ */
+export const OWED_REVIEW_AGAIN = "Cancelled: a new chargeback arrived, so the team reviews the account again before it can pay.";
+export const OWED_WON_MEANWHILE = "Cancelled: the bank decided a chargeback it covered in the developer's favour, so what is owed changed.";
+/**
+ * (§171 B6) Cancel Pay what you owe's open bank check(s) (the press's one payment, its window open): at Stripe FIRST; one that had already gone through is recorded as
+ * paid, once (finishConfirmed); otherwise what it covered is owed again and the one payment keeps `why`. `ids`: only these one payments (a won chargeback's cover).
+ * Confirm all's one payment and a one payment for charges made while away are never touched here.
+ */
+export async function cancelOpenOwed(devId: string, why: string, ids?: string[]) {
+  const open = await db.payment.findMany({ where: { developerId: devId, kind: OWED_KIND, status: { in: OWED_ACTIVE }, actionPi: { not: null }, note: "press", ...(ids ? { id: { in: ids } } : {}) } });
+  const out: { id: string; end: "cancelled" | "paid" }[] = [];
+  for (const p of open) {
+    try {
+      const end = await dropCheck(p.actionPi);
+      if (!(await claimCheck(p))) continue; // finished or ended elsewhere meanwhile
+      if (end === "succeeded") {
+        await (await import("./confirm")).finishConfirmed(p.id);
+        out.push({ id: p.id, end: "paid" });
+        continue;
+      }
+      if (await releaseOwed(p.id)) await db.payment.update({ where: { id: p.id }, data: { failure: why } });
+      out.push({ id: p.id, end: "cancelled" });
+    } catch (e) {
+      console.error("[owed] cancel open check:", (e as Error).message); // Stripe's answer unclear: it stays tracked (its clock or Cancel ends it)
+    }
+  }
+  return out;
+}

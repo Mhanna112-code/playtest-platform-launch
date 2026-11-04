@@ -94,7 +94,7 @@ describe("batch 19 sections 3 and 6: the Terms of Use", () => {
 
   it("one “How payments work” section: the listed headings in order, each with a one-line example; DRAFT and version 2 kept; What changed says so", () => {
     expect(PAYMENT_RULES.map((r) => r.heading)).toEqual([
-      "Prices and the split", "Days per tester", "Paying for work", "Pay more", "Unreviewed work: Charge or Let it go", "Close-out", "Calls", "Unlisted work",
+      "Prices and the split", "Days per tester", "Paying for work", "Changes while you pay", "Pay more", "Unreviewed work: Charge or Let it go", "Close-out", "Calls", "Unlisted work",
       "Bank checks, declines, holds", "Payouts", "Subscriptions", "Taxes and refunds",
     ]);
     for (const r of PAYMENT_RULES) {
@@ -104,8 +104,8 @@ describe("batch 19 sections 3 and 6: the Terms of Use", () => {
     }
     expect(PAYMENT_RULES[0].text).toContain("The tester receives 80% of every payment; the platform keeps 20%.");
     expect(PAYMENT_RULES[1].example).toBe("Opened Nov 6 with Open until Nov 20: 14 days per tester, so a tester who joins Nov 19 is due Dec 3.");
-    expect(PAYMENT_RULES[4].text).toContain("A Charge over $200 needs a tick. Each piece gets at least 14 days of Charge.");
-    expect(PAYMENT_RULES[8].text).toContain("adds a $15 fee");
+    expect(PAYMENT_RULES[5].text).toContain("A Charge over $200 needs a tick. Each piece gets at least 14 days of Charge.");
+    expect(PAYMENT_RULES[9].text).toContain("adds a $15 fee");
     expect(page).toContain('title: "4. How payments work"');
     expect(page).toContain("Example: {r.example}");
     expect(page).not.toContain("4. Reviews and payment");
