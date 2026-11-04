@@ -31,10 +31,11 @@ export function confirmByText(by: Date, now: Date, tz?: string | null) {
  * hold) or (batch 25 section 2) a retried chargeback, worded as on the test page: "a payment your bank had reversed (Ana Silva's written answers on “Harbor Run”)".
  */
 export const pieceWords = {
-  part: (name: string, kind: string, test: string, full = false) => pieceName({ tester: name, part: partOf(null, kind || "written"), test, full }),
-  call: (name: string, day: string, test: string, full = false) => pieceName({ tester: name, part: "live call", test, when: day, full }),
+  // (Owner, Nov 4, §175) `whose`: the tester's possessive pronoun in place of their name (the test page's Confirm with your bank, under the tester's name).
+  part: (name: string, kind: string, test: string, full = false, whose?: string) => pieceName({ tester: name, part: partOf(null, kind || "written"), test, full, whose }),
+  call: (name: string, day: string, test: string, full = false, whose?: string) => pieceName({ tester: name, part: "live call", test, when: day, full, whose }),
   dispute: (piece: string) => disputeDecisionName(piece),
-  work: (name: string, test: string, full = false) => pieceName({ tester: name, part: "work", test, full }),
+  work: (name: string, test: string, full = false, whose?: string) => pieceName({ tester: name, part: "work", test, full, whose }),
   reversed: (piece?: string | null) => (piece ? `a payment your bank had reversed (${piece})` : "a payment your bank had reversed"),
   owed: "what you owe",
 } as const;

@@ -61,6 +61,7 @@ const NOT_PRESSES: Record<string, string> = {
   "/api/tests/x/my-gaps": "the join pop-up's check of what the test needs (a read)",
   "/api/tests/x/invite-check": "the invite panel's check of the ticked testers (a read)",
   "/api/tests/x/invite-search": "the invite panel's lists and name search (a read)",
+  "/api/tests/x/invite-restore": "(§173) the invite panel's kept ticks after a reload: who is still invitable (a read)",
   "/api/sessions/x/recording-abandon": "sent by the page after an upload failed, to clear its row (the upload's own refusal is named)",
   "/api/account/timezone": "sent by the page when the browser's time zone changes",
   "/api/notifications/read": "sent by the page when the bell's lines are shown",

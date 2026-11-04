@@ -69,8 +69,8 @@ describe("§131 the bank-confirm items", () => {
     expect(row).toMatchObject({ id: p.id, lead: "$320.00 · the team's dispute decision on Alexandria M…'s written answers on “chargecharge…”", full: "$320.00 · the team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run”" });
     expect(renderToStaticMarkup(createElement(BankToConfirmBox, { rows: [row] }))).toContain(`title="${html(`${row.full} · ${row.by}`)}"`);
     const [onTest] = await bankWaitingOnTest(w.dev.user.id, w.testId);
-    expect(onTest.line).toMatch(/^Your bank wants you to confirm a \$320\.00 payment for the team's dispute decision on Alexandria M…'s written answers on “chargecharge…”, made while you were away\./);
-    expect(onTest.full).toContain("for the team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run”, made while you were away.");
+    expect(onTest.line).toMatch(/^Your bank wants you to confirm a \$320\.00 payment for the team's dispute decision on her written answers on “chargecharge…”, made while you were away\./); // (Owner, Nov 4, §175) under the tester's name
+    expect(onTest.full).toContain("for the team's dispute decision on her written answers on “chargechargeback run”, made while you were away.");
   });
 
   it("the owner's example: one payment for charges made while away lists each item in the new form", async () => {

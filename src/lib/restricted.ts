@@ -52,9 +52,21 @@ export function testerRestricted(u: Restrictable & { isDeveloper?: boolean; isTe
  * test, End early and Cancel call, from the restricted view of a test page (and Cancel call from the dashboard's Calls box); and the developer's side of a dispute.
  */
 export const RESTRICTED_OK_ACTIONS = new Set(["cancel-call", "stop", "end-early", "dispute-side"]);
-/** (Batch 15 section 23) What still works on a test the team paused (the same pair, plus chat and the side of a dispute). */
-// (Owner, Oct 28, batch 17 section 14) Rate too: both sides rate a test the team paused, straight through (not while the developer is held or suspended).
-export const TEAM_PAUSED_OK_ACTIONS = new Set(["stop", "end-early", "cancel-call", "message", "dispute-side", "rate"]);
+/**
+ * (Owner, Nov 4, §172; replaces batch 15 sections 1, 23 and 37 and batch 17 §14 for a team pause) The team's pause of ONE test follows the same exact rules as a
+ * developer suspension, for that test only: the same presses still work (Stop, End early, Cancel call and the developer's side of a dispute). Rate reaches its own
+ * refusal (RATE_TEAM_PAUSED), as a suspended developer's does; chat, Pay, Pay more and Confirm with your bank wait for the lift.
+ */
+export const TEAM_PAUSED_OK_ACTIONS = RESTRICTED_OK_ACTIONS;
+
+/** (§172) Is this test paused by the team right now? A stopped or closed test isn't paused any more (the team can't lift it then: its pause is over). */
+export const teamPausedNow = (t: { adminPausedAt?: Date | string | null; status?: string | null }) => !!t.adminPausedAt && t.status !== "stopped";
+/** (§172) What a refused press on a test the team paused says (never "suspended" or "hold"). */
+export const TEAM_PAUSED_LINE = "The team paused this test: you can stop it, end testers' work early, cancel calls, or add your side of a dispute.";
+/** (§172) A press that waits for the lift, as under a suspension: "The team paused this test: Pay waits until the pause is lifted." */
+export const teamPausedWaits = (what: string) => `The team paused this test: ${what} waits until the pause is lifted.`;
+/** (§172) The developer's Rate on a test the team paused (a suspended developer's reads RATE_INACTIVE). */
+export const RATE_TEAM_PAUSED = "The team paused this test: you can rate once the pause is lifted.";
 
 /** What a refused press tells the developer (the blue box at the dashboard top says the rest). */
 export const RESTRICTED_LINE: Record<DevRestriction, string> = {

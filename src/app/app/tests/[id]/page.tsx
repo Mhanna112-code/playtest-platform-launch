@@ -52,7 +52,7 @@ import { lastListingSave } from "@/lib/server/listingPanel";
 import { Fold, ResizeBox } from "@/components/Panel";
 import { SentWork } from "@/components/SentWork";
 import { additionsOf, answersByQuestion } from "@/lib/additions";
-import { bankWaitsLine, pieceOf, pieceRoom } from "@/lib/server/payments";
+import { bankWaitsOf, pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
@@ -168,16 +168,36 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const confirmingPays = await db.payment.findMany({ where: { developerId: u.id, contractId: { in: t.contracts.map((c) => c.id) }, kind: { in: ["review", "call"] }, status: "needs_action" }, select: { id: true, submissionId: true, callId: true } });
   const confirmingPay = (id: string) => confirmingPays.find((p) => (p.submissionId ?? p.callId) === id)?.id;
   // (Owner, Nov 3, §159) Pay more waits while a payment on its part waits for the bank: its box is greyed with the line saying which.
-  const bankWaits = new Map<string, string>();
+  // (Owner bug, Nov 4, §174) With the waiting payment's id: the Pay more box whose OWN bank check that is never greys itself for it.
+  const bankWaits = new Map<string, { line: string; id: string } | null>();
   for (const w of await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) }, kind: { in: ["review", "call", "extra", "dispute"] }, status: { in: ["needs_confirmation", "needs_action"] }, settledAt: null }, select: { submissionId: true, callId: true, contractId: true } })) {
     const piece = w.submissionId ?? w.callId;
     const c = t.contracts.find((x) => x.id === w.contractId);
-    if (piece && c && !bankWaits.has(piece)) bankWaits.set(piece, (await bankWaitsLine(db, { submissionId: w.submissionId, callId: w.callId }, displayName(c.tester))) ?? "");
+    if (piece && c && !bankWaits.has(piece)) bankWaits.set(piece, await bankWaitsOf(db, { submissionId: w.submissionId, callId: w.callId }, displayName(c.tester)));
   }
-  const waitsOf = (id: string) => bankWaits.get(id) || undefined;
+  const waitsOf = (id: string) => bankWaits.get(id)?.line || undefined;
+  const waitsIdOf = (id: string) => bankWaits.get(id)?.id || undefined;
   // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
   // (Owner, Oct 31, batch 35 §80) Confirmed in Needs you (where the dashboard's box, Payments and the bell link); under the piece only a link up to it.
   const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>);
+  // (Owner, Nov 4, §175) Needs you (and the restricted view's "Your bank wants you to confirm") lists the waiting charges under each tester's name, the green profile
+  // link: one group per tester, in the order of their oldest charge, and under it every charge about them, oldest first (bankRows comes oldest first), each with its own
+  // Confirm with your bank. The links up from the tester's row still land on the charge itself, inside its group.
+  const bankGroups: { c: (typeof t.contracts)[number]; rows: typeof bankRows }[] = [];
+  for (const b of bankRows) {
+    const g = bankGroups.find((x) => x.c.id === b.contractId);
+    if (g) g.rows.push(b);
+    else {
+      const c = t.contracts.find((x) => x.id === b.contractId);
+      if (c) bankGroups.push({ c, rows: [b] });
+    }
+  }
+  const bankGrouped = bankGroups.map(({ c, rows }) => (
+    <div key={c.id} className="space-y-2" data-bank-group={c.id}>
+      <h3 className="font-semibold text-white" data-bank-group-name=""><NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} /></h3>
+      {rows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
+    </div>
+  ));
   // (Batch 23, a batch 21 leftover) A call whose two browsers never connected reads "Waiting to connect", not "In progress".
   const connectedCalls = new Set((await db.callPresence.findMany({ where: { call: { contract: { testId: t.id } } }, select: { callId: true }, distinct: ["callId"] })).map((p) => p.callId));
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
@@ -303,10 +323,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), whoHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
   const banner = bannerCause ? (
     <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
-      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open") }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
+      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, disputes: disputesWaiting.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
   ) : null;
   if (restricted) {
-    const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + (!accountPaused ? t.contracts.filter((c) => rateBoxOf(c)).length : 0) + disputesWaiting.length;
+    // (Owner, Nov 4, §172; replaces batch 17 §14) No Rate here: a test the team paused hides Rate as a suspension does.
+    const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + disputesWaiting.length;
     return (
       <>
         <AutoRefresh query={`test=${t.id}`} v={pageV} />
@@ -334,7 +355,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {bankRows.length > 0 && (
             <section className="space-y-2" data-restricted-bank="">
               <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
-              {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
+              {bankGrouped}
             </section>
           )}
           {bookedAhead.length > 0 && <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} embedded />}
@@ -357,13 +378,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 </div>
               ))}
 
-            </section>
-          )}
-          {/* (Batch 17 section 14) A test the team paused (nobody held or suspended): the developer still rates, straight through. */}
-          {!accountPaused && t.contracts.some((c) => rateBoxOf(c)) && (
-            <section className="space-y-2" data-restricted-rate="">
-              <h2 className="font-semibold text-white">Rate your testers</h2>
-              {t.contracts.map((c) => rateBoxOf(c))}
             </section>
           )}
           {/* (Batch 15 section 27) The developer's side of a dispute: optional, never stopped, works while paused or restricted. */}
@@ -458,7 +472,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
-          {bankRows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
+          {bankGrouped}
           <Applications needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={apps} />
           <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
           {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
@@ -555,7 +569,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
               </ResizeBox>
               <p className="text-sm font-medium text-white">Pay more</p>
-              <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+              <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                 room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
               </Fold>
             </div>
@@ -647,7 +661,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <div className="w-full space-y-1" data-part-pay-more="">
                         <p className="text-sm font-medium text-white">Pay more</p>
-                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                         </div>
                       )}
@@ -715,7 +729,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                               <div className="space-y-1" data-call-pay-more="">
                               <p className="text-sm font-medium text-white">Pay more</p>
-                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
@@ -789,6 +803,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {!t.workEndedAt && t.status !== "stopped" && !restricted && (
         <InvitePanel
           testId={t.id}
+          userId={u.id}
           seenAt={seenAt}
           options={{ devices: t.devices, languages: t.languages }}
           perks={perks}

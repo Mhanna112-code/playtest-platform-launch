@@ -27,6 +27,7 @@ import { callsLeftCents } from "./callMoney";
 import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
 import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, updateWaiting } from "@/lib/moneyLines";
+import { teamPausedWaits } from "@/lib/restricted";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
 
@@ -91,6 +92,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const c = piece.contract;
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     await refuseSuspendedLocked(tx, dev.id, "Pay");
+    // (Owner, Nov 4, §172) The team paused this test: Pay waits for the lift, as under a suspension (read under the test's lock, which the team's Pause takes too).
+    await (await import("./teamPause")).refuseTeamPausedTest(tx, c.testId, "Pay");
     const name = displayName(c.tester);
     // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work is still reviewed when their payout account was connected; without one (DEFAULT)
     // nothing can reach them, so it can't be paid (final).
@@ -212,13 +215,20 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
  * bank check is open → "Your $10.00 payment for this part is waiting for your bank: finish or cancel it first.". Null when nothing waits.
  */
 export async function bankWaitsLine(tx: Prisma.TransactionClient | typeof db, at: { submissionId?: string | null; callId?: string | null }, testerName: string) {
+  return (await bankWaitsOf(tx, at, testerName))?.line ?? null;
+}
+/**
+ * (§159) The same line with the waiting payment it is about (`id`). (Owner bug, Nov 4, §174) The test page passes the id with the line, so a Pay more box never
+ * greys itself for its OWN bank check: a redraw drawn while that check is open (or just after it ended) reads the box's own row as waiting.
+ */
+export async function bankWaitsOf(tx: Prisma.TransactionClient | typeof db, at: { submissionId?: string | null; callId?: string | null }, testerName: string) {
   const where = at.callId ? { callId: at.callId } : at.submissionId ? { submissionId: at.submissionId } : null;
   if (!where) return null;
-  const w = await tx.payment.findFirst({ where: { ...where, OR: [{ kind: { in: ["review", "call", "extra", "dispute"] }, status: { in: ["needs_confirmation", "needs_action"] } }, { kind: { in: ["review", "call", "dispute"] }, status: "pending" }], settledAt: null }, orderBy: { createdAt: "desc" }, select: { status: true, amountCents: true } });
+  const w = await tx.payment.findFirst({ where: { ...where, OR: [{ kind: { in: ["review", "call", "extra", "dispute"] }, status: { in: ["needs_confirmation", "needs_action"] } }, { kind: { in: ["review", "call", "dispute"] }, status: "pending" }], settledAt: null }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, amountCents: true } });
   if (!w) return null;
   // A charge on this part still on its way to the bank (a Charge pressed this very moment): it can't be paid more until it lands either way.
-  if (w.status === "pending") return "A payment for this part is being confirmed. Wait for it to finish before paying again.";
-  return w.status === "needs_confirmation" ? `Confirm ${testerName}'s ${money(w.amountCents)} charge with your bank first.` : `Your ${money(w.amountCents)} payment for this part is waiting for your bank: finish or cancel it first.`;
+  if (w.status === "pending") return { id: w.id, line: "A payment for this part is being confirmed. Wait for it to finish before paying again." };
+  return { id: w.id, line: w.status === "needs_confirmation" ? `Confirm ${testerName}'s ${money(w.amountCents)} charge with your bank first.` : `Your ${money(w.amountCents)} payment for this part is waiting for your bank: finish or cancel it first.` };
 }
 
 /** (Owner, Nov 3, §159) "Your account is suspended: Pay waits until it is lifted." (Pay more: "extra pay"; Confirm with your bank, Confirm all: their names). */
@@ -235,11 +245,16 @@ export async function refuseSuspendedLocked(tx: Prisma.TransactionClient, devId:
  * (Owner, Nov 3, §159 rule 4a) The developer's own Pay / Pay more whose bank check came back while a suspension landed: the suspension's cancel may have run before
  * the check existed, so it is cancelled here (at Stripe first; one already approved is recorded as paid once) and the press is refused like Pay.
  */
+// (Owner, Nov 4, §172) The same when the team paused the press's test meanwhile: its Pause cancels the open checks on that test, as a suspension does.
 async function suspendedAfterCheck<T>(devId: string, paymentId: string, what: string, action: T): Promise<T> {
-  if (!(await db.user.findUnique({ where: { id: devId }, select: { devSuspendedAt: true } }))?.devSuspendedAt) return action;
+  const suspended = !!(await db.user.findUnique({ where: { id: devId }, select: { devSuspendedAt: true } }))?.devSuspendedAt;
+  const row = suspended ? null : await db.payment.findUnique({ where: { id: paymentId }, select: { contractId: true } });
+  const teamPaused = suspended ? null : await (await import("./teamPause")).teamPausedTestOf(db, row?.contractId);
+  if (!suspended && !teamPaused) return action;
   await (await import("./confirm")).release(paymentId);
   const p = await db.payment.findUnique({ where: { id: paymentId }, select: { status: true } });
   if (p && (p.status === "charged" || p.status === "not_set_up")) return action;
+  if (teamPaused) throw new HttpError(409, "admin_paused", teamPausedWaits(what), { testId: teamPaused });
   throw new HttpError(403, "suspended", suspendedLine(what));
 }
 
@@ -660,6 +675,8 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   // (Owner, Oct 27) Unavailable during ANY payment hold, chargeback hold or suspension (the route refuses first; this is the backstop).
   const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { devSuspendedAt: true } });
   if (devNow.devSuspendedAt) throw new HttpError(403, "suspended", "Your account is suspended: extra pay waits until it is lifted.");
+  // (Owner, Nov 4, §172) The team paused this test: the same backstop, for this test (the route refuses first).
+  await (await import("./teamPause")).refuseTeamPausedTest(db, testId, "extra pay");
   await (await import("./holds")).devHoldRefusal(dev.id, "pay");
   if ((await blockedEitherWay(dev.id, c.testerId)) || !testerPayable(c.tester)) throw new HttpError(409, "unavailable", "This payment isn't available.");
   const amount = toCents(body.amount);
@@ -679,6 +696,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   const reserved = await reserving(() => db.$transaction(async (tx) => {
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
     await refuseSuspendedLocked(tx, dev.id, "extra pay");
+    await (await import("./teamPause")).refuseTeamPausedTest(tx, testId, "extra pay"); // (§172) under the test's lock, as the team's Pause takes it
     // (Owner, Nov 3, §159) A payment on this part waiting for the bank: refused (never a stop-once: it can't go ahead), read in the locked step, so a Pay more pressed
     // the moment a Charge starts waiting can't slip through.
     const waits = await bankWaitsLine(tx, at, name);

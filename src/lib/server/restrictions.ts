@@ -23,11 +23,14 @@ import { closeOffersOfEnded } from "./offerClose";
 const DAY = 86_400_000;
 export const CALL_SUSPENSION_DAYS = 3;
 
-/** Calls starting within the next 3 days of a suspended or held developer are cancelled with no fault (both sides told). */
-export async function cancelCallsNearPause(devId: string, now = new Date()) {
+/**
+ * Calls starting within the next 3 days of a suspended or held developer are cancelled with no fault (both sides told). (Owner, Nov 4, §172) `testId`: only that
+ * test's calls (the team's pause of one test).
+ */
+export async function cancelCallsNearPause(devId: string, now = new Date(), testId?: string) {
   const soon = new Date(now.getTime() + CALL_SUSPENSION_DAYS * DAY);
   const calls = await db.call.findMany({
-    where: { status: "booked", startsAt: { gt: now, lte: soon }, contract: { test: { developerId: devId } } },
+    where: { status: "booked", startsAt: { gt: now, lte: soon }, contract: { test: { developerId: devId, ...(testId ? { id: testId } : {}) } } },
     include: { contract: { include: { tester: true, test: { include: { developer: true } } } } },
   });
   let n = 0;
@@ -49,6 +52,8 @@ export const cancelCallsNearSuspension = cancelCallsNearPause;
 export async function cancelLatePauseCalls(now = new Date()) {
   let n = 0;
   for (const u of await db.user.findMany({ where: { isDeveloper: true, OR: [{ devSuspendedAt: { not: null } }, { holdStartedAt: { not: null } }] }, select: { id: true } })) n += await cancelCallsNearPause(u.id, now);
+  // (Owner, Nov 4, §172) And each test the team paused, as a suspension does for all of the developer's tests.
+  for (const t of await db.test.findMany({ where: { adminPausedAt: { not: null }, status: { not: "stopped" } }, select: { id: true, developerId: true } })) n += await cancelCallsNearPause(t.developerId, now, t.id);
   return n;
 }
 export const cancelLateSuspensionCalls = cancelLatePauseCalls;
@@ -393,7 +398,10 @@ export async function suspendedAccountsReminder(now = new Date()) {
 
 // ---------- the team pausing or stopping one test (design doc 6 and 10) ----------
 
-/** Admin: pause one test. The developer can stop it, end testers' work early or cancel calls (batch 15 sections 23 and 37); testers see it as paused. */
+/**
+ * Admin: pause one test. (Owner, Nov 4, §172; replaces batch 15 sections 23 and 37) The same exact rules as a developer suspension, for this test only: the developer can
+ * stop it, end testers' work early, cancel calls and add their side of a dispute; testers see it as paused.
+ */
 export async function pauseTest(adminId: string, testId: string, note: string, seen: AdminSeen | null = null) {
   const t = await db.test.findUnique({ where: { id: testId } });
   if (!t) throw new HttpError(404, "not_found", "That test doesn't exist.");
@@ -412,13 +420,30 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
     const ev = await recordEvent(tx, testId, "paused", "The team paused this test", true, { adminPausedAt: new Date(), adminNote: note, adminPausedById: adminId });
     await keepNote(tx, ev.id, adminId, note); // (batch 35 §49) the pause's own reason, with its event
   });
-  await closeRequests({ contractIds: (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id) }, "the test is paused");
+  const contractIds = (await db.contract.findMany({ where: { testId }, select: { id: true } })).map((c) => c.id);
+  await closeRequests({ contractIds }, "the test is paused");
+  // (Owner, Nov 4, §172) What a developer suspension does to each of the developer's tests, done to this one: calls starting within 3 days are cancelled with no
+  // fault (later ones 3 days before they start if the pause still lasts: the daily job), and the developer's own Pay / Pay more whose bank page is still open on
+  // this test is cancelled (§159 rule 9 / §171 B5: at Stripe first; one the bank already approved is recorded as paid once). A tester's charge waiting for "Confirm
+  // with your bank" is not cancelled (rule 4b): only a new Confirm waits for the lift.
+  const callsCancelled = await cancelCallsNearPause(t.developerId, new Date(), testId);
+  const { release } = await import("./confirm");
+  for (const p of await db.payment.findMany({ where: { developerId: t.developerId, contractId: { in: contractIds }, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
+    await release(p.id).catch((e) => console.error("[team pause] cancel open Pay check:", (e as Error).message));
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
   // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page and in the email.
-  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} For now you can stop it, end testers' work early, or cancel calls.`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
+  // (Owner, Nov 4, §172) The email lists exactly what a developer suspension still allows, for this test.
+  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} ${TEAM_PAUSED_EMAIL_LINE}${callsCancelled ? ` ${teamPauseCallsLine(callsCancelled)}` : ""}`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
 }
+
+/** (Owner, Nov 4, §172) The pause email's line: what still works on the test, and what waits for the lift. */
+export const TEAM_PAUSED_EMAIL_LINE =
+  "For now you can stop it, end testers' work early, cancel calls, or add your side of a dispute. Chat, Pay, Pay more, Confirm with your bank and Rate on this test wait until the team lifts the pause.";
+/** "2 calls in the next 3 days were cancelled. Later calls are cancelled 3 days before they start if the pause still lasts." */
+export const teamPauseCallsLine = (n: number) =>
+  `${n === 1 ? "1 call" : `${n} calls`} in the next ${CALL_SUSPENSION_DAYS} days ${n === 1 ? "was" : "were"} cancelled. Later calls are cancelled ${CALL_SUSPENSION_DAYS} days before they start if the pause still lasts.`;
 
 /** Admin: lift the team's pause. Two admins at once: the first lifts it (its admin action is kept with it), the second is refused naming them. */
 export async function unpauseTest(testId: string, adminId: string | null = null, seen: AdminSeen | null = null) {
@@ -444,6 +469,14 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
     return null;
   });
   if (refused) throw refused;
+  // (Owner, Nov 4, §172) What a reinstatement restores, for this test: its charges that waited for the lift are made now (as one payment, chargeDeferred; nothing while
+  // the developer is still held or suspended), and its working testers are told it is running again (unless the developer's own pause still holds it).
+  const devNow = await db.user.findUniqueOrThrow({ where: { id: dev.id }, select: { holdStartedAt: true, devSuspendedAt: true } });
+  if (!devNow.holdStartedAt && !devNow.devSuspendedAt) {
+    await chargeDeferred(dev.id).catch((e) => console.error("[team pause] waiting charges:", (e as Error).message));
+    for (const c of await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } }))
+      await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused" });
+  }
   await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
   return { ok: true };
 }

@@ -6,6 +6,7 @@ import { type BankAction } from "@/lib/bankConfirm";
 import { money } from "@/lib/format";
 import { MARKABLE } from "@/lib/markJump";
 import { usePress } from "@/lib/usePress";
+import { useLoadTime } from "@/components/KeepLoadTime";
 import { BANK_CONFIRMED, CONFIRM_WITH_BANK, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, bankAnchor } from "@/lib/rules";
 import { refusalLine } from "@/lib/pressLabels";
 import { CANCEL_THIS_CHECK, STILL_WAITS, alreadyConfirmedLine, cancelledCheckLine } from "@/lib/bankNotice";
@@ -21,7 +22,8 @@ import { ApiError, api } from "@/lib/client";
 export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, cents, own = false }: { paymentId: string; /** (§160) the developer's own press (a Pay or Pay more whose bank window is open in another tab, or was left): Cancel this check is offered */ own?: boolean; line: ReactNode; /** (§131) the line with the names uncut: its hover */ full?: string; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string; /** (Owner, Nov 3) its amount: over $200 the tick "I confirm this payment is over $200." is needed (as Pay's) */ cents?: number }) {
   const bank = useBankCheck();
   // (Batch 35 §40, §41) Confirmed: the page redraws in place; until it has, the button stays greyed with the confirmed line.
-  const { press, changes, error, busy, doneLine, finish } = usePress(seenAt);
+  // (§176) On the dashboard: from its first load, never a redraw's render time (elsewhere: the page's own marker, unchanged).
+  const { press, changes, error, busy, doneLine, finish } = usePress(useLoadTime(seenAt));
   const [err, setErr] = useState("");
   const over = (cents ?? 0) > PAY_TICK_CENTS;
   const [over200, setOver200] = useState(false);

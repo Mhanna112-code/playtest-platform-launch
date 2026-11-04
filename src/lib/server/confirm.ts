@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTimeIn, fmtTimeIn, money } from "@/lib/format";
+import { displayName, fmtDateTimeIn, fmtTimeIn, money, pronouns } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
 import { awayFromTest, onTestLine } from "@/lib/rules"; // (§177)
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
@@ -112,14 +112,16 @@ async function piecesNamed(waiting: Waiting[], day: (d: Date) => string) {
   ]);
   return (p: Waiting) => {
     const c = contracts.find((x) => x.id === p.contractId);
-    if (!c) return { c: undefined, sub: undefined, call: undefined, piece: null, full: null };
+    if (!c) return { c: undefined, sub: undefined, call: undefined, piece: null, full: null, theirs: null, theirsFull: null };
     const name = displayName(c.tester);
     const at = pieceOf(p);
     const sub = at.submissionId ? subs.find((x) => x.id === at.submissionId) : undefined;
     const call = at.callId ? calls.find((x) => x.id === at.callId) : undefined;
-    const named = (full: boolean) => (sub ? pieceWords.part(name, sub.kind, c.title, full) : call ? pieceWords.call(name, day(call.startsAt), c.title, full) : pieceWords.work(name, c.title, full));
-    // `full`: the names uncut, the line's hover on the page (§131).
-    return { c, sub, call, piece: named(false), full: named(true) };
+    const named = (full: boolean, whose?: string) => (sub ? pieceWords.part(name, sub.kind, c.title, full, whose) : call ? pieceWords.call(name, day(call.startsAt), c.title, full, whose) : pieceWords.work(name, c.title, full, whose));
+    // `full`: the names uncut, the line's hover on the page (§131). (Owner, Nov 4, §175) `theirs` / `theirsFull`: the same with the tester's pronoun in place of
+    // their name ("her written answers on “Harbor Run”"), for a line under a heading that names them.
+    const whose = pronouns(c.tester.pronoun).poss;
+    return { c, sub, call, piece: named(false), full: named(true), theirs: named(false, whose), theirsFull: named(true, whose) };
   };
 }
 
@@ -233,10 +235,11 @@ export async function bankWaitingOnTest(devId: string, testId: string) {
   const tz = await zoneOf(devId);
   const named = await piecesNamed(waiting, (d) => fmtDateTimeIn(d, tz));
   return waiting.map((p) => {
-    const { c, sub, call, piece, full } = named(p);
+    const { c, sub, call, theirs, theirsFull } = named(p);
     const what = (x: string) => (p.kind === "dispute" ? pieceWords.dispute(x) : p.kind === "chargeback" ? pieceWords.reversed(x) : x);
-    // (§131) `full`: the line with the names uncut, its hover.
-    return { id: p.id, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(piece!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(full!), fmtDateTimeIn(p.actionBy!, tz)) };
+    // (§131) `full`: the line with the names uncut, its hover. (Owner, Nov 4, §175) The page lists these under each tester's name, so a line names its piece by the
+    // tester's pronoun: "… a $15.50 payment for her live call on “Harbor Run” (Oct 30), made while you were away. …" (this line is shown only here).
+    return { id: p.id, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(theirs!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(theirsFull!), fmtDateTimeIn(p.actionBy!, tz)) };
   });
 }
 
@@ -325,8 +328,12 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
   // chargeback's row checks the piece of the payment the bank reversed), so whatever stops Pay on it stops Confirm, and the same Alerts types are ignored.
   // (Owner, Nov 3, §159) Pressed while the developer is suspended: refused like Pay, under the developer's row lock (a check already open still finishes: §159 rule 4b).
   // Pay what you owe's own payments and a renewal stay open (unchanged).
-  if (p.contractId && p.kind !== "owed" && p.kind !== "chargeback" && p.kind !== "subscription")
+  // (Owner, Nov 4, §172) The same on a test the team paused, for that test's waiting charges ("The team paused this test: Confirm with your bank waits until the
+  // pause is lifted."); a check already open still finishes, as under a suspension.
+  if (p.contractId && p.kind !== "owed" && p.kind !== "chargeback" && p.kind !== "subscription") {
     await db.$transaction(async (tx) => (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank"));
+    await (await import("./teamPause")).refuseTeamPaused(db, p.contractId, "Confirm with your bank");
+  }
   if (p.contractId && seenOf(body.seenAt)) {
     const c = await db.contract.findUnique({ where: { id: p.contractId }, include: { tester: true } });
     if (c) {
@@ -337,6 +344,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
       await db.$transaction(async (tx) => {
         await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
         if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank");
+        if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./teamPause")).refuseTeamPausedTest(tx, c.testId, "Confirm with your bank"); // (§172) under the test's lock
         // (Owner, Nov 4, §171 item 7) The press-time gate stays as it was (`awayCharge`: §159's rules, not §171 A1/A2) while the owner decides the waiting-charge rules.
         await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true });
       }).catch((e) => {

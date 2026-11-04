@@ -16,6 +16,8 @@ export const cancelledLine = (why: string, card = false) => `This bank check was
 /** Why a check was cancelled underneath the open bank page (the plain reason after "This bank check was cancelled: "). */
 export const CANCELLED_WHY = {
   hold: "your tests were paused (a payment hold started)",
+  // (Owner, Nov 4, §172) The team paused the test this payment is on.
+  teamPaused: "the team paused this test",
   card: "you saved a new card",
   pressRanOut: "its 15 minutes ran out",
   awayRanOut: "the 3 days to confirm it ran out",
@@ -71,3 +73,13 @@ export function cancelledCheckLine(message: string, by?: unknown) {
  * box hides the button and says so (with Cancel this check); a press from an older page is refused with the same line (never a stop-once, never "already reserved").
  */
 export const owedElsewhereLine = (amount: string) => `Pay what you owe (${amount}) is waiting for your bank in another tab or window: finish that check, or cancel it.`;
+
+/**
+ * (Owner bug, Nov 4, §174) The "waits for your bank" line a Pay more box shows (§159), or none. Never for the box's OWN bank check: not while its bank box is open
+ * under it (a redraw drawn meanwhile reads its own row as waiting), and not for the row of the check it just ended (a redraw drawn before the end). Another
+ * payment's wait (a charge made while away, another tab's Pay) still greys it.
+ */
+export function payMoreWaits(line: string | undefined, waitingId: string | undefined, own: { open: boolean; checkId: string }) {
+  if (!line || own.open) return undefined;
+  return waitingId && own.checkId && waitingId === own.checkId ? undefined : line;
+}

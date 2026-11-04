@@ -849,7 +849,10 @@ export const PAUSE_DEFAULTS = {
   /** DEFAULT: drafts stay editable while paused (written answers typed and kept, recordings uploaded); only Send is refused. false = the forms hide while paused. */
   draftsEditable: true,
 
-  /** DEFAULT: the team's pause of one test (admin pause) follows the same tester rules. false = testers keep sending and chatting in a team-paused test. */
+  /**
+   * DEFAULT: the team's pause of one test (admin pause) follows the same tester rules. false = testers keep sending in a team-paused test. (Owner, Nov 4, §172: the team's
+   * pause is the same exact rules as a developer suspension for that test; its chat pauses whatever this says, messages.ts chatRestriction.)
+   */
   teamPauseSameRules: true,
   /** DEFAULT: when a pause lifts (a hold lift, a reinstatement, the team's unpause) working testers' deadlines and Open until move later by its length. false = they stay. */
   shiftDeadlines: true,
@@ -879,7 +882,8 @@ export const PAUSED_FOR_TESTERS = pausedForTesters({ drafts: true, charge: true,
 /** (Owner, Oct 28 afternoon) Send (written answers, recordings) while the test is paused. */
 export const PAUSED_SEND = `${PAUSED_RIGHT_NOW} You can send this once it resumes.`;
 /**
- * (Owner, Oct 30, batch 15 section 1) Chat is closed only while a PERSON is restricted, never because a test is paused. The other person can still open and read the chat;
+ * (Owner, Oct 30, batch 15 section 1) Chat is closed only while a PERSON is restricted (owner, Nov 4, §172: and while the team paused the test, which counts as the
+ * developer being restricted in that test's chats). The other person can still open and read the chat;
  * the message box is replaced by this neutral note (never "suspended", "hold" or "failed" about the other person).
  */
 export const CHAT_PAUSED_NOTE = "Messages are paused for now. You can still read this chat.";
@@ -1013,9 +1017,11 @@ export const partOf = (callId: string | null | undefined, subKind: string | null
  * test's names cut at 12 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
  * “Harbor Run” (Oct 30)". `full`: the names uncut, for the hover (`title`) of a line shown on a page (emails and bells stay cut).
  */
-export const pieceName = ({ tester, part, test, when, full = false }: { tester: string; part: PiecePart | string; test: string; when?: string | null; full?: boolean }) => {
+export const pieceName = ({ tester, part, test, when, full = false, whose }: { tester: string; part: PiecePart | string; test: string; when?: string | null; full?: boolean;
+  /** (Owner, Nov 4, §175) Under a heading that already names the tester: their pronoun's possessive ("her written answers on …") in place of "Ana Silva's". */
+  whose?: string }) => {
   const cut = full ? (s: string) => s : cut10;
-  return `${cut(tester)}'s ${part} on “${cut(test)}”${when ? ` (${when})` : ""}`;
+  return `${whose ?? `${cut(tester)}'s`} ${part} on “${cut(test)}”${when ? ` (${when})` : ""}`;
 };
 /** (§131) A team's dispute decision, named by its piece: "the team's dispute decision on Marc Hanna's recording on “chargechar…”". */
 export const disputeDecisionName = (piece: string) => `the team's dispute decision on ${piece}`;

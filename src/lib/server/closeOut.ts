@@ -80,8 +80,15 @@ export function testerPauseSpans(events: { kind: string; side: string; createdAt
   return mergeSpans(out);
 }
 
-/** The team's pauses of one test (from its events), plus the one on now. */
-async function teamPauseSpans(testId: string, adminPausedAt: Date | null, now: Date): Promise<Span[]> {
+/**
+ * The team's pauses of one test (from its events), plus the one on now. (Owner, Nov 4, §172) `stoppedAt`: the developer's Rate window pauses only while the pause is
+ * in force (a stopped or closed test isn't paused any more), so a pause still recorded on a stopped test ends at its stop there.
+ */
+export async function teamPauseSpans(testId: string, adminPausedAt: Date | null, now: Date, stoppedAt?: Date | null): Promise<Span[]> {
+  if (adminPausedAt && stoppedAt) {
+    const spans = await teamPauseSpans(testId, adminPausedAt, stoppedAt);
+    return spans.map((s) => (s.open ? { start: s.start, end: Math.max(s.start, stoppedAt.getTime()), open: false } : s));
+  }
   const evs = await db.testEvent.findMany({ where: { testId, OR: [{ kind: "paused", text: "The team paused this test" }, { kind: "resumed", text: "The team lifted the pause on this test" }] }, orderBy: { createdAt: "asc" }, select: { kind: true, createdAt: true } });
   const out: Span[] = [];
   let on: number | null = null;

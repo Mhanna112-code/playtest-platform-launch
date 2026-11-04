@@ -1,6 +1,7 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { teamPausedNow } from "@/lib/restricted";
 import { ArrowLeft } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
@@ -33,6 +34,8 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   const otherSide = await otherSideNotice(u, dev ? "developer" : "tester");
   if (otherSide) return otherSide;
   leaveIfClosed(u, "/app/chat", dev ? "developer" : "tester");
+  // (Owner, Nov 4, §172) A test the team paused closes its chats to the developer as a suspension closes theirs: back to the test, whose banner says why.
+  if (dev && teamPausedNow(c.test)) redirect(`/app/tests/${c.testId}`);
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads the chat: AutoRefresh starts from it.
   const pageV = await testV(u.id, c.testId, dev ? "" : c.id);
   const other = dev ? displayName(c.tester) : displayName(c.test.developer);
@@ -42,8 +45,8 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   // (Batch 35 §124) The other person's name (header and their messages) has the session page's profile hover.
   const otherUser = dev ? c.tester : c.test.developer;
   const otherHover = await personHoverFor(u.id, dev ? "developer" : "tester", otherUser);
-  // (Owner, Oct 30, batch 15 section 1) Never closed because the test is paused: only while the OTHER person is restricted, and then it can still be read.
-  // (The restricted person's own chat pages are closed: leaveIfClosed above.)
+  // (Owner, Oct 30, batch 15 section 1) Paused only while the OTHER person is restricted (owner, Nov 4, §172: or, for the tester, while the team paused this test),
+  // and then it can still be read. (The restricted person's own chat pages are closed: leaveIfClosed above.)
   const r = await chatRestriction(c.testId, c.testerId);
   const paused = dev ? r.tester : r.developer;
   await markChatRead(u.id, c.testId, c.testerId);

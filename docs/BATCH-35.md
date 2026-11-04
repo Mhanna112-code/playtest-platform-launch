@@ -2651,3 +2651,148 @@ Owner: "Ticking All in Alerts doesn't tick everything, and removing one while Al
   replaced, paid on another check; B5: cancelled, and already approved; B6 a and b: cancelled, and already approved (recorded once; refunded for a win), the
   reservation; B6 c: every change in one stop, then the new total paid; C: the Terms). Updated: `batch35-bank-notice` (another tester's ticked-off line isn't a
   line, this tester's is), `batch35-bank-peek` (the peek sends `pi`), `batch19` (the Terms' headings).
+
+## §172 Team pause = developer suspension (owner, Nov 4)
+
+The owner: "Make the team's pause of a test the same exact rules as a developer suspension." This replaces batch 15 sections 1, 23 and 37 (chat and the
+pair of presses on a team-paused test), batch 17 §14 ("both sides rate a test the team paused"), batch 19 section 2 (the banner's "rate testers") and the old
+split where Pay worked on a team-paused test but Pay more didn't. For the ONE test the team paused, everything follows what a developer suspension does to each
+of that developer's tests, for both sides, with the team's wording ("The team paused this test…", never "suspended" or "hold"). The developer's other tests,
+their account, their subscription and their Payments page are unaffected.
+
+"Paused by the team" now means `adminPausedAt` is set and the test isn't stopped (`teamPausedNow`, lib/restricted.ts): a stopped or closed test isn't paused
+any more (the team can't lift a pause on a stopped test, so nothing may wait for that lift).
+
+### Developer: before → after, per press or item
+| Press / item on the team-paused test | Before | After (§172) |
+|---|---|---|
+| Stop, End early, Cancel call, their side of a dispute | Allowed (stop-once; the pause stops an older page once) | Unchanged (`TEAM_PAUSED_OK_ACTIONS` is now `RESTRICTED_OK_ACTIONS`) |
+| Rate | Allowed straight through; Rate box in the restricted view | Hidden; refused `409 inactive` "The team paused this test: you can rate once the pause is lifted." Its 14 days pause while the team's pause is on (as a suspended developer's). Ratings to give and the reminders leave it out |
+| Chat: Send | Allowed | Refused, back to the test's banner ("Your Send on … didn't go through: the team paused this test."). That test's chat page sends the developer to the test; "Chat with <name>" for that test's tester: "Unable to chat with this tester." |
+| Pay (test page, dashboard) | Went through (`/api/review` had no check) | Refused `409 admin_paused` "The team paused this test: Pay waits until the pause is lifted.", back to the test's banner (`testId` in the refusal; client.ts follows it). Backstop under the test's lock; a Pay whose bank check came back as the pause landed is cancelled and refused (as a suspension's) |
+| Pay more | Refused with the old banner line | Refused, the new line; backstops "…extra pay waits until the pause is lifted." |
+| Confirm with your bank (that test's waiting charges) | Allowed | Refused under the button: "The team paused this test: Confirm with your bank waits until the pause is lifted." A check already open still finishes (§159 rule 4b) |
+| Confirm all | Covered that test's charges | Leaves that test's charges out; one the team paused after the page loaded stops once ("…: the team paused its test") |
+| Edit, invites (and their search / check), Accept / Decline an application, call requests and answers, a call set's Cancel, a broken key's dismiss, a no-show report, Next round | Refused | Refused (new line: "The team paused this test: you can stop it, end testers' work early, cancel calls, or add your side of a dispute.") |
+| Their own Pay / Pay more whose bank page is open at the pause | Left open | Cancelled at Stripe first (one already approved is recorded as paid once), as §159 rule 9 / §171 B5 do at a suspension; the window says "This bank check was cancelled: the team paused this test. Pressing Complete won't charge anything." |
+| Calls on that test | Kept | Within 3 days: cancelled with no fault at the pause (both told, the suspension's line); later ones 3 days before they start if the pause still lasts (the daily job) |
+| A listed call's automatic charge (7 days after) | Skipped while paused | Made, then waiting (as under a suspension): "…charged automatically: $15.00, charged when the team lifts the pause on this test"; charged at the lift |
+| Waiting charges ("deferred") on that test | Charged by the 5-minute sweep | Wait for the lift (or the test's stop or close), as a suspended developer's wait for the reinstatement |
+| Pause email | "For now you can stop it, end testers' work early, or cancel calls." | "For now you can stop it, end testers' work early, cancel calls, or add your side of a dispute. Chat, Pay, Pay more, Confirm with your bank and Rate on this test wait until the team lifts the pause." (+ "2 calls in the next 3 days were cancelled. Later calls are cancelled 3 days before they start if the pause still lasts." when any were) |
+| The red banner's last line (any pause) | "…cancel calls, or rate testers." | "…cancel calls, or add your side of a dispute." (when a dispute waits for their side; Rate never shows on a paused test) |
+| Lift (Lift the pause) | Clocks moved on; developer told | Also: that test's waiting charges are made now (one payment, `chargeDeferred`; not while a hold or suspension is on) and its working testers are told "“…” is running again. Your deadline moved on by the pause.", as a reinstatement does |
+
+Already identical before (unchanged): requests close at the pause, open invites close (`markPaused`), applications wait, one 7-day closing clock, deadlines and
+review clocks move on at the lift, reminders wait, excerpt Allow / Deny, the tester's Charge (charged at once, as under a suspension).
+
+### Tester: before → after
+| Item | Before | After (§172) |
+|---|---|---|
+| Send work, request calls, join | Refused (paused) | Unchanged |
+| Chat: Send | Allowed | Turned back: "Messages are paused for now, so this wasn't sent." The chat page shows "Messages are paused for now. You can still read this chat." |
+| Rate | Allowed | Unchanged (a developer suspension never stops the tester's Rate) |
+| Charge / Let it go, dispute, leave, cancel calls, drafts | Allowed | Unchanged |
+| Booked calls | Kept | Cancelled within 3 days (later ones 3 days before), with the neutral "paused" line |
+| A listed call's automatic charge | Not made while paused | Made; "Payment for your call may be delayed" until the lift |
+| At the lift | No line | "“…” is running again. Your deadline moved on by the pause." |
+
+### Open questions (built as below; the owner may want otherwise)
+1. **A stopped or closed test is no longer team-paused.** Before, the route kept refusing presses (Pay more, chat…) on a test the developer stopped while the team
+   had paused it. Now a stopped test follows a stopped test's rules, and its waiting charges are made by the next sweep. Related, not changed: the close-out
+   (`closeOut.ts testSpans`) still counts a pause recorded on a stopped test as still running, so Pay more and the tester's Rate on such a test never close.
+2. **Account-wide parts of a suspension are not applied** (billing pause, Post a test, Block / Report, direct messages, Payments page): the decision is scoped to
+   the one test.
+3. **Confirm all** leaves the paused test's charges out without a "not in Confirm all" line (a suspension refuses Confirm all outright); each still shows its own
+   Confirm with your bank, which is refused with the team's line.
+4. **A waiting charge's 3 days to confirm keep running** during the pause, as under a suspension: if they run out it counts as declined (a payment hold). A team
+   pause can run longer than a suspension usually does.
+5. **The developer's chat page of that test** sends them to the test page (a suspended developer's chat pages send them to the dashboard top).
+6. **Pay what you owe** during a hold still includes that test's waiting charges (as it does a suspended and held developer's).
+7. **Terms and help:** no text describes a team pause, so nothing was edited (no Terms version bump).
+
+- **Code.** `restricted.ts` (`TEAM_PAUSED_OK_ACTIONS`, `teamPausedNow`, the lines), new `teamPause.ts`, `/api/tests/[id]/[action]` (`adminRefusal`),
+  `/api/review`, `payments.ts` (Pay / Pay more backstops, `suspendedAfterCheck`), `confirm.ts`, `confirmAll.ts`, `messages.ts`, the chat page, `ratings.ts`,
+  `closeOut.ts` (`teamPauseSpans` exported, ends at a stop), `holds.ts` (`autoChargeCalls`, `chargeDeferredLocked`), `restrictions.ts` (`pauseTest`,
+  `unpauseTest`, `cancelCallsNearPause`, `cancelLatePauseCalls`), `bankNotice.ts` / `bankPeek.ts` (the cancelled window's reason), `TestBanner.tsx`, the test page
+  (no Rate in the restricted view), `client.ts`, `rules.ts` (comments), `BLUE-NOTICES.md`. No migration.
+- **Tests:** `tests/batch35-team-pause-suspension.test.ts` (new). Updated: `batch17-rate` (the developer's Rate waits; the tester rates), `batch19` (the banner
+  line), `batch6` and `batch15-sides` (a team pause pauses that test's chat), `batch16-tester-states` (the developer's Pay after the page loaded is made with the pause
+  lifted for that moment, since a team pause now refuses it).
+## §173 The invite ticks survive a reload in the same tab (owner, Nov 4)
+- The developer's Invite testers panel keeps its ticks in the tab's own storage (sessionStorage, `pt-invite-ticks:<account>:<test>`, `src/lib/inviteTicks.ts`), written as
+  the ticks change. A reload (or coming back to the test page in that tab) ticks them again. Another tab, another browser or a closed tab starts with nothing ticked.
+- On load only the people the panel can still invite right now come back ticked, by the lists' own rules (the server's `inviteRestore`, POST
+  `/api/tests/<id>/invite-restore`: not in this test, not already invited, hasn't rated it, hasn't applied or asked to rejoin, not suspended, under 10 tests, not
+  blocked either way, account not closed). Someone outside the current lists (ticked from an earlier search) stays selected and counts in "N selected", as before;
+  the panel knows their row, so Invite sends what was shown for them and the live re-check (§109) unticks them if that changes.
+- Everyone else is dropped, and one line under Invite names them with why, in the search rows' words (batch 30 §7):
+  "Not ticked any more: Ana Silva (already in this test), Dee Moss (can't join this test)." Other reasons: "already invited, waiting for her to join",
+  "applied: answer him in Needs you", "rated this test: can't join it again", "no longer in your list" (a block, never which side), "account closed". The line goes
+  at the next tick or Invite. The panel opens when anything came back or was dropped. A dropped person is never ticked again by a later reload.
+- A full, paused or closed test doesn't drop anyone: as before (batch 20 §10) Invite is disabled with its line and the ticks stay.
+- Invite going through empties the ticks and the kept copy at once; unticking everyone does too. Nothing is written until the restore has answered, so the panel's
+  empty start never wipes the kept ticks; offline at load, nothing comes back. Without storage the panel works as before.
+- The search box is not kept (unchanged). Every sign-in and sign-out clears the tab's kept ticks with its other copies (§8 item 4, SessionWatch's `forgetTyped`), so
+  after one the ticks start over.
+- **Tests:** `tests/batch35-invite-ticks-kept.test.ts` (keeping, emptying, sign-in / sign-out clearing, no storage; the restore merge and the line; the server's keep
+  and drop reasons for every case and the route; the panel clears on a successful Invite). `press-names` lists invite-restore as a read. No migration.
+## §175 Confirm with your bank grouped under each tester's name on the test page (owner, Nov 4)
+
+- **What changed.** On the developer's test page, the charges waiting for their bank ("Confirm with your bank") were listed flat at the top of Needs you, and
+  in the restricted view (a hold or suspension) flat in "Your bank wants you to confirm". Both now list them **one group per tester**, headed by the tester's
+  name as the green profile link (`NameLink`, §166), with every waiting charge about that tester under it, each with its own Confirm with your bank as before.
+  Groups come in the order of their oldest charge; inside a group the charges are oldest first (`bankWaitingOnTest` already returns them by `createdAt`).
+  Each group carries `data-bank-group="<contractId>"` (its heading `data-bank-group-name`); every existing hook (`data-bank-waiting`, `data-restricted-bank`,
+  `data-bank-up`, the `bank-<id>` anchors) is unchanged.
+- **The line drops the tester's name.** The line is built in one place (`bankWaitingOnTest` in `src/lib/server/confirm.ts`, shown only on this page), so it
+  now names the piece by the tester's pronoun (§162; unset reads "their"): "Your bank wants you to confirm a $15.50 payment for her live call on “Harbor Run”
+  (Oct 30), made while you were away. Confirm it by …", "… for the team's dispute decision on her written answers on …", "… for a payment your bank had
+  reversed (her written answers on …) …". The hover (`full`) is the same line with the test's name uncut. `pieceName` / `pieceWords` take an optional
+  `whose` for this; every other line (dashboard box, Payments, bell, emails, stop and notice texts) keeps the tester's name.
+- **Links up.** The "Confirm with your bank in Needs you ↑" links under a tester's pieces and row still land on the charge itself, which now sits inside that
+  tester's group (the jump centres it, so the name is right above it, and rings that one charge).
+- **Not changed.** Confirm's behaviour: the stop-once check, the bank box, the over-$200 tick, notices and refusals. Layout only.
+- **Code.** `src/app/app/tests/[id]/page.tsx` (`bankGroups` / `bankGrouped`), `src/lib/server/confirm.ts` (`piecesNamed`'s `theirs`, `bankWaitingOnTest`),
+  `src/lib/bankTop.ts` and `src/lib/rules.ts` (`whose`). No migration.
+- **Tests:** `tests/batch35-restricted-needs-you.test.ts` (two testers, three charges: Needs you and the held view each show two groups in oldest-charge order,
+  each under the tester's green link, charges oldest first, the pronoun lines, the links up still on the charge). Updated: `batch17-bank-check`, `batch25`,
+  `payment-piece-names` (the line's pronoun), `batch24` (the page's source check).
+## §176 The dashboard's Confirm with your bank stops once for the team's decision after a redraw (owner bug, Nov 4)
+- **Seen live (17:49-17:50 UTC).** fbbb's test excerpt, Nina Park; Alerts ticked off: payments, work, leaving, admin. A $5.00 charge made while away waited on
+  Nina's written answers. The owner pressed Confirm with your bank on the dashboard (17:34:50), cancelled that check (17:49:53); at 17:49:55 the team decided
+  Nina's call dispute ("The team decided Nina Park's dispute: raised the pay to $20.50 ($5.00 more)", Nina's contract) and its $5.00 charge on the call was
+  made (17:49:56). The second Confirm press (17:50:15) opened the bank's check with no stop box, though §159 rule 1 (kept by §171 item 7, `awayCharge`) says
+  the team's decision about that same tester always stops it once.
+- **Cause.** Not the gate: `confirmStart` runs the same `devGate` (`payPressOf` + `awayCharge`) on every press that sends a seen marker, a check opened before
+  included, and on the real rows it stops naming the decision (forced) for any seen time before 17:49:55. The seen marker was the problem: the dashboard
+  passed its server render time (`now`) as `seenAt`, and the box redraws on its own (`AutoRefresh` "bank=1": the decision's new charge row changed `bankTopV`;
+  "fresh=dashboard" too), so the press after the redraw sent a time after the decision. The dashboard has no top box or pill (and no `PageLoaded`), so the
+  decision line was never shown there: §90's "an update the page has shown counts as seen" didn't apply, it was a bug.
+- **Fix.** The dashboard's bank box keeps its first load's time across redraws (`components/KeepLoadTime.tsx`: the first render's time in state, given to the
+  box's presses through context; `BankToConfirm` wraps the box). Confirm with your bank (`BankWaiting`) and Confirm all (`ConfirmAll`) under it send the earlier
+  of that and the render time (batch 30's rule for pages whose redraws show no change lines); a row that appears after the load uses the same time; going back
+  to the dashboard is a new load. The test page and Payments (no wrapper) are unchanged. A press there may now also stop once for a line the box's own new row
+  stands for (a new charge's payment line, when Payments isn't ticked off): the box shows the row, not the line.
+- **Tests.** `tests/batch35-dash-confirm-decision.test.ts` (the redraw's time goes ahead, the first load's stops once naming the decision, forced, and the
+  second press goes ahead; another tester's charge follows the Decisions tick; Confirm all stops for it too; the wrapper and its readers).
+
+## §174 Pay more on a call: the box greyed above its own bank check (owner bug, Nov 4)
+
+Owner, Nov 4 (17:34 UTC): Pay more $2.00 on Nina Park's live call with a card that asks the bank every time; the bank box opened, Nina disputed that call 17 s
+later, and the Pay more box above the open bank box turned grey with "Your $2.00 payment for this part is waiting for your bank: finish or cancel it first.".
+The owner also saw no blue notice for the dispute, and the box stay open after Cancel.
+
+- **Cause (the grey box, fixed).** A redraw of the test page that reads the payments while the box's own check is open (a poll or refused-press redraw already on
+  its way when the press answered, or one drawn just before the check ended) sends the box its OWN waiting row as `bankWaits` (§159), and PayBox showed every
+  `bankWaits`. Reproduced on a local server (port 3471, test schema): a redraw landed about 4 s after the bank box opened and greyed it; after Cancel the line
+  stayed until the next redraw (16 s with a slow page). Now the page sends the waiting payment's id with the line (`bankWaitsOf` in payments.ts;
+  `bankWaitsLine` is unchanged for the server's refusals) and the box ignores it while its bank box is open, and for the check it just ended
+  (`payMoreWaits` in bankNotice.ts). Another payment's wait on the part still greys it, as §159 says; the server still refuses a second Pay more while one waits.
+- **The notice and Cancel (not reproduced).** On the real rows, the peek's gate for this call and payment returns "Nina Park disputed the pay for her live call"
+  (forced: same tester, §171 A3); a test of the same flow (Pay more on a call open at the bank, then the tester's dispute) gets the line from the peek, and its
+  Cancel answers 402 "nothing was charged" at once (the 3400 log has a 402 answered in 255 ms at about that point, most likely this Cancel). On the local server with the stand-in bank page
+  the notice showed the dispute within 3 s and Cancel closed the box, with and without a slow redraw landing meanwhile. So the server side is right; what kept the
+  owner's box from updating wasn't found. Seen at the same time on that account: another bank window (the $5.00 dispute-decision charge on Nina's written
+  answers, "Confirm with your bank") was open and peeking every few seconds for over 20 minutes, and the test page took 12 to 16 s to draw.
+- **Tests:** `tests/batch35-bank-box-call.test.ts` (the call's dispute is a peek line and reaches the notice; Cancel answers at once and cancels at Stripe; the
+  waiting line names its payment; the box never greys itself for its own check, another payment's wait still does; every Pay more on the page gets the id).

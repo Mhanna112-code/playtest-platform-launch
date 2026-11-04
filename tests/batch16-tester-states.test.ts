@@ -19,6 +19,12 @@ const ANSWER = "The harbour level felt great, but the second boss was far too ha
 
 type State = "stopped" | "ended early" | "left" | "removed" | "paused";
 
+/** (Owner, Nov 4, §172) The developer's Pay on a test the team paused is refused (as under a suspension): made with the pause lifted for that moment (its start kept). */
+async function asIfUnpaused(testId: string, run: () => Promise<unknown>) {
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { adminPausedAt: true } });
+  if (t.adminPausedAt) await db.test.update({ where: { id: testId }, data: { adminPausedAt: null } });
+  try { await run(); } finally { if (t.adminPausedAt) await db.test.update({ where: { id: testId }, data: { adminPausedAt: t.adminPausedAt } }); }
+}
 /** Ana sent written answers (paid $4 before the page loaded, or left unreviewed with Charge open) and a recording (paid by the developer AFTER the page loaded). */
 async function scene(state: State, written: "paid" | "charge-open") {
   const { dev, testId } = await setup({ recordingCents: "15.00" });
@@ -41,7 +47,8 @@ async function scene(state: State, written: "paid" | "charge-open") {
   const opened = seen();
   await settle();
   // Something the developer did after the page loaded (it would stop a press once in a normal session).
-  expect((await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200);
+  // (Owner, Nov 4, §172) A team pause refuses Pay as a suspension does: the payment the tester's page hadn't shown is made around it (the pause keeps its start).
+  await asIfUnpaused(testId, async () => expect((await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200));
   await settle();
   return { dev, testId, tester, sessionId, sub, rec, opened };
 }
@@ -108,7 +115,7 @@ describe("what still works follows the running test's stop-once rules (batch 29 
     await settle();
     const opened = seen();
     await settle();
-    expect((await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200);
+    await asIfUnpaused(testId, async () => expect((await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "15.00", tickedCents: 1500 })).status).toBe(200)); // (§172)
     const c0 = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "Something came up at work.", seenAt: opened });
     expect(c0.body.error?.code, JSON.stringify(c0.body)).toBe("stop_once");
     const c = await sact(sessionId, "cancel-call", tester.cookie, { callId: call.id, reason: "Something came up at work.", seenAt: opened, confirmed: true, boxAt: seen() });
