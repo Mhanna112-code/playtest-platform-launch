@@ -6,6 +6,7 @@ import { withTestLinks } from "@/components/TestLinks";
 import { bankToConfirm } from "@/lib/server/confirm";
 import { confirmAllState, type ConfirmAllState } from "@/lib/server/confirmAll";
 import { ConfirmAll } from "@/components/ConfirmAll";
+import { KeepLoadTime } from "@/components/KeepLoadTime";
 
 /**
  * (Owner, Oct 29, batch 24 section 1) "Your bank wants you to confirm (N)" below the developer name, in the same box for active and restricted accounts,
@@ -19,7 +20,10 @@ export async function BankToConfirm({ userId, now }: { userId: string; now: Date
   return (
     <>
       <AutoRefresh query="bank=1" v={bankTopV(rows)} />
-      <BankToConfirmBox rows={rows} seenAt={now.toISOString()} all={all} />
+      {/* (Owner bug, Nov 4, batch 35 §176) Its presses count from the dashboard's first load, never from a redraw (the dashboard shows no change lines). */}
+      <KeepLoadTime at={now.toISOString()}>
+        <BankToConfirmBox rows={rows} seenAt={now.toISOString()} all={all} />
+      </KeepLoadTime>
     </>
   );
 }
