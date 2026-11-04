@@ -1017,9 +1017,11 @@ export const partOf = (callId: string | null | undefined, subKind: string | null
  * test's names cut at 12 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
  * “Harbor Run” (Oct 30)". `full`: the names uncut, for the hover (`title`) of a line shown on a page (emails and bells stay cut).
  */
-export const pieceName = ({ tester, part, test, when, full = false }: { tester: string; part: PiecePart | string; test: string; when?: string | null; full?: boolean }) => {
+export const pieceName = ({ tester, part, test, when, full = false, whose }: { tester: string; part: PiecePart | string; test: string; when?: string | null; full?: boolean;
+  /** (Owner, Nov 4, §175) Under a heading that already names the tester: their pronoun's possessive ("her written answers on …") in place of "Ana Silva's". */
+  whose?: string }) => {
   const cut = full ? (s: string) => s : cut10;
-  return `${cut(tester)}'s ${part} on “${cut(test)}”${when ? ` (${when})` : ""}`;
+  return `${whose ?? `${cut(tester)}'s`} ${part} on “${cut(test)}”${when ? ` (${when})` : ""}`;
 };
 /** (§131) A team's dispute decision, named by its piece: "the team's dispute decision on Marc Hanna's recording on “chargechar…”". */
 export const disputeDecisionName = (piece: string) => `the team's dispute decision on ${piece}`;

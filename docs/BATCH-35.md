@@ -2736,3 +2736,24 @@ review clocks move on at the lift, reminders wait, excerpt Allow / Deny, the tes
   after one the ticks start over.
 - **Tests:** `tests/batch35-invite-ticks-kept.test.ts` (keeping, emptying, sign-in / sign-out clearing, no storage; the restore merge and the line; the server's keep
   and drop reasons for every case and the route; the panel clears on a successful Invite). `press-names` lists invite-restore as a read. No migration.
+## §175 Confirm with your bank grouped under each tester's name on the test page (owner, Nov 4)
+
+- **What changed.** On the developer's test page, the charges waiting for their bank ("Confirm with your bank") were listed flat at the top of Needs you, and
+  in the restricted view (a hold or suspension) flat in "Your bank wants you to confirm". Both now list them **one group per tester**, headed by the tester's
+  name as the green profile link (`NameLink`, §166), with every waiting charge about that tester under it, each with its own Confirm with your bank as before.
+  Groups come in the order of their oldest charge; inside a group the charges are oldest first (`bankWaitingOnTest` already returns them by `createdAt`).
+  Each group carries `data-bank-group="<contractId>"` (its heading `data-bank-group-name`); every existing hook (`data-bank-waiting`, `data-restricted-bank`,
+  `data-bank-up`, the `bank-<id>` anchors) is unchanged.
+- **The line drops the tester's name.** The line is built in one place (`bankWaitingOnTest` in `src/lib/server/confirm.ts`, shown only on this page), so it
+  now names the piece by the tester's pronoun (§162; unset reads "their"): "Your bank wants you to confirm a $15.50 payment for her live call on “Harbor Run”
+  (Oct 30), made while you were away. Confirm it by …", "… for the team's dispute decision on her written answers on …", "… for a payment your bank had
+  reversed (her written answers on …) …". The hover (`full`) is the same line with the test's name uncut. `pieceName` / `pieceWords` take an optional
+  `whose` for this; every other line (dashboard box, Payments, bell, emails, stop and notice texts) keeps the tester's name.
+- **Links up.** The "Confirm with your bank in Needs you ↑" links under a tester's pieces and row still land on the charge itself, which now sits inside that
+  tester's group (the jump centres it, so the name is right above it, and rings that one charge).
+- **Not changed.** Confirm's behaviour: the stop-once check, the bank box, the over-$200 tick, notices and refusals. Layout only.
+- **Code.** `src/app/app/tests/[id]/page.tsx` (`bankGroups` / `bankGrouped`), `src/lib/server/confirm.ts` (`piecesNamed`'s `theirs`, `bankWaitingOnTest`),
+  `src/lib/bankTop.ts` and `src/lib/rules.ts` (`whose`). No migration.
+- **Tests:** `tests/batch35-restricted-needs-you.test.ts` (two testers, three charges: Needs you and the held view each show two groups in oldest-charge order,
+  each under the tester's green link, charges oldest first, the pronoun lines, the links up still on the charge). Updated: `batch17-bank-check`, `batch25`,
+  `payment-piece-names` (the line's pronoun), `batch24` (the page's source check).
