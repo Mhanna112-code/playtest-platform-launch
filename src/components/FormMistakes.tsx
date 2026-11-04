@@ -9,9 +9,10 @@ import { useGoneOnNewVersion } from "@/lib/pageVersion";
  * (Owner, Oct 28, batch 16 section 10) Where a form showed `<Err text={err} />`: a red server mistake (errOf: the FIELD mark) goes to its field (the box
  * whose data-match pattern fits it, or `find`), red with the same text until that field is fixed; the page goes to the first red field; under the button,
  * MistakeList: "Fix the mistake above, then press <press> again." with one linked bullet per red field. A refusal (blue) shows as before, (§156) naming the
- * press first: "Your Save profile didn't go through: …".
+ * press first: "Your Save profile didn't go through: …". (Owner, Nov 4, batch 35 §170) `named`: the press's own name for that refusal when the button's words
+ * read wrong after "Your" (the button "Send the dispute" is the press Dispute: "Your Dispute didn't go through: …"); "press <press> again" keeps the button's words.
  */
-export function FormMistakes({ text, press, find, top = false }: { text: string; press: string; find?: (msg: string) => Element | null | undefined; top?: boolean }) {
+export function FormMistakes({ text, press, named, find, top = false }: { text: string; press: string; named?: string; find?: (msg: string) => Element | null | undefined; top?: boolean }) {
   const ref = useRef<HTMLSpanElement>(null);
   const [orphans, setOrphans] = useState<string[]>([]);
   const red = text.startsWith(FIELD);
@@ -31,7 +32,7 @@ export function FormMistakes({ text, press, find, top = false }: { text: string;
   return (
     <>
       <span ref={ref} hidden />
-      {!red && <Err text={text} press={press} />}
+      {!red && <Err text={text} press={named ?? press} />}
       <MistakeList press={press} orphans={gone ? [] : orphans} top={top} />
     </>
   );

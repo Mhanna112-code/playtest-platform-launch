@@ -329,7 +329,8 @@ describe("§117 rule 3: a debt waiting for the bank is locked", () => {
     const one = await oneOf(w.dev.user.id);
     st.approve(one.actionPi!);
     const c = await owedPress(w.dev.cookie, { cancelCheck: one.id });
-    expect(c.body).toMatchObject({ paid: true, line: R.CHECK_ALREADY_PAID });
+    // (Owner, Nov 4, batch 35 §170) Said with what was paid: "Your bank already confirmed it: paid $16.00."
+    expect(c.body).toMatchObject({ paid: true, line: "Your bank already confirmed it: paid $16.00." });
     for (const d of w.debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: "charged", coveredById: one.id });
     expect(st.made).toHaveLength(1);
     expect(await hold(w.dev.user.id)).toBeNull();

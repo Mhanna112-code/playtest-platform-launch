@@ -5,6 +5,7 @@ import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_CANCELLED, CHECK_ALREADY_PAID, CHEC
 import { HttpError } from "./http";
 import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
+import { alreadyConfirmedLine } from "@/lib/bankNotice";
 import { receipt } from "./payments";
 import { describedOnce, stripeDescription } from "./paymentRows";
 
@@ -327,7 +328,8 @@ export async function cancelOwedCheck(devId: string, id: string) {
   const confirm = await import("./confirm");
   if (end === "succeeded") {
     await confirm.finishConfirmed(p.id);
-    return { paid: true, line: CHECK_ALREADY_PAID };
+    // (Owner, Nov 4, batch 35 §170) Said with what was paid, as BankWaiting's Cancel this check says it.
+    return { paid: true, line: alreadyConfirmedLine(money(p.amountCents)) };
   }
   if (p.kind === OWED_KIND) await releaseOwed(p.id);
   else if (p.status === "paying") await db.payment.update({ where: { id: p.id }, data: { status: p.owedUntil ? "failed" : "owed", warnedAt: null } });

@@ -24,16 +24,24 @@ export const verifyPassword = (password: string, hash: string) => (hash ? bcrypt
 
 const field = (message: string) => new HttpError(400, "bad_field", message); // red at the field
 
+export const EMAIL_BAD = "Enter a valid email";
+export const PASSWORD_SHORT = "Password must be at least 8 characters";
+export const PASSWORD_LONG = "Use at most 200 characters";
+const emailOf = (v: unknown) => (typeof v === "string" ? normEmail(v) : "");
 function readEmail(v: unknown) {
-  const email = typeof v === "string" ? normEmail(v) : "";
-  if (!isEmail(email)) throw field("Enter a valid email");
+  const email = emailOf(v);
+  if (!isEmail(email)) throw field(EMAIL_BAD);
   return email;
 }
-function readNewPassword(v: unknown, message = "Password must be at least 8 characters") {
+/** A new password's mistake, or "" when it's fine (at least 8 characters, at most 200). */
+function newPasswordMistake(v: unknown, message = PASSWORD_SHORT) {
   const p = typeof v === "string" ? v : "";
-  if (p.length < 8) throw field(message);
-  if (p.length > 200) throw field("Use at most 200 characters");
-  return p;
+  return p.length < 8 ? message : p.length > 200 ? PASSWORD_LONG : "";
+}
+function readNewPassword(v: unknown, message = PASSWORD_SHORT) {
+  const mistake = newPasswordMistake(v, message);
+  if (mistake) throw field(mistake);
+  return v as string;
 }
 
 async function issue(email: string, kind: "reset" | "verify", ms: number) {
@@ -129,9 +137,11 @@ export function sidesOf(role: SignupRole, picks: { devices: string[]; languages:
  * owner, Oct 27), the Terms (batch 18 section 1: the version accepted is recorded) and "I'm 18 or older." (batch 20 section 5). (Owner, Nov 3, batch 35 §153) A
  * tester also ticks at least one device and one language (the profile's own lists and lines); a developer is never asked, and anything sent for them is ignored.
  * (§162) Optional: the pronoun (the profile's choice; unset reads "they"), saved as the account's, and the chosen side's bio (up to 2,000 characters, as the
- * profile's). Every mistake is red at once, each at its own field (batch 26 section 11: one line each), in the form's order.
+ * profile's). Every mistake is red at once, each at its own field (batch 26 section 11: one line each), in the form's order. (Owner, Nov 4, batch 35 §170;
+ * replaces §134's "email and password mistakes come first") The email form's email and password mistakes (`credentialMistakes`) are listed with the rest on
+ * the first press: choice, devices, languages, name, pronoun, bio, email, password, Terms, 18 or older.
  */
-export function readNewAccount(body: Record<string, unknown>): { role: SignupRole; name: string; pronoun: string; bio: string; devices: string[]; languages: string[] } {
+export function readNewAccount(body: Record<string, unknown>, credentialMistakes: string[] = []): { role: SignupRole; name: string; pronoun: string; bio: string; devices: string[]; languages: string[] } {
   const role = readRole(body.role);
   const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
   const tester = role === "tester";
@@ -145,6 +155,8 @@ export function readNewAccount(body: Record<string, unknown>): { role: SignupRol
     ...(name.length < 1 ? [NAME_MISSING] : []),
     ...(pronoun === null ? [PRONOUN_BAD] : []),
     ...(bio.length > LIMITS.bio ? [BIO_TOO_LONG] : []),
+    // (Owner, Nov 4, batch 35 §170) The email form's email and password lines sit here, in the form's order (Google's step has neither).
+    ...credentialMistakes.filter(Boolean),
     ...(!isTicked(body.acceptTerms) ? [TERMS_MISSING] : []),
     ...(!isTicked(body.over18) ? [AGE_LINE] : []),
   ];
@@ -158,15 +170,16 @@ export const isUniqueClash = (e: unknown) => e instanceof Prisma.PrismaClientKno
 
 /** Sign up: email + password. Signed in at once; a confirmation link is emailed. (Batch 15 section 7) At most 10 new accounts per network an hour. */
 export async function signUp(body: Record<string, unknown>, base: string, ip = "", now = new Date()) {
-  const email = readEmail(body.email);
-  const password = readNewPassword(body.password);
-  if (ip && (await db.loginAttempt.count({ where: { kind: "signup", ok: true, ip, at: { gt: new Date(now.getTime() - 3_600_000) } } })) >= SIGNUPS_PER_NETWORK_HOUR)
-    throw new HttpError(429, "too_many", TOO_MANY_SIGNUPS);
-  // (Owner, Oct 30) Sign-up keeps "An account with that email already exists".
-  if (await db.user.findUnique({ where: { email } })) throw field(EMAIL_TAKEN);
+  // (Owner, Nov 4, batch 35 §170) Every mistake on the first press: the email and password lines no longer stop the press before the rest are read. A valid
+  // email already in use is its own line at Email ("An account with that email already exists", owner, Oct 30), with the others.
+  const email = emailOf(body.email);
+  const emailMistake = !isEmail(email) ? EMAIL_BAD : (await db.user.findUnique({ where: { email } })) ? EMAIL_TAKEN : "";
   // (NEXT-UI 15) The full app's sign-up form also asks who you are, your name and the Terms. (Batch 35 §134) All required: no account is made without its sides,
   // so the old "Welcome to Playtest · Tell us who you are" step never comes.
-  const { role, name, pronoun, bio, devices, languages } = readNewAccount(body);
+  const { role, name, pronoun, bio, devices, languages } = readNewAccount(body, [emailMistake, newPasswordMistake(body.password)]);
+  const password = body.password as string;
+  if (ip && (await db.loginAttempt.count({ where: { kind: "signup", ok: true, ip, at: { gt: new Date(now.getTime() - 3_600_000) } } })) >= SIGNUPS_PER_NETWORK_HOUR)
+    throw new HttpError(429, "too_many", TOO_MANY_SIGNUPS);
   const user = await db.user.create({
     data: { email, passwordHash: await hashPassword(password), name, pronoun, timeZone: readTimeZone(body.timeZone), termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, ...sidesOf(role, { devices, languages, bio }) },
   }).catch((e) => {

@@ -132,8 +132,9 @@ export function callOverBadge(x: OverCall, who: { developer: string; tester: str
   if (!x.review) return { label: `Took place${len} · not paid yet`, tone: "amber" as Tone };
   if (x.review.rejected) return { label: `Took place${len} · Rejected`, tone: "rose" as Tone, reason: x.review.reason || undefined };
   if (/^Let go by the tester/.test(x.review.reason)) return { label: `Took place${len} · let go`, tone: "grey" as Tone };
-  if (paidCents === 0 && x.review.amountCents === 0) return { label: `Took place${len} · Paid $0`, tone: "green" as Tone, reason: x.review.reason || undefined };
-  return { label: `Took place${len} · paid ${money(paidCents)}`, tone: "green" as Tone };
+  // (Owner, Nov 4, batch 35 §170) `paidShown`: the label already names what was paid, so the developer's call row doesn't repeat it on the right.
+  if (paidCents === 0 && x.review.amountCents === 0) return { label: `Took place${len} · Paid $0`, tone: "green" as Tone, reason: x.review.reason || undefined, paidShown: true };
+  return { label: `Took place${len} · paid ${money(paidCents)}`, tone: "green" as Tone, paidShown: true };
 }
 /** Whether a call is over (it moves from the Live session to the tester row / Call history): cancelled, or its length is final. */
 export const callIsOver = (x: { status: string; measuredAt: Date | null; actualMinutes: number | null }) => x.status === "cancelled" || x.measuredAt != null || x.actualMinutes != null;
