@@ -36,7 +36,7 @@ import { testSearchWhere } from "@/lib/server/findSearch";
 import { INVITE_FULL_LINE, inviteBlocked, inviteTestRefusal } from "@/lib/rules";
 import { payMoreLine } from "@/lib/server/testerGate";
 import { json, makeUser, req } from "./helpers";
-import { act, atHours, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, atHours, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 import { pay, payMore } from "./b15";
 
 // Batch 20 (owner, Oct 28 night): question lists in a scroll box, the 20-question notice, every missing need named, Invite stops for changes that matter, 18+ at
@@ -984,7 +984,8 @@ describe("batch 20 section 26 (replaced by batch 35 §136): sent work is locked,
     }
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } });
     const f = await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "shot.png", sizeBytes: 10, contentType: "image/png", uploadedAt: new Date(), part: "written" } });
-    expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "", seenAt: seen(), confirmed: true })).status).toBe(200); // a file alone is something to add
+    // (§167) A file alone, placed in the box (its marker only), is something to add.
+    expect((await addTo(j.sessionId, j.tester.cookie, { text: `[[attachment:${f.id}|shot.png]]`, seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await db.recording.findUniqueOrThrow({ where: { id: f.id } })).submissionId).toBe(sub.id);
     const r = await db.recording.create({ data: { contractId: j.sessionId, storageKey: `k-${randomUUID()}`, filename: "run.mp4", sizeBytes: 10, contentType: "video/mp4", uploadedAt: new Date(), part: "recording" } });
     expect((await sact(j.sessionId, "recording-send", j.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);

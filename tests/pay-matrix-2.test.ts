@@ -11,7 +11,7 @@ import { newCardChecks } from "@/lib/server/owedOnce";
 import { suspendAccount } from "@/lib/server/restrictions";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 3, batch 35 §159, later decisions) The tester leaving always stops pay presses on their own parts; a suspended developer's Pay, Pay more, Confirm with
 // your bank and Confirm all are refused (checked under the developer's row lock) and the suspension cancels their own open Pay / Pay more checks (not a tester's
@@ -275,7 +275,7 @@ describe("§159: Confirm all stops for each item's own changes", () => {
     const b = await waitingCharge(w, w.ben, benRec.id, st);
     await settle();
     const loaded = seen(); await settle();
-    expect((await sact(w.ben.sessionId, "written-add", w.ben.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
+    expect((await addTo(w.ben.sessionId, w.ben.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
     const r = await all(w.dev.cookie, { seenTotalCents: 2000, seenIds: [a.id, b.id], seenAt: loaded });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });

@@ -8,19 +8,20 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { SentWork } from "@/components/SentWork";
-import { ADDED_LABEL, additionsOf, latestItems, pieceTime } from "@/lib/additions";
+import { ADDED_LABEL, additionsOf, latestItems, pieceTime, questionKey } from "@/lib/additions";
 import { ANSWER_NEW_QUESTIONS, NOTHING_TO_ADD, NO_RECORDING_TO_ADD, SENT_ANSWERS_LOCKED, SENT_RECORDING_LOCKED, workOverPress } from "@/lib/rules";
 import { ALL_RECORDINGS_SENT } from "@/lib/server/recordings";
 import { testV } from "@/lib/server/pulseV";
-import { act, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 import { json, req } from "./helpers";
 
 // (Owner, Nov 3, batch 35 §136) Sent work is locked: what was sent can't be removed or replaced, only added to. Each part reads as one list: what was sent
-// first, then each addition headed "Added" (no time: the part's header line carries the latest one).
+// first, then each addition headed "Added". (§167) An addition is to one question ("Add to this answer"), dated: "Added · <date>".
 (globalThis as unknown as { React: typeof React }).React = React;
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 const send = (sessionId: string, cookie: string, answers: string[], notes = "") => sact(sessionId, "written", cookie, { answers, notes, seenAt: seen(), confirmed: true });
-const add = (sessionId: string, cookie: string, text: string) => sact(sessionId, "written-add", cookie, { text, seenAt: seen(), confirmed: true });
+// (§167) Added under the first question.
+const add = (sessionId: string, cookie: string, text: string) => addTo(sessionId, cookie, { text, question: questionKey("What did you like?"), seenAt: seen(), confirmed: true });
 async function upload(sessionId: string, cookie: string, part: "recording" | "written", filename = "run.mp4", contentType = "video/mp4") {
   const r = await sact(sessionId, "recording-start", cookie, { filename, size: 1000, contentType, part });
   expect(r.status).toBe(200);
@@ -55,9 +56,9 @@ describe("written answers: locked once sent, only added to", () => {
     expect(pieceTime(after).getTime()).toBe(new Date(adds[0].at).getTime());
     expect(after.updatedAt.getTime()).toBeGreaterThan(sent.updatedAt.getTime());
     // The developer is told the same way a send does: a live line and a bell.
-    expect((await events(testId)).at(-1)).toBe("Ana Silva added to her written answers");
+    expect((await events(testId)).at(-1)).toBe("Ana Silva added to her answer to “What did you like?”");
     const bell = await db.notification.findFirst({ where: { userId: dev.user.id }, orderBy: { createdAt: "desc" } });
-    expect(bell?.text).toContain("Ana Silva added to her written answers for “Harbor Run”");
+    expect(bell?.text).toContain("Ana Silva added to her answer to “What did you like?” for “Harbor Run”");
   });
 
   it("a file sent with the answers can't be removed; a file placed in an addition goes with it", async () => {
@@ -102,7 +103,7 @@ describe("written answers: locked once sent, only added to", () => {
     const after = await db.submission.findUniqueOrThrow({ where: { id: sub.id }, include: { review: true } });
     expect(after.review?.amountCents).toBe(1000);
     expect(after.paidUpdateAt).not.toBeNull();
-    expect((await events(testId)).at(-1)).toBe("Ana Silva added to her written answers after you paid");
+    expect((await events(testId)).at(-1)).toBe("Ana Silva added to her answer to “What did you like?” after you paid");
   });
 
   it("after a switch to changed questions, the new answers are ADDED under the first ones (no previous-set pair for the developer)", async () => {
@@ -160,31 +161,31 @@ describe("one list per part, with Added", () => {
     { id: "f1aaaa", filename: "first.mp4", contentType: "video/mp4", sizeBytes: 10, part: "recording" },
     { id: "f2bbbb", filename: "second.mp4", contentType: "video/mp4", sizeBytes: 10, part: "recording" },
   ];
-  it("a recording piece: the first recordings, then each addition under a plain \"Added\" (no time, no before / after)", () => {
-    const h = renderToStaticMarkup(createElement(SentWork, { kind: "recording", answers: [], notes: "", additions: [{ at: "2026-11-03T21:14:00.000Z", files: ["f2bbbb"] }], files }));
-    expect(h.indexOf("first.mp4")).toBeLessThan(h.indexOf(`>${ADDED_LABEL}</p>`));
-    expect(h.indexOf(`>${ADDED_LABEL}</p>`)).toBeLessThan(h.indexOf("second.mp4"));
-    expect(h).toContain('data-added-label="">Added</p>');
-    expect(h).not.toMatch(/Added [A-Z][a-z]{2} \d/); // no time after it
+  it("a recording piece: the first recordings, then each addition under \"Added\" with its date (§167), no before / after", () => {
+    const h = renderToStaticMarkup(createElement(SentWork, { kind: "recording", timeZone: "UTC", answers: [], notes: "", additions: [{ at: "2026-11-03T21:14:00.000Z", files: ["f2bbbb"] }], files }));
+    const label = `>${ADDED_LABEL} · Nov 3, 2026, 9:14 PM</p>`;
+    expect(h.indexOf("first.mp4")).toBeLessThan(h.indexOf(label));
+    expect(h.indexOf(label)).toBeLessThan(h.indexOf("second.mp4"));
     expect(h).not.toMatch(/Before|Previous|updated version/i);
   });
 
-  it("written answers: the first answers, then the added text and the answers to new questions, each under Added", () => {
+  it("written answers (§167): a fold per question with its answer and what was added to it; a new question its own fold; no-question additions last", () => {
     const h = renderToStaticMarkup(createElement(SentWork, {
-      kind: "written", answers: [{ question: "Q1", required: false, answer: "first answer" }], notes: "",
-      additions: [{ at: "2026-11-03T21:14:00.000Z", text: "added text", files: [] }, { at: "2026-11-03T22:00:00.000Z", items: [{ question: "Q2", required: false, answer: "new answer" }], files: [] }], files: [],
+      kind: "written", timeZone: "UTC", answers: [{ question: "Q1", required: false, answer: "first answer" }], notes: "",
+      additions: [{ at: "2026-11-03T21:14:00.000Z", text: "added text", files: [], questionKey: questionKey("Q1") }, { at: "2026-11-03T22:00:00.000Z", items: [{ question: "Q2", required: false, answer: "new answer" }], files: [] }, { at: "2026-11-03T22:30:00.000Z", text: "old general", files: [] }], files: [],
     }));
     const at = (s: string) => h.indexOf(s);
     expect(at("first answer")).toBeLessThan(at("added text"));
     expect(at("added text")).toBeLessThan(at("new answer"));
-    expect(h.match(/data-added-label="">Added<\/p>/g)).toHaveLength(2);
+    expect(at("new answer")).toBeLessThan(at("old general"));
+    expect(h.match(/data-added-label=""[^>]*>Added · Nov 3, 2026, /g)).toHaveLength(2);
   });
 
   it("every place sent work is read uses the one list; the old previous-set pair and 'updated version' wording are gone", () => {
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page.match(/<SentWork /g)).toHaveLength(3); // Needs you, the update row, the tester row
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('<SentWork kind="written"');
+    expect(src("app/app/sessions/[id]/page.tsx")).toMatch(/<SentWork id=\{`own-\$\{written\.id\}`\} timeZone=\{u\.timeZone\} kind="written"/); // (§167)
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds draftsOnly");
     for (const f of ["lib/moneyLines.ts", "lib/server/paidUpdates.ts", "lib/server/tests.ts", "lib/server/recordings.ts", "app/app/page.tsx"]) expect(src(f)).not.toContain("updated version");
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).not.toContain("It stays with what you sent until you send again");

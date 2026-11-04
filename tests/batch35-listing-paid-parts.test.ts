@@ -11,7 +11,7 @@ import { asListing } from "@/lib/server/tests";
 import { panelRows } from "@/lib/listingPanel";
 import { chargeOpensAt } from "@/lib/rules";
 import { runDaily } from "@/lib/server/holds";
-import { act, joined, sact, seen, setup } from "./fixtures";
+import { act, addTo, joined, sact, seen, setup } from "./fixtures";
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, adminAway() {} }));
@@ -81,7 +81,7 @@ describe("listing folds, paid parts and sent-part labels (owner, Nov 1)", () => 
     const contract = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     expect(contract.dueAt.toISOString().slice(0, 10)).toBe("2026-11-15");
     vi.setSystemTime(new Date("2026-11-12T12:00:00Z"));
-    const resend = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "Updated work: new observations", seenAt: seen(), confirmed: true }); // (batch 35 §136) added, as an update was
+    const resend = await addTo(j.sessionId, j.tester.cookie, { text: "Updated work: new observations", seenAt: seen(), confirmed: true }); // (batch 35 §136) added, as an update was
     expect(resend.status, JSON.stringify(resend.body)).toBe(200);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
     expect(sub.late).toBe(false);

@@ -9,7 +9,7 @@ import { decideDispute } from "@/lib/server/payments";
 import { chargebackOpened, disputeAmountChanged, owed } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 3, batch 35 §159) The payment stop matrix: one test per rule.
 // 1. The team's decision about the SAME tester always stops Pay / Pay more / Confirm once; about ANOTHER tester it follows "Decisions by the team".
@@ -135,12 +135,12 @@ describe("§159 rule 2: the tester adding to that part stops Pay once if unseen"
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] })).status).toBe(200);
     await settle();
     const loaded = seen(); await settle();
-    expect((await sact(sessionId, "written-add", tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
+    expect((await addTo(sessionId, tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
     paying();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     const body = { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded };
     const first = await pay(dev.cookie, body);
-    expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to her written answers/)]);
+    expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to her answer to “/)]);
     expect((await pay(dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
   });
 });
@@ -162,11 +162,11 @@ describe("§159 rule 2: work on the SAME part always stops; work on other parts 
   it("\"Work sent\" ticked off: an addition to the part being paid still stops Pay once naming it; the second press pays", async () => {
     const w = await workWorld(true);
     const loaded = seen(); await settle();
-    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
+    expect((await addTo(w.sessionId, w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
     const body = { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded };
     const first = await pay(w.dev.cookie, body);
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to her written answers/)]);
+    expect(texts(first)).toEqual([expect.stringMatching(/^Ana Silva added to her answer to “/)]);
     expect((await pay(w.dev.cookie, { ...body, confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
   });
 
@@ -175,10 +175,10 @@ describe("§159 rule 2: work on the SAME part always stops; work on other parts 
       const w = await workWorld(off);
       const loaded = seen(); await settle();
       // Ana adds to her written answers; Nora pays the recording.
-      expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
+      expect((await addTo(w.sessionId, w.tester.cookie, { text: "one more thing", confirmed: true })).status).toBe(200);
       const r = await pay(w.dev.cookie, { kind: "submission", id: w.rec.id, amount: "10.00", tickedCents: 1000, seenAt: loaded });
       if (off) expect(r.status, JSON.stringify(r.body)).toBe(200);
-      else expect(texts(r)).toEqual([expect.stringMatching(/^Ana Silva added to her written answers/)]);
+      else expect(texts(r)).toEqual([expect.stringMatching(/^Ana Silva added to her answer to “/)]);
     }
   });
 
@@ -189,7 +189,7 @@ describe("§159 rule 2: work on the SAME part always stops; work on other parts 
     await db.review.create({ data: { contractId: w.sessionId, submissionId: w.rec.id, amountCents: 1000, agreedCents: 1000, payKey: randomUUID(), reason: "charged by the tester" } });
     await settle();
     const loaded = seen(); await settle();
-    expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: "more", confirmed: true })).status).toBe(200);
+    expect((await addTo(w.sessionId, w.tester.cookie, { text: "more", confirmed: true })).status).toBe(200);
     const more = await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: loaded });
     expect(more.body.error?.code, JSON.stringify(more.body)).toBe("stop_once");
     // Confirm on the recording's waiting charge: the written answers' update is another part → follows the tick (off): no stop.

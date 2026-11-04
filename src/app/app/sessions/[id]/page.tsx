@@ -8,7 +8,7 @@ import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, NOT_LISTED, byTesterChoice, PAUSE_DEFAULTS, disputeLimitText, testerPaused, STOP_NOTE_KIND, stopReasonOf, chargeOpensNote, chargeOpensAt } from "@/lib/rules";
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, Languages, MessagesSquare, Monitor, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
-import { displayName, fmtDateIn, fmtDateTimeIn, money, stopTimeIn } from "@/lib/server/dateFormat";
+import { displayName, fmtDateIn, fmtDateTimeIn, fmtStampIn, money, stopTimeIn } from "@/lib/server/dateFormat";
 import { LISTING_VALUES, historyRows, infoLines, parseValues } from "@/lib/listingInfo";
 import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
@@ -34,8 +34,7 @@ import { testV } from "@/lib/server/pulseV";
 import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/components/ScrollList";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
-import { ResizeBox } from "@/components/Panel";
-import { additionsOf, latestItems } from "@/lib/additions";
+import { ADDITIONS_MAX, additionsLeftLine, additionsOf, latestItems, questionKeys } from "@/lib/additions";
 import { writtenLength } from "@/lib/rules";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
@@ -129,6 +128,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 35 §136) The latest set sent (answers to changed questions are added under the first ones); the form after a switch carries its answers over.
   const sentItems = written ? latestItems(written, writtenQuestions(c)) : [];
   const newQuestions = !!written && (!!written.setUntil || !sameQuestions(sentItems, itemsFor(writtenQuestions(c))));
+  // (§167) Adding, per question of the current set: its keys, and how many of the part's 10 additions were made.
+  const currentKeys = questionKeys(sentItems);
+  const addsMade = written ? additionsOf(written.additions).length : 0;
   const prevSets = prevSetsOf(c.prevSets);
   // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
   const excerptPending = written ? (await db.excerpt.count({ where: { submissionId: written.id, status: "pending" } })) > 0 : false;
@@ -177,6 +179,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const rulesPaused = testerPaused(c.test.developer, c.test);
   const draftsShown = !rulesPaused || PAUSE_DEFAULTS.draftsEditable;
   const meOff = !!u.testerSuspendedAt;
+  // (§167) The tester can add under a question: sent, still open, the questions unchanged since.
+  const canAdd = !!written && canSendAgain(written) && !refusal && !meOff && draftsShown && !newQuestions;
+  const recAdds = recording ? additionsOf(recording.additions) : [];
+  const addedGroup = (id: string) => { const i = recAdds.findIndex((a) => a.files.includes(id)); return { group: i + 1, ...(i >= 0 ? { addedOn: fmtStampIn(recAdds[i].at, u.timeZone) } : {}) }; };
   // What a suspended tester can still press in the limited view (section 28): Dispute, Charge, Let it go, Rate.
   const canAct = !meOff || limited;
   // (Batch 17 section 10) In the limited view Dispute is the only press: Charge and Let it go wait for the reinstatement (Rate is hidden too).
@@ -636,21 +642,30 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           sendable={!rulesPaused}
           sentBefore={!!recording}
           // (Batch 35 §136) Each sent recording's group: 0 = sent first, n = the nth addition ("Added").
-          recordings={c.recordings.filter((r) => r.part === "recording").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, sent: !!r.submissionId, group: recording ? additionsOf(recording.additions).findIndex((a) => a.files.includes(r.id)) + 1 : 0 }))}
+          // (§167) With the addition's date: "Added · Nov 3, 2026, 11:29 PM".
+          recordings={c.recordings.filter((r) => r.part === "recording").map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, uploaded: !!r.uploadedAt, sent: !!r.submissionId, ...addedGroup(r.id) }))}
         />
       </section>
 
       <section className="card space-y-3" id="written">
         <h2 className="font-semibold text-white">The written part</h2>
         {termLine("Written answers", c.writtenCents, c.writtenRequired, false, written ? partPaid.get(written.id) ?? 0 : 0)}
-        {/* (Owner, Nov 3, batch 35 §136) What was sent is locked: shown as one list (the first answers, then each addition under "Added"), never edited. */}
+        {/* (Owner, Nov 3, batch 35 §136) What was sent is locked, never edited. (§167) Shown as the developer reads it, a fold per question with its answer and
+            what was added to it (dated); while adding is open, each current question's fold ends with its own "Add to this answer" box. */}
         {written && (
           <div className="space-y-2" data-sent-answers="">
             {written.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(written.setUntil)}</p>}
-            {/* (Batch 35 §139) In the same small panel as the developer's view (drag the corner for more), so Add more stays close. */}
-            <ResizeBox id={`own-${written.id}`} label="Your sent answers">
-              <SentWork kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)} />
-            </ResizeBox>
+            {canAdd && addsMade > 0 && addsMade < ADDITIONS_MAX && <p className="note" data-additions-left="">{additionsLeftLine(addsMade)}</p>}
+            <SentWork id={`own-${written.id}`} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
+              addTo={canAdd ? ({ key }) => {
+                const at = currentKeys.indexOf(key);
+                if (at < 0) return null;
+                return (
+                  <WrittenAddForm key={key} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={sentItems[at].question} made={addsMade}
+                    used={writtenLength([...sentItems.map((x) => x.answer), written.notes, ...additionsOf(written.additions).map((x) => x.text ?? "")])}
+                    known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+                );
+              } : undefined} />
           </div>
         )}
         {!written && (refusal || meOff || !draftsShown) && <p className="note">Nothing sent.</p>}
@@ -661,11 +676,6 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             <WrittenForm canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={!!written}
               initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </>
-        )}
-        {written && canSendAgain(written) && !refusal && !meOff && draftsShown && !newQuestions && (
-          <WrittenAddForm sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)}
-            used={writtenLength([...sentItems.map((x) => x.answer), written.notes, ...additionsOf(written.additions).map((x) => x.text ?? "")])}
-            known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
         )}
         {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. */}
         <PrevSetFolds draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />

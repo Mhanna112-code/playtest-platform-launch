@@ -111,14 +111,14 @@ export function ResizeBox({ id, children, label, className = "", defaultMax = PA
  * (Owner, Nov 3, batch 35 §139) A fold under a part (its answers or recordings; its Pay or Pay more box): its own toggle, open by default. Opened or closed, it stays
  * that way while the page redraws (and in this tab's sessionStorage). A link to something inside it (or to it) opens it (markJump's jumpTo).
  */
-export function Fold({ id, summary, children, defaultOpen = true, className = "", summaryClassName = "" }: { id: string; summary: ReactNode; children?: ReactNode; defaultOpen?: boolean; className?: string; summaryClassName?: string }) {
+export function Fold({ id, summary, children, defaultOpen = true, className = "", summaryClassName = "", jumpOpen = true }: { id: string; summary: ReactNode; children?: ReactNode; defaultOpen?: boolean; className?: string; summaryClassName?: string; /** (§167) false: a link to the part above doesn't open it (a written part's question folds) */ jumpOpen?: boolean }) {
   const ref = useRef<HTMLDetailsElement>(null);
   useLayoutEffect(() => {
     const kept = keptFold(id);
     if (ref.current && kept != null) ref.current.open = kept;
   }, [id]);
   return (
-    <details ref={ref} open={defaultOpen} className={`group/fold ${className}`} data-fold={id} data-jump-open=""
+    <details ref={ref} open={defaultOpen} className={`group/fold ${className}`} data-fold={id} data-jump-open={jumpOpen ? "" : undefined}
       onToggle={(e) => keepFold(id, e.currentTarget.open)}>
       <summary className={`fold-chevron cursor-pointer text-sm text-slate-300 ${summaryClassName}`}>{summary}</summary>
       <div className="mt-2">{children}</div>

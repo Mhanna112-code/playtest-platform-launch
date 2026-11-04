@@ -12,7 +12,7 @@ import { pillLabel, pillSide } from "@/lib/livePill";
 import { shownWithFresh } from "@/lib/adminScroll";
 import { CALL_MIN_AHEAD_MINUTES, farEnoughAhead } from "@/lib/callLead";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 // Batch 27 (owner, Oct 29): new terms answered before sending or calls (1), "Go to the next round" stops once (2), the update pill always, pointing at the updates (4),
 // admin Tests rows follow a pause lifted elsewhere (5), a call may start 1 minute ahead when testing locally (6). Section 3 (files placed in answers) waits for the owner's choice of design.
@@ -186,10 +186,10 @@ describe("batch 27 section 2: Go to the next round stops once too", () => {
     expect(quiet.body.id).toBe(made.body.id);
     const loaded = seen();
     await later();
-    expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "a2", seenAt: seen(), confirmed: true })).status).toBe(200); // (batch 35 §136) added, not updated
+    expect((await addTo(j.sessionId, j.tester.cookie, { text: "a2", seenAt: seen(), confirmed: true })).status).toBe(200); // (batch 35 §136) added, not updated
     const first = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded });
     expect(first.body.error.code).toBe("stop_once");
-    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toContain("fbbb added to their written answers");
+    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toContain("fbbb added to their answer to “What did you like?”");
     await later();
     const second = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded, ...again() });
     expect(second.status).toBe(200);

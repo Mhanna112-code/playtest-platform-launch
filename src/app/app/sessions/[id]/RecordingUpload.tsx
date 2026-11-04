@@ -11,13 +11,13 @@ import { ScreenRecorder } from "@/components/ScreenRecorder";
 import { RecordingVideo } from "@/components/RecordingVideo";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
-import { ADDED_LABEL } from "@/lib/additions";
+import { ADDED_LABEL, addedLabel } from "@/lib/additions";
 import { fileSize } from "@/lib/format";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
 
-/** `group`: 0 = sent first, 1… = the addition it was sent with (headed "Added"); unsent ones have none. */
-type Rec = { id: string; filename: string; size: number; uploaded: boolean; sent?: boolean; group?: number };
+/** `group`: 0 = sent first, 1… = the addition it was sent with (headed "Added"); unsent ones have none. (§167) `addedOn`: that addition's date, in the tester's zone. */
+type Rec = { id: string; filename: string; size: number; uploaded: boolean; sent?: boolean; group?: number; addedOn?: string };
 
 /** (Batch 35 §41) Send's result line shows under Send; an upload's under the upload box. */
 const sending = (line: string) => line.startsWith("Sent ") || line.startsWith("Added ");
@@ -104,7 +104,7 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
       {/* One list: what was sent first, then each addition under "Added"; then what isn't sent yet. */}
       {groups.map((g) => (
         <div key={g} className={g ? "space-y-1 border-t border-white/10 pt-2" : ""} data-recording-group={g}>
-          {g > 0 && <p className="text-xs font-semibold text-emerald-300" data-added-label="">{ADDED_LABEL}</p>}
+          {g > 0 && <p className="text-xs font-semibold text-emerald-300" data-added-label="">{(() => { const on = sent.find((r) => r.group === g)?.addedOn; return on ? addedLabel(on) : ADDED_LABEL; })()}</p>}
           <ul className="space-y-2" data-recordings="">
             {sent.filter((r) => (r.group ?? 0) === g).map((r) => <RecordingRow key={r.id} r={r} sessionId={sessionId} canRemove={false} />)}
           </ul>

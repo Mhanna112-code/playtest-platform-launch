@@ -2268,3 +2268,46 @@ sign-up.
   in-flight line (and "already reserved" only once reserved); a new chargeback during a reservation is named with what happens to it; the Owed box follows a
   redraw while an undrawn change still stops once. `batch35-payment-proofs` expects the in-flight line where another tab presses during the press's check.
 - **Recordings:** halted by the owner (Nov 3) before a final set; none belong to this section yet.
+
+## §167 What's added goes under its question, dated; at most 10 additions per part (owner, Nov 3)
+
+Replaces, in §136: "Add more" opens one box for the whole written part (`add:<session>`); "One list per part, 'Added'" (a part is one list, each addition under a
+small "Added" label with no time); the live line, bell and email "Ana added to her written answers" for written answers. Also §139's small panel around the
+tester's own sent answers (their question folds now hold the boxes, which a 12rem scroll panel would squeeze). The rest of §136 stands.
+
+- **The developer's view** (Needs you, the update row, the tester row's paid part, the admin's "See the work"; `SentWork`):
+  - each question is its own fold (the `Fold` component, closed at first), titled with the question (a long one cut to 2 lines, the whole question inside),
+    "· 2 added" when it has additions, a small "new question" tag on one that came with changed questions;
+  - inside, indented one step: the answer, then each addition to it, oldest first, under "Added · Nov 3, 2026, 11:29 PM" (`fmtStampIn`, the viewer's zone;
+    the admin's: `dateZone()`); additions are indented the same as the answer; files placed in them show in place as before;
+  - then the notes; a changed-questions send's own notes and loose files, under their dated "Added"; the files sent first not placed in an answer;
+  - additions made before §167 (no question) go under one more fold at the end, "Added (not about one question)", each with its date (every addition has had
+    its time stored since §136, so all of them are dated);
+  - changed questions: a new question gets its own fold (tag "new question") with its answer and its additions; a question kept from before whose answer
+    changed gets the new answer as an addition under it; one carried over unchanged adds nothing;
+  - a link to the part (`#piece-…`, `#update-…`, `#part-…`) opens the part's folds but not its question folds (`Fold jumpOpen={false}`): the count says which
+    changed;
+  - "By question": what was added to a question follows its answer there ("*Added · <date>*" and the text); additions with no question stay in "Other notes".
+- **Recordings** are not about questions: their list is unchanged, with the date next to each "Added" (the developer's views and the tester's own list).
+- **The tester** (`WrittenAddForm`, one per question): after Send, her own page shows the same folds; each current question's fold ends with "Add to this
+  answer", which opens the same box as before (Bold, Italic, Code block, 📎, the 50,000 count, the stop-once / windows / paused / ended rules), sent with "Add to
+  my answer" ("Added to your answer."). Drafts are per question: `add:<session>:<questionKey>`; a kept draft opens its question's fold. A question no longer
+  asked (an earlier set) has no box.
+- **Data:** an addition stores `questionKey` (no migration: `Submission.additions` is JSON). The key is a short hash of the question's text
+  (`questionKey` in `src/lib/additions.ts`), since answers are matched by question text everywhere (`carryOver`, `restoreDraft`); a repeated question in one set
+  gets "-2". Only the uploads placed in the text (by their markers) go with an addition now: another question's box may hold the others.
+- **Telling the developer:** "Ana added to her answer to “What did you think of level 2?”" (the live line; "… after you paid", "… (already paid the most)"), the
+  bell and email "… for “Harbor Run”", the tester's "Work sent" bell "What you added to your answer to “…” was sent to Nora Lane.", and her line in another
+  tab "You added to your answer to “…”". A question longer than 80 characters is cut with "…" in these lines.
+- **Refusals:** an older page's general Add more (no question): "Add to one question: open it in your answers and use Add to this answer." (409). A question
+  not in the current questions: "That question isn't one of your current questions. Reload the page and add under one of them." An older page's Send my updated
+  answers now reads "… Use Add to this answer under a question to add to them."
+- **At most 10 additions per written part** (owner, Nov 3): every addition counts, across all questions: old ones with no question, and the answers to changed
+  questions (they are stored as additions). The changed-questions Send itself is never refused for it (the new questions must be answerable); only Add is.
+  - Before the cap, once there is an addition: "3 of 10 additions left" above the question folds.
+  - At 10: every question's box shows a grey note instead of its button: "You've added to this part 10 times, the most it takes."; a kept draft shows read-only.
+  - The server counts under the test's lock (the same lock the add takes), so two adds at the 10th give exactly one; the other, and an older page's add past
+    10, get the same line as a refusal (409 `add_full`). Recordings keep their 5 (§136).
+- **Tests:** `tests/batch35-added-per-question.test.ts` (the folds, count and dates; old additions in the last fold; changed questions; the per-question add, its
+  key and draft key; the general Add refused; the live line, bell, email and own line naming the question; reaching 10, the 11th refused from an older page and at
+  the same moment; the note and the remaining count). `batch35-sent-locked` and the tests that added to written answers now add under a question.

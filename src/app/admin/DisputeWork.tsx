@@ -4,7 +4,7 @@ import { SentWork } from "@/components/SentWork";
 import type { SetItem } from "@/lib/answerSets";
 
 export type DisputedWork =
-  | { kind: "submission"; part: "written" | "recording"; setUntil: string | null; items: SetItem[]; notes: string; files: { id: string; filename: string; contentType: string; sizeBytes: number; part?: string }[]; /** (batch 35 §136) */ additions?: unknown }
+  | { kind: "submission"; part: "written" | "recording"; setUntil: string | null; items: SetItem[]; notes: string; files: { id: string; filename: string; contentType: string; sizeBytes: number; part?: string }[]; /** (batch 35 §136) */ additions?: unknown; /** (§167) the admin's zone, for the Added dates; the piece, for its folds' ids */ timeZone?: string; subId?: string }
   | { kind: "call"; when: string; length: string; rate: string };
 
 /**
@@ -23,8 +23,8 @@ export function DisputeWork({ work }: { work: DisputedWork | null }) {
         ) : (
           <AnswersBox>
             {work.part === "written" && work.setUntil && <p className="note" data-set-until="">Sent for the questions until {new Date(work.setUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>}
-            {/* (Batch 35 §136) One list: what was sent first, then each addition under "Added". */}
-            <SentWork kind={work.part} answers={work.items} notes={work.notes} additions={work.additions ?? []} files={work.files} />
+            {/* (Batch 35 §136, §167) What was sent first, a fold per question with what was added to it, dated. */}
+            <SentWork id={`dispute-${work.subId ?? "work"}`} timeZone={work.timeZone} kind={work.part} answers={work.items} notes={work.notes} additions={work.additions ?? []} files={work.files} />
           </AnswersBox>
         )}
       </div>

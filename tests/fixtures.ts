@@ -4,6 +4,8 @@ import { POST as testsPOST } from "@/app/api/tests/route";
 import { POST as testAction } from "@/app/api/tests/[id]/[action]/route";
 import { POST as sessionAction } from "@/app/api/sessions/[id]/[action]/route";
 import { json, makeUser, req } from "./helpers";
+import { questionKeys } from "@/lib/additions";
+import { itemsFor } from "@/lib/answerSets";
 
 export const listingBody = (over: Record<string, unknown> = {}) => ({
   productName: "Harbor Run", title: "Harbor Run", description: "Sail", buildUrl: "https://example.com/b", categories: ["Game"], devices: [], languages: [],
@@ -30,6 +32,16 @@ export const act = (id: string, action: string, cookie: string, body: Record<str
   testAction(req(`/api/tests/${id}/${action}`, { cookie, body: withPayTick(action, body) }), { params: Promise.resolve({ id, action }) }).then(json);
 export const sact = (id: string, action: string, cookie: string, body: Record<string, unknown> = {}) =>
   sessionAction(req(`/api/sessions/${id}/${action}`, { cookie, body }), { params: Promise.resolve({ id, action }) }).then(json);
+
+/**
+ * (Batch 35 §167) "Add to this answer": an addition is to one question, so a test's written-add goes under the session's first current question (`question` in
+ * `body` picks another).
+ */
+export async function addTo(id: string, cookie: string, body: Record<string, unknown> = {}) {
+  const c = await db.contract.findUniqueOrThrow({ where: { id } });
+  const qs = Array.isArray(c.questions) && c.questions.length ? (c.questions as string[]) : ["Your feedback"];
+  return sact(id, "written-add", cookie, { question: questionKeys(itemsFor(qs))[0], ...body });
+}
 
 export async function joined(testId: string, name = "Ana Silva", pronoun = "she") {
   const t = await makeUser({ tester: true, name, pronoun });

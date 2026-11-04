@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as testsPOST } from "@/app/api/tests/route";
 import { json, makeUser, req, saveRe } from "./helpers";
-import { act, joined, listingBody, sact, seen, setup } from "./fixtures";
+import { act, addTo, joined, listingBody, sact, seen, setup } from "./fixtures";
 
 const later = () => new Promise((r) => setTimeout(r, 30));
 
@@ -180,7 +180,7 @@ describe("tester session", () => {
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a2", "b2"] })).status).toBe(409);
-    expect((await sact(sessionId, "written-add", tester.cookie, { text: "more" })).status).toBe(200);
+    expect((await addTo(sessionId, tester.cookie, { text: "more" })).status).toBe(200);
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).answers).toEqual([{ question: "What did you like?", required: false, answer: "a" }, { question: "Where did you get stuck?", required: false, answer: "b" }] /* (batch 26 section 14) not required unless ticked */);
     const other = await makeUser({ tester: true });
     expect((await sact(sessionId, "written", other.cookie, { answers: ["x", "y"] })).status).toBe(404);

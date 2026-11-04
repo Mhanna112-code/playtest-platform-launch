@@ -1188,7 +1188,8 @@ export const NOTHING_CHANGED_LINE = "Nothing has changed since you sent it.";
  * (Owner, Nov 3, batch 35 §136) Sent work is locked: what was sent can't be removed or replaced, only added to. The server's refusals for an older page's press
  * (Send my updated answers, Remove on a sent recording) and an Add with nothing in it.
  */
-export const SENT_ANSWERS_LOCKED = "Your answers were already sent, so they can't be changed. Use Add more to add to them.";
+// (§167) Adding is under a question now: "Add to this answer".
+export const SENT_ANSWERS_LOCKED = "Your answers were already sent, so they can't be changed. Use Add to this answer under a question to add to them.";
 export const SENT_RECORDING_LOCKED = "Recordings you sent can't be removed. You can add more.";
 export const NOTHING_TO_ADD = "Write something or attach a file to add.";
 export const NO_RECORDING_TO_ADD = "Upload or record a recording to add first.";

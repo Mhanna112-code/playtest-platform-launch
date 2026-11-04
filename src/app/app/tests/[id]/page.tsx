@@ -5,7 +5,7 @@ import { hasPerks } from "@/lib/server/subscription";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { displayName, fmtDateIn, fmtDateTimeIn, money, pronouns } from "@/lib/server/dateFormat";
+import { displayName, fmtDateIn, fmtDateTimeIn, fmtStampIn, money, pronouns } from "@/lib/server/dateFormat";
 import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, termsLine, paidZeroLine } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
@@ -51,7 +51,7 @@ import { panelRows } from "@/lib/listingPanel";
 import { lastListingSave } from "@/lib/server/listingPanel";
 import { Fold, ResizeBox } from "@/components/Panel";
 import { SentWork } from "@/components/SentWork";
-import { additionsOf, latestItems } from "@/lib/additions";
+import { additionsOf, answersByQuestion } from "@/lib/additions";
 import { bankWaitsLine, pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
@@ -515,7 +515,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
                     {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                     {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
-                    <SentWork kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
+                    <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
                   </ResizeBox>
                   <p className="text-sm font-medium text-white">Pay</p>
                   <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
@@ -553,7 +553,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
               <PartPayments id={x.id} lines={partPays.get(x.id)} />
               <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
-                <SentWork kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
+                <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
               </ResizeBox>
               <p className="text-sm font-medium text-white">Pay more</p>
               <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
@@ -639,7 +639,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub?.review && <div className="w-full" data-paid-part-content="">
                         <ResizeBox id={`row-${r.sub.id}`} label={r.sub.kind === "written" ? "Written answers" : "Recordings"}>
                           {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
-                          <SentWork kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} />
+                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} />
                         </ResizeBox>
                       </div>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
@@ -821,9 +821,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 .filter((s) => s.kind === "written")
                 .map((s) => ({
                   // (Batch 13 section 8) Grouped by the exact text of the question each answer was sent for.
-                  ...((items) => ({ questions: items.map((i) => qStored(i.question, i.required)), answers: items.map((i) => i.answer) }))(latestItems(s, writtenQuestions(c))),
-                  // (Batch 35 §136) The latest answers per question; text added later joins the notes ("Other notes").
-                  contractId: c.id, tester: displayName(c.tester), notes: [s.notes, ...additionsOf(s.additions).flatMap((a) => [a.notes ?? "", a.text ?? ""])].filter((x) => x.trim()).join("\n\n"), sentAt: s.updatedAt,
+                  // (Batch 35 §136) The latest answers per question. (§167) What was added to a question follows its answer, dated; other additions join "Other notes".
+                  ...((w) => ({ questions: w.items.map((i) => qStored(i.question, i.required)), answers: w.answers, notes: w.notes }))(answersByQuestion(s, writtenQuestions(c), (at) => fmtStampIn(at, u.timeZone))),
+                  contractId: c.id, tester: displayName(c.tester), sentAt: s.updatedAt,
                   attachments: s.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType })),
                   status: (!s.review ? "waiting" : s.review.rejected && !(s.dispute?.decidedCents) ? "rejected" : "paid") as "paid" | "rejected" | "waiting",
                   paidCents: Math.max(s.review?.amountCents ?? 0, s.dispute?.decidedCents ?? 0),

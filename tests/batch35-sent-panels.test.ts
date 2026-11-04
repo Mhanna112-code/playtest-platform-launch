@@ -96,6 +96,7 @@ describe("two folds under each part", () => {
     const jump = src("lib/markJump.ts");
     expect(jump).toContain('el.querySelectorAll?.<HTMLDetailsElement>("details[data-jump-open]").forEach((d) => { d.open = true; });');
     expect(jump).toContain("if (p instanceof HTMLDetailsElement && !p.open) p.open = true;");
-    expect(src("components/Panel.tsx")).toContain('data-jump-open=""');
+    // (§167) Every fold but a written part's question folds (`jumpOpen={false}`).
+    expect(src("components/Panel.tsx")).toContain('data-jump-open={jumpOpen ? "" : undefined}');
   });
 });
