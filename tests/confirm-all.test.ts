@@ -143,8 +143,9 @@ describe("§147 Confirm all: one payment, one bank check", () => {
     expect(receipts.map((n) => n.text)).toEqual([`We charged your card $42.00 for: ${NAMES.join(", ")}`]);
     // Each tester sees their part paid as usual.
     const anaLines = (await db.notification.findMany({ where: { userId: w.ana.tester.user.id } })).map((n) => n.text);
-    expect(anaLines.filter((t) => /^Nora Lane paid \$(10|20)\.00 for your written answers$/.test(t))).toHaveLength(2);
-    expect((await db.notification.findMany({ where: { userId: w.ben.tester.user.id } })).map((n) => n.text)).toContain("Nora Lane paid $12.00 for your written answers");
+    // (Owner, Nov 4, §177) Each bell names WHICH test: Ana has written answers on two tests.
+    expect(anaLines.filter((t) => t === "Nora Lane paid $10.00 for your written answers on “Harbor Run”" || t === "Nora Lane paid $20.00 for your written answers on “Sky Lab”")).toHaveLength(2);
+    expect((await db.notification.findMany({ where: { userId: w.ben.tester.user.id } })).map((n) => n.text)).toContain("Nora Lane paid $12.00 for your written answers on “Sky Lab”");
     expect(st.made).toHaveLength(1);
     // Confirmed again (another tab): nothing more.
     expect((await confirm(w.dev.cookie, { paymentId: one.id })).status).not.toBe(500);

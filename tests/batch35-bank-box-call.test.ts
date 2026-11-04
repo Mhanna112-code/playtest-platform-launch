@@ -10,6 +10,7 @@ import { bankWaitsLine, bankWaitsOf } from "@/lib/server/payments";
 import { checkPiOf, watchBank, type PeekResult } from "@/lib/bankConfirm";
 import { payMoreWaits } from "@/lib/bankNotice";
 import { NO_NOTICE, addNews } from "@/components/BankCheck";
+import { fmtDateTimeIn } from "@/lib/format";
 import { json, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
@@ -54,7 +55,8 @@ async function payMoreOpen() {
   devs.push(s.dev.user.id);
   const j = await joined(s.testId);
   const call = await bookCall(s.testId, s.dev.cookie, j.sessionId, j.tester.cookie);
-  await db.call.update({ where: { id: call.id }, data: { startsAt: new Date(Date.now() - 3 * 3_600_000), measuredMinutes: 30, measuredAt: new Date(Date.now() - 2 * 3_600_000) } });
+  const start = new Date(Date.now() - 3 * 3_600_000);
+  await db.call.update({ where: { id: call.id }, data: { startsAt: start, measuredMinutes: 30, measuredAt: new Date(Date.now() - 2 * 3_600_000) } });
   await db.review.create({ data: { contractId: j.sessionId, callId: call.id, amountCents: 1500, agreedCents: 1500, payKey: randomUUID() } });
   await db.payment.create({ data: { kind: "call", contractId: j.sessionId, callId: call.id, developerId: s.dev.user.id, testerId: j.tester.user.id, amountCents: 1500, feeCents: 300, testerCents: 1200, status: "charged", settledAt: new Date() } });
   await db.user.update({ where: { id: s.dev.user.id }, data: { stripeCustomerId: "cus_" + randomUUID() } });
@@ -66,7 +68,7 @@ async function payMoreOpen() {
   await settle();
   const since = new Date().toISOString(); // the moment the bank box opened
   await settle();
-  return { ...s, ...j, call, st, paymentId: r.body.paymentId as string, pi: checkPiOf(r.body.clientSecret as string), since };
+  return { ...s, ...j, call, st, paymentId: r.body.paymentId as string, pi: checkPiOf(r.body.clientSecret as string), since, when: fmtDateTimeIn(start, "UTC") };
 }
 
 describe("§174 a Pay more on a CALL open at the bank", () => {
@@ -77,13 +79,14 @@ describe("§174 a Pay more on a CALL open at the bank", () => {
     expect(d.status, JSON.stringify(d.body)).toBe(200);
     const r = await peek(o.dev.cookie, { paymentId: o.paymentId, pi: o.pi, since: o.since });
     expect(r.status).toBe(200);
-    expect(r.body).toEqual({ status: "waiting", changes: ["Ana Silva disputed the pay for her live call"], still: "Complete still pays $2.00 as pressed; or press Cancel." });
+    // (Owner, Nov 4, §177) The line names WHICH call (its date and time; UTC in tests). The peek sends no page: the test's own page, so no "On “…”:" prefix.
+    expect(r.body).toEqual({ status: "waiting", changes: [`Ana Silva disputed the pay for her live call on ${o.when}`], still: "Complete still pays $2.00 as pressed; or press Cancel." });
     // The page's watch hands it to the notice as it arrives.
     let notice = NO_NOTICE;
     await new Promise<void>((done) => {
       const stop = watchBank(async () => r.body as PeekResult, () => undefined, 1, (a) => { notice = addNews(notice, a); stop(); done(); });
     });
-    expect(notice.lines).toEqual(["Ana Silva disputed the pay for her live call."]);
+    expect(notice.lines).toEqual([`Ana Silva disputed the pay for her live call on ${o.when}.`]);
   });
 
   it("Cancel under the frame answers at once (a refusal the box shows, so it closes): cancelled at Stripe, nothing charged", async () => {

@@ -82,7 +82,8 @@ describe("bell stacking: same-day lines about one test stack, except the lines t
     // (Batch 29 §33) They stack with the hold lines, in the day's "Payments and holds" entry.
     for (const re of [/^The team paused/, /^The team stopped/]) expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "payhold" });
     expect(dl.filter((l) => /^The team (paused|stopped)/.test(l.text)).map(bellKey).filter((k, i, a) => a.indexOf(k) === i).length).toBe(1);
-    expect((await lines(tester.user.id)).find((l) => /dispute on .* was decided$/.test(l.text))).toMatchObject({ own: false, groupKey: "disputedecided" });
+    // (Owner, Nov 4, §177) The decided line names the part: "Your dispute about your written answers on “Harbor Run” was decided".
+    expect((await lines(tester.user.id)).find((l) => l.text === "Your dispute about your written answers on “Harbor Run” was decided")).toMatchObject({ own: false, groupKey: "disputedecided" });
   });
 
   it("admins get ONE new-dispute entry a day across different tests, each line opening its own row (batch 29 §29)", async () => {

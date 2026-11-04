@@ -249,7 +249,8 @@ describe("batch 6 item 4: a paused test, what testers can do", () => {
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("delayed={paymentDelayed(sub.id)}");
 
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).status).not.toBe("owed");
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $10.00 for your written answers" } })).toBe(1);
+    // (Owner, Nov 4, §177) The delayed payment's bell names WHICH test too.
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid $10.00 for your written answers on “Harbor Run”" } })).toBe(1);
   });
 
   it("Charge during a chargeback hold waits outside what is owed too", async () => {
