@@ -102,16 +102,20 @@ describe("top panel stops once", () => {
     await later();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["Fun", "Level 2"] });
-    const first = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded });
+    // (Batch 35 §168) Shown with Stop: Next round has no stop-once any more (its one tap: tests/batch35-next-round-one-tap.test.ts).
+    const first = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded });
     expect(first.status).toBe(409);
     expect(first.body.error.code).toBe("stop_once");
     expect(first.body.error.message).toBe("Press again to go ahead.");
     expect(first.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Ana Silva joined", "Ana Silva sent her written answers"]);
-    const second = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, confirmed: true });
+    const second = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, confirmed: true });
     expect(second.status).toBe(200);
-    const copy = await db.test.findUniqueOrThrow({ where: { id: second.body.id } });
-    expect(copy).toMatchObject({ status: "draft", round: 2, title: "Harbor Run (round 2)", previousId: testId });
-    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("open") // (Owner) a next round no longer closes the current round;
+    expect((await db.test.findUniqueOrThrow({ where: { id: testId } })).status).toBe("stopped");
+    // (Batch 35 §168) Next round on it: a draft at once, with no name.
+    const next = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded });
+    expect(next.status).toBe(200);
+    const copy = await db.test.findUniqueOrThrow({ where: { id: next.body.id } });
+    expect(copy).toMatchObject({ status: "draft", round: 2, title: "", previousId: testId });
   });
 
   it("nothing new: the press goes straight through", async () => {

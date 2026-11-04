@@ -2,7 +2,7 @@ import { dateZone } from "./dateZone";
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
-import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
 import { additionsOf, latestItems } from "@/lib/additions";
@@ -31,7 +31,7 @@ import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
 import { withoutAttachmentMarkers } from "@/lib/answerAttachments";
-import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, ANSWER_NEW_QUESTIONS, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS } from "@/lib/rules";
+import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, ANSWER_NEW_QUESTIONS, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 
 type Tx = Prisma.TransactionClient;
@@ -357,7 +357,8 @@ export async function createTest(dev: U, body: Record<string, unknown>) {
  * Edit only changes the listing for new joiners: contracts are snapshots.
  */
 export async function editTest(dev: U, testId: string, body: Record<string, unknown>) {
-  await ownTest(dev.id, testId);
+  // (Owner, Nov 3, batch 35 §168) A closed test has no Edit: a Save (an older page's too) is refused plainly, never a stop-once.
+  if ((await ownTest(dev.id, testId)).status === "closed") throw new HttpError(409, "closed", TEST_CLOSED_NO_EDIT);
   const loaded = Number(body.version);
   const confirmed = body.confirmed === true;
   const touched = parseListing((body.fields ?? {}) as Record<string, unknown>, true, tzOf(body, dev));
@@ -380,6 +381,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
+    if (t.status === "closed") throw new HttpError(409, "closed", TEST_CLOSED_NO_EDIT); // (§168) closed while this Save waited for the lock
     if (typeof touched.title === "string" && touched.title.trim().toLowerCase() !== t.title.trim().toLowerCase()) await requireUniqueTitle(tx, dev.id, touched.title, testId);
     // (Batch 34 §9, owner's finding) A save made from this same browser tab is never "another tab": its own saves never stop it, and when every listing save since
     // this page loaded was this tab's own (its base is behind only because of them), there is nothing to name per field either.
@@ -396,7 +398,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (NEWEST+3) Save follows the same rule as the test page's buttons: every developer reason since Edit opened
     // (testers' actions, and anything saved or done in another tab), then any other change to the listing's version.
     const seen = boxAt ?? (confirmed ? null : seenOf(body.seenAt));
-    // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab stop Save once like every test-page press (a Pay, a call change, Next round,
+    // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab stop Save once like every test-page press (a Pay, a call change,
     // an invite…); another tab's Save becomes the per-field lines below.
     const dc = seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: { acts: ["edit"], keys: ["*"] } }), body) : [];
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
@@ -835,58 +837,35 @@ export async function endEarly(dev: U, testId: string, body: Record<string, unkn
   return { ended: true, count: ended.length, endedIds: ended.map((c) => c.id) };
 }
 
-/** Next round: a draft copy of the test for the next build. Optionally stops new testers joining this one. */
-export async function nextRound(dev: U, testId: string, body: Record<string, unknown>) {
+/**
+ * Next round: a draft copy of the test for the next build.
+ * (Owner, Nov 3, batch 35 §168; replaces batch 16 §21's and batch 27 §2's next-round rules and the Oct 28 one-draft rule) One tap: every press makes a new draft
+ * and opens it in Post a test. No stop-once, no check of drafts made before (in this tab or another): the developer names each one. The draft's name starts
+ * EMPTY (Post asks for it); everything else is this test's saved details.
+ */
+export async function nextRound(dev: U, testId: string) {
   await ownTest(dev.id, testId);
   // (Batch 8) Next round is a subscriber perk.
   await (await import("./subscription")).requirePerk(dev.id, "nextRound");
   const res = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     // (Owner, Oct 28 evening) Next round stays on a stopped test: it starts a new draft from it.
-    const existing = await tx.test.findFirst({ where: { previousId: testId } });
-    if (existing) {
-      // (Owner, Oct 28, batch 16 section 21) Another tab already made the draft: this press stops once, and the box links to the draft; then it's refused.
-      const boxAt = seenOf(body.boxAt);
-      const since = body.confirmed === true && boxAt ? boxAt : seenOf(body.seenAt);
-      const made = since ? (await ownChanges(dev.id, testId, since, tabOf(body), tx)).filter((o) => o.about?.a === "next-round") : [];
-      if (made.length && !(body.confirmed === true && !boxAt)) {
-        const m = made[made.length - 1];
-        throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: m.live ?? m.text, at: m.createdAt, link: `/app/tests/new?draft=${existing.id}` }] });
-      }
-      throw new HttpError(409, "exists", "This test already has a next round." + (await staleNote(testId, body.seenAt)), { id: existing.id });
-    }
     if (await devOnHold(dev.id)) throw new HttpError(409, "on_hold", `${PAY_WAITS} Your tests are paused until then.`);
-    await topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["next-round"], keys: ["test"] });
     const round = t.round + 1;
     const copy = await tx.test.create({
       data: {
-        // (Batch 31) The next round takes at most 10 testers, like any test posted now.
-        ...listingData(asListing(t)), spots: Math.min(t.spots, MAX_SPOTS), title: `${t.title.replace(/ \(round \d+\)$/, "")} (round ${round})`, developerId: dev.id, status: "draft", round, previousId: t.id,
+        // (Batch 31) The next round takes at most 10 testers, like any test posted now. (§168) No name: the developer types it in Post.
+        ...listingData(asListing(t)), spots: Math.min(t.spots, MAX_SPOTS), title: "", developerId: dev.id, status: "draft", round, previousId: t.id,
         questions: t.questions as Prisma.InputJsonValue,
       },
     });
-    // (Owner) Starting a next round never changes this round: it keeps taking testers and everyone carries on.
-    await recordEvent(tx, testId, "next_round", `Round ${round} was started`, true, {});
+    // (Owner) Starting a next round never changes this round: it keeps taking testers and everyone carries on. (§168) One event per press (several drafts:
+    // several lines); it no longer moves this test's version, so it never stops an Edit Save either.
+    await recordEvent(tx, testId, "next_round", `Round ${round} was started`, false, {});
     return { id: copy.id };
   });
   return res;
 }
-
-/**
- * (Owner, Oct 29, batch 27 section 2) "Go to the next round" (the test already has its next-round draft) is a press, not a plain link: it runs the developer's stop-once
- * gate first, with the same changes and Alerts types as Next round (a tester sent or updated work, left, a call change, a payment…): the first press stops once in
- * the box under the button, the second opens the draft. (Batch 29 section 11) On a stopped, closed or paused test it follows the same stop-once rules.
- */
-export async function goNextRound(dev: U, testId: string, body: Record<string, unknown>) {
-  await ownTest(dev.id, testId);
-  const next = await db.test.findFirst({ where: { previousId: testId }, select: { id: true } });
-  if (!next) throw new HttpError(409, "gone", NO_NEXT_ROUND);
-  // (Batch 30 §6, per batch 29 §11: stop-once everywhere) Also after Open until passed: no skip.
-  await db.$transaction((tx) => topPanelGate(tx, testId, body, {}, [], undefined, { acts: ["next-round"], keys: ["test"] }));
-  return { id: next.id };
-}
-/** (Batch 27 section 2) The next round's draft was deleted meanwhile. */
-export const NO_NEXT_ROUND = "This test has no next round any more: its draft was deleted.";
 
 // ---------- tester: find and join ----------
 

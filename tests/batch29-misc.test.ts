@@ -174,24 +174,24 @@ describe("batch 29 section 20: leftovers", () => {
     expect(src("app/app/sessions/[id]/page.tsx")).toContain("leadMinutes={CALL_MIN_AHEAD_MINUTES}");
   });
 
-  it("goNextRound's comment has no garbled characters", () => {
+  // (Batch 35 §168) goNextRound and its comment are gone; the file still has no garbled characters.
+  it("tests.ts has no garbled characters", () => {
     const t = src("lib/server/tests.ts");
     expect(t).not.toContain("â€");
-    expect(t).toContain("a call change, a payment…)");
+    expect(t).not.toContain("goNextRound");
   });
 
-  it("Go to the next round on a paused test (paused before the page loaded) opens at once", async () => {
+  // (Owner, Nov 3, batch 35 §168) "Go to the next round" is gone; on a test the team paused, Next round is refused like every other press the pause doesn't allow.
+  it("a test the team paused: Next round is refused with the team's pause (there is no Go to the next round)", async () => {
     const a = await admin();
     const s = await setup();
     await joined(s.testId);
-    const made = await act(s.testId, "next-round", s.dev.cookie, { seenAt: seen(), confirmed: true });
-    expect(made.status).toBe(200);
     expect((await aact(a.cookie, "pause-test", { id: s.testId, note: "Checking" })).status).toBe(200);
     await settle();
     const loaded = seen();
     await later();
-    const r = await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded });
-    expect(r.status).toBe(200);
-    expect(r.body.id).toBe(made.body.id);
+    expect((await act(s.testId, "next-round", s.dev.cookie, { seenAt: loaded })).body.error.code).toBe("admin_paused");
+    // The old press is refused too (the team's pause answers first, as for any press it doesn't allow).
+    expect((await act(s.testId, "go-next-round", s.dev.cookie, { seenAt: loaded })).body.error.code).toBe("admin_paused");
   });
 });

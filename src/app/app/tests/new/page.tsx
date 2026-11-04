@@ -3,6 +3,7 @@ import { hasPerks } from "@/lib/server/subscription";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { asListing } from "@/lib/server/tests";
+import { testTitleOf } from "@/lib/rules";
 import { requireOpenDevPage } from "@/lib/server/page-auth";
 import { needsTermsAgain } from "@/lib/termsOfUse";
 import { TestForm } from "../TestForm";
@@ -27,7 +28,8 @@ export default async function NewTest({ searchParams }: { searchParams: Promise<
   return (
     <>
       <h1 className="text-3xl font-bold tracking-tight text-white">Post a test</h1>
-      {draft && <p className="note" data-draft-note="">A draft: {draft.title}. Check the details, then press Post the test to open it for testers.</p>}
+      {/* (Owner, Nov 3, batch 35 §168) A Next round's draft has no name yet: "A draft: Untitled draft (round 2). Give it a name, check the details, …". */}
+      {draft && <p className="note" data-draft-note="">A draft: {testTitleOf(draft)}. {draft.title.trim() ? "Check the details" : "Give it a name, check the details"}, then press Post the test to open it for testers.</p>}
       <TestForm
         draft={draft ? { id: draft.id } : undefined}
         hasCard={!!u.stripePaymentMethodId}

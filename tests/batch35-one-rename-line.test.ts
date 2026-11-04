@@ -53,7 +53,7 @@ describe("batch 35 §17: one save, one line (a rename saved with other fields in
     expect(kept(early, after)).toEqual(["You saved the listing in another tab"]);
     // A press in that moment: one stop line too.
     await withoutSaveLine(testId, "tab-a", async () => {
-      const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-b" });
+      const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, tab: "tab-b" }); // (batch 35 §168)
       expect((r.body.error?.changes ?? []).map((c: { text: string }) => c.text)).not.toContain("You renamed the test to Harbor Run: night harbors");
     });
   });

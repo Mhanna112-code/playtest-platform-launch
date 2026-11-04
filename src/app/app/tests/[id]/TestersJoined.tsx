@@ -48,6 +48,8 @@ export function TestersJoined({ testId, spots, seats, gone, status, children, ti
   const joined = seats.length;
   const shown = Math.min(spots, 12);
   const stopped = status === "stopped";
+  // (Owner, Nov 3, batch 35 §168) A closed test can't be edited: no "Change in Edit".
+  const noEdit = stopped || status === "closed";
   return (
     <details open className="card space-y-3" id="testers-joined" aria-label="Testers joined">
       <summary className="fold-chevron flex cursor-pointer items-center justify-between">
@@ -76,7 +78,7 @@ export function TestersJoined({ testId, spots, seats, gone, status, children, ti
         </p>
         <p className="text-sm text-slate-400">
           {joined} of {spots} {spots === 1 ? "spot" : "spots"} taken
-          {!stopped && <> · <Link href={`/app/tests/${testId}/edit#spots`} className="text-sky-300 hover:underline">Change in Edit</Link></>}
+          {!noEdit && <> · <Link href={`/app/tests/${testId}/edit#spots`} className="text-sky-300 hover:underline">Change in Edit</Link></>}
         </p>
       </div>
     </details>

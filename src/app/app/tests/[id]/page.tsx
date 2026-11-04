@@ -117,7 +117,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (t.status === "draft") redirect(`/app/tests/new?draft=${t.id}`);
   // (Batch 8) The free plan: the perk buttons show a "Subscribers" tag (a press is refused with a Payments link).
   const perks = await hasPerks(u);
-  const next = await db.test.findFirst({ where: { previousId: id }, select: { id: true } });
   // (Batch 14 section 6) The read-only Access keys notice (only when the test uses keys).
   const keysView = await keyBoxes(id);
   // (Owner, Oct 30, batch 15 sections 23, 29 and 37) ANY pause (the team's, a payment or chargeback hold, a developer-side suspension) shows the restricted view: the
@@ -304,7 +303,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), whoHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
   const banner = bannerCause ? (
     <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
-      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open") }) : allowedLine(false, { nextRound: !t.adminStoppedAt && !next })} />
+      allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, rate: !accountPaused && t.contracts.some((c) => rateStates.get(c.id)?.kind === "open") }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
   ) : null;
   if (restricted) {
     const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + (!accountPaused ? t.contracts.filter((c) => rateBoxOf(c)).length : 0) + disputesWaiting.length;
@@ -316,7 +315,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           id={t.id} title={t.title} productName={t.productName} ignoredAlerts={t.ignoredAlerts} restricted mature={t.mature} nda={!!t.ndaText} keysLeft={null}
           parts={{ written: t.writtenCents != null, recording: t.recordingCents != null, live: t.liveRateCents != null }} paused status={t.status} workEnded={!!t.workEndedAt}
           terms={termsLine({ ...asListing(t), testerDays: t.testerDays })} openUntil={t.openUntil ? t.openUntil.toISOString() : null} version={t.version} seenAt={seenAt}
-          nextRoundId={null} teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}
+          teamStopped={!!t.adminStoppedAt} perks={perks} spotsLine={`${working.length} of ${t.spots} spots used`} full={working.length >= t.spots}
           joinMode={t.joinMode} deadlineDays={t.deadlineDays} categories={t.categories}
           alertKeys={t.status === "stopped" ? [...STOPPED_ALERTS] : [...PAUSED_ALERTS]}
           doneTo={accountPaused ? "/app" : undefined}
@@ -426,7 +425,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         joinClosedLine={t.openUntil && t.openUntil < new Date() ? joiningClosedLine(t.contracts.filter((c) => c.status === "working" && c.dueAt > new Date()).reduce<Date | null>((m, c) => (!m || c.dueAt > m ? c.dueAt : m), null), (d) => fmtDate(d).replace(/, \d{4}$/, "")) : ""}
         version={t.version}
         seenAt={seenAt}
-        nextRoundId={next?.id ?? null}
         teamStopped={!!t.adminStoppedAt}
         perks={perks}
         spotsLine={`${working.length} of ${t.spots} spots used`}
@@ -453,7 +451,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <ListingSeeIt box="listing" />
       {/* (Batch 30) The seen marker starts at this page's first load in the tab: a redraw never skips a change the page hasn't shown. */}
       <PageLoaded at={seenAt} />
-      <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} />
+      <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} canEdit={t.status !== "stopped" && t.status !== "closed"} />
       {/* (Owner, Oct 30, batch 34 §14) The first panel under the overview (and its notices): the current listing, as testers see it. */}
       <ListingPanel rows={listingRows} listing={listingNow} when={(d) => fmtDateTimeIn(d, u.timeZone)} savedAt={lastSave?.at.toISOString() ?? ""} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}

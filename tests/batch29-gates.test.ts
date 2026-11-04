@@ -70,15 +70,15 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     expect(second.status, JSON.stringify(second.body)).toBe(200);
   });
 
-  it("the stop itself is a change: a page opened before it stops Next round once naming it", async () => {
+  // (Owner, Nov 3, batch 35 §168) Next round has no stop-once: a page opened before the stop makes its draft at once.
+  it("the stop itself is a change, but Next round never stops for it: a draft at once", async () => {
     const { dev, testId } = await setup();
     await joined(testId);
     const loaded = await loadedNow();
     await db.test.update({ where: { id: testId }, data: { status: "stopped", stoppedAt: new Date(), adminStoppedAt: null } });
     await later();
     const r = await act(testId, "next-round", dev.cookie, { seenAt: loaded, tab: "B" });
-    expect(r.body.error?.code).toBe("stop_once");
-    expect(texts(r)[0]).toMatch(/^You stopped this test at .+\.$/);
+    expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
   it("on a paused test a payment elsewhere stops Charge once; the pause itself stops a page opened before it", async () => {
@@ -131,9 +131,9 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     await db.testEvent.create({ data: { testId: w.testId, kind: "left", text: "Cara Diaz left the test" } });
     expect((await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     const B = { seenAt: loaded, pageSeenAt: loaded, tab: "B" };
-    // Next round stops once for both.
+    // (Batch 35 §168) Next round never stops once: a draft at once.
     const n = await act(w.testId, "next-round", w.dev.cookie, B);
-    expect(texts(n)).toEqual(["Cara Diaz left the test", "You paid Ana Silva $1.00 more for her written answers in another tab"]);
+    expect(n.status, JSON.stringify(n.body)).toBe(200);
     // Rate Ben and the excerpt decision: through at once.
     const rate = await act(w.testId, "rate", w.dev.cookie, { contractId: b.sessionId, stars: 4, ...B });
     expect(rate.status, JSON.stringify(rate.body)).toBe(200);
@@ -160,7 +160,7 @@ describe("batch 29 section 12: the developer's own changes in another tab stop e
     expect(s2.status, JSON.stringify(s2.body)).toBe(200);
   });
 
-  it("an Edit save in tab A stops Next round, End early and Request a time in tab B once; the line shows live", async () => {
+  it("an Edit save in tab A stops End early and Request a time in tab B once (Next round: at once, batch 35 §168); the line shows live", async () => {
     const { dev, testId } = await setup({ spots: 5 });
     const a = await joined(testId);
     const loaded = await loadedNow();
@@ -169,8 +169,7 @@ describe("batch 29 section 12: the developer's own changes in another tab stop e
     const line = "You saved the listing in another tab"; // (batch 35 §34) no field list
     const B = { seenAt: loaded, tab: "B" };
     const n = await act(testId, "next-round", dev.cookie, B);
-    expect(n.body.error?.code).toBe("stop_once");
-    expect(texts(n)).toContain(line);
+    expect(n.status, JSON.stringify(n.body)).toBe(200);
     const e = await act(testId, "end-early", dev.cookie, { contractIds: [a.sessionId], reason: "All done.", ...B });
     expect(texts(e)).toContain(line);
     const q = await act(testId, "request-time", dev.cookie, { contractIds: [a.sessionId], startsAt: atHours(50), ...B });

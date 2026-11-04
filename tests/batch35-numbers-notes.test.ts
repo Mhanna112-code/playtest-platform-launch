@@ -316,7 +316,7 @@ describe("batch 35 §34: all listing changes since the page's seen time are ONE 
     const saves = await db.testEvent.findMany({ where: { testId, kind: "listing_saved" }, orderBy: { createdAt: "desc" } });
     expect(new Date(lines[0].saveAt!).getTime()).toBe(saves[0].createdAt.getTime()); // the newest Save: the panel redraws to it first
     // A press stops once with the same one line.
-    const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded, tab: "tab-b" });
+    const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, tab: "tab-b" }); // (batch 35 §168) Stop: Next round no longer stops once
     const texts: string[] = (r.body.error?.changes ?? []).map((c: { text: string }) => c.text);
     expect(texts.filter((t) => /listing|renamed/.test(t))).toEqual([SAVED_ELSEWHERE_LINE]);
   });

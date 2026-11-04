@@ -16,7 +16,7 @@ describe("calls are always requests", () => {
     await later();
     const call = await bookCall(testId, dev.cookie, sessionId, tester.cookie, 48);
     expect(call).toMatchObject({ rateCents: 3000, minutes: 30, status: "booked" });
-    const r = await act(testId, "next-round", dev.cookie, { seenAt: pageLoaded });
+    const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded }); // (batch 35 §168) Next round has no stop-once: Stop shows the same gate
     expect(r.body.error.changes.map((c: { text: string }) => c.text)).toContain(`Ana Silva booked a call for ${fmtIn("UTC", call.startsAt)}`);
   });
 

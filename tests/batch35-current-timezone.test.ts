@@ -71,7 +71,7 @@ describe("dates use the current viewer zone, not the server's UTC date", () => {
 
   it("the developer header and Listing before / now use the same local day", async () => {
     const { TopPanel } = await import("@/app/app/tests/[id]/TopPanel");
-    const html = renderToStaticMarkup(React.createElement(TopPanel, { id: "example", title: "Example", status: "open", terms: "", spotsLine: "1 spot", seenAt: new Date().toISOString(), working: [], nextRoundId: null, openUntil: close.toISOString(), timeZone: CENTRAL }));
+    const html = renderToStaticMarkup(React.createElement(TopPanel, { id: "example", title: "Example", status: "open", terms: "", spotsLine: "1 spot", seenAt: new Date().toISOString(), working: [], openUntil: close.toISOString(), timeZone: CENTRAL }));
     expect(html).toContain("Open until (last day to join) Nov 9, 2026");
     const listing = { openUntil: close.toISOString() } as Listing;
     const saved = { fields: ["openUntil"], before: { openUntil: endOfDayIn("2026-11-04", CENTRAL).toISOString() }, after: {}, at: new Date() };
@@ -103,7 +103,8 @@ describe("dates use the current viewer zone, not the server's UTC date", () => {
       const lines = (await res.json()).changes as { text: string }[];
       expect(lines.map(line => line.text)).toContain(`Ana Silva booked a call for ${fmtIn(zone, call.startsAt)}`);
       expect(lines.some(line => hasTimeTokens(line.text))).toBe(false);
-      const stopped = await testAction(req(`/api/tests/${f.testId}/next-round`, { cookie: f.dev.cookie, body: { seenAt: since }, headers: { "x-timezone": zone } }), { params: Promise.resolve({ id: f.testId, action: "next-round" }) });
+      // (Batch 35 §168) Stop: Next round no longer stops once.
+      const stopped = await testAction(req(`/api/tests/${f.testId}/stop`, { cookie: f.dev.cookie, body: { seenAt: since, reason: "We have what we need." }, headers: { "x-timezone": zone } }), { params: Promise.resolve({ id: f.testId, action: "stop" }) });
       const error = (await stopped.json()).error;
       expect(error.code).toBe("stop_once");
       expect(error.changes.map((line: { text: string }) => line.text)).toContain(`Ana Silva booked a call for ${fmtIn(zone, call.startsAt)}`);

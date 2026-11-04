@@ -10,7 +10,7 @@ export type KeysView = { free: { id: string; value: string; reused?: { from: str
  * parts, each in its own scroll box about 4 lines tall (stacked on phones): the free keys as chips with the count and open spots, and the keys given, each with its
  * tester (a key reported as not working is crossed out). The page's poll keeps it current. Nothing replaces a key on its own: the hint says what the developer can do.
  */
-export function KeysNotice({ testId, keys }: { testId: string; keys: KeysView | null }) {
+export function KeysNotice({ testId, keys, canEdit = true }: { testId: string; keys: KeysView | null; /** (Owner, Nov 3, batch 35 §168) false on a stopped or closed test: no "in Edit" hint */ canEdit?: boolean }) {
   if (!keys) return null;
   return (
     <section id="keys-notice" className="space-y-2 rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-sm text-amber-100" aria-label="Access keys" data-keys-notice="">
@@ -40,7 +40,7 @@ export function KeysNotice({ testId, keys }: { testId: string; keys: KeysView | 
           </ul>
         </div>
       </div>
-      <p className="text-xs" data-keys-hint="">{FREE_KEYS_HINT[0]}<a href={`/app/tests/${testId}/edit#keys`} target="_blank" rel="noopener" className="underline">{FREE_KEYS_HINT[1]}</a>{FREE_KEYS_HINT[2]}</p>
+      {canEdit && <p className="text-xs" data-keys-hint="">{FREE_KEYS_HINT[0]}<a href={`/app/tests/${testId}/edit#keys`} target="_blank" rel="noopener" className="underline">{FREE_KEYS_HINT[1]}</a>{FREE_KEYS_HINT[2]}</p>}
     </section>
   );
 }

@@ -7,7 +7,7 @@ import { answerRequest, cancelCallSet, devRequestTime } from "@/lib/server/reque
 import { apply, askToRejoin, decideApplication, join, joinStopList, withdrawApplication } from "@/lib/server/joining";
 import { addDevSide, payExtra } from "@/lib/server/payments";
 import { sendChat, sendMessage } from "@/lib/server/messages";
-import { countingState, asListing, deleteDraft, editTest, endEarly, goNextRound, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
+import { countingState, asListing, deleteDraft, editTest, endEarly, nextRound, openDraft, ownTest, postDraft, stopTest } from "@/lib/server/tests";
 import { keyBoxes } from "@/lib/server/accessKeys";
 import { getUserFromRequest } from "@/lib/server/session";
 import { failedLine, requireActive, requireConfirmed, requireCurrentTerms } from "@/lib/server/users";
@@ -45,9 +45,8 @@ export async function POST(req: Request, { params }: Ctx) {
   return handle(async () => {
     const { id, action } = await params;
     // (Batch 17 section 2) Rate reaches its own refusal ("You can rate once your account is active again.") while the developer is suspended or on a hold.
-    // (Batch 27 section 2) "Go to the next round" only opens the draft (it was a plain link): never refused for a paused test or account.
     const what = await pressWhat(req, action);
-    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate" || action === "go-next-round", devSide: !TESTER_SIDE.has(action), what });
+    const u = await requireActive(req, { devOk: SUSPENDED_OK.has(action) || action === "rate", devSide: !TESTER_SIDE.has(action), what });
     const body = await readJson(req, 900_000); // (batch 15 sections 3 and 17) an Edit with 20 questions and the steps at 20,000 characters each
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await adminRefusal(req, u.id, id, action, what);
@@ -70,7 +69,7 @@ const TESTER_SIDE = new Set(["join", "apply", "rejoin-ask", "withdraw-applicatio
  * fails and they are sent back to the test, where a permanent banner says so and names the press that failed.
  */
 async function adminRefusal(req: Request, userId: string, testId: string, action: string, what?: string) {
-  if (TESTER_SIDE.has(action) || action === "go-next-round") return;
+  if (TESTER_SIDE.has(action)) return;
   const t = await db.test.findUnique({ where: { id: testId }, select: { developerId: true, adminPausedAt: true, adminStoppedAt: true } });
   if (!t || t.developerId !== userId) return;
   // (Owner, Oct 28) A team stop is a HARD refusal for every press a stopped test does not allow (no stop-once); what a stopped test allows (chat, rate, a dispute reply, extra pay, a call's length
@@ -114,10 +113,9 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await devRate(u, id, body));
       case "end-early":
         return ok(await endEarly(u, id, body));
+      // (Owner, Nov 3, batch 35 §168) One tap: a new draft every press (Go to the next round is gone).
       case "next-round":
-        return ok(await nextRound(u, id, body));
-      case "go-next-round":
-        return ok(await goNextRound(u, id, body));
+        return ok(await nextRound(u, id));
       case "cancel-call":
         return ok(await devCancelCall(u, id, body));
       case "keys-dismiss":
