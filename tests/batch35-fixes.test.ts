@@ -141,7 +141,9 @@ describe("batch 35 §7: a link to a piece that was paid since lands on its teste
     expect(hashTargets("tester-x")).toEqual(["tester-x"]);
     expect(src("components/HashJump.tsx")).toContain("jumpTo(hashTargets(id).find((t) => document.getElementById(t)) ?? id)");
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("id={x.kind === \"sub\" ? `piece-${x.id}` : `call-${x.id}`}"); // Needs you's anchor, as before
+    // Needs you's anchor, as before; (§181) now on the part's own drop-down inside the person's (partNode), the ids unchanged.
+    expect(page).toContain("const anchor = x.kind === \"sub\" ? `piece-${x.id}` : `call-${x.id}`;");
+    expect(page).toContain("<div key={x.id} id={anchor} ");
     expect(page).toContain("{...(r.sub ? { id: `part-${r.sub.id}` } : {})}");
     // The part's line sits inside its tester's row.
     expect(page.indexOf("id: `part-${r.sub.id}`")).toBeGreaterThan(page.indexOf("id={`tester-${c.id}`}"));

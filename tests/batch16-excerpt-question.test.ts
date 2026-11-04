@@ -58,7 +58,13 @@ describe("the question above each excerpt (section 37)", () => {
     expect((await shownExcerpts(tester.user.id))[0].question).toBe(q);
     // The developer's rows: the test page's Needs you and its restricted view, and the restricted dashboard box.
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page.match(/<ExcerptQuestion question=\{x\.question\} \/>/g)?.length).toBe(2);
+    // (Batch 35 §181) Both views draw a person's excerpt requests through one excerptKind (Needs you's drop-down per person), so the question is written once
+    // there and used by the active view and the restricted one.
+    expect(page.match(/<ExcerptQuestion question=\{x\.question\} \/>/g)?.length).toBe(1);
+    const kind = page.slice(page.indexOf("const excerptKind = "), page.indexOf("const excerptKind = ") + 1500);
+    expect(kind).toContain("<ExcerptQuestion question={x.question} />");
+    expect(page).toContain('excerptKind(c, { "data-restricted-excerpts": "" })');
+    expect(page).toContain("excerptKind(c),");
     expect(src("app/app/page.tsx")).toContain("<ExcerptQuestion question={x.question} />");
   });
 });

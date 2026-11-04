@@ -172,7 +172,11 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const rows = await bankToConfirm(x.dev.user.id);
     expect(rows.map((r) => r.id)).toEqual([p.id]);
     expect(rows[0].href).toBe(bankHref(x.testId, p.id)); // the test's paused view carries the same button
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("{rows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}"); // (Owner, Nov 4, §175) under each tester's name
+    // (Owner, Nov 4, §175) under each tester's name; (§180 / §181) now each person's "Confirm with your bank" block inside their Needs you drop-down, in the
+    // active view and the restricted one alike.
+    const testPage = src("app/app/tests/[id]/page.tsx");
+    expect(testPage).toContain("node: bankOf(c.id).map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />) });");
+    expect(testPage).toContain('bankKind(c, { "data-restricted-bank": "" })');
     // The poll keeps refreshing during a hold or suspension.
     expect((await pulse(x.dev.cookie)).body).toMatchObject({ restricted: false });
     // §106 revision: the same box comes below the developer name, whatever their state.

@@ -60,6 +60,11 @@ describe("batch 35 §77 a re-send with nothing new isn't 'updated'", () => {
   // (Batch 35 §136) Replaced: sent work is locked, so a second Send is refused as locked (answers) or adds only new recordings.
   it("both Sends refuse a re-send of what was sent: the answers as locked, the recordings with nothing to add", () => {
     expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", existing ? NO_RECORDING_TO_ADD : "Upload a recording first.");');
-    expect(src("lib/server/tests.ts")).toContain('if (existing && !newQuestions) throw new HttpError(409, "locked", SENT_ANSWERS_LOCKED);');
+    // (Batch 35 §183) The same refusal, now in sendRefusal: checked before the stop-once (a single refusal, never a stop first) and again under the lock.
+    const tests = src("lib/server/tests.ts");
+    expect(tests).toContain('if (existing && !existing.setUntil && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);');
+    expect(tests.indexOf("const sentRefusal = sendRefusal(sent, qs, answers);")).toBeLessThan(tests.indexOf("await testerSendGate(contractId, body, sent?.id);"));
+    expect(tests).toContain("const refused = sendRefusal(existing, qs, answers);");
+    expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", NO_RECORDING_TO_ADD);'); // §183: the recordings' nothing-to-add, before the gate too
   });
 });
