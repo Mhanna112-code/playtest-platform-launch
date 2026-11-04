@@ -88,7 +88,7 @@ describe("batch 25 section 1: confirm-by times in the developer's own time zone"
     const by = new Date("2030-01-01T10:10:00Z"); // Tue 10:10 AM in UTC; Wed, Jan 2, 12:10 AM in Kiritimati
     const p = await waiting(x, { submissionId: x.sub.id, by });
     const onTest = (await bankWaitingOnTest(x.dev.user.id, x.testId)).find((r) => r.id === p.id)!;
-    expect(onTest.line).toBe("Your bank wants you to confirm a $12.50 payment for her written answers on “Harbor Run”, made while you were away. Confirm it by Wed, Jan 2, 12:10 AM.");
+    expect(onTest.line).toBe("Your bank wants you to confirm a $12.50 payment for her written answers, made while you were away. Confirm it by Wed, Jan 2, 12:10 AM."); // (§180) no test name on its own page
     const item = (await confirmItems(x.dev.user.id)).find((i) => i.id === p.id)!;
     expect(item.text).toBe("A payment for Ana Silva's written answers on “Harbor Run” $12.50 · confirm by Wed, Jan 2, 12:10 AM");
   });
@@ -105,7 +105,7 @@ describe("batch 25 section 2: a retried chargeback reads the same on the dashboa
     expect(rows.find((r) => r.id === repay.id)!.lead).toBe("$25.00 · a payment your bank had reversed (Ana Silva's written answers on “Harbor Run”)");
     expect(rows.find((r) => r.id === owedRetry.id)!.lead).toBe("$10.00 on “Harbor Run” · what you owe");
     const onTest = (await bankWaitingOnTest(x.dev.user.id, x.testId)).find((r) => r.id === repay.id)!;
-    expect(onTest.line).toContain("for a payment your bank had reversed (her written answers on “Harbor Run”), made while you were away.");
+    expect(onTest.line).toContain("for a payment your bank had reversed (her written answers), made while you were away.");
     expect(onTest.pieceId).toBe(x.sub.id);
   });
 });

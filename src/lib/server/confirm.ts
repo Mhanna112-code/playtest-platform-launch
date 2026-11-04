@@ -117,11 +117,12 @@ async function piecesNamed(waiting: Waiting[], day: (d: Date) => string) {
     const at = pieceOf(p);
     const sub = at.submissionId ? subs.find((x) => x.id === at.submissionId) : undefined;
     const call = at.callId ? calls.find((x) => x.id === at.callId) : undefined;
-    const named = (full: boolean, whose?: string) => (sub ? pieceWords.part(name, sub.kind, c.title, full, whose) : call ? pieceWords.call(name, day(call.startsAt), c.title, full, whose) : pieceWords.work(name, c.title, full, whose));
+    const named = (full: boolean, whose?: string, test: string | null = c.title) => (sub ? pieceWords.part(name, sub.kind, test, full, whose) : call ? pieceWords.call(name, day(call.startsAt), test, full, whose) : pieceWords.work(name, test, full, whose));
     // `full`: the names uncut, the line's hover on the page (§131). (Owner, Nov 4, §175) `theirs` / `theirsFull`: the same with the tester's pronoun in place of
     // their name ("her written answers on “Harbor Run”"), for a line under a heading that names them.
+    // (Owner, Nov 4, §180) Those lines are shown only on the test's own page, so they name no test: "her live call (Tue, Oct 27, 3:25 PM)".
     const whose = pronouns(c.tester.pronoun).poss;
-    return { c, sub, call, piece: named(false), full: named(true), theirs: named(false, whose), theirsFull: named(true, whose) };
+    return { c, sub, call, piece: named(false), full: named(true), theirs: named(false, whose, null), theirsFull: named(true, whose, null) };
   };
 }
 
@@ -238,7 +239,7 @@ export async function bankWaitingOnTest(devId: string, testId: string) {
     const { c, sub, call, theirs, theirsFull } = named(p);
     const what = (x: string) => (p.kind === "dispute" ? pieceWords.dispute(x) : p.kind === "chargeback" ? pieceWords.reversed(x) : x);
     // (§131) `full`: the line with the names uncut, its hover. (Owner, Nov 4, §175) The page lists these under each tester's name, so a line names its piece by the
-    // tester's pronoun: "… a $15.50 payment for her live call on “Harbor Run” (Oct 30), made while you were away. …" (this line is shown only here).
+    // tester's pronoun: "… a $15.50 payment for her live call (Oct 30), made while you were away. …" (this line is shown only here; §180: so it names no test).
     return { id: p.id, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(theirs!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(theirsFull!), fmtDateTimeIn(p.actionBy!, tz)) };
   });
 }

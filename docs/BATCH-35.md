@@ -2849,3 +2849,30 @@ to $20.50 ($5.00 more)". Nina has three live calls on that test and parts on two
   `batch35-dash-confirm-decision` (Confirm with your bank pressed on the dashboard names the test). Updated for the new wording: `batch10`, `batch11`,
   `batch28`, `batch29`, `batch23` (source check), `batch35-call-decide-lines`, `batch35-decide-paid-above`, `races-nov3`, `partial-dispute`, `pay-matrix`,
   `other-tab`, `stopped`, `addition`.
+
+## §180 Confirm with your bank: a drop-down under each tester's name; no test name on its own page (owner, Nov 4; refines §175)
+
+Owner: "i said dropdown under name for all confirms". Seen on the test page: the charge's line ran past the right edge of its panel ("…made while you were
+away. C"), and named the test the page is already on ("… for her live call on “excerptexcer…” (Tue, Oct 27, 3:25 PM) …").
+
+- **The drop-down.** On the developer's test page (Needs you, and the restricted view's "Your bank wants you to confirm"), each tester's waiting charges sit in
+  one drop-down (`BankGroup`, src/components/BankGroup.tsx; the same `<details>` + `fold-chevron` row as Needs you's per-tester "N parts to pay"). The summary
+  row: the tester's name as the green profile link (`NameLink`: clicking it opens the profile, clicking elsewhere on the row, Enter or Space opens or closes),
+  then "· 2 charges waiting · $20.50". Inside, each charge's Confirm with your bank box exactly as before (stop-once, bank box, over-$200 tick unchanged).
+  Groups and charges keep §175's order.
+- **Closed at first; when it opens by itself.** A link that jumps to one of its charges opens it: `#bank-<id>` on load (the bell, the dashboard and Payments
+  links) or on a hash change, and a click on an in-page link to one of its charges (the tester row's "Confirm with your bank in Needs you ↑"), before the
+  browser scrolls to it (HashJump's `jumpTo` also opens folds above its target, as before). It also opens, and can't be closed, while one of its charges has
+  its bank box open, a press under way, a stop box, or a refusal / "still waits" line showing (`useBankGroupHold` in BankWaiting): never closed over an open
+  bank check. Not remembered across reloads (owner: keep it simple).
+- **Lines name no test on the test's own page.** `bankWaitingOnTest` (shown only on this page) now writes "Your bank wants you to confirm a $15.50 payment
+  for her live call (Tue, Oct 27, 3:25 PM), made while you were away. Confirm it by …" (`pieceName`'s `test: null`; the hover is the same line). Every other
+  line keeps the test's name: the dashboard, Payments, bells, emails, Stripe descriptions.
+- **Wrap.** The charge box is `min-w-0 max-w-full` and its line `[overflow-wrap:anywhere]`; the group's details and its content are `min-w-0`. Checked on a
+  local server (port 3481, a throwaway test schema) at 1024 px and at 375 px, active and on a payment hold: no element in the groups is wider than its parent,
+  no page-wide horizontal scroll; the lines wrap inside the panel with a bank box open too. (The exact cut in the owner's screenshot wasn't reproduced on this
+  build; these rules keep the line inside the panel whatever its container.)
+- **Hooks.** `data-bank-group="<contractId>"` (now on the `<details>`), `data-bank-group-name` (the name), new `data-bank-group-toggle` (the summary) and
+  `data-bank-group-count`; `data-bank-waiting`, `data-restricted-bank`, `data-bank-up` and the `bank-<id>` anchors unchanged.
+- **Tests.** `batch35-restricted-needs-you` (each group a closed `<details>` with the toggle; the summary "· 2 charges waiting · $14.00" after the green name;
+  the lines name no test). Updated for the line without the test: `batch17-bank-check`, `batch25`, `payment-piece-names`.

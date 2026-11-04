@@ -1,6 +1,7 @@
 "use client";
 import { useState, type ReactNode } from "react";
 import { useBankCheck } from "@/components/BankCheck";
+import { useBankGroupHold } from "@/components/BankGroup";
 import { ChangesBox } from "@/components/ChangesBox";
 import { type BankAction } from "@/lib/bankConfirm";
 import { money } from "@/lib/format";
@@ -28,6 +29,8 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
   const over = (cents ?? 0) > PAY_TICK_CENTS;
   const [over200, setOver200] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  // (Owner, Nov 4, §180) On the test page its tester's drop-down stays open while its bank box, a stop box or a refusal is showing.
+  useBankGroupHold(paymentId, bank.open || busy || changes != null || !!error || !!err);
   async function cancelCheck() {
     setErr("");
     setCancelling(true);
@@ -60,8 +63,9 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
     }
   }
   return (
-    <div id={bankAnchor(paymentId)} className={`basis-full space-y-2 border border-sky-300/40 bg-sky-500/10 p-3 text-sm text-sky-100 ${MARKABLE}`} data-bank-waiting={paymentId}>
-      <p title={full}>{line}</p>
+    <div id={bankAnchor(paymentId)} className={`min-w-0 max-w-full basis-full space-y-2 border border-sky-300/40 bg-sky-500/10 p-3 text-sm text-sky-100 ${MARKABLE}`} data-bank-waiting={paymentId}>
+      {/* (Owner, Nov 4, §180) The line wraps inside the panel at every width (a long name or test name never runs past its edge). */}
+      <p title={full} className="[overflow-wrap:anywhere]">{line}</p>
       {over && !doneLine && (
         <label className="flex max-w-xs items-start gap-2 text-sm" data-over-tick="">
           <input type="checkbox" className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}

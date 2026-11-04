@@ -265,7 +265,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // The test page: under the piece (the tester's written answers), the box the link marks. (Owner, Nov 4, §175) Listed under the tester's name, the line names the
     // piece by her pronoun ("she").
     const rows = await bankWaitingOnTest(dev.user.id, testId);
-    expect(rows).toEqual([{ id: p.id, cents: 1000, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for her written answers on “Harbor Run”, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("her written answers on “Harbor Run”") }]);
+    expect(rows).toEqual([{ id: p.id, cents: 1000, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for her written answers, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("for her written answers, made") }]); // (Owner, Nov 4, §180) on the test's own page: no test name
     const box = renderToStaticMarkup(createElement(BankWaiting, { paymentId: p.id, line: rows[0].line }));
     expect(box).toContain(`id="bank-${p.id}"`);
     expect(box).toContain("data-[marked]:ring-2");

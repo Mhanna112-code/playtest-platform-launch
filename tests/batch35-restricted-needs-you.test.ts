@@ -185,8 +185,20 @@ describe("§175 Confirm with your bank grouped by tester", () => {
     expect(beaGroup).toBeGreaterThan(p2);
     expect(p3).toBeGreaterThan(beaGroup);
     // The lines name the piece by the pronoun, not the name the heading carries.
-    expect(html).toContain("Your bank wants you to confirm a $7.00 payment for her written answers on");
-    expect(html).toContain("Your bank wants you to confirm a $6.00 payment for their written answers on");
+    expect(html).toContain("Your bank wants you to confirm a $7.00 payment for her written answers, made while you were away.");
+    expect(html).toContain("Your bank wants you to confirm a $6.00 payment for their written answers, made while you were away.");
+    // (Owner, Nov 4, §180) Each group is a drop-down, closed at first: the summary is the green name, then the count and the total.
+    const alexTag = html.slice(alexGroup - 200, alexGroup + 200);
+    expect(alexTag).toMatch(/<details class="[^"]*" data-bank-group="/);
+    expect(alexTag).not.toMatch(/<details[^>]*\sopen=""[^>]*data-bank-group=/);
+    expect(html.match(/data-bank-group-toggle=""/g)).toHaveLength(2);
+    expect(html.slice(alexGroup, beaGroup)).toMatch(/<summary[^>]*data-bank-group-toggle=""[^>]*>.*data-name-link="person".*· 2 charges waiting · \$14\.00<\/span>/);
+    expect(html.slice(beaGroup)).toContain("· 1 charge waiting · $7.00</span>");
+    // (§180) The lines name no test on its own page (no “title”).
+    for (const id of [f.payment.id, alex2.id, bea1.id]) {
+      const box = html.slice(html.indexOf(`data-bank-waiting="${id}"`));
+      expect(box.slice(0, box.indexOf("</p>"))).not.toContain("“");
+    }
     if (state === "active") {
       // The links up from each tester's row still land on the charge (inside its group).
       expect(html).toContain(`href="#bank-${bea1.id}"`);

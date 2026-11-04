@@ -44,6 +44,7 @@ import { PayBox } from "./PayBox";
 import { CONFIRM_WITH_BANK, autoChargeLine, bankAnchor, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
+import { BankGroup } from "@/components/BankGroup";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
 import { ListingPanel } from "./ListingPanel";
 import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
@@ -192,11 +193,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       if (c) bankGroups.push({ c, rows: [b] });
     }
   }
+  // (Owner, Nov 4, §180) Each tester's charges in a drop-down under their name: "· 2 charges waiting · $13.00", closed at first (BankGroup says when it opens).
   const bankGrouped = bankGroups.map(({ c, rows }) => (
-    <div key={c.id} className="space-y-2" data-bank-group={c.id}>
-      <h3 className="font-semibold text-white" data-bank-group-name=""><NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} /></h3>
+    <BankGroup key={c.id} id={c.id} count={rows.length} total={money(rows.reduce((n, b) => n + b.cents, 0))}
+      name={<NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} />}>
       {rows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
-    </div>
+    </BankGroup>
   ));
   // (Batch 23, a batch 21 leftover) A call whose two browsers never connected reads "Waiting to connect", not "In progress".
   const connectedCalls = new Set((await db.callPresence.findMany({ where: { call: { contract: { testId: t.id } } }, select: { callId: true }, distinct: ["callId"] })).map((p) => p.callId));
