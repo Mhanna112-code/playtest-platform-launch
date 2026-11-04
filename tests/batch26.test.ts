@@ -338,7 +338,7 @@ describe("batch 26 section 11: layout", () => {
     await expect(finishGoogleSignup("none", {})).rejects.toMatchObject({ message: "Choose developer or tester.\nEnter your name\nAgree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
     for (const f of ["app/signup/page.tsx", "app/signup/google/page.tsx"]) expect(src(f).match(/<label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">/g)).toHaveLength(2);
     expect(src("components/FormMistakes.tsx")).toContain('text.slice(1).split("\\n").filter(Boolean)');
-    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain('<ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0"');
+    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain('<LongText text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0"');
   });
 });
 

@@ -2849,3 +2849,28 @@ to $20.50 ($5.00 more)". Nina has three live calls on that test and parts on two
   `batch35-dash-confirm-decision` (Confirm with your bank pressed on the dashboard names the test). Updated for the new wording: `batch10`, `batch11`,
   `batch28`, `batch29`, `batch23` (source check), `batch35-call-decide-lines`, `batch35-decide-paid-above`, `races-nov3`, `partial-dispute`, `pay-matrix`,
   `other-tab`, `stopped`, `addition`.
+
+## §182 The tester's parts fold; one long-text fold on both sides (owner, Nov 4)
+
+- **Your recording** (the tester's session page). The recordings (sent first, then each "Added · <date>", then the ones not sent yet) sit in a fold, "Your
+  recording" ("Your recordings (N)" with more than one), open at first and kept open or closed like every fold; inside, the list is in the list panel
+  (`own-recordings-list-<session>`, `LIST_PANEL.ownRecordings`, about one and a half recordings: scrolls inside, the grip drags it, the height is kept). The
+  count, Add more, the upload tools and Send stay under the fold.
+- **Your written answers.** What was sent sits in a fold, "Your written answers"; every question (§167's fold per question: the answer, then each addition,
+  dated) is in ONE panel (`own-answers-list-<submission>`, `LIST_PANEL.ownAnswers`). The "Add to this answer" buttons sit BELOW the panel, one per current
+  question, each followed by its question's first line. Pressed, the box opens IN the panel, directly under the latest part of that question (the original
+  answer or its last addition): it is drawn into the slot at the end of that question's fold (`data-add-slot`), the question's fold opens and the box is
+  brought into view with the typing in it. The box is itself a fold ("Add to this answer", open) whose editor scrolls inside when long; Add to my answer and
+  Close stay under it. A restored draft opens its box there the same way (every fold around it opens). Unchanged: the per-question keys and drafts
+  (`add:<session>:<questionKey>`), the 10 additions (at 10 the grey note in place of each button; a draft stays read-only), stop-once and the refusals.
+- **Long text, both sides: one fold** (`components/LongText.tsx`; FieldNote's FoldText is now this component). Wherever a tester's question, answer or
+  addition shows: the tester's own page (the sent answers, the previous sets, the answer form's questions), the developer's tester rows, Needs you's parts and
+  the update row (all through SentWork), By question, and the team's "See the work". A question shows its first 2 lines, an answer, an addition or the notes
+  their first 3. Text that fits shows whole with no button; longer text ends with "Show more", which opens the whole text in a scroll box about 8 lines tall
+  (the draggable panel, kept per panel id), and "Show less" folds it back. Whether it is long is measured on the page (the width, a picture loading), so
+  attachment markers, pictures and formatting inside an answer fold the same way; the text stays selectable. A question fold's title already shows the
+  question's first 2 lines: inside, only "Show more" (when the title cut it) opens the whole question. Payments show no answers (only "Written answers"), so
+  nothing changes there. Excerpts keep their own 2/3-line ClampText.
+- **Jumps.** A link to something inside a folded text opens it first (markJump's jumpTo), as it opens the details folds around it.
+- **Not changed.** The layout of Needs you and the test page (another branch is restructuring it): only the components that draw the text changed.
+- **Tests.** New `tests/batch35-parts-fold.test.ts`. Updated for the form's question fold: `batch20`, `batch26`.

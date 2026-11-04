@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
-import { ScrollText } from "@/components/ScrollText";
+import { ANSWER_LINES, LongText, QUESTION_LINES } from "@/components/LongText";
 import { ADDED_GENERAL, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
@@ -15,8 +15,6 @@ export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | n
   return <p className="text-xs font-semibold text-emerald-300" data-added-label="" data-added-at={at}>{addedLabel(fmtStampIn(at, timeZone))}</p>;
 }
 
-/** (§167) A long question is cut to 2 lines in its fold's title; the whole question shows inside. */
-const LONG_QUESTION = 120;
 
 /**
  * (Owner, Nov 3, batch 35 §136, §167) A sent piece, read wherever sent work is read: Needs you, the update row, the tester rows, the admin's "See the work" and the
@@ -38,11 +36,13 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
   const first = uploaded.filter((f) => !later.has(f.id));
   const all = uploaded.map(asAttachment);
   const byId = (ids: string[]) => uploaded.filter((f) => ids.includes(f.id));
-  const notesBlock = (text: string) => <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><AnswerWithAttachments text={text} attachments={all} /></div>;
-  const addedText = (a: { at: string; text: string; files: string[] }, i: number) => (
+  // (Owner, Nov 4, §182) Every answer, addition and note folds the same way (LongText): its first 3 lines, then Show more opening a scroll box about 8 lines tall.
+  const answerFold = (text: string, panel: string, label: string) => <LongText text={text} lines={ANSWER_LINES} id={panel} label={label}><AnswerWithAttachments text={text} attachments={all} /></LongText>;
+  const notesBlock = (text: string, panel = `${id}-notes`) => <div className="text-sm"><p className="font-medium text-ink-200">Notes</p>{answerFold(text, panel, "Notes")}</div>;
+  const addedText = (a: { at: string; text: string; files: string[] }, i: number, panel = `${id}-add-${i}`) => (
     <div key={i} className="space-y-1" data-addition={i}>
       <AddedLabel at={a.at} timeZone={timeZone} />
-      {a.text.trim() !== "" && <div className="text-sm [overflow-wrap:anywhere]"><AnswerWithAttachments text={a.text} attachments={all} /></div>}
+      {a.text.trim() !== "" && <div className="text-sm [overflow-wrap:anywhere]">{answerFold(a.text, panel, "Added")}</div>}
       <AttachmentList items={byId(a.files)} inlineText={[a.text]} />
     </div>
   );
@@ -73,9 +73,10 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
         </span>}
       </span>}>
       <div className="space-y-2 border-l border-white/10 pl-3" data-question-body={t.key}>
-        {t.question.length > LONG_QUESTION && <div className="text-xs text-slate-400" data-set-question=""><ScrollText className="min-w-0" text={t.question} label="Question" /></div>}
-        <div className="text-sm" data-set-answer="">{t.answer.trim() ? <AnswerWithAttachments text={t.answer} attachments={all} /> : <p className="text-slate-500" data-no-answer="">(no answer)</p>}</div>
-        {t.adds.map(addedText)}
+        {/* (§167) A long question is cut to 2 lines in its fold's title. (§182) A longer one gets Show more here (measured: none when it fits), opening the whole question. */}
+        <div className="text-xs text-slate-400 has-[[data-fold-text=short]]:hidden" data-set-question=""><LongText bare text={t.question} lines={QUESTION_LINES} id={`${id}-q-${t.key}-question`} label="Question" /></div>
+        <div className="text-sm" data-set-answer="">{t.answer.trim() ? answerFold(t.answer, `${id}-q-${t.key}-answer`, "Answer") : <p className="text-slate-500" data-no-answer="">(no answer)</p>}</div>
+        {t.adds.map((a, i) => addedText(a, i, `${id}-q-${t.key}-add-${i}`))}
         {addTo?.({ key: t.key, question: t.question })}
       </div>
     </Fold>
@@ -87,7 +88,7 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
       {extras.map((x, i) => (
         <div key={i} className="space-y-1" data-set-extra={i}>
           <AddedLabel at={x.at} timeZone={timeZone} />
-          {x.notes && notesBlock(x.notes)}
+          {x.notes && notesBlock(x.notes, `${id}-extra-${i}-notes`)}
           <AttachmentList items={byId(x.files)} inlineText={[...x.texts, x.notes]} />
         </div>
       ))}
@@ -96,7 +97,7 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
         <Fold id={`${id}-q-general`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="!text-sm"
           summary={<span className="text-slate-200" data-question-title="" data-general-title="">{ADDED_GENERAL}</span>}>
           <div className="space-y-2 border-l border-white/10 pl-3" data-question-body="general">
-            {general.map((a, i) => addedText({ at: a.at, text: a.text ?? "", files: a.files }, i))}
+            {general.map((a, i) => addedText({ at: a.at, text: a.text ?? "", files: a.files }, i, `${id}-general-${i}`))}
           </div>
         </Fold>
       )}

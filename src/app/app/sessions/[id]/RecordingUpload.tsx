@@ -15,6 +15,8 @@ import { ADDED_LABEL, addedLabel } from "@/lib/additions";
 import { fileSize } from "@/lib/format";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
+import { Fold, ResizeBox } from "@/components/Panel";
+import { LIST_PANEL } from "@/components/ScrollList";
 
 /** `group`: 0 = sent first, 1… = the addition it was sent with (headed "Added"); unsent ones have none. (§167) `addedOn`: that addition's date, in the tester's zone. */
 type Rec = { id: string; filename: string; size: number; uploaded: boolean; sent?: boolean; group?: number; addedOn?: string };
@@ -101,19 +103,28 @@ export function RecordingUpload({ sessionId, recordings, canSend, sentBefore, se
 
   return (
     <div className="space-y-2" data-mistakes-root="">
-      {/* One list: what was sent first, then each addition under "Added"; then what isn't sent yet. */}
-      {groups.map((g) => (
-        <div key={g} className={g ? "space-y-1 border-t border-white/10 pt-2" : ""} data-recording-group={g}>
-          {g > 0 && <p className="text-xs font-semibold text-emerald-300" data-added-label="">{(() => { const on = sent.find((r) => r.group === g)?.addedOn; return on ? addedLabel(on) : ADDED_LABEL; })()}</p>}
-          <ul className="space-y-2" data-recordings="">
-            {sent.filter((r) => (r.group ?? 0) === g).map((r) => <RecordingRow key={r.id} r={r} sessionId={sessionId} canRemove={false} />)}
-          </ul>
-        </div>
-      ))}
-      {fresh.length > 0 && (
-        <ul className="space-y-2" data-recordings="" data-not-sent="">
-          {fresh.map((r) => <RecordingRow key={r.id} r={r} sessionId={sessionId} canRemove={canSend} />)}
-        </ul>
+      {/* One list: what was sent first, then each addition under "Added"; then what isn't sent yet. (Owner, Nov 4, §182) It sits in "Your recording", a fold
+          (open at first, kept open or closed), in the list panel (scrolls inside, the grip drags it, its height kept). */}
+      {uploaded.length > 0 && (
+        <Fold id={`own-recordings-${sessionId}`} summary={<span className="font-medium text-white" data-own-recordings-title="">{uploaded.length === 1 ? "Your recording" : `Your recordings (${uploaded.length})`}</span>}>
+          <ResizeBox id={`own-recordings-list-${sessionId}`} label="Your recordings" defaultMax={LIST_PANEL.ownRecordings}>
+            <div className="space-y-2" data-own-recordings="">
+            {groups.map((g) => (
+              <div key={g} className={g ? "space-y-1 border-t border-white/10 pt-2" : ""} data-recording-group={g}>
+                {g > 0 && <p className="text-xs font-semibold text-emerald-300" data-added-label="">{(() => { const on = sent.find((r) => r.group === g)?.addedOn; return on ? addedLabel(on) : ADDED_LABEL; })()}</p>}
+                <ul className="space-y-2" data-recordings="">
+                  {sent.filter((r) => (r.group ?? 0) === g).map((r) => <RecordingRow key={r.id} r={r} sessionId={sessionId} canRemove={false} />)}
+                </ul>
+              </div>
+            ))}
+            {fresh.length > 0 && (
+              <ul className="space-y-2" data-recordings="" data-not-sent="">
+                {fresh.map((r) => <RecordingRow key={r.id} r={r} sessionId={sessionId} canRemove={canSend} />)}
+              </ul>
+            )}
+            </div>
+          </ResizeBox>
+        </Fold>
       )}
       <p className="text-xs text-slate-500" data-recording-count="">{uploaded.length} of 5 recordings{uploaded.length >= 5 ? (fresh.length ? ": remove one to add another" : ": the most this part takes") : ""}</p>
       {canSend && uploaded.length < 5 && !toolsOpen && (

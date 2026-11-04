@@ -7,7 +7,8 @@ import { DISPUTE_PRESS, PRESS_VERBS, refusalLine } from "@/lib/pressLabels";
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept, useKeptUnits } from "@/lib/useKept";
@@ -15,7 +16,7 @@ import { NOTES_UNIT, answerUnit, type Units } from "@/lib/draftUnits";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChars, answerShortLine, answersMissing, qRequired, qText } from "@/lib/questions";
 import { ChangesBox } from "@/components/ChangesBox";
-import { ScrollText } from "@/components/ScrollText";
+import { LongText, QUESTION_LINES } from "@/components/LongText";
 import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
 import { ADDITIONS_FULL, ADDITIONS_MAX } from "@/lib/additions";
 import { QuestionBox } from "@/components/QuestionBox";
@@ -212,9 +213,9 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       <QuestionBox count={questions.length} size="form" className="space-y-3" >
       {questions.map((q, i) => (
         <div key={i} data-question="">
-          {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. */}
+          {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. (Owner, Nov 4, §182) Now the shared fold: its first 2 lines, then Show more. */}
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
-          <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
+          <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
           <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} total={length} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
           {boxDraft(i)}
         </div>
@@ -260,8 +261,11 @@ export const ADD_OPEN = "Add to this answer";
  * draft per question (`add:<session>:<questionKey>`), editable until it's sent; a restored draft opens its question's fold. `canSend` false (a paused test): the
  * box and its draft stay, the button is hidden. `used`: the characters already sent (the 50,000 limit counts everything). `made`: the part's additions so far
  * (at most ADDITIONS_MAX; the page shows "3 of 10 additions left" once there is one): at 10, a grey note instead of the button, and a draft stays, read-only.
+ * (Owner, Nov 4, §182) The button sits below the written answers' panel (`question` names it there); pressed, the box opens in the panel, directly under the
+ * question's latest part: drawn into its `slot` (`<div data-add-slot>` at the end of that question's fold), the question's fold opened and the box brought into
+ * view. The box is a fold of its own (open), and its editor scrolls inside when long; Add to my answer and Close stay under it.
  */
-export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known = [], lines = [], questionKey, question, made = 0 }: { sessionId: string; seenAt: string; canSend?: boolean; used: number; known?: AnswerAttachment[]; lines?: string[]; questionKey: string; question: string; made?: number }) {
+export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known = [], lines = [], questionKey, question, made = 0, slot }: { sessionId: string; seenAt: string; canSend?: boolean; used: number; known?: AnswerAttachment[]; lines?: string[]; questionKey: string; question: string; made?: number; /** (§182) the data-add-slot the open box is drawn into */ slot?: string }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [attachments, setAttachments] = useState(known);
@@ -270,17 +274,35 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
   const [box, setBox] = useStopBox();
   const [boxAt, setBoxAt] = useState("");
   const root = useRef<HTMLDivElement>(null);
+  // (§182) Where the open box is drawn (null: here, at the button's place); `pressed`: opened by the button, so it is brought into view.
+  const [slotEl, setSlotEl] = useState<HTMLElement | null>(null);
+  const pressed = useRef(false);
+  // After every draw: a redraw of the page can draw the slot anew, so it is looked up again (it only sets when the slot changed, so it settles at once).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => {
+    if (!slot) return;
+    const found = document.querySelector<HTMLElement>(`[data-add-slot="${CSS.escape(slot)}"]`);
+    if (found !== slotEl) setSlotEl(found);
+  });
   const full = made >= ADDITIONS_MAX;
   const fin = useFinished(() => { setBusy(false); setText(""); setOpen(false); setBox(null); setBoxAt(""); });
   const keep = useKept(`add:${sessionId}:${questionKey}`, { text }, text === "", (v) => {
     if (typeof v.text === "string" && v.text) {
       setText(v.text);
       setOpen(true);
-      // (§167) A kept draft opens its question's fold, so it isn't hidden.
-      const fold = root.current?.closest("details");
-      if (fold) fold.open = true;
     }
   });
+  // (§167) A kept draft opens its question's fold, so it isn't hidden. (§182) Every fold it is in ("Your written answers" too); opened by the button, it is
+  // brought into view (the panel scrolls to it) and its box takes the typing.
+  useEffect(() => {
+    const el = root.current;
+    if (!open || !el) return;
+    for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement && !p.open) p.open = true;
+    if (!pressed.current) return;
+    pressed.current = false;
+    el.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
+    el.querySelector<HTMLTextAreaElement>("textarea:not([readonly])")?.focus({ preventScroll: true });
+  }, [open, slotEl]);
   const length = used + writtenLength([text]);
   const empty = !withoutAttachmentMarkers(text).trim() && !attachments.some((a) => hasMarkerFor(text, a.id, attachments));
   const remove = (id: string) => void api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true }).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setErr(errOf(e)));
@@ -304,28 +326,40 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
   if (!open && !fin.done) {
     return (
       <div ref={root} className="space-y-1" data-add-for={questionKey}>
-        {full ? fullNote : <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => setOpen(true)}>{ADD_OPEN}</button>}
+        {full ? fullNote : (
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => { pressed.current = true; setOpen(true); }}>{ADD_OPEN}</button>
+            {/* (§182) Below the panel: which question it adds to (its first line). */}
+            {slot && <span className="line-clamp-1 min-w-0 flex-1 basis-40 text-xs text-slate-400 [overflow-wrap:anywhere]" data-add-question="">{question}</span>}
+          </div>
+        )}
       </div>
     );
   }
-  return (
+  const boxNode = (
     <div ref={root} className="space-y-2 rounded-lg border border-white/10 p-3" data-add-box="written" data-add-for={questionKey} data-mistakes-root="">
-      {!fin.done && <>
-        <label className="label" htmlFor={`add-${sessionId}-${questionKey}`}>{ADD_OPEN}</label>
-        <p className="sr-only">{question}</p>
-        {full ? (
-          // (§167) At 10 the draft is kept, read-only.
-          <textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly="" />
-        ) : (
-          <>
-            <p className="note">What you sent stays as it is. This is added under this answer.</p>
-            <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} value={text} onChange={setText} />
-          </>
-        )}
-        {keep.restored && text !== "" && !full && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
-        {!full && <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>}
-        {canSend && !full && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      </>}
+      {!fin.done && (
+        // (§182) The box folds (open at first); what's typed scrolls inside it when long.
+        <details open className="group/fold" data-add-fold="">
+          <summary className="fold-chevron cursor-pointer text-sm font-medium text-slate-200">{ADD_OPEN}</summary>
+          <div className="mt-2 max-h-[min(24rem,60vh)] space-y-2 overflow-y-auto pr-1" data-add-scroll="">
+            <label className="sr-only" htmlFor={`add-${sessionId}-${questionKey}`}>{ADD_OPEN}</label>
+            <p className="sr-only">{question}</p>
+            {full ? (
+              // (§167) At 10 the draft is kept, read-only.
+              <textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly="" />
+            ) : (
+              <>
+                <p className="note">What you sent stays as it is. This is added under this answer.</p>
+                <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} value={text} onChange={setText} />
+              </>
+            )}
+            {keep.restored && text !== "" && !full && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
+            {!full && <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>}
+            {canSend && !full && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
+          </div>
+        </details>
+      )}
       {fullNote}
       <div className="flex flex-wrap items-center gap-3">
         {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? "Adding…" : ADD_PRESS}</button>}
@@ -338,6 +372,8 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
       <FormMistakes text={err} press={ADD_PRESS} named={PRESS_VERBS["written-add"]} />
     </div>
   );
+  // (§182) Open: drawn in the panel under the question's latest part (its slot); nothing stays at the button's place below the panel.
+  return slotEl ? createPortal(boxNode, slotEl) : boxNode;
 }
 
 export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; seenAt: string; title: string }) {

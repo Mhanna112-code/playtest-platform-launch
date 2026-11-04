@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { LongList } from "@/components/LongList";
 import { wasLine } from "@/lib/editMerge";
+import { ANSWER_LINES, LongText } from "@/components/LongText";
 
 /**
  * (Owner, Oct 28, batch 16 section 19) What another tab or device changed in one field, named as on the form ("Spots: 4 → 5"; long text: "Instructions:"
@@ -14,19 +15,9 @@ export type NoteItem = { name?: string; before?: string | string[]; after?: stri
 /** Short values stay on one line ("Spots: 4 → 5"); long text folds (3 lines, then Show more, opening a scroll box about 8 lines tall). */
 const isShort = (s: string) => s.length <= 80 && !s.includes("\n");
 
+/** (Owner, Nov 4, §182) The shared long-text fold (LongText): 3 lines, then Show more opening a scroll box about 8 lines tall. */
 export function FoldText({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
-  const long = text.length > 240 || text.split("\n").length > 3;
-  return (
-    <div data-fold-text={long ? (open ? "open" : "closed") : "short"}>
-      <div className={`whitespace-pre-wrap break-words ${long ? (open ? "max-h-48 overflow-y-auto pr-1" : "line-clamp-3") : ""}`}>{text}</div>
-      {long && (
-        <button type="button" className="btn-ghost mt-0.5 !px-2 !py-0.5 text-xs" aria-expanded={open} onClick={() => setOpen(!open)}>
-          {open ? "Show less" : "Show more"}
-        </button>
-      )}
-    </div>
-  );
+  return <LongText text={text} lines={ANSWER_LINES} />;
 }
 
 /** A list (the questions): 3, then "+N more". */
