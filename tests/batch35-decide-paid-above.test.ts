@@ -83,7 +83,7 @@ describe("§149: Decide after a Pay more since the admin's page loaded", () => {
     expect(w.st.made).toEqual([300]);
     expect(await paidOnPiece(w.sub.id)).toBe(1000);
     expect(await db.dispute.findUniqueOrThrow({ where: { id: w.row.id } })).toMatchObject({ status: "decided", decidedCents: 1000 });
-    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute: raised the pay to $10.00 ($3.00 more)");
+    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute on her written answers: raised the pay to $10.00 ($3.00 more)");
   });
 
   it("paid now equals the decided $10.00: it goes through, nothing is charged", async () => {
@@ -93,7 +93,7 @@ describe("§149: Decide after a Pay more since the admin's page loaded", () => {
     expect(w.st.made).toEqual([]);
     expect(await paidOnPiece(w.sub.id)).toBe(1000);
     expect(await db.dispute.findUniqueOrThrow({ where: { id: w.row.id } })).toMatchObject({ status: "decided", decidedCents: 1000 });
-    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute: kept the pay at $10.00, which was already paid: nothing more was charged");
+    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute on her written answers: kept the pay at $10.00, which was already paid: nothing more was charged");
   });
 
   it("paid now ($12.00) is MORE than the decided $10.00: Decide stops once naming it, nothing charged, the dispute stays open, the range moves up; then $10.00 is refused and $12.00 goes through", async () => {

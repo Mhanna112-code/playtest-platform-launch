@@ -66,7 +66,7 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect((await extra(testId, dev.cookie, { contractId: sessionId, submissionId: sub.id, amount: "200.00", tickedCents: 20_000 })).status).toBe(200);
     const d = await dispute(sessionId, tester.cookie, { kind: "submission", id: sub.id });
     expect(d.status).toBe(200);
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva disputed a payment on “Harbor Run”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva disputed the pay for her written answers on “Harbor Run”" } })).toBe(1); // (§177) which part
     const row = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
     // (Batch 28 §15; batch 29 §38) The total for the piece: from what it was paid ($0 + $200 Pay more) up to its cap ($1,000 in all).
     expect(await disputeBounds(row)).toMatchObject({ min: 20_000, max: 100_000 });
@@ -77,7 +77,8 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     expect(await decideDispute(a, row.id, { total: "800.00", tickCents: 60_000 })).toEqual({ extraCents: 60_000, line: "Done: raised the pay to $800.00 ($600.00 more charged)." }); // (batch 35 §163) the result line
     // No Stripe in tests: the raise is recorded ("payments not set up") at once, as any decision outside a hold.
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: row.id } })).toMatchObject({ kind: "dispute", amountCents: 60_000, status: "not_set_up" });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your dispute on “Harbor Run” was decided" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Your dispute about your written answers on “Harbor Run” was decided" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva's dispute about her written answers on “Harbor Run” was decided" } })).toBe(1); // (§177)
   });
 
   it("an unlisted call: the admin's max is $200/h × the logged minutes; during a hold the raise waits outside what is owed", async () => {

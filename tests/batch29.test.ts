@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { renderTimes } from "@/lib/tz";
+import { fmtDateTimeIn } from "@/lib/format";
 import { json, makeUser, req } from "./helpers";
 import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
 
@@ -44,7 +45,9 @@ async function heldCall(dev: { card?: boolean } = {}) {
 }
 const autoCharge = async () => (await import("@/lib/server/holds")).autoChargeCalls(new Date());
 const eventsOf = async (testId: string) => (await db.testEvent.findMany({ where: { testId, kind: "paid" }, orderBy: { createdAt: "asc" } })).map((e) => e.text);
-const delayedLines = (userId: string) => db.notification.count({ where: { userId, text: "Payment for your call on “Harbor Run” may be delayed" } });
+// (Owner, Nov 4, §177) The bell names which call (its start in the tester's zone, here UTC); the developer's event names it in theirs (UTC here).
+const delayedLines = (userId: string) => db.notification.count({ where: { userId, text: { startsWith: "Payment for your call on “Harbor Run” (", endsWith: " UTC) may be delayed" } } });
+const callOf = async (x: { call: { id: string } }) => `Ana Silva's call on ${fmtDateTimeIn((await db.call.findUniqueOrThrow({ where: { id: x.call.id } })).startsAt, "UTC")}`;
 
 describe("batch 29 §37: an automatic call charge the tester can't be paid for yet reads 'may be delayed'", () => {
   it("during a hold: deferred, the tester's call reads delayed and the event says it is waiting", async () => {
@@ -55,7 +58,7 @@ describe("batch 29 §37: an automatic call charge the tester can't be paid for y
     expect(await delayedLines(x.tester.user.id)).toBe(1);
     const mine = await db.notification.findMany({ where: { userId: x.tester.user.id } });
     for (const n of mine) expect(n.text).not.toMatch(/failed|hold|chargeback|suspended/i);
-    expect(await eventsOf(x.testId)).toContain("Ana Silva's call is waiting to be charged once your tests resume: $15.00");
+    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} is waiting to be charged once your tests resume: $15.00`);
     // The session page treats owed and waiting (deferred) call payments like a declined one: the delayed line instead of "paid".
     expect(src("app/app/sessions/[id]/page.tsx")).toContain('{ status: { in: ["needs_confirmation", "owed", "deferred"] } }');
   });
@@ -66,7 +69,7 @@ describe("batch 29 §37: an automatic call charge the tester can't be paid for y
     expect(await autoCharge()).toBe(1);
     expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "deferred" });
     expect(await delayedLines(x.tester.user.id)).toBe(1);
-    expect(await eventsOf(x.testId)).toContain("Ana Silva's call was charged automatically: $15.00, charged when your account is clear");
+    expect(await eventsOf(x.testId)).toContain(`${await callOf(x)} was charged automatically: $15.00, charged when your account is clear`);
   });
 
   it("the developer's event says the true outcome: declined, or waiting for the bank", async () => {
@@ -74,17 +77,17 @@ describe("batch 29 §37: an automatic call charge the tester can't be paid for y
     const a = await heldCall();
     expect(await autoCharge()).toBe(1);
     expect(await db.payment.findFirstOrThrow({ where: { callId: a.call.id } })).toMatchObject({ status: "failed" });
-    expect(await eventsOf(a.testId)).toEqual(["The automatic charge for Ana Silva's call ($15.00) was declined: it was added to what you owe"]);
+    expect(await eventsOf(a.testId)).toEqual([`The automatic charge for ${await callOf(a)} ($15.00) was declined: it was added to what you owe`]);
     expect(await delayedLines(a.tester.user.id)).toBe(1);
     stripeCard("3ds");
     const b = await heldCall();
     expect(await autoCharge()).toBe(1);
     expect(await db.payment.findFirstOrThrow({ where: { callId: b.call.id } })).toMatchObject({ status: "needs_confirmation" });
-    expect(await eventsOf(b.testId)).toEqual(["Ana Silva's call was charged automatically: $15.00, waiting for your bank to confirm it"]);
+    expect(await eventsOf(b.testId)).toEqual([`${await callOf(b)} was charged automatically: $15.00, waiting for your bank to confirm it`]);
     stripeCard("ok");
     const c = await heldCall();
     expect(await autoCharge()).toBe(1);
-    expect(await eventsOf(c.testId)).toEqual(["Ana Silva's call was charged automatically: $15.00"]);
+    expect(await eventsOf(c.testId)).toEqual([`${await callOf(c)} was charged automatically: $15.00`]);
   });
 });
 
@@ -110,7 +113,7 @@ describe("batch 29 §37: a developer who deleted their account", () => {
     expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "failed" });
     expect((await db.user.findUniqueOrThrow({ where: { id: x.dev.user.id } })).holdStartedAt).toBeNull();
     expect(await delayedLines(x.tester.user.id)).toBe(1);
-    expect(await eventsOf(x.testId)).toEqual(["The automatic charge for Ana Silva's call ($15.00) was declined"]);
+    expect(await eventsOf(x.testId)).toEqual([`The automatic charge for ${await callOf(x)} ($15.00) was declined`]);
   });
 });
 

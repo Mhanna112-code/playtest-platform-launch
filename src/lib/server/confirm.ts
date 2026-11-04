@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, fmtTimeIn, money } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
+import { awayFromTest, onTestLine } from "@/lib/rules"; // (§177)
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
 import { payPressOf, seenOf } from "./live";
@@ -338,6 +339,10 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
         if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank");
         // (Owner, Nov 4, §171 item 7) The press-time gate stays as it was (`awayCharge`: §159's rules, not §171 A1/A2) while the owner decides the waiting-charge rules.
         await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true });
+      }).catch((e) => {
+        // (Owner, Nov 4, §177) Pressed away from the test's own page (the dashboard's "Your bank wants you to confirm"): each stop line names the test.
+        if (e instanceof HttpError && e.code === "stop_once" && awayFromTest(body.page, c.testId) && Array.isArray(e.data?.changes)) e.data.changes = (e.data.changes as { text: string }[]).map((l) => ({ ...l, text: onTestLine(c.title, l.text) }));
+        throw e;
       });
     }
   }

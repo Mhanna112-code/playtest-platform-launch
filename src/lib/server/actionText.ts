@@ -1,12 +1,13 @@
 import { T as fmtDateTime } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, money, pronouns } from "@/lib/server/dateFormat";
+import { displayName, fmtDateTime as fmtAt, money, pronouns } from "@/lib/server/dateFormat";
 import { andList } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { questionKeys, quoteQuestion } from "@/lib/additions";
 import { itemsFor } from "@/lib/answerSets";
 import { qText } from "@/lib/questions";
 import { logAction, type Answers, type OwnAbout } from "./live";
+import { partWords } from "./partWords";
 
 // What a person did, in their own words, for reason E ("You sent your written answers in another tab"). Logged after the
 // action succeeded. Chat messages and the live-call Join are not logged (not stop-once buttons).
@@ -25,6 +26,14 @@ async function callLine(callId: string, withName: boolean, otherName?: string) {
   const call = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
   if (!call) return "a call";
   return `the call ${otherName ? `with ${otherName} ` : withName ? `with ${displayName(call.contract.tester)} ` : ""}on ${fmtDateTime(call.startsAt)}`;
+}
+
+/** (Owner, Nov 4, §177) A dispute named by its tester and part: "Nina Park's dispute about her live call on Tue, Oct 27, 2:00 PM". */
+async function disputeWords(disputeId: string) {
+  const d = await db.dispute.findUnique({ where: { id: disputeId } });
+  const c = d ? await db.contract.findUnique({ where: { id: d.contractId }, include: { tester: true } }) : null;
+  if (!d || !c) return "a dispute";
+  return `${displayName(c.tester)}'s dispute about ${pronouns(c.tester.pronoun).poss} ${await partWords(d, fmtAt)}`;
 }
 
 async function requestLine(requestId: string) {
@@ -66,7 +75,8 @@ export async function logTesterAction(userId: string, contractId: string, action
     case "terms": text = body.choice === "switch" ? "switched to the new terms" : "kept your current terms"; break;
     case "choose": {
       // (Batch 29 section 13) "You charged Nora Lane $10.00 for your recording in another tab".
-      const what = body.callId ? "live call" : (await db.submission.findUnique({ where: { id: s(body.submissionId) } }))?.kind === "recording" ? "recording" : "written answers";
+      // (Owner, Nov 4, §177) A call with its date and time: "You charged Nora Lane $15.00 for your live call on Tue, Oct 27, 2:00 PM in another tab".
+      const what = await partWords(body.callId ? { callId: s(body.callId) } : { submissionId: s(body.submissionId) }, fmtAt);
       const dev = await db.test.findUnique({ where: { id: c.testId }, include: { developer: true } });
       const cents = (result as { amountCents?: number } | null)?.amountCents ?? 0;
       text = body.choice === "letgo" ? `let your ${what} go` : `charged ${dev ? displayName(dev.developer) : "the developer"} ${money(cents)} for your ${what}`;
@@ -90,7 +100,8 @@ export async function logTesterAction(userId: string, contractId: string, action
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), false, devName)}`; break;
     case "cancel-set": text = "cancelled the rest of a daily / weekly set of calls"; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), false, devName)}`; break;
-    case "dispute": text = "opened a dispute"; break;
+    // (Owner, Nov 4, §177) Which part: "You disputed the pay for your live call on Tue, Oct 27, 2:00 PM in another tab".
+    case "dispute": text = `disputed the pay for your ${await partWords(body.kind === "call" ? { callId: s(body.id) } : { submissionId: s(body.id) }, fmtAt)}`; break;
     // (Batch 29 section 13) Rate (and the end of the part it brings) is never a line that stops other presses: it only races with Rate itself ("You already rated …").
     default: return;
   }
@@ -149,7 +160,8 @@ export async function logTestAction(userId: string, testId: string, action: stri
     case "cancel-call": text = `cancelled ${await callLine(s(body.callId), true)}`; about = { a: "cancel-call", k: await callKeys(s(body.callId)) }; break;
     case "cancel-set": text = `cancelled the rest of a daily / weekly set of calls with ${await contractName(s(body.contractId))}`; about = { a: "cancel-set", k: [`set:${s(body.setId)}`, `c:${s(body.contractId)}`] }; break;
     case "no-show": text = `reported a problem with ${await callLine(s(body.callId), true)}`; about = { a: "no-show", k: await callKeys(s(body.callId)) }; break;
-    case "dispute-side": text = "added your side to a dispute"; about = { a: "dispute-side", k: [`dispute:${s(body.disputeId)}`], answers: { item: s(body.disputeId) } }; break;
+    // (§177) Which dispute: "You added your side to Nina Park's dispute about her live call on Tue, Oct 27, 2:00 PM in another tab".
+    case "dispute-side": text = `added your side to ${await disputeWords(s(body.disputeId))}`; about = { a: "dispute-side", k: [`dispute:${s(body.disputeId)}`], answers: { item: s(body.disputeId) } }; break;
     case "pay-extra": {
       // (Batch 20 section 12) Waiting for the bank's check: nothing is paid yet (it's logged when the bank confirms: logPayMore). A repeat isn't news.
       const r = (result ?? {}) as { amountCents?: number; requiresAction?: boolean; repeated?: boolean };
@@ -158,7 +170,8 @@ export async function logTestAction(userId: string, testId: string, action: stri
       const sub = body.callId ? null : await db.submission.findUnique({ where: { id: s(body.submissionId) }, select: { kind: true } });
       const label = body.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
       // (Batch 20 section 12) "You paid Ana Silva $5.00 more for their written answers in another tab": it stops every press on the test page once (BIG_OWN_ACTS).
-      text = `paid ${await contractName(s(body.contractId))} ${money(r.amountCents ?? 0)} more for ${await contractPoss(s(body.contractId))} ${label}`;
+      // (Owner, Nov 4, §177) A call with its date and time ("… more for her live call on Tue, Oct 27, 2:00 PM").
+      text = `paid ${await contractName(s(body.contractId))} ${money(r.amountCents ?? 0)} more for ${await contractPoss(s(body.contractId))} ${body.callId ? await partWords({ callId: s(body.callId) }, fmtAt) : label}`;
       about = { a: "pay-more", k: [piece, `c:${s(body.contractId)}`], ...(!body.callId ? { answers: sentAnswer(s(body.submissionId), s(body.contractId), label) } : {}) };
       break;
     }
@@ -238,7 +251,9 @@ export async function logReview(userId: string, body: B, result: { amountCents?:
     : await db.submission.findUnique({ where: { id }, include: { contract: { include: { tester: true } } } }).then((x) => x && { c: x.contract, label: x.kind === "recording" ? "recording" : "written answers" });
   if (!piece) return;
   const name = displayName(piece.c.tester);
-  const text = result.rejected ? `rejected ${name}'s ${piece.label}` : `paid ${name} ${money(result.amountCents ?? 0)} for the ${piece.label}`;
+  // (Owner, Nov 4, §177) A call with its date and time: "You paid Ana Silva $15.00 for the live call on Tue, Oct 27, 2:00 PM in another tab".
+  const part = body.kind === "call" ? await partWords({ callId: id }, fmtAt) : piece.label;
+  const text = result.rejected ? `rejected ${name}'s ${part}` : `paid ${name} ${money(result.amountCents ?? 0)} for the ${part}`;
   // (Batch 16 section 21) It touches this piece (another Pay on it stops once) and this tester (an End early that includes them stops once).
   await logAction(userId, piece.c.testId, body, text, { a: "pay", k: [`${body.kind === "call" ? "call" : "sub"}:${id}`, `c:${piece.c.id}`], ...(body.kind !== "call" ? { answers: sentAnswer(id, piece.c.id, piece.label) } : {}) });
 }
@@ -260,11 +275,13 @@ export async function logConfirmed(userId: string, body: B, p: { id: string; kin
   if (!c) return;
   const sub = submissionId ? await db.submission.findUnique({ where: { id: submissionId }, select: { kind: true } }) : null;
   const label = callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
+  // (Owner, Nov 4, §177) A call with its date and time: "You confirmed Ana Silva's $15.00 charge for her live call on Tue, Oct 27, 2:00 PM with your bank …".
+  const part = callId ? await partWords({ callId }, fmtAt) : label;
   const name = displayName(c.tester), poss = pronouns(c.tester.pronoun).poss, amount = money(p.amountCents);
-  const what = p.kind === "dispute" ? `the team's ${amount} dispute decision on ${name}'s ${label}`
-    : p.kind === "extra" ? `your ${amount} Pay more for ${name}'s ${label}`
-      : p.kind === "chargeback" ? `your ${amount} payment again for ${name}'s ${label}`
-        : `${name}'s ${amount} charge for ${poss} ${label}`;
+  const what = p.kind === "dispute" ? `the team's ${amount} dispute decision on ${name}'s ${part}`
+    : p.kind === "extra" ? `your ${amount} Pay more for ${name}'s ${part}`
+      : p.kind === "chargeback" ? `your ${amount} payment again for ${name}'s ${part}`
+        : `${name}'s ${amount} charge for ${poss} ${part}`;
   const piece = callId ? `call:${callId}` : `sub:${submissionId}`;
   await logAction(userId, c.testId, body, `confirmed ${what} with your bank`, { a: p.kind === "extra" ? "pay-more" : "pay", k: [piece, `c:${c.id}`, `pay:${p.id}`], ...(submissionId && !callId ? { answers: sentAnswer(submissionId, c.id, label) } : {}) });
 }

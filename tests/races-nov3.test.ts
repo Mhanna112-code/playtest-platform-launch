@@ -89,7 +89,7 @@ describe("(Nov 3, races) 1: the team's Decide and the developer's Pay more on th
     const [d, m] = await Promise.all([decide, more]);
     expect(d).toMatchObject({ ok: true, v: { extraCents: 600 } });
     expect([m.status, m.body.error?.code]).toEqual([409, "stop_once"]);
-    expect(m.body.error.changes.map((c: { text: string }) => c.text)).toContain("The team decided Ana Silva's dispute: raised the pay to $10.00 ($6.00 more)");
+    expect(m.body.error.changes.map((c: { text: string }) => c.text)).toContain("The team decided Ana Silva's dispute on her written answers: raised the pay to $10.00 ($6.00 more)");
     expect(st.made).toEqual([600]);
     expect(await paidOnPiece(w.sub.id)).toBe(1000);
   });
@@ -132,7 +132,7 @@ describe("(Nov 3, races) 1: the team's Decide and the developer's Pay more on th
       expect(st.made).toEqual(dueCents ? [dueCents] : []);
       expect(await paidOnPiece(w.sub.id)).toBe(400 + moreCents + dueCents);
       const line = (await db.testEvent.findFirstOrThrow({ where: { testId: w.testId, kind: "admin" } })).text;
-      expect(line).toBe(dueCents ? "The team decided Ana Silva's dispute: raised the pay to $10.00 ($3.00 more)" : "The team decided Ana Silva's dispute: kept the pay at $10.00, which was already paid: nothing more was charged");
+      expect(line).toBe(dueCents ? "The team decided Ana Silva's dispute on her written answers: raised the pay to $10.00 ($3.00 more)" : "The team decided Ana Silva's dispute on her written answers: kept the pay at $10.00, which was already paid: nothing more was charged");
     }
   });
 
@@ -150,7 +150,7 @@ describe("(Nov 3, races) 1: the team's Decide and the developer's Pay more on th
       expect(st.made).toEqual([600]);
       expect(await paidOnPiece(w.sub.id)).toBe(1000);
       if (!d.ok) expect([d.e.message, m.status]).toEqual([DECIDE_LOCKED, 200]); // Pay more reserved first: Decide waits for it
-      else if (m.status !== 200) expect(m.body.error.changes.map((c: { text: string }) => c.text)).toContain("The team decided Ana Silva's dispute: raised the pay to $10.00 ($6.00 more)");
+      else if (m.status !== 200) expect(m.body.error.changes.map((c: { text: string }) => c.text)).toContain("The team decided Ana Silva's dispute on her written answers: raised the pay to $10.00 ($6.00 more)");
       else expect(d.v.extraCents).toBe(0); // Pay more went through before Decide's claim: nothing more was due
     }
   });

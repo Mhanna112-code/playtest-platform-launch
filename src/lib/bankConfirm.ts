@@ -78,7 +78,8 @@ export async function peekBank(t: PeekTarget, since?: string): Promise<PeekResul
     const res = await fetch("/api/payments/confirm", {
       method: "POST",
       headers: { "content-type": "application/json", ...(TAB ? { "x-tab": TAB } : {}), "x-timezone": Intl.DateTimeFormat().resolvedOptions().timeZone, ...(pageUser() ? { "x-uid": pageUser() } : {}) },
-      body: JSON.stringify({ ...t, ...(since ? { since } : {}), peek: true }),
+      // (Owner, Nov 4, §177) The page the window is open on: away from the payment's own test page, the notice names the test on each line.
+      body: JSON.stringify({ ...t, ...(since ? { since } : {}), page: location.pathname, peek: true }),
     });
     if (!res.ok) return { status: "waiting" };
     const data = (await res.json().catch(() => null)) as { status?: unknown; changes?: unknown; still?: unknown; cancelled?: unknown } | null;

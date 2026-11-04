@@ -1,11 +1,12 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, money } from "@/lib/format";
-import { PRESS_ACTION_MS } from "@/lib/rules";
+import { displayName, money, pronouns } from "@/lib/format";
+import { PRESS_ACTION_MS, awayFromTest, onTestLine } from "@/lib/rules";
 import { CANCELLED_WHY, cancelledLine, stillPaysLine } from "@/lib/bankNotice";
 import { HttpError } from "./http";
 import { fakeOn, getStripe, isMissing, stripeOn } from "./stripe";
 import { payPressOf, seenOf } from "./live";
+import { partAway } from "./partWords";
 
 // (Owner, Nov 3, batch 35 §158) The inline bank check finishes by itself even when the bank's return page is blocked (on localhost Chrome blocks Stripe's public page from
 // sending the frame back to http://localhost: Private Network Access). While the bank's page is open the page asks here every few seconds whether Stripe is still waiting
@@ -57,8 +58,8 @@ const after = (lines: Line[], since: Date) => [...new Set(lines.filter((l) => ne
  * it only reads, and throws its stop) with the same press (payPressOf; a retried chargeback's row checks the piece of the payment the bank reversed), so the Alerts
  * ticks and the team's-decision rule apply as for Pay. Seen at the press: only what came after it.
  */
-async function pieceChanges(p: Payment, since: Date, tab: string) {
-  const c = await db.contract.findUnique({ where: { id: p.contractId! }, select: { id: true, testId: true } });
+async function pieceChanges(p: Payment, since: Date, tab: string, page: unknown) {
+  const c = await db.contract.findUnique({ where: { id: p.contractId! }, select: { id: true, testId: true, title: true } });
   if (!c) return [];
   const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await db.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
   const piece = { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null };
@@ -69,7 +70,10 @@ async function pieceChanges(p: Payment, since: Date, tab: string) {
     return [];
   } catch (e) {
     if (!(e instanceof HttpError) || e.code !== "stop_once") throw e;
-    return after((e.data?.changes as Line[] | undefined) ?? [], since);
+    // (Owner, Nov 4, §177) A window open anywhere but this test's own page (the dashboard, Payments, Confirm all) names the test on each line: "On “Harbor Run”:
+    // Nina Park disputed the pay for her live call on Tue, Oct 27, 8:00 AM". On the test's own page the page is the test.
+    const lines = after((e.data?.changes as Line[] | undefined) ?? [], since);
+    return awayFromTest(page, c.testId) ? lines.map((l) => onTestLine(c.title, l)) : lines;
   }
 }
 
@@ -79,20 +83,36 @@ async function pieceChanges(p: Payment, since: Date, tab: string) {
  * what you owe (an unpaid hold), or is charged right after the team approves lifting the hold (a chargeback hold's reservation, which reserves ONCE: batch 28
  * §8); a charge made during an unpaid hold is charged right after this payment goes through (§125). A disputed amount the bank changed is said too.
  */
-const testerOf = async (contractId: string | null) => { const c = contractId ? await db.contract.findUnique({ where: { id: contractId }, select: { tester: true } }) : null; return c ? displayName(c.tester) : "A tester"; };
+/**
+ * (Owner, Nov 4, §177) A charge that arrived meanwhile, named by WHO charged WHAT on WHICH test (these windows are never a test's own page): "Ana Silva charged $5.00
+ * for her written answers on “Harbor Run” meanwhile", "Ana Silva charged $15.00 for her live call on “Harbor Run” (Tue, Oct 27, 8:00 AM) meanwhile", "The
+ * automatic charge for Ana Silva's live call on “Harbor Run” (Tue, Oct 27, 8:00 AM) added $15.00 meanwhile", "The team's dispute decision on Ana Silva's
+ * recording on “Harbor Run” added $5.00 meanwhile", "Your Pay more for … added $5.00 meanwhile".
+ */
+async function meanwhileHead(p: { kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null }) {
+  const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId }, select: { title: true, tester: true } }) : null;
+  const amount = money(p.amountCents);
+  if (!c) return `${p.kind === "dispute" ? "The team's dispute decision added" : "A tester charged"} ${amount} meanwhile`;
+  const name = displayName(c.tester);
+  const piece = async () => `${name}'s ${(await partAway(p, "", c.title)).trimStart()}`;
+  if (p.kind === "dispute") return `The team's dispute decision on ${await piece()} added ${amount} meanwhile`;
+  if (p.kind === "extra") return `Your Pay more for ${await piece()} added ${amount} meanwhile`;
+  if (p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto) return `The automatic charge for ${await piece()} added ${amount} meanwhile`;
+  return `${name} charged ${amount} for ${await partAway(p, pronouns(c.tester.pronoun).poss, c.title)} meanwhile`;
+}
 export const owedTail = (reservation: boolean, charge: boolean) =>
   reservation ? "it isn't in this reservation; it's charged right after the team approves lifting your hold"
     : charge ? "it's charged right after this payment goes through" : "it isn't in this payment; pay it with Pay what you owe after this one";
 async function owedChanges(devId: string, since: Date, covered: Set<string>, reservation = false) {
   const { owedLines } = await import("./holds");
   const lines = (await owedLines(devId)).filter((l) => !covered.has(l.id));
-  const rows = lines.length ? await db.payment.findMany({ where: { id: { in: lines.map((l) => l.id) } }, select: { id: true, kind: true, status: true, amountCents: true, createdAt: true, owedUntil: true, chargebackAt: true, contractId: true } }) : [];
+  const rows = lines.length ? await db.payment.findMany({ where: { id: { in: lines.map((l) => l.id) } }, select: { id: true, kind: true, status: true, amountCents: true, createdAt: true, owedUntil: true, chargebackAt: true, contractId: true, submissionId: true, callId: true } }) : [];
   const out: Line[] = [];
   for (const l of lines) {
     const r = rows.find((x) => x.id === l.id);
     if (!r) continue;
     if (r.status === "deferred") {
-      if (r.createdAt > since) out.push({ text: `${r.kind === "dispute" ? "The team's dispute decision added" : `${await testerOf(r.contractId)} charged`} ${money(r.amountCents)} meanwhile: ${owedTail(reservation, true)}`, at: r.createdAt });
+      if (r.createdAt > since) out.push({ text: `${await meanwhileHead(r)}: ${owedTail(reservation, true)}`, at: r.createdAt });
       continue;
     }
     const at = [r.chargebackAt, r.owedUntil, r.status === "owed" ? r.createdAt : null].filter((d): d is Date => !!d && d > since).sort((a, b) => a.getTime() - b.getTime())[0];
@@ -111,16 +131,16 @@ async function owedChanges(devId: string, since: Date, covered: Set<string>, res
  * (§160) Confirm all: a new charge made while away (it asks the bank) that this one payment doesn't cover. Never added to it: "Ben Okafor charged $10.00 meanwhile:
  * it isn't in this payment; confirm it on its own, or with Confirm all after this one." (owner, Nov 3).
  */
-export const notInAllLine = (who: string, cents: number) => `${who} ${who.startsWith("The team") ? "added" : "charged"} ${money(cents)} meanwhile: it isn't in this payment; confirm it on its own, or with Confirm all after this one`;
-async function allChanges(devId: string, since: Date, oneId: string, tab: string) {
+export const notInAllLine = (head: string) => `${head}: it isn't in this payment; confirm it on its own, or with Confirm all after this one`;
+async function allChanges(devId: string, since: Date, oneId: string, tab: string, page: unknown) {
   const { inAll } = await import("./confirmAll");
   const fresh = (await db.payment.findMany({ where: { developerId: devId, createdAt: { gt: since }, actionPi: { not: null }, coveredById: null, NOT: { id: oneId } }, orderBy: { createdAt: "asc" } })).filter(inAll);
   const out: Line[] = [];
-  for (const p of fresh) out.push({ text: notInAllLine(p.kind === "dispute" ? "The team's dispute decision" : await testerOf(p.contractId), p.amountCents), at: p.createdAt });
+  for (const p of fresh) out.push({ text: notInAllLine(await meanwhileHead(p)), at: p.createdAt }); // (§177) who, which part, which test
   // (Owner, Nov 4, §171 A3) And everything about each covered charge's tester (its part's pay-press lines, whatever the Alerts ticks), each line once.
   const lines = [...after(out, since)];
   for (const c of await db.payment.findMany({ where: { coveredById: oneId, contractId: { not: null } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }))
-    for (const t of await pieceChanges(c, since, tab)) if (!lines.includes(t)) lines.push(t);
+    for (const t of await pieceChanges(c, since, tab, page)) if (!lines.includes(t)) lines.push(t);
   return lines;
 }
 
@@ -222,11 +242,11 @@ export async function peekBankCheck(dev: { id: string }, body: Record<string, un
   const status = await piAnswer(p.actionPi);
   if (!since) return { status };
   const once = await import("./owedOnce");
-  if (once.isAll(p)) return withChanges(status, await allChanges(dev.id, since, p.id, tab), p.amountCents);
+  if (once.isAll(p)) return withChanges(status, await allChanges(dev.id, since, p.id, tab, body.page), p.amountCents);
   if (p.kind === once.OWED_KIND) {
     const covered = new Set((await db.payment.findMany({ where: { coveredById: p.id }, select: { id: true } })).map((x) => x.id));
     return withChanges(status, await owedChanges(dev.id, since, covered), p.amountCents);
   }
-  if (p.contractId) return withChanges(status, await pieceChanges(p, since, tab), p.amountCents);
+  if (p.contractId) return withChanges(status, await pieceChanges(p, since, tab, body.page), p.amountCents);
   return { status }; // a Subscribe or a renewal: only a cancelled check is said
 }

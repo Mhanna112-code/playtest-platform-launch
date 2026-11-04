@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
+import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
   owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
@@ -24,6 +24,7 @@ import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
 import { describedOnce, stripeDescription } from "./paymentRows";
+import { partOnTest } from "./partWords";
 import { LATE_REMINDER_TAIL, NO_CHARGE_LATE } from "@/lib/moneyLines";
 
 // Payment hold (owner rule, Oct 27): starts AT ONCE when any payment is declined (part Pay, the tester's Charge, a call charge, extra pay), or when a chargeback opens
@@ -283,6 +284,15 @@ export async function paymentPiece(p: { contractId: string | null; submissionId:
   const call = !p.submissionId && p.callId && day ? await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } }) : null;
   const part = partOf(p.submissionId ? null : p.callId, sub ? sub.kind || "written" : p.submissionId ? "written" : null);
   return pieceName({ tester: displayName(c.tester), part, test: c.title, when: call && day ? day(call.startsAt) : null, full });
+}
+
+/**
+ * (Owner, Nov 4, §177) Which payment a reversal's line is about: " for Ana Silva's written answers on “Harbor Run”", " for the team's dispute decision on …" (the
+ * chargeback's opening line already named it), or "" when it paid for no one part.
+ */
+export async function reversalFor(p: { kind: string; contractId: string | null; submissionId: string | null; callId: string | null }) {
+  const piece = await paymentPiece(p);
+  return piece ? ` for ${p.kind === "dispute" ? disputeDecisionName(piece) : piece}` : "";
 }
 
 /**
@@ -593,8 +603,12 @@ export async function owedItemName(p: { amountCents: number; kind: string; contr
 /** The tester's one notice when a delayed payment goes through: the normal paid line. */
 export async function tellArrived(p: { contractId: string | null; submissionId: string | null; callId: string | null; kind: string; amountCents: number }, email: string, devName: string) {
   const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
+  // (Owner, Nov 4, §177) A bell names WHICH part and WHICH test: "Nora Lane paid $15.00 for your live call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST)", "… for your
+  // dispute about your recording on “Harbor Run”".
+  const title = p.contractId ? (await db.contract.findUnique({ where: { id: p.contractId }, select: { title: true } }))?.title : null;
+  const part = title && (p.submissionId || p.callId) ? await partOnTest(p, "your", title) : null;
   const label = p.kind === "dispute" ? "dispute" : p.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
-  const line = `${devName} paid ${money(p.amountCents)} for your ${label}`;
+  const line = part ? `${devName} paid ${money(p.amountCents)} for ${p.kind === "dispute" ? `your dispute about ${part}` : part}` : `${devName} paid ${money(p.amountCents)} for your ${label}`;
   await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? "part-live" : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { side: "tester", payment: true, group: "tarrived" });
 }
 
@@ -638,8 +652,11 @@ export async function owedLines(devId: string) {
     const sub = p.submissionId ? await db.submission.findUnique({ where: { id: p.submissionId } }) : null;
     // (Owner, Nov 2, §131) Named by its tester, part and test (pieceName); a dispute decision by the piece it decided.
     const part = partOf(p.submissionId ? null : p.callId, sub?.kind || "written"); // (as before: a row naming no part reads "written answers")
+    // (Owner, Nov 4, §177) A call is named with its date, as pieceName names a call everywhere else: "Ana Silva's live call on “Harbor Run” (Oct 27)".
+    const call = !p.submissionId && p.callId ? await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } }) : null;
+    const when = call ? fmtDate(call.startsAt).replace(/, \d{4}$/, "") : null;
     const name = (full: boolean) => {
-      const piece = c ? pieceName({ tester: displayName(c.tester), part, test: c.test.title, full }) : part;
+      const piece = c ? pieceName({ tester: displayName(c.tester), part, test: c.test.title, when, full }) : part;
       return p.kind === "dispute" ? disputeDecisionName(piece).replace(/^the/, "The") : piece;
     };
     const what = name(false), whole = name(true);
@@ -787,7 +804,7 @@ export async function chargebackWon(paymentIntentId: string) {
   await db.payment.deleteMany({ where: { repaysId: p.id, kind: "chargeback", status: "deferred" } });
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
   // (Batch 11) A payments-kind stop-once line on the developer's test page and Edit (Alerts can ignore it).
-  if (c) await (await import("./live")).logEvent(c.testId, "payment", chargebackReversedLine(rev, refunded || rev + CHARGEBACK_FEE_CENTS, refunded > 0), c.id);
+  if (c) await (await import("./live")).logEvent(c.testId, "payment", chargebackReversedLine(rev, refunded || rev + CHARGEBACK_FEE_CENTS, refunded > 0, await reversalFor(p)), c.id);
   await notify(dev.email, chargebackWonLine(rev), [chargebackWonLine(rev)], "/app/payments", { side: "developer", payment: true, group: "payhold" });
   // No chargeback left open: the hold is a payment hold again (it lifts once nothing is owed; the 4th hold on still needs the admin's Approve).
   if (dev.holdStartedAt && dev.holdReason === "chargeback" && !(await db.payment.count({ where: { developerId: dev.id, chargeback: "open" } }))) {
@@ -1311,6 +1328,9 @@ export async function autoChargeCalls(now: Date) {
     const minutes = callMinutesOf(x);
     if (minutes == null || x.rateCents == null) continue;
     const c = x.contract, dev = c.test.developer, name = displayName(c.tester);
+    // (Owner, Nov 4, §177) Each line names the call it charged, with its date and time in the developer's zone: "Ana Silva's call on Tue, Oct 27, 8:00 AM was
+    // charged automatically: $15.00" (a tester can have many calls on a test).
+    const call = `${name}'s call on ${callAtFor(x.startsAt, dev)}`;
     const gone = !!dev.deletedAt;
     if (gone && !dev.stripePaymentMethodId) continue;
     // A charge waiting for the bank on this call (the developer's own press) is left to finish.
@@ -1322,40 +1342,42 @@ export async function autoChargeCalls(now: Date) {
     const review = await db.review.create({ data: { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: callReference(x.rateCents, minutes).cents, rateCents: x.rateCents, reason: amount ? AUTO_CHARGED_CALL : AUTO_NOTHING_CALL, payKey, auto: true } }).catch(() => null);
     if (!review) continue; // paid (or charged) meanwhile
     if (!amount) {
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${name}'s call on ${fmtDateTime(x.startsAt)} closed with nothing to pay`, false, {}, c.id, "", `call-${x.id}`));
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${call} closed with nothing to pay`, false, {}, c.id, "", `call-${x.id}`));
       continue;
     }
     // (§131) The developer's payment lines name the tester, the part and the test (pieceName).
     const piece = pieceName({ tester: name, part: "live call", test: c.title });
     const what = `${piece} (${T(x.startsAt, "date")}, charged automatically after ${REVIEW_DAYS} days)`;
     // (Batch 29 §37) The tester's call reads "may be delayed" (never "failed" or "hold") while the money waits: the same line as for a declined charge.
-    const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
+    // (Owner, Nov 4, §177) Which call: "Payment for your call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST) may be delayed".
+    const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     // (Batch 29 §37) The developer's event says what really happened (charged, waiting for the bank, declined, owed, waiting for the account).
     const logged = (text: string) => db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${text}`, false, {}, c.id, "", `call-${x.id}`));
     if (!gone && dev.devSuspendedAt && !dev.holdStartedAt) {
       // During a suspension: it waits and is charged when the account is clear (chargeDeferred on the reinstatement); the tester is paid then.
       await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "deferred" } });
       await tellDelayed();
-      await logged(`${name}'s call was charged automatically: ${money(amount)}, charged when your account is clear`);
+      await logged(`${call} was charged automatically: ${money(amount)}, charged when your account is clear`);
       n++;
       continue;
     }
     if (!gone && await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-      await bell(dev.id, `${piece} (${money(amount)}) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+      // (Owner, Nov 4, §177) Which call: its date, as every other payment line names a call ("Ana Silva's live call on “Harbor Run” (Oct 27)").
+      await bell(dev.id, `${pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt, "date") })} (${money(amount)}) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
       await tellDelayed();
-      await logged(`${name}'s call is waiting to be charged once your tests resume: ${money(amount)}`);
+      await logged(`${call} is waiting to be charged once your tests resume: ${money(amount)}`);
       n++;
       continue;
     }
     const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
-    let outcome = `${name}'s call was charged automatically: ${money(amount)}`;
+    let outcome = `${call} was charged automatically: ${money(amount)}`;
     try {
       // (Owner, Nov 3) "Playtest: Ana Silva's live call on “Harbor Run”, charged automatically after 7 days", as its "What you've paid" line (its review is made first).
       const r = await charge(dev, c.tester, amount, payKey, await describedOnce(row.id, () => stripeDescription({ payment: row })));
       if (r.status === "requires_action") {
         await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
         await tellDelayed();
-        outcome = `${name}'s call was charged automatically: ${money(amount)}, waiting for your bank to confirm it`;
+        outcome = `${call} was charged automatically: ${money(amount)}, waiting for your bank to confirm it`;
       } else {
         await db.payment.update({ where: { id: row.id }, data: { status: r.status, stripePaymentIntentId: r.stripePaymentIntentId, ...(r.feeCents != null ? { feeCents: r.feeCents, testerCents: r.testerCents, transferStatus: r.transferStatus } : {}) } });
         // (Owner, Nov 3) Full names in the receipt email.
@@ -1376,7 +1398,7 @@ export async function autoChargeCalls(now: Date) {
       await tellDelayed();
       // (A deleted developer: no hold to start; it stays "delayed" for the tester and is listed for the admins, as declinedPayment says.)
       await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt, "date") }));
-      outcome = gone ? `The automatic charge for ${name}'s call (${money(amount)}) was declined` : `The automatic charge for ${name}'s call (${money(amount)}) was declined: it was added to what you owe`;
+      outcome = gone ? `The automatic charge for ${call} (${money(amount)}) was declined` : `The automatic charge for ${call} (${money(amount)}) was declined: it was added to what you owe`;
     }
     await logged(outcome);
     n++;
@@ -1564,12 +1586,13 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id, "", `call-${x.id}`));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)} go: nothing charged`, false, {}, c.id, "", `call-${x.id}`));
     return { choice, amountCents: 0 };
   }
   if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
     await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt, "date") })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id, "", `call-${x.id}`));
+    // (Owner, Nov 4, §177) Which call: "Ana Silva charged $15.00 for her call on Tue, Oct 27, 8:00 AM" (the developer's zone).
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)}`, false, {}, c.id, "", `call-${x.id}`));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
@@ -1580,7 +1603,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     status = r.status;
     if (r.status === "requires_action") {
       await (await import("./confirm")).awayAction(row.id, r as NeedsAction);
-      await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
+      await notify(c.tester.email, `Payment for your call on “${c.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
       status = "needs_confirmation";
     } else {
       return finishChoicePay(row.id, r);
@@ -1595,10 +1618,10 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     }
     status = "failed";
     const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
-    await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
+    await notify(c.tester.email, `Payment for your call on “${c.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt, "date") }));
   }
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id, "", `call-${x.id}`));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)}`, false, {}, c.id, "", `call-${x.id}`));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
@@ -1609,7 +1632,9 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
   const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
   // (§131) The receipt names the tester, the part and the test (pieceName).
   await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title, full: true })} (charged by ${pronouns(c.tester.pronoun).obj} after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${label}`, false, {}, c.id, "", p.callId ? `call-${p.callId}` : p.submissionId ? `part-${p.submissionId}` : ""));
+  // (Owner, Nov 4, §177) A call with its date and time: "Ana Silva charged $15.00 for her call on Tue, Oct 27, 8:00 AM".
+  const call = p.callId ? await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } }) : null;
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${label}${call ? ` on ${callAtFor(call.startsAt, c.test.developer)}` : ""}`, false, {}, c.id, "", p.callId ? `call-${p.callId}` : p.submissionId ? `part-${p.submissionId}` : ""));
   return { choice: "charge" as const, amountCents: p.amountCents, status: r.status };
 }
 

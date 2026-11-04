@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateFormat";
-import { TESTER_CHOICE_REASONS, stopOnce, type TestEventLike } from "@/lib/rules";
+import { TESTER_CHOICE_REASONS, partWhen, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { keyGivenToYouLine } from "@/lib/keys";
@@ -34,7 +34,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
   const [offers, reviews, calls, devReqs, mine] = await Promise.all([
     // (Owner, reason A) An offer still waiting (or replaced by a newer one) stops the press even when the top box already showed it; one the tester already decided on does not.
     db.termsOffer.findMany({ where: { contractId, createdAt: { gt: termsFrom < seenAt ? termsFrom : seenAt }, status: { in: ["open", "superseded"] } } }),
-    db.review.findMany({ where: { contractId, createdAt: { gt: seenAt }, reason: { notIn: TESTER_CHOICE_REASONS } }, include: { submission: true } }),
+    db.review.findMany({ where: { contractId, createdAt: { gt: seenAt }, reason: { notIn: TESTER_CHOICE_REASONS } }, include: { submission: true, call: { select: { startsAt: true } } } }),
     db.call.findMany({ where: { contractId, cancelledAt: { gt: seenAt }, cancelledBy: { not: "tester" } } }),
     db.callRequest.findMany({ where: { contractId, fromSide: "developer", updatedAt: { gt: seenAt } } }),
     db.callRequest.findMany({ where: { contractId, fromSide: "tester", status: { in: ["booked", "declined"] }, decidedAt: { gt: seenAt } } }),
@@ -50,15 +50,19 @@ export async function testerChanges(testerId: string, contractId: string, testId
   for (const r of reviews) {
     // Owed (or paid late): the "delayed" line and, when it goes through, the paid line come from the payment.
     if (!r.rejected && (owedKeys.has(r.submissionId ?? r.callId) || lateKeys.has(r.submissionId ?? r.callId))) continue;
-    const what = r.callId ? "your live call" : `your ${r.submission?.kind === "recording" ? "recording" : "written answers"}`;
+    // (Owner, Nov 4, §177) Which call: "Nora Lane paid $15.00 for your live call on Tue, Oct 27, 8:00 AM".
+    const what = r.callId ? `your ${partWhen("live call", r.call ? fmtDateTime(r.call.startsAt) : null)}` : `your ${r.submission?.kind === "recording" ? "recording" : "written answers"}`;
     // (Batch 30 §5) The team's $0 closure is the team's, never the developer's.
     out.push({ kind: r.rejected ? "rejected" : "paid", text: r.rejected ? `${dev} rejected ${what}` : r.teamClosedById ? `The team closed ${what} for $0` : `${dev} paid ${money(r.amountCents)} for ${what}`, createdAt: r.createdAt, piece: (r.submissionId ?? r.callId) || undefined });
   }
   // (Owner, Oct 28, batch 20 section 12, bug found by the owner) A Pay more (Payment kind "extra") is a "paid" change too: before, only Reviews were read, so a Pay
   // more never stopped a tester press (a Cancel call went straight through) nor showed in the stop box or the live box. Charged (or charged before payouts are set up).
   const kinds = new Map((await db.submission.findMany({ where: { contractId }, select: { id: true, kind: true } })).map((x) => [x.id, x.kind]));
+  const starts = new Map((await db.call.findMany({ where: { contractId }, select: { id: true, startsAt: true } })).map((x) => [x.id, x.startsAt]));
   for (const p of await db.payment.findMany({ where: { contractId, kind: "extra", createdAt: { gt: seenAt }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "asc" } })) {
-    out.push({ kind: "paid", text: payMoreLine(dev, p.amountCents, p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"), createdAt: p.createdAt, piece: (p.submissionId ?? p.callId) || undefined });
+    // (§177) A Pay more on a call names it: "Nora Lane paid you $5.00 more for your live call on Tue, Oct 27, 8:00 AM".
+    const at = p.callId ? starts.get(p.callId) : undefined;
+    out.push({ kind: "paid", text: payMoreLine(dev, p.amountCents, p.callId ? partWhen("live call", at ? fmtDateTime(at) : null) : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers"), createdAt: p.createdAt, piece: (p.submissionId ?? p.callId) || undefined });
   }
   for (const r of devReqs) {
     const when = fmtDateTime(r.startsAt);

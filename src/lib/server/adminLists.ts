@@ -261,13 +261,16 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
  * charge waits (a payment hold, the developer's bank, a declined card); otherwise the decision's own line on the test ("kept the pay at $12.00, which was already
  * paid: nothing more was charged").
  */
+/** (§177) The head of the team's decision line, up to what it did: "The team decided Ana Silva's dispute[ on her live call on Tue, Oct 27, 8:00 AM]: ". */
+const TEAM_DECIDED_HEAD = /^The team decided .*?: /;
 async function decidedResult(d: { id: string; contractId: string; decidedCents: number | null; decidedAt: Date | null; submissionId: string | null; callId: string | null }) {
   const row = await db.payment.findFirst({ where: { disputeId: d.id, kind: "dispute" }, orderBy: { createdAt: "desc" } });
   if (row && row.amountCents > 0) return decisionWhat({ paidNowCents: 0, dueCents: row.amountCents, decidedCents: d.decidedCents ?? 0, rejected: false }, row.status === "charged" || row.status === "not_set_up" || !!row.settledAt);
   const at = d.decidedAt?.getTime() ?? 0;
   const events = await db.testEvent.findMany({ where: { contractId: d.contractId, kind: "admin", text: { startsWith: "The team decided" }, createdAt: { gte: new Date(at - 60_000), lte: new Date(at + 60_000) } } });
   const ev = events.sort((a, b) => Math.abs(a.createdAt.getTime() - at) - Math.abs(b.createdAt.getTime() - at))[0];
-  if (ev) return ev.text.replace(/^The team decided [^:]*: /, "");
+  // (Owner, Nov 4, §177) The line now names the part, a call with its time ("… dispute on her live call on Tue, Oct 27, 8:00 AM: raised …"): up to the first ": ".
+  if (ev) return ev.text.replace(TEAM_DECIDED_HEAD, "");
   const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId ?? "none" } });
   return decisionWhat({ paidNowCents: d.decidedCents ?? 0, dueCents: 0, decidedCents: d.decidedCents ?? 0, rejected: !!r?.rejected });
 }
@@ -845,7 +848,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       rows.push({ ...mk("dispute", d.id, d.createdAt, [...ofP(d.contractId), ` disputed the pay for ${possOf(d.contractId)} ${part}:`]), em: d.reason });
       if (d.decidedAt) {
         const ev = decisions.filter((e) => e.contractId === d.contractId && Math.abs(e.createdAt.getTime() - d.decidedAt!.getTime()) < 60_000)[0];
-        const what = ev ? ev.text.replace(/^The team decided [^:]*: /, "") : `${money(d.decidedCents ?? 0)} in all`;
+        const what = ev ? ev.text.replace(TEAM_DECIDED_HEAD, "") : `${money(d.decidedCents ?? 0)} in all`;
         rows.push(mk("dispute-decided", d.id, d.decidedAt, [`${emails(d.decidedById) || "The team"} decided `, ...ofP(d.contractId), `'s dispute: ${what}`]));
       }
     }

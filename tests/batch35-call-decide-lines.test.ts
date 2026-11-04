@@ -5,6 +5,7 @@ import type Stripe from "stripe";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import * as M from "@/lib/callMeasure";
+import { fmtDateTimeIn } from "@/lib/format";
 import { CHARGED_BY_TESTER, decideDoneLine, decisionWhat } from "@/lib/rules";
 import * as T from "@/lib/confirmAllText";
 import { POST as reviewPOST } from "@/app/api/review/route";
@@ -147,7 +148,7 @@ describe("§163 2: one wording when the decision equals what's paid now", () => 
     const w = await payMoreAfterLoad(600);
     expect(await decideDispute(w.admin, w.row.id, { total: "10.00", tickCents: 600, seenAt: w.loaded })).toEqual({ extraCents: 0, line: "Done: kept the pay at $10.00, which was already paid: nothing more was charged." });
     expect(w.made).toEqual([]);
-    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute: kept the pay at $10.00, which was already paid: nothing more was charged");
+    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute on her written answers: kept the pay at $10.00, which was already paid: nothing more was charged");
     expect((await yourAction(w.admin.id, w.row.id))?.why).toBe("dispute decided by you: kept the pay at $10.00, which was already paid: nothing more was charged");
   });
 
@@ -159,20 +160,20 @@ describe("§163 2: one wording when the decision equals what's paid now", () => 
     expect(r2.status).toBe(200);
     expect(r2.body).toEqual({ extraCents: 0, line: "Done: kept the pay at $12.00, which was already paid: nothing more was charged." });
     expect(w.made).toEqual([]);
-    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute: kept the pay at $12.00, which was already paid: nothing more was charged");
+    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute on her written answers: kept the pay at $12.00, which was already paid: nothing more was charged");
     // The developer's next Pay more stops once naming it in the same words.
     const m = await act(w.testId, "pay-extra", w.dev.cookie, { seenAt: w.loaded, contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, payKey: randomUUID() });
-    expect(m.body.error.changes.map((c: { text: string }) => c.text)).toContain("The team decided Ana Silva's dispute: kept the pay at $12.00, which was already paid: nothing more was charged");
+    expect(m.body.error.changes.map((c: { text: string }) => c.text)).toContain("The team decided Ana Silva's dispute on her written answers: kept the pay at $12.00, which was already paid: nothing more was charged");
   });
 
   it("keeping the pay with a blank box reads the same; a raise that charges is unchanged", async () => {
     const k = await disputed();
     stripe();
     expect(await decideDispute(k.admin, k.row.id, { total: "" })).toEqual({ extraCents: 0, line: "Done: kept the pay at $4.00, which was already paid: nothing more was charged." });
-    expect(await decidedLine(k.testId)).toBe("The team decided Ana Silva's dispute: kept the pay at $4.00, which was already paid: nothing more was charged");
+    expect(await decidedLine(k.testId)).toBe("The team decided Ana Silva's dispute on her written answers: kept the pay at $4.00, which was already paid: nothing more was charged");
     const w = await payMoreAfterLoad(300);
     expect(await decideDispute(w.admin, w.row.id, { total: "10.00", tickCents: 600, seenAt: w.loaded })).toEqual({ extraCents: 300, line: "Done: raised the pay to $10.00 ($3.00 more charged)." });
-    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute: raised the pay to $10.00 ($3.00 more)");
+    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute on her written answers: raised the pay to $10.00 ($3.00 more)");
   });
 });
 
@@ -285,7 +286,8 @@ async function awayWorld() {
   return { ...s, ana, ben, cara, anaWork, anaCall, box };
 }
 const WORK_LINE = "You confirmed Ana Silva's $10.00 charge for her written answers with your bank in another tab";
-const CALL_LINE = "You confirmed Ana Silva's $30.00 charge for her live call with your bank in another tab";
+// (Owner, Nov 4, §177) The call is named with its date and time (the developer's zone: UTC in tests).
+const callLine = async (w: { ana: { sessionId: string } }) => `You confirmed Ana Silva's $30.00 charge for her live call on ${fmtDateTimeIn((await db.call.findFirstOrThrow({ where: { contractId: w.ana.sessionId } })).startsAt, "UTC")} with your bank in another tab`;
 /** What tab A's (or B's) open bank box on Ben's charge says (§160's peek), since the box opened. */
 const notice = async (w: Awaited<ReturnType<typeof awayWorld>>, tab: string, since: string) => ((await confirmIn(w.dev.cookie, tab, { paymentId: w.box.id, peek: true, since })).body.changes ?? []) as string[];
 
@@ -311,6 +313,7 @@ describe("§163 5: a Confirm in another tab is one of the developer's own other-
     const opened = seen();
     await settle();
     expect((await confirmIn(w.dev.cookie, "tab-B", { paymentId: w.anaCall.id, simulate: "succeeded" })).status).toBe(200);
+    const CALL_LINE = await callLine(w);
     expect(await notice(w, "tab-A", opened)).toEqual([CALL_LINE]);
     expect(await notice(w, "tab-B", opened)).toEqual([]);
     const p = await pay(w.dev.cookie, { kind: "submission", id: w.cara.sub.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: false, tab: "tab-A" });
@@ -329,6 +332,7 @@ describe("§163 5: a Confirm in another tab is one of the developer's own other-
     // Its one bank check finishes through the confirm route when it asked the bank; otherwise it went through at once.
     if (r.body.confirm && oneId) expect((await confirmIn(w.dev.cookie, "tab-B", { paymentId: oneId, simulate: "succeeded" })).status).toBe(200);
     const a = await notice(w, "tab-A", opened);
+    const CALL_LINE = await callLine(w);
     expect(a.filter((l) => l === WORK_LINE)).toHaveLength(1);
     expect(a.filter((l) => l === CALL_LINE)).toHaveLength(1);
     const b = await notice(w, "tab-B", opened);

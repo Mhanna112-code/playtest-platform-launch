@@ -150,7 +150,7 @@ describe("§160 the peek's changes: what would have stopped the press since it",
     const r = await peek(o.dev.cookie, { paymentId: one.id, since });
     expect(r.body.status).toBe("waiting");
     expect(r.body.changes).toHaveLength(1);
-    expect(r.body.changes[0]).toBe("Ana Silva charged $5.00 meanwhile: it isn't in this payment; confirm it on its own, or with Confirm all after this one");
+    expect(r.body.changes[0]).toBe("Ana Silva charged $5.00 for her written answers on “Harbor Run” meanwhile: it isn't in this payment; confirm it on its own, or with Confirm all after this one"); // (§177) which part, which test
     expect(r.body.still).toBe(stillPaysLine("$20.00"));
   });
 });
@@ -353,7 +353,7 @@ describe("§160 Cancel under the bank's window (and leaving the page): Stripe is
     await settle();
     await db.payment.create({ data: { kind: "review", developerId: dev, testerId: o.tester.user.id, contractId: o.sessionId, submissionId: o.sub.id, amountCents: 1000, feeCents: 0, testerCents: 1000, status: "deferred" } });
     const r = await peek(o.dev.cookie, { paymentId: one.id, since });
-    expect(r.body.changes).toEqual(["Ana Silva charged $10.00 meanwhile: it's charged right after this payment goes through"]);
+    expect(r.body.changes).toEqual(["Ana Silva charged $10.00 for her written answers on “Harbor Run” meanwhile: it's charged right after this payment goes through"]); // (§177)
     expect((await db.payment.findUniqueOrThrow({ where: { id: one.id } })).amountCents).toBe(700); // not added
   });
 

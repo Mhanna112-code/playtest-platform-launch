@@ -402,7 +402,7 @@ describe("batch 28 §20, §15, §14: a listed piece's cap is its listing plus th
     await db.message.create({ data: { testId: w.testId, testerId: w.tester.user.id, contractId: w.sessionId, senderId: w.tester.user.id, body: "Can you pay $30 for the extra levels?" } });
     await db.message.create({ data: { testId: w.testId, testerId: w.tester.user.id, contractId: w.sessionId, senderId: w.dev.user.id, body: "Yes, $30 in all." } });
     expect((await dispute(w.sessionId, w.tester.cookie, w.sub.id)).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: "Ana Silva disputed a payment on “Harbor Run”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: "Ana Silva disputed the pay for her written answers on “Harbor Run”" } })).toBe(1); // (§177) which part
     const row = await db.dispute.findFirstOrThrow({ where: { submissionId: w.sub.id } });
     expect(await disputeBounds(row)).toMatchObject({ min: 2000, max: 100_000 });
     const rows = (await adminPage("disputes", w.dev.user.id, null)).rows as import("@/lib/server/adminLists").DisputeVM[];

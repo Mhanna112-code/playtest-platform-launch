@@ -7,7 +7,7 @@ import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, ensureCustomer, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
 import { cardLabel, logAccountChange } from "./accountChanges";
 import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACKS_REVIEW_FROM, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, REVIEWED_LINE, RESERVE_DAYS, RESERVE_EXPIRED, bankChangedLine, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
-import { liftHoldIfClear, owed, payable, tellArrived } from "./holds";
+import { liftHoldIfClear, owed, payable, reversalFor, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
 // (Owner, Oct 26) A CHARGEBACK is a payment hold with extra steps. The developer's account goes on a payment hold (as for a failed payment). To lift it:
@@ -79,7 +79,8 @@ export async function resolveRepaidAfterReview(devId: string) {
     if (!(await db.payment.count({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up"] } } }))) continue;
     if ((await db.payment.updateMany({ where: { id: p.id, chargeback: "open" }, data: { chargeback: "resolved" } })).count !== 1) continue;
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
-    if (c) await logEvent(c.testId, "chargeback", `You repaid the bank reversal of ${reversedWords(p)}`, c.id);
+    // (Owner, Nov 4, §177) Which payment: "You repaid the bank reversal of your $10.00 payment for Ana Silva's written answers on “Harbor Run”".
+    if (c) await logEvent(c.testId, "chargeback", `You repaid the bank reversal of ${reversedWords(p)}${await reversalFor(p)}`, c.id);
   }
 }
 
@@ -499,7 +500,7 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
     await db.payment.update({ where: { id: p.id }, data: { chargeback: "resolved" } });
     const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
     // (§133) "The team resolved the bank reversal of $96.00 of your $444.67 payment" when the bank reversed part of it.
-    if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of ${reversedWords(p)}`, c.id);
+    if (c) await logEvent(c.testId, "chargeback", `The team resolved the bank reversal of ${reversedWords(p)}${await reversalFor(p)}`, c.id); // (§177) which payment
   }
   // (Batch 24, a batch 23 leftover) ONE notice for the developer: when Approve lifts the hold it says so too (the testers still get their "is running again").
   const lifted = await liftHoldIfClear(devId, { quietDev: true });

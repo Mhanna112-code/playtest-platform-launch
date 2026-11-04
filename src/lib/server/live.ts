@@ -3,7 +3,7 @@ import { dateZone } from "./dateZone";
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime, money } from "@/lib/server/dateFormat";
-import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, switchedLine, type TestEventLike } from "@/lib/rules";
+import { DEV_QUIET_KINDS, DEV_STOP_KINDS, delayedPayLine, partWhen, switchedLine, type TestEventLike } from "@/lib/rules";
 import { alertOf } from "@/lib/alerts";
 import { INFO_FIELDS, LISTING_SAVE, SAVED_ELSEWHERE_LINE, editedLine, ndaAgainLine, parseSave, saveLine } from "@/lib/listingSave";
 import { LISTING_SAVED, panelKeysOf, parseSaved } from "@/lib/listingPanel";
@@ -374,8 +374,18 @@ async function subKinds(ids: (string | null)[], tx: Tx | typeof db = db) {
   const subs = await tx.submission.findMany({ where: { id: { in: ids.filter((x): x is string => !!x) } }, select: { id: true, kind: true } });
   return new Map(subs.map((s) => [s.id, s.kind]));
 }
-const pieceLabel = (p: { kind: string; callId: string | null; submissionId: string | null }, kinds: Map<string, string>) =>
-  p.kind === "dispute" ? "dispute decision" : p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers";
+/**
+ * (Owner, Nov 4, §177) WHICH part a payment line is about: a call with its date and time ("live call on Tue, Oct 27, 8:00 AM"); a dispute decision names the part
+ * it decided ("dispute decision on the live call on Tue, Oct 27, 8:00 AM"). `starts`: the payments' calls' starts.
+ */
+const partLabel = (p: { kind: string; callId: string | null; submissionId: string | null }, kinds: Map<string, string>, starts: Map<string, Date>) => {
+  const part = partWhen(p.callId ? "live call" : kinds.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers", p.callId && starts.has(p.callId) ? fmtDateTime(starts.get(p.callId)!) : null);
+  return p.kind === "dispute" ? (p.callId || p.submissionId ? `dispute decision on the ${part}` : "dispute decision") : part;
+};
+async function callStarts(ids: (string | null)[], tx: Tx | typeof db = db) {
+  const calls = await tx.call.findMany({ where: { id: { in: ids.filter((x): x is string => !!x) } }, select: { id: true, startsAt: true } });
+  return new Map(calls.map((c) => [c.id, c.startsAt]));
+}
 
 /**
  * (NEWEST+3, payments ACROSS TESTS) The developer's payment problems on ANY of their tests, naming the test: an owed
@@ -391,6 +401,7 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
   const contracts = await tx.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, tester: true, test: { select: { title: true } } } });
   const cmap = new Map(contracts.map((c) => [c.id, c]));
   const kinds = await subKinds(pays.map((p) => p.submissionId), tx);
+  const starts = await callStarts(pays.map((p) => p.callId), tx);
   // (Owner, Nov 3, batch 35 §163) A charge the developer confirmed with their bank themselves (Confirm with your bank, Confirm all) is ONE line: their own
   // "You confirmed … with your bank in another tab" in the other tabs, nothing in the tab that pressed; never a second "Payment went through" for it.
   const settled = pays.filter((p) => p.settledAt && p.settledAt > since).map((p) => `pay:${p.id}`);
@@ -400,7 +411,8 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
     if (confirmedByMe.has(`pay:${p.id}`)) continue;
     const c = cmap.get(p.contractId!);
     const title = c?.test.title ?? "a test";
-    const who = `${money(p.amountCents)} to ${c ? displayName(c.tester) : "a tester"} for the ${pieceLabel(p, kinds)}`;
+    // (Owner, Nov 4, §177) "$15.00 to Nina Park for the live call on Tue, Oct 27, 8:00 AM", "… for the dispute decision on the recording".
+    const who = `${money(p.amountCents)} to ${c ? displayName(c.tester) : "a tester"} for the ${partLabel(p, kinds, starts)}`;
     const next = " · pay what you owe in Payments"; // (Owner, Oct 27) no retries and no cut-off any more: a declined payment is a hold at once
     // (Batch 35 §78) An owed payment that went through was the developer's own (Pay what you owe, a retry, a new card): it lifts their hold, so like a
     // reinstatement (§72) it shows in the live box but never stops their press. A tester's Charge, a dispute decision or a failed payment stop as before.
@@ -431,10 +443,13 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
   ]);
   const titles = new Map((await db.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, title: true } })).map((c) => [c.id, c.title]));
   const kinds = await subKinds(pays.map((p) => p.submissionId));
+  const starts = await callStarts(pays.map((p) => p.callId));
   const out: TestEventLike[] = [];
   const dev = displayName(me.test.developer);
   for (const p of pays) {
-    const label = pieceLabel(p, kinds) === "dispute decision" ? "dispute" : pieceLabel(p, kinds);
+    // (Owner, Nov 4, §177) Which part: "your live call on Tue, Oct 27, 8:00 AM"; a dispute's payment names the part it was about ("your dispute about the recording").
+    const part = partLabel({ ...p, kind: "" }, kinds, starts);
+    const label = p.kind === "dispute" ? (p.callId || p.submissionId ? `dispute about the ${part}` : "dispute") : part;
     const title = p.contractId === contractId ? "" : titles.get(p.contractId!) ?? "";
     // When a delayed payment goes through: the normal paid line (on another session: naming the test).
     const late = (p.status === "deferred" || p.status === "owed" || !!p.owedUntil) && p.createdAt > since;

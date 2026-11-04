@@ -46,7 +46,8 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
   }
   async function go() {
     setErr("");
-    const start = await press<Omit<BankAction, "requiresAction">>("/api/payments/confirm", { paymentId, start: true, ...(over ? { over200 } : {}) }, "bank");
+    // (Owner, Nov 4, §177) `page`: away from the test's own page a stop line names the test.
+    const start = await press<Omit<BankAction, "requiresAction">>("/api/payments/confirm", { paymentId, start: true, page: location.pathname, ...(over ? { over200 } : {}) }, "bank");
     if (!start) return; // stopped once, or refused: the box under the button says so
     try {
       // (§160) A charge made while away: Cancel (or leaving the page) never cancels it; it keeps waiting for the bank.

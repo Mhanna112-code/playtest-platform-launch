@@ -1020,6 +1020,20 @@ export const pieceName = ({ tester, part, test, when, full = false }: { tester: 
 /** (§131) A team's dispute decision, named by its piece: "the team's dispute decision on Marc Hanna's recording on “chargechar…”". */
 export const disputeDecisionName = (piece: string) => `the team's dispute decision on ${piece}`;
 /**
+ * (Owner, Nov 4, §177) WHICH part a change line is about: a tester has one written answers and one recording on a test, but can have many live calls, so a call is
+ * always named with its date and time, as the other call lines already are: "live call on Tue, Oct 27, 8:00 AM" (`when`: the call's formatted start).
+ */
+export const partWhen = (part: string, when?: string | null) => (when ? `${part} on ${when}` : part);
+/**
+ * (Owner, Nov 4, §177) WHICH test: a change line shown anywhere but its test's own page (a bank window opened from the dashboard or Payments, Confirm all, a
+ * "Confirm with your bank" press away from the test) names the test, quoted and cut like every listed test name: "On “Harbor Run”: Nina Park disputed the pay for
+ * her live call on Tue, Oct 27, 8:00 AM". A line that already names its test ("On Harbor Run: …", "Payment went through on Harbor Run: …") is kept as it is.
+ */
+export const onTestLine = (title: string, text: string) =>
+  /^(On |Payment (went through|failed) on )/.test(text) ? text : `On “${cutTo(title)}”: ${/^(You|Your|The|A|An)\b/.test(text) ? text.charAt(0).toLowerCase() + text.slice(1) : text}`;
+/** (§177) The page a press or a bank window was on (`page`, the browser's path) is not this test's own page. None sent (an older page, a test's own press): its own page. */
+export const awayFromTest = (page: unknown, testId: string) => typeof page === "string" && page !== "" && page !== `/app/tests/${testId}` && !page.startsWith(`/app/tests/${testId}/`) && !page.startsWith(`/app/tests/${testId}?`);
+/**
  * (Owner, Nov 3, batch 35 §133) A bank can dispute PART of a card payment (Stripe's charge.dispute.created carries the disputed `amount`; Stripe takes back only that,
  * plus its fee). What the bank reversed of a payment: its `reversedCents` (at most the payment), or the whole payment (a chargeback recorded before §133).
  */
@@ -1057,8 +1071,8 @@ export const repaidReversedLine = (o: { amountCents: number; reversedCents?: num
   return piece ? `Repaid the reversed ${money(o.amountCents)}${what} for ${piece} (${money(o.amountCents)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee)` : null;
 };
 /** (Batch 11) The stop-once line on the developer's test page and Edit when the platform won a chargeback (a payments-kind line). */
-export const chargebackReversedLine = (cents: number, backCents: number, refunded: boolean) =>
-  `Your bank's chargeback of ${money(cents)} was reversed: ${money(backCents)} ${refunded ? "refunded to your card" : "taken off what you owe"}.`;
+export const chargebackReversedLine = (cents: number, backCents: number, refunded: boolean, /** (Owner, Nov 4, §177) " for <piece>": which payment */ forPiece = "") =>
+  `Your bank's chargeback of ${money(cents)}${forPiece} was reversed: ${money(backCents)} ${refunded ? "refunded to your card" : "taken off what you owe"}.`;
 /**
  * (Owner, Oct 29, batch 23 section 6) A chargeback hold's Pay what you owe reserves the money on the card (an authorization, Stripe shows it "Uncaptured"); the team's Approve
  * takes it. An authorization lasts about 7 days: unused by then, it is released and the developer presses Pay what you owe again.
