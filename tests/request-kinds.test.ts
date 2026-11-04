@@ -39,27 +39,24 @@ describe("request kinds", () => {
     expect((await devReq(testId, dev.cookie, [sessionId], { times: [atHours(400)], weeks: 9 })).body.error.message).toBe("Weekly calls repeat 2 to 8 times.");
   });
 
-  it("limits: 3 pending requests per tester (both sides); 3 booked times (a set counts 1); a 4th is refused", async () => {
+  it("(Owner, Nov 4, §185) limit: 3 in total per tester (booked times + waiting requests, both sides; a set counts 1); the next is refused", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "request-time", tester.cookie, { times: [atHours(50)] });
     await devReq(testId, dev.cookie, [sessionId], { times: [atHours(60), atHours(61)] });
     await sact(sessionId, "request-time", tester.cookie, { times: [atHours(70)], weeks: 3 });
-    expect((await sact(sessionId, "request-time", tester.cookie, { times: [atHours(80)] })).body.error.message).toBe("You already have 3 requests waiting with Nora Lane. Withdraw one or wait for an answer.");
-    expect((await devReq(testId, dev.cookie, [sessionId], { times: [atHours(90)] })).body.error.message).toBe("You already have 3 requests waiting with Ana Silva. Withdraw one or wait for an answer.");
-    // Booked: a single call, a daily set and another call = 3 booked times; accepting a 4th is refused.
+    expect((await sact(sessionId, "request-time", tester.cookie, { times: [atHours(80)] })).body.error.message).toBe("You already have 3 calls booked or requested with Nora Lane. Wait until one is answered, over or cancelled, or withdraw a request.");
+    expect((await devReq(testId, dev.cookie, [sessionId], { times: [atHours(90)] })).body.error.message).toBe("You already have 3 calls booked or requested with Ana Silva. Wait until one is answered, over or cancelled, or withdraw a request.");
+    // Booked: a single call, a daily set (3 calls) and another call = 3 booked times; nothing more can be requested.
     const s2 = await setup();
     const j = await joined(s2.testId);
     await bookCall(s2.testId, s2.dev.cookie, j.sessionId, j.tester.cookie, 40);
     await devReq(s2.testId, s2.dev.cookie, [j.sessionId], { times: [atHours(100)], weeks: 3, repeat: "daily" });
     await sact(j.sessionId, "answer-request", j.tester.cookie, { requestId: (await pending(j.sessionId, "developer")).id, action: "accept" });
     await bookCall(s2.testId, s2.dev.cookie, j.sessionId, j.tester.cookie, 300);
-    await devReq(s2.testId, s2.dev.cookie, [j.sessionId], { times: [atHours(400)] });
-    const r4 = await sact(j.sessionId, "answer-request", j.tester.cookie, { requestId: (await pending(j.sessionId, "developer")).id, action: "accept" });
-    expect(r4.body.error.message).toBe("You already have 3 booked times in this test.");
-    await sact(j.sessionId, "request-time", j.tester.cookie, { times: [atHours(450)] }); // (batch 35 §132) before testers' work ends (about 20 days ahead)
-    const r5 = await act(s2.testId, "answer-request", s2.dev.cookie, { contractId: j.sessionId, requestId: (await pending(j.sessionId, "tester")).id, action: "accept", seenAt: seen(), confirmed: true });
-    expect(r5.body.error.message).toBe("Ana Silva already has 3 booked times with you. Wait until one is over or cancel one.");
+    expect(await db.call.count({ where: { contractId: j.sessionId, status: "booked" } })).toBe(5);
+    const r4 = await sact(j.sessionId, "request-time", j.tester.cookie, { times: [atHours(450)] }); // (batch 35 §132) before testers' work ends (about 20 days ahead)
+    expect(r4.body.error.message).toBe("You already have 3 calls booked or requested with Nora Lane. Wait until one is answered, over or cancelled, or withdraw a request.");
   });
 
   it("daily: one time repeated 2-8 days; accepting books every day", async () => {

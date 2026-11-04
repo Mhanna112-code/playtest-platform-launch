@@ -32,9 +32,9 @@ const unescape = (html: string) => html.replace(/&#x27;/g, "'").replace(/&quot;/
 describe("§152: every call list in the draggable panel, with a stable id", () => {
   it("call requests, booked calls (both sides, the paused view), the testers' calls, the dashboards' calls, past calls", () => {
     const checks: [string, string][] = [
-      ["components/CallRequestsPanel.tsx", '<ResizeBox id={panelId} label="Call requests" defaultMax={LIST_PANEL.requests}>'],
-      ["app/app/tests/[id]/CallRequestsBox.tsx", "panelId={`call-requests-${testId}`}"], // (§181) the box of its own
-      ["components/CallRequests.tsx", 'panelId={`call-requests-${p.path.split("/").filter(Boolean).pop() ?? ""}`}'],
+      ["components/CallRequestsPanel.tsx", "<ResizeBox id={panelId} label={title} defaultMax={LIST_PANEL.requests}>"], // (§185) labelled by its box: "Requests to you" / "Your requests"
+      ["app/app/tests/[id]/CallRequestsBox.tsx", "panelId={`${kind === \"to-you\" ? \"call-requests\" : \"your-requests\"}-${testId}`}"], // (§181) the box of its own; (§185) two: call-requests-<test> / your-requests-<test>
+      ["components/CallRequests.tsx", "panelId={`${kind}-${id}`}"], // (§185) the tester's two lists: call-requests-<session> / your-requests-<session>
       ["app/app/tests/[id]/DevCallPanel.tsx", "<ResizeBox id={`booked-${t.contractId}`} label={`Booked calls with ${t.name}`} defaultMax={LIST_PANEL.booked}>"],
       ["app/app/tests/[id]/DevCallPanel.tsx", "<ResizeBox id={`testers-calls-${testId}`} label=\"Testers' calls\" defaultMax={LIST_PANEL.testersCalls} tallest={TESTERS_CALLS_TALLEST}>"],
       ["app/app/tests/[id]/RestrictedCalls.tsx", "<ResizeBox id={person ? `booked-restricted-${testId}-${person}` : `booked-restricted-${testId}`} label=\"Booked calls\" defaultMax={LIST_PANEL.restricted}>"],

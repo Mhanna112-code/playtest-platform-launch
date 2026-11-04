@@ -5,7 +5,7 @@ import { displayName, fmtDate, fmtDateTime, fmtTime, pronouns } from "@/lib/serv
 import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, movedDue, MAX_ACTIVE_TESTS, termsLine, testPaused, TEST_LIMIT_LINE, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { LIMITS } from "@/lib/limits";
-import { notify } from "./notify";
+import { bell, notify } from "./notify";
 import { unanswered, answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, PROFILE_FIRST, profileSaved } from "./tests";
 import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
@@ -267,7 +267,10 @@ export async function withdrawApplication(tester: { id: string }, testId: string
   const n = await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
   if (!n.count) throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
   const me = await db.user.findUniqueOrThrow({ where: { id: tester.id } });
-  await logEvent(testId, "applied", `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application`);
+  // (Owner, Nov 4, §185) No live line and no stop for the developer any more (it was a Joins-type "applied" line): a bell instead (and its email, per their
+  // settings), stacked per test and day ("Applications · 2 withdrawn today"). Accept / Decline on it stays one refusal ("Ana Silva withdrew her application.").
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true, title: true } });
+  await bell(t.developerId, `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application to “${t.title}”`, `/app/tests/${testId}`, undefined, { testId, group: `appwithdrawn:${testId}` });
   return { withdrawn: true };
 }
 

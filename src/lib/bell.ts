@@ -35,6 +35,10 @@ export const GROUP_TITLES: Record<string, string> = {
   admindisputes: "Disputes",
   adminreports: "Reports",
   adminlifts: "Hold lifts waiting",
+  // (Owner, Nov 4, §185) Per test and day ("reqclosed:<testId>", "appwithdrawn:<testId>"): call requests the other side withdrew or that a booking closed; a
+  // tester withdrawing her application.
+  reqclosed: "Call requests closed",
+  appwithdrawn: "Applications withdrawn",
 };
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
@@ -47,9 +51,14 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   admindisputes: (_n, lines) => `Disputes · ${lines} new`,
   adminreports: (_n, lines) => `Reports · ${lines} new`,
   adminlifts: (_n, lines) => `Hold lifts waiting · ${lines}`,
+  // (Owner, Nov 4, §185) "Call requests · 3 closed today", "Applications · 2 withdrawn today" (one stack per test and day).
+  reqclosed: (_n, lines) => `Call requests · ${lines} closed today`,
+  appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn today`,
 };
+/** (§185) A group key may name its test after a colon ("reqclosed:<testId>": one stack per test and day); its titles are the part before it. */
+export const groupBase = (key: string) => key.split(":")[0];
 /** A stacked entry's title: `n` = the tests it covers, `lines` = its lines. */
-export const groupTitle = (key: string, n: number, lines = n) => GROUP_COUNT_TITLES[key]?.(n, lines) ?? GROUP_TITLES[key];
+export const groupTitle = (key: string, n: number, lines = n) => GROUP_COUNT_TITLES[groupBase(key)]?.(n, lines) ?? GROUP_TITLES[groupBase(key)];
 
 export function bellKeyIn(n: { id: string; testId: string | null; own: boolean; groupKey?: string | null; createdAt: Date }, timeZone?: string | null) {
   if (n.own) return `solo|${n.id}`;

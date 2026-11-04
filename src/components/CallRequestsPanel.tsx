@@ -1,6 +1,6 @@
 "use client";
 import { NameLink } from "@/components/Cut";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
@@ -24,15 +24,50 @@ export type PanelReq = { id: string; contractId: string; tester: string; /** (Ow
 /** (Batch 26 section 10) The pressed button's name for its stop box or refusal ("Your Withdraw didn't go through"), from the press key. */
 /** (Owner, Nov 4, §181) A person's drop-down in the developer's Call requests box (Needs you's "2 call requests ↓" jumps to it). */
 export const callRequestsAnchor = (contractId: string) => `call-requests-person-${contractId}`;
+/** (Owner, Nov 4, §185) A person's drop-down in the developer's "Your requests" box (their own waiting requests to that tester). */
+export const yourRequestsAnchor = (contractId: string) => `your-requests-person-${contractId}`;
+/** (§185) The box's name search: as you type, case-insensitive, anywhere in the name as shown. An empty search matches everyone. */
+export const matchesName = (name: string, query: string) => name.toLowerCase().includes(query.trim().toLowerCase());
+/** (§185) What the box says when nobody matches: "No one matches “ana”". */
+export const noMatchLine = (query: string) => `No one matches “${query.trim()}”`;
 export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
 
-export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0, panelId, byPerson = false }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
+export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0, panelId, byPerson = false, title = "Call requests", sectionId = "call-requests", anchor = callRequestsAnchor, search, showCount = false }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
   /** (Owner, Nov 2, batch 35 §132) The server's call lead: a time less than it away can't be booked any more. */
   leadMinutes?: number;
   /** (Owner, Nov 3, batch 35 §152) The list's panel id ("call-requests-<test or session id>"): its dragged height is kept by it. */
   panelId: string;
-  /** (Owner, Nov 4, §181) The developer's Call requests box: one drop-down per person */ byPerson?: boolean }) {
+  /** (Owner, Nov 4, §181) The developer's Call requests box: one drop-down per person */ byPerson?: boolean;
+  /** (Owner, Nov 4, §185) The list's name (its heading, when not by person, and its label): "Requests to you" / "Your requests" */ title?: string;
+  /** (§185) the section's anchor: "call-requests" (requests to you) / "your-requests" */ sectionId?: string;
+  /** (§185) a person's drop-down id (Needs you's "N call requests ↓" points at callRequestsAnchor, the "Requests to you" box) */ anchor?: (contractId: string) => string;
+  /** (§185) the name search above the people ("to-you" / "yours": its data-request-search) */ search?: string;
+  /** (§185) the heading says how many: "Requests to you (2)" (the tester's split lists) */ showCount?: boolean }) {
   const { press, changes, error, busy, at, finish } = usePress(seenAt);
+  // (Owner, Nov 4, §185) The name search: filters this box's people as you type (on this page only, nothing sent).
+  const [query, setQuery] = useState("");
+  const people$ = useRef<HTMLDivElement>(null);
+  // A link (Needs you's "2 call requests ↓", a request's #req-<id>) to someone the search hides: the search clears and they show at once, before the jump scrolls.
+  useEffect(() => {
+    if (!search) return;
+    const reveal = (href: string | null) => {
+      const id = href?.startsWith("#") ? decodeURIComponent(href.slice(1)) : "";
+      const el = id ? document.getElementById(id) : null;
+      const box = people$.current;
+      if (!el || !box || !box.contains(el)) return;
+      for (let n: Element | null = el; n && n !== box; n = n.parentElement) n.removeAttribute("hidden");
+      box.querySelector("[data-request-search-empty]")?.setAttribute("hidden", "");
+      setQuery("");
+    };
+    const click = (e: MouseEvent) => reveal((e.target as Element | null)?.closest?.("a[href^='#']")?.getAttribute("href") ?? null);
+    const hash = () => reveal(window.location.hash);
+    document.addEventListener("click", click, true);
+    window.addEventListener("hashchange", hash);
+    return () => {
+      document.removeEventListener("click", click, true);
+      window.removeEventListener("hashchange", hash);
+    };
+  }, [search]);
   // (Batch 35 §132) A time less than the lead away (24 hours on the live site) can't be booked any more: its Accept goes and the row says why. The clock moves on
   // while the page is open (checked every half minute).
   const [now, setNow] = useState(() => Date.now());
@@ -110,25 +145,39 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
       else people.push({ id: r.contractId, name: r.tester, href: r.testerHref, reqs: [r] });
     }
   }
+  // (Owner, Nov 4, §185) The name search keeps a person whose request has a press under way, its stop box or refusal showing (never hidden mid-press).
+  const held = (p: { reqs: PanelReq[] }) => p.reqs.some(pressed) && (busy || changes != null || !!error);
+  const shown = (p: { name: string; reqs: PanelReq[] }) => !search || matchesName(p.name, query) || held(p);
+  const none = !!search && query.trim() !== "" && people.length > 0 && !people.some(shown);
   return (
-    <section className="space-y-1.5" aria-label="Call requests" data-call-requests="" id="call-requests">
-      {!byPerson && <h3 className="text-sm font-semibold text-white">Call requests</h3>}
+    <section className="space-y-1.5" aria-label={title} data-call-requests="" id={sectionId}>
+      {!byPerson && <h3 className="text-sm font-semibold text-white">{title}{showCount && <span className="font-normal text-slate-400"> ({sorted.length})</span>}</h3>}
       {sorted.length === 0 ? (
         <p className="note">No call requests waiting.</p>
       ) : (
-        // (Owner, Nov 3, batch 35 §152) In the draggable panel (§139): it scrolls inside, and the grip drags it shorter or taller.
-        <ResizeBox id={panelId} label="Call requests" defaultMax={LIST_PANEL.requests}>
+        <div className="space-y-2" ref={people$}>
+        {/* (Owner, Nov 4, §185) The name search above the list: as you type, only the people whose name matches (case-insensitive). */}
+        {byPerson && search && (
+          <input type="search" className="input w-full max-w-xs" placeholder="Search by name" aria-label={`Search ${title.toLowerCase()} by name`} data-request-search={search}
+            value={query} onChange={(e) => setQuery(e.target.value)} />
+        )}
+        {none && <p className="note" data-request-search-empty="">{noMatchLine(query)}</p>}
+        {/* (Owner, Nov 3, batch 35 §152) In the draggable panel (§139): it scrolls inside, and the grip drags it shorter or taller. */}
+        <ResizeBox id={panelId} label={title} defaultMax={LIST_PANEL.requests}>
         {byPerson ? (
           <div className="space-y-2" data-call-requests-people="">
             {people.map((p) => (
-              <HoldFold key={p.id} data={{ id: callRequestsAnchor(p.id), "data-call-requests-person": p.id }} toggleData={{ "data-call-requests-person-toggle": "" }}
+              // (§185) Hidden, not removed, while the search leaves them out: a drop-down keeps whether it was open.
+              <div key={p.id} hidden={!shown(p) || undefined}>
+              <HoldFold data={{ id: anchor(p.id), "data-call-requests-person": p.id }} toggleData={{ "data-call-requests-person-toggle": "" }}
                 summary={<span className="min-w-0 [overflow-wrap:anywhere]"><NameLink text={p.name} href={p.href} />{" "}<span className="whitespace-nowrap font-normal text-slate-400">· {p.reqs.length} request{p.reqs.length === 1 ? "" : "s"}</span></span>}>
                 {/* A press on one of their requests (under way, its stop box or refusal) keeps their drop-down open. */}
-                <HoldWhile on={p.reqs.some(pressed) && (busy || changes != null || !!error)} />
+                <HoldWhile on={held(p)} />
                 <ResizeBox id={`${panelId}-${p.id}`} label={`Call requests with ${p.name}`} defaultMax={LIST_PANEL.requests}>
                   <ul className="space-y-2 text-sm" data-call-requests-list="">{p.reqs.map(row)}</ul>
                 </ResizeBox>
               </HoldFold>
+              </div>
             ))}
           </div>
         ) : (
@@ -137,6 +186,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
         </ul>
         )}
         </ResizeBox>
+        </div>
       )}
     </section>
   );

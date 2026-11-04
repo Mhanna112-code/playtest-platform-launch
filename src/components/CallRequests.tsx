@@ -95,9 +95,26 @@ export function CallRequests(p: {
     );
   return (
     <div className="space-y-2 text-sm">
-      {/* (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request with them, both directions, soonest first. */}
-      <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`call-requests-${p.path.split("/").filter(Boolean).pop() ?? ""}`}
-        requests={p.requests.map((r) => ({ id: r.id, contractId: r.contractId, tester: p.side === "tester" ? "You" : r.who, asker: r.who, rows: r.rows, minutes: r.minutes ?? 0, mine: r.mine, rate: r.rate }))} />
+      {/* (Batch 16 sections 33 and 35) The waiting requests with them, soonest first. (Owner, Nov 4, §185) Split as on the developer's page: "Requests to you (N)"
+          (theirs, to answer: Accept / Decline) and "Your requests (N)" (yours, waiting: Withdraw), each its own panel (`call-requests-<id>` / `your-requests-<id>`).
+          One person here (the developer), so no name search. Neither waiting: the one "No call requests waiting." line. */}
+      {(() => {
+        const id = p.path.split("/").filter(Boolean).pop() ?? "";
+        const all = p.requests.map((r) => ({ id: r.id, contractId: r.contractId, tester: p.side === "tester" ? "You" : r.who, asker: r.who, rows: r.rows, minutes: r.minutes ?? 0, mine: r.mine, rate: r.rate }));
+        const toYou = all.filter((r) => !r.mine), yours = all.filter((r) => r.mine);
+        const panel = (title: string, list: typeof all, kind: "call-requests" | "your-requests") => (
+          <div data-requests-to-you={kind === "call-requests" ? "" : undefined} data-your-requests={kind === "your-requests" ? "" : undefined}>
+            <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`${kind}-${id}`} title={title} sectionId={kind} showCount requests={list} />
+          </div>
+        );
+        if (!all.length) return <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`call-requests-${id}`} requests={[]} />;
+        return (
+          <>
+            {toYou.length > 0 && panel("Requests to you", toYou, "call-requests")}
+            {yours.length > 0 && panel("Your requests", yours, "your-requests")}
+          </>
+        );
+      })()}
       {p.canRequest && shut && <p className="note" data-window-shut="">{shut}</p>}
       {p.canRequest && !shut && (
         <div className="space-y-2" ref={form} data-mistakes-root="">

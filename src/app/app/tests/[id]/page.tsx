@@ -249,7 +249,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       const next = cs.find((x) => x.startsAt > now)!;
       return [{ id: sid, label: `${daily ? "Daily" : "Weekly"} · ${cs[0].startsAt.toLocaleString("en-US", { weekday: "short", hour: "numeric", minute: "2-digit", timeZone: u.timeZone || "UTC" })}${row?.count === 0 ? " (until testers' work ends)" : ` (${left} left)`}`, minutes: cs[0].minutes, rate: rateLabel(cs[0].rateCents, c.liveRateCents), needsReason: cancelNeedsReason(next.startsAt, now), calls: cs.map(toCall) }];
     });
-    const booked = new Set(c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id)).size;
+    // (Owner, Nov 4, §185) As the server counts it: a Forever set while it runs is one booked time even with none of its calls ahead.
+    const booked = new Set([...c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => x.setId ?? x.id), ...callSets.filter((s) => s.contractId === c.id && s.status === "active" && s.count === 0).map((s) => s.id)]).size;
     return {
       contractId: c.id, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, terms, booked, warning: callsWarn.get(c.id) ?? "",
       calls: live.filter((x) => !x.setId).map(toCall),
@@ -598,7 +599,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           <div className="space-y-2" data-needs-people="">{needsPeople(needsEntries)}</div>
         </NeedsYou>
       )}
-      {/* (Owner, Nov 4, §181) Call requests: a box of its own, right under Needs you (Needs you's "2 call requests ↓" lines jump here). */}
+      {/* (Owner, Nov 4, §181) Call requests: right under Needs you. (§185) Two boxes: "Requests to you" (Needs you's "2 call requests ↓" lines jump here) and "Your requests". */}
       {callRequests.length > 0 && <CallRequestsBox testId={t.id} seenAt={seenAt} requests={callRequests} leadMinutes={CALL_MIN_AHEAD_MINUTES} />}
 
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}

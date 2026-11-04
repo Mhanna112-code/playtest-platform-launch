@@ -106,6 +106,9 @@ describe("batch 18 section 6: the Length is capped by what's left of the $1,000"
     expect(t.status).toBe(400);
     expect(t.body.error.message).toBe("At most 95 minutes: the $1,000 for calls with Nora Lane on this test.");
     // Ben asks for 150 minutes (fits); more is booked with him meanwhile: Accept is refused with the cap.
+    // (Owner, Nov 4, §185) 2 booked + the developer's request = 3 with Ben: the developer withdraws it first, so Ben has room to ask.
+    const toBen = await db.callRequest.findFirstOrThrow({ where: { contractId: ben.sessionId, fromSide: "developer", status: "pending" } });
+    expect((await act(s.testId, "answer-request", s.dev.cookie, { contractId: ben.sessionId, requestId: toBen.id, action: "withdraw", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await sact(ben.sessionId, "request-time", ben.tester.cookie, { seenAt: seen(), confirmed: true, rows: once(150), minutes: 150 })).status).toBe(200);
     await db.call.update({ where: { id: benOther.id }, data: { minutes: benOther.minutes + 100 } }); // $250 more reserved: $250 left, 100 minutes
     const q = await db.callRequest.findFirstOrThrow({ where: { contractId: ben.sessionId, fromSide: "tester", status: "pending" } });

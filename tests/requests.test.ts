@@ -34,7 +34,7 @@ describe("call requests on both sides", () => {
     const r = await sact(sessionId, "request-time", tester.cookie, { startsAt: at(70) });
     await sact(sessionId, "answer-request", tester.cookie, { requestId: r.body.id, action: "withdraw" });
     const a = await act(testId, "answer-request", dev.cookie, { contractId: sessionId, requestId: r.body.id, action: "accept", seenAt: seen(), confirmed: true });
-    expect(a.body.error.message).toMatch(/^Ana Silva withdrew this request at /);
+    expect(a.body.error.message).toBe("Ana Silva withdrew this request."); // (Owner, Nov 4, §185)
   });
 
   it("a developer's request is a stop-once reason for every tester button; a hold closes pending requests", async () => {

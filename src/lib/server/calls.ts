@@ -30,11 +30,9 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     const c = await tx.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
     if (!c || c.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
     const name = displayName(c.contract.tester);
-    // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
-    if (c.status === "cancelled") {
-      await devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`call:${c.id}`, `c:${c.contractId}`] });
-      throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
-    }
+    // (Owner, Nov 4, §185; replaces batch 16 section 21's stop first) A Cancel on a call already cancelled (by the tester, in another tab, by a stop) from an old
+    // page is refused once, never a stop first; the row then leaves the booked list with the page's redraw (the call is in Call history, Cancelled).
+    if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
     const ok = checkCancel(c.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
     // (Batch 16 section 21) Another tab's call action with this tester stops it once.
