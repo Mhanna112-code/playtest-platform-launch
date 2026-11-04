@@ -2484,3 +2484,41 @@ tester's own sent answers (their question folds now hold the boxes, which a 12re
   line, Charge and Pay at the same moment in both orders, a cancelled or declined payment leaving Charge for the full listing). Updated for the new lines:
   `batch21-call-room`, `batch35-decide-paid-above`, `races-nov3`, `batch22`, `batch10`, `batch12`, `batch17-close-out`, `batch35-answered-seen`,
   `batch35-decide-tick`, `pay`, `batch35-admin-drafts`, `choice`, `suspended-and-ask`, `pay-matrix`.
+
+## §169 Alerts "All" ticks everything, and follows a single untick (owner, Nov 4)
+
+Owner: "Ticking All in Alerts doesn't tick everything, and removing one while All is ticked doesn't untick it."
+
+- **Causes (reproduced in the browser on an isolated server).**
+  - All sent one save per type, one after another, and each instant tick was made on the list from when the click happened (a stale copy). So the boxes
+    showed one tick at a time, moving down the list, with All unticked, until the last answer came back.
+  - A poll (`/api/pulse`) or a page redraw asked before a save, and answered after it, put the older list back. The poll reads the ticks first and then
+    works out the page's fingerprint, so its answer lands seconds later on a busy machine. With a 1.5 s slow poll, after ticking All the menu showed nothing
+    ticked while the server had all 7, until the next poll 20 s later. After unticking Work sent with All ticked, Work sent and All ticked themselves again.
+  - The server's per-type save read the list and then wrote it with no lock. 7 saves at the same moment (menu ticks and stop box chips mixed) kept only 3
+    or 4 of the 7 types, in each of 5 rounds.
+- **One request for All.** `POST /api/account/alerts { testId, keys, off }`: every type that can be changed here, ticked or unticked together. Greyed types
+  (a paused or stopped test) and old stored ticks keep theirs.
+- **Atomic saves.** Every save goes through `saveTestAlerts`, which locks the test row (`SELECT … FOR UPDATE`), applies the change and adds one to
+  `Test.alertsV`. That covers All, one type, the older whole list and the stop box's "Don't stop me for" chip. Saves at the same moment are all kept. Every
+  answer carries `{ ignored, v }`.
+- **No stale lists.** The version comes with every save answer, the poll's `alerts`, the pages' `AlertsMenu` (`v`) and the other tabs' storage message.
+  - A tab never takes a list older than the newest one it has accepted (`ignoredAlertsFresh`).
+  - A save on the way (`startIgnoredAlertsSave`) shows its ticks at once, on the ticks shown now. They stay so over any poll, redraw or earlier answer that
+    arrives meanwhile. If the save fails, only its own types go back.
+- **All's tick.** `allAlertsOn`: ticked exactly while every open type is ticked. Unticking one unticks All at once, and ticking it again ticks All.
+- **Migration.** `20261116090000_test_alerts_version` adds `Test.alertsV` (INTEGER, default 0). It is additive and nothing is rewritten.
+- **Tests.** `tests/batch35-alerts-all-atomic.test.ts`:
+  - All as one request in one version step, and unticking All;
+  - greyed and old ticks kept;
+  - 7 saves at once all kept, with distinct versions, plus two unticks at once, and All with a chip;
+  - the poll's version older than a later save;
+  - in the tab: an older poll ignored while a save is on the way and after it, a newer one taken, a failed save going back;
+  - All following one untick and re-tick (`allAlertsOn` and the menu as drawn).
+
+  Updated for the new shapes: `batch35-alerts-all` (§71), `batch35-alerts-per-test` and `batch20` §8 (the poll's `v`, the menu's request, `useIgnoredAlerts`
+  with the version).
+- **Recordings** (`playtest-lite-evidence/alerts-all/`):
+  - `alerts-all-before.webm`: one tick at a time;
+  - `alerts-all-slow-poll-before.webm` and `alerts-all-slow-poll-fixed.webm`: the stale poll;
+  - `alerts-all-fixed.webm`: tick All in two tabs through a poll, untick one, re-tick it, untick All.

@@ -70,9 +70,9 @@ export function AutoRefresh({ query, refresh = true, v }: { query: string; refre
       try {
         const r = await fetch(`/api/pulse?${query}`, { cache: "no-store" });
         if (!r.ok) return;
-        const { v, adminStopped, restricted, alerts } = (await r.json()) as { v: string; adminStopped?: boolean; restricted?: boolean; alerts?: { ignored?: string[]; testerOff?: boolean } };
+        const { v, adminStopped, restricted, alerts } = (await r.json()) as { v: string; adminStopped?: boolean; restricted?: boolean; alerts?: { ignored?: string[]; v?: number; testerOff?: boolean } };
         // (Batch 20 section 8) The Alerts setting as saved now (changed in another browser or device): the menu, toggle and chips follow.
-        if (alive && testId && Array.isArray(alerts?.ignored)) publishIgnoredAlerts(testId, alerts.ignored, false); // (batch 35 §73) this test's
+        if (alive && testId && Array.isArray(alerts?.ignored)) publishIgnoredAlerts(testId, alerts.ignored, false, alerts.v); // (batch 35 §73) this test's; (§169) never over a newer save
         if (alive && typeof alerts?.testerOff === "boolean") publishTesterAlertsOff(alerts.testerOff, false);
         if (testId && alive && stopped.current === false && adminStopped) {
           try { window.history.scrollRestoration = "manual"; } catch { /* ignore */ }

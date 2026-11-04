@@ -25,8 +25,8 @@ describe("batch 35 §73: the developer's Alerts belong to each test", () => {
     expect(await saved(a)).toEqual(["joins"]);
     expect(await saved(b)).toEqual([]);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).ignoredAlerts).toEqual([]);
-    expect((await json(await pulseGET(req(`/api/pulse?test=${a}`, { cookie: dev.cookie, method: "GET" })))).body.alerts).toEqual({ ignored: ["joins"] });
-    expect((await json(await pulseGET(req(`/api/pulse?test=${b}`, { cookie: dev.cookie, method: "GET" })))).body.alerts).toEqual({ ignored: [] });
+    expect((await json(await pulseGET(req(`/api/pulse?test=${a}`, { cookie: dev.cookie, method: "GET" })))).body.alerts).toEqual({ ignored: ["joins"], v: 1 }); // (§169) with its version
+    expect((await json(await pulseGET(req(`/api/pulse?test=${b}`, { cookie: dev.cookie, method: "GET" })))).body.alerts).toEqual({ ignored: [], v: 0 });
     // The gate: a join on each test since the page opened stops B's press, not A's.
     const opened = new Date(Date.now() - 1000);
     for (const t of [a, b]) await db.testEvent.create({ data: { testId: t, kind: "joined", text: "Ana Silva joined" } });
@@ -58,7 +58,8 @@ describe("batch 35 §73: the developer's Alerts belong to each test", () => {
     expect((await chip(dev.cookie, { key: "calls" })).status).toBe(400);
     // The chip finds its test from the page (the test page or Edit), and the menu passes its own.
     expect(src("components/QuickIgnore.tsx")).toContain('"/api/account/alerts/add", { testId, key: k }');
-    expect(src("components/AlertsMenu.tsx")).toContain('"/api/account/alerts", { testId, key, off: on }');
+    expect(src("components/AlertsMenu.tsx")).toContain('"/api/account/alerts", { testId, ...body }');
+    expect(src("components/AlertsMenu.tsx")).toContain("save([key], on, { key, off: on })");
   });
 
   it("only the test's developer can change them", async () => {

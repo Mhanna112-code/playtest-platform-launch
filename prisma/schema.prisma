@@ -189,6 +189,9 @@ model Test {
   /// (Owner, Oct 31, batch 35 §73) The developer's Alerts menu for this test: the update types they chose NOT to be stopped for here (see src/lib/alerts.ts).
   /// A new test and a Next round start empty (every alert on)
   ignoredAlerts String[] @default([])
+  /// (Owner, Nov 4, §169) Goes up by one with every save of ignoredAlerts (in the same locked write): a tab never puts an older list over a newer one (a poll or
+  /// a redraw asked before a save but answered after it)
+  alertsV       Int      @default(0)
   /// (Design doc 4) The game, website, app or other product (60 characters); the title above is this test's own name (60)
   productName String   @default("")
   /// (Design doc 4) Mature (18+): the developer says why the content is mature (required when ticked)
