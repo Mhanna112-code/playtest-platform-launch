@@ -2176,8 +2176,8 @@ sign-up.
 
 - **Why.** Once the bank's page is open, Stripe's Complete can't be stopped by us. So while it is open, anything that would have stopped the developer's
   press, or a cancellation of the check underneath it, is said in a blue notice before the developer presses Complete.
-- **Where.** INSIDE the bank check's box (the bordered box holding the bank's frame), directly above the frame, under its title (owner's correction, Nov 3:
-  within the bank window, not below the box). The app's blue "info" style, as the stop boxes use.
+- **Where.** INSIDE the bank check's box (the bordered box holding the bank's frame), at its bottom, under the frame and Cancel (owner, Nov 4; it was directly
+  above the frame, owner's correction of Nov 3: within the bank window, not below the box). The app's blue "info" style, as the stop boxes use.
 - **What it says.**
   - Changes: "While your bank's page was open:" then each line ("Ana Silva disputed the pay for her recording."), then "Complete still pays $10.00 as
     pressed; or press Cancel." ("reserves" for a chargeback hold's Pay what you owe). Plain changes never close the box: the developer decides.
@@ -2258,7 +2258,7 @@ sign-up.
 - **Tests:** `tests/batch35-bank-notice.test.ts` (a change after the press is a line with what Complete still does, one before isn't, asked twice the same;
   Alerts-ignored types aren't lines but the team's dispute decision is, another tab's own action is and this tab's isn't; Confirm all's and Pay what you owe's
   changes; a hold or a new card cancels with its reason and the box stays open; still-open or paid checks are never cancelled; the peek changes nothing (rows,
-  action logs, reviews, Stripe calls); the notice renders inside the box above the frame and never duplicates a line; plain changes never end the watch;
+  action logs, reviews, Stripe calls); the notice renders inside the box at its bottom and never duplicates a line; plain changes never end the watch;
   Cancel on an unfinished Pay cancels at Stripe and the part is payable again; Cancel after the bank finished records it paid once (a second Cancel or the
   beacon charges nothing); a cancel that finds it just succeeded records it paid once; Cancel on a charge made while away never cancels it (same date, no
   hold); Pay what you owe's notice names a charge that waits instead of being added; the page has Cancel with its hint and the pagehide beacon).

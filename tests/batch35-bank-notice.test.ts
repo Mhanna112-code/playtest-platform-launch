@@ -239,16 +239,17 @@ describe("§160 the notice in the box", () => {
     expect(n.cancelled).toBe("This bank check was cancelled: your tests were paused (a payment hold started). Pressing Complete won't charge anything.");
   });
 
-  it("renders INSIDE the bank box, directly above the frame: the heading, the lines and what Complete still does; a cancelled check says so instead", () => {
+  it("renders INSIDE the bank box, at its bottom under the frame and Cancel (owner, Nov 4): the heading, the lines and what Complete still does; a cancelled check says so instead", () => {
     const plain = renderToStaticMarkup(createElement(BankCheckView, { action, finish: async () => ({}), onEnd: () => {}, notice: { lines: ["Ana Silva disputed the pay for her recording."], still: stillPaysLine("$10.00"), cancelled: "" } }));
-    expect(plain).toMatch(/data-bank-check="bank".*data-bank-notice="".*<iframe /s);
+    expect(plain).toMatch(/data-bank-check="bank".*<iframe .*data-bank-close="".*data-bank-notice=""/s);
     expect(plain).toContain('class="info"');
     expect(plain).toContain(NOTICE_HEAD.replace("'", "&#x27;"));
     expect(plain).toContain("<li data-bank-notice-line=\"\">Ana Silva disputed the pay for her recording.</li>");
     expect(plain).toContain("Complete still pays $10.00 as pressed; or press Cancel.");
     expect(plain.match(/data-bank-notice-line/g)).toHaveLength(1);
     const cancelled = renderToStaticMarkup(createElement(BankCheckView, { action, finish: async () => ({}), onEnd: () => {}, notice: { lines: [], still: "", cancelled: cancelledLine(CANCELLED_WHY.hold) } }));
-    expect(cancelled).toMatch(/data-bank-notice-cancelled="">This bank check was cancelled: your tests were paused \(a payment hold started\)\. Pressing Complete won&#x27;t charge anything\.<\/p>.*<iframe /s);
+    expect(cancelled).toMatch(/data-bank-notice-cancelled="">This bank check was cancelled: your tests were paused \(a payment hold started\)\. Pressing Complete won&#x27;t charge anything\.<\/p>/s);
+    expect(cancelled).toMatch(/<iframe .*data-bank-notice-cancelled/s);
     expect(cancelled).not.toContain("Complete still pays");
     // No news: no notice.
     expect(renderToStaticMarkup(createElement(BankCheckView, { action, finish: async () => ({}), onEnd: () => {} }))).not.toContain("data-bank-notice");
