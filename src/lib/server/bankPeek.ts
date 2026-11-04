@@ -64,7 +64,8 @@ async function pieceChanges(p: Payment, since: Date, tab: string) {
   const piece = { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null };
   const { devGate } = await import("./tests");
   try {
-    await devGate(db as unknown as Parameters<typeof devGate>[0], c.testId, { seenAt: since.toISOString(), tab }, {}, [], undefined, payPressOf(c.id, piece));
+    // (Owner, Nov 4, §171 A3) Everything about this payment's tester, whatever the Alerts ticks (`wholeTester`); other testers' lines keep following them.
+    await devGate(db as unknown as Parameters<typeof devGate>[0], c.testId, { seenAt: since.toISOString(), tab }, {}, [], undefined, { ...payPressOf(c.id, piece), wholeTester: true });
     return [];
   } catch (e) {
     if (!(e instanceof HttpError) || e.code !== "stop_once") throw e;
@@ -111,12 +112,34 @@ async function owedChanges(devId: string, since: Date, covered: Set<string>, res
  * it isn't in this payment; confirm it on its own, or with Confirm all after this one." (owner, Nov 3).
  */
 export const notInAllLine = (who: string, cents: number) => `${who} ${who.startsWith("The team") ? "added" : "charged"} ${money(cents)} meanwhile: it isn't in this payment; confirm it on its own, or with Confirm all after this one`;
-async function allChanges(devId: string, since: Date, oneId: string) {
+async function allChanges(devId: string, since: Date, oneId: string, tab: string) {
   const { inAll } = await import("./confirmAll");
   const fresh = (await db.payment.findMany({ where: { developerId: devId, createdAt: { gt: since }, actionPi: { not: null }, coveredById: null, NOT: { id: oneId } }, orderBy: { createdAt: "asc" } })).filter(inAll);
   const out: Line[] = [];
   for (const p of fresh) out.push({ text: notInAllLine(p.kind === "dispute" ? "The team's dispute decision" : await testerOf(p.contractId), p.amountCents), at: p.createdAt });
-  return after(out, since);
+  // (Owner, Nov 4, §171 A3) And everything about each covered charge's tester (its part's pay-press lines, whatever the Alerts ticks), each line once.
+  const lines = [...after(out, since)];
+  for (const c of await db.payment.findMany({ where: { coveredById: oneId, contractId: { not: null } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }))
+    for (const t of await pieceChanges(c, since, tab)) if (!lines.includes(t)) lines.push(t);
+  return lines;
+}
+
+/**
+ * (Owner, Nov 4, §171 B4) The reason this window's check is not the charge's live check any more, or null: the charge is covered by Confirm all (or another one
+ * payment), its check was replaced by a new one, or it was paid on another check. `pi`: the PaymentIntent the window holds (from its client secret); a page that
+ * doesn't send it is only told about a cover. A one payment's own check (Pay what you owe, Confirm all) is always its own.
+ */
+async function notThisCheck(p: Payment, pi: string) {
+  const once = await import("./owedOnce");
+  if (p.kind === once.OWED_KIND) return null;
+  if (p.coveredById && p.coveredById !== p.id) {
+    const cover = await db.payment.findUnique({ where: { id: p.coveredById }, select: { kind: true, note: true } });
+    if (cover) return once.isAll(cover) ? CANCELLED_WHY.inAll : CANCELLED_WHY.inOther;
+  }
+  if (!pi) return null;
+  if (p.actionPi && p.actionPi !== pi) return CANCELLED_WHY.replaced;
+  if (!p.actionPi && p.settledAt && p.stripePaymentIntentId && p.stripePaymentIntentId !== pi) return CANCELLED_WHY.paidOther;
+  return null;
 }
 
 /** (§160) Was this payment's check ended by something else while its bank page was open? Still waiting, or paid: no. */
@@ -127,6 +150,10 @@ function endedUnderneath(p: Payment) {
 
 /** (§160) Why it was cancelled, in plain words: a hold started, a new card, its time ran out, paused, Stripe's other mode, or ended elsewhere. */
 async function whyCancelled(p: Payment, devId: string, since: Date) {
+  // (Owner, Nov 4, §171 B6) Pay what you owe's check cancelled by a chargeback change: the one payment keeps why.
+  const once = await import("./owedOnce");
+  if (p.failure === once.OWED_REVIEW_AGAIN) return CANCELLED_WHY.reviewAgain;
+  if (p.failure === once.OWED_WON_MEANWHILE) return CANCELLED_WHY.won;
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true, stripePaymentMethodId: true } });
   if (u?.holdStartedAt && u.holdStartedAt >= since) return CANCELLED_WHY.hold;
   const { RAN_OUT } = await import("./owedOnce");
@@ -173,13 +200,21 @@ export async function peekBankCheck(dev: { id: string }, body: Record<string, un
   if (reservation && reservation.developerId === dev.id) {
     const since = sinceOf(body, reservation.createdAt);
     // (§160) A new card cancelled it (§148), or it lapsed: its Complete reserves nothing.
-    if (since && ["cancelled", "expired", "failed"].includes(reservation.status)) return { status: "waiting", cancelled: cancelledLine(reservation.status === "cancelled" ? CANCELLED_WHY.card : CANCELLED_WHY.pressRanOut) };
+    if (since && ["cancelled", "expired", "failed"].includes(reservation.status)) {
+      // (Owner, Nov 4, §171 B6b) A chargeback it covered was won meanwhile: said so (Pay what you owe then reserves the new total).
+      const won = reservation.status === "cancelled" && reservation.covers.length ? await db.payment.count({ where: { id: { in: reservation.covers }, chargeback: "won" } }) : 0;
+      return { status: "waiting", cancelled: cancelledLine(won ? CANCELLED_WHY.won : reservation.status === "cancelled" ? CANCELLED_WHY.card : CANCELLED_WHY.pressRanOut) };
+    }
     const status = reservation.stripePaymentIntentId ? await piAnswer(reservation.stripePaymentIntentId) : "waiting";
     return since ? withChanges(status, await owedChanges(dev.id, since, new Set(reservation.covers), true), reservation.amountCents, true) : { status };
   }
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (!p || p.developerId !== dev.id) throw new HttpError(404, "not_found", NOTHING);
   const since = sinceOf(body, p.createdAt);
+  // (Owner, Nov 4, §171 B4) This window's own check (its PaymentIntent, `pi`) is no longer the charge's live check: Confirm all took the charge over, a new check
+  // replaced it, or it was paid on another one. Complete there charges nothing, and the notice says why.
+  const gone = since ? await notThisCheck(p, typeof body.pi === "string" ? body.pi : "") : null;
+  if (gone) return { status: "waiting", cancelled: cancelledLine(gone) };
   // (§160) Cancelled underneath the open bank page: said, and the box stays open (Stripe cancelled the check, so Complete charges nothing).
   if (since && endedUnderneath(p)) return { status: "waiting", cancelled: cancelledLine(await whyCancelled(p, dev.id, since)) };
   // Already finished, released or claimed elsewhere: nothing waits; the page's finish gives the server's own answer.
@@ -187,7 +222,7 @@ export async function peekBankCheck(dev: { id: string }, body: Record<string, un
   const status = await piAnswer(p.actionPi);
   if (!since) return { status };
   const once = await import("./owedOnce");
-  if (once.isAll(p)) return withChanges(status, await allChanges(dev.id, since, p.id), p.amountCents);
+  if (once.isAll(p)) return withChanges(status, await allChanges(dev.id, since, p.id, tab), p.amountCents);
   if (p.kind === once.OWED_KIND) {
     const covered = new Set((await db.payment.findMany({ where: { coveredById: p.id }, select: { id: true } })).map((x) => x.id));
     return withChanges(status, await owedChanges(dev.id, since, covered), p.amountCents);

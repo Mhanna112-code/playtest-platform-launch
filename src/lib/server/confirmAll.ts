@@ -89,7 +89,8 @@ async function itemStops(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0
     if (!c) continue;
     const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await tx.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
     try {
-      await devGate(tx, c.testId, body, {}, [], undefined, payPressOf(c.id, { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null }));
+      // (Owner, Nov 4, §171 item 7) Its press-time gate stays as it was (`awayCharge`: §159's rules) while the owner decides the waiting-charge rules.
+      await devGate(tx, c.testId, body, {}, [], undefined, { ...payPressOf(c.id, { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null }), awayCharge: true });
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "stop_once")) throw e;
       const name = await nameOf(p);

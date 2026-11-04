@@ -174,6 +174,31 @@ These are always S on the account scope indicated, under its next pressed button
 | `Subscription: kept, renews <date>` / `Subscription: active, renews <date>` | Keep / Subscribe succeeded elsewhere. | [subscription route](../src/app/api/payments/subscription/route.ts#L27) |
 
 
+### Forced lines added by §171 (owner, Nov 4)
+
+A forced line (`forced: true`) stops whatever the Alerts ticks, and the box offers no turn-off for it (§160b). Source: `live.alwaysStops` / `payCallLines`, `testerGate.disputeChange`.
+
+| Press | Forced line | Notes |
+| --- | --- | --- |
+| Pay, Pay more (a part) | Anything on that part: `sent` (work sent, updated, added); `paid` / `rejected` / `choice` events carrying `part-<id>` / `call-<id>` (a Charge, Let it go, Charge opening, an automatic call charge); `payment` lines whose payment is on that part (`Payment went through on <test>: $X to <tester> for the <part>`, `Payment failed on …`); a dispute on it | Lines about the same tester's other parts follow the ticks (except A2 below). |
+| Pay, Pay more (a call) | `<tester> reported a problem with the call on <date/time>: <note>` (kind `call_problem`); `The length of the call with <tester> on <date/time> is final: N minutes` (kind `call_length`) | New kinds with no Alerts type; never in the live box. Only the tester's report (the developer's own report doesn't stop). |
+| Every developer press about one tester: Pay, Pay more on any of their parts; End early including them; call requests with them, their answers and cancels | `<tester> disputed the pay for <their> <part>`; `The team decided <tester>'s dispute: …` | §171 A2. Presses about the whole test (Stop, Next round, Edit Save, Invite) and other testers' presses follow Disputes / Decisions by the team. Developer Rate keeps its own rule. |
+| Every tester press on the test (Send, Add to this answer, recording add, Charge, Let it go, Dispute, Leave, call requests, Rate) | `<dev> added <their> side to your dispute about …`; `The team decided your dispute about your <part>: …` | §171 A2, even with Alerts Off. Excerpt requests keep their own rules. |
+| NOT changed (§171 item 7): Confirm with your bank on a charge made while away, Confirm all's items | §159's forced set only (the same tester's decision, that tester leaving, work sent on the very part) | Flagged `awayCharge` until the owner decides the waiting-charge rules. |
+
+### The blue notice inside an open bank window (§160, widened by §171)
+
+* **Changes (§171 A3):** every line about the payment's tester is listed whatever the Alerts ticks (Confirm all: each covered charge's tester, each line once). Lines about other testers follow the ticks.
+* **Cancelled reasons added (§171 B4–B6):** `This bank check was cancelled: <reason>. Pressing Complete won't charge anything.` with:
+  * `it was moved into your Confirm all in another tab` (a single Confirm window whose charge Confirm all took over);
+  * `it was moved into another payment in another tab` (covered by another one payment);
+  * `a new bank check replaced it (in another tab, or after your Confirm all ended)` (the window's PaymentIntent isn't the charge's `actionPi` any more);
+  * `the payment already went through on another bank check`;
+  * `your tests were paused (a payment hold started)`, now also for an open Pay more check (§171 B5);
+  * `a new chargeback arrived, so the team reviews your account again before you can pay` (Pay what you owe on a review-first account, §171 B6a);
+  * `your bank decided a chargeback in your favour, so what you owe changed` (Pay what you owe's one payment, or a chargeback hold's reservation, covering a chargeback won meanwhile, §171 B6b).
+* **Pay what you owe's stop (§171 B6c):** every change in one box: `Added to what you owe meanwhile: …` / `Another payment failed meanwhile: …`, `Your bank's chargeback of $X was reversed in your favour: $Y taken off`, `Your bank changed the amount it took back from your $X payment for …: $A → $B (now …)`, then `New total $T.` (when something was added or won) and the press-again line with the same total.
+
 ## 2. Stop-once lines: tester and Join / Rate
 
 The tester's shared gate applies to Switch / Keep, written Send, recording Send, Charge / Let it go, Dispute, Leave, call Request / Accept / Decline / Withdraw / Cancel and (Task 12 §93) Rate. Block does not stop. An ended/stopped/paused test still uses this gate for presses that remain allowed. `answersIt` drops the current request/offer/piece being answered. One box combines the shared changes with Rate's stop/pause moment; `boxAt` makes the second press continue without a second box for the other source.
@@ -183,7 +208,7 @@ Task 12 normalizes the gate's older `pageSeenAt`/`loadedAt` baselines to `seenAt
 | Kind | Exact wording | Trigger / Alerts |
 | --- | --- | --- |
 | terms | &lt;dev&gt; offered you the new terms: Switch or Keep below | An open/superseded offer since the unseen baseline; always, even Alerts Off. |
-| dispute | &lt;dev&gt; added their side to your dispute | Developer side added; ordinary Alerts. |
+| dispute | &lt;dev&gt; added their side to your dispute | Developer side added. (§171 A2) Forced: stops every press of theirs on the test once, even with Alerts Off. |
 | paid | &lt;dev&gt; paid $X for your &lt;part&gt; | New review, excluding tester choices / delayed duplicates; ordinary Alerts. |
 | rejected | &lt;dev&gt; rejected your &lt;part&gt; | New rejection; ordinary Alerts. |
 | paid | The team closed your &lt;part&gt; for $0 | Team-closed review; ordinary Alerts. |
@@ -203,8 +228,8 @@ Task 12 normalizes the gate's older `pageSeenAt`/`loadedAt` baselines to `seenAt
 | info / renamed | &lt;dev&gt; edited the listing | Listing save collapsed to one line with See it; ordinary Alerts. Rename alone never stops. |
 | payment | &lt;dev&gt;'s payment for your &lt;part&gt;[ on &lt;test&gt;] ($X) is delayed. You'll be told when it arrives. | Owed/deferred/declined owed payment; ordinary Alerts, own developer sessions only. |
 | paid | &lt;dev&gt; paid $X for your &lt;part&gt;[ on &lt;test&gt;] | Delayed payment settled; replaces delayed line by payment key; ordinary Alerts. |
-| admin | The team decided your dispute: the pay was raised to $X | Decision above original review; ordinary Alerts. |
-| admin | The team decided your dispute: the pay stays at $X | No raise; ordinary Alerts. |
+| admin | The team decided your dispute: the pay was raised to $X | Decision above original review. (§171 A2) Forced: stops every press of theirs on the test once, even with Alerts Off. |
+| admin | The team decided your dispute: the pay stays at $X | No raise. (§171 A2) Forced, as above. |
 | own | You &lt;tester action from section 1&gt; in another tab | Always, including Alerts Off; all later shared presses. |
 
 For Dispute, any payment line on the piece being disputed is mandatory even with Alerts Off (§68). `KINDS` also includes `info`, `payment`, `admin`, `own`, `dispute`, and explicitly adds renamed/keyfixed/keygiven. Call changes counted from loadedAt in the older shared gate; the page-shown rule and Task 12 Rate normalization must be distinguished from that historical comment. [testerGate.ts](../src/lib/server/testerGate.ts), [testerPaymentChanges](../src/lib/server/live.ts), [delayedPayLine](../src/lib/rules.ts).

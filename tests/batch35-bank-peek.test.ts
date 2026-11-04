@@ -224,7 +224,8 @@ describe("§158 the page polls while the bank's page is open", () => {
     expect(bc).toContain("return watchBank(() => peek(opened.current), () => void end(), undefined, (r) => setNotice((n) => addNews(n, r)));");
     expect(bc).toMatch(/if \(!action\.checkUrl \|\| !peek\) return;/);
     // The default peek is the payment's (or reservation's) own id; Verify a card passes its SetupIntent's.
-    expect(bc).toContain("peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId }, since) : undefined)");
+    // (§171 B4) The peek also names the window's own PaymentIntent (from its client secret).
+    expect(bc).toContain("peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId, ...(checkPiOf(a.clientSecret) ? { pi: checkPiOf(a.clientSecret) } : {}) }, since) : undefined)");
     expect(src("components/ChargebackSteps.tsx")).toContain("finish(setupIntent), (since) => peekBank({ setupIntent }, since)");
     // The route answers a peek before anything that changes a payment.
     const route = src("app/api/payments/confirm/route.ts");

@@ -2568,3 +2568,86 @@ Owner: "Ticking All in Alerts doesn't tick everything, and removing one while Al
   `batch35-one-card-checks` (the gone-through line with its amount) updated.
 - **Pictures:** `playtest-lite-evidence/small-ui/before-1366x768.png`, `before-1280x720.png` (the box cut inside Needs you's panels) and `after-1366x768.png`,
   `after-1280x720.png` (the whole box: frame, hint, Cancel and the notice).
+
+## §171 Stop rules v2 and four payment fixes (owner, Nov 4)
+
+### A. The owner's new stop rules
+1. **Same part always stops.** Pay and Pay more stop once for ANYTHING on the part being paid, whatever the Alerts ticks (forced, so the box offers no turn-off,
+   §160b), unless the press can't go ahead at all (then it's §163's refusal). "Anything":
+   - work sent, updated or added to that part (§159 rule 2, kept);
+   - a dispute raised on it (A2 below covers it);
+   - another payment on it: another tab's (an own line, already forced), a tester's Charge, Let it go or Charge opening, an automatic call charge, a team
+     decision's charge, a payment going through or failing on it. The holds' "paid" / "rejected" / "choice" events now carry their part as their link
+     (`part-<submission>`, `call-<call>`; the live box's line jumps there too), and `devPaymentChanges`' lines carry the payment's part (`piece`);
+   - for a call: the tester reporting a problem with it ("Ana Silva reported a problem with the call on Thu, Nov 5, 3:00 PM: Was late") and its measured length
+     becoming final ("The length of the call with Ana Silva on Thu, Nov 5, 3:00 PM is final: 30 minutes"). Neither has a test event, so the payment press reads
+     them from the call (`live.payCallLines`, kinds `call_problem` / `call_length`, no Alerts type). The length is written once (`measuredAt`), so "changing" and
+     "becoming final" are the same moment. The developer's own problem report doesn't stop their Pay (it's their own press, possibly in this same tab).
+2. **A dispute by a tester, or the team's decision on it, stops every press about that tester once, whatever the Alerts.**
+   - Developer side (`live.alwaysStops` with `pressContracts`: a payment press's contract and every `c:<contract>` the press touches): Pay and Pay more on any of
+     their parts, End early including them, call requests with them, answering or cancelling them. Presses about the whole test (Stop, Next round, Edit Save,
+     Invite) and about other testers follow the Disputes / Decisions ticks. Developer Rate keeps today's rule (an open dispute refuses it; the decision stops it
+     once). **Block** has no stop-once gate and is only on profiles (owner, Oct 27): there is no Block on the test page, so nothing changed.
+   - Tester side (`testerGate.disputeChange`): the team's decision on their dispute, or the developer adding their side, stops every press of theirs on that test
+     once, even with Alerts Off, forced: Send, Add to this answer, a recording's add, Charge, Let it go, Dispute, Leave, call requests, Rate. Excerpt requests
+     keep their own rules (their own route).
+   - §159 rule 1 (the same tester's decision always stops payment presses) is kept; the tester's dispute now does the same.
+3. **The middle ground.** The blue notice INSIDE an open bank window lists EVERYTHING about the payment's tester, whatever the Alerts ticks (`Press.wholeTester`,
+   used only by the peek). Confirm all: each covered charge's tester (each covered charge's part runs its own peek lines; each line once). Lines about other
+   testers keep following the ticks. The notice still never closes or stops the window.
+
+### B. Payment fixes
+4. **A single Confirm window whose check isn't the live one any more.** The page now sends the window's own PaymentIntent with each peek (`pi`, read from the
+   client secret: `bankConfirm.checkPiOf`), and `bankPeek.notThisCheck` answers cancelled when the charge is covered (Confirm all: "This bank check was
+   cancelled: it was moved into your Confirm all in another tab. Pressing Complete won't charge anything."; another one payment: "… it was moved into another
+   payment in another tab …"), when its live check is a different PaymentIntent ("… a new bank check replaced it (in another tab, or after your Confirm all
+   ended) …"), or when it was paid on another check ("… the payment already went through on another bank check …"). The owner's decision stands: Confirm all
+   keeps claiming such a charge and cancelling its check. A page that sends no `pi` is still told about a cover.
+5. **A hold starting cancels an open Pay more check too.** `holds.startHold` now releases the developer's open `needs_action` checks of kinds review, call AND
+   extra: at Stripe first; one the bank already approved is recorded as paid once (`finishExtraPay`). The window reads "This bank check was cancelled: your tests
+   were paused (a payment hold started). Pressing Complete won't charge anything."
+6. **Pay what you owe while chargebacks change underneath it.**
+   - (a) **A new chargeback during an approved review-first payment** (§161): `chargebackOpened`, after clearing the approval, cancels that account's open Pay
+     what you owe check (`owedOnce.cancelOpenOwed`: Stripe first; already approved → recorded paid once via `finishConfirmed`; otherwise what it covered is owed
+     again and the one payment keeps `failure` = `OWED_REVIEW_AGAIN`). The window: "This bank check was cancelled: a new chargeback arrived, so the team reviews
+     your account again before you can pay. Pressing Complete won't charge anything."
+   - (b) **A chargeback won while the window is open.** Chosen: cancel the open check at Stripe before anything else in `chargebackWon`, so Complete charges
+     nothing and the developer pays the new total. If the bank had already approved it, it is recorded as paid once (its repayment row for the won chargeback is
+     made by the normal settle) and that repayment is then refunded by `chargebackWon`'s existing refund step (the reversed amount + the fee to the card), which
+     is the Terms' refund rule ("Payments aren't refunded, except when the platform wins a chargeback the developer already paid (the amount and the fee go back
+     to their card)"); no credit balance exists in the app, so credit was not an option. A chargeback hold's reservation whose bank check is open
+     (`needs_action`) and covers the won chargeback is cancelled at Stripe the same way (nothing reserved; Pay what you owe reserves the new total). A reservation
+     already authorized ("reserved") is left alone: the team's Approve captures only what's still owed (`amount_to_capture`), so the won part is never taken.
+     The window: "This bank check was cancelled: your bank decided a chargeback in your favour, so what you owe changed. Pressing Complete won't charge anything."
+     (the one payment keeps `failure` = `OWED_WON_MEANWHILE`; a reservation's reason is read from its covered payments).
+   - (c) **Every change in the stop box.** Pay what you owe's press-time stop now lists every change together (they replaced each other): "Another payment failed
+     meanwhile: …" / "Added to what you owe meanwhile: …", "Your bank's chargeback of $10.00 was reversed in your favour: $25.00 taken off" (what the page showed
+     for it, else the reversed amount + the fee), and "Your bank changed the amount it took back from your $20.00 payment for …: $12.00 → $20.00 (now $20.00 +
+     $15.00 fee = $35.00)", then "New total $44.00." (when something was added or won) and the press-again line with the same total. The stop carries the box's
+     lines and the new total as before (the Nov 3 A3 fix), so the bullets and the button agree. An older page without `seenAmounts` no longer guesses a changed amount
+     when something was also added.
+7. **Not built yet (the owner is deciding the waiting-charge rules):** "Confirm with your bank" on a charge made while away and Confirm all's items keep their
+   press-time gate exactly as before (`Press.awayCharge`: §159's forced set only, no call lines). Their windows do get A3 and B4.
+
+### C. Terms of Use (edited in place: TERMS_VERSION stays 2, no What changed entry; nothing has launched)
+- New "Changes while you pay" under Paying for work: the approved text, with one sentence added for A2 ("A dispute by a tester, or the team's decision on it,
+  also stops once every other press about that tester (End early, call requests and their answers), and the team's decision on a tester's dispute, or the
+  developer adding their side to it, stops each of that tester's own presses on the test once."), and the approved example.
+- Unreviewed work: "Charge and Let it go are offered only while the developer hasn't paid anything on that part; once they have, Dispute is the way to ask for
+  more." ("up to what's left of the listing price" now reads "up to the listing price", §163.)
+- Bank checks, declines, holds: "From an account's 2nd chargeback (every payment ever reversed counts), our team reviews the account before the developer can
+  pay: once the team allows it, Pay what you owe charges everything owed as one payment and the tests resume; a new chargeback before paying needs the team's
+  review again." (§161)
+- §167 (10 additions per written part) and §168 (Next round's empty name) aren't described anywhere in the Terms, so nothing was added for them.
+
+- **Code.** `live.ts` (`Press.wholeTester` / `awayCharge`, `alwaysStops`, `pressContracts`, `payCallLines`, `callProblemLine`, `callLengthLine`, `piece` on part
+  lines and payment lines), `holds.ts` (event links, `startHold`, `chargebackOpened`, `chargebackWon`, `payOwed`'s stop text), `owedOnce.ts` (`cancelOpenOwed`,
+  `OWED_REVIEW_AGAIN`, `OWED_WON_MEANWHILE`), `bankPeek.ts` (`notThisCheck`, `wholeTester`, Confirm all's per-tester lines, the new reasons), `bankNotice.ts`
+  (`CANCELLED_WHY`), `bankConfirm.ts` (`checkPiOf`, `PeekTarget.pi`), `BankCheck.tsx` (sends `pi`), `testerGate.ts` (`disputeChange`), `confirm.ts` and
+  `confirmAll.ts` (`awayCharge`), `termsOfUse.ts`. No migration.
+- **Tests:** `tests/batch35-stop-rules-v2.test.ts` (A1: a payment on the part stops Pay more, forced, and follows the tick on another part; a Charge line on the
+  part; the event links; a call's problem report and final length; A2: End early, Pay on another part for a dispute, which presses are about them, Stop follows
+  the ticks, the tester's presses with Alerts Off; A3: Pay's window and Confirm all's window; item 7: Confirm keeps its gate; B4: Confirm all took it over,
+  replaced, paid on another check; B5: cancelled, and already approved; B6 a and b: cancelled, and already approved (recorded once; refunded for a win), the
+  reservation; B6 c: every change in one stop, then the new total paid; C: the Terms). Updated: `batch35-bank-notice` (another tester's ticked-off line isn't a
+  line, this tester's is), `batch35-bank-peek` (the peek sends `pi`), `batch19` (the Terms' headings).

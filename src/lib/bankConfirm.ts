@@ -44,7 +44,9 @@ export async function finishPayment<T = Record<string, unknown>>(paymentId: stri
 }
 
 /** (§158) What the open bank check asks about: a payment's (or a chargeback hold's reservation's) check, or Verify a card's SetupIntent. */
-export type PeekTarget = { paymentId: string } | { setupIntent: string };
+export type PeekTarget = { paymentId: string; /** (§171 B4) the window's own PaymentIntent */ pi?: string } | { setupIntent: string };
+/** (Owner, Nov 4, §171 B4) The PaymentIntent a bank window holds, read from its client secret ("pi_…_secret_…"); "" when it carries none. */
+export const checkPiOf = (clientSecret: string | null | undefined) => { const i = (clientSecret ?? "").indexOf("_secret"); return i > 0 ? clientSecret!.slice(0, i) : ""; };
 export type PeekAnswer = "waiting" | "done";
 /**
  * (Owner, Nov 3, §160) A peek's whole answer: whether Stripe still waits, and what the box's blue notice says: the changes since the press that would have stopped

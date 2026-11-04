@@ -22,6 +22,14 @@ export const CANCELLED_WHY = {
   paused: "this payment is paused until your tests resume",
   otherMode: "it was made in Stripe's other mode (test or live)",
   elsewhere: "it was ended elsewhere (in another tab, or by the team)",
+  // (Owner, Nov 4, §171 B4) This window's check is no longer the charge's live check.
+  inAll: "it was moved into your Confirm all in another tab",
+  inOther: "it was moved into another payment in another tab",
+  replaced: "a new bank check replaced it (in another tab, or after your Confirm all ended)",
+  paidOther: "the payment already went through on another bank check",
+  // (§171 B6) Pay what you owe while chargebacks change underneath it.
+  reviewAgain: "a new chargeback arrived, so the team reviews your account again before you can pay",
+  won: "your bank decided a chargeback in your favour, so what you owe changed",
 } as const;
 
 /** A change line as the notice shows it: one sentence, ending with its stop. */
