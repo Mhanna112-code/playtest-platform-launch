@@ -3,7 +3,9 @@ import type Stripe from "stripe";
 import { afterEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
-import { DECIDE_LOCKED, decideDispute } from "@/lib/server/payments";
+import { decideDispute, decideLockedLine } from "@/lib/server/payments";
+// (Batch 35 §162) setup()'s developer is "she": "… with her bank".
+const DECIDE_LOCKED = decideLockedLine("she");
 import { setStripeForTests } from "@/lib/server/stripe";
 import { decidePayChangedLine } from "@/lib/rules";
 import { json, makeUser, req } from "./helpers";

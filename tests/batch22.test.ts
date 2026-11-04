@@ -166,7 +166,7 @@ describe("batch 22 section 4: the admin's test timeline speaks about people", ()
     expect(texts).toContain(`${nora} paid ${ana} $5.00 for the written answers`);
     expect(texts).toContain(`${nora}'s developer account was paused (by ${a.user.email})`);
     expect(texts).toContain(`${nora}'s tests are running again`);
-    expect(texts.filter((t) => /disputed/.test(t))).toEqual([`${ana} disputed the pay for their written answers:`]);
+    expect(texts.filter((t) => /disputed/.test(t))).toEqual([`${ana} disputed the pay for her written answers:`]);
     expect(rows.find((r) => /disputed/.test(r.text))?.em).toBe("I answered every question in full.");
     expect(texts.filter((t) => /decided/.test(t))).toEqual([`${a.user.email} decided ${ana}'s dispute: kept the pay at $5.00`]);
     expect(texts.some((t) => /^You |^Your /.test(t))).toBe(false);

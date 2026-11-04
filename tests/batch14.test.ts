@@ -137,7 +137,7 @@ describe("batch 14 section 6: access keys, no Assign a free key", () => {
     expect((await db.accessKey.findFirstOrThrow({ where: { testId, value: "K1" } })).status).toBe("broken");
     expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "access key" } } })).toBe(0);
-    expect((await devChanges(dev.user.id, testId, since, "", db, { all: true })).map((e) => e.text)).toContain("Ana Silva reported their key doesn't work");
+    expect((await devChanges(dev.user.id, testId, since, "", db, { all: true })).map((e) => e.text)).toContain("Ana Silva reported her key doesn't work");
     expect((await devChanges(dev.user.id, testId, since, "")).some((e) => e.kind === "key")).toBe(false);
     expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBeGreaterThanOrEqual(400);
     const notice = src("app/app/tests/[id]/KeysNotice.tsx");

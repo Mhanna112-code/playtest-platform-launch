@@ -1,6 +1,7 @@
 "use client";
 import { useRef, useState } from "react";
 import { PressDone } from "@/components/PressDone";
+import { pronouns } from "@/lib/format";
 import { lengthCap } from "@/lib/callMeasure";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -30,6 +31,8 @@ export function CallRequests(p: {
   end?: CallEnd;
   /** (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked, what's left of the $1,000, the rate). */
   clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number; leftCents: number | null; rateCents: number | null };
+  /** (Batch 35 §162) The other person's pronoun (one person: the developer on the tester's page): "She picks one of these." */
+  otherPronoun?: string;
 }) {
   // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
   const [limitSeen, setLimitSeen] = useState("");
@@ -109,7 +112,7 @@ export function CallRequests(p: {
               ))}
             </fieldset>
           )}
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={p.leadMinutes} end={p.end} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={p.leadMinutes} end={p.end} picker={`${pronouns(p.otherPronoun).Subj} ${pronouns(p.otherPronoun).v("picks", "pick")}`} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
           <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">

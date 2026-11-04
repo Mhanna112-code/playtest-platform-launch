@@ -3,7 +3,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { getKept, setKept } from "@/lib/server/kept";
-import { invitePanel, WHY_IN_TEST, WHY_INVITED } from "@/lib/server/invites";
+import { invitePanel, WHY_IN_TEST } from "@/lib/server/invites";
 import { newInviteLine } from "@/lib/server/joining";
 import { testV } from "@/lib/server/pulseV";
 import { testerChanges } from "@/lib/server/testerGate";
@@ -194,7 +194,7 @@ describe("batch 34 §11: the invite panel's lists leave out testers in the test 
     expect(inRow).toMatchObject({ why: WHY_IN_TEST, whyKind: "in" });
     expect(inRow.grey).toBeTruthy();
     const invRow = (await invitePanel(dev.user.id, testId, { q: `Ivo Invited ${tag}` })).found.find((x) => x.id === invited.tester.user.id)!;
-    expect(invRow).toMatchObject({ why: WHY_INVITED, whyKind: "invited", invited: true });
+    expect(invRow).toMatchObject({ why: "already invited, waiting for her to join", whyKind: "invited", invited: true }); // (batch 35 §162) in her pronoun
     // Cancel the invite: they show again in People you've worked with.
     const inv = await db.invite.findFirstOrThrow({ where: { testId, testerId: invited.tester.user.id, status: "sent" } });
     await db.invite.update({ where: { id: inv.id }, data: { status: "cancelled" } });

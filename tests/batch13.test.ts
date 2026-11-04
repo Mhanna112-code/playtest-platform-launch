@@ -51,7 +51,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     expect(r.status).toBe(200);
     const row = await db.excerpt.findUniqueOrThrow({ where: { id: r.body.id } });
     expect(row).toMatchObject({ status: "pending", hideProduct: false, question: "What did you like?", text: "the second boss was far too hard" });
-    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: "Ana Silva asked to show an excerpt from “Harbor Run” on their profile" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: "Ana Silva asked to show an excerpt from “Harbor Run” on her profile" } })).toBe(1);
     // One pending request per part. (Batch 35 §126) The same text again is refused as a duplicate.
     expect((await ask(s.tester.cookie, s.sub.id, { index: 1, text: "Nowhere really, it was smooth." })).body.error.message).toBe(X.ONE_PENDING);
     expect((await ask(s.tester.cookie, s.sub.id)).body.error.message).toBe(X.SAME_PENDING);
@@ -138,7 +138,7 @@ describe("batch 13 sections 1-3: excerpt requests", () => {
     await ex(t2.dev.cookie, { action: "decide", excerptId: shown, decision: "allow" });
     // The developer of the first test deletes: its pending request closes.
     await deleteAccount(s.dev.user.id, "self");
-    expect(await db.excerpt.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "closed", closedReason: "Harbor Run's developer deleted their account, so this request was closed" });
+    expect(await db.excerpt.findUniqueOrThrow({ where: { id } })).toMatchObject({ status: "closed", closedReason: "Harbor Run's developer deleted her account, so this request was closed" });
     // The developer of the second deletes: the shown excerpt stays.
     await deleteAccount(t2.dev.user.id, "self");
     expect((await db.excerpt.findUniqueOrThrow({ where: { id: shown } })).status).toBe("shown");

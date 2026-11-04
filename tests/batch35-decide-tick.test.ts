@@ -67,8 +67,8 @@ describe("batch 35 §1: the tick on a dispute decision that charges", () => {
     await db.payment.create({ data: { kind: "extra", submissionId: sub.id, contractId: c.id, developerId: c.test.developerId, testerId: c.testerId, amountCents: 600, feeCents: 120, testerCents: 480, status: "needs_action" } });
     const made: unknown[] = [];
     setStripeForTests({ paymentIntents: { create: async (p: unknown) => { made.push(p); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
-    const { DECIDE_LOCKED } = await import("@/lib/server/payments");
-    await expect(decideDispute(admin, row.id, { total: "10.00", tickCents: 600 })).rejects.toThrow(DECIDE_LOCKED);
+    const { decideLockedLine } = await import("@/lib/server/payments");
+    await expect(decideDispute(admin, row.id, { total: "10.00", tickCents: 600 })).rejects.toThrow(decideLockedLine("she")); // (batch 35 §162) setup()'s developer is "she"
     expect(made).toHaveLength(0);
     expect((await db.dispute.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("open");
   });

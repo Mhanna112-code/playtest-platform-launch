@@ -12,7 +12,7 @@ import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
 import { devGate, recordEvent } from "./tests";
-import { testerGate } from "./testerGate";
+import { FINISHED_PART_REASON, finishedPartReason, testerGate } from "./testerGate";
 import { answerTermsFirst } from "./terms";
 import { CALL_MIN_AHEAD_MINUTES, farEnoughAhead } from "@/lib/callLead";
 import { afterEndToBookLine, beforeEndLine, leadLine, tooSoonToBookLine, windowShut, windowShutLine, type CallEnd } from "@/lib/callWindow";
@@ -48,7 +48,7 @@ export const pageRows = (r: { rows?: unknown; times: Date[]; startsAt: Date; wee
 // sending refuses overlaps with calls/requests between the same two; accepting refuses overlaps with anyone's calls.
 
 type Side = "developer" | "tester";
-type U = { id: string; email: string; name: string };
+type U = { id: string; email: string; name: string; pronoun?: string };
 const DAY_MS = 86_400_000;
 /** Limits per tester per test: up to 3 booked times (a single call = 1, a daily/weekly set = 1) and up to 3 pending
  * requests (both sides together). */
@@ -71,17 +71,18 @@ export const rateLabel = (rateCents: number | null, contractRate: number | null)
  * (Owner, Oct 29, batch 26 section 10, DEFAULT) The developer's call request row: a tester on older terms than the listing says so, "Their terms: $30/h (the listing
  * is now $24/h)"; otherwise the usual label.
  */
-export const devRateLabel = (rateCents: number | null, contractRate: number | null, listingRate: number | null) =>
+export const devRateLabel = (rateCents: number | null, contractRate: number | null, listingRate: number | null, /** (§162) the tester's: "Her terms" */ pronoun?: string | null) =>
   rateCents != null && rateCents === contractRate && listingRate != null && listingRate !== contractRate
-    ? `Their terms: ${money(rateCents).replace(/\.00$/, "")}/h (the listing is now ${money(listingRate).replace(/\.00$/, "")}/h)`
+    ? `${pronouns(pronoun).Poss} terms: ${money(rateCents).replace(/\.00$/, "")}/h (the listing is now ${money(listingRate).replace(/\.00$/, "")}/h)`
     : rateLabel(rateCents, contractRate);
 /**
  * (Batch 26 section 10) A waiting call request that is no longer waiting, as its row says it live on an open page: "Closed: the tester finished their part",
  * "Withdrawn", "Declined", "Booked", or the taken line. "" while it waits.
  */
-export function requestGoneLine(r: { status: string; closedReason: string }) {
+export function requestGoneLine(r: { status: string; closedReason: string }, /** (§162) the tester's: "the tester finished her part" */ testerPronoun?: string | null) {
   if (r.status === "pending") return "";
-  if (r.status === "closed") return `Closed${r.closedReason ? `: ${r.closedReason}` : ""}`;
+  const reason = r.closedReason === FINISHED_PART_REASON ? finishedPartReason(testerPronoun) : r.closedReason;
+  if (r.status === "closed") return `Closed${reason ? `: ${reason}` : ""}`;
   if (r.status === "taken") return r.closedReason || "Taken";
   return r.status === "booked" ? "Booked" : r.status === "withdrawn" ? "Withdrawn" : r.status === "declined" ? "Declined" : "Closed";
 }
@@ -584,7 +585,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
   });
   // (Batch 15 sections 11 and 20) The time in the reader's own zone; the reason only in the email, never in the bell line.
   const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${T(calls[0].startsAt)}.`;
-  await notify(other.email, line, [line, ...(reason ? [`Their reason: “${reason}”`] : [])], side === "developer" ? `/app/sessions/${contractId}#call-${calls[0].id}` : `/app/tests/${c.testId}#call-${calls[0].id}`, { about: user.id });
+  await notify(other.email, line, [line, ...(reason ? [`${pronouns(user.pronoun).Poss} reason: “${reason}”`] : [])], side === "developer" ? `/app/sessions/${contractId}#call-${calls[0].id}` : `/app/tests/${c.testId}#call-${calls[0].id}`, { about: user.id });
   return { cancelled: calls.length };
 }
 

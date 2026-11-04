@@ -107,7 +107,7 @@ export async function devRateStates(contractIds: string[], now = new Date()) {
     const base = { opensAt, endsAt: w?.end ?? null, paused: w?.paused ?? false, revealAt };
     if (mine) out.set(c.id, { kind: "rated", line: "", ...base });
     else if (dev.devSuspendedAt || dev.holdStartedAt) out.set(c.id, { kind: "hidden", line: RATE_INACTIVE, ...base });
-    else if (!opensAt) out.set(c.id, { kind: "hidden", line: ratePendingLine(name), ...base });
+    else if (!opensAt) out.set(c.id, { kind: "hidden", line: ratePendingLine(name, c.tester.pronoun), ...base });
     else if (w && w.end.getTime() <= now.getTime()) out.set(c.id, { kind: "hidden", line: `The ${WINDOW_DAYS} days to rate ${name} have passed.`, ...base });
     else if (open.has(c.id)) out.set(c.id, { kind: "disabled", line: rateTheirDisputeLine(name), ...base });
     else out.set(c.id, { kind: "open", line: "", ...base });
@@ -244,14 +244,14 @@ export async function testerRate(tester: { id: string; name: string; email: stri
     const wasWorking = c.status === "working";
     if (wasWorking) {
       await tx.contract.update({ where: { id: c.id }, data: { status: "left", endKind: "rated", endedAt: new Date() } });
-      await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished their part.`);
+      await cancelCallsAhead(tx, [c.id], `${displayName(tester)} finished ${pronouns(tester.pronoun).poss} part.`);
       await closeOffersOfEnded(tx, [c.id]); // (batch 35 §118) rating ends the part: its open new-terms offer closes
       // (Owner, Oct 29, batch 24 section 2) Said in the tester's terms: they finished their part (Leave and a suspension's removal keep "the tester left").
       await tx.callRequest.updateMany({ where: { contractId: c.id, status: "pending" }, data: { status: "closed", closedReason: FINISHED_PART_REASON, decidedAt: new Date() } });
     }
     // (Owner, Oct 28, batch 20 section 24) A working tester who rates is leaving: one line ("Testers leaving"). One whose part had ended: "ff rated you" (Ratings from
     // testers). Either stops the developer's presses once; never the stars (the blind reveal).
-    if (wasWorking) await recordEvent(tx, c.testId, "left", `${finishedAndRatedLine(displayName(tester))}`, true, {}, c.id);
+    if (wasWorking) await recordEvent(tx, c.testId, "left", `${finishedAndRatedLine(displayName(tester), tester.pronoun)}`, true, {}, c.id);
     else await recordEvent(tx, c.testId, "rated", `${ratedYouLine(displayName(tester))}`, false, {}, c.id);
   }).catch(ratedOnce(`You already rated ${displayName(c0.test.developer)}.`));
   // (Batch 17 section 16) The developer's Rate (and its 14 days) opens once everything this tester sent is settled too: now, or when the last piece is.

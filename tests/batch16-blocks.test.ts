@@ -56,7 +56,7 @@ for (const who of ["the developer blocks the tester", "the tester blocks the dev
       // Rejoin ask: refused neutrally; Join on the hidden test and Apply: refused.
       expect((await act(left.testId, "rejoin-ask", ana.tester.cookie, { listingVersion: 1, seenAt: seen(), confirmed: true })).body.error.message).toBe(NOT_TAKING_LINE);
       const joinOther = (await act(other.testId, "join", ana.tester.cookie, { listingVersion: 1 })).body.error.message;
-      expect(joinOther).toBe(who === "the developer blocks the tester" ? NOT_TAKING_LINE : "You blocked Nora Lane: unblock them in Account → Blocked people to join.");
+      expect(joinOther).toBe(who === "the developer blocks the tester" ? NOT_TAKING_LINE : "You blocked Nora Lane: unblock her in Account → Blocked people to join.");
       // Invites can't be sent.
       expect((await act(other.testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ana.tester.user.id] })).body.message).toBe("Ana Silva can't be invited right now.");
 

@@ -1,5 +1,5 @@
 import { withDateZone } from "@/lib/server/dateZone";
-import { fmtDateIn } from "@/lib/format";
+import { fmtDateIn, pronouns } from "@/lib/format";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { publicProfileV } from "@/lib/server/pageFreshness";
 import { ProfileMessageButton } from "@/components/ProfileMessageButton";
@@ -52,6 +52,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
   if (!mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: p.id, blockedId: viewer.id } }))) return <>{watch}<ProfileUnavailable /></>;
   const iBlocked = !mine && !isAdmin(viewer) && (await db.block.count({ where: { blockerId: viewer.id, blockedId: p.id } })) > 0;
   const name = displayName(p);
+  const pron = pronouns(p.pronoun); // (batch 35 §162) the lines about this tester
   const pr = p.profile;
   // (§105) The direct conversation is shared by the two accounts, whether they have worked together or not.
   const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
@@ -71,7 +72,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       </section>
       <TesterTiles userId={p.id} />
       {/* (Owner, Oct 29, batch 13) Shown excerpts (never from a test that has an NDA now); the tester's own list, with Remove, on their own profile. */}
-      {mine ? <MyExcerpts items={await myExcerpts(p.id, true)} /> : <ShownExcerpts items={await shownExcerpts(p.id)} />}
+      {mine ? <MyExcerpts items={await myExcerpts(p.id, true)} /> : <ShownExcerpts items={await shownExcerpts(p.id)} poss={pron.poss} />}
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">About</h2>
         <p className="whitespace-pre-wrap break-words text-sm text-slate-300">{pr?.bio || <span className="text-slate-500">No bio yet.</span>}</p>
@@ -89,7 +90,7 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       {viewer.isDeveloper && !mine && !off && (
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
-          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect="Their sessions on your tests end now (work they sent stays payable), calls between you are cancelled, their applications and your invites close, and chat closes. They won't see your tests any more." />}
+          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect={`${pron.Poss} sessions on your tests end now (work ${pron.subj} sent stays payable), calls between you are cancelled, ${pron.poss} applications and your invites close, and chat closes. ${pron.Subj} won't see your tests any more.`} />}
         </div>
       )}
     </div>

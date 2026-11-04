@@ -63,12 +63,27 @@ export const normEmail = (s: string) => s.trim().toLowerCase();
 /** A person's name for others to read: their name, or the part of their email before the @. */
 export const displayName = (u: { name?: string | null; email: string; deletedAt?: Date | null }) => (u.deletedAt ? "Deleted account" : u.name?.trim() ? u.name.trim() : u.email.split("@")[0]);
 
-/** "they" unless a pronoun is on record. */
+/**
+ * "they" unless a pronoun is on record. (Owner, Nov 3, batch 35 §162) With the verbs that agree when the pronoun is the subject ("she is" / "they are", "she
+ * has" / "they have", "she was" / "they were", "she's" / "they're", "she'd" / "they'd"), `v("asks", "ask")` for any other verb, and capitalized forms for the
+ * start of a line ("She left the test.", "Her note: …").
+ */
 export function pronouns(p: string | null | undefined) {
-  if (p === "she") return { subj: "she", obj: "her", poss: "her" };
-  if (p === "he") return { subj: "he", obj: "him", poss: "his" };
-  return { subj: "they", obj: "them", poss: "their" };
+  const [subj, obj, poss] = p === "she" ? ["she", "her", "her"] : p === "he" ? ["he", "him", "his"] : ["they", "them", "their"];
+  const one = subj !== "they";
+  const cap = (s: string) => s[0].toUpperCase() + s.slice(1);
+  return {
+    subj, obj, poss, Subj: cap(subj), Obj: cap(obj), Poss: cap(poss),
+    is: one ? "is" : "are", has: one ? "has" : "have", was: one ? "was" : "were",
+    /** "she's" / "they're" (is) */ subjIs: one ? `${subj}'s` : "they're",
+    /** "she's" / "they've" (has) */ subjHas: one ? `${subj}'s` : "they've",
+    /** "she'd" / "they'd" */ subjHad: `${subj}'d`,
+    /** a verb agreeing with the pronoun as its subject: v("asks", "ask") */ v: (singular: string, plural: string) => (one ? singular : plural),
+  };
 }
+export type Pronouns = ReturnType<typeof pronouns>;
+/** (Batch 35 §162) The pronoun choice, the same on the profile and at sign-up: unset reads "they". */
+export const PRONOUN_OPTIONS: [value: string, label: string][] = [["", "Not set (others read “they”)"], ["she", "she / her"], ["he", "he / him"], ["they", "they / them"]];
 
 export const fmtDateTime = (d: Date | string) =>
   new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });

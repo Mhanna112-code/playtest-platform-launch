@@ -59,10 +59,10 @@ async function joinAs(cookie: string, userId: string) {
 }
 
 describe("batch 35 §153: devices and languages at sign-up for testers", () => {
-  it("tester or both: at least one device and one language are required, red at their own pickers with the profile's own lines, every missing part at once; nothing is made", async () => {
+  it("tester: at least one device and one language are required, red at their own pickers with the profile's own lines, every missing part at once; nothing is made", async () => {
     expect(DEVICES_MISSING).toBe("Pick at least one device you play on.");
     expect(LANGUAGES_MISSING).toBe("Pick at least one language you can test in.");
-    for (const role of ["tester", "both"]) {
+    for (const role of ["tester"]) { // (§162) no "both" at sign-up any more
       const email = mail();
       const none = await signup({ email, role, name: "Ana Silva", ...TICKS });
       expect(none).toMatchObject({ status: 400, body: { error: { code: "bad_field", message: `${DEVICES_MISSING}\n${LANGUAGES_MISSING}` } } });
@@ -88,13 +88,6 @@ describe("batch 35 §153: devices and languages at sign-up for testers", () => {
     expect(home).not.toContain(PROFILE_STEP);
     expect(home).toContain(PAYOUTS_STEP);
     expect((await joinAs(cookieOf(r.token), r.user.id)).status).toBe(200);
-    // Both: the tester side is saved too (it lands on the developer side; switched, it joins at once).
-    const both = await signUp({ email: mail(), password: "harbor-run-1", role: "both", devices: ["Mac"], languages: ["German"], name: "Nora Lane", ...TICKS }, "http://localhost:3400");
-    expect(both.user).toMatchObject({ isDeveloper: true, isTester: true, side: "developer" });
-    expect(await db.testerProfile.findUniqueOrThrow({ where: { userId: both.user.id } })).toMatchObject({ devices: ["Mac"], languages: ["German"] });
-    await db.user.update({ where: { id: both.user.id }, data: { side: "tester" } });
-    expect(await dashboard(both.user.id)).not.toContain(PROFILE_STEP);
-    expect((await joinAs(cookieOf(both.token), both.user.id)).status).toBe(200);
   });
 
   it("developer only: never asked, anything sent is ignored, no tester profile; their Get started is unchanged", async () => {
@@ -103,7 +96,7 @@ describe("batch 35 §153: devices and languages at sign-up for testers", () => {
     const dev = await db.user.findUniqueOrThrow({ where: { email } });
     expect(dev).toMatchObject({ isDeveloper: true, isTester: false });
     expect(await db.testerProfile.count({ where: { userId: dev.id } })).toBe(0);
-    expect(readNewAccount({ role: "developer", devices: ["Mac"], languages: ["English"], name: "Dee", ...TICKS })).toEqual({ role: "developer", name: "Dee", devices: [], languages: [] });
+    expect(readNewAccount({ role: "developer", devices: ["Mac"], languages: ["English"], name: "Dee", ...TICKS })).toEqual({ role: "developer", name: "Dee", pronoun: "", bio: "", devices: [], languages: [] });
     const home = await dashboard(dev.id);
     expect(home).toContain("Add a card (needed to post a test)");
     expect(home).not.toContain(PROFILE_STEP);
@@ -113,7 +106,7 @@ describe("batch 35 §153: devices and languages at sign-up for testers", () => {
     const email = mail();
     const token = await startGoogleSignup(email);
     expect((await finish(token, { role: "tester", name: "Pat Reyes", ...TICKS })).body.error).toMatchObject({ code: "bad_field", message: `${DEVICES_MISSING}\n${LANGUAGES_MISSING}` });
-    expect((await finish(token, { role: "both" })).body.error.message).toBe([DEVICES_MISSING, LANGUAGES_MISSING, NAME_MISSING, TERMS_MISSING, AGE_LINE].join("\n"));
+    expect((await finish(token, { role: "tester" })).body.error.message).toBe([DEVICES_MISSING, LANGUAGES_MISSING, NAME_MISSING, TERMS_MISSING, AGE_LINE].join("\n"));
     expect(await db.user.count({ where: { email } })).toBe(0);
     const ok = await finish(token, { role: "tester", devices: ["Android phone"], languages: ["Portuguese"], name: "Pat Reyes", ...TICKS });
     expect(ok.status).toBe(200);
@@ -147,9 +140,9 @@ describe("batch 35 §153: devices and languages at sign-up for testers", () => {
     expect(await joinAs(dev.cookie, dev.user.id)).toMatchObject({ status: 409, body: { error: { code: "profile_first" } } });
   });
 
-  it("the form: the pickers follow the choice (tester or both only), reuse the profile's lists, pills and red-line matches, and send every tick as a list", () => {
+  it("the form: the pickers follow the choice (tester only), reuse the profile's lists, pills and red-line matches, and send every tick as a list", () => {
     const role = src("components/RoleChoice.tsx");
-    expect(role).toContain('const tester = role === "tester" || role === "both";');
+    expect(role).toContain('const tester = role === "tester";');
     expect(role).toContain("{tester && (");
     expect(role).toContain('<Choices label="Devices you use" name="devices" required options={DEVICES}');
     expect(role).toContain('<Choices label="Languages you can test in" name="languages" required options={LANGUAGES}');
@@ -163,7 +156,7 @@ describe("batch 35 §153: devices and languages at sign-up for testers", () => {
     expect(profile).toContain('data-match="at least one language"><Choices label="Languages you can test in" required options={LANGUAGES}');
     // Both sign-up pages use the one choice, and their press goes to the server even with a box red here (an empty Name), so every missing part is red at once.
     for (const f of ["app/signup/page.tsx", "app/signup/google/page.tsx"]) {
-      expect(src(f)).toContain("<RoleChoice />");
+      expect(src(f)).toContain("<RoleChoice>");
       expect(src(f)).toContain("<AuthForm allAtOnce ");
     }
     expect(src("components/AuthForm.tsx")).toContain('{...(p.allAtOnce ? { "data-red-and-blue": "" } : {})}');

@@ -122,7 +122,7 @@ describe("batch 33 §1: every person, test and payment the team reads is a link"
     expect(tpays.some((p) => hrefsOf(p.parts!).includes(tester(testerId)))).toBe(true);
     const timeline = await rowsOf<TextVM>("t-timeline", a.user.id, w.testId);
     const disputeLine = timeline.find((x) => x.em === "I answered every question in full.")!;
-    expect(disputeLine.text).toMatch(new RegExp(`· Ana Silva \\(${esc(w.tester.user.email)}\\) disputed the pay for their written answers:$`));
+    expect(disputeLine.text).toMatch(new RegExp(`· Ana Silva \\(${esc(w.tester.user.email)}\\) disputed the pay for her written answers:$`));
     // The rendered box: each link is an <a>, the Stripe ones in a new tab.
     const html = renderToStaticMarkup(createElement(PagedList, { kind: "u-payments", initial: { rows: pays, next: null, total: pays.length }, title: "Payments they made", level: 3 }));
     // (Owner, Nov 3) The email is cut in the middle (Cut): the full one is its tooltip and its hidden full copy.
@@ -206,7 +206,7 @@ describe("batch 33 §3: a developer's admin box lists their payment failures", (
     await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 });
     const failed = await db.payment.findFirstOrThrow({ where: { submissionId: w.sub.id, status: "failed" } });
     const line = async () => (await rowsOf<TextVM>("u-failures", a.user.id, w.dev.user.id)).find((x) => x.id === `failure-${failed.id}`)!;
-    const head = `$10.00 to Ana Silva (${w.tester.user.email}) for their written answers on “Harbor Run” · failed `;
+    const head = `$10.00 to Ana Silva (${w.tester.user.email}) for her written answers on “Harbor Run” · failed `;
     const why = failed.failure.trim().replace(/\.$/, "");
     expect(why).not.toBe("");
     expect((await line()).text).toMatch(new RegExp(`^.+ · ${esc(head)}.+: ${esc(why)} · still owed$`));

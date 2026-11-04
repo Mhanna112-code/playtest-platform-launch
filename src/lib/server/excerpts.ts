@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName } from "@/lib/format";
+import { displayName, pronouns } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { itemsOf } from "@/lib/answerSets";
 import { markerPattern, withoutAttachmentMarkers } from "@/lib/answerAttachments";
@@ -43,7 +43,8 @@ export const allowedLine = (test: string) => `Your excerpt from ${test} is now o
 export const deniedLine = (dev: string, test: string) => `${dev} prefers that work from ${test} isn't shown on profiles.`;
 /** (Batch 29 section 30) A developer's Take down pressed on a page loaded before it went. */
 export const ONLY_TESTER_REMOVES = "Only the tester can remove an excerpt from their profile.";
-export const devDeletedClosedLine = (test: string) => `${test}'s developer deleted their account, so this request was closed`;
+/** (Batch 35 §162) In the developer's recorded pronoun ("deleted her account"). */
+export const devDeletedClosedLine = (test: string, pronoun?: string | null) => `${test}'s developer deleted ${pronouns(pronoun).poss} account, so this request was closed`;
 export const ndaHiddenLine = (test: string) => `Hidden while ${test} has an NDA`;
 
 /** How the quote names its source: the product's name, or (an older excerpt whose tester ticked "Don't name the product") the kind of test it was. */
@@ -81,7 +82,7 @@ export async function excerptChoices(sub: { id: string; kind: string; answers: u
 }
 
 /** A tester asks to show an excerpt. No stop-once; refused only for the rules above. */
-export async function requestExcerpt(tester: { id: string; name: string; email: string; deletedAt?: Date | null }, body: Record<string, unknown>) {
+export async function requestExcerpt(tester: { id: string; name: string; email: string; pronoun?: string; deletedAt?: Date | null }, body: Record<string, unknown>) {
   const sub = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, dispute: true, contract: { include: { test: true } } } });
   if (!sub || sub.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That part doesn't exist or isn't yours.");
   const t = sub.contract.test;
@@ -110,7 +111,7 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
     if ((await tx.excerpt.count({ where: { testerId: tester.id, status: { in: ["pending", "shown"] } } })) - replaced >= MAX_EXCERPTS) throw new HttpError(409, "too_many", TOO_MANY_EXCERPTS);
     return tx.excerpt.create({ data: { testerId: tester.id, testId: t.id, contractId: sub.contractId, submissionId: sub.id, question: pick.question, text, hideProduct } });
   });
-  await bell(t.developerId, `${displayName(tester)} asked to show an excerpt from “${t.title}” on their profile`, `/app/tests/${t.id}#excerpt-${x.id}`, undefined, { testId: t.id });
+  await bell(t.developerId, `${displayName(tester)} asked to show an excerpt from “${t.title}” on ${pronouns(tester.pronoun).poss} profile`, `/app/tests/${t.id}#excerpt-${x.id}`, undefined, { testId: t.id });
   return { id: x.id };
 }
 
@@ -178,9 +179,9 @@ const decidedLine = (x: { status: string; closedReason?: string | null }) =>
 /** Deleting an account (restrictions.deleteAccount): a tester's requests and excerpts go; a developer's pending requests close, with the reason the tester reads. */
 export async function excerptsOnDelete(userId: string) {
   await db.excerpt.deleteMany({ where: { testerId: userId } });
-  const pending = await db.excerpt.findMany({ where: { status: "pending", test: { developerId: userId } }, include: { test: true } });
+  const pending = await db.excerpt.findMany({ where: { status: "pending", test: { developerId: userId } }, include: { test: { include: { developer: { select: { pronoun: true } } } } } });
   for (const x of pending) {
-    const line = devDeletedClosedLine(x.test.title);
+    const line = devDeletedClosedLine(x.test.title, x.test.developer.pronoun);
     await db.excerpt.update({ where: { id: x.id }, data: { status: "closed", closedReason: line, decidedAt: new Date() } });
     await bell(x.testerId, `${line}.`, `/app/sessions/${x.contractId}`, undefined, { side: "tester", testId: x.testId });
   }
@@ -214,5 +215,5 @@ export async function pendingForDeveloper(devId: string, testId?: string) {
   // (Batch 35 §126) A request for a question already shown replaces it on Allow: its row names the text shown now.
   const shownNow = rows.length ? await db.excerpt.findMany({ where: { status: "shown", OR: rows.map((x) => ({ testerId: x.testerId, contractId: x.contractId, question: x.question })) }, orderBy: { decidedAt: "desc" }, select: { testerId: true, contractId: true, question: true, text: true } }) : [];
   return rows.map((x) => ({
-    replaces: shownNow.filter((o) => o.testerId === x.testerId && o.contractId === x.contractId && o.question === x.question).map((o) => o.text), id: x.id, contractId: x.contractId, testId: x.testId, testTitle: x.test.title, tester: displayName(x.tester), testerHref: x.tester.deletedAt ? null : `/app/testers/${x.testerId}`, text: x.text, question: x.question, named: !x.hideProduct, source: excerptSource(x), ndaNote: x.test.ndaText ? allowUnderNdaNote(x.test.title) : "" }));
+    replaces: shownNow.filter((o) => o.testerId === x.testerId && o.contractId === x.contractId && o.question === x.question).map((o) => o.text), id: x.id, contractId: x.contractId, testId: x.testId, testTitle: x.test.title, tester: displayName(x.tester), /** (batch 35 §162) "on her profile" */ testerPoss: pronouns(x.tester.pronoun).poss, testerHref: x.tester.deletedAt ? null : `/app/testers/${x.testerId}`, text: x.text, question: x.question, named: !x.hideProduct, source: excerptSource(x), ndaNote: x.test.ndaText ? allowUnderNdaNote(x.test.title) : "" }));
 }

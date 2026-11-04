@@ -314,7 +314,7 @@ describe("batch 26 section 10: call requests", () => {
     const poll = async (cookie: string) => (await json(await pulseGET(req(`/api/pulse?requests=${r.id}`, { cookie, method: "GET" })))).body.gone;
     expect(await poll(dev.cookie)).toEqual([]);
     await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: "the tester finished their part" } });
-    expect(await poll(dev.cookie)).toEqual([{ id: r.id, line: "Closed: the tester finished their part" }]);
+    expect(await poll(dev.cookie)).toEqual([{ id: r.id, line: "Closed: the tester finished her part" }]); // (batch 35 §162) in the tester's pronoun
     const stranger = await makeUser({ dev: true });
     expect(await poll(stranger.cookie)).toEqual([]);
     expect(requestPressName("w-abc")).toBe("Withdraw");
@@ -335,7 +335,7 @@ describe("batch 26 section 11: layout", () => {
     // (Batch 35 §134) Google's step asks who you are and a name too: with them given, only the ticks are left.
     await expect(finishGoogleSignup("none", { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Rae" })).rejects.toMatchObject({ message: "Agree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
     await expect(finishGoogleSignup("none", { role: "tester", devices: ["Windows PC"], languages: ["English"], name: "Rae", acceptTerms: "yes" })).rejects.toMatchObject({ message: "You must be 18 or older to use Playtest." });
-    await expect(finishGoogleSignup("none", {})).rejects.toMatchObject({ message: "Choose developer, tester or both.\nEnter your name\nAgree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
+    await expect(finishGoogleSignup("none", {})).rejects.toMatchObject({ message: "Choose developer or tester.\nEnter your name\nAgree to the Terms of Use to sign up\nYou must be 18 or older to use Playtest." });
     for (const f of ["app/signup/page.tsx", "app/signup/google/page.tsx"]) expect(src(f).match(/<label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">/g)).toHaveLength(2);
     expect(src("components/FormMistakes.tsx")).toContain('text.slice(1).split("\\n").filter(Boolean)');
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain('<ScrollText className="min-w-0" text={qText(q)} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0"');

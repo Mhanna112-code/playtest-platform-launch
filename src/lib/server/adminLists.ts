@@ -1,6 +1,6 @@
 import { dateZone } from "./dateZone";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, renderDateText, money } from "@/lib/server/dateFormat";
+import { displayName, fmtDate, fmtDateTime, renderDateText, money, pronouns } from "@/lib/server/dateFormat";
 import { pauseCountdownLine } from "@/lib/pause";
 import { chargebackHolds } from "./chargeback";
 import { disputeBounds } from "./payments";
@@ -660,7 +660,7 @@ async function failureRows(userId: string): Promise<Row[]> {
     const what = part(p);
     const why = p.failure.trim().replace(/\.$/, "");
     const after = !p.settledAt ? "still owed" : byTeam(p.settledAt) ? "settled by the team" : `paid later on ${dayOnly(p.settledAt)}`;
-    const body: Rich = [`${money(p.amountCents)} to `, ...person(who.get(p.testerId)), ...(what ? [` for their ${what}`] : p.kind === "extra" ? [" as extra pay"] : []), ...(t ? [" on ", testLink(t)] : []), ` · failed ${fmtDateTime(failedAt)}${why ? `: ${why}` : ""} · ${after}`, ...stripeIds(p)];
+    const body: Rich = [`${money(p.amountCents)} to `, ...person(who.get(p.testerId)), ...(what ? [` for ${pronouns(who.get(p.testerId)?.pronoun).poss} ${what}`] : p.kind === "extra" ? [" as extra pay"] : []), ...(t ? [" on ", testLink(t)] : []), ` · failed ${fmtDateTime(failedAt)}${why ? `: ${why}` : ""} · ${after}`, ...stripeIds(p)];
     return mk("failure", p.id, failedAt, body);
   });
 }
@@ -736,6 +736,8 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
   // (Batch 33 §1) A tester as their profile link with the email after it ("a tester" when the contract is gone).
   const testerOf = new Map(contracts.map((c) => [c.id, c.tester]));
   const ofP = (cid: string | null): Rich => (cid && testerOf.get(cid) ? person(testerOf.get(cid)) : [of(cid)]);
+  /** (Batch 35 §162) That contract's tester's possessive ("her"; "their" when unknown). */
+  const possOf = (cid: string | null) => pronouns(cid ? testerOf.get(cid)?.pronoun : null).poss;
   /** The line's names (this contract's tester first, the developer, every other tester) as profile links. */
   const L = (text: string, cid?: string | null): Rich => linkNames(text, [...(cid ? [testerOf.get(cid)] : []), t.developer, ...contracts.map((c) => c.tester)]);
   const adminIds = [t.adminPausedById, t.adminStoppedById, t.developer.devSuspendedById].filter((x): x is string => !!x);
@@ -746,6 +748,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     // (Owner, Oct 29, batch 22 section 4) For admins every line names who did it, in the third person ("Nora Lane paid Ana Silva $10.00 …", "Nora Lane's tests are
     // running again", "Nora Lane's developer account was paused (by ana@…)"), and each dispute and each decision shows once.
     const dev = displayName(t.developer);
+    const devP = pronouns(t.developer.pronoun); // (batch 35 §162) the developer's lines in their own pronoun
     const [events, suspensions, actions, disputes, closures] = await Promise.all([
       // (Batch 30 §15, §10) Not the session pages' stored listing values nor the testers' per-save records (both JSON; never a line).
       db.testEvent.findMany({ where: { testId, kind: { notIn: [LISTING_VALUES, LISTING_SAVED, "listing_save"] } }, orderBy: { createdAt: "desc" }, take: 3000 }),
@@ -781,10 +784,10 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
       const x = e.text;
       if (x === "Your account is paused") return `${dev}'s developer account was paused (by ${suspendedBy(e.createdAt)})`;
       if (x === "Your tests are running again") return `${dev}'s tests are running again`;
-      if (x === "Your tests are paused until you pay what you owe") return `${dev}'s tests are paused until they pay what they owe`;
+      if (x === "Your tests are paused until you pay what you owe") return `${dev}'s tests are paused until ${devP.subj} ${devP.v("pays", "pay")} what ${devP.subj} ${devP.v("owes", "owe")}`;
       if (x === "Your tests are paused until the chargeback steps are done") return `${dev}'s tests are paused until the chargeback steps are done`; // (batch 35 §22)
       if (x === SUBSCRIPTION_ENDED) return `${dev}'s subscription ended`;
-      if (x.startsWith("Your bank reversed your ")) return `${dev}'s bank reversed their ${x.slice("Your bank reversed your ".length)}`;
+      if (x.startsWith("Your bank reversed your ")) return `${dev}'s bank reversed ${devP.poss} ${x.slice("Your bank reversed your ".length)}`;
       if (x.startsWith("You ")) return `${dev} ${x.slice(4)}`;
       if (x === "The team paused this test") return `${by("pause-test", e.createdAt)} paused this test${reasonOf(e, !!t.adminPausedAt && Math.abs(t.adminPausedAt.getTime() - e.createdAt.getTime()) < 5_000)}`;
       if (x.startsWith("The team closed ")) return `${closedBy(e.createdAt)} closed ${x.slice("The team closed ".length)}`;
@@ -812,7 +815,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     }
     for (const d of disputes) {
       const part = d.callId ? "live call" : d.submission?.kind === "recording" ? "recording" : "written answers";
-      rows.push({ ...mk("dispute", d.id, d.createdAt, [...ofP(d.contractId), ` disputed the pay for their ${part}:`]), em: d.reason });
+      rows.push({ ...mk("dispute", d.id, d.createdAt, [...ofP(d.contractId), ` disputed the pay for ${possOf(d.contractId)} ${part}:`]), em: d.reason });
       if (d.decidedAt) {
         const ev = decisions.filter((e) => e.contractId === d.contractId && Math.abs(e.createdAt.getTime() - d.decidedAt!.getTime()) < 60_000)[0];
         const what = ev ? ev.text.replace(/^The team decided [^:]*: /, "") : `${money(d.decidedCents ?? 0)} in all`;
@@ -824,7 +827,7 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     for (const c of contracts) rows.push(mk("contract", c.id, c.joinedAt, [...person(c.tester), ` joined on: ${termsLine(c)}`]));
     for (const o of await db.termsOffer.findMany({ where: { testId } })) {
       rows.push(mk("offer", o.id, o.createdAt, ["New terms offered to ", ...ofP(o.contractId), `: ${o.diff}`]));
-      if (o.decidedAt) rows.push(mk("offer-decided", o.id, o.decidedAt, [...ofP(o.contractId), o.status === "closed" ? " did not answer the new terms before their part ended (the offer closed)" : ` ${o.status === "switched" ? "switched to" : o.status === "kept" ? "kept their terms instead of" : "did not take"} the new terms`]));
+      if (o.decidedAt) rows.push(mk("offer-decided", o.id, o.decidedAt, [...ofP(o.contractId), o.status === "closed" ? ` did not answer the new terms before ${possOf(o.contractId)} part ended (the offer closed)` : ` ${o.status === "switched" ? "switched to" : o.status === "kept" ? `kept ${possOf(o.contractId)} terms instead of` : "did not take"} the new terms`]));
     }
   } else {
     for (const p of await db.payment.findMany({ where: { contractId: { in: ids } } })) rows.push(mk("payment", p.id, p.createdAt, [`${p.kind} ${money(p.amountCents)} to `, ...ofP(p.contractId), ` · ${p.status}${p.chargeback === "open" ? ` · chargeback open${reversedPart(p) ? ` (${money(reversedOf(p))} reversed)` : ""}` : ""}`, ...stripeIds(p)]));

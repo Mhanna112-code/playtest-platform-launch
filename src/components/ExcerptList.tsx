@@ -54,12 +54,12 @@ export function MyExcerpts({ items, canRemove = true }: { items: Mine[]; canRemo
   );
 }
 
-/** Shown excerpts as others see them (the profile): plain quotes, up to 3. */
-export function ShownExcerpts({ items }: { items: { id: string; text: string; source: string; question?: string }[] }) {
+/** Shown excerpts as others see them (the profile): plain quotes, up to 3. (Batch 35 §162) The heading in the tester's own pronoun ("Excerpts of her work"). */
+export function ShownExcerpts({ items, poss = "their" }: { items: { id: string; text: string; source: string; question?: string }[]; poss?: string }) {
   if (!items.length) return null;
   return (
     <section className="card space-y-2" aria-label="Excerpts" data-shown-excerpts="">
-      <h2 className="font-semibold text-white">Excerpts of their work</h2>
+      <h2 className="font-semibold text-white">Excerpts of {poss} work</h2>
       <ul className="space-y-2">
         {items.map((x) => (
           <li key={x.id} className="text-sm">

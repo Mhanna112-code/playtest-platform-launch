@@ -1,6 +1,6 @@
 import { Cut } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
-import { fmtDateTimeIn } from "@/lib/format";
+import { fmtDateTimeIn, pronouns } from "@/lib/format";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/server/dateFormat";
 import { callStatus } from "@/lib/server/blocks";
@@ -60,6 +60,7 @@ export default async function CallPage({ params, searchParams }: { params: Promi
         role={amTester ? "tester" : "developer"}
         myName={displayName(u)}
         otherName={otherName}
+        otherPoss={pronouns(other?.pronoun).poss}
         iceServers={ice}
         relayOnly={relayOnly}
         initialLine={s.line}

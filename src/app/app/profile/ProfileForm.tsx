@@ -9,7 +9,8 @@ import { mergeChanges } from "@/lib/live";
 import { DEVICES, LANGUAGES } from "@/lib/options";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { PROFILE_DRAFT_FIELDS, type ProfileDraftField } from "@/lib/keptText";
-import { LIMITS } from "@/lib/limits";
+import { BioBox, DEV_BIO_PLACEHOLDER, TESTER_BIO_PLACEHOLDER } from "@/components/BioBox";
+import { PRONOUN_OPTIONS } from "@/lib/format";
 
 /** `bio`: the bio of the form's own side (batch 35 §134: the developer's and the tester's are separate; the first setup's is the tester's). */
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string };
@@ -71,13 +72,8 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
     setV(init);
   };
   // (Owner, Nov 3, batch 35 §134) The side's own bio, optional, with its count (x / 2,000): the developer's is shown to testers, the tester's to developers.
-  const bioBox = (shownTo: "developers" | "testers", placeholder: string) => (
-    <div>
-      <label className="label" htmlFor="bio">{`Bio (shown to ${shownTo})`}</label>
-      <textarea id="bio" className="input min-h-24" maxLength={LIMITS.bio} value={v.bio} onChange={(e) => set({ bio: e.target.value })} placeholder={placeholder} />
-      <CharacterCount value={v.bio} max={LIMITS.bio} />
-    </div>
-  );
+  // (Batch 35 §162) The same box as sign-up's (BioBox).
+  const bioBox = (shownTo: "developers" | "testers", placeholder: string) => <BioBox shownTo={shownTo} value={v.bio} onChange={(bio) => set({ bio })} placeholder={placeholder} />;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -111,10 +107,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
       <div>
         <label className="label" htmlFor="pronoun">Pronoun</label>
         <select id="pronoun" className="input max-w-[12rem]" value={v.pronoun} onChange={(e) => set({ pronoun: e.target.value })}>
-          <option value="">Not set (others read “they”)</option>
-          <option value="she">she / her</option>
-          <option value="he">he / him</option>
-          <option value="they">they / them</option>
+          {PRONOUN_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
         </select>
       </div>
       {first && !admin && (
@@ -124,12 +117,12 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
           <label className="text-sm"><input type="checkbox" checked={v.isTester} onChange={(e) => set({ isTester: e.target.checked })} /> test apps, games and more, and get paid (tester)</label>
         </fieldset>
       )}
-      {!first && side === "developer" && bioBox("testers", "e.g. A two-person studio making co-op puzzle games for PC; we read every answer.")}
+      {!first && side === "developer" && bioBox("testers", DEV_BIO_PLACEHOLDER)}
       {tester && (
         <>
           <div id="devices" data-field-group="" data-match="at least one device"><Choices label="Devices you use" required options={DEVICES} value={v.devices} onChange={(devices) => set({ devices })} /></div>
           <div id="languages" data-field-group="" data-match="at least one language"><Choices label="Languages you can test in" required options={LANGUAGES} value={v.languages} onChange={(languages) => set({ languages })} /></div>
-          {bioBox("developers", "e.g. Gameplay-experience QA for 5 years; Castilian Spanish LQA; I play a lot of roguelikes on PC.")}
+          {bioBox("developers", TESTER_BIO_PLACEHOLDER)}
         </>
       )}
       <div className="flex flex-wrap items-center gap-3">

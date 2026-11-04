@@ -581,7 +581,7 @@ describe("batch 20 section 12: a Pay more stops presses once", () => {
     const loaded = seen();
     await later();
     expect((await payMore(w.testId, w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "5.00", tickedCents: 500, tab: "A" })).status).toBe(200);
-    const line = "You paid Ana Silva $5.00 more for their written answers in another tab";
+    const line = "You paid Ana Silva $5.00 more for her written answers in another tab"; // (batch 35 §162) Ana is "she"
     const presses: [string, Record<string, unknown>][] = [
       ["request-time", { contractIds: [w.sessionId], rows: [{ startsAt: atHours(100), repeat: "once", count: 1 }], minutes: "30" }],
       ["end-early", { contractIds: [w.sessionId], reason: "Thanks, that's enough." }],
@@ -917,7 +917,7 @@ describe("batch 20 section 24: a tester's rating updates the developer's pages l
     await later();
     expect((await sact(ended.sessionId, "rate", ended.tester.cookie, { stars: 4, seenAt: seen(), confirmed: true })).status).toBe(200);
     const live = await json(await liveGET(req(`/api/live?scope=test:${testId}&since=${encodeURIComponent(loaded)}`, { cookie: dev.cookie, method: "GET" })));
-    expect(live.body.changes.map((c: { text: string }) => c.text).some((t: string) => /^ff rated you\. You can rate them (until |once)/.test(t))).toBe(true);
+    expect(live.body.changes.map((c: { text: string }) => c.text).some((t: string) => /^ff rated you\. You can rate her (until |once)/.test(t))).toBe(true);
     const other = await makeUser({ tester: true, name: "Gil" });
     const inv = await act(testId, "invite", dev.cookie, { testerIds: [other.user.id], seenAt: loaded, tab: "B" });
     expect(texts(inv)).toEqual([]);
@@ -933,7 +933,7 @@ describe("batch 20 section 24: a tester's rating updates the developer's pages l
     expect((await sact(w.sessionId, "rate", w.tester.cookie, { stars: 5, seenAt: seen(), confirmed: true })).status).toBe(200);
     const third = await makeUser({ tester: true, name: "Ivo" });
     const stop = await act(testId, "invite", dev.cookie, { testerIds: [third.user.id], seenAt: loaded2, tab: "B" });
-    expect(texts(stop)).toEqual(["Hal finished their part (rated you)"]);
+    expect(texts(stop)).toEqual(["Hal finished her part (rated you)"]);
     await db.test.update({ where: { id: testId }, data: { ignoredAlerts: ["leaving"] } });
     expect(texts(await act(testId, "invite", dev.cookie, { testerIds: [third.user.id], seenAt: loaded2, tab: "B" }))).toEqual([]);
   });

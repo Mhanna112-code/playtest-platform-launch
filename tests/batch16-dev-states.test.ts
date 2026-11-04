@@ -79,7 +79,7 @@ describe("developer, stopped / closed or paused / held: what still works follows
     await db.testEvent.create({ data: { testId: w.testId, kind: "left", text: "Cara Diaz left the test" } });
     expect((await act(w.testId, "pay-extra", w.dev.cookie, { contractId: w.sessionId, submissionId: w.sub.id, amount: "1.00", tickedCents: 100, seenAt: seen(), confirmed: true, tab: "A" })).status).toBe(200);
     const B = { seenAt: loaded, tab: "B" };
-    const news = ["Cara Diaz left the test", "You paid Ana Silva $1.00 more for their written answers in another tab"];
+    const news = ["Cara Diaz left the test", "You paid Ana Silva $1.00 more for her written answers in another tab"];
     const p1 = await pay(w.dev.cookie, { kind: "submission", id: subB.id, amount: "10.00", tickedCents: 1000, ...B, confirmed: false });
     expect(p1.body.error.changes.map((c: { text: string }) => c.text)).toEqual(news);
     expect((await pay(w.dev.cookie, { kind: "submission", id: subB.id, amount: "10.00", tickedCents: 1000, ...B, confirmed: true, boxAt: seen() })).status).toBe(200);

@@ -104,8 +104,9 @@ export async function GET(req: Request) {
     if (q.has("requests")) {
       const { requestGoneLine } = await import("@/lib/server/requests");
       const rows = reqIds.length ? await db.callRequest.findMany({ where: { id: { in: reqIds } }, select: { id: true, status: true, closedReason: true, contractId: true } }) : [];
-      const mine = new Set((await db.contract.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.contractId))] }, OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { id: true } })).map((c) => c.id));
-      return ok({ gone: rows.filter((r) => mine.has(r.contractId) && r.status !== "pending").map((r) => ({ id: r.id, line: requestGoneLine(r) })), restricted: false });
+      // (Batch 35 §162) With the tester's pronoun ("Closed: the tester finished her part").
+      const mine = new Map((await db.contract.findMany({ where: { id: { in: [...new Set(rows.map((r) => r.contractId))] }, OR: [{ testerId: u.id }, { test: { developerId: u.id } }] }, select: { id: true, tester: { select: { pronoun: true } } } })).map((c) => [c.id, c.tester.pronoun]));
+      return ok({ gone: rows.filter((r) => mine.has(r.contractId) && r.status !== "pending").map((r) => ({ id: r.id, line: requestGoneLine(r, mine.get(r.contractId)) })), restricted: false });
     }
     let testId = q.get("test") ?? "";
     const sessionId = q.get("session") ?? "";

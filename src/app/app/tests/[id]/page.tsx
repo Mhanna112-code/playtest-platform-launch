@@ -242,7 +242,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       pending: reqs.filter((r) => r.contractId === c.id).length, leftCents: callsLeft.get(c.id) ?? null, rateCents: callListed(t, c) ? c.liveRateCents : null,
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
         id: r.id, minutes: r.minutes, rows: pageRows(r, callEnd), mine: r.fromSide === "developer",
-        rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents),
+        rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun),
       })),
     };
   });
@@ -273,11 +273,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, name: displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, name: displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) }] : [];
   });
+  // (Batch 35 §162) "her written answers", "Her reason": the tester's recorded pronoun.
   const disputesWaiting = t.contracts.flatMap((c) => [
-    ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: x.kind === "written" ? "their written answers" : "their recording", reason: x.dispute!.reason })),
-    ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
+    ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `${pronouns(c.tester.pronoun).poss} ${x.kind === "written" ? "written answers" : "recording"}`, reason: x.dispute!.reason })),
+    ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
   ]);
   // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (shown in the row; batch 29 section 30: only the tester removes one).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
@@ -337,7 +338,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               {excerptReqs.map((x) => (
                 <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
                   {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
-                  <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on their profile</span>}>
+                  <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
                   <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
                     {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                     <ExcerptQuestion question={x.question} />
@@ -366,7 +367,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {disputesWaiting.map((d) => (
                   <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
                     <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
-                    <ResizeBox id={`dispute-${d.id}`} label="Their reason"><ReasonQuote text={d.reason} /></ResizeBox>
+                    <ResizeBox id={`dispute-${d.id}`} label={`${d.Poss} reason`}><ReasonQuote text={d.reason} /></ResizeBox>
                     </Fold>
                     <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
                   </div>
@@ -457,7 +458,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {excerptReqs.map((x) => (
             <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
               {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
-              <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on their profile</span>}>
+              <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
               <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
                 {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
                 <ExcerptQuestion question={x.question} />
@@ -471,7 +472,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {disputesWaiting.map((d) => (
             <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
               <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
-              <ResizeBox id={`dispute-${d.id}`} label="Their reason"><ReasonQuote text={d.reason} /></ResizeBox>
+              <ResizeBox id={`dispute-${d.id}`} label={`${d.Poss} reason`}><ReasonQuote text={d.reason} /></ResizeBox>
               </Fold>
               <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
             </div>
@@ -489,7 +490,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 scroll-mt-24">
               <p className="text-sm font-medium">
                 {/* (Owner, Nov 3) The tester's name (their link) is on the fold above, once; each part starts with what it is. */}
-                {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "updated" : "sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : "In their contract"}
+                {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "updated" : "sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : `In ${pronouns(x.c.tester.pronoun).poss} contract`}
               </p>
               {/* (Batch 17 §19) The last 7 days before close-out. */}
               {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
@@ -499,7 +500,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <>
                   {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Under the part, two folds of its own: the answers or recordings, in a small panel (about
                       12rem) that drags taller or shorter and scrolls inside, so the Pay box under it is in view; and the Pay box. Both open at first. */}
-                  <Fold id={`needs-body-${x.s!.id}`} summary={x.s!.kind === "written" ? "Their written answers" : "Their recording"}>
+                  <Fold id={`needs-body-${x.s!.id}`} summary={`${pronouns(x.c.tester.pronoun).Poss} ${x.s!.kind === "written" ? "written answers" : "recording"}`}>
                   <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
                     {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                     {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
@@ -540,7 +541,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
               {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
               <PartPayments id={x.id} lines={partPays.get(x.id)} />
-              <Fold id={`update-body-${x.id}`} summary={x.kind === "written" ? "Their written answers" : "Their recording"}>
+              <Fold id={`update-body-${x.id}`} summary={`${pronouns(c.tester.pronoun).Poss} ${x.kind === "written" ? "written answers" : "recording"}`}>
               <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
                 <SentWork kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
               </ResizeBox>
@@ -562,6 +563,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         seats={await Promise.all(working.map(async (c) => ({
           testerId: c.testerId,
           name: displayName(c.tester),
+          pronoun: c.tester.pronoun,
           summary: [
             [...(c.tester.profile?.devices ?? []), ...(c.tester.profile?.languages ?? [])].join(", "),
             (await ratingSummary(c.testerId)).line || "No ratings yet",
@@ -602,7 +604,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
                 </>}>
-                <p className="note">Their contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
+                <p className="note">{pronouns(c.tester.pronoun).Poss} contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
                 <ul className="space-y-1 text-sm" data-parts-sent="">
                   {partRows.filter((r) => r.on || r.sub).map((r) => (
                     // (Batch 35 §7) A bell or email link to a piece ("#piece-<id>") that has left Needs you (paid) lands on this line (HashJump's fallback).
@@ -617,7 +619,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
                       {/* (Batch 35 §139) The part's body and its Pay more box are each their own fold under it (open at first), the body in a small panel. */}
                       {r.sub?.review && <div className="w-full" data-paid-part-content="">
-                        <Fold id={`row-body-${r.sub.id}`} summary={r.sub.kind === "written" ? "Their written answers" : "Their recording"}>
+                        <Fold id={`row-body-${r.sub.id}`} summary={`${pronouns(c.tester.pronoun).Poss} ${r.sub.kind === "written" ? "written answers" : "recording"}`}>
                         <ResizeBox id={`row-${r.sub.id}`} label={r.sub.kind === "written" ? "Written answers" : "Recordings"}>
                           {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
                           <SentWork kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} />
@@ -679,7 +681,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                               <span className={`badge ${badge.tone === "green" ? "border-emerald-400/40 text-emerald-200" : badge.tone === "amber" ? "border-amber-300/40 text-amber-200" : badge.tone === "rose" ? "border-rose-400/40 text-rose-200" : ""}`} data-call-badge="">{badge.label}</span>
                               <span className="ml-auto text-slate-300">{tookPlace(x) ? `paid ${money(partPaid(x.id))}` : ""}</span>
                             </div>
-                            {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : "In their contract"}</p>}
+                            {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
                             {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
                             <PartPayments id={x.id} lines={partPays.get(x.id)} />
                             {badge.reason && <ReasonQuote text={badge.reason} />}
@@ -721,14 +723,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   </div>
                 ))}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
-                {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }))}</p>}
+                {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun)}</p>}
                 </Fold>
                 <div className="space-y-1" data-tester-summary="">
                   <div className="flex flex-wrap items-center gap-2">
                     {!restricted && <a href={`/app/chat/${c.id}`} className="btn-secondary relative px-3 py-1 text-xs no-underline hover:no-underline"><MessagesSquare className="h-3.5 w-3.5" /> Chat
                       {unreadN > 0 && <span className="absolute -right-1.5 -top-1.5 rounded-full bg-fuchsia-400 px-1.5 text-[10px] font-bold text-ink-950" aria-label={`${unreadN} unread`}>{unreadN}</span>}
                     </a>}
-                    <a href={`/app/testers/${c.testerId}`} className="text-xs" data-tester-profile="">See their profile</a>
+                    <a href={`/app/testers/${c.testerId}`} className="text-xs" data-tester-profile="">See {pronouns(c.tester.pronoun).poss} profile</a>
                   </div>
                   <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
                   {ri?.avg && <p className="note"><NameLink text={name} href={personHref} />: {ri.avg}</p>}
@@ -761,7 +763,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         // (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request, both directions (Needs you's rows open it here).
         requests={restricted ? [] : reqs.flatMap((r) => {
           const c = working.find((x) => x.id === r.contractId);
-          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents), warning: callsWarn.get(c.id) || undefined }] : [];
+          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined }] : [];
         })}
         elsewhere={otherCalls}
       />
@@ -776,7 +778,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           blocked={inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, now, fmtDate)}
           closes={t.openUntil && t.openUntil > now ? { at: t.openUntil.toISOString(), line: inviteBlocked({ ...t, testersIn: working.length, paused: !!u.holdStartedAt, chargeback: u.holdReason === "chargeback" }, new Date(t.openUntil.getTime() + 1000), fmtDate)?.line ?? "" } : undefined}
           initial={invitePanelData ?? { worked: [], suggested: [], found: [], foundTotal: 0, capLine: "", searched: false }}
-          sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, testerId: i.testerId, name: people.get(i.testerId) ?? "?", status: "waiting for them to join", ...inviteInfo.get(i.testerId)! }))}
+          sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, testerId: i.testerId, name: people.get(i.testerId) ?? "?", status: `waiting for ${pronouns(inviteUsers.find((x) => x.id === i.testerId)?.pronoun).obj} to join`, ...inviteInfo.get(i.testerId)! }))}
         />
       )}
       {saved && (

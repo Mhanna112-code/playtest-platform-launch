@@ -2,7 +2,7 @@ import { Cut } from "@/components/Cut";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { Users } from "lucide-react";
-import { fmtDateIn } from "@/lib/format";
+import { fmtDateIn, pronouns } from "@/lib/format";
 import { PlusMore } from "@/components/PlusMore";
 import { LongList } from "@/components/LongList";
 import { AllTesters, AvatarButton } from "./TesterFilter";
@@ -13,7 +13,7 @@ import { AllTesters, AvatarButton } from "./TesterFilter";
 // working (N)".
 
 /** (Batch 16 section 23) The hover card: rating, accepted parts, the profile link and "Chat with <name>"; no excerpts (they're on the profile). */
-export type Seat = { testerId: string; name: string; summary: string[]; block: ReactNode; chat?: ReactNode };
+export type Seat = { testerId: string; name: string; summary: string[]; block: ReactNode; chat?: ReactNode; /** (batch 35 §162) the tester's recorded pronoun */ pronoun?: string };
 export type Gone = { contractId: string; name: string; how: string; at: Date | null };
 
 function TesterAvatar({ seat }: { seat: Seat }) {
@@ -21,13 +21,13 @@ function TesterAvatar({ seat }: { seat: Seat }) {
     // (Owner, Nov 3, long text) On a phone the card opens from the row's left edge, never past the screen; from sm up under the avatar.
     <span className="group inline-block sm:relative">
       {/* (Batch 35 §140) The circle filters the list below to this tester; the card keeps "See their profile". */}
-      <AvatarButton testerId={seat.testerId} name={seat.name} />
+      <AvatarButton testerId={seat.testerId} name={seat.name} obj={pronouns(seat.pronoun).obj} />
       <span role="tooltip"
         className="invisible absolute left-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
         <span className="block font-semibold text-white">{seat.name}</span>
         {/* Devices and languages: 3, then "+N more". */}
         {seat.summary.map((l, i) => <span key={l} className="block text-slate-300">{i === 0 && l.includes(", ") ? <PlusMore items={l.split(", ")} /> : l}</span>)}
-        <Link href={`/app/testers/${seat.testerId}`} className="mt-1 block text-sky-300 hover:underline">See their profile</Link>
+        <Link href={`/app/testers/${seat.testerId}`} className="mt-1 block text-sky-300 hover:underline">See {pronouns(seat.pronoun).poss} profile</Link>
         {seat.chat && <span className="mt-3 block border-t border-white/10 pt-2">{seat.chat}</span>}
         {seat.block && <span className="mt-3 block border-t border-white/10 pt-2">{seat.block}</span>}
       </span>

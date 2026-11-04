@@ -76,13 +76,13 @@ describe("section 1: Rate is disabled while something is open, with one line (te
 describe("section 16: the developer rates only after the tester rated and everything is settled", () => {
   it("hidden (refused) until then; the 14 days and the bell start when the last piece settles; a dispute disables it, its decision stops once", async () => {
     const x = await sent();
-    expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5 })).body.error.message).toBe("You can rate Ana Silva once they've rated you and everything they sent is settled.");
+    expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5 })).body.error.message).toBe("You can rate Ana Silva once she's rated you and everything she sent is settled."); // (batch 35 §162) Ana is "she"
     // An unlisted part past its review date: the tester can rate, the developer still waits for it to be settled.
     await db.submission.update({ where: { id: x.sub.id }, data: { agreedCents: null } });
     await db.contract.update({ where: { id: x.sessionId }, data: { dueAt: new Date(Date.now() - 60_000) } });
     await db.submission.update({ where: { id: x.sub.id }, data: { payBy: new Date(Date.now() - 60_000) } });
     expect((await sact(x.sessionId, "rate", x.tester.cookie, { stars: 2 })).status).toBe(200);
-    expect((await devRateStates([x.sessionId])).get(x.sessionId)).toMatchObject({ kind: "hidden", line: "You can rate Ana Silva once they've rated you and everything they sent is settled." });
+    expect((await devRateStates([x.sessionId])).get(x.sessionId)).toMatchObject({ kind: "hidden", line: "You can rate Ana Silva once she's rated you and everything she sent is settled." });
     expect(await db.notification.count({ where: { userId: x.dev.user.id, text: { contains: "You can rate her for 14 days" } } })).toBe(0);
     expect((await pay(x.dev.cookie, { kind: "submission", id: x.sub.id, amount: "4.00", tickedCents: 400, reason: "Short" })).status).toBe(200);
     const s = (await devRateStates([x.sessionId])).get(x.sessionId)!;

@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { ApiError } from "@/lib/client";
+import { pronouns } from "@/lib/format";
 import { refusalLine } from "@/lib/pressLabels";
 import type { AccountState } from "@/lib/server/accountState";
 import { AdminButton } from "./AdminButton";
@@ -72,7 +73,7 @@ export function AccountActions({ initial }: { initial: AccountState }) {
           {acct.notes?.[s] && <ReasonQuote text={acct.notes[s]} className="basis-full text-sm" />}
           {/* (Owner, Oct 30, batch 34 §4) The developer side waits for a payment or chargeback hold to clear: a note instead of Reinstate (back on the live redraw). */}
           {s === "developer" && acct.held ? (
-            <span className="note" data-reinstate-waits={acct.held}>{acct.held === "chargeback" ? "Reinstate waits for the chargeback hold: the team approves it first." : "Reinstate waits for the payment hold: they pay what they owe first."}</span>
+            <span className="note" data-reinstate-waits={acct.held}>{acct.held === "chargeback" ? "Reinstate waits for the chargeback hold: the team approves it first." : `Reinstate waits for the payment hold: ${pronouns(acct.pronoun).subj} ${pronouns(acct.pronoun).v("pays", "pay")} what ${pronouns(acct.pronoun).subj} ${pronouns(acct.pronoun).v("owes", "owe")} first.`}</span>
           ) : (
             <AdminButton action="unsuspend" id={acct.id} label="Reinstate" extra={{ side: s, ...seen }} onRefused={refused} />
           )}

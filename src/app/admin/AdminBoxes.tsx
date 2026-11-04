@@ -2,6 +2,7 @@ import { withDateZone } from "@/lib/server/dateZone";
 import { adminPage, testRowsByIds, userTotals, type Kind, type Page } from "@/lib/server/adminLists";
 import { db } from "@/lib/db";
 import { fmtDateTime } from "@/lib/server/dateFormat";
+import { pronouns } from "@/lib/format";
 import { pauseClosesAt, pauseCountdownLine } from "@/lib/pause";
 import { TestActions } from "./TestActions";
 import { accountState } from "@/lib/server/accountState";
@@ -34,6 +35,8 @@ export async function AdminPersonBoxes({ userId, adminId, developer, tester }: {
 
   // (Owner, Oct 30, batch 33 §7) The fingerprint as of BEFORE the boxes are read: another admin's suspend, reinstate, delete or $0 close-out redraws this box.
   const liveV = await adminPersonV(userId);
+  // (Batch 35 §162) The box titles in the person's own pronoun ("Payments she made", "Payouts to him", "Parts they sent").
+  const p = pronouns((await db.user.findUnique({ where: { id: userId }, select: { pronoun: true } }))?.pronoun);
   const totals = await userTotals(userId);
   const acct = await accountState(userId);
   const [payments, payouts, disputes, chargebacks, holds, tests, reports, parts, failures] = await Promise.all(
@@ -45,19 +48,19 @@ export async function AdminPersonBoxes({ userId, adminId, developer, tester }: {
       <AutoRefresh query={`adminPerson=${userId}`} v={liveV} />
       <p className="text-sm text-slate-200" data-admin-totals="">{totals.line}</p>
       {acct && <div className="text-sm text-slate-300" data-admin-account=""><AccountActions initial={acct} /></div>}
-      {developer && <Box title="Payments they made" kind="u-payments" arg={userId} page={payments} />}
+      {developer && <Box title={`Payments ${p.subj} made`} kind="u-payments" arg={userId} page={payments} />}
       {/* (Owner, Oct 30, batch 33 §3) Every charge of theirs that failed, newest first, and what became of it (paid later, still owed, settled by the team). */}
       {developer && <Box title="Payment failures" kind="u-failures" arg={userId} page={failures} />}
-      {tester && <Box title="Payouts to them" kind="u-payouts" arg={userId} page={payouts} />}
+      {tester && <Box title={`Payouts to ${p.obj}`} kind="u-payouts" arg={userId} page={payouts} />}
       <Box title="Disputes" kind="u-disputes" arg={userId} page={disputes} />
       <Box title="Chargebacks" kind="u-chargebacks" arg={userId} page={chargebacks} />
       <Box title="Holds and suspensions" kind="u-holds" arg={userId} page={holds} />
       <Box title="Tests posted or joined" kind="u-tests" arg={userId} page={tests} />
-      <Box title="Reports against them" kind="u-reports" arg={userId} page={reports} />
+      <Box title={`Reports against ${p.obj}`} kind="u-reports" arg={userId} page={reports} />
       {tester && (
         <>
           <p className="text-sm text-slate-200" data-admin-parts-totals="">{totals.partsLine}</p>
-          <Box title="Parts they sent, across tests" kind="u-parts" arg={userId} page={parts} />
+          <Box title={`Parts ${p.subj} sent, across tests`} kind="u-parts" arg={userId} page={parts} />
         </>
       )}
     </section>

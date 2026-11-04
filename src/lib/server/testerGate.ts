@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime, money } from "@/lib/server/dateFormat";
+import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateFormat";
 import { TESTER_CHOICE_REASONS, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
@@ -17,6 +17,8 @@ import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answ
 
 /** (Owner, Oct 29, batch 24 section 2) A tester who rates (finishing their part) closes their waiting call requests with this reason. */
 export const FINISHED_PART_REASON = "the tester finished their part";
+/** (Batch 35 §162) The stored reason as a row shows it, in the tester's recorded pronoun ("the tester finished her part"). */
+export const finishedPartReason = (pronoun?: string | null) => `the tester finished ${pronouns(pronoun).poss} part`;
 /** Closed because of the tester's own press (their own action, reason E): a different rate, Leave (and a suspension's removal), finishing their part by rating. */
 export const CLOSED_BY_TESTER = new Set(["you asked a different rate", "the tester left", FINISHED_PART_REASON]);
 /** (Owner, Oct 28, batch 16 section 24) What the stop, a closure or an early end did by itself (requests closed, calls ahead cancelled): never a stop-once
@@ -38,7 +40,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
     db.callRequest.findMany({ where: { contractId, fromSide: "tester", status: { in: ["booked", "declined"] }, decidedAt: { gt: seenAt } } }),
   ]);
   const out: TestEventLike[] = [];
-  for (const d of sides) out.push({ kind: "dispute", text: `${dev} added their side to your dispute about ${d.call ? `your live call on ${fmtDateTime(d.call.startsAt)}` : `your ${d.submission?.kind === "recording" ? "recording" : "written answers"}`}`, createdAt: d.devSideAt! });
+  for (const d of sides) out.push({ kind: "dispute", text: `${dev} added ${pronouns(c.test.developer.pronoun).poss} side to your dispute about ${d.call ? `your live call on ${fmtDateTime(d.call.startsAt)}` : `your ${d.submission?.kind === "recording" ? "recording" : "written answers"}`}`, createdAt: d.devSideAt! });
   // (Batch 35 §53) The offer is a consequence for a working tester; its fields are the listing's one line ("See it") and the offer box, never a list here.
   for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you the new terms: Switch or Keep below`, createdAt: o.createdAt, item: o.id });
   const owed = await db.payment.findMany({ where: { contractId, status: "failed", owedUntil: { not: null }, settledAt: null }, select: { submissionId: true, callId: true } });

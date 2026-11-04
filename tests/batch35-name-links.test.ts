@@ -32,10 +32,10 @@ describe("<NameLink>", () => {
 describe("the sentences that name someone link them", () => {
   it("the developer's Excerpt requests row: the tester to their profile and the test to the test", () => {
     const dash = src("app/app/page.tsx");
-    expect(dash).toContain('<NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on their profile');
+    expect(dash).toContain('<NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on {x.testerPoss} profile');
     expect(dash).toContain('<NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} on “<NameLink text={d.testTitle} kind="test" href={`/app/tests/${d.testId}`} />”');
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("<NameLink text={x.tester} href={x.testerHref} /> would like to show this on their profile");
+    expect(page).toContain("<NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile");
     expect(page).toContain("<NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for");
   });
 

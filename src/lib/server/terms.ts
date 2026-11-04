@@ -1,6 +1,6 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, fmtDate } from "@/lib/server/dateFormat";
+import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
 import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms } from "@/lib/rules";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { HttpError } from "./http";
@@ -175,18 +175,18 @@ async function questionSetsOnSwitch(c: { id: string; testerId: string; questions
   return ops;
 }
 
-/** Developer's tester row: "On their original terms · offered new terms Oct 22" / "Switched to the Oct 22 terms". */
+/** Developer's tester row: "On their original terms · offered new terms Oct 22" / "Switched to the Oct 22 terms". (Batch 35 §162) In the tester's pronoun ("On her original terms"). */
 export async function termsRowLines(contractIds: string[]) {
   const [offers, contracts] = await Promise.all([
     db.termsOffer.findMany({ where: { contractId: { in: contractIds } }, orderBy: { createdAt: "desc" } }),
-    db.contract.findMany({ where: { id: { in: contractIds } }, select: { id: true, termsSwitchedAt: true, status: true } }),
+    db.contract.findMany({ where: { id: { in: contractIds } }, select: { id: true, termsSwitchedAt: true, status: true, tester: { select: { pronoun: true } } } }),
   ]);
   const out = new Map<string, string>();
   for (const c of contracts) {
     const latest = offers.find((o) => o.contractId === c.id);
     if (c.termsSwitchedAt) out.set(c.id, `Switched to the ${fmtDate(c.termsSwitchedAt).replace(/, \d{4}$/, "")} terms`);
     // (Batch 35 §118) An offer left unanswered when their part ended reads closed (an older row still "open" on an ended part too).
-    else if (latest) out.set(c.id, `On their original terms · offered new terms ${fmtDate(latest.createdAt).replace(/, \d{4}$/, "")}${latest.status === "kept" ? " (kept their terms)" : latest.status === "closed" || (latest.status === "open" && c.status !== "working") ? " (closed: their part ended)" : ""}`);
+    else if (latest) out.set(c.id, `On ${pronouns(c.tester.pronoun).poss} original terms · offered new terms ${fmtDate(latest.createdAt).replace(/, \d{4}$/, "")}${latest.status === "kept" ? ` (kept ${pronouns(c.tester.pronoun).poss} terms)` : latest.status === "closed" || (latest.status === "open" && c.status !== "working") ? ` (closed: ${pronouns(c.tester.pronoun).poss} part ended)` : ""}`);
   }
   return out;
 }

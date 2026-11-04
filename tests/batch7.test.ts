@@ -134,7 +134,7 @@ describe("batch 7 item 4: stop-once on every press still allowed", () => {
     // (Batch 15 section 27) The side of a dispute never stops.
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "They skipped two answers", seenAt: loaded })).status).toBe(200);
     // (Batch 17 section 16) Rate Ana: her call isn't paid yet, so the developer's Rate is still pending (refused with its line).
-    expect((await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded })).body.error.message).toBe("You can rate Ana Silva once they've rated you and everything they sent is settled.");
+    expect((await act(testId, "rate", dev.cookie, { contractId: a.sessionId, stars: 4, seenAt: loaded })).body.error.message).toBe("You can rate Ana Silva once she's rated you and everything she sent is settled."); // (batch 35 §162) Ana is "she"
   });
 
   it("developer, restricted: Cancel call from the dashboard's Calls box stops once for news, then goes through (batch 29 section 11)", async () => {

@@ -308,7 +308,7 @@ describe("batch 28 §8: Pay what you owe reserves once; what's added after is ch
     expect(later).toHaveLength(1);
     expect(later[0].p).toMatchObject({ off_session: true });
     expect(await db.payment.findUniqueOrThrow({ where: { id: added.id } })).toMatchObject({ status: "charged", transferStatus: "sent" });
-    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: "Receipt: you paid $5.00 for Ana Silva's written answers on “Harbor Run” (charged by them after 7 days)" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: "Receipt: you paid $5.00 for Ana Silva's written answers on “Harbor Run” (charged by her after 7 days)" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: x.tester.user.id, text: { contains: "paid $5.00 for your written answers" } } })).toBe(1);
     // Nothing is charged twice (the lift's charging runs again with nothing deferred).
     await (await import("@/lib/server/holds")).chargeDeferred(x.dev.user.id);

@@ -104,7 +104,7 @@ describe("the developer rates a tester (after the tester rated; blind reveal)", 
 
   it("not before the tester rated; then a bell; the tester's rating is hidden until the developer rates, then both show", async () => {
     const { dev, testId, tester, sessionId } = await ratedByTester();
-    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 4, seenAt: seen(), confirmed: true })).body.error.message).toBe("You can rate Ana Silva once they've rated you and everything they sent is settled.");
+    expect((await act(testId, "rate", dev.cookie, { contractId: sessionId, stars: 4, seenAt: seen(), confirmed: true })).body.error.message).toBe("You can rate Ana Silva once she's rated you and everything she sent is settled.");
     expect((await sact(sessionId, "rate", tester.cookie, { stars: 3, comment: "Slow replies" })).status).toBe(200);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Ana Silva finished Harbor Run. You can rate her for 14 days." } })).toBe(1);
     const { contractRatings } = await import("@/lib/server/ratings");

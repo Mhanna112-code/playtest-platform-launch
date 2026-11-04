@@ -1920,3 +1920,101 @@ there). `tests/addition.test.ts`, `tests/batch16-dev-states.test.ts`, `tests/bat
   done after the bank confirmed or refused, still unpaid until the finish; someone else's payment, reservation or card check refused; the page peeks every 3
   s, ignores failed peeks, ends the check once on done and stops when closed; Close and its hint under the frame, the stand-in's Confirm / Cancel kept).
   `batch17-bank-check` now expects Close under the bank's frame.
+
+## §162 Pronoun and bio at sign-up; pronouns everywhere (owner, Nov 3)
+
+Owner: ask the pronoun and the bio at sign-up, and make every line about a person use that person's recorded pronoun. Later the same day: drop "Both" from
+sign-up.
+
+### Sign-up: Developer or Tester only (replaces §134's "both")
+
+- **The choice is Developer or Tester** on the email form and on Google's step (`RoleChoice`, `src/components/RoleChoice.tsx`): two choices, required, red at
+  the choice with **"Choose developer or tester."** (`ROLE_MISSING`, was "Choose developer, tester or both."). The hint under it: "One account either way: you
+  can add the other side later in Settings."
+- **An older page's "both" is refused** with the same line, red at the choice, nothing made (`readRole` reads only developer and tester; `readNewAccount` in
+  `src/lib/server/passwords.ts`, used by `signUp` and `finishGoogleSignup`).
+- Replaces §134's "both, which lands on the developer side" and §153's "Tester or Both shows the tester's Devices …": only Tester shows them now.
+- **Unchanged:** accounts that already have both sides keep them; adding the other side later (Settings' "Start testing too" / "Start posting tests too") works as
+  before (§134's shared name and pronoun, the side's own fields empty).
+
+### Pronoun and bio at sign-up
+
+- **Pronoun** (optional), right under Name, on both pages: the profile's own choice (`PRONOUN_OPTIONS` in `src/lib/format.ts`, now shared by the profile and
+  sign-up): "Not set (others read “they”)", "she / her", "he / him", "they / them". Saved as the account's pronoun (`User.pronoun`, the same field the profile
+  saves; unset reads "they").
+- **Bio** (optional), under Pronoun, for the side chosen, with the profile's label, limit and count (`BioBox`, `src/components/BioBox.tsx`, now also the
+  profile's box): Developer → **"Bio (shown to testers)"**, saved to `User.devBio`; Tester → **"Bio (shown to developers)"**, saved to `TesterProfile.bio` (with
+  the devices and languages, §153). Up to 2,000 characters (`LIMITS.bio`), count "12 / 2,000" under the box. The box follows the choice live (choose Tester, its
+  bio box shows; switch, the other one shows); what was typed in each stays while the choice changes back and forth, and only the box shown is sent. No box
+  before a choice is made.
+- **Order on the form:** I am a… (Tester: devices, languages), Name, Pronoun, Bio, then email and password (email form) and the two ticks.
+- **Red at their field, all at once with the others** (as §134 / §153): "Choose a pronoun from the list." (`PRONOUN_BAD`) at Pronoun and "Keep your bio to
+  2,000 characters or fewer." (`BIO_TOO_LONG`) at the bio. The page itself can't produce either (the box stops at 2,000 and offers only the four choices), so
+  they come only from an older page or a hand-made request. Order of the lines: choice, devices, languages, name, pronoun, bio, Terms, 18 or older.
+- **Saved when the account is made** (`sidesOf(role, { devices, languages, bio })`), on the email form and on Google's step alike, and shown on the profile
+  afterwards (the Pronoun choice selected, the side's bio in its box): nothing is asked twice.
+
+### Pronouns everywhere
+
+- **`pronouns()`** (`src/lib/format.ts`) now also gives the verbs that agree when the pronoun is the subject: `is` (is / are), `has` (has / have), `was`
+  (was / were), `subjIs` (she's / they're), `subjHas` (she's / they've), `subjHad` (she'd / they'd), `v("asks", "ask")` for any other verb, and the
+  capitalized forms for the start of a line (`Subj`, `Poss`, `Obj`). Unset (or anything unknown) reads they / them / their.
+- **Every line below now reads the person's recorded pronoun** (she / her / her, he / him / his, they / them / their) instead of a fixed "their / they / them".
+  Generic text about several people ("testers … their work", End early's ticked testers, "their testers can charge…") and the team ("Their note" from the
+  team) is unchanged. The page's own reader is "you" as before (e.g. the tester's own "You left this test.").
+  - Payments (`payments.ts`): "Ana already charged $8.00 for her written answers." / "Ana let her written answers go: nothing was charged." (Pay on an older
+    page); the tester's email "Her note: “…”" (Pay, Pay more, a $0 Pay more: the developer's note); "Ana disputed the pay for her written answers" (live
+    line); the admin's "Decide again once she adds a card." and "The developer is confirming a payment for this piece with her bank. …" (`decideLockedLine`;
+    `DECIDE_LOCKED` is the unset one); the admin's stop line "The developer added her side".
+  - Charges and holds (`holds.ts`): "Ana let her written answers go: nothing charged", "Ana charged $8.00 for her written answers", "… for her call", "Ana let
+    her call on … go" (test-page lines); "Ana can now charge or let go of her written answers"; receipts "Ana Silva's written answers … (charged by her after 7
+    days)"; the developer's daily line "… You can still pay until she does" (`unreviewedLine`); the admins' bell "Hold lift waiting: Nora paid what she owes".
+  - Joining (`joining.ts`, `tests.ts`): "You blocked Nora: unblock her in Account → Blocked people to join." (both places); "Her note: “…”" (an application's
+    and a rejoin ask's email); "Ana withdrew her application" (line and refusal); "Her deal: …" (joined email); "Work she already sent still waits for your
+    review." (left email, also for a removed tester in `restrictions.ts`).
+  - Invites (`invites.ts`, `rules.ts`): "You ended her work"; "Applied: answer her in Needs you"; "already invited, waiting for her to join" (`whyInvited`;
+    `WHY_INVITED` is the unset one) and the Invited list's "waiting for her to join"; "asked to rejoin: answer her in Needs you →" (`whyApplied`); "Ana: you've
+    invited her to this test 3 times today. You can invite her again tomorrow."; "Ana's account was closed, so she can't be invited."; "Ana rated this test,
+    so she can't join it again. Untick her …" (one tester; several keep "they"); "She already joined." (Cancel invite); "Ana joined this test, so she's no
+    longer in your invite list"; "Ana got her first rating: 4.5".
+  - Ratings (`rules.ts`, `ratings.ts`, live route): "Ana finished her part (rated you)"; "Ana rated you. You can rate her until …" / "… once everything she sent
+    is settled."; "You can rate Ana once she's rated you and everything she sent is settled."; the cancelled calls' "Ana finished her part.".
+  - Calls (`rules.ts`, `calls.ts`, `blocks.ts`): the developer's "She left the test." / "His session ended." (call page and Join refusal); "Sharing her screen"
+    (call room); "She picks one of these." (the tester's request form, about the developer); "Closed: the tester finished her part" (a request row,
+    `requestGoneLine`); "Her terms: $30/h (the listing is now $24/h)" (`devRateLabel`).
+  - Keys (`keys.ts`, `accessKeys.ts`, `KeyBox`): "Ben reported his key doesn't work" (live line); the tester's "The developer was told. She can send you another
+    key in a message." (after the press and on the key box).
+  - Excerpts (`excerpts.ts`): bell "Ana asked to show an excerpt from “Harbor Run” on her profile"; Needs you and the dashboard "… would like to show this on her
+    profile"; "Harbor Run's developer deleted her account, so this request was closed".
+  - Disputes (`disputes.ts`, the test page): "Ana disputed what you paid for her written answers", "Her reason"; the tester's stop / live line "Nora added her
+    side to your dispute about …" (`testerGate.ts`).
+  - The developer's test page: "Her written answers" / "Her recording" (the folds), "Her contract: …", "In her contract", "See her profile" (row and avatar
+    card), the avatar's "Ana: showing only her", "On her original terms · … (kept her terms) / (closed: her part ended)" (`terms.ts`), "Ana deleted her
+    account before setting up payouts, so this can't be paid."; the dashboard's "sent her recording", "added to her written answers"; the developer's own
+    action in another tab "You paid Ana $5.00 more for her written answers" (`actionText.ts`).
+  - Profiles: the tester profile's "Excerpts of her work" and Block's "Her sessions on your tests end now (work she sent stays payable), … She won't see your
+    tests any more."; the developer profile's Block "Your sessions on her tests end now … You won't see her other tests any more." and "You blocked Nora, so her
+    tests are hidden."; the hover cards' "See her profile" (Messages, chat, the session page, the dashboard's seats).
+  - The join page: "If the developer doesn't review it in time, you choose: charge her, or let it go", "See her profile and other tests"; the tester's "Can't
+    be paid: Nora deleted her account".
+  - Admin console (`adminLists.ts`, `AdminBoxes`, `AccountActions`): "Payments she made", "Payouts to her", "Reports against her", "Parts she sent, across
+    tests"; "$8.00 to Ana … for her written answers"; the timeline's "Nora's tests are paused until she pays what she owes", "Nora's bank reversed her …", "Ana
+    disputed the pay for her written answers:", "Ana kept her terms instead of the new terms", "… before her part ended"; "Reinstate waits for the payment
+    hold: she pays what she owes first."; the suspension preview "pay for work she sent still reaches her".
+  - Stripe descriptions and receipts use names, not pronouns (unchanged), except the "charged by her" receipt above.
+- **A pronoun change shows on the next redraw.** The pages' live versions now include the pronouns their lines read: the test page and the session page
+  (`testV`: the developer's, each tester's in the test and each applicant's), the dashboard (`dashboardV`: the testers', developers' and applicants'), a profile
+  (`publicProfileV`) and the admin's person box (`adminPersonV`). Lines computed live (the live box's "rated you" line, the request rows) read the pronoun as it
+  is now. Lines already stored (a bell line, an email sent, a test event's text) keep the words they were written with.
+- **Tests:** `tests/batch35-pronouns.test.ts`: sign-up with pronoun and bio for each type on the email form and on Google's step, saved to the right fields and
+  shown on the profile; both optional (unset reads they); "both" refused on Google's step; the red lines for an unknown pronoun and a bio over 2,000 (all at
+  once, in order) and the page's Pronoun choice and bio box (label, limit, "12 / 2,000", red-line matches); the form's source (no Both, the bio box following
+  the choice, the shared choice and box); `pronouns()` for she / he / they and its verbs; representative lines for she, he and they (live and stop box lines,
+  Needs you, invite and request rows, bell, email and payment lines) with verb agreement ("she's rated you" / "they've rated you", "until she does" / "until
+  they do", "She left the test." / "They left the test."); in the app, a key report's live line and the tester's note, and the test and session pages'
+  versions changing with a pronoun. `batch35-signup-bio`, `batch35-signup-devices`, `sides` and `batch26` updated for Developer or Tester only. The suites
+  whose people have a pronoun (the fixtures' developer and `joined()` testers are "she") now expect it: `batch5`, `batch7`, `batch11`, `batch13`, `batch14`,
+  `batch16-blocks`, `batch16-dev-states`, `batch17-rate`, `batch18-misc`, `batch20`, `batch21-call-room`, `batch22`, `batch26`, `batch28`, `batch29-gates`,
+  `batch33`, `batch34-fixes`, `batch34-invite-beats-application`, `batch35-decide-paid-above`, `batch35-decide-tick`, `batch35-name-links`,
+  `batch35-tester-folds`, `block`, `choice`, `pay-until-chosen`, `races-nov3`, `ratings`, `stopped`. Unchanged and not done: "See their contract" (the stop
+  and top boxes' contract link) still reads "their", as its line carries only the contract id.

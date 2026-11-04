@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { PAYOUT_LINE, payoutWaitLine } from "@/lib/payout";
-import { displayName, fmtDateTime, fmtTime, money } from "@/lib/server/dateFormat";
+import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/server/dateFormat";
 import { callCancelledLine } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
@@ -79,7 +79,7 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
       return list;
     });
     await tellCancelled(cancelled, "ended");
-    await notify(c.test.developer.email, `${who} left “${c.title}”`, [`${who} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id });
+    await notify(c.test.developer.email, `${who} left “${c.title}”`, [`${who} left your test “${c.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id });
     await spotOpened(c.testId);
   }
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
@@ -493,7 +493,8 @@ export async function previewSuspension(userId: string) {
   if (u.isTester) {
     const contracts = await db.contract.count({ where: { testerId: userId, status: "working" } });
     const calls = await db.call.count({ where: { status: "booked", startsAt: { gt: new Date() }, contract: { testerId: userId } } });
-    lines.push(`Removed from ${s(contracts, "test")}; ${s(calls, "booked call")} cancelled; pay for work they sent still reaches them.`); // (batch 22: no held shares)
+    const pr = pronouns(u.pronoun); // (batch 35 §162) the account's own pronoun
+    lines.push(`Removed from ${s(contracts, "test")}; ${s(calls, "booked call")} cancelled; pay for work ${pr.subj} sent still reaches ${pr.obj}.`); // (batch 22: no held shares)
   }
   if (!lines.length) lines.push("This account has no developer or tester side yet: nothing else changes.");
   return { lines };

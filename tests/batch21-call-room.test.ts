@@ -178,7 +178,7 @@ describe("batch 21 section 2: the server ends calls for real", () => {
     const admin = await makeUser({ name: "Team" });
     await suspendAccount(admin.user.id, x.tester.user.id, "Checking", "tester");
     await expect(roomPoll(x.tester.user, x.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: your session ended."));
-    await expect(roomPoll(x.dev.user, x.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: they left the test."));
+    await expect(roomPoll(x.dev.user, x.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: she left the test."));
     expect(await db.call.findUniqueOrThrow({ where: { id: x.call.id } })).toMatchObject({ status: "booked", measuredMinutes: 8 });
   });
 
@@ -194,12 +194,12 @@ describe("batch 21 section 2: the server ends calls for real", () => {
     const a = await inProgress(10, 10);
     expect((await sact(a.sessionId, "leave", a.tester.cookie, { seenAt: seen(), confirmed: true })).status).toBe(200);
     await expect(roomPoll(a.tester.user, a.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: you left this test."));
-    await expect(roomPoll(a.dev.user, a.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: they left the test."));
+    await expect(roomPoll(a.dev.user, a.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: she left the test."));
 
     const b = await inProgress(10, 10);
     expect((await act(b.testId, "end-early", b.dev.cookie, { contractIds: [b.sessionId], reason: "We have enough feedback now.", seenAt: seen(), confirmed: true })).status).toBe(200);
     await expect(roomPoll(b.tester.user, b.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: your session ended."));
-    await expect(roomPoll(b.dev.user, b.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: their session ended."));
+    await expect(roomPoll(b.dev.user, b.call.id, 0, true)).rejects.toMatchObject(refusedWith("Call ended: her session ended."));
 
     const c = await inProgress(25, 10);
     const later = await bookCall(c.testId, c.dev.cookie, c.sessionId, c.tester.cookie, 72);

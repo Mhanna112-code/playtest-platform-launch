@@ -129,6 +129,8 @@ export async function joinCall(user: { id: string }, callId: string) {
     {
       status: call.status, startsAt: call.startsAt, minutes: call.minutes, noShow: !!call.noShowBy, paused: testPaused(c.test.developer, c.test),
       testStatus: c.test.status, contractStatus: c.status, blocked: await blockedEitherWay(c.testerId, c.test.developerId), side,
+      // (Batch 35 §162) The developer reads "She left the test." in the tester's pronoun.
+      testerPronoun: side === "developer" ? (await db.user.findUnique({ where: { id: c.testerId }, select: { pronoun: true } }))?.pronoun : null,
     },
     new Date(),
     fmtTime,
@@ -160,12 +162,12 @@ export async function callStatus(user: { id: string }, callId: string) {
   const fresh = state?.ended || closedNow ? await db.call.findUniqueOrThrow({ where: { id: callId } }) : call;
   const both = call.devJoinedAt && call.testerJoinedAt ? new Date(Math.max(call.devJoinedAt.getTime(), call.testerJoinedAt.getTime())) : null;
   const amTester = c.testerId === user.id;
-  const tester = amTester ? null : await db.user.findUnique({ where: { id: c.testerId }, select: { name: true, email: true } });
+  const tester = amTester ? null : await db.user.findUnique({ where: { id: c.testerId }, select: { name: true, email: true, pronoun: true } });
   const otherName = amTester ? (c.test.developer.name || c.test.developer.email.split("@")[0]) : (tester?.name || tester?.email.split("@")[0] || "");
   const tz = await db.user.findUnique({ where: { id: user.id }, select: { timeZone: true } });
   const side = amTester ? "tester" : "developer";
   const closed = fresh.status === "booked" && !fresh.endedAt && !fresh.measuredAt ? await callClosedLine(call, side) : "";
-  const line = callLineFor({ ...fresh, contract: c }, side, otherName, tz, closed);
+  const line = callLineFor({ ...fresh, contract: { ...c, ...(tester ? { tester: { pronoun: tester.pronoun } } : {}) } }, side, otherName, tz, closed);
   const now = Date.now();
   const capLine = !line && state && !state.ended && state.together && state.endsAt.getTime() - now <= END_WARN_MS ? endWarnLine(fmtFor(tz, state.endsAt, "time")) : "";
   return {

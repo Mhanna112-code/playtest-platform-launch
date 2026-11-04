@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime } from "@/lib/server/dateFormat";
+import { displayName, fmtDateTime, pronouns } from "@/lib/server/dateFormat";
 
 /** (Owner, Oct 30, batch 15 section 27) A developer's open disputes still waiting for their (optional) side, newest first: the dashboard box while restricted. */
 export async function disputesForSide(devId: string) {
@@ -12,6 +12,6 @@ export async function disputesForSide(devId: string) {
     const c = byId.get(d.contractId);
     if (!c) return [];
     const at = d.callId ? calls.get(d.callId) : null;
-    return [{ id: d.id, testId: c.testId, testTitle: c.title, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.tester.id}`, reason: d.reason, what: at ? `the call on ${fmtDateTime(at)}` : subs.get(d.submissionId ?? "") === "recording" ? "their recording" : "their written answers" }];
+    return [{ id: d.id, testId: c.testId, testTitle: c.title, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.tester.id}`, reason: d.reason, what: at ? `the call on ${fmtDateTime(at)}` : `${pronouns(c.tester.pronoun).poss} ${subs.get(d.submissionId ?? "") === "recording" ? "recording" : "written answers"}` }];
   });
 }

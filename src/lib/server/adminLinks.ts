@@ -6,7 +6,7 @@ import { REPORTED_LABEL } from "./reports";
 // (Owner, Oct 30, batch 33 §1) The links of the admin console and the admin boxes: every developer or tester named opens their profile (with its admin box), shown as
 // "Nora Lane (nora@…)" with the name as the link; every test named opens its page (with its admin box); every Stripe id opens that object in the Stripe Dashboard.
 
-export type Who = { id: string; email: string; name: string; isDeveloper: boolean; deletedAt: Date | null };
+export type Who = { id: string; email: string; name: string; isDeveloper: boolean; deletedAt: Date | null; /** (batch 35 §162) for the lines about them */ pronoun?: string };
 
 /** The profile page an admin opens for an account (the one the Accounts list links to): the developer's, or else the tester's. Both carry the admin box. */
 export const profileHref = (u: { id: string; isDeveloper: boolean }) => (u.isDeveloper ? `/app/developers/${u.id}` : `/app/testers/${u.id}`);
@@ -29,7 +29,7 @@ export const testLink = (t: { id: string; title: string } | null | undefined): S
 export async function whoById(ids: (string | null | undefined)[]) {
   const list = [...new Set(ids.filter((x): x is string => !!x))];
   if (!list.length) return new Map<string, Who>();
-  const rows = await db.user.findMany({ where: { id: { in: list } }, select: { id: true, email: true, name: true, isDeveloper: true, deletedAt: true } });
+  const rows = await db.user.findMany({ where: { id: { in: list } }, select: { id: true, email: true, name: true, pronoun: true, isDeveloper: true, deletedAt: true } });
   return new Map(rows.map((u) => [u.id, u]));
 }
 

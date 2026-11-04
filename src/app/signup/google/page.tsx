@@ -14,8 +14,8 @@ export const metadata = { title: "Finish signing up · Playtest" };
 /**
  * (Owner, Oct 28, batch 20 section 5) After Google answers for a NEW account: one short step before the account exists, the Terms agreement and "I'm 18 or
  * older.", then Continue. Nothing is created until both are ticked (each is red at its box when missing). (Owner, Nov 3, batch 35 §134) The step also asks who
- * you are (developer, tester or both) and your name, as the email form does, both required: the account is made with its sides (with both, it lands on the
- * developer side), so no "Welcome to Playtest" step comes after it.
+ * you are (developer or tester: §162 dropped "both") and your name, as the email form does, both required, and (§162) the optional pronoun and bio: the account
+ * is made with its side, so no "Welcome to Playtest" step comes after it.
  */
 export default async function GoogleSignupStep() {
   if (await getPageUser()) redirect("/app");
@@ -33,11 +33,13 @@ export default async function GoogleSignupStep() {
     <AuthShell title="Finish signing up">
       <AuthForm allAtOnce path="/api/auth/google/finish" next="/app" announce="in" submit="Continue" busy="Creating…">
         <p className="text-sm text-slate-300" data-google-step="">Signing up with Google as <b className="text-white">{step.email}</b>.</p>
-        <RoleChoice />
-        <div>
-          <label className="label req" htmlFor="name">Name</label>
-          <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
-        </div>
+        {/* (Batch 35 §162) As the email form: Name, then the optional Pronoun and the chosen side's bio. */}
+        <RoleChoice>
+          <div>
+            <label className="label req" htmlFor="name">Name</label>
+            <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
+          </div>
+        </RoleChoice>
         {/* (Batch 26 section 11) The red line under the whole tick row; every missing tick is red. */}
         <label className="flex items-start gap-2 text-sm text-slate-300" data-note-after="">
           <input type="checkbox" id="acceptTerms" name="acceptTerms" value="yes" required className="mt-1" data-match="terms of use" />

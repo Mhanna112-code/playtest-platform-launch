@@ -36,7 +36,7 @@ describe("after the test is stopped", () => {
     expect(first.status).toBe(409);
     expect(first.body.error.code).toBe("stop_once");
     // (Batch 17 section 12) A page opened before the stop: Pay stops once with the stop as a change; (batch 30, Oct 29 addition) the dispute since then with it, oldest first.
-    expect(texts(first)).toEqual([expect.stringMatching(/^You stopped this test at /), "Ana Silva disputed the pay for their written answers"]);
+    expect(texts(first)).toEqual([expect.stringMatching(/^You stopped this test at /), "Ana Silva disputed the pay for her written answers"]);
     // The second press goes ahead (nothing newer happened).
     const second = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: true, boxAt: first.body.error.now });
     expect(second.status).toBe(200);
@@ -80,7 +80,7 @@ describe("after the test is stopped", () => {
     await db.dispute.update({ where: { id: d1.id }, data: { devSideAt: new Date(Date.now() + 10) } });
     await later();
     const side = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: afterStop });
-    expect(side.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane added their side to your dispute about your written answers"]);
+    expect(side.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane added her side to your dispute about your written answers"]);
     const go = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "submission", id: rec.id, reason: "The recording was fine really", seenAt: afterStop, confirmed: true, boxAt: seen() });
     expect(go.status, JSON.stringify(go.body)).toBe(200);
     // Disputing the first piece again: final.
