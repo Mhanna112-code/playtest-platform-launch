@@ -1,7 +1,7 @@
 "use client";
 import { useState, type ReactNode } from "react";
 import { useBankCheck } from "@/components/BankCheck";
-import { useBankGroupHold } from "@/components/BankGroup";
+import { useBankGroupHold } from "@/components/HoldFold";
 import { ChangesBox } from "@/components/ChangesBox";
 import { type BankAction } from "@/lib/bankConfirm";
 import { money } from "@/lib/format";

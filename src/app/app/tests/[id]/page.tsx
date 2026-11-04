@@ -33,6 +33,7 @@ import { LiveTop } from "@/components/LiveTop";
 import { MessagesSquare } from "lucide-react";
 import { Applications } from "./Applications";
 import { NeedsRequests } from "./NeedsRequests";
+import { CallRequestsBox } from "./CallRequestsBox";
 import { callEndProps, devRateLabel, pageRows, rateLabel } from "@/lib/server/requests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
@@ -44,7 +45,8 @@ import { PayBox } from "./PayBox";
 import { CONFIRM_WITH_BANK, autoChargeLine, bankAnchor, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
-import { BankGroup } from "@/components/BankGroup";
+import { HoldFold } from "@/components/HoldFold";
+import type { ReactNode } from "react";
 import { bankWaitingOnTest } from "@/lib/server/confirm";
 import { ListingPanel } from "./ListingPanel";
 import { ListingSeeIt, SeeItTarget } from "@/components/ListingInfo";
@@ -146,7 +148,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const apps = pendingApps.map((a) => {
     const x = appUsers.find((y) => y.id === a.testerId)!;
     const old = a.kind === "rejoin" ? t.contracts.find((c) => c.testerId === a.testerId) : undefined;
-    return { id: a.id, kind: a.kind, line: old ? rejoinAskLine(displayName(x), pronouns(x.pronoun), old, u.timeZone) : undefined, userId: x.id, name: displayName(x), note: a.note, ...appInfo.get(x.id)! };
+    // (Owner, Nov 4, §181) `contractId`: an ask to rejoin goes in the drop-down of the person it is (their contract here); `at`: when it was sent.
+    return { id: a.id, contractId: t.contracts.find((c) => c.testerId === a.testerId)?.id, at: a.createdAt, kind: a.kind, line: old ? rejoinAskLine(displayName(x), pronouns(x.pronoun), old, u.timeZone) : undefined, userId: x.id, name: displayName(x), note: a.note, ...appInfo.get(x.id)! };
   });
   // (NEXT-UI 4) Chat is its own page per session: each tester's row links to it with an unread badge.
   const unread = new Map(await Promise.all(t.contracts.map(async (c) => [c.id, await unreadCount(u.id, t.id, c.testerId)] as const)));
@@ -181,25 +184,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
   // (Owner, Oct 31, batch 35 §80) Confirmed in Needs you (where the dashboard's box, Payments and the bell link); under the piece only a link up to it.
   const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>);
-  // (Owner, Nov 4, §175) Needs you (and the restricted view's "Your bank wants you to confirm") lists the waiting charges under each tester's name, the green profile
-  // link: one group per tester, in the order of their oldest charge, and under it every charge about them, oldest first (bankRows comes oldest first), each with its own
-  // Confirm with your bank. The links up from the tester's row still land on the charge itself, inside its group.
-  const bankGroups: { c: (typeof t.contracts)[number]; rows: typeof bankRows }[] = [];
-  for (const b of bankRows) {
-    const g = bankGroups.find((x) => x.c.id === b.contractId);
-    if (g) g.rows.push(b);
-    else {
-      const c = t.contracts.find((x) => x.id === b.contractId);
-      if (c) bankGroups.push({ c, rows: [b] });
-    }
-  }
-  // (Owner, Nov 4, §180) Each tester's charges in a drop-down under their name: "· 2 charges waiting · $13.00", closed at first (BankGroup says when it opens).
-  const bankGrouped = bankGroups.map(({ c, rows }) => (
-    <BankGroup key={c.id} id={c.id} count={rows.length} total={money(rows.reduce((n, b) => n + b.cents, 0))}
-      name={<NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} />}>
-      {rows.map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />)}
-    </BankGroup>
-  ));
+  // (Owner, Nov 4, §175, §180; §181) Needs you lists the waiting charges under each tester's name, inside that person's drop-down (needsPeople below), oldest first
+  // (bankRows comes oldest first), each with its own Confirm with your bank. The links up from the tester's row still land on the charge itself, inside its drop-down.
+  const bankOf = (contractId: string) => bankRows.filter((b) => b.contractId === contractId);
   // (Batch 23, a batch 21 leftover) A call whose two browsers never connected reads "Waiting to connect", not "In progress".
   const connectedCalls = new Set((await db.callPresence.findMany({ where: { call: { contract: { testId: t.id } } }, select: { callId: true }, distinct: ["callId"] })).map((p) => p.callId));
   // (Owner, Oct 27) While a failed payment is owed, Pay (part Pay, extra pay) is disabled: "Pay what you owe first."; the room above the listing prices for extra pay.
@@ -302,12 +289,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     .sort((a, b) => a.at.getTime() - b.at.getTime());
   const needsRequests = reqs.filter((r) => r.fromSide === "tester").flatMap((r) => {
     const c = t.contracts.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, contractId: c.id, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, name: displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) }] : [];
+    return c ? [{ id: r.id, contractId: c.id, at: r.createdAt, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, name: displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) }] : [];
   });
   // (Batch 35 §162) "her written answers", "Her reason": the tester's recorded pronoun.
   const disputesWaiting = t.contracts.flatMap((c) => [
-    ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `${pronouns(c.tester.pronoun).poss} ${x.kind === "written" ? "written answers" : "recording"}`, reason: x.dispute!.reason })),
-    ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
+    ...c.submissions.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, contractId: c.id, at: x.dispute!.createdAt, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `${pronouns(c.tester.pronoun).poss} ${x.kind === "written" ? "written answers" : "recording"}`, reason: x.dispute!.reason })),
+    ...c.calls.filter((x) => x.dispute && x.dispute.status === "open" && !x.dispute.devSide).map((x) => ({ id: x.dispute!.id, contractId: c.id, at: x.dispute!.createdAt, name: displayName(c.tester), Poss: pronouns(c.tester.pronoun).Poss, testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, what: `the call on ${fmtDateTime(x.startsAt)}`, reason: x.dispute!.reason })),
   ]);
   // (Owner, Oct 29, batch 13) Excerpt requests waiting for Allow or Deny (hidden while the test has an NDA), and excerpts shown from this test (batch 29 section 30: only the tester removes one; owner, Nov 3, §166: listed only in the restricted view, no longer in the tester's row).
   const excerptReqs = await pendingForDeveloper(u.id, t.id);
@@ -322,7 +309,74 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const stopEntry = stopEvent && stopReasonOf(stopEvent.text) ? { at: stopEvent.createdAt.toISOString(), reason: stopReasonOf(stopEvent.text) } : null;
   const bannerReason = bannerCause === "stopped" && stopEntry ? stopEntry.reason : bannerCauseReason;
   // (Batch 15 section 29) The restricted view: Booked calls (ahead) with Cancel, and the open disputes waiting for the developer's side.
-  const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, who: displayName(c.tester), whoHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
+  const bookedAhead = t.contracts.flatMap((c) => c.calls.filter((x) => x.status === "booked" && x.startsAt > now).map((x) => ({ id: x.id, contractId: c.id, at: x.createdAt, who: displayName(c.tester), whoHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, when: x.startsAt.toISOString(), minutes: x.minutes, needsReason: cancelNeedsReason(x.startsAt, now) }))).sort((a, b) => a.when.localeCompare(b.when));
+  // (Owner, Nov 4, §181) "Is it possible in Needs you to have all notifications about the same person under each name" ("expandable"): Needs you (and the restricted
+  // view's) is one drop-down per person (HoldFold: closed at first; the summary is the green name, then "· N things"), holding everything in Needs you about them,
+  // with a small sub-heading over each kind only when they have more than one kind. The person whose oldest waiting thing waits longest comes first; inside, each
+  // kind keeps its order. An applicant who hasn't joined is a person of their own (keyed by the application). Nothing in Needs you is about no one.
+  type NeedsWho = { key: string; name: string; href: string | null };
+  type NeedsKind = { kind: string; label: string; ats: Date[]; node: ReactNode; data?: Record<string, string>; /** how many things it is, when not one per time in `ats` */ count?: number };
+  const whoOf = (c: (typeof t.contracts)[number]): NeedsWho => ({ key: c.id, name: displayName(c.tester), href: c.tester.deletedAt ? null : `/app/testers/${c.testerId}` });
+  const needsPeople = (entries: (NeedsKind & { who: NeedsWho })[]) => {
+    const people: (NeedsWho & { kinds: NeedsKind[] })[] = [];
+    for (const { who, ...k } of entries) {
+      if (!k.ats.length) continue;
+      const p = people.find((x) => x.key === who.key);
+      if (p) p.kinds.push(k);
+      else people.push({ ...who, kinds: [k] });
+    }
+    const oldest = (p: (typeof people)[number]) => Math.min(...p.kinds.flatMap((k) => k.ats.map((d) => d.getTime())));
+    return people.sort((a, b) => oldest(a) - oldest(b)).map((p) => {
+      const count = p.kinds.reduce((n, k) => n + (k.count ?? k.ats.length), 0);
+      return (
+        <HoldFold key={p.key} data={{ "data-needs-person": p.key }} toggleData={{ "data-needs-person-toggle": "" }}
+          summary={<span className="min-w-0 [overflow-wrap:anywhere]"><span data-needs-person-name=""><NameLink text={p.name} href={p.href} /></span>{" "}<span className="whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span></span>}>
+          {/* (Owner, Nov 3) Each name's drop-down is its own panel (it scrolls inside; the grip drags it taller). */}
+          <ResizeBox id={`needs-person-${p.key}`} label={`${p.name}: Needs you`} defaultMax="min(30rem, 60vh)">
+            <div className="min-w-0 space-y-3">
+              {p.kinds.map((k) => (
+                <div key={k.kind} className="min-w-0 space-y-2" data-needs-kinds={k.kind} {...k.data}>
+                  {p.kinds.length > 1 && <h3 className="text-xs font-semibold text-slate-400" data-needs-kind={k.kind}>{k.label}</h3>}
+                  {k.node}
+                </div>
+              ))}
+            </div>
+          </ResizeBox>
+        </HoldFold>
+      );
+    });
+  };
+  // The kinds both views share: a person's charges waiting for the bank, their disputes waiting for your side, their excerpt requests.
+  const bankKind = (c: (typeof t.contracts)[number], extra: Record<string, string> = {}) => ({ who: whoOf(c), kind: "bank", label: CONFIRM_WITH_BANK, ats: bankOf(c.id).map((b) => b.at), data: { "data-bank-group": c.id, ...extra },
+    node: bankOf(c.id).map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />) });
+  const disputeKind = (c: (typeof t.contracts)[number], extra: Record<string, string> = {}) => {
+    const mine = disputesWaiting.filter((d) => d.contractId === c.id);
+    return { who: whoOf(c), kind: "disputes", label: "Disputes", ats: mine.map((d) => d.at), data: extra, node: mine.map((d) => (
+      <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
+        <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
+        <ResizeBox id={`dispute-${d.id}`} label={`${d.Poss} reason`}><ReasonQuote text={d.reason} /></ResizeBox>
+        </Fold>
+        <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
+      </div>
+    )) };
+  };
+  const excerptKind = (c: (typeof t.contracts)[number], extra: Record<string, string> = {}) => {
+    const mine = excerptReqs.filter((x) => x.contractId === c.id);
+    return { who: whoOf(c), kind: "excerpts", label: "Excerpt requests", ats: mine.map((x) => x.at), data: extra, node: mine.map((x) => (
+      <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
+        {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
+        <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
+        <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
+          {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
+          <ExcerptQuestion question={x.question} />
+          <ClampText text={`“${x.text}”`} className="text-slate-200" />
+          <ExcerptReplaces texts={x.replaces} />
+        </ResizeBox>
+        </Fold>
+        <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
+      </div>
+    )) };
+  };
   const banner = bannerCause ? (
     <TestBanner cause={bannerCause} reason={bannerReason} failed={failed}
       allowed={restricted ? allowedLine(true, { stop: t.status !== "stopped", endEarly: t.status !== "stopped" && working.length > 0, cancelCalls: bookedAhead.length > 0, disputes: disputesWaiting.length > 0 }) : allowedLine(false, { nextRound: !t.adminStoppedAt })} />
@@ -352,52 +406,21 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         />
         <LiveTop scope={`test:${t.id}`} seenAt={seenAt} contractLink="scroll" />
         <PageLoaded at={seenAt} />
+        {/* (Owner, Nov 4, §181) One drop-down per person: their charges waiting for the bank (Batch 17 §11: a charge made while away, e.g. a retry during the pause,
+            confirmed here), their disputes (Batch 15 section 27: the developer's side is optional, never stopped, works while paused or restricted), their booked calls
+            with Cancel, their excerpt requests (Batch 15 section 39: Allow / Deny go through anything; batch 29 section 30: no Take down). "#calls" lands on the list. */}
         {restrictedNeeds > 0 && <NeedsYou count={restrictedNeeds}>
-          {/* (Batch 17 §11) A charge made while away (e.g. a retry during the pause) that the bank wants confirmed: confirmed here, each line naming its piece. */}
-          {bankRows.length > 0 && (
-            <section className="space-y-2" data-restricted-bank="">
-              <h2 className="font-semibold text-white">Your bank wants you to confirm</h2>
-              {bankGrouped}
-            </section>
-          )}
-          {bookedAhead.length > 0 && <RestrictedCalls testId={t.id} seenAt={seenAt} calls={bookedAhead} embedded />}
-          {/* (Batch 15 section 39) Excerpts go through anything: Allow / Deny (hidden while the test has an NDA, as always). (Batch 29 section 30) No Take down: only the tester removes an excerpt. */}
-          {excerptReqs.length > 0 && (
-            <section className="space-y-2" data-restricted-excerpts="">
-              <h2 className="font-semibold text-white">Excerpts</h2>
-              {excerptReqs.map((x) => (
-                <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-excerpt-request="">
-                  {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
-                  <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
-                  <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
-                    {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
-                    <ExcerptQuestion question={x.question} />
-                    <ClampText text={`“${x.text}”`} className="text-slate-200" />
-                    <ExcerptReplaces texts={x.replaces} />
-                  </ResizeBox>
-                  </Fold>
-                  <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
-                </div>
-              ))}
-
-            </section>
-          )}
-          {/* (Batch 15 section 27) The developer's side of a dispute: optional, never stopped, works while paused or restricted. */}
-          {disputesWaiting.length > 0 && (
-            <section className="space-y-2" data-restricted-disputes="">
-              <h2 className="font-semibold text-white">Disputes: add your side</h2>
-              <div className="space-y-2">
-                {disputesWaiting.map((d) => (
-                  <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-                    <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
-                    <ResizeBox id={`dispute-${d.id}`} label={`${d.Poss} reason`}><ReasonQuote text={d.reason} /></ResizeBox>
-                    </Fold>
-                    <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
-                  </div>
-                ))}
-              </div>
-            </section>
-          )}
+          <div className="space-y-2" id={bookedAhead.length > 0 ? "calls" : undefined} data-needs-people="">
+            {needsPeople(t.contracts.flatMap((c) => {
+              const calls = bookedAhead.filter((x) => x.contractId === c.id);
+              return [
+                bankKind(c, { "data-restricted-bank": "" }),
+                disputeKind(c, { "data-restricted-disputes": "" }),
+                { who: whoOf(c), kind: "calls", label: "Booked calls", ats: calls.map((x) => x.at), node: <RestrictedCalls testId={t.id} seenAt={seenAt} calls={calls} embedded person={c.id} /> },
+                excerptKind(c, { "data-restricted-excerpts": "" }),
+              ];
+            }))}
+          </div>
         </NeedsYou>}
         {shownEx.length > 0 && <section className="card space-y-2" aria-label="Shown excerpts">
             {shownEx.map((e) => (
@@ -412,12 +435,109 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Oct 28, batch 20 section 24) Each open Rate in Needs you: "Rate ff · 14 days left", linking to that tester's Rate box (the page's poll brings it).
   const rateNeeds = restricted ? [] : t.contracts.flatMap((c) => {
     const st = rateStates.get(c.id);
-    return st?.kind === "open" && st.endsAt ? [{ id: c.id, line: rateNeedsLine(displayName(c.tester), st.endsAt, now) }] : [];
+    // (§181) `at`: when the window opened (its end when that isn't known), for the order of the drop-downs.
+    return st?.kind === "open" && st.endsAt ? [{ id: c.id, at: st.opensAt ?? st.endsAt, line: rateNeedsLine(displayName(c.tester), st.endsAt, now) }] : [];
   });
   // (Batch 30 §2) Updated versions sent after a piece was paid, below its cap while Pay more is open: each its own Needs you row with the piece's Pay more box.
   const updates = restricted || !payMore.open ? [] : t.contracts.filter((c) => testerPayable(c.tester)).flatMap((c) => c.submissions.filter((x) => updateWaiting(x) && (rooms.get(x.id)?.room ?? 0) > 0).map((x) => ({ c, s: x })))
     .sort((a, b) => a.s.paidUpdateAt!.getTime() - b.s.paidUpdateAt!.getTime());
   const needsCount = bankRows.length + updates.length + pieces.length + apps.length + needsRequests.length + disputesWaiting.length + excerptReqs.length + rateNeeds.length;
+  // (Owner, Nov 4, §181) "the parts should have big drop down with their name then part and pay/pay more as own dropdowns": in the person's drop-down each part is a
+  // drop-down of its own (closed; the plain part name: "Written answers", "Recording", "Live call on <date>"), holding what it held before (its sent / updated
+  // line, its payments, the answers or recordings with their "Added · date" lines) and, last, its Pay (or Pay more, for an update sent after paying) as one more
+  // drop-down. A link to the part ("#piece-<id>", "#call-<id>", "#update-<id>") opens it and its Pay box (as §139); the tester's name is on the drop-down above, once.
+  const partNode = (x: (typeof pieces)[number]) => {
+    const anchor = x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`;
+    return (
+      <div key={x.id} id={anchor} className="rounded-lg border border-white/10 p-3 scroll-mt-24">
+        <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-part-${x.id}` }}
+          summary={x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : `Live call on ${fmtDateTime(x.x!.startsAt)}`}>
+          <p className="text-xs text-slate-400" data-part-when="">
+            {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "Updated" : "Sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : `In ${pronouns(x.c.tester.pronoun).poss} contract`}
+          </p>
+          {/* (Batch 17 §19) The last 7 days before close-out. */}
+          {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
+          {/* (Owner, Nov 3, batch 35 §152) Any payment already made on it (e.g. one declined or waiting for your bank). */}
+          <PartPayments id={x.id} lines={partPays.get(x.id)} />
+          {x.kind === "sub" ? (
+            <>
+              {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Inside the part's drop-down: the answers or recordings in a small panel (about 12rem)
+                  that drags taller or shorter and scrolls inside, so the Pay box under it is in view; then the Pay box. */}
+              <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
+                {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
+                {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
+                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
+              </ResizeBox>
+              <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
+              <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
+                /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
+                note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
+                listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
+              </HoldFold>
+            </>
+          ) : (
+            <>
+              {/* (Batch 15 section 40) The measured length: "Length: 29 min (both in the call 2:21–2:50 PM)"; a lowered one says so, with the reason. */}
+              <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
+              {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
+              <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
+              <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
+                /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
+                note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
+                minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
+                listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
+                listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+              </HoldFold>
+            </>
+          )}
+        </HoldFold>
+      </div>
+    );
+  };
+  // (Batch 30 §2) An updated version sent after its part was paid (below its cap while Pay more is open): (§181) that part's drop-down, with Pay more.
+  const updateNode = ({ c, s: x }: (typeof updates)[number]) => (
+    <div key={`update-${x.id}`} id={`update-${x.id}`} className="rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
+      <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-part-${x.id}` }} summary={x.kind === "written" ? "Written answers" : "Recording"}>
+        <p className="text-xs text-slate-400" data-part-when="">Updated {fmtDateTime(x.paidUpdateAt!)}</p>
+        <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
+        {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
+        <PartPayments id={x.id} lines={partPays.get(x.id)} />
+        <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
+          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
+        </ResizeBox>
+        <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}` }} summary="Pay more">
+        <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+          room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
+        </HoldFold>
+      </HoldFold>
+    </div>
+  );
+  // (Owner, Nov 4, §181) Everything in Needs you, by person, each person's kinds in this order: their parts to pay (and updates after paying), their charges waiting
+  // for the bank, their disputes (Add your side), their call requests (the row opens the Live session's Call requests panel there, as before), their application or
+  // ask to rejoin (Accept / Decline), their excerpt requests (Allow / Deny), their Rate. An applicant who hasn't joined is a person of their own.
+  // (Batch 16 sections 33 and 35) Every waiting call request, both directions: (Owner, Nov 4, §181) the page's own Call requests box (CallRequestsBox), by person.
+  const callRequests = restricted ? [] : reqs.flatMap((r) => {
+    const c = working.find((x) => x.id === r.contractId);
+    return c ? [{ id: r.id, at: r.createdAt.toISOString(), contractId: c.id, tester: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined }] : [];
+  });
+  const needsEntries = [
+    ...t.contracts.flatMap((c) => {
+      const mine = pieces.filter((x) => x.c.id === c.id), more = updates.filter((x) => x.c.id === c.id);
+      const asks = needsRequests.filter((r) => r.contractId === c.id), rate = rateNeeds.filter((r) => r.id === c.id);
+      return [
+        { who: whoOf(c), kind: "pay", label: "Pay", ats: [...mine.map((x) => x.at), ...more.map((x) => x.s.paidUpdateAt!)], node: <div className="space-y-3">{mine.map(partNode)}{more.map(updateNode)}</div> },
+        bankKind(c),
+        disputeKind(c),
+        // (Owner, Nov 4, §181) Their call requests are answered in the Call requests box: here one line, "2 call requests ↓", jumping to them there (one thing).
+        { who: whoOf(c), kind: "requests", label: "Call requests", ats: asks.map((r) => r.at), count: 1, node: <NeedsRequests contractId={c.id} count={asks.length} /> },
+        ...apps.filter((a) => a.contractId === c.id).map((a) => ({ who: whoOf(c), kind: "application", label: a.kind === "rejoin" ? "Ask to rejoin" : "Application", ats: [a.at], node: <Applications embedded needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={[a]} /> })),
+        excerptKind(c),
+        { who: whoOf(c), kind: "rate", label: "Rate", ats: rate.map((r) => r.at), node: rate.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>) },
+      ];
+    }),
+    ...apps.filter((a) => !a.contractId).map((a) => ({ who: { key: a.id, name: a.name, href: `/app/testers/${a.userId}` }, kind: "application", label: a.kind === "rejoin" ? "Ask to rejoin" : "Application", ats: [a.at],
+      node: <Applications embedded needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={[a]} /> })),
+  ];
   return (
     // (Batch 34 §14) Every stop box under any button on this page: a listing line's See it goes to the Listing panel.
     <SeeItTarget target="#listing">
@@ -474,110 +594,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
-          {bankGrouped}
-          <Applications needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={apps} />
-          <NeedsRequests testId={t.id} seenAt={seenAt} requests={needsRequests} />
-          {rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}
-          {excerptReqs.map((x) => (
-            <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
-              {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
-              <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
-              <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
-                {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
-                <ExcerptQuestion question={x.question} />
-                <ClampText text={`“${x.text}”`} className="text-slate-200" />
-                <ExcerptReplaces texts={x.replaces} />
-              </ResizeBox>
-              </Fold>
-              <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
-            </div>
-          ))}
-          {disputesWaiting.map((d) => (
-            <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-              <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
-              <ResizeBox id={`dispute-${d.id}`} label={`${d.Poss} reason`}><ReasonQuote text={d.reason} /></ResizeBox>
-              </Fold>
-              <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
-            </div>
-          ))}
-          {[...new Set(pieces.map((x) => x.c.id))].map((cid) => {
-            const mine = pieces.filter((x) => x.c.id === cid);
-            const who = displayName(mine[0].c.tester);
-            return (
-              <details key={cid} open className="rounded-xl border border-white/10 p-2" data-needs-person={who}>
-                {/* (Owner, Nov 3, long text) A long name wraps beside the arrow (never past the box); the count follows it, kept on one line. (Owner, Nov 3) The name is the
-                    tester's link (green), shown here only, not again on each part. */}
-                <summary className="fold-chevron flex cursor-pointer items-center gap-2 text-sm font-medium text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><NameLink text={who} href={mine[0].c.tester.deletedAt ? null : `/app/testers/${mine[0].c.testerId}`} /> <span className="whitespace-nowrap font-normal text-slate-400">· {mine.length} part{mine.length === 1 ? "" : "s"} to pay</span></span></summary>
-                {/* (Owner, Nov 3) Each name's drop-down is its own panel holding all their parts (it scrolls inside; the grip drags it taller). */}
-                <div className="mt-2">
-                <ResizeBox id={`needs-person-${cid}`} label={`${who}'s parts`} defaultMax="min(30rem, 60vh)">
-                <div className="space-y-3">
-          {mine.map((x) => (
-            <div key={x.id} id={x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`} className="rounded-lg border border-white/10 p-3 scroll-mt-24">
-              {/* (Owner, Nov 3) Each part is its own drop-down (open at first): its line, then inside its payments, the answers or recordings, and its Pay box. */}
-              <Fold id={`needs-part-${x.id}`} className="space-y-2" summaryClassName="!text-sm" summary={<span className="font-medium">
-                {/* (Owner, Nov 3) The tester's name (their link) is on the fold above, once; each part starts with what it is. */}
-                {x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : "Live call"} · {x.kind === "sub" ? `${additionsOf(x.s!.additions).length ? "updated" : "sent"} ${fmtDateTime(x.s!.updatedAt)}` : `${fmtDateTime(x.x!.startsAt)} · ${x.x!.minutes} min booked`} · {(x.kind === "sub" ? x.s!.agreedCents : x.x!.rateCents) == null ? NOT_LISTED : `In ${pronouns(x.c.tester.pronoun).poss} contract`}
-              </span>}>
-              {/* (Batch 17 §19) The last 7 days before close-out. */}
-              {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
-              {/* (Owner, Nov 3, batch 35 §152) Any payment already made on it (e.g. one declined or waiting for your bank). */}
-              <PartPayments id={x.id} lines={partPays.get(x.id)} />
-              {x.kind === "sub" ? (
-                <>
-                  {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Inside the part's drop-down: the answers or recordings in a small panel (about 12rem)
-                      that drags taller or shorter and scrolls inside, so the Pay box under it is in view; then the Pay box. */}
-                  <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
-                    {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
-                    {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
-                    <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
-                  </ResizeBox>
-                  <p className="text-sm font-medium text-white">Pay</p>
-                  <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
-                    /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
-                    note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
-                    listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
-                </>
-              ) : (
-                <>
-                  {/* (Batch 15 section 40) The measured length: "Length: 29 min (both in the call 2:21–2:50 PM)"; a lowered one says so, with the reason. */}
-                  <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
-                  {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
-                  <p className="text-sm font-medium text-white">Pay</p>
-                  <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
-                    /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
-                    note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
-                    minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
-                    listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
-                    listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
-                </>
-              )}
-              </Fold>
-            </div>
-          ))}
-                </div>
-                </ResizeBox>
-                </div>
-              </details>
-            );
-          })}
-          {updates.map(({ c, s: x }) => (
-            <div key={`update-${x.id}`} id={`update-${x.id}`} className="rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
-              <Fold id={`update-part-${x.id}`} className="space-y-2" summaryClassName="!text-sm" summary={<span className="font-medium"><NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} /> · {x.kind === "written" ? "Written answers" : "Recording"} · updated {fmtDateTime(x.paidUpdateAt!)}</span>}>
-              <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
-              {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
-              <PartPayments id={x.id} lines={partPays.get(x.id)} />
-              <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
-                <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
-              </ResizeBox>
-              <p className="text-sm font-medium text-white">Pay more</p>
-              <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
-                room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
-              </Fold>
-            </div>
-          ))}
+          {/* (Owner, Nov 4, §181) One drop-down per person, holding everything in Needs you about them (needsEntries). */}
+          <div className="space-y-2" data-needs-people="">{needsPeople(needsEntries)}</div>
         </NeedsYou>
       )}
+      {/* (Owner, Nov 4, §181) Call requests: a box of its own, right under Needs you (Needs you's "2 call requests ↓" lines jump here). */}
+      {callRequests.length > 0 && <CallRequestsBox testId={t.id} seenAt={seenAt} requests={callRequests} leadMinutes={CALL_MIN_AHEAD_MINUTES} />}
 
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
       <TestersJoined timeZone={u.timeZone}
@@ -795,11 +817,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         canRequest={t.status !== "stopped" && t.status !== "draft" && !u.holdStartedAt && !restricted}
         noRequestReason={t.status === "stopped" ? "" : u.holdStartedAt ? `${pausedUntil(u.holdReason === "chargeback")}: calls wait meanwhile.` : ""}
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
-        // (Batch 16 sections 33 and 35) The one Call requests panel: every waiting request, both directions (Needs you's rows open it here).
-        requests={restricted ? [] : reqs.flatMap((r) => {
-          const c = working.find((x) => x.id === r.contractId);
-          return c ? [{ id: r.id, contractId: c.id, tester: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined }] : [];
-        })}
         elsewhere={otherCalls}
       />
       {!t.workEndedAt && t.status !== "stopped" && !restricted && (

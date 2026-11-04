@@ -922,7 +922,7 @@ describe("batch 20 section 24: a tester's rating updates the developer's pages l
     const other = await makeUser({ tester: true, name: "Gil" });
     const inv = await act(testId, "invite", dev.cookie, { testerIds: [other.user.id], seenAt: loaded, tab: "B" });
     expect(texts(inv)).toEqual([]);
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("{rateNeeds.map((r) => <p key={`rate-need-${r.id}`} className=\"text-sm\" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("rate.map((r) => <p key={`rate-need-${r.id}`} className=\"text-sm\" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>)"); // (§181) in its person's Needs you drop-down
     // A working tester who rates leaves: one stop line under Testers leaving.
     const w = await joined(testId, "Hal");
     await sact(w.sessionId, "written", w.tester.cookie, { answers: ["a", "b"] });

@@ -5,6 +5,7 @@ import { api, ApiError, errOf } from "./client";
 import type { Change } from "@/components/ChangesBox";
 import { mergeChanges, useLiveAppend } from "./live";
 import { reloadKeepingPlace } from "./keepPlace";
+import { useHoldOpen } from "@/components/HoldFold";
 
 /** (Batch 35 §41) How long a finished press's result line shows at least (the page's redraw may land sooner): the old reloads waited about as long. */
 export const DONE_HOLD_MS = 900;
@@ -122,6 +123,8 @@ export function usePress(seenAt: string, onStop?: (data: Record<string, unknown>
   });
   // (Batch 35 §40, §41) A press that went through: `finish(line)` redraws the page in place; until it has, the panel stays busy (its buttons greyed) and `done`.
   const fin = useFinished(opts.onFresh);
+  // (Owner, Nov 4, §181) A press under way, its stop box or its refusal keeps the Needs you drop-downs around it open (outside one: nothing).
+  useHoldOpen(busy || fin.done || changes != null || !!error);
   /** (Batch 35 §75) Another button opened its panel or dialog: the box (and refusal) under the earlier press goes. */
   const clear = () => {
     setChanges(null);

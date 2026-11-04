@@ -9,9 +9,11 @@ import { acceptChoices, describeRows } from "@/components/RequestRows";
 import { bookableNow, tooSoonNote } from "@/lib/callWindow";
 import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL } from "@/components/ScrollList";
+import { HoldFold, useHoldOpen } from "@/components/HoldFold";
 
 /** One waiting call request: `tester` (whose test session it is), `asker` (who asked: "you" when it's yours). */
-export type PanelReq = { id: string; contractId: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string };
+export type PanelReq = { id: string; contractId: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string;
+  /** (Owner, Nov 4, §181) when it was sent (ISO): the developer's box lists each person's requests oldest first */ at?: string };
 
 /**
  * (Owner, Oct 28, batch 16 sections 33 and 35) The one "Call requests" panel: every waiting request on this test in both directions, soonest first: the tester, the
@@ -20,13 +22,16 @@ export type PanelReq = { id: string; contractId: string; tester: string; /** (Ow
  * so they follow every rule of the panel (the stop-once box, the clash refusals, the paused / stopped / restricted refusals).
  */
 /** (Batch 26 section 10) The pressed button's name for its stop box or refusal ("Your Withdraw didn't go through"), from the press key. */
+/** (Owner, Nov 4, §181) A person's drop-down in the developer's Call requests box (Needs you's "2 call requests ↓" jumps to it). */
+export const callRequestsAnchor = (contractId: string) => `call-requests-person-${contractId}`;
 export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
 
-export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0, panelId }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
+export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0, panelId, byPerson = false }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
   /** (Owner, Nov 2, batch 35 §132) The server's call lead: a time less than it away can't be booked any more. */
   leadMinutes?: number;
   /** (Owner, Nov 3, batch 35 §152) The list's panel id ("call-requests-<test or session id>"): its dragged height is kept by it. */
-  panelId: string }) {
+  panelId: string;
+  /** (Owner, Nov 4, §181) The developer's Call requests box: one drop-down per person */ byPerson?: boolean }) {
   const { press, changes, error, busy, at, finish } = usePress(seenAt);
   // (Batch 35 §132) A time less than the lead away (24 hours on the live site) can't be booked any more: its Accept goes and the row says why. The clock moves on
   // while the page is open (checked every half minute).
@@ -69,41 +74,76 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
   };
   const first = (r: PanelReq) => Math.min(...r.rows.map((x) => new Date(x.startsAt).getTime()));
   const sorted = [...requests].sort((a, b) => first(a) - first(b));
+  const pressed = (r: PanelReq) => at === "a-" + r.id || at === "d-" + r.id || at === "w-" + r.id;
+  const row = (r: PanelReq) => (
+    <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 ${MARKABLE}`} data-request-row={r.mine ? "mine" : "theirs"}>
+      <span className="mr-auto text-slate-300">
+        {/* (§181) In a person's drop-down the name is on the drop-down, once. */}
+        {side === "developer" && !byPerson && <><b className="text-white"><NameLink text={r.tester} href={r.testerHref} /></b> · </>}
+        {describeRows(r.rows)} · {r.minutes} min · {r.rate} · asked by {r.mine ? "you" : r.asker}
+      </span>
+      {gone[r.id] ? (
+        <span className="text-xs font-medium text-amber-200" data-request-gone="">{gone[r.id]}</span>
+      ) : r.mine ? (
+        <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "withdraw" }, "w-" + r.id)}>Withdraw</button>
+      ) : (
+        <>
+          {bookable(r).map((x) => (
+            <button key={x.label} className="btn" disabled={busy} onClick={() => go(r, { action: "accept", ...(x.time ? { time: x.time } : {}) }, "a-" + r.id)}>{x.label}</button>
+          ))}
+          <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "decline" }, "d-" + r.id)}>Decline</button>
+        </>
+      )}
+      {!gone[r.id] && bookable(r).length === 0 && <span className="basis-full text-xs text-amber-200" data-too-soon="">{tooSoonNote(leadMinutes)}</span>}
+      {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}
+      {pressed(r) && <div className="basis-full"><ChangesBox side={side} changes={changes} error={error} press={requestPressName(at)} /></div>}
+    </li>
+  );
+  // (Owner, Nov 4, §181) The developer's box: one drop-down per person (closed; the green name, then "· N requests"), in the order of each person's oldest request;
+  // inside, all their requests oldest first, both kinds together (theirs to answer with Accept / Decline, and yours with Withdraw), in a panel of its own.
+  const sent = (r: PanelReq) => (r.at ? Date.parse(r.at) : first(r));
+  const people: { id: string; name: string; href?: string | null; reqs: PanelReq[] }[] = [];
+  if (byPerson) {
+    for (const r of [...requests].sort((a, b) => sent(a) - sent(b))) {
+      const p = people.find((x) => x.id === r.contractId);
+      if (p) p.reqs.push(r);
+      else people.push({ id: r.contractId, name: r.tester, href: r.testerHref, reqs: [r] });
+    }
+  }
   return (
     <section className="space-y-1.5" aria-label="Call requests" data-call-requests="" id="call-requests">
-      <h3 className="text-sm font-semibold text-white">Call requests</h3>
+      {!byPerson && <h3 className="text-sm font-semibold text-white">Call requests</h3>}
       {sorted.length === 0 ? (
         <p className="note">No call requests waiting.</p>
       ) : (
         // (Owner, Nov 3, batch 35 §152) In the draggable panel (§139): it scrolls inside, and the grip drags it shorter or taller.
         <ResizeBox id={panelId} label="Call requests" defaultMax={LIST_PANEL.requests}>
+        {byPerson ? (
+          <div className="space-y-2" data-call-requests-people="">
+            {people.map((p) => (
+              <HoldFold key={p.id} data={{ id: callRequestsAnchor(p.id), "data-call-requests-person": p.id }} toggleData={{ "data-call-requests-person-toggle": "" }}
+                summary={<span className="min-w-0 [overflow-wrap:anywhere]"><NameLink text={p.name} href={p.href} />{" "}<span className="whitespace-nowrap font-normal text-slate-400">· {p.reqs.length} request{p.reqs.length === 1 ? "" : "s"}</span></span>}>
+                {/* A press on one of their requests (under way, its stop box or refusal) keeps their drop-down open. */}
+                <HoldWhile on={p.reqs.some(pressed) && (busy || changes != null || !!error)} />
+                <ResizeBox id={`${panelId}-${p.id}`} label={`Call requests with ${p.name}`} defaultMax={LIST_PANEL.requests}>
+                  <ul className="space-y-2 text-sm" data-call-requests-list="">{p.reqs.map(row)}</ul>
+                </ResizeBox>
+              </HoldFold>
+            ))}
+          </div>
+        ) : (
         <ul className="space-y-2 text-sm" data-call-requests-list="">
-          {sorted.map((r) => (
-            <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 ${MARKABLE}`} data-request-row={r.mine ? "mine" : "theirs"}>
-              <span className="mr-auto text-slate-300">
-                {side === "developer" && <><b className="text-white"><NameLink text={r.tester} href={r.testerHref} /></b> · </>}
-                {describeRows(r.rows)} · {r.minutes} min · {r.rate} · asked by {r.mine ? "you" : r.asker}
-              </span>
-              {gone[r.id] ? (
-                <span className="text-xs font-medium text-amber-200" data-request-gone="">{gone[r.id]}</span>
-              ) : r.mine ? (
-                <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "withdraw" }, "w-" + r.id)}>Withdraw</button>
-              ) : (
-                <>
-                  {bookable(r).map((x) => (
-                    <button key={x.label} className="btn" disabled={busy} onClick={() => go(r, { action: "accept", ...(x.time ? { time: x.time } : {}) }, "a-" + r.id)}>{x.label}</button>
-                  ))}
-                  <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "decline" }, "d-" + r.id)}>Decline</button>
-                </>
-              )}
-              {!gone[r.id] && bookable(r).length === 0 && <span className="basis-full text-xs text-amber-200" data-too-soon="">{tooSoonNote(leadMinutes)}</span>}
-              {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}
-              {(at === "a-" + r.id || at === "d-" + r.id || at === "w-" + r.id) && <div className="basis-full"><ChangesBox side={side} changes={changes} error={error} press={requestPressName(at)} /></div>}
-            </li>
-          ))}
+          {sorted.map(row)}
         </ul>
+        )}
         </ResizeBox>
       )}
     </section>
   );
+}
+
+/** (§181) Holds the drop-down it sits in open while `on`. */
+function HoldWhile({ on }: { on: boolean }) {
+  useHoldOpen(on);
+  return null;
 }

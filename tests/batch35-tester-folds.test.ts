@@ -56,9 +56,10 @@ describe("each tester folds by their name", () => {
     expect(r).not.toContain('data-tester-profile=""'); // (owner, Nov 3, §166) no "See her profile": the name in the heading is the link
     const p = page();
     for (const [f, button] of [["needs-excerpt-${x.id}", "<ExcerptDecision"], ["needs-dispute-${d.id}", "<DisputeSide"], ["needs-part-${x.id}", "<PayBox"]]) {
-      const at = p.indexOf(`<Fold id={\`${f}\`}`);
+      // (§181) A part in Needs you is a HoldFold (its Pay box in one more drop-down inside it); its source ends where updateNode starts.
+      const at = f.startsWith("needs-part") ? p.indexOf(`"data-fold": \`${f}\``) : p.indexOf(`<Fold id={\`${f}\`}`);
       expect(at, f).toBeGreaterThan(0);
-      const close = p.indexOf("</Fold>", at);
+      const close = p.indexOf(f.startsWith("needs-part") ? "const updateNode" : "</Fold>", at);
       // The excerpt's and dispute's buttons follow their fold; the Pay box is inside the part's fold.
       if (f.startsWith("needs-part")) expect(p.slice(at, close)).toContain(button);
       else expect(p.indexOf(button, close)).toBeLessThan(p.indexOf("</div>", close) + 200);

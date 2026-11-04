@@ -240,7 +240,8 @@ export async function bankWaitingOnTest(devId: string, testId: string) {
     const what = (x: string) => (p.kind === "dispute" ? pieceWords.dispute(x) : p.kind === "chargeback" ? pieceWords.reversed(x) : x);
     // (§131) `full`: the line with the names uncut, its hover. (Owner, Nov 4, §175) The page lists these under each tester's name, so a line names its piece by the
     // tester's pronoun: "… a $15.50 payment for her live call (Oct 30), made while you were away. …" (this line is shown only here; §180: so it names no test).
-    return { id: p.id, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(theirs!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(theirsFull!), fmtDateTimeIn(p.actionBy!, tz)) };
+    // (Owner, Nov 4, §181) `at`: when it started waiting (Needs you puts the person whose oldest thing waits longest first).
+    return { id: p.id, at: p.createdAt, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(theirs!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(theirsFull!), fmtDateTimeIn(p.actionBy!, tz)) };
   });
 }
 

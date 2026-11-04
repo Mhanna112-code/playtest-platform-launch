@@ -73,8 +73,8 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
   it("the developer's test page and its panels: the tester's name is a NameLink in every heading and row", () => {
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain('data-tester-fold-name=""><NameLink text={name} href={personHref} /></h3>');
-    expect(page).toContain("<NameLink text={who} href={mine[0].c.tester.deletedAt ? null : `/app/testers/${mine[0].c.testerId}`} />"); // Needs you's person panel
-    expect(page).toContain("<NameLink text={displayName(c.tester)} href={c.tester.deletedAt ? null : `/app/testers/${c.testerId}`} /> · {x.kind"); // an update row
+    expect(page).toContain("<span data-needs-person-name=\"\"><NameLink text={p.name} href={p.href} /></span>"); // (§181) Needs you's person drop-down
+    expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink text={p.name} href={p.href} />"); // (§181) the Call requests box's person drop-down (an update is in its person's drop-down now)
     expect(page).not.toMatch(/<a href=\{`\/app\/testers\/[^`]*`\}[^>]*>\s*<Cut /);
     // (Owner, Nov 3) The "<name>: 1.0 ★ (1 rating)" line left the tester's section; the circle's card keeps the rating summary.
     expect(page).not.toContain("{ri?.avg");

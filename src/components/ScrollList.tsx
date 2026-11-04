@@ -13,7 +13,8 @@ export const PAY_LINES_SHOWN = 4;
 export const LIST_PANEL = {
   /** Call requests (was max-h-80) */ requests: "min(20rem, 60vh)",
   /** The developer's booked calls with one tester (was max-h-40, about 3 calls) */ booked: "min(10rem, 60vh)",
-  /** The developer's whole list of testers' calls (was max-h-[200vh], about 2 screens; the grip drags it up to that too) */ testersCalls: "200vh",
+  /** The developer's whole list of testers' calls (was max-h-[200vh], about 2 screens; (owner, Nov 4, §181) it showed too many testers: now about 3–4 tester
+   * cards at first, the rest scroll inside; the grip still drags it up to 2 screens) */ testersCalls: "min(28rem, 70vh)",
   /** The paused / restricted view's booked calls (was max-h-72) */ restricted: "min(18rem, 60vh)",
   /** The dashboards' calls (was ScrollList "lines", max-h-56) */ dashCalls: "min(14rem, 60vh)",
   /** The tester's booked calls on their session page (no box before: about 4 calls) */ testerBooked: "min(20rem, 60vh)",

@@ -7,7 +7,7 @@ import { db } from "@/lib/db";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { POST as excerptsPOST } from "@/app/api/excerpts/route";
 import { bankToConfirm } from "@/lib/server/confirm";
-import { json, req } from "./helpers";
+import { json, makeUser, req } from "./helpers";
 import { act, bookCall, joined, seen, sact, setup } from "./fixtures";
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
@@ -167,33 +167,46 @@ describe("§175 Confirm with your bank grouped by tester", () => {
 
   it.each(["active", "held"] as const)("one group per tester under their green name, oldest first (%s)", async (state) => {
     const { f, b, bea1, alex2, html } = await twoTesters(state);
-    const where = state === "held" ? html.indexOf('data-restricted-bank=""') : html.indexOf('id="needs-you"');
+    const where = html.indexOf('id="needs-you"');
     expect(where).toBeGreaterThan(0);
+    // (Owner, Nov 4, §181) Each person is ONE drop-down holding everything in Needs you about them; their charges sit in it under "Confirm with your bank".
+    const alexPerson = html.indexOf(`data-needs-person="${f.sessionId}"`), bePerson = html.indexOf(`data-needs-person="${b.sessionId}"`);
     const alexGroup = html.indexOf(`data-bank-group="${f.sessionId}"`);
     const beaGroup = html.indexOf(`data-bank-group="${b.sessionId}"`);
-    expect(alexGroup).toBeGreaterThan(where);
-    // Alex's oldest charge is the oldest of all: Alex's group first, then Bea's.
-    expect(beaGroup).toBeGreaterThan(alexGroup);
+    expect(alexPerson).toBeGreaterThan(where);
+    expect(alexGroup).toBeGreaterThan(alexPerson);
+    // Alex's oldest thing is the oldest of all: Alex's drop-down first, then Bea's.
+    expect(bePerson).toBeGreaterThan(alexGroup);
+    expect(beaGroup).toBeGreaterThan(bePerson);
     expect(html.match(/data-bank-group="/g)).toHaveLength(2);
-    // Each heading is the tester's green profile link.
-    expect(html.slice(alexGroup, beaGroup)).toMatch(new RegExp(`<a href="/app/testers/${f.tester.user.id}"[^>]*data-name-link="person"`));
-    expect(html.slice(beaGroup)).toMatch(new RegExp(`<a href="/app/testers/${b.tester.user.id}"[^>]*data-name-link="person"`));
-    // Alex's two charges inside Alex's group, oldest first; Bea's in hers.
+    expect(html.match(/data-needs-person="/g)).toHaveLength(2);
+    if (state === "held") {
+      expect(html.indexOf('data-restricted-bank=""')).toBeGreaterThan(alexPerson);
+      expect(html.match(/data-restricted-bank=""/g)).toHaveLength(2);
+    }
+    // Each summary is the tester's green profile link.
+    expect(html.slice(alexPerson, alexGroup)).toMatch(new RegExp(`<a href="/app/testers/${f.tester.user.id}"[^>]*data-name-link="person"`));
+    expect(html.slice(bePerson, beaGroup)).toMatch(new RegExp(`<a href="/app/testers/${b.tester.user.id}"[^>]*data-name-link="person"`));
+    // Alex's two charges inside Alex's drop-down, oldest first; Bea's in hers.
     const p1 = html.indexOf(`data-bank-waiting="${f.payment.id}"`), p2 = html.indexOf(`data-bank-waiting="${alex2.id}"`), p3 = html.indexOf(`data-bank-waiting="${bea1.id}"`);
     expect(p1).toBeGreaterThan(alexGroup);
     expect(p2).toBeGreaterThan(p1);
-    expect(beaGroup).toBeGreaterThan(p2);
+    expect(bePerson).toBeGreaterThan(p2);
     expect(p3).toBeGreaterThan(beaGroup);
     // The lines name the piece by the pronoun, not the name the heading carries.
     expect(html).toContain("Your bank wants you to confirm a $7.00 payment for her written answers, made while you were away.");
     expect(html).toContain("Your bank wants you to confirm a $6.00 payment for their written answers, made while you were away.");
-    // (Owner, Nov 4, §180) Each group is a drop-down, closed at first: the summary is the green name, then the count and the total.
-    const alexTag = html.slice(alexGroup - 200, alexGroup + 200);
-    expect(alexTag).toMatch(/<details class="[^"]*" data-bank-group="/);
-    expect(alexTag).not.toMatch(/<details[^>]*\sopen=""[^>]*data-bank-group=/);
-    expect(html.match(/data-bank-group-toggle=""/g)).toHaveLength(2);
-    expect(html.slice(alexGroup, beaGroup)).toMatch(/<summary[^>]*data-bank-group-toggle=""[^>]*>.*data-name-link="person".*· 2 charges waiting · \$14\.00<\/span>/);
-    expect(html.slice(beaGroup)).toContain("· 1 charge waiting · $7.00</span>");
+    // (§180, §181) Each drop-down is closed at first; the summary is only the green name, then "· N things" (Alex: two charges, the dispute, the excerpt request;
+    // Bea: her written answers to pay and her charge, or only the charge while held).
+    const alexTag = html.slice(alexPerson - 200, alexPerson + 100);
+    expect(alexTag).toMatch(/<details class="[^"]*" data-hold-fold="" data-needs-person="/);
+    expect(alexTag).not.toMatch(/<details[^>]*\sopen=""[^>]*data-needs-person=/);
+    expect(html.match(/data-needs-person-toggle=""/g)).toHaveLength(2);
+    expect(html.slice(alexPerson, alexGroup)).toMatch(/<summary[^>]*data-needs-person-toggle=""[^>]*>.*data-name-link="person".*· 4 things<\/span><\/span><\/summary>/);
+    expect(html.slice(bePerson, beaGroup)).toContain(state === "held" ? "· 1 thing</span></span></summary>" : "· 2 things</span></span></summary>");
+    // A sub-heading over each kind only when the person has more than one kind.
+    expect(html.slice(alexPerson, bePerson)).toContain('data-needs-kind="bank">Confirm with your bank</h3>');
+    expect(html.slice(bePerson).includes('data-needs-kind="bank"')).toBe(state === "active");
     // (§180) The lines name no test on its own page (no “title”).
     for (const id of [f.payment.id, alex2.id, bea1.id]) {
       const box = html.slice(html.indexOf(`data-bank-waiting="${id}"`));
@@ -204,5 +217,67 @@ describe("§175 Confirm with your bank grouped by tester", () => {
       expect(html).toContain(`href="#bank-${bea1.id}"`);
       expect(html).toContain(`data-bank-up="${bea1.id}"`);
     }
+  });
+});
+
+// (Owner, Nov 4, §181) "Is it possible in Needs you to have all notifications about the same person under each name" ("expandable"; summary: the name and
+// "· N things"; "the parts should have big drop down with their name then part and pay/pay more as own dropdowns").
+describe("§181 Needs you: one drop-down per person", () => {
+  it("holds everything about each person, oldest first; each part and its Pay are drop-downs of their own; all closed at first", async () => {
+    const f = await fixture("active"); // Alex: a dispute, an excerpt request, a charge waiting for the bank (his written answers are paid)
+    const b = await joined(f.testId, "Bea Stone", "she");
+    await sact(b.sessionId, "written", b.tester.cookie, { answers: ["Her answer", "Her other answer"] });
+    const bSub = await db.submission.findFirstOrThrow({ where: { contractId: b.sessionId } });
+    const ask = await db.callRequest.create({ data: { testId: f.testId, contractId: b.sessionId, fromSide: "tester", startsAt: new Date(Date.now() + 3 * 86_400_000), minutes: 30, times: [] } });
+    const cara = await makeUser({ tester: true, name: "Cara Diaz", pronoun: "she" });
+    const app = await db.application.create({ data: { testId: f.testId, testerId: cara.user.id, note: "I would like to try it", listing: {} } });
+    const { default: Page } = await import("@/app/app/tests/[id]/page");
+    const html = renderToStaticMarkup(await serverTree(await Page({ params: Promise.resolve({ id: f.testId }), searchParams: Promise.resolve({}) })));
+    // The person whose oldest waiting thing is oldest first; an applicant who hasn't joined is a person of their own (keyed by the application).
+    expect([...html.matchAll(/data-needs-person="([^"]+)"/g)].map((m) => m[1])).toEqual([f.sessionId, b.sessionId, app.id]);
+    const at = (k: string) => html.indexOf(`data-needs-person="${k}"`);
+    const alex = html.slice(at(f.sessionId), at(b.sessionId)), bea = html.slice(at(b.sessionId), at(app.id)), cara1 = html.slice(at(app.id));
+    // The count on Needs you is still every thing; each summary is the green name and "· N things" only.
+    expect(html).toMatch(/<h2 class="inline">Needs you<\/h2> <span class="text-sm font-normal text-slate-400">6<\/span>/);
+    expect(alex).toMatch(/data-name-link="person".*· 3 things<\/span><\/span><\/summary>/);
+    expect(bea).toMatch(/data-name-link="person".*· 2 things<\/span><\/span><\/summary>/);
+    expect(cara1).toMatch(/data-name-link="person".*· 1 thing<\/span><\/span><\/summary>/);
+    expect(html).not.toContain("parts to pay");
+    expect(html).not.toContain("charges waiting");
+    // Everything about Alex in his: the charge, the dispute (Add your side), the excerpt request; sub-headings since he has more than one kind.
+    expect(alex).toContain(`data-bank-waiting="${f.payment.id}"`);
+    expect(alex).toContain(`id="item-dispute-${f.dispute.id}"`);
+    expect(alex).toContain(`id="excerpt-${f.excerpt.id}"`);
+    for (const h of ['data-needs-kind="bank">Confirm with your bank</h3>', 'data-needs-kind="disputes">Disputes</h3>', 'data-needs-kind="excerpts">Excerpt requests</h3>']) expect(alex).toContain(h);
+    // Bea: her written answers (a drop-down named plainly, the Pay box its own drop-down inside it), then her call request.
+    const part = bea.indexOf(`id="piece-${bSub.id}"`), fold = bea.indexOf(`data-fold="needs-part-${bSub.id}"`), pay = bea.indexOf(`data-fold="needs-pay-${bSub.id}"`), req1 = bea.indexOf(`data-needs-requests="${b.sessionId}"`);
+    expect(part).toBeGreaterThan(0);
+    expect(fold).toBeGreaterThan(part);
+    expect(pay).toBeGreaterThan(fold);
+    expect(req1).toBeGreaterThan(pay);
+    expect(bea).toContain(">Written answers</summary>");
+    expect(bea).toContain(">Pay</summary>");
+    expect(bea).toContain('data-needs-kind="pay">Pay</h3>');
+    expect(bea).toContain('data-needs-kind="requests">Call requests</h3>');
+    // (§181) Her call request: one line in Needs you ("1 call request ↓", no buttons) jumping to her drop-down in the Call requests box.
+    expect(bea).toContain(`href="#call-requests-person-${b.sessionId}">1 call request ↓</a>`);
+    // Cara: her application with Accept / Decline, no sub-heading (one kind).
+    expect(cara1).toContain(`id="item-app-${app.id}"`);
+    expect(cara1).toContain("Accept</button>");
+    expect(cara1).not.toContain("data-needs-kind=");
+    // Every drop-down (person, part, Pay; the Call requests box's person) is closed at first, and none remembers its state; the Call requests box itself is open.
+    const box = html.indexOf('data-call-requests-box=""');
+    expect(box).toBeGreaterThan(html.indexOf('id="needs-you"'));
+    const holds = [...html.matchAll(/<details[^>]*data-hold-fold=""[^>]*>/g)].map((m) => m[0]);
+    expect(holds.length).toBe(7);
+    for (const d of holds.filter((x) => !x.includes("data-call-requests-box"))) expect(d).not.toMatch(/\sopen=""/);
+    expect(holds.find((x) => x.includes("data-call-requests-box"))).toMatch(/\sopen=""/);
+    // The box: one drop-down per person ("· 1 request"), her request inside it with Accept / Decline; no Needs you row with buttons.
+    const inBox = html.slice(html.indexOf(`id="call-requests-person-${b.sessionId}"`));
+    expect(inBox).toMatch(/data-name-link="person".*· 1 request<\/span><\/span><\/summary>/);
+    expect(inBox.indexOf(`id="req-${ask.id}"`)).toBeGreaterThan(0);
+    expect(inBox).toContain("Decline</button>");
+    expect(html).not.toContain(`id="needs-req-${ask.id}"`);
+    expect(html.match(/data-needs-person-toggle=""/g)).toHaveLength(3);
   });
 });

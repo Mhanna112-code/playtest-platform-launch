@@ -2876,3 +2876,80 @@ away. C"), and named the test the page is already on ("… for her live call on 
   `data-bank-group-count`; `data-bank-waiting`, `data-restricted-bank`, `data-bank-up` and the `bank-<id>` anchors unchanged.
 - **Tests.** `batch35-restricted-needs-you` (each group a closed `<details>` with the toggle; the summary "· 2 charges waiting · $14.00" after the green name;
   the lines name no test). Updated for the line without the test: `batch17-bank-check`, `batch25`, `payment-piece-names`.
+
+## §181 Needs you: one drop-down per person, everything about them inside (owner, Nov 4; builds on §180)
+
+Owner: "Is it possible in Needs you to have all notifications about the same person under each name" — "expandable"; the summary shows only the name and the
+count; then "the parts should have big drop down with their name then part and pay/pay more as own dropdowns".
+
+- **Before.** On the developer's test page Needs you was a run of separate sections: §180's per-tester "Confirm with your bank" drop-downs ("· 2 charges waiting ·
+  $20.50"), then Applications, the call requests, the Rate lines, the excerpt requests, the disputes (Add your side), one open "N parts to pay" drop-down per tester
+  (each part an open fold with "Pay" and its box under it), then the updates sent after paying (each its own row with the tester's name). The restricted view
+  (hold, suspension, the team's pause) had four sections: "Your bank wants you to confirm" (§180's drop-downs), Booked calls, Excerpts, "Disputes: add your side".
+- **After.** Needs you (both views) is one drop-down per person, closed at first. The summary: the person's name as the green profile link (`NameLink`: clicking
+  it opens the profile; clicking elsewhere on the row, Enter or Space opens or closes), then "· N things" (nothing else: no amounts, no per-kind counts). Inside,
+  everything in Needs you about that person, in this order, each kind under a small sub-heading only when the person has more than one kind:
+  1. **Pay**: each part to pay is a drop-down of its own (closed), named plainly: "Written answers", "Recording", "Live call on Tue, Oct 27, 3:25 PM". Inside it,
+     what the part held before (its "Sent / Updated <date> · In her contract" line, which was the old summary; the Pay-closes note; its payments; the answers or
+     recordings panel with the "Added · date" lines), then **Pay** as one more drop-down (closed) holding the Pay box. An update sent after paying is its part's
+     drop-down too ("Updated <date>", the update line, payments, the answers) with **Pay more** as its own drop-down.
+  2. **Confirm with your bank**: the person's waiting charges, each its Confirm with your bank box, oldest first (as §175).
+  3. **Disputes**: each dispute waiting for your side with Add your side (as before).
+  4. **Call requests** (active view): one line, "2 call requests ↓", jumping to the person's drop-down in the Call requests box (below). Restricted view:
+     **Booked calls**, the person's booked calls with Cancel.
+  5. **Application** / **Ask to rejoin**: the request with its Details fold and Accept / Decline. An applicant who hasn't joined is a person of their own (their
+     own drop-down, keyed by the application); an ask to rejoin from someone with a contract on this test goes in that person's drop-down.
+  6. **Excerpt requests**: each request with Allow / Deny (both views).
+  7. **Rate**: "Rate <name> · N days left", linking to their Rate box (active view).
+  Nothing in Needs you is about no one, so there is no plain section below the people.
+- **Order.** The person whose oldest waiting thing waits longest comes first (a part: when it was sent / the call took place; an update: when it was sent; a
+  charge, dispute, request, application, excerpt request or booked call: when it was made; Rate: when the window opened). Inside a person, each kind keeps its
+  order (parts by when sent, updates after them; charges oldest first; and so on).
+- **When a drop-down opens by itself (person, part, Pay / Pay more).** Exactly as §180, all the way down: a link to anything inside it opens it before the
+  browser scrolls (on load, on a hash change, and on a click on an in-page link): `#bank-<id>` (the bell, the dashboard, Payments, the tester row's "Confirm with
+  your bank in Needs you ↑"), `#piece-<id>` / `#call-<id>` (the bell, the dashboard's Needs you rows, a tester row's "Pay it in Needs you ↑": these also open the
+  part and its Pay drop-down, as §139), `#update-<id>` (the part and its Pay more), `#item-dispute-<id>`, `#item-app-<id>` (the dashboard, the
+  Invite box's "had applied" link), `#excerpt-<id>` (the bell); markJump's `jumpTo` also opens every fold above its target, as before. A link to the whole of Needs
+  you (`#needs-you`) opens none of them. No drop-down closes while anything inside has a bank box open, a press under way, a stop box or a refusal showing:
+  every press (`usePress`) and a Pay box's own bank check (`PayBox`) now hold the drop-downs around them, as BankWaiting did for §180; a hold opens them, and
+  every drop-down around them. Not remembered across reloads (owner: no extras).
+- **Not changed.** Every button's behaviour: stop-once, the bank boxes, notices, the over-$200 tick, drafts. One layout effect: Accept / Decline on one
+  application no longer greys the other applicants' buttons while it is pressed (each application is now in its own drop-down, each with its own press). The
+  count on Needs you (`needsCount`, and the restricted view's) is the same as before: it still counts each call request to answer, while a person's "N things"
+  counts their call requests line as one thing (owner), so with two or more requests from one person the badge is higher than the sum of the "N things".
+- **Call requests: a box of its own (owner).** Call requests are not answered inside Needs you any more. The developer's test page has its own **Call requests**
+  box right under Needs you (`CallRequestsBox`, open at first, with the count), replacing both places that listed them: the Live session's "Call requests" list
+  (`CallRequestsPanel` inside `DevCallPanel`) and each tester card's "Waiting" list in the Live session ("Nina Park requested Mon, Nov 9, 1:00 PM · 30 min ·
+  Contract $31/h", "You requested …", links up to the list). Its content is the same draggable panel (`call-requests-<testId>`, its height rule and memory as
+  before), holding one drop-down per person (closed; the green name, then "· 3 requests"), in the order of each person's oldest request (when it was sent); inside,
+  their requests oldest first, both kinds together: theirs to answer (Accept, an Accept per time for a "one of" request, Decline) and the ones waiting on them,
+  yours included ("asked by you", Withdraw), in a panel of its own (`call-requests-<testId>-<contractId>`) that scrolls when long. The presses, their stop box and
+  refusals are unchanged (one press state for the whole box, as before). A drop-down opens by itself on a link to a request in it (`#req-<id>`: the dashboard's and
+  the bell's links, a refusal's "already requested" link) or to it, and stays open while a press on one of its requests, its stop box or refusal shows. In Needs
+  you, a person with requests to answer has ONE line, "2 call requests ↓" (or "1 call request ↓"), jumping (`jumpTo`) to their drop-down in the box: it opens the
+  box and the drop-down before it scrolls (inside the panels too). The Live session keeps the request form and the booked calls; a tester card there shows only
+  their calls ("No calls" when ticked with none). The tester's own session page is unchanged (its Call requests list, one list, no people).
+- **The Live session's list of testers' calls is shorter at first (owner).** The panel `testers-calls-<testId>` (DevCallPanel) started at 200vh (about two screens,
+  so many testers at once); it now starts at `min(28rem, 70vh)` (`LIST_PANEL.testersCalls`), about 3–4 tester cards, the rest scrolling inside. The grip still
+  drags it up to two screens (`TESTERS_CALLS_TALLEST`), and a height already dragged is kept as before (by the panel's id).
+- **Hooks.** New: `data-needs-person="<contractId, or the application id for an applicant who hasn't joined>"` on each person's `<details>` (it used to be on the
+  parts drop-down, with the name), `data-needs-person-toggle` on its summary, `data-needs-person-name`, `data-needs-person-count`, `data-needs-kinds="<kind>"` on
+  each kind's block and `data-needs-kind` on its sub-heading, `data-hold-fold` on every such drop-down, `data-part-when` on a part's line, `data-fold="needs-pay-<id>"`
+  / `"update-pay-<id>"` on the Pay / Pay more drop-downs (`needs-part-<id>` / `update-part-<id>` kept on the parts), `data-needs-requests="<contractId>"` on the
+  call requests line; in the box `data-call-requests-box`, `data-call-requests-count`, `data-call-requests-people`, `data-call-requests-person="<contractId>"`
+  (id `call-requests-person-<contractId>`) and `data-call-requests-person-toggle`. `data-bank-group="<contractId>"` is now on the person's charges block (no longer
+  a drop-down of its own; §180's `data-bank-group-toggle` / `-name` / `-count` went with it); `data-restricted-bank`, `-disputes`, `-excerpts`, `-calls` are on
+  each person's block of that kind. The anchors `bank-`, `piece-`, `call-`, `update-`, `item-dispute-`, `item-app-`, `excerpt-`, `req-`, `call-requests` are
+  unchanged; `needs-req-<id>` (Needs you's old request rows) is gone (nothing linked to it). The restricted view's `#calls` lands on the list of people.
+- **Code.** `src/components/HoldFold.tsx` (§180's `BankGroup` generalised: `HoldFold`, `useFoldHold` / `useBankGroupHold`, `useHoldOpen`, `defaultOpen`; holds
+  pass up to every drop-down around), `src/app/app/tests/[id]/page.tsx` (`needsPeople`, `bankKind` / `disputeKind` / `excerptKind`, `partNode`, `updateNode`,
+  `needsEntries`, `callRequests`), `CallRequestsBox.tsx` (new), `components/CallRequestsPanel.tsx` (`byPerson`, `callRequestsAnchor`, `at`), `NeedsRequests.tsx`
+  (now the one line), `DevCallPanel.tsx` (no requests list, no "Waiting"), `components/ScrollList.tsx` (`testersCalls`), `Applications.tsx` (`embedded`),
+  `RestrictedCalls.tsx` (`person`), `PayBox.tsx` and `lib/usePress.ts` (the hold), `lib/server/confirm.ts` and `lib/server/excerpts.ts` (`at`). No migration.
+- **Tests.** `tests/batch35-restricted-needs-you.test.ts`: §175 / §180's test now checks the charges inside each person's drop-down (closed, the green name then
+  "· 4 things" / "· 2 things", the sub-heading only with more than one kind; held: "· 1 thing"); new §181 test (Alex: charge, dispute, excerpt request; Bea: her
+  written answers to pay and a call request; Cara: an application, not joined): three drop-downs in oldest-first order, the badge still 6, each thing in its
+  person's drop-down, the part and its Pay drop-down named plainly, Bea's "1 call request ↓" line, the Call requests box open with Bea's closed drop-down
+  ("· 1 request", Accept / Decline), every other drop-down closed. Updated source checks: `batch35-sent-panels`, `batch35-sent-locked`, `batch35-tester-folds`,
+  `batch20` (the Rate line), `batch17-bank-check`, `batch35-list-panels`, `batch35-green-names`, `batch35-name-links`, `batch16-calls-live`,
+  `batch35-answering-press`.
