@@ -10,6 +10,7 @@ import { bookableNow, tooSoonNote } from "@/lib/callWindow";
 import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL } from "@/components/ScrollList";
 import { HoldFold, useHoldOpen } from "@/components/HoldFold";
+import { FIND_SEARCH_MAX } from "@/lib/findSearch";
 
 /** One waiting call request: `tester` (whose test session it is), `asker` (who asked: "you" when it's yours). */
 export type PanelReq = { id: string; contractId: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string;
@@ -158,7 +159,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
         <div className="space-y-2" ref={people$}>
         {/* (Owner, Nov 4, §185) The name search above the list: as you type, only the people whose name matches (case-insensitive). */}
         {byPerson && search && (
-          <input type="search" className="input w-full max-w-xs" placeholder="Search by name" aria-label={`Search ${title.toLowerCase()} by name`} data-request-search={search}
+          <input type="search" className="input w-full max-w-xs" placeholder="Search by name" maxLength={FIND_SEARCH_MAX} aria-label={`Search ${title.toLowerCase()} by name`} data-request-search={search}
             value={query} onChange={(e) => setQuery(e.target.value)} />
         )}
         {none && <p className="note" data-request-search-empty="">{noMatchLine(query)}</p>}
