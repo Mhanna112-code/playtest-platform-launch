@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type Stripe from "stripe";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
+import { fmtDateTimeIn } from "@/lib/format";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
 import { POST as owedPOST } from "@/app/api/payments/owed/route";
@@ -279,7 +280,7 @@ describe("§159 rule 4: Charge / Let it go — a payment on that part and the te
       const first = await choose(w, "charge", { seenAt: loaded, loadedAt: loaded });
       if (off) { expect(first.status, JSON.stringify(first.body)).toBe(200); continue; }
       expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-      expect(texts(first)).toEqual(["Nora Lane paid $15.00 for your live call"]);
+      expect(texts(first)).toEqual([`Nora Lane paid $15.00 for your live call on ${fmtDateTimeIn(slot.startsAt, "UTC")}`]); // (§177) which call
     }
   });
 

@@ -1,12 +1,10 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
 import { fmtTimeIn, money } from "@/lib/format";
-import { renderTimes } from "@/lib/tz";
-import { dateZone } from "./dateZone";
 import { NO_CHECK_WAITING, OVER_PAY_TICK_LINE, PAY_TICK_CENTS } from "@/lib/rules";
 import * as T from "@/lib/confirmAllText";
 import { HttpError } from "./http";
-import { notify } from "./notify";
+import { notify, renderFor } from "./notify";
 import { charge, stripeOn } from "./stripe";
 import { serverKey } from "./pressKeys";
 import { stripeDescription } from "./paymentRows";
@@ -32,8 +30,8 @@ export const inAll = (p: { kind: string; status: string; contractId: string | nu
 export const openAll = (devId: string) => db.payment.findFirst({ where: { developerId: devId, kind: OWED_KIND, note: ALL_NOTE, status: { in: OWED_ACTIVE } }, orderBy: { createdAt: "desc" } });
 
 const sum = (rows: { amountCents: number }[]) => rows.reduce((a, p) => a + p.amountCents, 0);
-// (Owner, Nov 4, §177) A call's date is a time token in the piece's name: written here, in this developer's zone ("Ana Silva's live call on “Harbor Run” (Oct 27)").
-const nameOf = async (p: Payment) => renderTimes(`${await (await import("./holds")).owedItemName(p)} ${money(p.amountCents)}`, dateZone());
+// (Owner, Nov 4, §177) A call's date is a time token in the piece's name: written here, in the developer's saved zone ("Ana Silva's live call on “Harbor Run” (Oct 27)").
+const nameOf = async (p: Payment) => renderFor(p.developerId, `${await (await import("./holds")).owedItemName(p)} ${money(p.amountCents)}`);
 
 export type ConfirmAllState = { ids: string[]; totalCents: number; leftOut: string | null; open: { id: string; cents: number; n: number } | null };
 

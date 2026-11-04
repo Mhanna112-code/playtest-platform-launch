@@ -273,7 +273,8 @@ export async function deferredForBox(devId: string) {
   // (Nov 2, payments proof: bug seen on video) A charge covered by a combined payment waiting for the bank is listed in that payment's "Confirm with your bank" item,
   // not here too.
   const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", coveredById: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
-  return Promise.all(rows.map(async (p) => ({ id: p.id, amountCents: p.amountCents, what: await deferredWhat(p), full: await deferredWhat(p, true), href: p.contractId ? `/app/tests/${(await db.contract.findUniqueOrThrow({ where: { id: p.contractId }, select: { testId: true } })).testId}` : "/app/payments" })));
+  // (Owner, Nov 4, §177) An automatic call charge names its call's date as a time token: written in the developer's zone for the page.
+  return Promise.all(rows.map(async (p) => ({ id: p.id, amountCents: p.amountCents, what: await renderFor(devId, await deferredWhat(p)), full: await renderFor(devId, await deferredWhat(p, true)), href: p.contractId ? `/app/tests/${(await db.contract.findUniqueOrThrow({ where: { id: p.contractId }, select: { testId: true } })).testId}` : "/app/payments" })));
 }
 
 /**

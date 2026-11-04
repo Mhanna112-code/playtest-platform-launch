@@ -2796,3 +2796,56 @@ The owner also saw no blue notice for the dispute, and the box stay open after C
   answers, "Confirm with your bank") was open and peeking every few seconds for over 20 minutes, and the test page took 12 to 16 s to draw.
 - **Tests:** `tests/batch35-bank-box-call.test.ts` (the call's dispute is a peek line and reaches the notice; Cancel answers at once and cancels at Stripe; the
   waiting line names its payment; the box never greys itself for its own check, another payment's wait still does; every Pay more on the page gets the id).
+
+## §177 Change lines name which part and which test (owner, Nov 4)
+
+Seen in the developer's open bank window (blue notice): "Nina Park disputed the pay for her live call." and "The team decided Nina Park's dispute: raised the pay
+to $20.50 ($5.00 more)". Nina has three live calls on that test and parts on two tests: the owner couldn't tell which call, which part or which test.
+
+- **Rule.** Every change line the developer or tester reads names WHICH part: a tester has one written answers and one recording on a test (they keep their plain
+  name), but many calls, so a call is always named with its date and time, as the call lines already were (`live call on Tue, Oct 27, 8:00 AM`; stored lines in the
+  developer's saved zone, else the writer's request zone). A team decision names the part it decided. Shown anywhere but the test's own page, a line also names
+  WHICH test: `On “<title, cut at 12>”: …` (rules.ts `onTestLine`; a leading You / Your / The / A lowercased; a line already naming its test, "On Sky Lab: …" or
+  "Payment went through on Sky Lab: …", is kept). Bank windows send the page they are on (`page`, bankConfirm.ts `peekBank`), and so does "Confirm with your
+  bank" (`BankWaiting`); a request without it counts as the test's own page. Bells and emails named the test already and now name the part too. Wording only:
+  nothing changes what stops what. Stored rows keep their old text; new events get the new wording (the admin's "Your actions" and test history read the
+  decision's line up to its first ": ", so a call's "8:00 AM" doesn't break them).
+- **Also fixed (owner, the dashboard, same day).** "Charges made while you were away $5.00 (the team's dispute decision on Nina Park's live call on
+  “excerptexcer…” (⟦t:2026-10-27T19:04:52.652Z:date⟧) $5.00)": a call's day is a time token in a payment's piece name (`paymentPiece`), and a few page paths
+  printed it raw. Now written in the developer's saved zone where they leave the server: `owedOnce.coveredNames` (the dashboard's "Your bank wants you to
+  confirm" rows, Payments' Confirm items, Pay what you owe's chargeback "covers"), `deferredForBox` (Payments' waiting charges: an automatic call charge's day),
+  Confirm all's item names (`nameOf`: its stop lines and "leaves out" line), and the "Booked: you both picked …" message a request press returns. Bells and
+  emails already wrote them (notify / renderFor); test events are written by the live box and stop boxes (`asLines` / `devLine`) and the admin pages
+  (`renderDateText`).
+
+| Where | Before | After |
+| --- | --- | --- |
+| Test event: dispute | Nina Park disputed the pay for her live call | Nina Park disputed the pay for her live call on Tue, Oct 27, 8:00 AM |
+| Test event: team decision | The team decided Nina Park's dispute: raised the pay to $20.50 ($5.00 more) | The team decided Nina Park's dispute on her live call on Tue, Oct 27, 8:00 AM: raised the pay to $20.50 ($5.00 more) (written answers: "… dispute on her written answers: …") |
+| Test event: tester's Charge on a call (also while a hold waits, and when it goes through later) | Ana Silva charged $15.00 for her call | Ana Silva charged $15.00 for her call on Tue, Oct 27, 8:00 AM |
+| Test event: Let it go on a call | … let her call on (tester's zone) go: nothing charged | the same, in the developer's zone |
+| Test events: automatic call charge | Ana Silva's call was charged automatically: $15.00 [, waiting for your bank to confirm it / , charged when your account is clear / , charged when the team lifts the pause on this test]; Ana Silva's call is waiting to be charged once your tests resume: $15.00; The automatic charge for Ana Silva's call ($15.00) was declined[: it was added to what you owe] | Ana Silva's call on Tue, Oct 27, 8:00 AM was charged automatically: … (each variant); … is waiting to be charged …; The automatic charge for Ana Silva's call on Tue, Oct 27, 8:00 AM ($15.00) was declined… ("closed with nothing to pay" had the time already: now the developer's zone, not UTC) |
+| Test events: the developer's Pay / Pay more on a call | You paid Ana Silva $15.00 for the live call / … extra for the live call | … for the live call on Tue, Oct 27, 8:00 AM |
+| Test events: chargebacks | You repaid the bank reversal of your $10.00 payment; The team resolved the bank reversal of your $10.00 payment; Your bank's chargeback of $10.00 was reversed: $25.00 … | … of your $10.00 payment for Ana Silva's written answers on “Harbor Run”; Your bank's chargeback of $10.00 for Ana Silva's written answers on “Harbor Run” was reversed: … (pieceName, as the chargeback's opening line) |
+| Developer's payment lines (any test) | Payment went through on Harbor Run: $15.00 to Ana Silva for the live call; … for the dispute decision | … for the live call on Tue, Oct 27, 8:00 AM; … for the dispute decision on the live call on Tue, Oct 27, 8:00 AM (the same for "Payment failed on …") |
+| Own other-tab lines | You paid Ana Silva $15.00 for the live call in another tab; You paid Ana Silva $5.00 more for her live call …; You confirmed Ana Silva's $15.00 charge for her live call with your bank …; You rejected Ana Silva's live call …; (tester) You charged Nora Lane $15.00 for your live call …; You opened a dispute …; You added your side to a dispute … | each call "live call on Tue, Oct 27, 8:00 AM"; You disputed the pay for your live call on … / your written answers in another tab; You added your side to Nina Park's dispute about her live call on … in another tab |
+| Tester's lines (session page) | Nora Lane paid $15.00 for your live call; Nora Lane paid you $5.00 more for your live call; Nora Lane paid $5.00 for your dispute; Nora Lane's payment for your dispute ($5) is delayed | … for your live call on Tue, Oct 27, 8:00 AM; … for your dispute about the recording / the live call on … (lines about another test keep "on <title>") |
+| Bank window, Confirm with your bank press, away from the test page | Nina Park disputed the pay for her live call | On “Harbor Run”: Nina Park disputed the pay for her live call on Tue, Oct 27, 8:00 AM (on the test page: no prefix) |
+| Confirm all window | Ana Silva charged $5.00 meanwhile: it isn't in this payment; …; The team's dispute decision added $5.00 meanwhile: … | Ana Silva charged $5.00 for her written answers on “Harbor Run” meanwhile: …; Ana Silva charged $15.00 for her live call on “Harbor Run” (Tue, Oct 27, 8:00 AM) meanwhile: …; The team's dispute decision on Ana Silva's recording on “Harbor Run” added $5.00 meanwhile: …; The automatic charge for Ana Silva's live call on “Harbor Run” (…) added $15.00 meanwhile (it read "Ana Silva charged"); Your Pay more for … added $5.00 meanwhile |
+| Pay what you owe window | Ana Silva charged $10.00 meanwhile: it's charged right after this payment goes through | the same heads as Confirm all's |
+| Pay what you owe / Payments owed lines | Ana Silva's live call on “Harbor Run” $8.00 … | Ana Silva's live call on “Harbor Run” (Oct 27) $8.00 … (pieceName's day, as every other payment line names a call) |
+| Bells / emails: disputes | Ana Silva disputed a payment on “Harbor Run”; Your dispute on “Harbor Run” was decided; A dispute on “Harbor Run” was decided | Ana Silva disputed the pay for her live call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST); Your dispute about your live call on “Harbor Run” (…) was decided; Ana Silva's dispute about her written answers on “Harbor Run” was decided |
+| Bells: tester payments | Nora Lane paid you $15.00 for your live call on “Harbor Run”; … paid you $5.00 more for your live call on “Harbor Run”; Nora Lane paid $10.00 for your written answers (a delayed payment arriving); Nora Lane's payment for your written answers ($10) is delayed.; Payment for your call on “Harbor Run” may be delayed | … your live call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST); … for your written answers on “Harbor Run”; … for your written answers on “Harbor Run” ($10) is delayed.; Payment for your call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST) may be delayed |
+| Bells: developer | Ana Silva's live call on “Harbor Run” ($15.00) is added to what you owe …; a declined Pay: … for Ana Silva's live call on “Harbor Run” | … live call on “Harbor Run” (Oct 27) … |
+
+- **Not changed, and why.** Lines about written answers or a recording (one of each per tester per test: already exact). Call request, booking, cancel and
+  call-problem lines (they carry the time already). Lines on the test's own page get no test name (the page is the test); lines about another test keep
+  "On <title>: …" as they were. The tester's session-page lines (the page is the test). The admin's test history ("disputed the pay for her live call:") and
+  the admins' bells: admin views. Stored rows: not rewritten. bankWaitingOnTest's lines (§175) and the restricted / team-pause lines (§172): they name the
+  piece already.
+- **Tests.** New `tests/specific-lines-177.test.ts` (the helpers; a dispute and the team's decision on a call with their bells and the admin's result line; a
+  tester's Charge on a call; the payment lines' part, the developer's and the tester's; no raw time marker in the dashboard row, Payments' item, or Payments'
+  waiting automatic charge). `batch35-bank-notice` (a window on the dashboard or Payments names the test, the test page's doesn't; the meanwhile lines),
+  `batch35-dash-confirm-decision` (Confirm with your bank pressed on the dashboard names the test). Updated for the new wording: `batch10`, `batch11`,
+  `batch28`, `batch29`, `batch23` (source check), `batch35-call-decide-lines`, `batch35-decide-paid-above`, `races-nov3`, `partial-dispute`, `pay-matrix`,
+  `other-tab`, `stopped`, `addition`.

@@ -7,6 +7,7 @@ import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isMissing, stripeOn, type 
 import { serverKey } from "./pressKeys";
 import { alreadyConfirmedLine } from "@/lib/bankNotice";
 import { receipt } from "./payments";
+import { renderFor } from "./notify";
 import { describedOnce, stripeDescription } from "./paymentRows";
 
 // (Owner, Nov 2, batch 35 §117) One card in play; bank checks never double-charge.
@@ -285,7 +286,9 @@ export async function coveredNames(ids: string[], full = false) {
   const holds = await import("./holds");
   for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
     const cents = p.chargeback === "open" ? reversedOf(p) + CHARGEBACK_FEE_CENTS : p.amountCents; // (§133) what the bank reversed + the fee
-    out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), `${await holds.owedItemName(p, full)} ${money(cents)}`]);
+    // (Owner, Nov 4, §177; seen on the dashboard: "… live call on “excerptexcer…” (⟦t:2026-10-27T19:04:52.652Z:date⟧) $5.00") A call's date is a time token in the
+    // piece's name: written here in the developer's own zone, as every page line that lists these shows it.
+    out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), await renderFor(p.developerId, `${await holds.owedItemName(p, full)} ${money(cents)}`)]);
   }
   return out;
 }

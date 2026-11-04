@@ -171,7 +171,7 @@ describe("§133 part of a single payment", () => {
     // The reservation and the team's Approve take exactly $96 + $15; the repayment row names the payment and the part.
     const { reserved, approved } = await clear(w);
     expect([reserved, approved.lifted, approved.takenCents, st.captured]).toEqual([11100, true, 11100, [11100]]);
-    expect((await db.testEvent.findFirstOrThrow({ where: { testId: w.testId, text: { startsWith: "The team resolved" } } })).text).toBe("The team resolved the bank reversal of $96.00 of your $444.67 payment");
+    expect((await db.testEvent.findFirstOrThrow({ where: { testId: w.testId, text: { startsWith: "The team resolved" } } })).text).toBe("The team resolved the bank reversal of $96.00 of your $444.67 payment for Ana Silva's written answers on “Harbor Run”"); // (§177) which payment
     const repay = await db.payment.findFirstOrThrow({ where: { repaysId: p.id } });
     expect(repay).toMatchObject({ kind: "chargeback", amountCents: 11100, testerCents: 0, status: "charged" });
     const reversed = await db.payment.findUniqueOrThrow({ where: { id: p.id } });
@@ -230,7 +230,7 @@ describe("§133 repayment and a won chargeback", () => {
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).chargeback).toBe("won");
     const texts = (await db.notification.findMany({ where: { userId: w.dev.user.id }, orderBy: { createdAt: "asc" } })).map((n) => n.text);
     expect(texts).toEqual(expect.arrayContaining(["Refund: your bank's chargeback of $96.00 was reversed", "Your bank's chargeback of $96.00 was reversed in your favour."]));
-    expect(await db.testEvent.count({ where: { testId: w.testId, text: "Your bank's chargeback of $96.00 was reversed: $111.00 refunded to your card." } })).toBe(1);
+    expect(await db.testEvent.count({ where: { testId: w.testId, text: "Your bank's chargeback of $96.00 for Ana Silva's written answers on “Harbor Run” was reversed: $111.00 refunded to your card." } })).toBe(1);
     // What you've paid: the whole payment counts again; the refunded repayment doesn't.
     expect(paidOutTotal([await db.payment.findUniqueOrThrow({ where: { id: p.id } }), await db.payment.findUniqueOrThrow({ where: { id: repay.id } })])).toBe(44467);
     // A second delivery refunds nothing more.
@@ -247,7 +247,7 @@ describe("§133 repayment and a won chargeback", () => {
     expect(st.refunds).toEqual([]);
     expect(await owed(w.dev.user.id)).toEqual([]);
     expect((await db.user.findUniqueOrThrow({ where: { id: w.dev.user.id } })).holdStartedAt).toBeNull();
-    expect(await db.testEvent.count({ where: { testId: w.testId, text: "Your bank's chargeback of $96.00 was reversed: $111.00 taken off what you owe." } })).toBe(1);
+    expect(await db.testEvent.count({ where: { testId: w.testId, text: "Your bank's chargeback of $96.00 for Ana Silva's written answers on “Harbor Run” was reversed: $111.00 taken off what you owe." } })).toBe(1);
 
     const q = await paidPiece(w, 1, 20000);
     await chargebackOpened(q.stripePaymentIntentId!, 5000);

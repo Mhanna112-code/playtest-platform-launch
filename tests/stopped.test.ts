@@ -41,7 +41,7 @@ describe("after the test is stopped", () => {
     const second = await pay(dev.cookie, { kind: "submission", id: rec.id, amount: "10.00", tickedCents: 1000, seenAt: opened, confirmed: true, boxAt: first.body.error.now });
     expect(second.status).toBe(200);
     // The dispute is a bell line for the developer.
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "disputed a payment" } } })).toBeGreaterThan(0);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "disputed the pay for her written answers on “Harbor Run”" } } })).toBeGreaterThan(0);
   });
 
   it("the developer's other buttons are refused for good, naming the stop (batch 7: Next round still works)", async () => {

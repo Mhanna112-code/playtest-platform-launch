@@ -32,6 +32,8 @@ Source: [live.ts](../src/lib/server/live.ts), [tests.ts devGate](../src/lib/serv
 
 ### Recorded event wording and payment lines
 
+(Owner, Nov 4, §177) Every change line names WHICH part (a live call always with its date and time, `live call on <date/time>`; a team decision the part it decided) and, shown anywhere but the test's own page (a bank window or a Confirm with your bank press on the dashboard or Payments, Confirm all, Pay what you owe), WHICH test: `On “<title, cut at 12>”: <line>` (a leading You/Your/The/A lowercased; a line already naming its test is kept). Bank windows send the page they're on (`page`); none sent counts as the test's own page. New events carry the new wording; stored rows keep theirs. Before → after: docs/BATCH-35.md §177.
+
 Every row below is an event producer read by `devChanges`, or a companion live-only event. `S` uses the shared developer presses and lifetime above; `quiet` means live top box only, never a stop. Events starting `You ` are removed from the other-person feed and represented once by the own-action log. Stored metadata records (`listing_saved`, `listing_values`, `listing_save`) are parsed, not printed as JSON.
 
 | Kind | Exact wording / variants | Stops / where / lifetime | Producer and source |
@@ -40,28 +42,28 @@ Every row below is an event producer read by `devChanges`, or a companion live-o
 | `key` | `<person> reported their key doesn't work` | quiet; live only | `reportKeyBroken`; [src/lib/server/accessKeys.ts:141](../src/lib/server/accessKeys.ts#L141) |
 | `cancelled` | `You cancelled the call with <person> on <date/time>` | Own-action feed instead (same-page load excluded) | `devCancelCall`; [src/lib/server/calls.ts:43](../src/lib/server/calls.ts#L43) |
 | `cancelled` | `<person> cancelled <pronouns(tester.pronoun).poss> call on <date/time>` | S; see kind/Alerts table | `testerCancelCall`; [src/lib/server/calls.ts:89](../src/lib/server/calls.ts#L89) |
-| `chargeback` | `The team resolved the bank reversal of your $X payment` | S; see kind/Alerts table | `approveChargebackHold`; [src/lib/server/chargeback.ts:393](../src/lib/server/chargeback.ts#L393) |
+| `chargeback` | `The team resolved the bank reversal of your $X payment for <piece>` (§177) | S; see kind/Alerts table | `approveChargebackHold`; [src/lib/server/chargeback.ts:393](../src/lib/server/chargeback.ts#L393) |
 | `chargeback` | `Your bank reversed your $X payment for <person>'s live call`<br>`Your bank reversed your $X payment for <person>'s recording`<br>`Your bank reversed your $X payment for <person>'s written answers`<br>`Your bank reversed your $X payment for <person>` | S; see kind/Alerts table | `chargebackOpened`; [src/lib/server/holds.ts:583](../src/lib/server/holds.ts#L583) |
-| `payment` | `Your bank's chargeback of $X was reversed: $X refunded to your card.`<br>`Your bank's chargeback of $X was reversed: $X taken off what you owe.` | S; see kind/Alerts table | `chargebackWon`; [src/lib/server/holds.ts:624](../src/lib/server/holds.ts#L624) |
+| `payment` | `Your bank's chargeback of $X for <piece> was reversed: $X refunded to your card.`<br>`Your bank's chargeback of $X for <piece> was reversed: $X taken off what you owe.` | S; see kind/Alerts table | `chargebackWon`; [src/lib/server/holds.ts:624](../src/lib/server/holds.ts#L624) |
 | `choice` | `<person> can now charge or let go of their recording`<br>`<person> can now charge or let go of their written answers` | S; see kind/Alerts table | `openCharges`; [src/lib/server/holds.ts:826](../src/lib/server/holds.ts#L826) |
 | `paid` | `<person>'s call on <date/time> closed with nothing to pay` | S; see kind/Alerts table | `autoChargeCalls`; [src/lib/server/holds.ts:1104](../src/lib/server/holds.ts#L1104) |
-| `paid` | `<text>` | S; see kind/Alerts table | `autoChargeCalls / logged`; [src/lib/server/holds.ts:1111](../src/lib/server/holds.ts#L1111) |
+| `paid` | (§177) `<person>'s call on <date/time> was charged automatically: $X`<br>`… was charged automatically: $X, waiting for your bank to confirm it`<br>`… was charged automatically: $X, charged when your account is clear`<br>`<person>'s call on <date/time> is waiting to be charged once your tests resume: $X`<br>`The automatic charge for <person>'s call on <date/time> ($X) was declined[: it was added to what you owe]` | S; see kind/Alerts table | `autoChargeCalls / logged`; [src/lib/server/holds.ts:1111](../src/lib/server/holds.ts#L1111) |
 | `rejected` | `<person> let their recording go: nothing charged`<br>`<person> let their written answers go: nothing charged` | S; see kind/Alerts table | `chooseOutcome`; [src/lib/server/holds.ts:1218](../src/lib/server/holds.ts#L1218) |
 | `paid` | `<person> charged $X for their recording`<br>`<person> charged $X for their written answers` | S; see kind/Alerts table | `chooseOutcome`; [src/lib/server/holds.ts:1227](../src/lib/server/holds.ts#L1227) |
 | `paid` | `<person> charged $X for their recording`<br>`<person> charged $X for their written answers` | S; see kind/Alerts table | `chooseOutcome`; [src/lib/server/holds.ts:1258](../src/lib/server/holds.ts#L1258) |
 | `rejected` | `<person> let their call on <date/time> go: nothing charged` | S; see kind/Alerts table | `chooseCallOutcome`; [src/lib/server/holds.ts:1300](../src/lib/server/holds.ts#L1300) |
-| `paid` | `<person> charged $X for their call` | S; see kind/Alerts table | `chooseCallOutcome`; [src/lib/server/holds.ts:1307](../src/lib/server/holds.ts#L1307) |
-| `paid` | `<person> charged $X for their call` | S; see kind/Alerts table | `chooseCallOutcome`; [src/lib/server/holds.ts:1334](../src/lib/server/holds.ts#L1334) |
-| `paid` | `<person> charged $X for their call`<br>`<person> charged $X for their recording`<br>`<person> charged $X for their written answers` | S; see kind/Alerts table | `finishChoicePay`; [src/lib/server/holds.ts:1344](../src/lib/server/holds.ts#L1344) |
+| `paid` | `<person> charged $X for their call on <date/time>` (§177) | S; see kind/Alerts table | `chooseCallOutcome`; [src/lib/server/holds.ts:1307](../src/lib/server/holds.ts#L1307) |
+| `paid` | `<person> charged $X for their call on <date/time>` (§177) | S; see kind/Alerts table | `chooseCallOutcome`; [src/lib/server/holds.ts:1334](../src/lib/server/holds.ts#L1334) |
+| `paid` | `<person> charged $X for their call on <date/time>` (§177)<br>`<person> charged $X for their recording`<br>`<person> charged $X for their written answers` | S; see kind/Alerts table | `finishChoicePay`; [src/lib/server/holds.ts:1344](../src/lib/server/holds.ts#L1344) |
 | `applied` | `<person> applied to join` | S; see kind/Alerts table | `apply`; [src/lib/server/joining.ts:256](../src/lib/server/joining.ts#L256) |
 | `applied` | `<person> withdrew their application` | S; see kind/Alerts table | `withdrawApplication`; [src/lib/server/joining.ts:265](../src/lib/server/joining.ts#L265) |
 | `applied` | `0 waiting application was accepted when you switched to joins instantly`<br>`0 waiting applications were accepted when you switched to joins instantly` | S; see kind/Alerts table | `onSwitchToAnyone`; [src/lib/server/joining.ts:379](../src/lib/server/joining.ts#L379) |
 | `applied` | `<person> asks to rejoin` | S; see kind/Alerts table | `askToRejoin`; [src/lib/server/joining.ts:455](../src/lib/server/joining.ts#L455) |
-| `paid` | `You paid <person> $X for the live call`<br>`You paid <person> $X for the recording`<br>`You paid <person> $X for the written answers` | Own-action feed instead (same-page load excluded) | `finishReviewPay`; [src/lib/server/payments.ts:202](../src/lib/server/payments.ts#L202) |
-| `dispute` | `<person> disputed the pay for their live call`<br>`<person> disputed the pay for their recording`<br>`<person> disputed the pay for their written answers` | S; see kind/Alerts table | `openDispute`; [src/lib/server/payments.ts:248](../src/lib/server/payments.ts#L248) |
-| `admin` | `The team decided <person>'s dispute: raised the pay to $X ($X more)`<br>`The team decided <person>'s dispute: kept the pay at $X (rejected)`<br>`The team decided <person>'s dispute: kept the pay at $X` | S; see kind/Alerts table | `decideDispute`; [src/lib/server/payments.ts:368](../src/lib/server/payments.ts#L368) |
+| `paid` | `You paid <person> $X for the live call on <date/time>` (§177)<br>`You paid <person> $X for the recording`<br>`You paid <person> $X for the written answers` | Own-action feed instead (same-page load excluded) | `finishReviewPay`; [src/lib/server/payments.ts:202](../src/lib/server/payments.ts#L202) |
+| `dispute` | `<person> disputed the pay for their live call on <date/time>` (§177)<br>`<person> disputed the pay for their recording`<br>`<person> disputed the pay for their written answers` | S; see kind/Alerts table | `openDispute`; [src/lib/server/payments.ts:248](../src/lib/server/payments.ts#L248) |
+| `admin` | (§177: names the part it decided, a call with its date/time) `The team decided <person>'s dispute on <their> <part>: raised the pay to $X ($X more)`<br>`The team decided <person>'s dispute on <their> <part>: kept the pay at $X (rejected)`<br>`The team decided <person>'s dispute on <their> <part>: kept the pay at $X` | S; see kind/Alerts table | `decideDispute`; [src/lib/server/payments.ts:368](../src/lib/server/payments.ts#L368) |
 | `paid` | `You paid <person> $0 more for the updated recording`<br>`You paid <person> $0 more for the updated written answers` | Own-action feed instead (same-page load excluded) | `closeUpdateAtZero`; [src/lib/server/payments.ts:581](../src/lib/server/payments.ts#L581) |
-| `paid` | `You paid <person> $X extra for the live call`<br>`You paid <person> $X extra for the recording`<br>`You paid <person> $X extra for the written answers` | Own-action feed instead (same-page load excluded) | `finishExtraPay`; [src/lib/server/payments.ts:599](../src/lib/server/payments.ts#L599) |
+| `paid` | `You paid <person> $X extra for the live call on <date/time>` (§177)<br>`You paid <person> $X extra for the recording`<br>`You paid <person> $X extra for the written answers` | Own-action feed instead (same-page load excluded) | `finishExtraPay`; [src/lib/server/payments.ts:599](../src/lib/server/payments.ts#L599) |
 | `left` | `<person> finished their part (rated you)` | S; see kind/Alerts table | `testerRate`; [src/lib/server/ratings.ts:246](../src/lib/server/ratings.ts#L246) |
 | `rated` | `<person> rated you` | quiet; live only | `testerRate`; [src/lib/server/ratings.ts:247](../src/lib/server/ratings.ts#L247) |
 | `afterPaid.atCap ? "sentpaid" : "sent` | `<person> sent an updated version of <pronouns(tester.pronoun).poss> recording (already paid the most)`<br>`<person> sent an updated version of <pronouns(tester.pronoun).poss> recording after you paid` | sent: S under Work sent; sentpaid (already paid the most): quiet live-only | `sendRecording`; [src/lib/server/recordings.ts:189](../src/lib/server/recordings.ts#L189) |
@@ -89,8 +91,8 @@ The following synthesized lines do not depend on a stored event's literal text:
 
 | Exact wording | Who / trigger | Stops / Alerts / place / lifetime |
 | --- | --- | --- |
-| Payment failed on &lt;test&gt;: $X to &lt;tester&gt; for the &lt;part&gt; · pay what you owe in Payments | Developer; an owed payment declined, including another test | S; payments; shared developer gate; keyed by payment. |
-| Payment went through on &lt;test&gt;: $X to &lt;tester&gt; for the &lt;part&gt; | Developer; a payment settled | S payments unless it had owedUntil: then quiet live-only (§78). |
+| Payment failed on &lt;test&gt;: $X to &lt;tester&gt; for the &lt;part&gt; · pay what you owe in Payments (§177: a call is `live call on <date/time>`; a team decision `dispute decision on the <part>`) | Developer; an owed payment declined, including another test | S; payments; shared developer gate; keyed by payment. |
+| Payment went through on &lt;test&gt;: $X to &lt;tester&gt; for the &lt;part&gt; (§177: as above) | Developer; a payment settled | S payments unless it had owedUntil: then quiet live-only (§78). |
 | On &lt;test&gt;: &lt;event with its first letter lowercased&gt; | Developer; another test has a chargeback/payment event | S; chargeback always, payment under payments. |
 | You saved the listing in another tab | Developer; listing save(s) from another load collapsed to one latest line | S always; See it marks the union of changed fields. Rename-only is quiet. |
 | You re-sent &lt;tester&gt;'s invite (the listing changed) | Developer; Save re-sent an invite | S always; separate consequence beside the listing line. |
@@ -182,7 +184,7 @@ A forced line (`forced: true`) stops whatever the Alerts ticks, and the box offe
 | --- | --- | --- |
 | Pay, Pay more (a part) | Anything on that part: `sent` (work sent, updated, added); `paid` / `rejected` / `choice` events carrying `part-<id>` / `call-<id>` (a Charge, Let it go, Charge opening, an automatic call charge); `payment` lines whose payment is on that part (`Payment went through on <test>: $X to <tester> for the <part>`, `Payment failed on …`); a dispute on it | Lines about the same tester's other parts follow the ticks (except A2 below). |
 | Pay, Pay more (a call) | `<tester> reported a problem with the call on <date/time>: <note>` (kind `call_problem`); `The length of the call with <tester> on <date/time> is final: N minutes` (kind `call_length`) | New kinds with no Alerts type; never in the live box. Only the tester's report (the developer's own report doesn't stop). |
-| Every developer press about one tester: Pay, Pay more on any of their parts; End early including them; call requests with them, their answers and cancels | `<tester> disputed the pay for <their> <part>`; `The team decided <tester>'s dispute: …` | §171 A2. Presses about the whole test (Stop, Next round, Edit Save, Invite) and other testers' presses follow Disputes / Decisions by the team. Developer Rate keeps its own rule. |
+| Every developer press about one tester: Pay, Pay more on any of their parts; End early including them; call requests with them, their answers and cancels | `<tester> disputed the pay for <their> <part>`; `The team decided <tester>'s dispute on <their> <part>: …` | §171 A2. Presses about the whole test (Stop, Next round, Edit Save, Invite) and other testers' presses follow Disputes / Decisions by the team. Developer Rate keeps its own rule. |
 | Every tester press on the test (Send, Add to this answer, recording add, Charge, Let it go, Dispute, Leave, call requests, Rate) | `<dev> added <their> side to your dispute about …`; `The team decided your dispute about your <part>: …` | §171 A2, even with Alerts Off. Excerpt requests keep their own rules. |
 | NOT changed (§171 item 7): Confirm with your bank on a charge made while away, Confirm all's items | §159's forced set only (the same tester's decision, that tester leaving, work sent on the very part) | Flagged `awayCharge` until the owner decides the waiting-charge rules. |
 
@@ -1016,8 +1018,8 @@ Some reusable constructors are also used as F reasons, I banners or an S line. T
 
 **chargebackReversedLine** — [src/lib/rules.ts:924](../src/lib/rules.ts#L924)
 
-* `Your bank's chargeback of $X was reversed: $X refunded to your card.`
-* `Your bank's chargeback of $X was reversed: $X taken off what you owe.`
+* `Your bank's chargeback of $X for <piece> was reversed: $X refunded to your card.`
+* `Your bank's chargeback of $X for <piece> was reversed: $X taken off what you owe.`
 
 **TEST_LIMIT_LINE** — [src/lib/rules.ts:1047](../src/lib/rules.ts#L1047)
 

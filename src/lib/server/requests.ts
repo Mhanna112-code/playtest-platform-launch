@@ -24,7 +24,8 @@ import { CALL_MIN_MINUTES } from "@/lib/rules";
 import { bookableMinutes, lengthCapLine } from "@/lib/callMeasure";
 import { CALL_ACTS } from "./live";
 import { clashNotes, localFmt } from "@/lib/callClash";
-import { safeZone } from "@/lib/tz";
+import { renderTimes, safeZone } from "@/lib/tz";
+import { dateZone } from "./dateZone";
 
 /** (Batch 15 section 34) The calls a request books if accepted: the most of any one row (a "choose one" row books 1; a set books all of its calls, up to the end). */
 const callsIfAccepted = (rows: CallRow[], end: Date | null) => Math.max(1, ...rows.map((r) => occurrences(r, end).length));
@@ -360,7 +361,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
         const line = `Booked: you both picked ${T(hit)}`;
         await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
-        return { booked: true, callId: call.id, message: line };
+        return { booked: true, callId: call.id, message: renderTimes(line, dateZone()) }; // (§177) the page shows it: the time written, never its token
       }
     }
   }
@@ -435,7 +436,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
       await closeBatch(m.batchId, m.id);
       const line = `Booked: you both picked ${T(hit)}`;
       await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId });
-      return { booked: true, callId: call.id, message: line };
+      return { booked: true, callId: call.id, message: renderTimes(line, dateZone()) }; // (§177) the page shows it: the time written, never its token
     }
   }
   const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33)

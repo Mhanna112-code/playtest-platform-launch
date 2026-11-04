@@ -105,7 +105,10 @@ describe("§176 the dashboard's Confirm with your bank stops once for the team's
     expect(sent).toBe(loaded);
     const first = await confirmStart(w.dev.cookie, w.items[0].id, sent);
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(first.body.error?.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(/^The team decided Ana Silva's dispute: raised the pay to \$9\.00/), forced: true })]);
+    expect(first.body.error?.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(/^The team decided Ana Silva's dispute on her written answers: raised the pay to \$9\.00/), forced: true })]);
+    // (Owner, Nov 4, §177) Pressed on the dashboard (the page it was on is sent): the line names the test.
+    const away = await confirmStart(w.dev.cookie, w.items[0].id, sent, { page: "/app" });
+    expect(away.body.error?.changes).toEqual([expect.objectContaining({ text: expect.stringMatching(/^On “Harbor Run”: the team decided Ana Silva's dispute on her written answers: raised the pay to \$9\.00/), forced: true })]);
     const second = await confirmStart(w.dev.cookie, w.items[0].id, sent, { confirmed: true, boxAt: first.body.error!.now });
     expect(second.status, JSON.stringify(second.body)).toBe(200);
     // Another tester's waiting charge: the decision about Ana follows the Decisions tick (off), so it goes ahead.

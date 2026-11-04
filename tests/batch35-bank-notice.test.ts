@@ -155,6 +155,21 @@ describe("§160 the peek's changes: what would have stopped the press since it",
   });
 });
 
+describe("§177 a bank window away from the payment's own test page names the test", () => {
+  it("on the dashboard or Payments each line reads “On “Harbor Run”: …”; on the test's own page (or from a page that sends none) it doesn't", async () => {
+    const o = await payOpen();
+    await logEvent(o.testId, "dispute", "Ana Silva disputed the pay for her recording", o.sessionId);
+    await settle();
+    await logEvent(o.testId, "admin", "The team decided Ana Silva's dispute on her recording: kept the pay at $4.00", o.sessionId);
+    const plain = ["Ana Silva disputed the pay for her recording", "The team decided Ana Silva's dispute on her recording: kept the pay at $4.00"];
+    for (const page of ["/app", "/app/payments"]) {
+      expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since, page })).body.changes).toEqual(["On “Harbor Run”: Ana Silva disputed the pay for her recording", "On “Harbor Run”: the team decided Ana Silva's dispute on her recording: kept the pay at $4.00"]);
+    }
+    expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since, page: `/app/tests/${o.testId}` })).body.changes).toEqual(plain);
+    expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since })).body.changes).toEqual(plain);
+  });
+});
+
 describe("§160 Pay what you owe's changes", () => {
   it("a debt added after the press is a line; what the one payment covers, or what was owed before, is not", async () => {
     const o = await payOpen();

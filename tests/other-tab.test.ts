@@ -332,7 +332,8 @@ describe("payments and disputes, only for this test", () => {
     // The tester: one bell, the top-box line and a stop once, worded without failed / declined / card / hold.
     const delayed = "Nora Lane's payment for your written answers ($10) is delayed. You'll be told when it arrives.";
     const bells = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
-    expect(bells.slice(notesBefore).map((n) => n.text)).toEqual([delayed]);
+    // (Owner, Nov 4, §177) The bell is read away from the session page: it names the test.
+    expect(bells.slice(notesBefore).map((n) => n.text)).toEqual(["Nora Lane's payment for your written answers on “Harbor Run” ($10) is delayed. You'll be told when it arrives."]);
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
     // (Batch 15 section 25) Leave no longer stops; the tester's gate itself (every other tester button) stops once with the line.
     const gate = await (await import("@/lib/server/testerGate")).testerGate(ana.tester.user.id, ana.sessionId, (await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).testId, { seenAt: pageLoaded }).then(() => null, (e: { data?: { changes?: { text: string }[] } }) => e.data?.changes?.map((c) => c.text));
@@ -345,7 +346,7 @@ describe("payments and disputes, only for this test", () => {
     expect((await payOwed(dev.user)).paid).toBe(1);
     const after = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
     // (Owner, Oct 27) The declined payment started the hold at once, so paying it lifts the hold: the tester also reads that the test is running again.
-    expect(after.map((n) => n.text).slice(afterDecline)).toEqual(["Nora Lane paid $10.00 for your written answers", "“Harbor Run” is running again"]);
+    expect(after.map((n) => n.text).slice(afterDecline)).toEqual(["Nora Lane paid $10.00 for your written answers on “Harbor Run”", "“Harbor Run” is running again"]); // (§177) the bell names the test
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane paid $10.00 for your written answers"]); // (batch 35 §76) one line per payment: paid replaces delayed
   });
 

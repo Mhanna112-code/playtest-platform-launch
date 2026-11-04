@@ -144,7 +144,7 @@ describe("batch 11 item 2: the chargeback fee", () => {
     await settle();
     await webhook("charge.dispute.closed", { payment_intent: p.stripePaymentIntentId, status: "won" });
     expect(st.refunds).toHaveLength(1);
-    const line = "Your bank's chargeback of $10.00 was reversed: $25.00 refunded to your card.";
+    const line = "Your bank's chargeback of $10.00 for Ana Silva's written answers on “Harbor Run” was reversed: $25.00 refunded to your card." // (§177) which payment;
     expect(await db.testEvent.count({ where: { testId, kind: "payment", text: line } })).toBe(1);
     expect(R.DEV_STOP_KINDS).toContain("payment");
     const stop = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: loaded });
@@ -156,7 +156,7 @@ describe("batch 11 item 2: the chargeback fee", () => {
     const lines = await owedLines(dev.user.id);
     await webhook("charge.dispute.closed", { payment_intent: p.stripePaymentIntentId, status: "won" });
     expect(await owed(dev.user.id)).toEqual([]);
-    expect(await db.testEvent.count({ where: { testId, kind: "payment", text: "Your bank's chargeback of $10.00 was reversed: $25.00 taken off what you owe." } })).toBe(1);
+    expect(await db.testEvent.count({ where: { testId, kind: "payment", text: "Your bank's chargeback of $10.00 for Ana Silva's written answers on “Harbor Run” was reversed: $25.00 taken off what you owe." } })).toBe(1);
     // A second owed line keeps the box: the press with the old page stops once naming the reversal.
     await db.payment.create({ data: { kind: "review", developerId: dev.user.id, testerId: dev.user.id, amountCents: 700, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date() } });
     await startHold(dev.user.id, "unpaid");

@@ -55,7 +55,7 @@ describe("newest addition", () => {
     const { dev, sub, sessionId, tester, testId } = await sent();
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "4.00", tickedCents: 400, reason: "Half the answers" });
     await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "disputed a payment" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "disputed the pay for" } /* (§177) names the part */ } })).toBe(1);
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: sub.id } });
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Answers 2 and 3 were one word each" })).status).toBe(200);
     expect((await act(testId, "dispute-side", dev.cookie, { disputeId: d.id, text: "Again" })).body.error.message).toBe("You already added your side.");
