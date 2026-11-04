@@ -464,7 +464,7 @@ describe("§160 an open bank check stays open only while its page is open (heart
     expect(drawn.body.confirm?.[0]).toMatchObject({ requiresAction: true });
     expect(await db.payment.findFirstOrThrow({ where: { developerId: dev, kind: "owed" } })).toMatchObject({ amountCents: 1000 });
     const box = fs.readFileSync(path.resolve(__dirname, "../src/components/OwedBox.tsx"), "utf8");
-    expect(box).toContain("if (drawn !== lastDrawn) {");
+    expect(box).toContain("if (drawnKey !== lastDrawn) {");
     expect(box).toMatch(/if \(!changes\) \{\s+setTotal\(seenTotal\);\s+setShownIds\(retry\.map\(\(o\) => o\.id\)\);/);
   });
 });
