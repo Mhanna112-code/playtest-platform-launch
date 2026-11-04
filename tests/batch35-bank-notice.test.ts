@@ -5,7 +5,7 @@ import * as React from "react";
 import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import type Stripe from "stripe";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as confirmPOST } from "@/app/api/payments/confirm/route";
@@ -28,6 +28,14 @@ const RETURN_URL = "http://localhost:3400/api/payments/bank-return";
 const TAB = "tab-bank-notice";
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, headers: { "x-tab": TAB }, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 const peek = (cookie: string, body: Record<string, unknown>) => confirmPOST(req("/api/payments/confirm", { cookie, headers: { "x-tab": TAB }, body: { ...body, peek: true } })).then(json);
+// This file leaves open checks, holds and debts on its own developers: they are closed at the end, so the global jobs other files run (the daily job,
+// the 5-minute sweep) never act on them.
+const devs: string[] = [];
+afterAll(async () => {
+  await db.payment.updateMany({ where: { developerId: { in: devs }, status: { notIn: ["charged", "bundled", "not_set_up"] } }, data: { status: "cancelled", actionPi: null, actionBy: null, coveredById: null } });
+  await db.reservation.updateMany({ where: { developerId: { in: devs } }, data: { status: "cancelled" } });
+  await db.user.updateMany({ where: { id: { in: devs } }, data: { holdStartedAt: null, holdReason: "" } });
+});
 afterEach(() => {
   setStripeForTests(null);
   vi.useRealTimers();
@@ -60,6 +68,7 @@ function fakeStripe(pm = "pm_old") {
 /** Written answers sent on a test (listed at $10), and the developer's Pay of them open at the bank. */
 async function payOpen() {
   const s = await setup({ writtenCents: "10.00" });
+  devs.push(s.dev.user.id);
   const j = await joined(s.testId);
   const n = ((await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } })).questions as string[]).length || 1;
   await sact(j.sessionId, "written", j.tester.cookie, { answers: Array(n).fill("answer") });
