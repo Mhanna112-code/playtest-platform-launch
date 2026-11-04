@@ -49,7 +49,7 @@ type Ctx = Awaited<ReturnType<typeof lineContext>>;
  * line (`stripeDescription`), so the two can't drift. `full`: the names uncut (Stripe, and the page's hover). Null for a row with no test to name (the page shows its
  * plain label).
  */
-function devLine(ctx: Ctx, p: PayingRow, full: boolean) {
+function devLine(ctx: Ctx, p: PayingRow, full: boolean, viaAll = false) {
   const o = ctx.src(p);
   const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
   if (!c) {
@@ -63,7 +63,10 @@ function devLine(ctx: Ctx, p: PayingRow, full: boolean) {
   // (Owner, Nov 3) The piece's own payment says how it was charged (by the tester, automatically); a Pay more or a team decision on it is its own payment and doesn't.
   const own = p.kind === "review" || p.kind === "call";
   const byTester = own && r && (r.reason === CHARGED_BY_TESTER || r.reason === CHARGED_BY_TESTER_14);
-  const how = p.kind === "chargeback" ? "" : p.settledAt || p.owedUntil ? "paid through Pay what you owe" : byTester ? `charged by ${tester} after 7 days without a review` : own && r?.auto ? "charged automatically after 7 days" : "";
+  // (Owner, Nov 4) A charge paid by Confirm all's one payment says so (that payment shares Pay what you owe's machinery, so it read "paid through Pay what you owe").
+  const how = p.kind === "chargeback" ? ""
+    : viaAll ? (byTester ? `charged by ${tester} after 7 days without a review, confirmed with Confirm all` : own && r?.auto ? "charged automatically after 7 days, confirmed with Confirm all" : "confirmed with Confirm all")
+    : p.settledAt || p.owedUntil ? "paid through Pay what you owe" : byTester ? `charged by ${tester} after 7 days without a review` : own && r?.auto ? "charged automatically after 7 days" : "";
   // (Owner, Nov 2, §131) The developer's rows name the piece by pieceName (the tester's and the test's names cut at 10 characters on the page).
   const piece = pieceName({ tester, part: ctx.partOf(o), test: c.title, full });
   const what = p.kind === "extra" ? `Pay more for ${piece}`
@@ -75,6 +78,14 @@ function devLine(ctx: Ctx, p: PayingRow, full: boolean) {
   return { what, how, testId: c.testId };
 }
 
+/** (Owner, Nov 4) The rows paid by a Confirm all's one payment (a Payment of kind "owed" with note "press:all" that they point to through coveredById). */
+async function paidByConfirmAll(ps: Row[]): Promise<Set<string>> {
+  const covered = await db.payment.findMany({ where: { id: { in: ps.filter((p) => p.settledAt).map((p) => p.id) }, coveredById: { not: null } }, select: { id: true, coveredById: true } });
+  if (!covered.length) return new Set();
+  const alls = new Set((await db.payment.findMany({ where: { id: { in: covered.map((c) => c.coveredById!) }, note: "press:all" }, select: { id: true } })).map((x) => x.id));
+  return new Set(covered.filter((c) => alls.has(c.coveredById!)).map((c) => c.id));
+}
+
 /**
  * (Owner, Oct 30, batch 32 §18) What each line of Payments' paid lists was for: the tester (or developer), the part and the test, and how it was paid ("charged by Ana
  * Silva after 7 days without a review", "charged automatically after 7 days", "paid through Pay what you owe"); a payment the developer's bank reversed says so.
@@ -82,10 +93,11 @@ function devLine(ctx: Ctx, p: PayingRow, full: boolean) {
  */
 export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise<Map<string, PaidRow>> {
   const ctx = await lineContext(ps);
+  const viaAll = await paidByConfirmAll(ps);
   const out = new Map<string, PaidRow>();
   for (const p of ps) {
     if (side === "developer") {
-      const cut = devLine(ctx, p, false), whole = devLine(ctx, p, true);
+      const cut = devLine(ctx, p, false, viaAll.has(p.id)), whole = devLine(ctx, p, true, viaAll.has(p.id));
       if (cut && whole) out.set(p.id, { what: cut.what, full: whole.what, how: cut.how, testId: cut.testId, reversed: !!p.chargebackAt, reversedCents: p.chargebackAt && reversedPart(p) ? reversedOf(p) : null });
       continue;
     }
@@ -96,7 +108,8 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     const r = ctx.reviewOf(o);
     const own = p.kind === "review" || p.kind === "call";
     const byTester = own && r && (r.reason === CHARGED_BY_TESTER || r.reason === CHARGED_BY_TESTER_14);
-    const how = p.kind === "chargeback" ? "" : p.settledAt || p.owedUntil ? "paid through Pay what you owe" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
+    // (Owner, Nov 4) Confirm all is the developer's own button: the tester's row reads as the charge itself.
+    const how = p.kind === "chargeback" ? "" : (p.settledAt || p.owedUntil) && !viaAll.has(p.id) ? "paid through Pay what you owe" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
     const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
     out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false });
   }
