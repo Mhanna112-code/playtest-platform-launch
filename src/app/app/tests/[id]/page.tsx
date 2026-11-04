@@ -52,7 +52,7 @@ import { lastListingSave } from "@/lib/server/listingPanel";
 import { Fold, ResizeBox } from "@/components/Panel";
 import { SentWork } from "@/components/SentWork";
 import { additionsOf, answersByQuestion } from "@/lib/additions";
-import { bankWaitsLine, pieceOf, pieceRoom } from "@/lib/server/payments";
+import { bankWaitsOf, pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
@@ -168,13 +168,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const confirmingPays = await db.payment.findMany({ where: { developerId: u.id, contractId: { in: t.contracts.map((c) => c.id) }, kind: { in: ["review", "call"] }, status: "needs_action" }, select: { id: true, submissionId: true, callId: true } });
   const confirmingPay = (id: string) => confirmingPays.find((p) => (p.submissionId ?? p.callId) === id)?.id;
   // (Owner, Nov 3, §159) Pay more waits while a payment on its part waits for the bank: its box is greyed with the line saying which.
-  const bankWaits = new Map<string, string>();
+  // (Owner bug, Nov 4, §174) With the waiting payment's id: the Pay more box whose OWN bank check that is never greys itself for it.
+  const bankWaits = new Map<string, { line: string; id: string } | null>();
   for (const w of await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) }, kind: { in: ["review", "call", "extra", "dispute"] }, status: { in: ["needs_confirmation", "needs_action"] }, settledAt: null }, select: { submissionId: true, callId: true, contractId: true } })) {
     const piece = w.submissionId ?? w.callId;
     const c = t.contracts.find((x) => x.id === w.contractId);
-    if (piece && c && !bankWaits.has(piece)) bankWaits.set(piece, (await bankWaitsLine(db, { submissionId: w.submissionId, callId: w.callId }, displayName(c.tester))) ?? "");
+    if (piece && c && !bankWaits.has(piece)) bankWaits.set(piece, await bankWaitsOf(db, { submissionId: w.submissionId, callId: w.callId }, displayName(c.tester)));
   }
-  const waitsOf = (id: string) => bankWaits.get(id) || undefined;
+  const waitsOf = (id: string) => bankWaits.get(id)?.line || undefined;
+  const waitsIdOf = (id: string) => bankWaits.get(id)?.id || undefined;
   // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
   // (Owner, Oct 31, batch 35 §80) Confirmed in Needs you (where the dashboard's box, Payments and the bell link); under the piece only a link up to it.
   const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>);
@@ -555,7 +557,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
               </ResizeBox>
               <p className="text-sm font-medium text-white">Pay more</p>
-              <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+              <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                 room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
               </Fold>
             </div>
@@ -647,7 +649,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <div className="w-full space-y-1" data-part-pay-more="">
                         <p className="text-sm font-medium text-white">Pay more</p>
-                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                         </div>
                       )}
@@ -715,7 +717,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                             {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                               <div className="space-y-1" data-call-pay-more="">
                               <p className="text-sm font-medium text-white">Pay more</p>
-                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
                                 room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                                 listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                                 listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />

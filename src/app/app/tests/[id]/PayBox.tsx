@@ -10,6 +10,7 @@ import { FIELD, newPressId } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { needsBank } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
+import { payMoreWaits } from "@/lib/bankNotice";
 import { MIN_CHARGE_CENTS, NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, REASON_WHEN_UNDER_LISTING, STRIPE_MAX_LINE, ZERO_PAY_REASON, overCallsLine, overMaxLine, payUnderLine } from "@/lib/rules";
 import { amountFromRate, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { DraftTag, useKept } from "@/lib/useKept";
@@ -43,6 +44,8 @@ export function PayBox(p: {
   confirming?: string;
   /** (Owner, Nov 3, §159) Pay more while a payment on this part waits for the bank: the box is greyed with this line ("Confirm Ana Silva's $10.00 charge with your bank first."). */
   bankWaits?: string;
+  /** (Owner bug, Nov 4, §174) The waiting payment `bankWaits` is about: the box's own bank check never greys it. */
+  bankWaitsId?: string;
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
@@ -60,6 +63,9 @@ export function PayBox(p: {
   const [bankErr, setBankErr] = useState("");
   // (Batch 17 §11) The bank's check opens inline, under the button; the button stays disabled while it is open.
   const bank = useBankCheck();
+  // (Owner bug, Nov 4, §174) This box's own bank check (its payment): a redraw saying that very payment waits for the bank doesn't grey the box above its own check.
+  const [ownCheck, setOwnCheck] = useState("");
+  const bankWaits = payMoreWaits(p.bankWaits, p.bankWaitsId, { open: bank.open, checkId: ownCheck });
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Draft"; batch 35 §8: after signing in, with "Use saved").
   // (Owner, Oct 30) The amount (and a call's rate) is kept with its note, so a note never comes back next to another amount. A kept amount needs the tick again.
   const startAmount = start == null ? "" : (start / 100).toFixed(2);
@@ -127,6 +133,7 @@ export function PayBox(p: {
     let res: typeof r = r;
     if (needsBank(r)) {
       setBankErr("");
+      setOwnCheck(r.paymentId);
       try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); setPayKey(newPressId()); return; }
     }
     await keep.clear();
@@ -136,8 +143,8 @@ export function PayBox(p: {
   // (§160) A redraw while this box's own bank check is open keeps the box (and the bank's page): only another tab's or a later visit's shows "Confirming with your bank".
   if (p.confirming && !bank.open) return <BankWaiting own paymentId={p.confirming} line="Confirming with your bank" seenAt={p.seenAt} />;
   return (
-    <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}${p.bankWaits ? " opacity-60" : ""}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-mistakes-root="">
-      {p.bankWaits && <p className="info" data-pay-more-waits="">{p.bankWaits}</p>}
+    <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}${bankWaits ? " opacity-60" : ""}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-mistakes-root="">
+      {bankWaits && <p className="info" data-pay-more-waits="">{bankWaits}</p>}
       <p className="text-sm">
         {more && <b className="text-white">Pay more · </b>}
         <b>{listed ? `Listing: ${p.listingText}` : NOT_LISTED}</b>
@@ -180,7 +187,7 @@ export function PayBox(p: {
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        <button className="btn-green" disabled={busy || bank.open || !!p.bankWaits || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
+        <button className="btn-green" disabled={busy || bank.open || !!bankWaits || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
         {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
         {!done && <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>}
       </div>

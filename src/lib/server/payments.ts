@@ -207,13 +207,20 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
  * bank check is open → "Your $10.00 payment for this part is waiting for your bank: finish or cancel it first.". Null when nothing waits.
  */
 export async function bankWaitsLine(tx: Prisma.TransactionClient | typeof db, at: { submissionId?: string | null; callId?: string | null }, testerName: string) {
+  return (await bankWaitsOf(tx, at, testerName))?.line ?? null;
+}
+/**
+ * (§159) The same line with the waiting payment it is about (`id`). (Owner bug, Nov 4, §174) The test page passes the id with the line, so a Pay more box never
+ * greys itself for its OWN bank check: a redraw drawn while that check is open (or just after it ended) reads the box's own row as waiting.
+ */
+export async function bankWaitsOf(tx: Prisma.TransactionClient | typeof db, at: { submissionId?: string | null; callId?: string | null }, testerName: string) {
   const where = at.callId ? { callId: at.callId } : at.submissionId ? { submissionId: at.submissionId } : null;
   if (!where) return null;
-  const w = await tx.payment.findFirst({ where: { ...where, OR: [{ kind: { in: ["review", "call", "extra", "dispute"] }, status: { in: ["needs_confirmation", "needs_action"] } }, { kind: { in: ["review", "call", "dispute"] }, status: "pending" }], settledAt: null }, orderBy: { createdAt: "desc" }, select: { status: true, amountCents: true } });
+  const w = await tx.payment.findFirst({ where: { ...where, OR: [{ kind: { in: ["review", "call", "extra", "dispute"] }, status: { in: ["needs_confirmation", "needs_action"] } }, { kind: { in: ["review", "call", "dispute"] }, status: "pending" }], settledAt: null }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, amountCents: true } });
   if (!w) return null;
   // A charge on this part still on its way to the bank (a Charge pressed this very moment): it can't be paid more until it lands either way.
-  if (w.status === "pending") return "A payment for this part is being confirmed. Wait for it to finish before paying again.";
-  return w.status === "needs_confirmation" ? `Confirm ${testerName}'s ${money(w.amountCents)} charge with your bank first.` : `Your ${money(w.amountCents)} payment for this part is waiting for your bank: finish or cancel it first.`;
+  if (w.status === "pending") return { id: w.id, line: "A payment for this part is being confirmed. Wait for it to finish before paying again." };
+  return { id: w.id, line: w.status === "needs_confirmation" ? `Confirm ${testerName}'s ${money(w.amountCents)} charge with your bank first.` : `Your ${money(w.amountCents)} payment for this part is waiting for your bank: finish or cancel it first.` };
 }
 
 /** (Owner, Nov 3, §159) "Your account is suspended: Pay waits until it is lifted." (Pay more: "extra pay"; Confirm with your bank, Confirm all: their names). */

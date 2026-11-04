@@ -71,3 +71,13 @@ export function cancelledCheckLine(message: string, by?: unknown) {
  * box hides the button and says so (with Cancel this check); a press from an older page is refused with the same line (never a stop-once, never "already reserved").
  */
 export const owedElsewhereLine = (amount: string) => `Pay what you owe (${amount}) is waiting for your bank in another tab or window: finish that check, or cancel it.`;
+
+/**
+ * (Owner bug, Nov 4, §174) The "waits for your bank" line a Pay more box shows (§159), or none. Never for the box's OWN bank check: not while its bank box is open
+ * under it (a redraw drawn meanwhile reads its own row as waiting), and not for the row of the check it just ended (a redraw drawn before the end). Another
+ * payment's wait (a charge made while away, another tab's Pay) still greys it.
+ */
+export function payMoreWaits(line: string | undefined, waitingId: string | undefined, own: { open: boolean; checkId: string }) {
+  if (!line || own.open) return undefined;
+  return waitingId && own.checkId && waitingId === own.checkId ? undefined : line;
+}
