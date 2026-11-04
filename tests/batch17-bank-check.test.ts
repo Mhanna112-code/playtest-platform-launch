@@ -269,7 +269,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     expect(box).toContain(`id="bank-${p.id}"`);
     expect(box).toContain("data-[marked]:ring-2");
     expect(box).toContain(">Confirm with your bank</button>");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("{r.sub && bankAt(r.sub.id)}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("{bankAt(r.sub.id)}"); // inside the sent part's own drop-down (owner, Nov 3)
     // "Confirm with your bank": the payment is confirmed with return_url so the bank's page shows inline; then it goes through.
     const start = await confirm(dev.cookie, { paymentId: p.id, start: true });
     expect(start.body).toMatchObject({ paymentId: p.id, needs: "action", checkUrl: CHECK_URL });
