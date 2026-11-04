@@ -200,13 +200,22 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   // was decided changes what that tester is owed. A decision about ANOTHER tester follows the Alerts ticks like every other line.
   // (§159 rule 2) Likewise the tester's sent, updated or added work on the SAME part being paid ("sent" lines carry the part as their item) always stops once,
   // even with "Work sent" ticked; work on their other parts, and other testers' work, follows the tick.
-  const payContract = opts.press?.stopCheck && opts.press.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x)) ? opts.press.stopCheck : null;
   // (§159) And that tester leaving the test (or being removed: a suspension or deletion reads "left") always stops a payment press on THEIR parts; another tester
   // leaving follows "Testers leaving".
-  const always = (c: TestEventLike & { contractId?: string | null; item?: string }) => !!payContract && (
-    ((isTeamDecision(c) || c.kind === "left") && c.contractId === payContract) || (c.kind === "sent" && !!c.item && !!opts.press?.keys.includes(`sub:${c.item}`)));
-  return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a) || always(c); }) : loud;
+  return ignored.size ? loud.filter((c) => { const a = alertOf(c.kind); return !a || !ignored.has(a) || alwaysStops(c, opts.press); }) : loud;
 }
+
+/**
+ * (§159) The lines that stop a payment press (Pay, Pay more, Confirm with your bank: `payPressOf`) whatever the Alerts ticks: the team's decision about that same
+ * tester, that tester leaving (or removed), and work sent, updated or added on the very part being paid.
+ */
+export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
+  const payContract = press?.stopCheck && press.acts.some((x) => (PAY_ACTS as readonly string[]).includes(x)) ? press.stopCheck : null;
+  if (!payContract) return false;
+  return ((isTeamDecision(c) || c.kind === "left") && c.contractId === payContract) || (c.kind === "sent" && !!c.item && !!press?.keys.includes(`sub:${c.item}`));
+}
+/** (Owner, Nov 3, §160) A developer's stop line that no Alerts tick could switch off: one with no Alerts type (own other-tab actions, a stop, a listing change…) or one that always stops this press. */
+export const devForced = (c: TestEventLike & { contractId?: string | null }, press?: Press) => !alertOf(c.kind) || alwaysStops(c, press);
 
 /** (Owner, Nov 3) A line recording the team's dispute decision ("The team decided Ana Silva's dispute: …"). */
 export const isTeamDecision = (c: { kind: string; text: string }) => c.kind === "admin" && c.text.startsWith("The team decided ");
@@ -394,4 +403,4 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
   return side === "join" ? withSaveAt(testId, lines, tx) : lines;
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: renderTimes(e.text, dateZone()), at: e.createdAt, ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: renderTimes(e.text, dateZone()), at: e.createdAt, ...(e.forced ? { forced: true } : {}), ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

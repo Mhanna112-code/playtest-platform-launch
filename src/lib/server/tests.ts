@@ -2,7 +2,7 @@ import { dateZone } from "./dateZone";
 import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
-import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, ownChanges, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
 import { additionsOf, latestItems } from "@/lib/additions";
@@ -664,6 +664,8 @@ export const devLine = (c: TestEventLike & { contractId?: string | null }, withA
   ...(c.saveAt ? { saveAt: c.saveAt } : {}),
   // (Batch 35 §34) ... and the panel lines all the listing changes it covers changed (See it marks the union).
   ...(c.keys?.length ? { keys: c.keys } : {}),
+  // (Owner, Nov 3, §160) A line no Alerts tick could switch off: the box shows no "turn these stops off" for it.
+  ...(c.forced ? { forced: true } : {}),
 });
 
 /**
@@ -704,7 +706,8 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
   const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || e.kind === "stop" || keep(e)) : raw, body);
   if (changes.length) {
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => devLine(c)), ...extra });
+    // (Owner, Nov 3, §160) Each line says whether any Alerts tick could have switched it off (`forced`): the box offers to turn off only the ones that could.
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: changes.map((c) => devLine({ ...c, forced: devForced(c, press) })), ...extra });
   }
 }
 /** The developer's own Stop made in another tab, as its line reads. */

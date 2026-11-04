@@ -2001,3 +2001,20 @@ bank's page (Stripe's own 3D Secure page, inline under the button) the only butt
   `PayBox` `bankWaits`; `ConfirmAll` sends `seenAt` / `boxAt`. No migration.
 - **Code (14).** `confirm.confirmStart` (advisory lock per payment), `confirmFinish` (waits out "processing"), `bankPeek.stillWaiting` ("processing" waits).
 - **Tests (6–14):** `tests/pay-matrix-2.test.ts`; `batch35-bank-peek` ("processing" still waits).
+
+## §160b No turn-off offered for stops that ignore Alerts (owner, Nov 3)
+
+Owner: "With forced stops that ignore alerts, don't show the turn-me-off in Alerts."
+
+- **The server marks each stop line that no Alerts tick could switch off** (`forced: true`). Developer side (`devGate`, so Pay, Pay more, Confirm with your bank,
+  Confirm all's item lines, every other developer press): a line with no Alerts type (your own other-tab actions, a stop or pause, a listing change, …) and the
+  §159 always-stop lines for a payment press (the team's decision about the same tester, that tester leaving or removed, work on the very part being paid).
+  Tester side (`testerGate`, and the stop-moment box): new terms, a key marked working, their own other-tab actions, a stop or pause, and the piece rules (Dispute's
+  payment on that piece; Charge / Let it go's payment on that part and any team decision on their disputes).
+- **The box** (`ChangesBox`): the developer's "You can turn these stops off in Alerts… Don't stop me for: …" chips come only from lines that aren't forced (a box of
+  forced lines shows no hint at all; a mixed box offers only the optional lines' types). The tester's "Turn off alerts" / "You can turn these stops off below" shows
+  only when a line in the box isn't forced.
+- **Code.** `live.alwaysStops` / `devForced`, `tests.devLine` (carries `forced`), `testerGate` (marks before `asLines`), `ChangesBox.optionalAlerts` /
+  `testerCanTurnOff`. No migration.
+- **Tests:** `tests/forced-stops.test.ts` (forced-only boxes offer no turn-off; a mixed box offers only the optional type; the server marks the same-tester decision
+  forced and another tester leaving optional; the tester's decision line with Alerts Off is forced).
