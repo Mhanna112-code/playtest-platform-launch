@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { fmtDateTimeIn } from "@/lib/format";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import * as React from "react";
@@ -90,7 +91,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const decision = await waiting(d, t, { kind: "dispute", submissionId: x.sub.id, contractId: x.sessionId, amountCents: 500, by: new Date(Date.now() + 60 * HOUR) });
     const rows = await bankToConfirm(d);
     expect(rows.map((r) => r.id)).toEqual([onCall.id, retry.id, decision.id, late.id]);
-    const day = call.startsAt.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    const day = fmtDateTimeIn(call.startsAt, "UTC"); // (Owner, Nov 4, §178) a call by its date and time
     expect(rows.map((r) => r.lead)).toEqual([
       `$15.00 · Ana Silva's live call on “Harbor Run” (${day})`,
       "$10.00 on “Harbor Run” · what you owe",

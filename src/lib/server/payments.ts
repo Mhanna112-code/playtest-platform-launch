@@ -198,7 +198,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     });
     // (Owner, Nov 4, §177) A call is named with its day, as every payment line names a call ("Ana Silva's live call on “Harbor Run” (Oct 27)").
     const callStart = payment!.callId ? (await db.call.findUnique({ where: { id: payment!.callId }, select: { startsAt: true } }))?.startsAt ?? null : null;
-    await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, pieceName({ tester: name, part: piece.label, test: c.title, when: callStart ? T(callStart, "date") : null }));
+    await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, pieceName({ tester: name, part: piece.label, test: c.title, when: callStart ? T(callStart) : null })); // (§178) its date and time
     // The tester is told at once (bell; their top box and stop-once read the owed payment): never "failed". (§177) The bell names the test and which call:
     // "Nora Lane's payment for your live call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST) ($15) is delayed."
     await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents, `“${c.title}”${callStart ? ` (${T(callStart)})` : ""}`), `/app/sessions/${c.id}#${partAnchor(piece.label)}`, undefined, { payment: true, group: "tdelayed" });
@@ -273,6 +273,12 @@ export async function reserving<T>(run: () => Promise<T>): Promise<T> {
   }
 }
 
+/** (Owner, Nov 4, §178) A call payment's call, for a line that names it: its date and time as a time token (written in the reader's zone); null for a sent part. */
+const callWhen = async (p: { callId?: string | null; submissionId?: string | null }) => {
+  const call = p.callId && !p.submissionId ? await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } }) : null;
+  return call ? T(call.startsAt) : null;
+};
+
 /** (Batch 11) A Pay went through (at once, or once the bank confirmed it): the payment is recorded, the tester told, the receipt sent. */
 export async function finishReviewPay(paymentId: string, result: { status: string; feeCents?: number; testerCents?: number; transferStatus?: string; stripePaymentIntentId: string | null }) {
   const p = await db.payment.findUniqueOrThrow({ where: { id: paymentId } });
@@ -305,7 +311,8 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
     { payment: true, group: "tpaid" },
   );
   // (§131) The receipt names the tester, the part and the test (pieceName).
-  if (rev.amountCents > 0) await receipt(dev.email, pieceName({ tester: name, part: piece.label, test: c.title, full: true }), rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+  // (Owner, Nov 4, §178) A call with its date and time ("Ana Silva's live call on “Harbor Run” (Tue, Oct 27, 8:00 AM CST)").
+  if (rev.amountCents > 0) await receipt(dev.email, pieceName({ tester: name, part: piece.label, test: c.title, full: true, when: await callWhen(p) }), rev.amountCents, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   // (Batch 22 section 2) A suspended tester is paid like anyone (no held share).
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }
@@ -744,7 +751,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     // (Owner, Oct 27) A declined extra pay starts the payment hold at once, like any declined payment.
     await db.payment.update({ where: { id: row.id }, data: { failure: (e as Error).message } });
     if (row.submissionId) await answerUpdate(db, row.submissionId, row.createdAt); // (batch 30 §2) it was pressed: the update's row goes (the amount is owed)
-    await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${pieceName({ tester: name, part: piece.label, test: c.title })}`);
+    await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${pieceName({ tester: name, part: piece.label, test: c.title, when: await callWhen(row) })}`); // (§178)
     throw new HttpError(402, "card_failed", `Your card was declined, so ${name} wasn't paid ${money(amount)} extra yet. Your tests are paused until you pay what you owe: open Payments.`, { held: true, failed: `Your extra pay on ${c.test.title} was declined` });
   }
   if (result.status === "requires_action") return suspendedAfterCheck(dev.id, row.id, "extra pay", await (await import("./confirm")).pressAction(row.id, result as NeedsAction & Record<string, unknown>));
@@ -798,6 +805,6 @@ export async function finishExtraPay(paymentId: string, result: { status: string
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for ${await partOnTest(p, "your", c.test.title)}`; // (§177) which call
   await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`${pronouns(dev.pronoun).Poss} note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
-  await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title, full: true })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
+  await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title, full: true, when: await callWhen(p) })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`); // (§178)
   return { paid: true, amountCents: amount, status: result.status };
 }

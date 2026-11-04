@@ -284,11 +284,13 @@ export async function coveredNames(ids: string[], full = false) {
   const out = new Map<string, string[]>();
   if (!ids.length) return out;
   const holds = await import("./holds");
+  const days = new Map<string, (d: Date) => string>(); // (Owner, Nov 4, §178) a call by its date and time, as the page's other lines write it
   for (const p of await db.payment.findMany({ where: { coveredById: { in: ids } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] })) {
+    if (!days.has(p.developerId)) days.set(p.developerId, await holds.pageCallDay(p.developerId));
     const cents = p.chargeback === "open" ? reversedOf(p) + CHARGEBACK_FEE_CENTS : p.amountCents; // (§133) what the bank reversed + the fee
     // (Owner, Nov 4, §177; seen on the dashboard: "… live call on “excerptexcer…” (⟦t:2026-10-27T19:04:52.652Z:date⟧) $5.00") A call's date is a time token in the
     // piece's name: written here in the developer's own zone, as every page line that lists these shows it.
-    out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), await renderFor(p.developerId, `${await holds.owedItemName(p, full)} ${money(cents)}`)]);
+    out.set(p.coveredById!, [...(out.get(p.coveredById!) ?? []), await renderFor(p.developerId, `${await holds.owedItemName(p, full, days.get(p.developerId))} ${money(cents)}`)]);
   }
   return out;
 }
