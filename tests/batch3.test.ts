@@ -11,7 +11,7 @@ import * as R from "@/lib/rules";
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 const DAY = 86_400_000;
 const inHours = (h: number) => new Date(Date.now() + h * 3_600_000).toISOString();
@@ -237,7 +237,7 @@ describe("newest owner rules", () => {
     const { tester, sessionId } = await joined(testId);
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"], ask: "12.00" })).status).toBe(200);
     expect((await db.submission.findFirstOrThrow({ where: { contractId: sessionId } })).askedCents).toBeNull();
-    expect((await sact(sessionId, "written-add", tester.cookie, { text: "c", ask: "abc" })).status).toBe(200); // (batch 35 §136) sent answers are added to
+    expect((await addTo(sessionId, tester.cookie, { text: "c", ask: "abc" })).status).toBe(200); // (batch 35 §136) sent answers are added to
     await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: inHours(48), ask: "20" });
     expect((await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId } })).askRateCents).toBeNull();
     expect(dev).toBeTruthy();

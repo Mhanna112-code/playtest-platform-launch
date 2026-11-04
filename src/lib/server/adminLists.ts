@@ -435,7 +435,7 @@ async function disputedWork(d: { submissionId: string | null; callId: string | n
   if (!s) return null;
   return {
     kind: "submission", part: s.kind === "recording" ? "recording" : "written", setUntil: s.setUntil ? s.setUntil.toISOString() : null,
-    items: s.kind === "written" ? itemsOf(s.answers, writtenQuestionsOf(s.contract)) : [], notes: s.notes, additions: s.additions,
+    items: s.kind === "written" ? itemsOf(s.answers, writtenQuestionsOf(s.contract)) : [], notes: s.notes, additions: s.additions, timeZone: dateZone(), subId: s.id,
     files: s.recordings.filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, contentType: r.contentType, sizeBytes: r.sizeBytes, part: r.part })),
   };
 }

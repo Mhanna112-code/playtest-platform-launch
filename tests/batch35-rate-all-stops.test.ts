@@ -8,7 +8,7 @@ import { POST as sessionPOST } from "@/app/api/sessions/[id]/[action]/route";
 import { api, newPageLoad, pageLoad } from "@/lib/client";
 import { clearShown, notePageLoaded, setShownOnPage } from "@/lib/live";
 import { json, makeUser, req } from "./helpers";
-import { act, atHours, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, atHours, joined, sact, seen, settle, setup } from "./fixtures";
 
 const pay = (cookie: string, id: string) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), kind: "submission", id, amount: "10.00", tickedCents: 1000, confirmed: true } })).then(json);
 const texts = (r: { body: { error?: { changes?: { text: string }[] } } }) => (r.body.error?.changes ?? []).map((e) => e.text);
@@ -60,11 +60,11 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     const x = await ready();
     await db.user.update({ where: { id: x.tester.user.id }, data: { testerAlertsOff: true } });
     const loaded = seen(); await settle();
-    const sent = await sact(x.sessionId, "written-add", x.tester.cookie, { text: "updated answer", confirmed: true, tab: "another-tab", load: "another-load" }); // (batch 35 §136) an addition
+    const sent = await addTo(x.sessionId, x.tester.cookie, { text: "updated answer", confirmed: true, tab: "another-tab", load: "another-load" }); // (batch 35 §136) an addition
     expect(sent.status, JSON.stringify(sent.body)).toBe(200);
     const first = await rate(x, loaded);
     expect(first.body.error?.code).toBe("stop_once");
-    expect(texts(first)).toEqual(["You added to your written answers in another tab"]);
+    expect(texts(first)).toEqual([expect.stringMatching(/^You added to your answer to “.+” in another tab$/)]); // (§167) it names the question
     expect(first.body.error.alertsOff).toBe(true);
     expect((await rate(x, loaded, { confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
   });
@@ -92,7 +92,7 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     if (kind === "listing") await edit(x, { description: "Updated sailing course" });
     if (kind === "call") expect((await act(x.testId, "request-time", x.dev.cookie, { confirmed: true, contractIds: [x.sessionId], startsAt: atHours(48), minutes: 30 })).status).toBe(200);
     if (kind === "stop") expect((await act(x.testId, "stop", x.dev.cookie, { confirmed: true, reason: "We have all the feedback" })).status).toBe(200);
-    if (kind === "own") expect((await sact(x.sessionId, "written-add", x.tester.cookie, { text: "updated answer", confirmed: true, tab: "another-tab" })).status).toBe(200);
+    if (kind === "own") expect((await addTo(x.sessionId, x.tester.cookie, { text: "updated answer", confirmed: true, tab: "another-tab" })).status).toBe(200);
     if (kind === "pause") {
       const a = await makeUser();
       await (await import("@/lib/server/restrictions")).pauseTest(a.user.id, x.testId, "Checking the test");

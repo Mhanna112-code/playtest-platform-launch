@@ -3,6 +3,9 @@ import { db } from "@/lib/db";
 import { displayName, money, pronouns } from "@/lib/server/dateFormat";
 import { andList } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
+import { questionKeys, quoteQuestion } from "@/lib/additions";
+import { itemsFor } from "@/lib/answerSets";
+import { qText } from "@/lib/questions";
 import { logAction, type Answers, type OwnAbout } from "./live";
 
 // What a person did, in their own words, for reason E ("You sent your written answers in another tab"). Logged after the
@@ -48,7 +51,13 @@ export async function logTesterAction(userId: string, contractId: string, action
     // (Owner, Oct 29, batch 29 section 13) "You sent your updated answers in another tab" (a part sent again replaces the sent one).
     case "written": text = (await resent(contractId, "written")) ? "sent your answers to the new questions" : "sent your written answers"; break;
     // (Batch 35 §136) Adding to sent work: "You added to your written answers in another tab", "You added a recording …".
-    case "written-add": text = "added to your written answers"; break;
+    // (§167) An addition to one question names it: "You added to your answer to “…” in another tab".
+    case "written-add": {
+      const qs = Array.isArray(c.questions) && c.questions.length ? (c.questions as string[]) : ["Your feedback"];
+      const q = qs[questionKeys(itemsFor(qs)).indexOf(s(body.question))];
+      text = q ? `added to your answer to ${quoteQuestion(qText(q))}` : "added to your written answers";
+      break;
+    }
     case "recording-send": {
       const n = Number((result as { added?: number } | null)?.added ?? 0);
       text = n ? (n === 1 ? "added a recording" : `added ${n} recordings`) : "sent your recording";

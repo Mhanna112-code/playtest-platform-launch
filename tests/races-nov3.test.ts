@@ -16,7 +16,8 @@ import { pressLabelOf } from "@/lib/pressLabels";
 import { keptRefusalLine } from "@/lib/keptRefusal";
 import { pressAgainLine } from "@/lib/rules";
 import { email, json, makeUser, req } from "./helpers";
-import { act, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
+import { questionKey } from "@/lib/additions";
 
 // (Owner, Nov 3, races) Seven bugs the race recordings found: each test fires both presses at once (or with the second landing while the first is in flight) and
 // checks that exactly one outcome happens.
@@ -238,7 +239,7 @@ describe("(Nov 3, races) 4: Add to my answers while the developer's Pay is in fl
     const st = gatedStripe();
     const paying = pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
     await st.called; // the Pay is at the bank
-    const [added] = await Promise.all([sact(j.sessionId, "written-add", j.tester.cookie, { text: "One more thing", seenAt: seen(), confirmed: true }), sleep(300).then(() => st.open())]);
+    const [added] = await Promise.all([addTo(j.sessionId, j.tester.cookie, { text: "One more thing", seenAt: seen(), confirmed: true }), sleep(300).then(() => st.open())]);
     expect(added.status).toBe(200);
     expect((await paying).status).toBe(200);
     const after = await db.submission.findUniqueOrThrow({ where: { id: sub.id }, include: { review: true } });
@@ -251,7 +252,7 @@ describe("(Nov 3, races) 4: Add to my answers while the developer's Pay is in fl
     const s = await setup();
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
-    expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "One more thing", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect((await addTo(j.sessionId, j.tester.cookie, { text: "One more thing", seenAt: seen(), confirmed: true })).status).toBe(200);
     await settle();
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId } });
     gatedStripe(false);
@@ -314,7 +315,7 @@ describe("(Nov 3, races) 6: the developer's Stop wins over the tester's Add", ()
       await settle();
       const dev = await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } });
       const tester = await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } });
-      const body = { text: "One more thing", seenAt: seen(), confirmed: true };
+      const body = { text: "One more thing", question: questionKey("What did you like?"), seenAt: seen(), confirmed: true }; // (§167) under a question
       const [, add] = await Promise.all([
         stopTest(dev, s.testId, { reason: "We have what we need.", seenAt: seen(), confirmed: true }),
         outcome(sleep(lag).then(() => addWritten(tester, j.sessionId, body))),
@@ -330,7 +331,7 @@ describe("(Nov 3, races) 6: the developer's Stop wins over the tester's Add", ()
     const j = await joined(s.testId);
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["a", "b"] });
     await stopTest(await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } }), s.testId, { reason: "We have what we need.", seenAt: seen(), confirmed: true });
-    const late = await outcome(addWritten(await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } }), j.sessionId, { text: "x", seenAt: seen(), confirmed: true }));
+    const late = await outcome(addWritten(await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } }), j.sessionId, { text: "x", question: questionKey("What did you like?"), seenAt: seen(), confirmed: true }));
     expect(late.ok).toBe(false);
     if (!late.ok) expect(keptRefusalLine(pressLabelOf(path(j.sessionId), {}), late.e.message)).toMatch(/^Your Add didn't go through: Nora Lane stopped the test on /);
     void refused;
@@ -346,7 +347,7 @@ describe("(Nov 3, races) 7: a suspended tester's Dismiss all and Add", () => {
     expect([all.status, all.body.error.failed]).toEqual([403, "Your Dismiss all didn't go through"]);
     const one = await sact(j.sessionId, "dismiss-removed", j.tester.cookie, {});
     expect(one.body.error.failed).toBe("Your Dismiss on Harbor Run didn't go through");
-    const add = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "x" });
+    const add = await addTo(j.sessionId, j.tester.cookie, { text: "x" });
     expect(add.body.error.failed).toBe("Your Add on Harbor Run didn't go through");
     expect(pressLabelOf(`/api/sessions/${j.sessionId}/dismiss-removed`, { all: true })).toBe("Dismiss all");
     expect(pressLabelOf(`/api/sessions/${j.sessionId}/dismiss-removed`, {})).toBe("Dismiss");

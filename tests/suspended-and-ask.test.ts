@@ -9,7 +9,7 @@ import { chargeAmount } from "@/lib/rules";
 import { startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, sact, seen, setup } from "./fixtures";
+import { act, addTo, bookCall, joined, sact, seen, setup } from "./fixtures";
 
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 const adm = (action: string, cookie: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
@@ -78,9 +78,9 @@ describe("no Ask $ on sends (owner, Oct 26): the Pay box starts at the listing; 
     const { sessionId, tester, sub, testId } = await sent();
     expect((await newest(sub.id)).askedCents).toBeNull();
     // (Batch 35 §136) Sent answers are added to, not updated.
-    expect((await sact(sessionId, "written-add", tester.cookie, { text: "c", ask: "15.00" })).status).toBe(200);
+    expect((await addTo(sessionId, tester.cookie, { text: "c", ask: "15.00" })).status).toBe(200);
     expect((await newest(sub.id)).askedCents).toBeNull();
-    expect(await db.testEvent.count({ where: { testId, text: "Ana Silva added to her written answers" } })).toBe(1);
+    expect(await db.testEvent.count({ where: { testId, text: { startsWith: "Ana Silva added to her answer to “" } } })).toBe(1);
     expect(await db.testEvent.count({ where: { testId, text: { contains: "asks" } } })).toBe(0);
   });
 

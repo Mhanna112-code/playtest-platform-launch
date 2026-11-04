@@ -5,7 +5,7 @@ import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
-import { additionsOf, latestItems } from "@/lib/additions";
+import { ADDITIONS_FULL, ADDITIONS_MAX, ADD_UNDER_QUESTION, QUESTION_GONE, additionsOf, latestItems, questionKeys, quoteQuestion } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -30,7 +30,7 @@ import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
-import { withoutAttachmentMarkers } from "@/lib/answerAttachments";
+import { markerIds, withoutAttachmentMarkers } from "@/lib/answerAttachments";
 import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, ANSWER_NEW_QUESTIONS, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 
@@ -1105,24 +1105,37 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
 }
 
 /**
- * (Owner, Nov 3, batch 35 §136) "Add more" on sent written answers: more text (with files placed in it) is added under what was sent, headed "Added". Nothing sent
- * before changes. The same windows as Send (not after the work ends, not while the test is paused, not while an offer of new terms is open) and the same
- * stop-once; the developer is told the same way ("Ana added to their written answers"). Payments and reviews already made stay as they are; after a Pay, Pay more
- * can pay for it (batch 30 §2's update row).
+ * (Owner, Nov 3, batch 35 §136) Adding to sent written answers: more text (with files placed in it) is added under what was sent. Nothing sent before changes. The
+ * same windows as Send (not after the work ends, not while the test is paused, not while an offer of new terms is open) and the same stop-once. Payments and
+ * reviews already made stay as they are; after a Pay, Pay more can pay for it (batch 30 §2's update row).
+ * (Owner, Nov 3, §167; replaces §136's one "Add more" for the whole part) Each addition is to ONE question (`question`: its key, questionKeys of the current
+ * questions), and the developer is told which ("Ana added to her answer to “…”"). An older page's general Add more (no question) is refused (ADD_UNDER_QUESTION).
+ * Only the files placed in this text go with it (another question's box may hold the others). At most 10 additions per part (ADDITIONS_MAX: every addition
+ * counts, old ones with no question and the answers to changed questions too), checked under the test's lock, so two adds at the 10th give exactly one.
  */
 export async function addWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
   const ended = sessionRefusal(c0, c0.test, displayName(c0.test.developer));
   if (ended) throw new HttpError(409, "closed", ended);
   await answerTermsFirst(contractId);
+  const key = typeof body.question === "string" ? body.question : "";
+  if (!key) throw new HttpError(409, "pick_question", ADD_UNDER_QUESTION);
   const text = typeof body.text === "string" ? body.text.trim() : "";
   if ((await db.recording.count({ where: { contractId, part: "written", uploadedAt: null, createdAt: { gt: new Date(Date.now() - 3 * 3_600_000) } } })) || text.includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
-  const files = await db.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
-  if (!withoutAttachmentMarkers(text).trim() && !files.length) throw new HttpError(400, "empty", NOTHING_TO_ADD);
+  // (§167) Only the uploads placed in this text (by their markers) go with it.
+  const placedIn = (rows: { id: string; filename: string }[]) => {
+    const ids = markerIds(text, rows);
+    return rows.filter((r) => ids.has(r.id));
+  };
+  const unsent = { contractId, part: "written", uploadedAt: { not: null }, submissionId: null };
+  if (!withoutAttachmentMarkers(text).trim() && !placedIn(await db.recording.findMany({ where: unsent, select: { id: true, filename: true } })).length) throw new HttpError(400, "empty", NOTHING_TO_ADD);
+  // (§167) Already at 10 (an older page): refused before any stop box.
+  const before = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, select: { additions: true } });
+  if (before && additionsOf(before.additions).length >= ADDITIONS_MAX) throw new HttpError(409, "add_full", ADDITIONS_FULL);
   await testerSendGate(contractId, body);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
-  const { sub, afterPaid } = await db.$transaction(async (tx) => {
+  const { sub, afterPaid, question } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
     await (await import("./workWindow")).assertWorkOpen(tx, t.id);
@@ -1133,33 +1146,40 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     const locked = resendRefusal(existing.review, "written");
     if (locked) throw new HttpError(409, "paid", locked);
     const qs = writtenQuestions(c);
-    if (existing.setUntil || !sameQuestions(latestItems(existing, qs), itemsFor(qs))) throw new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
+    const latest = latestItems(existing, qs);
+    if (existing.setUntil || !sameQuestions(latest, itemsFor(qs))) throw new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
+    const at = questionKeys(latest).indexOf(key);
+    if (at < 0) throw new HttpError(409, "question_gone", QUESTION_GONE);
+    // (§167) The 10 additions, counted under the lock.
+    const made = additionsOf(existing.additions);
+    if (made.length >= ADDITIONS_MAX) throw new HttpError(409, "add_full", ADDITIONS_FULL);
     // (Batch 14) At most 50,000 characters for the written part: the latest answers, the notes and everything added.
-    const long = checkWrittenLength([...latestItems(existing, qs).map((x) => x.answer), existing.notes, ...additionsOf(existing.additions).map((a) => a.text ?? ""), text]);
+    const long = checkWrittenLength([...latest.map((x) => x.answer), existing.notes, ...made.map((a) => a.text ?? ""), text]);
     if (!long.ok) throw new HttpError(400, "too_long", long.message);
     const now = new Date();
     // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
     // payment once that Pay is recorded.
     const paid = !!existing.review;
     const late = existing.late || isLate(c.dueAt, now);
-    const fresh = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
+    const fresh = placedIn(await tx.recording.findMany({ where: unsent, select: { id: true, filename: true } }));
     const sub = await tx.submission.update({ where: { id: existing.id }, data: {
-      additions: [...additionsOf(existing.additions), { at: now.toISOString(), text, files: fresh.map((f) => f.id) }] as unknown as Prisma.InputJsonValue,
+      additions: [...made, { at: now.toISOString(), text, files: fresh.map((f) => f.id), questionKey: key }] as unknown as Prisma.InputJsonValue,
       late, updatedAt: now,
       ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
     } });
     await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
-    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: true, paid });
-    return { sub, afterPaid };
+    const question = latest[at].question;
+    const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: true, paid, question });
+    return { sub, afterPaid, question };
   });
-  await tellSentByBell(c0, tester, sub, "written answers", true, afterPaid);
+  await tellSentByBell(c0, tester, sub, "written answers", true, afterPaid, 1, question);
   return sub;
 }
 
 /** (Batch 35 §136) The developer's live line for a send or an addition (after a Pay: below the cap a stop-once "sent" line, at the cap a quiet one). */
-export async function tellSent(tx: Tx, p: { testId: string; contractId: string; subId: string; name: string; poss: string; part: "written answers" | "recording"; added: boolean; paid: boolean; n?: number }) {
+export async function tellSent(tx: Tx, p: { testId: string; contractId: string; subId: string; name: string; poss: string; part: "written answers" | "recording"; added: boolean; paid: boolean; n?: number; /** (§167) the question added to */ question?: string }) {
   const afterPaid = p.paid ? await paidUpdateRoom(tx, p.subId, p.testId) : null;
-  const text = afterPaid ? (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(p.name, p.poss, p.part, p.n) : p.added ? `${p.name} ${addedWhat(p.poss, p.part, p.n)}` : `${p.name} sent ${p.poss} ${p.part}`;
+  const text = afterPaid ? (afterPaid.atCap ? updatedAtCapLive : updatedAfterPaidLive)(p.name, p.poss, p.part, p.n, p.question) : p.added ? `${p.name} ${addedWhat(p.poss, p.part, p.n, p.question)}` : `${p.name} sent ${p.poss} ${p.part}`;
   await recordEvent(tx, p.testId, afterPaid?.atCap ? "sentpaid" : "sent", text, false, {}, p.contractId, "", `part-${p.subId}`);
   return afterPaid;
 }
@@ -1168,13 +1188,14 @@ export async function tellSent(tx: Tx, p: { testId: string; contractId: string; 
 export async function tellSentByBell(
   c0: { id: string; testId: string; title: string; test: { developer: { email: string; name: string; deletedAt: Date | null } } },
   tester: U, sub: { id: string; late: boolean }, part: "written answers" | "recording", added: boolean, afterPaid: { atCap: boolean; paidCents: number; roomCents: number } | null, n = 1,
+  /** (§167) the question added to */ question?: string,
 ) {
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss, dev = displayName(c0.test.developer);
   const anchor = part === "recording" ? "part-recording" : "part-written";
-  await notify(tester.email, `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added to your ${part} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
-  if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n);
-  const title = added ? `${name} ${addedWhat(poss, part, n)} for “${c0.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.title}”`;
-  const what = added ? addedWhat(poss, part, n) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;
+  await notify(tester.email, `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added to your ${question ? `answer to ${quoteQuestion(question)}` : part} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
+  if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n, question);
+  const title = added ? `${name} ${addedWhat(poss, part, n, question)} for “${c0.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.title}”`;
+  const what = added ? addedWhat(poss, part, n, question) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;
   await notify(c0.test.developer.email, title, [`${name} ${what}${sub.late ? " (late)" : ""}. ${part === "recording" ? "Watch it" : "Review them"} and choose what to pay.`], `/app/tests/${c0.testId}#piece-${sub.id}`, { about: tester.id });
 }
 

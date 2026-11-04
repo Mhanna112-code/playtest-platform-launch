@@ -12,7 +12,7 @@ import { pillLabel, pillSide } from "@/lib/livePill";
 import { shownWithFresh } from "@/lib/adminScroll";
 import { CALL_MIN_AHEAD_MINUTES, farEnoughAhead } from "@/lib/callLead";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, addTo, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
 // Batch 27 (owner, Oct 29): new terms answered before sending or calls (1), "Go to the next round" stops once (2), the update pill always, pointing at the updates (4),
 // admin Tests rows follow a pause lifted elsewhere (5), a call may start 1 minute ahead when testing locally (6). Section 3 (files placed in answers) waits for the owner's choice of design.
@@ -185,7 +185,7 @@ describe("batch 27 section 2 (replaced by batch 35 §168): Go to the next round 
     await settle();
     const loaded = seen();
     await later();
-    expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "a2", seenAt: seen(), confirmed: true })).status).toBe(200); // (batch 35 §136) added, not updated
+    expect((await addTo(j.sessionId, j.tester.cookie, { text: "a2", seenAt: seen(), confirmed: true })).status).toBe(200); // (batch 35 §136) added, not updated
     const again1 = await act(s.testId, "next-round", s.dev.cookie, { seenAt: loaded });
     expect(again1.status, JSON.stringify(again1.body)).toBe(200);
     expect(again1.body.id).not.toBe(made.body.id);

@@ -103,6 +103,9 @@ export function zoneOpt(tz?: string | null): { timeZone?: string } {
  */
 export const fmtDateTimeIn = (d: Date | string, tz?: string | null) =>
   new Date(d).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit", ...zoneOpt(tz) });
+/** (Owner, Nov 3, batch 35 §167) A date with its year and time, "Nov 3, 2026, 11:29 PM", in a person's saved zone (none: the server's clock): the "Added" labels. */
+export const fmtStampIn = (d: Date | string, tz?: string | null) =>
+  new Date(d).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit", ...zoneOpt(tz) });
 /** (Batch 26 section 3) "3:10 PM" in a person's saved zone (none: the server's clock). */
 export const fmtTimeIn = (d: Date | string, tz?: string | null) => new Date(d).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", ...zoneOpt(tz) });
 /** (Batch 26 section 3) A stop's time as the stop lines say it: "3:10 PM" within 12 hours, else "Tue, Nov 3, 3:10 PM", in the person's saved zone. */

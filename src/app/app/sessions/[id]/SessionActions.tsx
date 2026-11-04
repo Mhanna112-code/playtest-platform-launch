@@ -17,6 +17,7 @@ import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChar
 import { ChangesBox } from "@/components/ChangesBox";
 import { ScrollText } from "@/components/ScrollText";
 import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
+import { ADDITIONS_FULL, ADDITIONS_MAX } from "@/lib/additions";
 import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
@@ -247,15 +248,19 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   );
 }
 
-/** (Batch 35 §136) The Add button's name, in its refusals and mistakes list. */
-export const ADD_PRESS = "Add to my answers";
+/** (Batch 35 §136) The Add button's name, in its refusals and mistakes list. (§167) One per question. */
+export const ADD_PRESS = "Add to my answer";
+/** (§167) The button that opens a question's box. */
+export const ADD_OPEN = "Add to this answer";
 
 /**
- * (Owner, Nov 3, batch 35 §136) Sent written answers are locked: "Add more" opens a box for more text (Bold, Italic, Code block, 📎 files), sent with "Add to my
- * answers" and added under what was sent ("Added"). Kept as a draft like the answers (`add:<session>`), editable until it's sent. `canSend` false (a paused test):
- * the box and its draft stay, the button is hidden. `used`: the characters already sent (the 50,000 limit counts everything).
+ * (Owner, Nov 3, batch 35 §136, §167; replaces §136's one "Add more" box for the whole part) Sent written answers are locked: each question of the tester's
+ * read-only list has its own "Add to this answer" box (Bold, Italic, Code block, 📎 files), sent with "Add to my answer" and added under that question. Kept as a
+ * draft per question (`add:<session>:<questionKey>`), editable until it's sent; a restored draft opens its question's fold. `canSend` false (a paused test): the
+ * box and its draft stay, the button is hidden. `used`: the characters already sent (the 50,000 limit counts everything). `made`: the part's additions so far
+ * (at most ADDITIONS_MAX; the page shows "3 of 10 additions left" once there is one): at 10, a grey note instead of the button, and a draft stays, read-only.
  */
-export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known = [], lines = [] }: { sessionId: string; seenAt: string; canSend?: boolean; used: number; known?: AnswerAttachment[]; lines?: string[] }) {
+export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known = [], lines = [], questionKey, question, made = 0 }: { sessionId: string; seenAt: string; canSend?: boolean; used: number; known?: AnswerAttachment[]; lines?: string[]; questionKey: string; question: string; made?: number }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [attachments, setAttachments] = useState(known);
@@ -263,45 +268,69 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
   const [boxAt, setBoxAt] = useState("");
+  const root = useRef<HTMLDivElement>(null);
+  const full = made >= ADDITIONS_MAX;
   const fin = useFinished(() => { setBusy(false); setText(""); setOpen(false); setBox(null); setBoxAt(""); });
-  const keep = useKept(`add:${sessionId}`, { text }, text === "", (v) => { if (typeof v.text === "string" && v.text) { setText(v.text); setOpen(true); } });
+  const keep = useKept(`add:${sessionId}:${questionKey}`, { text }, text === "", (v) => {
+    if (typeof v.text === "string" && v.text) {
+      setText(v.text);
+      setOpen(true);
+      // (§167) A kept draft opens its question's fold, so it isn't hidden.
+      const fold = root.current?.closest("details");
+      if (fold) fold.open = true;
+    }
+  });
   const length = used + writtenLength([text]);
   const empty = !withoutAttachmentMarkers(text).trim() && !attachments.some((a) => hasMarkerFor(text, a.id, attachments));
   const remove = (id: string) => void api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true }).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setErr(errOf(e)));
   async function add() {
-    if (!canSend || empty) return;
+    if (!canSend || empty || full) return;
     if (text.includes("[Uploading ")) return setErr(FIELD + "Wait for the upload to finish before sending.");
     if (!offerShown() && length > WRITTEN_MAX_CHARS) return setErr(FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).`);
     setBusy(true);
     setErr("");
     try {
-      await api(`/api/sessions/${sessionId}/written-add`, { text, seenAt, confirmed: !!boxAt, boxAt });
+      await api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt });
       await keep.clear();
-      fin.finish("Added to your answers.");
+      fin.finish("Added to your answer.");
     } catch (e) {
       const sb = stopBox(e);
       if (sb) { setBox(sb); setBoxAt(sb.now); } else setErr(errOf(e));
       setBusy(false);
     }
   }
+  const fullNote = full && <p className="note" data-additions-full="">{ADDITIONS_FULL}</p>;
   if (!open && !fin.done) {
-    return <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => setOpen(true)}>Add more</button>;
+    return (
+      <div ref={root} className="space-y-1" data-add-for={questionKey}>
+        {full ? fullNote : <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => setOpen(true)}>{ADD_OPEN}</button>}
+      </div>
+    );
   }
   return (
-    <div className="space-y-2 rounded-lg border border-white/10 p-3" data-add-box="written" data-mistakes-root="">
+    <div ref={root} className="space-y-2 rounded-lg border border-white/10 p-3" data-add-box="written" data-add-for={questionKey} data-mistakes-root="">
       {!fin.done && <>
-        <label className="label" htmlFor={`add-${sessionId}`}>Add to your answers</label>
-        <p className="note">What you sent stays as it is. This is added under it.</p>
-        <AnswerBox id={`add-${sessionId}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} value={text} onChange={setText} />
-        {keep.restored && text !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
-        <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
-        {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
+        <label className="label" htmlFor={`add-${sessionId}-${questionKey}`}>{ADD_OPEN}</label>
+        <p className="sr-only">{question}</p>
+        {full ? (
+          // (§167) At 10 the draft is kept, read-only.
+          <textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} data-add-readonly="" />
+        ) : (
+          <>
+            <p className="note">What you sent stays as it is. This is added under this answer.</p>
+            <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} value={text} onChange={setText} />
+          </>
+        )}
+        {keep.restored && text !== "" && !full && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
+        {!full && <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>}
+        {canSend && !full && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
       </>}
+      {fullNote}
       <div className="flex flex-wrap items-center gap-3">
-        {canSend && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? "Adding…" : ADD_PRESS}</button>}
-        {!fin.done && !busy && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}
+        {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? "Adding…" : ADD_PRESS}</button>}
+        {!fin.done && !busy && !full && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}
       </div>
-      {!canSend && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
+      {!canSend && !full && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
       <PressDone line={fin.line} />
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       <FormMistakes text={err} press={ADD_PRESS} />
