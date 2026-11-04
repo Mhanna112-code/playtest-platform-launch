@@ -1064,7 +1064,12 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   if (!long.ok) throw new HttpError(400, "too_long", long.message);
   // (Owner, Oct 28 afternoon) No sending while the test is paused (the typed answers stay kept as a draft).
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
-  await testerSendGate(contractId, body);
+  // (Owner, Nov 4, §183) A Send that adds to sent answers (the answers to changed questions) stops once for a developer payment on them since the page loaded,
+  // whatever the tester's Alerts. One that could only be refused (locked, or the team's $0 closure) is refused at once, never after a stop (checked again below).
+  const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
+  const sentRefusal = sendRefusal(sent, qs, answers);
+  if (sentRefusal) throw sentRefusal;
+  await testerSendGate(contractId, body, sent?.id);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
@@ -1074,16 +1079,10 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     if (refusal) throw new HttpError(409, "closed", refusal);
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    // (Batch 30 §2) Only an old rejection or the team's $0 closure stays locked against anything more.
-    const locked = resendRefusal(existing?.review, "written");
-    if (locked) throw new HttpError(409, "paid", locked);
+    const refused = sendRefusal(existing, qs, answers);
+    if (refused) throw refused;
     const paid = !!existing?.review;
     const items = itemsFor(qs, answers);
-    // (Owner, Nov 3, batch 35 §136; replaces batch 13 §8's "sending replaces the sent version" and batch 20 §26's updated answers) What was sent is locked: a
-    // second Send is only for the answers to changed questions (after a switch), and those are ADDED under what was sent ("Added"), never in its place.
-    const before = existing ? latestItems(existing, qs) : [];
-    const newQuestions = !!existing && (!!existing.setUntil || !sameQuestions(before, items));
-    if (existing && !newQuestions) throw new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
     // (Batch 30 §3) Added to a late piece, it stays late; added after the deadline, the piece is late (and Charge, if it had opened, no longer applies).
     const late = !!existing?.late || isLate(c.dueAt, now);
     const files = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
@@ -1102,6 +1101,37 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   });
   await tellSentByBell(c0, tester, sub, "written answers", updated, afterPaid);
   return sub;
+}
+
+type SentPart = Prisma.SubmissionGetPayload<{ include: { review: true } }>;
+
+/** What refuses a Send of written answers whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock). */
+function sendRefusal(existing: SentPart | null, qs: string[], answers: string[]) {
+  // (Batch 30 §2) Only an old rejection or the team's $0 closure stays locked against anything more.
+  const locked = resendRefusal(existing?.review, "written");
+  if (locked) return new HttpError(409, "paid", locked);
+  // (Owner, Nov 3, batch 35 §136; replaces batch 13 §8's "sending replaces the sent version" and batch 20 §26's updated answers) What was sent is locked: a
+  // second Send is only for the answers to changed questions (after a switch), and those are ADDED under what was sent ("Added"), never in its place.
+  if (existing && !existing.setUntil && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
+  return null;
+}
+
+/** What refuses an Add to this answer whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock). */
+function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: string, text: string) {
+  if (!existing) return new HttpError(409, "not_sent", "Send your answers first.");
+  const locked = resendRefusal(existing.review, "written");
+  if (locked) return new HttpError(409, "paid", locked);
+  const qs = writtenQuestions(c);
+  const latest = latestItems(existing, qs);
+  if (existing.setUntil || !sameQuestions(latest, itemsFor(qs))) return new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
+  if (questionKeys(latest).indexOf(key) < 0) return new HttpError(409, "question_gone", QUESTION_GONE);
+  // (§167) The 10 additions.
+  const made = additionsOf(existing.additions);
+  if (made.length >= ADDITIONS_MAX) return new HttpError(409, "add_full", ADDITIONS_FULL);
+  // (Batch 14) At most 50,000 characters for the written part: the latest answers, the notes and everything added.
+  const long = checkWrittenLength([...latest.map((x) => x.answer), existing.notes, ...made.map((a) => a.text ?? ""), text]);
+  if (!long.ok) return new HttpError(400, "too_long", long.message);
+  return null;
 }
 
 /**
@@ -1130,10 +1160,13 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   };
   const unsent = { contractId, part: "written", uploadedAt: { not: null }, submissionId: null };
   if (!withoutAttachmentMarkers(text).trim() && !placedIn(await db.recording.findMany({ where: unsent, select: { id: true, filename: true } })).length) throw new HttpError(400, "empty", NOTHING_TO_ADD);
-  // (§167) Already at 10 (an older page): refused before any stop box.
-  const before = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, select: { additions: true } });
-  if (before && additionsOf(before.additions).length >= ADDITIONS_MAX) throw new HttpError(409, "add_full", ADDITIONS_FULL);
-  await testerSendGate(contractId, body);
+  // (§167) Already at 10 (an older page): refused before any stop box. (Owner, Nov 4, §183) So is everything else that could only refuse it (the team's $0 closure,
+  // changed questions, a question gone, too long): a developer payment on these answers since the page loaded now stops the press once whatever the tester's
+  // Alerts, and a stop whose second press could only be refused is a single refusal instead (owner's standing rule).
+  const before = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
+  const beforeRefusal = addRefusal(before, c0, key, text);
+  if (beforeRefusal) throw beforeRefusal;
+  await testerSendGate(contractId, body, before?.id);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, afterPaid, question } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
@@ -1142,20 +1175,12 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    if (!existing) throw new HttpError(409, "not_sent", "Send your answers first.");
-    const locked = resendRefusal(existing.review, "written");
-    if (locked) throw new HttpError(409, "paid", locked);
-    const qs = writtenQuestions(c);
-    const latest = latestItems(existing, qs);
-    if (existing.setUntil || !sameQuestions(latest, itemsFor(qs))) throw new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
+    // (§167) The 10 additions (and every other refusal) counted again under the lock.
+    const refused = addRefusal(existing, c, key, text);
+    if (refused || !existing) throw refused ?? new HttpError(409, "not_sent", "Send your answers first.");
+    const latest = latestItems(existing, writtenQuestions(c));
     const at = questionKeys(latest).indexOf(key);
-    if (at < 0) throw new HttpError(409, "question_gone", QUESTION_GONE);
-    // (§167) The 10 additions, counted under the lock.
     const made = additionsOf(existing.additions);
-    if (made.length >= ADDITIONS_MAX) throw new HttpError(409, "add_full", ADDITIONS_FULL);
-    // (Batch 14) At most 50,000 characters for the written part: the latest answers, the notes and everything added.
-    const long = checkWrittenLength([...latest.map((x) => x.answer), existing.notes, ...made.map((a) => a.text ?? ""), text]);
-    if (!long.ok) throw new HttpError(400, "too_long", long.message);
     const now = new Date();
     // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
     // payment once that Pay is recorded.
