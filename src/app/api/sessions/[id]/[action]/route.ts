@@ -97,7 +97,7 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
     }
   }
   if (!more.length) stopBox([stop]);
-  const lines = [{ text: stop.text, at: stop.createdAt, kind: "stop" }, ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const lines = [{ text: stop.text, at: stop.createdAt, kind: "stop", forced: true }, ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines, tail: "Press again to go ahead.", ...extra });
 }
 

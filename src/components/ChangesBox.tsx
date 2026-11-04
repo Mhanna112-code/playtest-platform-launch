@@ -17,7 +17,12 @@ import { savedZone } from "@/components/TimeZoneSync";
 import { seeItClick, useSeeItTarget } from "@/components/ListingInfo";
 import { useGoneOnNewVersion } from "@/lib/pageVersion";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** (Batch 35 §34) the panel lines all the listing changes it covers changed */ keys?: string[] };
+export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** (Batch 35 §34) the panel lines all the listing changes it covers changed */ keys?: string[]; /** (Owner, Nov 3, §160) it stops whatever the Alerts: no way to turn it off is offered for it */ forced?: boolean };
+
+/** (Owner, Nov 3, §160) The Alerts types the developer's box offers to turn off: only from lines that could be switched off (not `forced`, not already ignored, not terms). */
+export const optionalAlerts = (changes: Change[]) => [...new Set(changes.filter((c) => !c.forced && !c.ignored && c.kind !== "terms").map((c) => c.alert).filter((x): x is string => !!x))];
+/** (Owner, Nov 3, §160) The tester's box offers "Turn off alerts" only when a line in it is one the tester's Alerts could have switched off. */
+export const testerCanTurnOff = (changes: Change[]) => changes.some((c) => !c.forced && c.kind !== "terms" && c.kind !== "keyfixed" && c.kind !== "stop");
 
 /** (Batch 28 §4) Every time in the box is in the reader's saved zone (the browser's only when none is saved), like the stop lines. */
 const time = (iso: string) => fmtTimeIn(iso, savedZone());
@@ -51,7 +56,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   const name = press ?? (label || lastPressLabel());
   const named = name && name !== "press" ? name : "";
   const action = DEFAULT_TAILS.has(tail) ? (named ? `Press ${pressVerb(named)} again to go ahead.` : "Press again to go ahead.") : tail;
-  const alerts = changes ? [...new Set(changes.filter((c) => !c.ignored && c.kind !== "terms").map((c) => c.alert).filter((x): x is string => !!x))] : [];
+  // (Owner, Nov 3, §160) Only the lines an Alerts tick could have switched off offer to turn their type off; a box of forced lines shows no turn-off hint at all.
+  const alerts = changes ? optionalAlerts(changes) : [];
   return (
     <div ref={ref} className="info basis-full" role="status" aria-live="polite" data-stop-box="">
       {changes && (
@@ -76,7 +82,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
               </li>
             ))}
           </LongList>
-          {side === "tester" ? <TesterAlertsOff show={changes.some((c) => c.kind !== "terms" && c.kind !== "keyfixed")} where={alertsWhere} /> : <QuickIgnore alerts={alerts} />}
+          {side === "tester" ? <TesterAlertsOff show={testerCanTurnOff(changes)} where={alertsWhere} /> : <QuickIgnore alerts={alerts} />}
           <p className="mt-1 font-semibold" data-press-again="">{action}</p>
         </>
       )}
