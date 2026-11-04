@@ -180,8 +180,32 @@ export const LENGTH_ENDED_LINE = "Call ended: it reached 150% of the booked time
 export const closedEndedLine = (closedLine: string) => `Call ended: ${closedLine.replace(/^This test /, "the test ").replace(/^./, (c) => c.toLowerCase())}`;
 /** (Batch 21 section 1) Anyone who isn't the call's booked tester or developer, anyone more than 10 minutes before the start, and anyone after it ended. */
 export const CALL_NOT_AVAILABLE = "This call isn't available.";
-/** (Batch 21 section 4) The two browsers couldn't reach each other directly (no TURN relay, a strict network). Nothing is measured. */
-export const STRICT_NETWORK_LINE = "Couldn't connect directly (a strict network?). Try another network, or reschedule.";
+/**
+ * (Batch 21 section 4) The two browsers couldn't reach each other. Nothing is measured. (Owner, Nov 3, batch 35 §163) The owner's wording, replacing "Couldn't connect
+ * directly (a strict network?). Try another network, or reschedule.": shown when the connection fails, and when both are in the room but still not connected after
+ * CANT_CONNECT_MS (with no usable path, a strict network with no relay or a relay that can't be reached, Chrome never reaches "failed": it stays "new" or "connecting").
+ */
+export const CANT_CONNECT_LINE = "The call can't connect.";
+/** (Owner, Nov 3, batch 35 §163) Both in the room this long without the browsers connecting: "The call can't connect." */
+export const CANT_CONNECT_MS = 20_000;
+/** The room's line while this browser has no camera or microphone it may use. */
+export const ALLOW_MEDIA_LINE = "Allow your camera or microphone to join (check the browser's permission prompt).";
+
+/**
+ * (Owner, Nov 3, batch 35 §163) The call room's status line, from what the room knows: `setup` (the camera still starting, refused, or ready), the connection's
+ * state, whether the other person is in the room (the room's polls) or said they left, and `stuck` (both in the room CANT_CONNECT_MS and never connected).
+ * "Waiting for Ana…" only while the other person really isn't in the room; in the room but not connected yet reads "Connecting…".
+ */
+export function roomStatusLine(r: { setup: "camera" | "allow" | "ready"; connection: string; otherHere: boolean; otherLeft: boolean; stuck: boolean; otherName: string }) {
+  if (r.setup === "camera") return "Starting your camera…";
+  if (r.connection === "connected") return "Connected";
+  if (r.otherLeft) return `${r.otherName} left the call`;
+  if (r.connection === "failed" || r.stuck) return CANT_CONNECT_LINE;
+  if (r.setup === "allow") return ALLOW_MEDIA_LINE;
+  if (r.connection === "disconnected") return `${r.otherName} lost connection…`;
+  if (!r.otherHere) return `Waiting for ${r.otherName}…`;
+  return "Connecting…";
+}
 /** Join on a call that ended at the $1,000. */
 export const CALL_OVER_LINE = "This call is over.";
 

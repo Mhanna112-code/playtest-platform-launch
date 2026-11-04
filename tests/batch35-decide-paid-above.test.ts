@@ -79,7 +79,7 @@ describe("§149: Decide after a Pay more since the admin's page loaded", () => {
   it("paid now ($7.00) is less than the decided $10.00: only the difference ($3.00) is charged and the dispute is decided", async () => {
     const w = await payMoreAfterLoad(300);
     const r = await decideDispute(w.admin, w.row.id, { total: "10.00", tickCents: 600, seenAt: w.loaded });
-    expect(r).toEqual({ extraCents: 300 });
+    expect(r).toEqual({ extraCents: 300, line: "Done: raised the pay to $10.00 ($3.00 more charged)." });
     expect(w.st.made).toEqual([300]);
     expect(await paidOnPiece(w.sub.id)).toBe(1000);
     expect(await db.dispute.findUniqueOrThrow({ where: { id: w.row.id } })).toMatchObject({ status: "decided", decidedCents: 1000 });
@@ -89,11 +89,11 @@ describe("§149: Decide after a Pay more since the admin's page loaded", () => {
   it("paid now equals the decided $10.00: it goes through, nothing is charged", async () => {
     const w = await payMoreAfterLoad(600);
     const r = await decideDispute(w.admin, w.row.id, { total: "10.00", tickCents: 600, seenAt: w.loaded });
-    expect(r).toEqual({ extraCents: 0 });
+    expect(r).toEqual({ extraCents: 0, line: "Done: kept the pay at $10.00, which was already paid: nothing more was charged." });
     expect(w.st.made).toEqual([]);
     expect(await paidOnPiece(w.sub.id)).toBe(1000);
     expect(await db.dispute.findUniqueOrThrow({ where: { id: w.row.id } })).toMatchObject({ status: "decided", decidedCents: 1000 });
-    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute: raised the pay to $10.00, which was already paid: nothing more was charged");
+    expect(await decidedLine(w.testId)).toBe("The team decided Ana Silva's dispute: kept the pay at $10.00, which was already paid: nothing more was charged");
   });
 
   it("paid now ($12.00) is MORE than the decided $10.00: Decide stops once naming it, nothing charged, the dispute stays open, the range moves up; then $10.00 is refused and $12.00 goes through", async () => {
@@ -112,7 +112,7 @@ describe("§149: Decide after a Pay more since the admin's page loaded", () => {
     const again = await decideDispute(w.admin, w.row.id, { total: "10.00", tickCents: 600, seenAt: e!.data!.seenAt }).then(() => null, (x: Error & { code?: string }) => x);
     expect([again?.code, again?.message]).toEqual(["bad_amount", "A decision can only raise pay: at least the $12.00 paid for this piece."]);
     // $12.00 (what's paid now): goes through, nothing charged.
-    expect(await decideDispute(w.admin, w.row.id, { total: "12.00", seenAt: e!.data!.seenAt })).toEqual({ extraCents: 0 });
+    expect(await decideDispute(w.admin, w.row.id, { total: "12.00", seenAt: e!.data!.seenAt })).toEqual({ extraCents: 0, line: "Done: kept the pay at $12.00, which was already paid: nothing more was charged." }); // (batch 35 §163) the one wording
     expect(w.st.made).toEqual([]);
     expect(await db.dispute.findUniqueOrThrow({ where: { id: w.row.id } })).toMatchObject({ status: "decided", decidedCents: 1200 });
   });

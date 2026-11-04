@@ -51,7 +51,7 @@ describe("big changes from another tab stop every press once (section 21)", () =
     expect(twice.body.error.changes).toBeUndefined();
   });
 
-  it("Pay on the same piece in both tabs: B's Pay stops once (the live line is there), then it's already paid", async () => {
+  it("Pay on the same piece in both tabs: (owner, Nov 4, batch 35 §163; was a stop first) B's Pay is refused at once, naming tab A and its time", async () => {
     const { dev, testId } = await setup();
     const a = await sent(testId);
     await later();
@@ -59,9 +59,9 @@ describe("big changes from another tab stop every press once (section 21)", () =
     await later();
     expect((await pay(dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000, tab: "A" })).status).toBe(200);
     const b = await pay(dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, confirmed: false, tab: "B" });
-    expect(texts(b)).toEqual([PAID]);
-    const b2 = await pay(dev.cookie, { kind: "submission", id: a.sub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded, tab: "B", ...again() });
-    expect(b2.body.error.message).toBe("You already paid $10.00 for Ana Silva's written answers.");
+    expect(texts(b)).toEqual([]);
+    expect(b.body.error.message).toMatch(/^You already paid \$10\.00 for Ana Silva's written answers in another tab at \d{1,2}:\d{2} [AP]M\.$/);
+    expect(PAID).toBe("You paid Ana Silva $10.00 for the written answers in another tab"); // still the line other presses stop for
     // A box that stays (Pay more) keeps what was typed (its own state); the paid total and room come from the refreshed page.
     const box = src("app/app/tests/[id]/PayBox.tsx");
     expect(box).toContain("const [amount, setAmount] = useState(");

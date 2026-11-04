@@ -43,13 +43,13 @@ describe("batch 35 §1: the tick on a dispute decision that charges", () => {
     await expect(decideDispute(admin, row.id, { total: "10.00", tickCents: 100 })).rejects.toThrow("Tick “");
     expect(made).toHaveLength(0);
     expect((await db.dispute.findUniqueOrThrow({ where: { id: row.id } })).status).toBe("open");
-    expect(await decideDispute(admin, row.id, { total: "10.00", tickCents: 600 })).toEqual({ extraCents: 600 });
+    expect(await decideDispute(admin, row.id, { total: "10.00", tickCents: 600 })).toEqual({ extraCents: 600, line: "Done: raised the pay to $10.00 ($6.00 more charged)." });
     expect(made).toHaveLength(1);
   });
 
   it("keeping the pay (blank or the same total) needs no tick", async () => {
     const { admin, row } = await disputed();
-    expect(await decideDispute(admin, row.id, { total: "" })).toEqual({ extraCents: 0 });
+    expect(await decideDispute(admin, row.id, { total: "" })).toEqual({ extraCents: 0, line: "Done: kept the pay at $4.00, which was already paid: nothing more was charged." });
   });
 
   it("the admin's Decide shows the tick for a raise, disables Decide until it's ticked, and sends the ticked amount", () => {

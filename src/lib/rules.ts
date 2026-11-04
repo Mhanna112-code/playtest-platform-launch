@@ -158,6 +158,20 @@ export const disputeRangeLine = (paidCents: number, roomCents: number) => `${mon
  */
 export const decidePayChangedLine = (tester: string, moreCents: number, paidCents: number, decidedCents: number) =>
   `${tester}'s pay changed since you opened this: the developer paid ${money(moreCents)} more, now ${money(paidCents)} paid, more than your ${money(decidedCents)} decision. A decision can only raise the pay: decide ${money(paidCents)} or more.`;
+/**
+ * (Owner, Nov 3, batch 35 §163) What a dispute decision did, as the developer's test page line ("The team decided Ana Silva's dispute: …"), both emails and bells
+ * and the admin's result read it. A raise that charges: "raised the pay to $10.00 ($3.00 more)" (unchanged). A decision equal to what's paid now (a Pay more reached
+ * it, the decision after Decide's §149 stop, or the pay kept as it is), ONE wording: "kept the pay at $12.00, which was already paid: nothing more was charged".
+ * A rejected piece (nothing paid) still reads "kept the pay at $0.00 (rejected)". `charged` is the admin's result only: "($3.00 more charged)", or "($3.00 more,
+ * not charged yet)" when the charge waits (a payment hold, the developer's bank, a declined card).
+ */
+export function decisionWhat(o: { paidNowCents: number; dueCents: number; decidedCents: number; rejected: boolean }, charged?: boolean) {
+  if (o.dueCents > 0) return `raised the pay to ${money(o.decidedCents)} (${money(o.dueCents)} more${charged === undefined ? "" : charged ? " charged" : ", not charged yet"})`;
+  if (o.rejected || o.paidNowCents <= 0) return `kept the pay at ${money(o.paidNowCents)}${o.rejected ? " (rejected)" : ""}`;
+  return `kept the pay at ${money(o.paidNowCents)}, which was already paid: nothing more was charged`;
+}
+/** (Owner, Nov 3, batch 35 §163) The admin's line once Decide went through, from the server's result: "Done: raised the pay to $10.00 ($3.00 more charged)." */
+export const decideDoneLine = (what: string) => `Done: ${what}.`;
 
 /**
  * An admin's decision can only raise pay. (Owner, Oct 29, batch 28 §15) The total for the piece runs from what it was already paid (`paidCents`, its Pay and every Pay
@@ -1477,8 +1491,18 @@ export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date 
 export const ADMIN_DIGEST_DAYS = 3;
 export const INVITE_REMIND_DAYS = 1; // (Owner, Oct 26) invite reminders are daily
 
-/** "Charge": the listing minus what's already been paid for that part (0 = only "Close it"). */
-export const chargeAmount = (listingCents: number | null, paidCents: number) => (listingCents == null ? 0 : Math.max(0, listingCents - paidCents));
+/**
+ * "Charge": what the tester's Charge offers for a part (0 = no Charge or Let it go). (Owner, Nov 3, batch 35 §163; replaces the Oct 26 rule "the listing minus
+ * what's already been paid") The listing, and nothing once the developer paid anything on the part (a payment that went through): the tester's way to more is
+ * Dispute. A payment cancelled or declined that left nothing paid doesn't count.
+ */
+export const chargeAmount = (listingCents: number | null, paidCents: number) => (listingCents == null || paidCents > 0 ? 0 : listingCents);
+/**
+ * (Owner, Nov 3, batch 35 §163) Charge or Let it go pressed on an older page (or at the same moment) after the developer paid: ONE final refusal, never a stop-once.
+ * "Nora Lane paid $6.00 for this meanwhile: you can dispute it if you think it should be more." (with a Pay more after it: "paid $6.00 and $2.00 more").
+ */
+export const paidMeanwhileLine = (dev: string, payCents: number, moreCents = 0) =>
+  `${dev} paid ${moreCents && !payCents ? `${money(moreCents)} more` : `${money(payCents)}${moreCents ? ` and ${money(moreCents)} more` : ""}`} for this meanwhile: you can dispute it if you think it should be more.`;
 
 // ---------- New terms offered to working testers (owner) ----------
 

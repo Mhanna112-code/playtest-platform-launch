@@ -8,7 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { Mic, MicOff, MonitorUp, PhoneOff, Video, VideoOff } from "lucide-react";
 import { CallCheck } from "@/components/CallCheck";
-import { STRICT_NETWORK_LINE } from "@/lib/callMeasure";
+import { CANT_CONNECT_MS, roomStatusLine } from "@/lib/callMeasure";
 import { TAB } from "@/lib/client";
 
 type Ice = { urls: string | string[]; username?: string; credential?: string }[];
@@ -35,10 +35,20 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const screenSender = useRef<RTCRtpSender | null>(null);
-  const [status, setStatus] = useState("Starting your camera…");
+  // (Owner, Nov 3, batch 35 §163) The status line is made from what the room knows (roomStatusLine): the camera's setup, the connection's state, whether the other
+  // person is in the room or left, and whether both were in the room CANT_CONNECT_MS without connecting ("The call can't connect.").
+  const [setup, setSetup] = useState<"camera" | "allow" | "ready">("camera");
+  const [connection, setConnection] = useState("new");
+  const [otherLeft, setOtherLeft] = useState(false);
+  const [stuck, setStuck] = useState(false);
+  // Each fresh connection (the start, and whenever the other person comes back) gets its own 20 seconds.
+  const [attempt, setAttempt] = useState(0);
   const [otherHere, setOtherHere] = useState(false);
   // (Owner, Nov 2) Whether the two browsers are connected: the other tile says "Connecting…" only until then (connected with no video reads "No video").
   const [linked, setLinked] = useState(false);
+  // (Owner, Nov 3, §163) This connection reached "connected" (media flows): only then does the other tile show their picture. `ontrack` fires before any media
+  // flows, so it alone left a black tile with no "Connecting…".
+  const [flowing, setFlowing] = useState(false);
   const [measured, setMeasured] = useState(0);
   const [warn, setWarn] = useState("");
   const [mic, setMic] = useState(true);
@@ -58,6 +68,12 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
   // What this browser shows the other (camera / microphone on or off, sharing), and the shared screen: kept for a fresh connection.
   const media = useRef({ mic: true, cam: true, noCamera: false, sharing: false });
   const screenTrack = useRef<MediaStreamTrack | null>(null);
+  // (Owner, Nov 4, batch 35 §163) The page's ICE servers are held in a ref, NOT in the room's effect's dependencies: a redraw of the call page (router.refresh():
+  // TimeZoneSync's first refresh, a hot reload) hands a new array with the same servers, which hung up the call and rejoined (the other side rebuilt too).
+  const pageIce = useRef(iceServers);
+  useEffect(() => {
+    pageIce.current = iceServers;
+  }, [iceServers]);
 
   useEffect(() => {
     let stopped = false;
@@ -74,13 +90,17 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
     };
     let pc: RTCPeerConnection | null = null;
     // (Batch 35 §135) The page's ICE servers until the room's join answers with them again (the relay's short-lived credentials, fresh for a rejoin).
-    let ice = iceServers;
+    let ice = pageIce.current;
     /** A fresh connection carrying this browser's camera and microphone (and the shared screen): at the start, and whenever the other person comes (back) into the room. */
     const connect = () => {
       const next = new RTCPeerConnection({ iceServers: ice, ...(relayOnly ? { iceTransportPolicy: "relay" as const } : {}) });
       pc = next;
       pcRef.current = next;
       screenSender.current = null;
+      setConnection("new");
+      setFlowing(false);
+      setStuck(false);
+      setAttempt((n) => n + 1);
       next.onicecandidate = (e) => {
         if (pc === next && e.candidate) void send("candidate", e.candidate.toJSON());
       };
@@ -94,7 +114,11 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
         const s = next.connectionState;
         report(s === "connected");
         setLinked(s === "connected");
-        setStatus(s === "connected" ? "Connected" : s === "connecting" ? "Connecting…" : s === "failed" ? STRICT_NETWORK_LINE : s === "disconnected" ? `${otherName} lost connection…` : "Waiting…");
+        setConnection(s);
+        if (s === "connected") {
+          setFlowing(true);
+          setStuck(false); // connected after all: "The call can't connect." goes
+        }
       };
       next.onnegotiationneeded = async () => {
         if (pc !== next) return;
@@ -142,9 +166,9 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
         if (localRef.current) localRef.current.srcObject = stream;
         setMyVideo(stream.getVideoTracks().length > 0);
         media.current.noCamera = !stream.getVideoTracks().length;
-        setStatus(`Waiting for ${otherName}…`);
+        setSetup("ready");
       } catch {
-        setStatus("Allow your camera or microphone to join (check the browser's permission prompt).");
+        setSetup("allow");
       }
       if (stopped) return;
       connect();
@@ -199,12 +223,13 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
                 cur.close();
                 report(false);
                 setLinked(false);
+                setOtherLeft(false);
                 if (remoteRef.current) remoteRef.current.srcObject = null;
                 setOtherVideo(false);
                 connect();
                 void send("media", media.current);
               } else if (s.kind === "bye") {
-                setStatus(`${otherName} left the call`);
+                setOtherLeft(true);
                 if (remoteRef.current) remoteRef.current.srcObject = null;
                 setOtherVideo(false);
               }
@@ -220,7 +245,16 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
       window.removeEventListener("pagehide", bye);
       hangUp();
     };
-  }, [callId, role, otherName, iceServers, relayOnly]);
+  }, [callId, role, otherName, relayOnly]);
+
+  // (Owner, Nov 3, batch 35 §163) Both in the room (the room's polls say the other person is here) and this connection never connected within CANT_CONNECT_MS:
+  // "The call can't connect." (also on "failed"; cleared once it connects). Never while the other person isn't in the room, or after they left.
+  useEffect(() => {
+    if (!otherHere || otherLeft || flowing) return;
+    const t = setTimeout(() => setStuck(true), CANT_CONNECT_MS);
+    return () => clearTimeout(t);
+  }, [otherHere, otherLeft, flowing, attempt]);
+  const status = roomStatusLine({ setup, connection, otherHere, otherLeft, stuck, otherName });
 
   const tell = (state: Partial<{ mic: boolean; cam: boolean; noCamera: boolean; sharing: boolean }>) => {
     media.current = { ...media.current, ...state };
@@ -282,7 +316,7 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
       <div className="grid items-start gap-3 md:grid-cols-[2fr_1fr]">
         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">
           <video ref={remoteRef} autoPlay playsInline className="aspect-video w-full object-cover" aria-label={`${otherName}'s video`} />
-          {!(otherVideo && (otherCam || otherSharing)) && <NoVideo name={otherName} note={!otherHere ? "Not here yet" : !linked ? "Connecting…" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "No video"} />}
+          {!(otherVideo && flowing && (otherCam || otherSharing)) && <NoVideo name={otherName} note={!otherHere ? "Not here yet" : !linked ? "Connecting…" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "No video"} />}
           {otherSharing && <span className="absolute right-3 top-3 rounded-full bg-sky-500/80 px-2.5 py-1 text-xs font-medium text-white">Sharing {otherPoss} screen</span>}
           <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">{!otherMic && <MicOff className="h-3.5 w-3.5 text-rose-300" aria-label="muted" />}{otherName}{otherHere ? "" : " · not here yet"}</span>
         </div>

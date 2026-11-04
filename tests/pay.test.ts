@@ -179,7 +179,7 @@ describe("admin decides disputes", () => {
     expect((await admin("decide", owner.cookie, { id: d.id, total: "3.00" })).body.error.message).toContain("can only raise pay");
     expect((await admin("decide", owner.cookie, { id: d.id, total: "1010.01" })).body.error.message).toContain("At most");
     const r = await admin("decide", owner.cookie, { id: d.id, total: "10.00", note: "Answers were complete", tickCents: 600 });
-    expect(r.body).toEqual({ extraCents: 600 });
+    expect(r.body).toEqual({ extraCents: 600, line: "Done: raised the pay to $10.00 ($6.00 more charged)." });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id } })).toMatchObject({ kind: "dispute", amountCents: 600, testerCents: 480 });
     expect((await admin("decide", owner.cookie, { id: d.id, total: "10.00" })).body.error.message).toMatch(/^.+ already decided this dispute at .+.$/); // (batch 15 section 21) named by email
   });
@@ -198,7 +198,7 @@ describe("admin decides disputes", () => {
     expect(over.status).toBe(400);
     // Blank keeps the pay as it is (nothing charged).
     const kept = await admin("decide", owner.cookie, { id: d.id, total: "" });
-    expect(kept.body).toEqual({ extraCents: 0 });
+    expect(kept.body).toEqual({ extraCents: 0, line: "Done: kept the pay at $0.00." });
     expect((await db.dispute.findUniqueOrThrow({ where: { id: d.id } })).decidedCents).toBe(0);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { contains: "dispute" } } })).toBeGreaterThan(0);
   });

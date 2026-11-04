@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
-import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
+import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, decisionWhat, decideDoneLine, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -22,7 +22,7 @@ import { PAYMENT_CHECKING, freshPayKey, pressKeyFor } from "./recovery";
 import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
-import { payPressOf, seenOf } from "./live";
+import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
 import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, updateWaiting } from "@/lib/moneyLines";
 
@@ -94,13 +94,26 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     // nothing can reach them, so it can't be paid (final).
     if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun));
     const already = await tx.review.findFirst({ where: piece.where });
-    // (Batch 16 section 21) Another tab's Pay on this piece stops this press once, BEFORE it is refused as already done.
     const payPress = payPressOf(c.id, piece.where);
+    // (Owner, Nov 4, batch 35 §163; replaces batch 16 section 21's "another tab's Pay on this piece stops this press once, BEFORE it is refused as already done")
+    // A part already settled is refused on the FIRST press, never after a stop: its second press could only be refused.
     if (already) {
       // (Owner, Nov 3, §159) The tester's Charge on this part waits for the bank (a page that hadn't redrawn yet): refused with what to do, never a stop-once.
       const waits = await bankWaitsLine(tx, piece.where, name);
       if (waits) throw new HttpError(409, "bank_waits", waits);
-      await devGate(tx, c.testId, body, {}, [], undefined, payPress);
+      // (§163) Settled by this developer's own Pay, Reject or Confirm with your bank in ANOTHER tab: named with that tab and its time. "You already paid $10.00 for
+      // Ana Silva's written answers in another tab at 3:20 PM.", "You already rejected …", "You already confirmed Ana Silva's $10.00 charge for her written answers
+      // with your bank in another tab at 3:20 PM."
+      const mine = await ownOtherTabAction(dev.id, piece.kind === "call" ? `call:${id}` : `sub:${id}`, tabOf(body), ["pay"], tx);
+      if (mine) {
+        const at = fmtTime(mine.at);
+        if (mine.text.startsWith("rejected ")) throw new HttpError(409, "reviewed", `You already rejected ${name}'s ${piece.reference} in another tab at ${at}.`);
+        if (mine.text.startsWith("confirmed ")) throw new HttpError(409, "reviewed", `You already ${mine.text} in another tab at ${at}.`);
+        throw new HttpError(409, "reviewed", `You already paid ${money(already.amountCents)} for ${name}'s ${piece.reference} in another tab at ${at}.`);
+      }
+      // (Owner, Nov 3, batch 35 §163) The tester's Charge, the tester's Let it go and the team's close-out are refused on the FIRST press, before the gate: a stop
+      // there (the developer's Alerts letting the Charge line through) could only be followed by this refusal (as §159 item 12: never a stop whose second press
+      // could only be refused).
       if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${piece.reference}.`);
       if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let ${pronouns(c.tester.pronoun).poss} ${piece.reference} go: nothing was charged.`);
       if (already.teamClosedById) throw new HttpError(409, "reviewed", TEAM_CLOSED_NO_PAY); // (batch 30 §5)
@@ -128,8 +141,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       }
       // (Batch 9 section 6; batch 11 section 6: one Pay box, an amount above the base counts as extra pay; batch 12 section 2: the unlisted call caps) Caps per piece.
       const room = await pieceRoom({ ...piece, contractId: c.id }, tx);
+      // (§163) Over what's left: refused on the first press (never after a stop whose second press could only be refused).
       if (amountCents! > room.roomCents) {
-        await devGate(tx, c.testId, body, {}, [], undefined, payPress);
         throw new HttpError(400, "over_cap", overRoomLine(piece, room));
       }
       const card = amountCents! > 0 ? cardRefusal(dev) : "";
@@ -441,11 +454,12 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     // (§149) A Pay more that went through just now took the pay above the decision: the same stop (the claim rolls back).
     if (!blank && decided! < paidNow) throw await payChanged(paidNow, Math.max(await paidSince(tx), paidNow - min), displayName(c.tester));
     const due = raise ? Math.max(0, decided! - paidNow) : 0;
-    const line = due > 0 ? `The team raised the pay to ${money(decided!)} (${money(due)} more).`
-      : raise ? `The team raised the pay to ${money(decided!)}, which was already paid: nothing more was charged.`
-        : `The team kept the pay at ${money(paidNow)}${review.rejected ? " (rejected)" : ""}.`;
-    const ev = await tx.testEvent.create({ data: { testId: c.testId, kind: "admin", text: `The team decided ${displayName(c.tester)}'s dispute: ${line.replace(/^The team /, "").replace(/\.$/, "")}`, contractId: c.id } });
-    return { due, line, eventId: ev.id };
+    // (Owner, Nov 3, batch 35 §163) One wording whenever the decision equals what's paid now: "kept the pay at $12.00, which was already paid: nothing more was charged"
+    // (it read "raised the pay to $12.00, which was already paid…" after a Pay more, and "kept the pay at $12.00" after the §149 stop).
+    const what = { paidNowCents: paidNow, dueCents: due, decidedCents: decided!, rejected: review.rejected };
+    const line = `The team ${decisionWhat(what)}.`;
+    const ev = await tx.testEvent.create({ data: { testId: c.testId, kind: "admin", text: `The team decided ${displayName(c.tester)}'s dispute: ${decisionWhat(what)}`, contractId: c.id } });
+    return { due, line, what, eventId: ev.id };
   });
   if (!claim) {
     // Any admin, first decision wins: the second press says who and when.
@@ -499,7 +513,8 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   await notify(c.tester.email, `Your dispute on “${c.title}” was decided`, [line, ...(delayed ? [heldNow || testPaused(c.test.developer, c.test) ? "Payment may be delayed until the test resumes." : "Payment may be delayed."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
   await notify(c.test.developer.email, `A dispute on “${c.title}” was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}#tester-${c.id}`, { group: "disputedecided" });
   await (await import("./live")).logAction(admin.id, c.testId, body, "decided a dispute", { a: "decide", k: [`dispute:${d.id}`], answers: { item: d.id } });
-  return { extraCents: due };
+  // (Owner, Nov 3, batch 35 §163) The admin reads what the decision did, not just "Done.": "Done: raised the pay to $10.00 ($3.00 more charged)."
+  return { extraCents: due, line: decideDoneLine(decisionWhat(claim.what, !delayed)) };
 }
 
 /**
@@ -662,7 +677,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     const room = await pieceRoom(piece, tx);
     const morePress = payPressOf(c.id, at);
     if (amount! > room.roomCents) {
-      await devGate(tx, testId, body, {}, [], undefined, morePress); // (batch 16 section 21) another tab's Pay on it first stops once
+      // (Owner, Nov 4, batch 35 §163; replaces batch 16 section 21's stop first) More than what's left: refused on the first press, never after a stop.
       throw new HttpError(400, "over_cap", overRoomLine(piece, room));
     }
     await devGate(tx, testId, body, {}, [], undefined, morePress);

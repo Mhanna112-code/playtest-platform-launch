@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { displayName, fmtDateTimeIn, money } from "@/lib/format";
+import { displayName, fmtDateTimeIn, fmtTimeIn, money } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
 import { bankTopLead, confirmByText, pieceWords, shortDay, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
@@ -255,15 +255,23 @@ export const OVER_TICK_REFUSAL = `Tick “${OVER_PAY_TICK_LINE}” to pay.`;
 export const ALREADY_CONFIRMED = "You already confirmed this payment.";
 export const CONFIRM_EXPIRED = "This confirmation expired: nothing was charged.";
 export const CONFIRM_CANCELLED = "This payment was cancelled: nothing was charged.";
+/**
+ * (Owner, Nov 4, batch 35 §163) Confirmed by this developer in ANOTHER tab (its own line names the payment): "You already confirmed this payment in another tab at
+ * 3:20 PM."; otherwise the plain ALREADY_CONFIRMED.
+ */
+export async function alreadyConfirmedLine(devId: string, paymentId: string, tab: string) {
+  const mine = await (await import("./live")).ownOtherTabAction(devId, `pay:${paymentId}`, tab, ["pay", "pay-more"]);
+  return mine ? `You already confirmed this payment in another tab at ${fmtTimeIn(mine.at, (await db.user.findUnique({ where: { id: devId }, select: { timeZone: true } }))?.timeZone ?? null)}.` : ALREADY_CONFIRMED;
+}
 
 /** (Batch 23 section 9) A payment "Confirm with your bank" can still start on, or a plain refusal saying why not. */
-async function startable(devId: string, paymentId: string) {
+async function startable(devId: string, paymentId: string, tab = "") {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (!p || p.developerId !== devId) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   if (!p.actionPi) {
     await refusePaused(p);
     await refuseInAll(p);
-    if (p.status === "charged" || p.status === "not_set_up") throw new HttpError(409, "confirmed", ALREADY_CONFIRMED);
+    if (p.status === "charged" || p.status === "not_set_up") throw new HttpError(409, "confirmed", await alreadyConfirmedLine(devId, p.id, tab));
     if (p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
     throw new HttpError(409, "expired", CONFIRM_EXPIRED);
   }
@@ -274,14 +282,14 @@ async function startable(devId: string, paymentId: string) {
   return p;
 }
 
-async function own(devId: string, paymentId: string) {
+async function own(devId: string, paymentId: string, tab = "") {
   const p = await db.payment.findUnique({ where: { id: paymentId } });
   if (p && p.developerId === devId && !p.actionPi) await refusePaused(p);
   if (p && p.developerId === devId && !p.actionPi) await refuseInAll(p);
   // (§148) A press's check a new card cancelled (an old tab finishing the bank's page): said plainly, nothing was charged.
   if (p && p.developerId === devId && !p.actionPi && p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
   // (Owner, Nov 3, §157) Finished in another tab first (the bank's page done in both): said plainly, nothing is charged again.
-  if (p && p.developerId === devId && !p.actionPi && (p.status === "charged" || p.status === "not_set_up" || p.status === "bundled")) throw new HttpError(409, "confirmed", ALREADY_CONFIRMED);
+  if (p && p.developerId === devId && !p.actionPi && (p.status === "charged" || p.status === "not_set_up" || p.status === "bundled")) throw new HttpError(409, "confirmed", await alreadyConfirmedLine(devId, p.id, tab));
   if (!p || p.developerId !== devId || !p.actionPi) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
   return p;
 }
@@ -309,7 +317,7 @@ async function refusePaused(p: { status: string; kind: string; note: string; dev
  * waits with no next step, so it is confirmed here with return_url: the bank's check page (`checkUrl`) then shows inline; "none" when it went through without one.
  */
 export async function confirmStart(dev: { id: string }, paymentId: string, body: Record<string, unknown> = {}) {
-  const p = await startable(dev.id, paymentId);
+  const p = await startable(dev.id, paymentId, typeof body.tab === "string" ? body.tab : "");
   // (Owner, Oct 29, batch 23 section 9) On the test page, the developer's stop-once check first, exactly like Pay on that piece: a stop, close or End early (batch 17 §12), a
   // dispute, the tester's Charge or Let it go, a Pay or Pay more in another tab, a call change... (Alerts apply) stops it once; the second press opens the bank's check.
   // (Owner, Oct 29, batch 26 section 9) EXACTLY Pay's check on that piece: the same devGate call under the same test lock, the same press (payPressOf: a retried
@@ -390,7 +398,7 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
     const status = reservation.stripePaymentIntentId ? await piStatus(reservation.stripePaymentIntentId, body.simulate) : body.simulate === "succeeded" ? "requires_capture" : "canceled";
     return cb.reservationChecked(dev.id, paymentId, status === "requires_capture" || status === "succeeded");
   }
-  const p = await own(dev.id, paymentId);
+  const p = await own(dev.id, paymentId, typeof body.tab === "string" ? body.tab : "");
   let status = await piStatus(p.actionPi!, body.simulate);
   // (Owner, Nov 3, §159 R4) Right after Complete Stripe can still be "processing": its final answer is waited for (a few seconds), never read as "nothing was charged".
   for (let i = 0; status === "processing" && i < 10; i++) {

@@ -206,7 +206,7 @@ describe("until close-out the developer can still Pay a piece after its Charge o
     await cron();
     expect((await db.submission.findUniqueOrThrow({ where: { id: w.sub.id } })).choiceOfferedAt).not.toBeNull();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
-    expect((await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "charge", seenAt: seen() })).body.error.message).toBe("Nora Lane paid $10.00 for this meanwhile.");
+    expect((await sact(w.sessionId, "choose", w.tester.cookie, { submissionId: w.sub.id, choice: "charge", seenAt: seen() })).body.error.message).toBe("Nora Lane paid $10.00 for this meanwhile: you can dispute it if you think it should be more.");
   });
 });
 
@@ -219,7 +219,7 @@ describe("disputes are unchanged after close-out", () => {
     const d = await db.dispute.findFirstOrThrow({ where: { submissionId: w.sub.id } });
     const a = await makeUser({ name: "Admin" });
     const admin = await db.user.update({ where: { id: a.user.id }, data: { isAdmin: true } });
-    expect(await decideDispute(admin, d.id, { total: "10.00", tickCents: 500 })).toEqual({ extraCents: 500 });
+    expect(await decideDispute(admin, d.id, { total: "10.00", tickCents: 500 })).toEqual({ extraCents: 500, line: "Done: raised the pay to $10.00 ($5.00 more charged)." });
     expect(await db.payment.findFirstOrThrow({ where: { disputeId: d.id, kind: "dispute" } })).toMatchObject({ amountCents: 500 });
   });
 });

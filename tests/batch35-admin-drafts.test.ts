@@ -106,7 +106,7 @@ describe("batch 35 §11: what a restored draft puts back", () => {
     // Decide stays disabled until a restored raise is ticked again (batch 35 §1).
     expect(d).toContain("disabled={busy || (extra > 0 && !ticked)}");
     // Cleared only when Decide goes through.
-    const body = d.slice(d.indexOf('await api("/api/admin/decide"'));
+    const body = d.slice(d.indexOf('await api<{ line?: string }>("/api/admin/decide"')); // (batch 35 §163) the answer carries the result line
     expect(body.indexOf("await keep.clear();")).toBeGreaterThan(-1);
     expect(body.indexOf("await keep.clear();")).toBeLessThan(body.indexOf("} catch (e) {"));
   });

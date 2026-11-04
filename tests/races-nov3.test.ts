@@ -131,7 +131,7 @@ describe("(Nov 3, races) 1: the team's Decide and the developer's Pay more on th
       expect(st.made).toEqual(dueCents ? [dueCents] : []);
       expect(await paidOnPiece(w.sub.id)).toBe(400 + moreCents + dueCents);
       const line = (await db.testEvent.findFirstOrThrow({ where: { testId: w.testId, kind: "admin" } })).text;
-      expect(line).toBe(dueCents ? "The team decided Ana Silva's dispute: raised the pay to $10.00 ($3.00 more)" : "The team decided Ana Silva's dispute: raised the pay to $10.00, which was already paid: nothing more was charged");
+      expect(line).toBe(dueCents ? "The team decided Ana Silva's dispute: raised the pay to $10.00 ($3.00 more)" : "The team decided Ana Silva's dispute: kept the pay at $10.00, which was already paid: nothing more was charged");
     }
   });
 

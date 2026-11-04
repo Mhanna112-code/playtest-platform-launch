@@ -133,6 +133,22 @@ export async function unanswered<T extends TestEventLike & { contractId?: string
   return lines.filter((e) => e.kind === "own" || !answers.some(({ a, at }) => at > e.createdAt && answersIt(e, a)));
 }
 
+/**
+ * (Owner, Nov 4, batch 35 §163) This developer's LATEST own action that touched `key` ("sub:<id>", "call:<id>", "pay:<payment>"), of one of `acts`, when it was
+ * made in ANOTHER tab than `tab` (null when none, or when the latest was this tab's or a page that sends no tab): its log text and time. A press it settled is
+ * refused at once naming it ("You already paid $10.00 for Ana Silva's written answers in another tab at 3:20 PM.").
+ */
+export async function ownOtherTabAction(userId: string, key: string, tab: string, acts: readonly string[], tx: Tx | typeof db = db) {
+  if (!tab) return null;
+  const rows = await tx.actionLog.findMany({ where: { userId, text: { contains: `"${key}"` } }, orderBy: { createdAt: "desc" }, take: 20 });
+  for (const r of rows) {
+    const { text, about } = parseLog(r.text);
+    if (!about || !about.k.includes(key) || !acts.includes(about.a)) continue;
+    return r.tab && r.tab !== tab ? { text, at: r.createdAt } : null;
+  }
+  return null;
+}
+
 /** This person's own actions on the test since `since`, from other tabs. */
 export async function ownChanges(userId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db): Promise<OwnEvent[]> {
   const rows = await tx.actionLog.findMany({ where: { userId, testId, createdAt: { gt: since }, ...(tab ? { tab: { not: tab } } : { tab: { not: "" } }) }, orderBy: { createdAt: "asc" }, take: 50 });
@@ -306,8 +322,13 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
   const contracts = await tx.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, tester: true, test: { select: { title: true } } } });
   const cmap = new Map(contracts.map((c) => [c.id, c]));
   const kinds = await subKinds(pays.map((p) => p.submissionId), tx);
+  // (Owner, Nov 3, batch 35 §163) A charge the developer confirmed with their bank themselves (Confirm with your bank, Confirm all) is ONE line: their own
+  // "You confirmed … with your bank in another tab" in the other tabs, nothing in the tab that pressed; never a second "Payment went through" for it.
+  const settled = pays.filter((p) => p.settledAt && p.settledAt > since).map((p) => `pay:${p.id}`);
+  const confirmedByMe = new Set(settled.length ? (await tx.actionLog.findMany({ where: { userId: devId, testId, createdAt: { gt: since }, text: { startsWith: "confirmed " } }, select: { text: true } })).flatMap((r) => parseLog(r.text).about?.k.filter((k) => settled.includes(k)) ?? []) : []);
   const out: TestEventLike[] = [];
   for (const p of pays) {
+    if (confirmedByMe.has(`pay:${p.id}`)) continue;
     const c = cmap.get(p.contractId!);
     const title = c?.test.title ?? "a test";
     const who = `${money(p.amountCents)} to ${c ? displayName(c.tester) : "a tester"} for the ${pieceLabel(p, kinds)}`;

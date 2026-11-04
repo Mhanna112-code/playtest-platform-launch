@@ -309,14 +309,14 @@ describe("G, H) Charge opening and the cap", () => {
     return { ...s, ...j, sub };
   }
 
-  it("the tester's Charge cap is the listing minus what was already paid for that part", async () => {
+  it("(batch 35 §163; replaces \"the listing minus what was already paid\") once the developer paid anything on the part, there's no Charge: Dispute instead", async () => {
     const { dev, tester, sessionId, sub, testId } = await sentUnreviewed();
     await db.test.update({ where: { id: testId }, data: { openUntil: new Date(Date.now() - 1000) } }); await db.contract.updateMany({ where: { testId: testId }, data: { dueAt: new Date(Date.now() - 1000) } }); // (batch 15 section 18: the tester's own deadline)
     await db.payment.create({ data: { kind: "review", submissionId: sub.id, contractId: sessionId, developerId: dev.user.id, testerId: tester.user.id, amountCents: 400, feeCents: 80, testerCents: 320, status: "charged" } });
     await cron();
-    const tooMuch = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "7.00", tickedCents: 700 });
-    expect(tooMuch.body.error.message).toBe("At most $6.00.");
-    expect((await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00", tickedCents: 600 })).body).toMatchObject({ choice: "charge", amountCents: 600 });
+    expect((await db.submission.findUniqueOrThrow({ where: { id: sub.id } })).choiceOfferedAt).toBeNull();
+    const refused = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge", amount: "6.00", tickedCents: 600 });
+    expect(refused.body.error.message).toBe("Nora Lane paid $4.00 for this meanwhile: you can dispute it if you think it should be more.");
   });
 
   it("Charge is refused until its review date has passed (the refusal says so)", async () => {
