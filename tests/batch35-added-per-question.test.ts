@@ -234,6 +234,6 @@ describe("at most 10 additions per part", () => {
     expect(full).not.toContain("data-add-more");
     expect(full).not.toContain("data-add-send");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(form).toContain('<textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} data-add-readonly="" />');
+    expect(form).toContain('<textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly="" />');
   });
 });
