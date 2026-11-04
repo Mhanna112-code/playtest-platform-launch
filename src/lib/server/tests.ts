@@ -985,7 +985,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
         listingVersion: t.listingVersion, terms: termsLine(asListing(t), true), questions: t.questions,
       });
     }
-    if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock them in Account → Blocked people to join.`);
+    if (await tx.block.count({ where: { blockerId: tester.id, blockedId: t.developerId } })) throw new HttpError(409, "blocked", `You blocked ${displayName(dev)}: unblock ${pronouns(dev.pronoun).obj} in Account → Blocked people to join.`);
     if (await tx.block.count({ where: { blockerId: t.developerId, blockedId: tester.id } })) throw new HttpError(409, "closed", "This test isn't taking new testers right now.");
     gapStop(t, profile, body, "Join");
     // (Design doc 7.3) Joining needs the NDA accepted (the time it was accepted is kept with the terms).
@@ -1010,7 +1010,7 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
   });
   if (filled) await tellFull(filled);
   // (Owner, Oct 27) The developer who accepted an application made it happen themselves: no second "joined" line for it (the "applied" line was the notice).
-  if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `Their deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id });
+  if (body.acceptedByDeveloper !== true) await notify(dev.email, `${displayName(tester)} joined “${contract.title}”`, [`${displayName(tester)} joined your test “${contract.title}”.`, `${pronouns(tester.pronoun).Poss} deal: ${termsLine(contract)}.`], `/app/tests/${testId}#tester-${contract.id}`, { about: tester.id });
   return contract;
 }
 
@@ -1055,7 +1055,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
     await recordEvent(tx, c.testId, "left", `${displayName(tester)} left the test`, true, {}, c.id);
     return c;
   });
-  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work they already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });
+  await notify(c0.test.developer.email, `${displayName(tester)} left “${c.title}”`, [`${displayName(tester)} left your test “${c.title}”. Work ${pronouns(tester.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: tester.id });
   await spotOpened(c.testId);
   return { left: true };
 }

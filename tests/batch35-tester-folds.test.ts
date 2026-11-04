@@ -30,7 +30,7 @@ describe("the circles filter the tester list", () => {
     expect(filter).toContain("All testers");
     // The list hides the other rows (the name search still works with it).
     expect(src("app/app/tests/[id]/RowsBox.tsx")).toContain('|| !rowShown(el.dataset.testerId ?? "", chosen);');
-    expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("<AvatarButton testerId={seat.testerId} name={seat.name} />");
+    expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("<AvatarButton testerId={seat.testerId} name={seat.name} obj={pronouns(seat.pronoun).obj} />"); // (batch 35 §162)
   });
 });
 

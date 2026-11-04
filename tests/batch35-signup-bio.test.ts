@@ -9,7 +9,6 @@ import { POST as signupPOST } from "@/app/api/auth/signup/route";
 import { POST as googleFinishPOST } from "@/app/api/auth/google/finish/route";
 import { POST as profilePOST } from "@/app/api/profile/route";
 import { POST as sidePOST } from "@/app/api/account/side/route";
-import { POST as switchPOST } from "@/app/app/switch/route";
 import AppHome from "@/app/app/page";
 import ProfilePage from "@/app/app/profile/page";
 import { ProfileForm } from "@/app/app/profile/ProfileForm";
@@ -24,7 +23,6 @@ import { publicProfileV } from "@/lib/server/pageFreshness";
 import { PROFILE_FIRST } from "@/lib/server/tests";
 import { SESSION_COOKIE } from "@/lib/server/session";
 import { LIMITS } from "@/lib/limits";
-import { sideFor } from "@/lib/sides";
 import { AGE_LINE } from "@/lib/termsOfUse";
 import { json, makeUser, req, uniq } from "./helpers";
 import { act, settle, setup } from "./fixtures";
@@ -76,17 +74,20 @@ const roleRadios = (markup: string) =>
   [...markup.matchAll(/<input type="radio"[^>]*>/g)].map(([r]) => (r.includes('name="role"') && r.includes('required=""') ? r.match(/value="(\w+)"/)?.[1] : "not a required role choice"));
 
 describe("batch 35 §134: who you are is required when the account is made", () => {
-  it("email sign-up without developer, tester or both is refused, red at the choice, with every other missing part at once; nothing is made", async () => {
-    expect(ROLE_MISSING).toBe("Choose developer, tester or both.");
+  it("email sign-up without developer or tester is refused, red at the choice, with every other missing part at once; nothing is made", async () => {
+    // (§162) Developer or Tester only: an older page's "both" reads the same line.
+    expect(ROLE_MISSING).toBe("Choose developer or tester.");
     const email = mail();
     const no = await signup({ email, name: "Ana Silva", acceptTerms: "yes", over18: "yes" });
     expect(no).toMatchObject({ status: 400, body: { error: { code: "bad_field", message: ROLE_MISSING } } });
     expect((await signup({ email, role: "nobody", name: "Ana Silva", acceptTerms: "yes", over18: "yes" })).body.error.message).toBe(ROLE_MISSING);
+    expect((await signup({ email, role: "both", devices: ["Mac"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", over18: "yes" })).body.error.message).toBe(ROLE_MISSING);
     expect((await signup({ email })).body.error.message).toBe(ALL_MISSING);
     expect(await db.user.count({ where: { email } })).toBe(0);
-    // The page: the three choices (each required), red at the choice for the server's line; the other boxes keep their own lines.
+    // The page: the two choices (each required), red at the choice for the server's line; the other boxes keep their own lines.
     const form = await html(SignupPage());
-    expect(roleRadios(form)).toEqual(["developer", "tester", "both"]);
+    expect(roleRadios(form)).toEqual(["developer", "tester"]);
+    expect(form).not.toContain('value="both"');
     expect(form).toContain('data-field-group=""');
     expect(matches(form, "role", ROLE_MISSING)).toBe(true);
     expect(matches(form, "name", NAME_MISSING)).toBe(true);
@@ -95,46 +96,36 @@ describe("batch 35 §134: who you are is required when the account is made", () 
     expect(matches(form, "over18", AGE_LINE)).toBe(true);
   });
 
-  it("each role makes its sides; both lands on the developer side (Get started asks for a card); (§153) its tester side is saved at sign-up, so switched it joins at once", async () => {
+  it("each role makes its side; (§162) both is refused; (§153) a tester's profile is saved at sign-up, the gate holds for one never saved", async () => {
     const dev = await signUp({ email: mail(), password: "harbor-run-1", role: "developer", name: "Dee Moss", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     expect(dev.user).toMatchObject({ isDeveloper: true, isTester: false, side: "developer", name: "Dee Moss" });
     expect(await db.testerProfile.count({ where: { userId: dev.user.id } })).toBe(0);
+    const home = await dashboard(dev.user.id);
+    expect(home).not.toContain("Welcome to Playtest");
+    expect(home).toContain("Add a card (needed to post a test)");
     const tester = await signUp({ email: mail(), password: "harbor-run-1", role: "tester", devices: ["Mac"], languages: ["French"], name: "Tia Park", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
     expect(tester.user).toMatchObject({ isDeveloper: false, isTester: true, side: "tester" });
     expect(await db.testerProfile.findUnique({ where: { userId: tester.user.id } })).toMatchObject({ devices: ["Mac"], languages: ["French"], bio: "" });
-    const both = await signUp({ email: mail(), password: "harbor-run-1", role: "both", devices: ["Windows PC"], languages: ["English"], name: "Nora Lane", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400");
-    expect(both.user).toMatchObject({ isDeveloper: true, isTester: true, side: "developer" });
-    expect(sideFor(both.user)).toBe("developer");
-    expect(await db.testerProfile.count({ where: { userId: both.user.id } })).toBe(1);
-    // The landing: the dashboard of the developer side, never the old Welcome step.
-    const home = await dashboard(both.user.id);
-    expect(home).not.toContain("Welcome to Playtest");
-    expect(home).toContain("Add a card (needed to post a test)");
-    expect(home).not.toContain("Save your profile (needed to join a test)");
-    // Switched to the tester side: (§153) the devices and languages ticked at sign-up are its saved profile, so Get started has no profile step and Join goes through.
-    const sw = await switchPOST(new Request("http://localhost:3400/app/switch", { method: "POST", headers: { cookie: cookieOf(both.token), origin: "http://localhost:3400", "content-type": "application/x-www-form-urlencoded" }, body: "to=tester&next=/app" }));
-    expect(sw.status).toBe(303);
-    expect((await fresh(both.user.id)).side).toBe("tester");
-    const testerHome = await dashboard(both.user.id);
+    const testerHome = await dashboard(tester.user.id);
     expect(testerHome).not.toContain("Save your profile (needed to join a test)");
     expect(testerHome).toContain("Set up payouts (to receive your pay)");
-    await db.user.update({ where: { id: both.user.id }, data: { emailVerifiedAt: new Date() } });
+    await expect(signUp({ email: mail(), password: "harbor-run-1", role: "both", devices: ["Windows PC"], languages: ["English"], name: "Nora Lane", acceptTerms: "yes", over18: "yes" }, "http://localhost:3400")).rejects.toMatchObject({ code: "bad_field", message: ROLE_MISSING });
+    await db.user.update({ where: { id: tester.user.id }, data: { emailVerifiedAt: new Date() } });
     const { testId } = await setup();
     const test = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    expect((await act(testId, "join", cookieOf(both.token), { listingVersion: test.listingVersion })).status).toBe(200);
     // The tester side's gate still holds for a profile that was never saved (an older account): see §153's tests.
     await db.testerProfile.update({ where: { userId: tester.user.id }, data: { devices: [], languages: [] } });
     expect(await dashboard(tester.user.id)).toContain("Save your profile (needed to join a test)");
-    await db.user.update({ where: { id: tester.user.id }, data: { emailVerifiedAt: new Date() } });
     expect(await act(testId, "join", cookieOf(tester.token), { listingVersion: test.listingVersion })).toMatchObject({ status: 409, body: { error: { code: "profile_first", message: PROFILE_FIRST } } });
   });
 
-  it("Google's step asks the same (who you are and a name, required, red at each); then the account is made with its sides; both lands on the developer side", async () => {
+  it("Google's step asks the same (who you are and a name, required, red at each); then the account is made with its side; both is refused", async () => {
     const email = mail();
     const token = await startGoogleSignup(email);
     const no = await json(await finish(token, { name: "Ana Silva", acceptTerms: "yes", over18: "yes" }));
     expect(no).toMatchObject({ status: 400, body: { error: { code: "bad_field", message: ROLE_MISSING } } });
-    expect((await json(await finish(token, { role: "both", devices: ["Mac"], languages: ["English"], acceptTerms: "yes", over18: "yes" }))).body.error.message).toBe(NAME_MISSING);
+    expect((await json(await finish(token, { role: "both", devices: ["Mac"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", over18: "yes" }))).body.error.message).toBe(ROLE_MISSING);
+    expect((await json(await finish(token, { role: "tester", devices: ["Mac"], languages: ["English"], acceptTerms: "yes", over18: "yes" }))).body.error.message).toBe(NAME_MISSING);
     expect((await json(await finish(token, {}))).body.error.message).toBe(ALL_MISSING);
     expect(await db.user.count({ where: { email } })).toBe(0);
     // The step is still waiting: the page shows the choice and the Name box, each red at its own line.
@@ -142,27 +133,22 @@ describe("batch 35 §134: who you are is required when the account is made", () 
     const step = await html(GoogleSignupStep());
     page.signupCookie = "";
     expect(step).toContain(`Signing up with Google as <b class="text-white">${email}</b>.`);
-    expect(roleRadios(step)).toEqual(["developer", "tester", "both"]);
+    expect(roleRadios(step)).toEqual(["developer", "tester"]);
     expect(matches(step, "role", ROLE_MISSING)).toBe(true);
     expect(matches(step, "name", NAME_MISSING)).toBe(true);
     expect(step.indexOf('name="role"')).toBeLessThan(step.indexOf('id="acceptTerms"'));
-    // Continue with everything: made with both sides, landing on the developer side.
-    const ok = await finish(token, { role: "both", devices: ["Mac"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", over18: "yes" });
+    // Continue with everything: made with the tester side.
+    const ok = await finish(token, { role: "tester", devices: ["Mac"], languages: ["English"], name: "Ana Silva", acceptTerms: "yes", over18: "yes" });
     expect(ok.status).toBe(200);
     const u = await db.user.findUniqueOrThrow({ where: { email }, include: { profile: true } });
-    expect(u).toMatchObject({ name: "Ana Silva", isDeveloper: true, isTester: true, side: "developer" });
+    expect(u).toMatchObject({ name: "Ana Silva", isDeveloper: false, isTester: true, side: "tester" });
     expect(u.emailVerifiedAt).not.toBeNull();
     expect(u.profile).toMatchObject({ devices: ["Mac"], languages: ["English"], bio: "" });
-    expect(sideFor(u)).toBe("developer");
-    const home = await dashboard(u.id);
-    expect(home).not.toContain("Welcome to Playtest");
-    expect(home).toContain("Add a card (needed to post a test)");
-    // Developer only, and tester only, the same way.
-    for (const role of ["developer", "tester"] as const) {
-      const e = mail();
-      expect((await finish(await startGoogleSignup(e), { role, devices: ["Mac"], languages: ["English"], name: "Pat Reyes", acceptTerms: "yes", over18: "yes" })).status).toBe(200);
-      expect(await db.user.findUniqueOrThrow({ where: { email: e } })).toMatchObject({ isDeveloper: role === "developer", isTester: role === "tester", side: role, name: "Pat Reyes" });
-    }
+    expect(await dashboard(u.id)).not.toContain("Welcome to Playtest");
+    // Developer only, the same way.
+    const e = mail();
+    expect((await finish(await startGoogleSignup(e), { role: "developer", name: "Pat Reyes", acceptTerms: "yes", over18: "yes" })).status).toBe(200);
+    expect(await db.user.findUniqueOrThrow({ where: { email: e } })).toMatchObject({ isDeveloper: true, isTester: false, side: "developer", name: "Pat Reyes" });
   });
 
   it("an older account with no side: the dashboard sends it to Profile, where choosing a side is required; an admin keeps its Name-and-Pronoun setup", async () => {
@@ -257,8 +243,11 @@ describe("batch 35 §134: each side has its own bio; the name and pronoun are th
       expect(form, side).toMatch(/<textarea id="bio"[^>]*maxLength="2000"/i);
     }
     const f = src("src/app/app/profile/ProfileForm.tsx");
-    expect(f).toContain("maxLength={LIMITS.bio}");
-    expect(f).toContain("<CharacterCount value={v.bio} max={LIMITS.bio} />");
+    // (Batch 35 §162) The profile's box is BioBox, the same as sign-up's.
+    expect(f).toContain("<BioBox ");
+    const box = src("src/components/BioBox.tsx");
+    expect(box).toContain("maxLength={LIMITS.bio}");
+    expect(box).toContain("<CharacterCount value={value} max={LIMITS.bio} />");
   });
 
   it("a developer-side Save of an account with both sides never needs (or changes) the tester's fields; the other side's changes don't stop it", async () => {

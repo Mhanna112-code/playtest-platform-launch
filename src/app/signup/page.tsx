@@ -13,8 +13,8 @@ import { AGE_TICK } from "@/lib/termsOfUse";
 export const metadata = { title: "Create an account · Playtest" };
 
 /**
- * Sign up, as the full app's: I am a... (developer, tester or both), name, email, password and the Terms of Use. (Batch 35 §134) Every one is required: the
- * account is made with its sides, and with both it lands on the developer side.
+ * Sign up, as the full app's: I am a... (developer or tester), name, email, password and the Terms of Use. (Batch 35 §134) Every one is required: the account is
+ * made with its side. (Batch 35 §162) No "Both" any more (the other side is added later in Settings); the pronoun and the chosen side's bio are optional.
  */
 export default async function SignupPage() {
   if (await getPageUser()) redirect("/app");
@@ -27,11 +27,13 @@ export default async function SignupPage() {
             <p className="note text-center">or</p>
           </>
         )}
-        <RoleChoice />
-        <div>
-          <label className="label req" htmlFor="name">Name</label>
-          <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
-        </div>
+        {/* (Batch 35 §162) The Name box sits inside the choice's fields: after it the optional Pronoun and the chosen side's bio. */}
+        <RoleChoice>
+          <div>
+            <label className="label req" htmlFor="name">Name</label>
+            <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
+          </div>
+        </RoleChoice>
         <div>
           <label className="label req" htmlFor="email">Email</label>
           <CountedInput maxLength={EMAIL_MAX} className="input" id="email" name="email" type="email" autoComplete="email" required data-required="" data-required-msg="Enter a valid email" data-match="email" />

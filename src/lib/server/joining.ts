@@ -46,7 +46,7 @@ export async function joinRefusal(testerId: string, testId: string, opts: { rejo
   if (old?.status === "ended" && !opts.rejoin && !(await db.invite.findFirst({ where: { testId, testerId, status: "sent" } }))) return "You can't join this test again.";
   const testersIn = await db.contract.count({ where: { testId, status: "working" } });
   if (testersIn >= t.spots) return (await db.invite.findFirst({ where: { testId, testerId, status: "sent" } })) ? `${t.title} is full right now.` : "This test is full.";
-  if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock them in Account → Blocked people to join.`;
+  if (await db.block.count({ where: { blockerId: testerId, blockedId: t.developerId } })) return `You blocked ${displayName(t.developer)}: unblock ${pronouns(t.developer.pronoun).obj} in Account → Blocked people to join.`;
   if (await db.block.count({ where: { blockerId: t.developerId, blockedId: testerId } })) return "This test isn't taking new testers right now.";
   if ((await db.contract.count({ where: { testerId, status: "working" } })) >= MAX_ACTIVE_TESTS) return TEST_LIMIT_LINE;
   return "";
@@ -258,7 +258,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
     create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${displayName(tester)} applied to join` } }));
-  await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`Their note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`);
+  await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`);
   return { applied: true };
 }
 
@@ -266,7 +266,8 @@ export async function withdrawApplication(tester: { id: string }, testId: string
   if (await db.application.count({ where: { testId, testerId: tester.id, status: "pending" } })) await listingGate(tester.id, testId, body, "withdraw");
   const n = await db.application.updateMany({ where: { testId, testerId: tester.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });
   if (!n.count) throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
-  await logEvent(testId, "applied", `${displayName(await db.user.findUniqueOrThrow({ where: { id: tester.id } }))} withdrew their application`);
+  const me = await db.user.findUniqueOrThrow({ where: { id: tester.id } });
+  await logEvent(testId, "applied", `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application`);
   return { withdrawn: true };
 }
 
@@ -307,7 +308,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     if (a.status === "closed" && a.closedReason === "blocked") return new HttpError(409, "gone", `${name}'s application was closed.`);
     if (a.status === "closed") return new HttpError(409, "gone", a.closedReason === "invite_only" ? `${name}'s application closed when the test became invite only at ${fmtTime(a.decidedAt ?? new Date())}.` : `${name}'s application closed when you changed the listing in another tab at ${fmtTime(a.decidedAt ?? new Date())}.`);
     // (Batch 16 section 21) Answered already (in another tab): a plain refusal naming it, no stop box.
-    return new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew their application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
+    return new HttpError(409, "gone", a.status === "withdrawn" ? `${name} withdrew ${pronouns(tester.pronoun).poss} application.` : a.status === "declined" ? "You already declined this application." : a.status === "accepted" || a.status === "joined" ? "You already accepted this application." : "This application was already answered.");
   };
   const goneNow = async () => gone(await db.application.findUniqueOrThrow({ where: { id: a.id } }));
   if (a.status !== "pending") throw gone(a);
@@ -323,7 +324,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     const shownRating = !("rating" in shownRaw) ? undefined : typeof shownRaw.rating === "number" ? shownRaw.rating : null;
     const rating = await ratingSummary(tester.id);
     const currentRating = rating.n ? Number(rating.avg.toFixed(1)) : null;
-    const ratingLine = ratingChangedLine(name, shownRating, currentRating);
+    const ratingLine = ratingChangedLine(name, shownRating, currentRating, tester.pronoun);
     if (ratingLine) lines.push(ratingLine);
     if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, rating.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
   }
@@ -466,7 +467,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   const name = displayName(tester);
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${name} asks to rejoin` } }));
   const line = rejoinAskLine(name, pronouns(tester.pronoun), old);
-  await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`Their note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id });
+  await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id });
   return { asked: true };
 }
 

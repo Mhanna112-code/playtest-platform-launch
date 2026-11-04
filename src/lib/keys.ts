@@ -1,4 +1,5 @@
 // (Design doc 4 and 5) Access keys: one per line; each joining tester gets one. Pure helpers shared by the form and the server.
+import { pronouns } from "./format";
 
 export const KEY_MAX_LENGTH = 200;
 /** The refusal of a longer key (the server; the red line under it in the list). */
@@ -77,7 +78,9 @@ export const reusedKeyLine = (value: string, name: string, broken: boolean) => (
 export const FREE_KEYS_RULE = "Keys in use can't be added. Keys from testers who left or finished can be typed in again; you'll see if one was reported as broken.";
 
 /** (Owner, Oct 29, batch 14 section 6) The developer's quiet live-box line when a tester reports their key (not a stop-once kind, no bell). */
-export const keyReportedLine = (name: string) => `${name} reported their key doesn't work`;
+export const keyReportedLine = (name: string, /** (batch 35 §162) the tester's */ pronoun?: string | null) => `${name} reported ${pronouns(pronoun).poss} key doesn't work`;
+/** (Batch 35 §162) The tester's note after "This key doesn't work", in the developer's pronoun ("She can send you another key in a message."). */
+export const keyToldNote = (already: boolean, devPronoun?: string | null) => `${already ? "The developer was already told." : "Thanks. The developer was told."} ${pronouns(devPronoun).Subj} can send you another key in a message.`;
 /** The Free keys notice's hint (its "in Edit" opens Edit's access keys section in a new tab). */
 export const FREE_KEYS_HINT = ["If a tester's key doesn't work, delete a free key ", "in Edit", " and send it to them in a message."] as const;
 export const openSpotsKeyLine = (open: number) => `${open} open spot${open === 1 ? "" : "s"}: each new tester gets one.`;

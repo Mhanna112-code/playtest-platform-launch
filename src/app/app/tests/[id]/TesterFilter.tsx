@@ -38,11 +38,11 @@ export function useTesterFilter() {
 /** Which rows show for a choice: every row, or only that tester's. */
 export const rowShown = (rowTesterId: string, chosen: string) => !chosen || rowTesterId === chosen;
 
-export function AvatarButton({ testerId, name }: { testerId: string; name: string }) {
+export function AvatarButton({ testerId, name, obj = "them" }: { testerId: string; name: string; /** (batch 35 §162) the tester's object pronoun */ obj?: string }) {
   const chosen = useTesterFilter();
   const on = chosen === testerId;
   return (
-    <button type="button" aria-pressed={on} aria-label={on ? `${name}: showing only them (press to show everyone)` : `Show only ${name}`} data-avatar-filter={testerId}
+    <button type="button" aria-pressed={on} aria-label={on ? `${name}: showing only ${obj} (press to show everyone)` : `Show only ${name}`} data-avatar-filter={testerId}
       onClick={() => choose(on ? "" : testerId)}
       className={`flex h-9 w-9 items-center justify-center rounded-full bg-gradient-to-br from-volt-300 to-sky-300 text-sm font-semibold text-ink-950 ring-2 focus:outline-none focus-visible:ring-sky-300 ${on ? "ring-sky-300 ring-offset-2 ring-offset-slate-950" : "ring-slate-950 hover:ring-sky-300"}`}>
       {name.trim().charAt(0).toUpperCase()}

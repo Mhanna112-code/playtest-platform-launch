@@ -133,7 +133,7 @@ describe("batch 29 section 11: stopped, closed and paused tests keep the stop-on
     const B = { seenAt: loaded, pageSeenAt: loaded, tab: "B" };
     // Next round stops once for both.
     const n = await act(w.testId, "next-round", w.dev.cookie, B);
-    expect(texts(n)).toEqual(["Cara Diaz left the test", "You paid Ana Silva $1.00 more for their written answers in another tab"]);
+    expect(texts(n)).toEqual(["Cara Diaz left the test", "You paid Ana Silva $1.00 more for her written answers in another tab"]);
     // Rate Ben and the excerpt decision: through at once.
     const rate = await act(w.testId, "rate", w.dev.cookie, { contractId: b.sessionId, stars: 4, ...B });
     expect(rate.status, JSON.stringify(rate.body)).toBe(200);

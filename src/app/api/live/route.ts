@@ -55,12 +55,15 @@ export async function GET(req: Request) {
       const rated = changes.filter((c) => c.kind === "rated" && (c as { contractId?: string | null }).contractId);
       if (rated.length) {
         const { devRateStates } = await import("@/lib/server/ratings");
-        const states = await devRateStates(rated.map((c) => (c as unknown as { contractId: string }).contractId));
+        const cids = rated.map((c) => (c as unknown as { contractId: string }).contractId);
+        const states = await devRateStates(cids);
+        // (Batch 35 §162) "You can rate her …": the tester's pronoun as it is now.
+        const pron = new Map((await db.contract.findMany({ where: { id: { in: cids } }, select: { id: true, tester: { select: { pronoun: true } } } })).map((x) => [x.id, x.tester.pronoun]));
         changes = changes.map((c) => {
           const cid = (c as { contractId?: string | null }).contractId;
           if (c.kind !== "rated" || !cid) return c;
           const end = states.get(cid)?.endsAt ?? null;
-          return { ...c, text: ratedYouLiveLine(c.text.replace(/ rated you$/, ""), end ? fmtDate(end) : null) };
+          return { ...c, text: ratedYouLiveLine(c.text.replace(/ rated you$/, ""), end ? fmtDate(end) : null, pron.get(cid)) };
         });
       }
     } else if (kind === "listing") {

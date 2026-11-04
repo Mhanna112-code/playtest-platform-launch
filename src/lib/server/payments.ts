@@ -2,7 +2,7 @@ import { recordReviewDraft } from "./reviewDraft";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, fmtTime, money, toCents } from "@/lib/server/dateFormat";
+import { displayName, fmtDate, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
@@ -92,7 +92,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     const name = displayName(c.tester);
     // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work is still reviewed when their payout account was connected; without one (DEFAULT)
     // nothing can reach them, so it can't be paid (final).
-    if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null })));
+    if (!testerPayable(c.tester) && !(await tx.review.findFirst({ where: piece.where }))) throw new HttpError(409, "gone", deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun));
     const already = await tx.review.findFirst({ where: piece.where });
     // (Batch 16 section 21) Another tab's Pay on this piece stops this press once, BEFORE it is refused as already done.
     const payPress = payPressOf(c.id, piece.where);
@@ -101,8 +101,8 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       const waits = await bankWaitsLine(tx, piece.where, name);
       if (waits) throw new HttpError(409, "bank_waits", waits);
       await devGate(tx, c.testId, body, {}, [], undefined, payPress);
-      if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for their ${piece.reference}.`);
-      if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let their ${piece.reference} go: nothing was charged.`);
+      if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${piece.reference}.`);
+      if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let ${pronouns(c.tester.pronoun).poss} ${piece.reference} go: nothing was charged.`);
       if (already.teamClosedById) throw new HttpError(409, "reviewed", TEAM_CLOSED_NO_PAY); // (batch 30 §5)
       const owedNow = !already.rejected && (await tx.payment.findFirst({ where: { ...piece.where, status: "failed", owedUntil: { not: null }, settledAt: null } }));
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
@@ -262,7 +262,7 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
     rev.amountCents === 0 ? `${displayName(dev)} paid $0 for your ${piece.label} on “${c.title}”` : `${displayName(dev)} paid you ${money(rev.amountCents)} for your ${piece.label} on “${c.title}”`,
     [
       rev.amountCents === 0 ? `${displayName(dev)} paid $0 for this.` : `${displayName(dev)} paid ${money(rev.amountCents)}${rev.rateCents != null ? ` (${money(rev.rateCents)}/h)` : ""} for your ${piece.label}: you get ${money(testerShare(rev.amountCents))}.`,
-      ...(rev.reason ? [`Their note: “${rev.reason}”`] : []),
+      ...(rev.reason ? [`${pronouns(dev.pronoun).Poss} note: “${rev.reason}”`] : []),
       ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : []),
     ],
     `/app/sessions/${c.id}#${partAnchor(piece.label)}`,
@@ -325,7 +325,7 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
     throw e;
   });
   // (Batch 15 section 35) The live line opens its Needs you row, like the bell line.
-  await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for their ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId, `item-dispute-${d.id}`);
+  await logEvent(c.testId, "dispute", `${displayName(tester)} disputed the pay for ${pronouns(tester.pronoun).poss} ${kind === "call" ? "live call" : (await db.submission.findUnique({ where: { id } }))?.kind === "recording" ? "recording" : "written answers"}`, contractId, `item-dispute-${d.id}`);
   await notify(c.test.developer.email, `${displayName(tester)} disputed a payment on “${c.title}”`, [`${displayName(tester)} thinks the pay should be higher: “${reason}”`, `Our team decides. A decision can only raise the pay, ${disputeLimitText(roomCents)}.`], `/app/tests/${c.testId}#item-dispute-${d.id}`, { group: "disputefiled" });
   // (Owner, Oct 26) Admins are told too. (Batch 29 §29) Disputes have their own daily entry across tests ("Disputes · 3 new"); each line opens its own row (marked).
   const flagged = await reportedOver3([tester.id, c.test.developerId]);
@@ -378,7 +378,10 @@ export async function paidAndCap(pieces: { submissionId?: string | null; callId?
 
 /** Admin: decide a dispute. The total can only go up (to at most the piece's cap, batch 28 §15); blank keeps the pay; the extra is charged. */
 /** (Batch 35 §70) Decide on a piece whose payment is waiting for the developer's bank. */
-export const DECIDE_LOCKED = "The developer is confirming a payment for this piece with their bank. Decide again once it's confirmed or fails.";
+/** (Batch 35 §162) In the developer's recorded pronoun ("with her bank"); DECIDE_LOCKED is the unset one. */
+export const decideLockedLine = (pronoun?: string | null) => `The developer is confirming a payment for this piece with ${pronouns(pronoun).poss} bank. Decide again once it's confirmed or fails.`;
+export const DECIDE_LOCKED = decideLockedLine();
+const devPronounOf = async (contractId: string) => (await db.contract.findUnique({ where: { id: contractId }, select: { test: { select: { developer: { select: { pronoun: true } } } } } }))?.test.developer.pronoun;
 
 export async function decideDispute(admin: U, disputeId: string, body: Record<string, unknown>) {
   if (!isAdmin(admin)) throw new HttpError(403, "not_admin", "Only admins can decide disputes.");
@@ -389,12 +392,12 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   // (§86) Decide answers this dispute, including its developer-side line.
   const seen = typeof body.seenAt === "string" ? new Date(body.seenAt) : null;
   if (seen && !isNaN(seen.getTime()) && d.devSideAt && d.devSideAt > seen) {
-    const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, select: { testId: true } });
-    await (await import("./adminRace")).stopForUnanswered(admin.id, c.testId, "Decide", [{ item: d.id, text: "The developer added their side", at: d.devSideAt }], { item: d.id });
+    const c = await db.contract.findUniqueOrThrow({ where: { id: d.contractId }, select: { testId: true, test: { select: { developer: { select: { pronoun: true } } } } } });
+    await (await import("./adminRace")).stopForUnanswered(admin.id, c.testId, "Decide", [{ item: d.id, text: `The developer added ${pronouns(c.test.developer.pronoun).poss} side`, at: d.devSideAt }], { item: d.id });
   }
   // (Owner, Oct 31, batch 35 §70) The developer's own payment on this piece waiting for their bank (up to 15 minutes) would be charged on top of the decision: refused until
   // it's confirmed or fails, so the piece is never paid more than decided.
-  if (await (await import("./confirm")).pieceLocked({ submissionId: d.submissionId, callId: d.callId })) throw new HttpError(409, "locked", DECIDE_LOCKED);
+  if (await (await import("./confirm")).pieceLocked({ submissionId: d.submissionId, callId: d.callId })) throw new HttpError(409, "locked", decideLockedLine(await devPronounOf(d.contractId)));
   const { review, min, max, poolBinds } = await disputeBounds(d);
   // A blank box keeps the pay as it is.
   const blank = body.total === undefined || body.total === null || String(body.total).trim() === "";
@@ -432,7 +435,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
     await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${c.testId} FOR UPDATE`;
     const claimed = await tx.dispute.updateMany({ where: { id: d.id, status: "open" }, data: { status: "decided", decidedCents: decided!, decisionNote: note, decidedById: admin.id, decidedAt: new Date() } });
     if (claimed.count !== 1) return null;
-    if (await tx.payment.count({ where: { ...key, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", DECIDE_LOCKED); // the claim rolls back
+    if (await tx.payment.count({ where: { ...key, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", decideLockedLine(c.test.developer.pronoun)); // the claim rolls back
     const piece = await pieceOf(key, tx);
     const paidNow = Math.max(review.amountCents, piece ? (await pieceRoom(piece, tx)).paidCents : review.amountCents);
     // (§149) A Pay more that went through just now took the pay above the decision: the same stop (the claim rolls back).
@@ -477,7 +480,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
         await db.dispute.update({ where: { id: d.id }, data: { status: "open", decidedCents: null, decidedAt: null, decidedById: null, decisionNote: "" } }); // (Nov 2, §119) no longer names who
         await db.testEvent.deleteMany({ where: { id: claim.eventId } }); // (Owner, Nov 3, races) nothing was decided after all: its line goes with the claim
         // (§130) The developer's card was unknown to Stripe (cleared): the team reads why, not the developer's "Add a card".
-        if (e instanceof HttpError && e.code === "no_card") throw new HttpError(409, "no_card", "The developer's saved card is no longer available, so nothing was charged and the dispute stays open. Decide again once they add a card.");
+        if (e instanceof HttpError && e.code === "no_card") throw new HttpError(409, "no_card", `The developer's saved card is no longer available, so nothing was charged and the dispute stays open. Decide again once ${pronouns(c.test.developer.pronoun).subj} ${pronouns(c.test.developer.pronoun).v("adds", "add")} a card.`);
         throw e;
       }
       const failed = await db.payment.create({ data: { ...owedRow, status: "failed", failure: e.message, owedUntil: new Date() } });
@@ -728,7 +731,7 @@ async function closeUpdateAtZero(dev: U, c: { id: string; testId: string; tester
   });
   if (done) {
     const line = `${displayName(dev)} paid $0 more for what you added to your ${label} on “${c.test.title}”`; // (batch 35 §136)
-    await notify(c.tester.email, line, [line + ".", ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#part-${label === "recording" ? "recording" : "written"}`, { payment: true, group: "tpaid", about: dev.id });
+    await notify(c.tester.email, line, [line + ".", ...(note ? [`${pronouns(dev.pronoun).Poss} note: “${note}”`] : [])], `/app/sessions/${c.id}#part-${label === "recording" ? "recording" : "written"}`, { payment: true, group: "tpaid", about: dev.id });
   }
   return { paid: true, amountCents: 0, status: "closed" };
 }
@@ -746,7 +749,7 @@ export async function finishExtraPay(paymentId: string, result: { status: string
     if (p.submissionId) await answerUpdate(tx, p.submissionId, p.createdAt);
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for your ${label} on “${c.test.title}”`;
-  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`Their note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
+  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`${pronouns(dev.pronoun).Poss} note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
   await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title, full: true })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`);
   return { paid: true, amountCents: amount, status: result.status };
 }

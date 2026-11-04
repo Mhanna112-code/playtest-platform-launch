@@ -348,7 +348,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
                 <span className="mr-auto"><Cut text={s.name} /> · {s.status}</span>
                 {s.tag && <span className="badge border-amber-300/40 text-amber-200">{s.tag}</span>}
                 <span className="text-xs text-slate-500">{s.detail}</span>
-                {s.status === "waiting for them to join" && (
+                {/* (Batch 35 §162) "waiting for her / him / them to join", in the tester's pronoun. */}
+                {s.status.startsWith("waiting for ") && (
                   <CancelInviteButton testId={p.testId} seenAt={p.seenAt} row={s} needs={p.options} />
                 )}
               </li>

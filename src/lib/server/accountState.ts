@@ -21,9 +21,11 @@ export type AccountState = {
   held?: "" | "payment" | "chargeback";
   /** (Batch 35 §43) The typed reasons on their own, for the small quoted box: each suspended side's Why and the deletion's. */
   notes?: { developer: string; tester: string; deleted: string };
+  /** (Batch 35 §162) The account's pronoun, for the lines about it ("she pays what she owes first"). */
+  pronoun?: string;
 };
 
-type Acct = Pick<User, "id" | "email" | "isDeveloper" | "isTester" | "devSuspendedAt" | "devSuspendedById" | "devSuspendNote" | "testerSuspendedAt" | "testerSuspendedById" | "testerSuspendNote" | "deletedAt" | "deletedBy" | "deleteReason"> & Partial<Pick<User, "holdStartedAt" | "holdReason">>;
+type Acct = Pick<User, "id" | "email" | "isDeveloper" | "isTester" | "devSuspendedAt" | "devSuspendedById" | "devSuspendNote" | "testerSuspendedAt" | "testerSuspendedById" | "testerSuspendNote" | "deletedAt" | "deletedBy" | "deleteReason"> & Partial<Pick<User, "holdStartedAt" | "holdReason" | "pronoun">>;
 
 /** The states of several accounts at once (the Accounts list's page). */
 export async function accountStates(users: Acct[]): Promise<Map<string, AccountState>> {
@@ -51,6 +53,7 @@ export async function accountStates(users: Acct[]): Promise<Map<string, AccountS
         suspended: { developer: side(u, "developer"), tester: side(u, "tester") },
         notes: { developer: u.devSuspendedAt ? u.devSuspendNote ?? "" : "", tester: u.testerSuspendedAt ? u.testerSuspendNote ?? "" : "", deleted: u.deletedAt ? u.deleteReason ?? "" : "" },
         held: u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "payment") : "",
+        pronoun: u.pronoun ?? "",
         deleted: u.deletedAt ? `Deleted ${fmtDateTime(u.deletedAt)} by ${u.deletedBy === "admin" ? deletedBy.get(u.id) ?? "the team" : "the owner of the account"}${u.deleteReason ? `: ${u.deleteReason}` : ""}` : "",
       },
     ]),

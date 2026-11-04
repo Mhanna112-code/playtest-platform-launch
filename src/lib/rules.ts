@@ -3,7 +3,7 @@ import { withoutAttachmentMarkers } from "./answerAttachments";
 // the Edit version check, the join check and contract snapshots live here so they are tested in one place.
 
 import type { Prisma } from "@prisma/client";
-import { money } from "./format";
+import { money, pronouns } from "./format";
 import { LIMITS } from "./limits";
 import { qText } from "./questions";
 import { T, safeZone } from "./tz";
@@ -948,8 +948,9 @@ export const testerPayable = (t: { deletedAt: Date | null; stripeAccountId: stri
 /** The same rule as a Prisma filter on a tester. */
 export const PAYABLE_TESTER: Prisma.UserWhereInput = { OR: [{ deletedAt: null }, { stripeAccountId: { not: null }, payoutsReady: true }] };
 /** (Owner, Oct 29, batch 12 section 1) The tester's part still under review when the developer deleted their account. */
-export const devDeletedLine = (dev: string) => `${dev} deleted their account, so this can't be paid.`;
-export const deletedNoPayoutsLine = (name: string) => `${name} deleted their account before setting up payouts, so this can't be paid.`;
+// (Batch 35 §162) Each line about a person uses their recorded pronoun (`pronoun`: she, he, they or unset, which reads "they").
+export const devDeletedLine = (dev: string, pronoun?: string | null) => `${dev} deleted ${pronouns(pronoun).poss} account, so this can't be paid.`;
+export const deletedNoPayoutsLine = (name: string, pronoun?: string | null) => `${name} deleted ${pronouns(pronoun).poss} account before setting up payouts, so this can't be paid.`;
 /** (Owner, Oct 29, batch 10) A hold lifted (paid, or a chargeback hold cleared) while an admin suspension is still on: bell and email, sent even with email Off. */
 /** (Owner, Oct 29, batch 10) The platform won a chargeback: the developer's bell and email, and (when they had already paid it back) the receipt line for the refund. */
 export const chargebackWonLine = (cents: number) => `Your bank's chargeback of ${money(cents)} was reversed in your favour.`;
@@ -1166,8 +1167,11 @@ export function inviteBlocked(t: Parameters<typeof inviteTestRefusal>[0], now: D
  * "ff finished their part (rated you)"); one whose part had ended gives only the live box's line, with the developer's own window. Never the stars.
  */
 export const ratedYouLine = (name: string) => `${name} rated you`;
-export const finishedAndRatedLine = (name: string) => `${name} finished their part (rated you)`;
-export const ratedYouLiveLine = (name: string, until: string | null) => (until ? `${name} rated you. You can rate them until ${until}.` : `${name} rated you. You can rate them once everything they sent is settled.`);
+export const finishedAndRatedLine = (name: string, pronoun?: string | null) => `${name} finished ${pronouns(pronoun).poss} part (rated you)`;
+export const ratedYouLiveLine = (name: string, until: string | null, pronoun?: string | null) => {
+  const p = pronouns(pronoun);
+  return until ? `${name} rated you. You can rate ${p.obj} until ${until}.` : `${name} rated you. You can rate ${p.obj} once everything ${p.subj} sent is settled.`;
+};
 /** The test page's Needs you row for an open Rate: "Rate ff · 14 days left". */
 export const rateNeedsLine = (name: string, endsAt: Date, now = new Date()) => {
   const days = Math.max(1, Math.ceil((endsAt.getTime() - now.getTime()) / 86_400_000));
@@ -1201,8 +1205,8 @@ export const MAX_ACTIVE_TESTS = LIMITS.testsPerTester;
 /** (7.3) Joining, applying, accepting an invite and asking to rejoin all refuse with this line at the limit. */
 export const TEST_LIMIT_LINE = "You can't join more tests right now.";
 /** Invite: per-tester refusals. Never reveals a block or a suspension. */
-export function inviteTesterRefusal(name: string, x: { suspended: boolean; blocked: boolean; deleted: boolean; activeTests: number }) {
-  if (x.deleted) return `${name}'s account was closed, so they can't be invited.`;
+export function inviteTesterRefusal(name: string, x: { suspended: boolean; blocked: boolean; deleted: boolean; activeTests: number; pronoun?: string | null }) {
+  if (x.deleted) return `${name}'s account was closed, so ${pronouns(x.pronoun).subj} can't be invited.`;
   if (x.suspended || x.blocked) return `${name} can't be invited right now.`;
   if (x.activeTests >= MAX_ACTIVE_TESTS) return `${name} can't join more tests right now.`;
   return "";
@@ -1523,7 +1527,7 @@ export const JOIN_CLOSES_AFTER_END_MIN = 30;
 
 /** Why Join call can't open the room now, or "". Shown in blue under Join. */
 export function joinCallRefusal(
-  x: { status: string; startsAt: Date; minutes: number; noShow: boolean; paused: boolean; testStatus: string; contractStatus: string; blocked: boolean; side: "tester" | "developer" },
+  x: { status: string; startsAt: Date; minutes: number; noShow: boolean; paused: boolean; testStatus: string; contractStatus: string; blocked: boolean; side: "tester" | "developer"; /** (§162) the tester's, for the developer's lines */ testerPronoun?: string | null },
   now: Date,
   fmtTime: (d: Date) => string,
 ) {
@@ -1532,8 +1536,8 @@ export function joinCallRefusal(
   if (x.noShow) return "This call was reported as a no-show.";
   if (x.paused) return "This test is paused.";
   if (x.testStatus === "stopped") return "This test was stopped.";
-  if (x.contractStatus === "left") return x.side === "tester" ? "You left this test." : "They left the test.";
-  if (x.contractStatus === "ended") return x.side === "tester" ? "Your session ended." : "Their session ended.";
+  if (x.contractStatus === "left") return x.side === "tester" ? "You left this test." : `${pronouns(x.testerPronoun).Subj} left the test.`;
+  if (x.contractStatus === "ended") return x.side === "tester" ? "Your session ended." : `${pronouns(x.testerPronoun).Poss} session ended.`;
   const opens = new Date(x.startsAt.getTime() - JOIN_OPENS_MIN * 60_000);
   if (now < opens) return `You can join from ${fmtTime(opens)}.`;
   if (now.getTime() > x.startsAt.getTime() + (x.minutes + JOIN_CLOSES_AFTER_END_MIN) * 60_000) return "This call is over.";
@@ -1612,7 +1616,10 @@ export const rateOpensReviewLine = (devName: string) => `Rating opens once ${dev
 /** (Batch 17 section 1) The developer's Rate is disabled while a dispute with that tester on this test is open. */
 export const rateTheirDisputeLine = (name: string) => `Rating opens once the team decides ${name}'s dispute.`;
 /** (Batch 17 section 16) The developer's Rate is hidden until the tester has rated and everything they sent is settled; an old page's press reads this. */
-export const ratePendingLine = (name: string) => `You can rate ${name} once they've rated you and everything they sent is settled.`;
+export const ratePendingLine = (name: string, pronoun?: string | null) => {
+  const p = pronouns(pronoun);
+  return `You can rate ${name} once ${p.subjHas} rated you and everything ${p.subj} sent is settled.`;
+};
 /** (Batch 17 section 12) A Cancel call pressed on a page opened before the test stopped (its calls ahead were cancelled by the stop). */
 export const CALL_CANCELLED_BY_STOP = "This call was cancelled when the test stopped.";
 /** "3:10 PM" when it happened in the last 12 hours, else "Tue, Nov 3, 3:10 PM". */
@@ -1779,12 +1786,12 @@ export function callClosedKind(x: { paused: boolean; testStatus: string; contrac
   return "";
 }
 /** Each side's neutral line for it (never "hold" or "suspended"; a tester removed by a suspension reads that their session ended). */
-export function callClosedLineOf(kind: CallClosedKind | "" | string, side: "tester" | "developer", endKind = "") {
+export function callClosedLineOf(kind: CallClosedKind | "" | string, side: "tester" | "developer", endKind = "", /** (§162) the tester's, for the developer's lines */ testerPronoun?: string | null) {
   if (kind === "blocked") return "This call isn't available.";
   if (kind === "paused") return "This test is paused.";
   if (kind === "stopped") return "This test was stopped.";
-  if (kind === "left") return side === "tester" ? (endKind === "suspended" || endKind === "deleted" ? "Your session ended." : "You left this test.") : "They left the test.";
-  if (kind === "ended") return side === "tester" ? "Your session ended." : "Their session ended.";
+  if (kind === "left") return side === "tester" ? (endKind === "suspended" || endKind === "deleted" ? "Your session ended." : "You left this test.") : `${pronouns(testerPronoun).Subj} left the test.`;
+  if (kind === "ended") return side === "tester" ? "Your session ended." : `${pronouns(testerPronoun).Poss} session ended.`;
   return "";
 }
 /** (Owner, Oct 28, batch 18 section 13; batch 21 section 1) "Check your call setup", from booking onward: an in-app camera and microphone check (no call). */

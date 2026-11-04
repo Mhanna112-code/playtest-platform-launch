@@ -1,11 +1,11 @@
 import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
-import { displayName } from "@/lib/format";
+import { displayName, pronouns } from "@/lib/format";
 import { ratingSummary } from "@/lib/server/ratings";
 import type { Side } from "@/lib/sides";
 
 /** What PersonHover needs for one person: their name, the profile it links to and the summary lines. */
-export type PersonHoverInfo = { name: string; href: string; summary: string[] };
+export type PersonHoverInfo = { name: string; href: string; summary: string[]; /** (batch 35 §162) their possessive, for "See her profile" */ poss?: string };
 
 /**
  * (Batch 35 §124) The profile hover for the other person in Messages and in a chat, as the session page's developer name has it: their rating line (or
@@ -19,5 +19,5 @@ export async function personHoverFor(viewerId: string, side: Side | null, other:
   const href = side === "developer" ? (tester ?? dev) : (dev ?? tester);
   if (!href) return null;
   if ((await db.block.count({ where: { blockerId: other.id, blockedId: viewerId } })) > 0) return null;
-  return { name: displayName(other), href, summary: [(await ratingSummary(other.id)).line || "No ratings yet"] };
+  return { name: displayName(other), href, poss: pronouns(other.pronoun).poss, summary: [(await ratingSummary(other.id)).line || "No ratings yet"] };
 }

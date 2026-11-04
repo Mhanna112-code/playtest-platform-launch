@@ -52,7 +52,7 @@ describe("batch 18 section 5 (confirmed as built): excerpt requests in the bell"
       expect((await pay(s.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
       const r = await ex(j.tester.cookie, { action: "request", submissionId: sub.id, index: 0, text: "the second boss was far too hard" });
       expect(r.status).toBe(200);
-      asks.push(`${name} asked to show an excerpt from “Harbor Run” on their profile`);
+      asks.push(`${name} asked to show an excerpt from “Harbor Run” on her profile`); // (batch 35 §162) joined() testers are "she"
     }
     const lines = await db.notification.findMany({ where: { userId: s.dev.user.id, text: { in: asks } }, orderBy: { createdAt: "asc" } });
     expect(lines.map((l) => l.text)).toEqual(asks);

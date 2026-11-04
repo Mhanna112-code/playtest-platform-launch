@@ -153,7 +153,9 @@ export async function callClosedKindOf(call: { contract: { testerId: string; sta
 }
 /** The neutral line for that, per side ("This test is paused.", "Their session ended.", …); "" when open. */
 export async function callClosedLine(call: Parameters<typeof callClosedKindOf>[0] & { contract: { endKind?: string } }, side: "tester" | "developer") {
-  return callClosedLineOf(await callClosedKindOf(call), side, call.contract.endKind ?? "");
+  // (Batch 35 §162) The developer reads the tester's own pronoun ("She left the test.").
+  const tester = side === "developer" ? await db.user.findUnique({ where: { id: call.contract.testerId }, select: { pronoun: true } }) : null;
+  return callClosedLineOf(await callClosedKindOf(call), side, call.contract.endKind ?? "", tester?.pronoun);
 }
 
 /**
@@ -249,13 +251,13 @@ export const blockEndedLine = (mine: boolean, otherName: string) => (mine ? `Cal
  * The line the call page shows instead of the room, for one of its two people ("" while the room can be used, or before it opens): "This call was cancelled.",
  * "Call ended: it reached 150% of the booked time.", "Call ended: the test is paused.", "Call ended at 3:42 PM." …
  */
-export function callLineFor(call: { status: string; startsAt: Date; minutes: number; endedAt: Date | null; endReason: string; cappedAt: Date | null; measuredAt: Date | null; measuredMinutes: number | null; measuredTo: Date | null; actualMinutes: number | null; contract: { endKind: string } }, side: "tester" | "developer", otherName: string, tz: { timeZone?: string | null } | null, closed = "", now = new Date()) {
+export function callLineFor(call: { status: string; startsAt: Date; minutes: number; endedAt: Date | null; endReason: string; cappedAt: Date | null; measuredAt: Date | null; measuredMinutes: number | null; measuredTo: Date | null; actualMinutes: number | null; contract: { endKind: string; tester?: { pronoun: string } } }, side: "tester" | "developer", otherName: string, tz: { timeZone?: string | null } | null, closed = "", now = new Date()) {
   if (call.status === "cancelled") return "This call was cancelled.";
   if (call.endedAt || call.cappedAt) {
     const r = call.endReason || "calls_cap";
     // (Batch 26 section 2) "blocked:<side that blocked>"; an older row's plain "blocked" reads as cancelled on both pages.
     if (r.startsWith("blocked")) return blockEndedLine(r === `blocked:${side}`, otherName);
-    return r === "calls_cap" ? capEndedLine(otherName) : r === "length" ? LENGTH_ENDED_LINE : closedEndedLine(callClosedLineOf(r, side, call.contract.endKind));
+    return r === "calls_cap" ? capEndedLine(otherName) : r === "length" ? LENGTH_ENDED_LINE : closedEndedLine(callClosedLineOf(r, side, call.contract.endKind, call.contract.tester?.pronoun));
   }
   if (call.measuredAt || call.actualMinutes != null) return (call.measuredMinutes ?? 0) > 0 ? callEndedLine(fmtFor(tz, call.measuredTo ?? call.measuredAt ?? now, "time")) : CALL_OVER_LINE;
   if (now.getTime() > measureDeadline(call.startsAt, call.minutes).getTime()) return CALL_OVER_LINE;

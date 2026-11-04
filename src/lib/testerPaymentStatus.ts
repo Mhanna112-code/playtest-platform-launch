@@ -1,4 +1,5 @@
 import { LET_GO_BY_TESTER, notPaidClosedLine } from "./rules";
+import { pronouns } from "./format";
 
 /** (§97) A tester's payment state, using the page's existing review, outstanding-payment and close-out facts. */
 export type TesterPaymentFacts = {
@@ -7,6 +8,8 @@ export type TesterPaymentFacts = {
   confirming?: boolean;
   closedOn?: string | null;
   developerDeleted?: string | null;
+  /** (Batch 35 §162) That developer's recorded pronoun ("deleted her account"). */
+  developerPronoun?: string | null;
   paidCents?: number;
 };
 export function testerPaymentStatus(p: TesterPaymentFacts) {
@@ -17,7 +20,7 @@ export function testerPaymentStatus(p: TesterPaymentFacts) {
   if (p.review?.teamClosedById) return { kind: "closed", text: "Closed by the team", tone: "grey" } as const;
   if (p.review?.reason === LET_GO_BY_TESTER) return { kind: "letgo", text: "Let go", tone: "grey" } as const;
   if (p.review) return { kind: "paid", text: "Paid", tone: "green" } as const;
-  if (p.developerDeleted) return { kind: "gone", text: `Can't be paid: ${p.developerDeleted} deleted their account`, tone: "rose" } as const;
+  if (p.developerDeleted) return { kind: "gone", text: `Can't be paid: ${p.developerDeleted} deleted ${pronouns(p.developerPronoun).poss} account`, tone: "rose" } as const;
   if (p.closedOn) return { kind: "closed", text: notPaidClosedLine(p.closedOn), tone: "grey" } as const;
   return { kind: "review", text: "Waiting for review", tone: "amber" } as const;
 }

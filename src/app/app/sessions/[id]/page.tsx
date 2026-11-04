@@ -1,7 +1,7 @@
 import { renderTimes } from "@/lib/tz";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
-import { fmtTimeIn } from "@/lib/format";
+import { fmtTimeIn, pronouns } from "@/lib/format";
 import { notFound, redirect } from "next/navigation";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
@@ -311,7 +311,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {!meOff && (!over || stillWorks.charge || stillWorks.dispute || stillWorks.rate) && <TesterAlertsToggle off={u.testerAlertsOff} />}
       </div>
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
-      {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} />}
+      {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} devPronoun={c.test.developer.pronoun} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
       <ListingSeeIt box="scope" />
       <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? {
@@ -335,7 +335,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <div className="flex flex-wrap items-start gap-4">
           <div className="min-w-[12rem] flex-1">
             <p className="text-sm text-slate-400">by{" "}
-              <PersonHover name={dev} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} chat={!meOff ? <ChatWithButton contractId={c.id} name={dev} /> : undefined} />
+              <PersonHover name={dev} poss={pronouns(c.test.developer.pronoun).poss} href={`/app/developers/${c.test.developerId}`} summary={[devRating || "No ratings yet"]} chat={!meOff ? <ChatWithButton contractId={c.id} name={dev} /> : undefined} />
               {" "}· joined {fmtDate(c.joinedAt)}</p>
             <div className="mt-1 flex flex-wrap gap-2">
               {c.test.status === "stopped" && <span className="badge border-sky-300/40 text-sky-200"><span className="h-2 w-2 rounded-sm bg-sky-300" /> Stopped</span>}
@@ -495,7 +495,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 {sub?.review ? (sub.review.rejected ? <XCircle className="h-4 w-4 text-rose-300" /> : <CheckCircle2 className="h-4 w-4 text-emerald-300" />) : <CircleDot className={`h-4 w-4 ${sub ? "text-amber-300" : "text-slate-400"}`} />}
                 <strong>{name}:</strong>
                 {sub && <TesterPaymentTag review={sub.review} confirming={confirmingBase.has(sub.id)} delayed={paymentDelayed(sub.id)} paidCents={partPaid.get(sub.id) ?? 0}
-                  developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
+                  developerDeleted={devGone && !sub.choiceOfferedAt ? devRealName : null} developerPronoun={c.test.developer.pronoun} closedOn={chargeShut(sub.id) ? shutOn(sub.id) : null} />}
                 <span className="text-slate-200">{sub ? <>{additionsOf(sub.additions).length ? "Updated" : "Sent"} {fmtDateTime(sub.updatedAt)}</> : "Not sent yet"}</span>
                 {cents != null && <span className={`badge ${required ? "border-amber-300/40 text-amber-200" : ""}`}>{required ? "Required" : "Not required"}</span>}
               </p>
@@ -531,7 +531,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 <p className="flex flex-wrap items-center gap-2 text-xs text-slate-400" data-call-row="" data-call-length="">
                   {fmtDateTime(x.startsAt)} · {callMinutesOf(x)} min
                   <TesterPaymentTag review={x.review} confirming={confirmingBase.has(x.id)} delayed={paymentDelayed(x.id) || failedCalls.has(x.id)} paidCents={partPaid.get(x.id) ?? 0}
-                    developerDeleted={devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? devRealName : null} closedOn={chargeShut(x.id) ? shutOn(x.id) : null} />
+                    developerDeleted={devGone && !(x.rateCents != null && c.test.developer.stripePaymentMethodId) ? devRealName : null} developerPronoun={c.test.developer.pronoun} closedOn={chargeShut(x.id) ? shutOn(x.id) : null} />
                 </p>
                 {/* A listed call is charged automatically after its review date; no Charge or Let it go. */}
                 {x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}
@@ -578,6 +578,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 seenAt={seenAt}
                 canRequest={canRequestCall}
                 targets={[{ contractId: c.id, name: dev, rate: "" }]}
+                otherPronoun={c.test.developer.pronoun}
                 requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, rows: pageRows(r, callEnd), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: rateLabel(listedCall ? c.liveRateCents : null, c.liveRateCents) }))}
                 // (Batch 16 section 33) The clash checks while the form is filled: the calls between you, your other calls, and the limits.
                 clash={{

@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, fmtDate, fmtDateTime, money, toCents } from "@/lib/server/dateFormat";
+import { displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
   owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
@@ -297,7 +297,11 @@ export async function deferredWhat(p: { kind: string; submissionId: string | nul
     const call = await db.call.findUnique({ where: { id: p.callId }, select: { startsAt: true } });
     return `${piece} (${call ? `${T(call.startsAt, "date")}, ` : ""}charged automatically after ${REVIEW_DAYS} days)`;
   }
-  if (review?.reason === CHARGED_BY_TESTER && piece) return `${piece} (charged by them after ${REVIEW_DAYS} days)`;
+  if (review?.reason === CHARGED_BY_TESTER && piece) {
+    // (Batch 35 §162) "charged by her": the tester's recorded pronoun.
+    const tester = p.contractId ? (await db.contract.findUnique({ where: { id: p.contractId }, select: { tester: { select: { pronoun: true } } } }))?.tester : null;
+    return `${piece} (charged by ${pronouns(tester?.pronoun).obj} after ${REVIEW_DAYS} days)`;
+  }
   return piece ? `${piece} (paid during the pause)` : "work you paid for during the pause";
 }
 
@@ -354,9 +358,10 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
 }
 
 /** Admins get one bell line when a hold lift is waiting for them (after the developer paid): (batch 29 §29) its own daily entry ("Hold lifts waiting · 1"), linking to the row. */
-async function tellAdminsLiftWaiting(dev: { id: string; email: string; name: string; holdCount: number; holdStartedAt: Date | null }) {
+async function tellAdminsLiftWaiting(dev: { id: string; email: string; name: string; pronoun: string; holdCount: number; holdStartedAt: Date | null }) {
   const flagged = (await reportedOver3([dev.id])).has(dev.id);
-  const text = `Hold lift waiting: ${labelled(displayName(dev), flagged)} paid what they owe (${MANY_HOLDS_LABEL})`;
+  const p = pronouns(dev.pronoun);
+  const text = `Hold lift waiting: ${labelled(displayName(dev), flagged)} paid what ${p.subj} ${p.v("owes", "owe")} (${MANY_HOLDS_LABEL})`;
   for (const a of await adminUsers()) {
     if (await db.notification.count({ where: { userId: a.id, text, createdAt: { gt: dev.holdStartedAt ?? new Date(0) } } })) continue;
     await bell(a.id, text, `/admin#lift-${dev.id}`, undefined, { group: "adminlifts" });
@@ -995,7 +1000,7 @@ async function openCharges(now: Date, co: CloseOuts) {
     // With no Charge for the tester (a deleted tester, or their Charge closed) the piece keeps its own daily "… wasn't reviewed by <date>: pay it." (batch 28).
     const gone = !!c.tester.deletedAt;
     if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
-      const line = unreviewedLine(c.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null);
+      const line = unreviewedLine(c.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null, c.tester.pronoun);
       await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
@@ -1007,7 +1012,7 @@ async function openCharges(now: Date, co: CloseOuts) {
       const by = new Date(now.getTime() + REVIEW_DAYS * 86_400_000);
       await db.submission.update({ where: { id: s.id }, data: { choiceOfferedAt: now, choiceBy: by, remindedAt: now } });
       // (Owner, Oct 29, batch 29 §22) No line of its own: the tester's ONE daily "Charge or let go" line (testerChargeLines) starts today.
-      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of their ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "choice", `${displayName(c.tester)} can now charge or let go of ${pronouns(c.tester.pronoun).poss} ${s.kind === "recording" ? "recording" : "written answers"}`, false, {}, c.id));
       await (await import("./ratings")).maybePromptRating(c.id);
       n++;
       continue;
@@ -1244,8 +1249,8 @@ async function testerChargeLines(now: Date, co: CloseOuts) {
  * Ana Silva can now charge or let it go. You can still pay until they do (at the latest Nov 13)." With no Charge for the tester (a deleted tester, or their Charge
  * closed): "… wasn't reviewed by Oct 30: pay it." The dates are time tokens (the reader's zone), also in the email.
  */
-export const unreviewedLine = (title: string, name: string, part: string, reviewDate: Date, closesAt: Date | null | undefined) =>
-  `“${title}”: ${name}'s ${part} ${part.endsWith("s") ? "weren't" : "wasn't"} reviewed by ${T(reviewDate, "date")}: ${closesAt === null ? "pay it." : `${name} can now charge or let it go. You can still pay until they do${closesAt ? ` (at the latest ${T(closesAt, "date")})` : ""}.`}`;
+export const unreviewedLine = (title: string, name: string, part: string, reviewDate: Date, closesAt: Date | null | undefined, /** (§162) the tester's */ pronoun?: string | null) =>
+  `“${title}”: ${name}'s ${part} ${part.endsWith("s") ? "weren't" : "wasn't"} reviewed by ${T(reviewDate, "date")}: ${closesAt === null ? "pay it." : `${name} can now charge or let it go. You can still pay until ${pronouns(pronoun).subj} ${pronouns(pronoun).v("does", "do")}${closesAt ? ` (at the latest ${T(closesAt, "date")})` : ""}.`}`;
 
 /** (Batch 15 section 34) What a tester can Charge for a listed call: its measured (or lowered) length × the contract rate, less what's paid, within what's left of the $1,000. */
 export async function callChargeCap(x: { id: string; contractId: string; rateCents: number | null; actualMinutes: number | null; measuredMinutes: number | null; measuredAt: Date | null }) {
@@ -1364,7 +1369,7 @@ async function payYourCalls(now: Date, co: CloseOuts) {
 }
 
 /** The tester's choice on a contract part (or, batch 15 section 15, a listed call) unreviewed for the review window: "charge" (the listing minus what is paid) or "letgo". */
-export async function chooseOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
+export async function chooseOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
   // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Charge and Let it go until the tester answers it (Switch or Keep).
   if ((await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true } }))?.testerId === tester.id) await (await import("./terms")).answerTermsFirst(contractId);
   if (body.callId) return chooseCallOutcome(tester, contractId, body);
@@ -1401,14 +1406,14 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const review = await claimChoice(c.testId, { submissionId: s.id }, displayName(dev), { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their ${label} go: nothing charged`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} ${label} go: nothing charged`, false, {}, c.id));
     return { choice, amountCents: 0 };
   }
   // (Batch 35 §113) During a hold the tester's choice waits separately until the hold lifts; it never grows Pay what you owe.
   // During an admin suspension with no hold, or the team's pause, it is charged at once below.
   if (await deferIfHeld({ kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
     await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   // (Batch 15 section 9) The payment row is reserved (pending) before the charge, so a lost answer from Stripe can be found and finished or cleared later.
@@ -1441,7 +1446,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { side: "tester", payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title }));
   }
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their ${label}`, false, {}, c.id));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
@@ -1473,7 +1478,7 @@ async function chargeCloseOutGate(where: { submissionId: string } | { callId: st
 }
 
 /** (Batch 15 sections 15, 34 and 40) The tester's Charge / Let it go on a listed call left unpaid past its review date. */
-async function chooseCallOutcome(tester: { id: string; email: string; name: string }, contractId: string, body: Record<string, unknown>) {
+async function chooseCallOutcome(tester: { id: string; email: string; name: string; pronoun?: string }, contractId: string, body: Record<string, unknown>) {
   const x = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!x || x.contractId !== contractId || x.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That call doesn't exist.");
   const c = x.contract, dev = c.test.developer, label = "live call";
@@ -1504,12 +1509,12 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let their call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(x.startsAt)} go: nothing charged`, false, {}, c.id));
     return { choice, amountCents: 0 };
   }
   if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
     await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt, "date") })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
   const row = await db.payment.create({ data: { kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0, status: "pending", payKey } });
@@ -1538,7 +1543,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     await notify(c.tester.email, `Payment for your call on “${c.title}” may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
     await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt, "date") }));
   }
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for their call`, false, {}, c.id));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call`, false, {}, c.id));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
 }
 
@@ -1548,8 +1553,8 @@ export async function finishChoicePay(paymentId: string, r: { status: string; fe
   const c = await db.contract.findUniqueOrThrow({ where: { id: p.contractId! }, include: { tester: true, test: { include: { developer: true } } } });
   const label = p.callId ? "call" : (await db.submission.findUnique({ where: { id: p.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers";
   // (§131) The receipt names the tester, the part and the test (pieceName).
-  await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title, full: true })} (charged by them after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for their ${label}`, false, {}, c.id));
+  await receipt(c.test.developer.email, `${pieceName({ tester: displayName(c.tester), part: p.callId ? "live call" : label, test: c.title, full: true })} (charged by ${pronouns(c.tester.pronoun).obj} after ${REVIEW_DAYS} days)`, p.amountCents, r.status, `/app/tests/${c.testId}`);
+  await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(c.tester)} charged ${money(p.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${label}`, false, {}, c.id));
   return { choice: "charge" as const, amountCents: p.amountCents, status: r.status };
 }
 

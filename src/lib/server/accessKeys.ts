@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName } from "@/lib/format";
-import { keyNeedLine, keyRefusal, keyReportedLine, KEY_MAX_LENGTH, KEY_TOO_LONG, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
+import { keyNeedLine, keyRefusal, keyReportedLine, keyToldNote, KEY_MAX_LENGTH, KEY_TOO_LONG, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
 
@@ -137,9 +137,9 @@ export async function reportKeyBroken(tester: { id: string; name: string; email:
     await tx.accessKey.update({ where: { id: key.id }, data: { status: "broken", brokenAt: new Date() } });
     return { already: false, replaced: [] as { contractId: string }[] };
   });
-  if (result.already) return { reported: true, replaced: false, note: "The developer was already told. They can send you another key in a message." };
-  await logEvent(c.testId, "key", keyReportedLine(displayName(tester)), c.id);
-  return { reported: true, replaced: false, note: "Thanks. The developer was told. They can send you another key in a message." };
+  if (result.already) return { reported: true, replaced: false, note: keyToldNote(true, c.test.developer.pronoun) };
+  await logEvent(c.testId, "key", keyReportedLine(displayName(tester), tester.pronoun), c.id);
+  return { reported: true, replaced: false, note: keyToldNote(false, c.test.developer.pronoun) };
 }
 
 /** Parse + check the keys typed on Post (a list; each once; length). Returns the keys or throws the first mistake. */

@@ -59,9 +59,14 @@ export const applyDeclinedLine = (title: string) => `Your application to “${ti
  */
 export async function testV(viewerId: string, testId: string, sessionId = "") {
   await (await import("./workWindow")).finishWorkIfDue(testId);
-  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } });
+  const t = await db.test.findUnique({ where: { id: testId }, include: { developer: { select: { holdStartedAt: true, devSuspendedAt: true, pronoun: true } } } });
   if (!t) return "";
-  const cons = await db.contract.findMany({ where: { testId }, select: { id: true, status: true, endedAt: true, testerId: true, dueAt: true } });
+  const cons = await db.contract.findMany({ where: { testId }, orderBy: { id: "asc" }, select: { id: true, status: true, endedAt: true, testerId: true, dueAt: true, tester: { select: { pronoun: true } } } });
+  // (Owner, Nov 3, batch 35 §162) Every line about a person reads their recorded pronoun: a pronoun changed on the profile (the developer's, a tester's in the
+  // test, or an applicant's) redraws the open test and session pages on the next poll.
+  const applicants = sessionId ? [] : (await db.application.findMany({ where: { testId, status: "pending" }, select: { testerId: true } })).map((a) => a.testerId);
+  const appPronouns = applicants.length ? await db.user.findMany({ where: { id: { in: applicants } }, orderBy: { id: "asc" }, select: { pronoun: true } }) : [];
+  const pronounsV = [t.developer.pronoun, ...cons.map((c) => c.tester.pronoun), ...appPronouns.map((a) => a.pronoun)].join(",");
   const ids = cons.map((c) => c.id);
   // (Owner, Nov 2, batch 35 §132) When testers' work on the test ends: the call request forms' latest time and their calls drop-downs. It moves (Open until extended, a
   // tester joining with a later deadline, a pause lifted) without a test event, so it's in the fingerprint and the forms' limits follow on the normal poll.
@@ -110,7 +115,7 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   const excerpts = await db.excerpt.findMany({ where: sessionId ? { contractId: sessionId } : { testId }, orderBy: { id: "asc" }, select: { id: true, status: true } });
   const excerptsV = excerpts.map((x) => `${x.id}:${x.status}`).join(",");
   // (Batch 10) The developer's suspension and the team's pause are in it too, so a tester's session page shows (or drops) the paused banner live.
-  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, excerptsV, workEnd, myKeyV].join("|");
+  return [ev?.createdAt.getTime() ?? 0, pay.n, pay.last, bankActionsV, elsewhereV, t.developer.holdStartedAt?.getTime() ?? 0, t.status, disp.map((d) => d.status + (d.devSideAt?.getTime() ?? 0)).join(","), inv?.updatedAt.getTime() ?? 0, sus, msg?.createdAt.getTime() ?? 0, t.developer.devSuspendedAt?.getTime() ?? 0, t.adminPausedAt?.getTime() ?? 0, keysV, own?.createdAt.getTime() ?? 0, reqV?.updatedAt.getTime() ?? 0, profV?.getTime() ?? 0, ratingsN, ratingRowsV, rateV, consV, callsKey, blocksV, excerptsV, workEnd, pronounsV, myKeyV].join("|");
 }
 
 /** (Owner, Oct 29, batch 10) Payments'"Pay what you owe": a declined payment, a chargeback, a tester's Charge during the hold, a payment from another tab, a reservation. */
@@ -131,12 +136,12 @@ export async function owedV(developerId: string) {
  */
 export async function adminPersonV(userId: string) {
   const [u, ev, acted] = await Promise.all([
-    db.user.findUnique({ where: { id: userId }, select: { devSuspendedAt: true, testerSuspendedAt: true, deletedAt: true, holdStartedAt: true, holdApprovedAt: true } }),
+    db.user.findUnique({ where: { id: userId }, select: { devSuspendedAt: true, testerSuspendedAt: true, deletedAt: true, holdStartedAt: true, holdApprovedAt: true, pronoun: true } }),
     db.accountEvent.aggregate({ where: { userId }, _count: { _all: true }, _max: { createdAt: true } }),
     db.adminAction.aggregate({ where: { targetId: userId }, _count: { _all: true }, _max: { createdAt: true } }),
   ]);
   const t = (d: Date | null | undefined) => d?.getTime() ?? 0;
-  return u ? [t(u.devSuspendedAt), t(u.testerSuspendedAt), t(u.deletedAt), t(u.holdStartedAt), t(u.holdApprovedAt), ev._count._all, t(ev._max.createdAt), acted._count._all, t(acted._max.createdAt)].join(":") : "";
+  return u ? [t(u.devSuspendedAt), t(u.testerSuspendedAt), t(u.deletedAt), t(u.holdStartedAt), t(u.holdApprovedAt), ev._count._all, t(ev._max.createdAt), acted._count._all, t(acted._max.createdAt), u.pronoun /* (§162) the box titles' pronoun */].join(":") : "";
 }
 
 /**

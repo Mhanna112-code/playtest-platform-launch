@@ -1,6 +1,6 @@
 import { Cut } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
-import { fmtDateIn } from "@/lib/format";
+import { fmtDateIn, pronouns } from "@/lib/format";
 import { publicProfileV } from "@/lib/server/pageFreshness";
 import { ProfileMessageButton } from "@/components/ProfileMessageButton";
 import Link from "next/link";
@@ -54,6 +54,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
   // (Batch 16 section 14) Invite-only tests are listed only for people invited to, applying to or in them (as in Find).
   const open = iBlocked ? [] : await profileOpenTests(p, viewer, isAdmin(viewer));
   const name = displayName(p);
+  const pron = pronouns(p.pronoun); // (batch 35 §162) the lines about this developer
   const reportedRow = !mine ? await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: viewer.id, reportedId: p.id } } }) : null;
   const reportedOn = reportedRow ? fmtDate(reportedRow.createdAt) : null;
   return (
@@ -83,7 +84,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
         <h2 className="font-semibold text-white">Open tests</h2>
         {/* (Owner, Oct 28, batch 17 section 9) Seen by someone else, the list stays current on the page's poll (and when shown again with Back). */}
         {!mine && !isAdmin(viewer) && !iBlocked && <AutoRefresh query={`profile=${p.id}`} v={openTestsV(open)} />}
-        {iBlocked && <p className="text-sm text-slate-400" data-blocked-tests="">{blockedTestsLine(name)}</p>}
+        {iBlocked && <p className="text-sm text-slate-400" data-blocked-tests="">{blockedTestsLine(name, p.pronoun)}</p>}
         {/* (Owner, Oct 28, batch 16 section 14) Every open test, in a plain scroll box (no "Show N more"). */}
         {iBlocked ? null : open.length === 0 ? <p className="text-sm text-slate-400">No open tests right now.</p> : (
           <ScrollList className="space-y-2">
@@ -110,7 +111,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
         <div className="space-y-2 text-right text-xs text-slate-500">
           <ReportButton userId={p.id} name={name} reportedOn={reportedOn} />
           {/* (Batch 20 section 17) Blocked: Unblock where Block was (no confirm). */}
-          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect="Your sessions on their tests end now (work you sent stays payable, and you can still charge, dispute and rate it), calls between you are cancelled, your applications and invites close, and chat closes. You won't see their other tests any more." />}
+          {iBlocked ? <UnblockButton say userId={p.id} name={name} /> : <BlockButton plain userId={p.id} name={name} effect={`Your sessions on ${pron.poss} tests end now (work you sent stays payable, and you can still charge, dispute and rate it), calls between you are cancelled, your applications and invites close, and chat closes. You won't see ${pron.poss} other tests any more.`} />}
         </div>
       )}
     </div>

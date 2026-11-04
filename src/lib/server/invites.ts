@@ -45,7 +45,7 @@ async function rankedTesters(devId: string, testId: string) {
   // Blocked either way and deleted accounts never appear.
   const testers = await db.user.findMany({
     where: { isTester: true, deletedAt: null, id: { notIn: [devId, ...removed] } },
-    select: { id: true, name: true, email: true, deletedAt: true, testerSuspendedAt: true, profile: { select: { devices: true, languages: true, categories: true, updatedAt: true } } },
+    select: { id: true, name: true, email: true, pronoun: true, deletedAt: true, testerSuspendedAt: true, profile: { select: { devices: true, languages: true, categories: true, updatedAt: true } } },
     orderBy: { createdAt: "desc" }, // ties keep the newest first, as before
   });
   const workedWith = new Set(withDev.map((c) => c.testerId));
@@ -109,9 +109,9 @@ async function rankedTesters(devId: string, testId: string) {
       id: x.t.id, name: x.name, changedAt: new Date(Math.max(x.t.profile?.updatedAt.getTime() ?? 0, ratings.get(x.t.id)?.at?.getTime() ?? 0)).toISOString(), devices: x.t.profile?.devices ?? [], languages: x.t.profile?.languages ?? [], categories: x.t.profile?.categories ?? [],
       details: inviteDetailsKey(x.name, x.t.profile?.updatedAt.getTime() ?? 0, x.mineAvg, myTests.filter((c) => c.testerId === x.t.id)),
       availability: inviteAvailabilityKey({ id: x.t.id, exists: true, blocked: false, suspended: !!x.t.testerSuspendedAt, atLimit: (activeOf.get(x.t.id) ?? 0) >= MAX_ACTIVE_TESTS, invited: !!x.inv, inTest: inTestSet.has(x.t.id), rated: ratedHere.has(x.t.id) }),
-      invited: !!x.inv, inviteId: x.inv?.id ?? null, grey: x.grey, rating: ratings.get(x.t.id)?.line || "No ratings yet", ratingAvg: ratings.get(x.t.id)?.n ? Number(ratings.get(x.t.id)!.avg.toFixed(1)) : null,
+      invited: !!x.inv, inviteId: x.inv?.id ?? null, grey: x.grey, /** (batch 35 §162) for the row's lines about them */ pronoun: x.t.pronoun, rating: ratings.get(x.t.id)?.line || "No ratings yet", ratingAvg: ratings.get(x.t.id)?.n ? Number(ratings.get(x.t.id)!.avg.toFixed(1)) : null,
       // (NEXT-UI 14) Still tickable: a re-invite is how an ended tester can come back.
-      was: ratedHere.has(x.t.id) ? "Finished (rated this test)" : ((s) => (s === "left" ? "Left this test" : s === "ended" ? "You ended their work" : ""))(past.find((c) => c.testerId === x.t.id)?.status),
+      was: ratedHere.has(x.t.id) ? "Finished (rated this test)" : ((s) => (s === "left" ? "Left this test" : s === "ended" ? `You ended ${pronouns(x.t.pronoun).poss} work` : ""))(past.find((c) => c.testerId === x.t.id)?.status),
       tag: doesntListTag(test, x.t.profile),
       tagItems: doesntListItems(test, x.t.profile),
       detail: withYouText(ratings.get(x.t.id)?.n ? ratings.get(x.t.id)!.avg : null, togetherCount(x.t.id), ratings.get(x.t.id)?.n),
@@ -157,7 +157,7 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
   const appOf = new Map(apps.map((a) => [a.testerId, a]));
   for (const x of lean) {
     const a = appOf.get(x.t.id);
-    if (a && !x.grey) x.grey = a.kind === "rejoin" ? "Asked to rejoin: answer them in Needs you" : "Applied: answer them in Needs you";
+    if (a && !x.grey) x.grey = `${a.kind === "rejoin" ? "Asked to rejoin" : "Applied"}: answer ${pronouns(x.t.pronoun).obj} in Needs you`;
   }
   // (Batch 34 §11) People you've worked with and Suggested leave out testers CURRENTLY in this test (a working contract) and testers already invited (they're in
   // the Invited list with Cancel invite); someone who left the test shows again. The name search below still finds them, greyed with the reason.
@@ -173,15 +173,16 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
 }
 
 /** (Batch 30 §7) Why a search match can't be invited, in the row's words ("fbbb · already invited, waiting for them to join"), or nothing when they can be. */
-export const WHY_INVITED = "already invited, waiting for them to join";
+export const whyInvited = (pronoun?: string | null) => `already invited, waiting for ${pronouns(pronoun).obj} to join`;
+export const WHY_INVITED = whyInvited();
 /** (Batch 35 §94) The greyed row of a tester who rated this test. */
 export const RATED_THIS_TEST = "Rated this test: can't join it again";
 export const WHY_IN_TEST = "already in this test";
-export const whyApplied = (kind: string) => `${kind === "rejoin" ? "asked to rejoin" : "applied"}: answer them in Needs you →`;
-function whyNotInvitable(r: { invited: boolean; inviteId: string | null; grey: string | null }, app?: { id: string; kind: string }): { why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string } {
-  if (r.invited) return { why: WHY_INVITED, whyKind: "invited" };
+export const whyApplied = (kind: string, pronoun?: string | null) => `${kind === "rejoin" ? "asked to rejoin" : "applied"}: answer ${pronouns(pronoun).obj} in Needs you →`;
+function whyNotInvitable(r: { invited: boolean; inviteId: string | null; grey: string | null; pronoun?: string | null }, app?: { id: string; kind: string }): { why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string } {
+  if (r.invited) return { why: whyInvited(r.pronoun), whyKind: "invited" };
   if (r.grey === "Already in this test") return { why: WHY_IN_TEST, whyKind: "in" };
-  if (app) return { why: whyApplied(app.kind), whyKind: "applied", appId: app.id };
+  if (app) return { why: whyApplied(app.kind, r.pronoun), whyKind: "applied", appId: app.id };
   if (r.grey) return { why: r.grey, whyKind: "cant" };
   return {};
 }
@@ -233,7 +234,7 @@ export const INVITES_PER_TESTER_PER_TEST = 3;
 export const invitesLeftLine = (left: number) =>
   left > 0 ? `You can send up to ${INVITES_PER_DAY} invites a day. You have ${left} left today.` : `You've sent ${INVITES_PER_DAY} invites today. You can invite more tomorrow.`;
 /** One tester skipped (the others in the press are invited). */
-export const sameTesterLimitLine = (name: string) => `${name}: you've invited them to this test ${INVITES_PER_TESTER_PER_TEST} times today. You can invite them again tomorrow.`;
+export const sameTesterLimitLine = (name: string, pronoun?: string | null) => `${name}: you've invited ${pronouns(pronoun).obj} to this test ${INVITES_PER_TESTER_PER_TEST} times today. You can invite ${pronouns(pronoun).obj} again tomorrow.`;
 
 /**
  * Invite ticked testers. Refused for good when the test is full, stopped, past Open until or paused. Stops once for the
@@ -260,8 +261,10 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     // (Owner, Oct 31, batch 35 §94) Someone who rated this test can't join it again, so they can't be invited to it (an old page's tick is refused).
     const rated = await tx.contract.findMany({ where: { testId, testerId: { in: ids }, endKind: "rated" }, select: { testerId: true } });
     if (rated.length) {
-      const names = people.filter((p) => rated.some((r) => r.testerId === p.id)).map((p) => displayName(p));
-      throw new HttpError(409, "refused", `${names.join(", ")} rated this test, so they can't join it again. Untick them to invite the others.`, { clearTicks: true });
+      const raters = people.filter((p) => rated.some((r) => r.testerId === p.id));
+      // (Batch 35 §162) One tester: in their own pronoun ("so she can't join it again. Untick her …"); several: "they".
+      const pr = pronouns(raters.length === 1 ? raters[0].pronoun : "they");
+      throw new HttpError(409, "refused", `${raters.map((p) => displayName(p)).join(", ")} rated this test, so ${pr.subj} can't join it again. Untick ${pr.obj} to invite the others.`, { clearTicks: true });
     }
     const contracts = await tx.contract.findMany({ where: { testId, testerId: { in: ids } } });
     const invites = await tx.invite.findMany({ where: { testId, testerId: { in: ids } } });
@@ -287,12 +290,12 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
         if (seenP) {
           const lines = testerNeedsChangedLines(name, seenP, { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [] }, t);
           const currentRating = shownRatingRows.get(p.id);
-          const ratingLine = ratingChangedLine(name, seenP.rating, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null);
+          const ratingLine = ratingChangedLine(name, seenP.rating, currentRating?.n ? Number(currentRating.avg.toFixed(1)) : null, p.pronoun);
           if (ratingLine) lines.push(ratingLine);
           if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(p.profile?.updatedAt.getTime() ?? 0, currentRating?.at?.getTime() ?? 0)), key: `needs:${p.id}` });
         }
         const joined = contracts.find((c) => c.testerId === p.id && c.joinedAt > seenAt);
-        if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subj}'s no longer in your invite list`.replace("they's", "they're"), createdAt: joined.joinedAt });
+        if (joined) extra.push({ kind: "joined", text: `${name} joined this test, so ${pronouns(p.pronoun).subjIs} no longer in your invite list`, createdAt: joined.joinedAt });
         // A ticked tester became greyed or removed since the page loaded.
         if (p.testerSuspendedAt && p.testerSuspendedAt > seenAt) extra.push({ kind: "joined", text: `${name} can't be invited right now`, createdAt: p.testerSuspendedAt });
         const blockedSince = await tx.block.findFirst({ where: { createdAt: { gt: seenAt }, OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } });
@@ -338,14 +341,14 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
       }
       const active = await tx.contract.count({ where: { testerId: p.id, status: "working" } });
       const blocked = (await tx.block.count({ where: { OR: [{ blockerId: dev.id, blockedId: p.id }, { blockerId: p.id, blockedId: dev.id }] } })) > 0;
-      const why = inviteTesterRefusal(name, { suspended: !!p.testerSuspendedAt, blocked, deleted: !p.isTester, activeTests: active });
+      const why = inviteTesterRefusal(name, { suspended: !!p.testerSuspendedAt, blocked, deleted: !p.isTester, activeTests: active, pronoun: p.pronoun });
       if (why) {
         others.push(why);
         continue;
       }
       // (Owner, Nov 2, batch 35 §128) At most 3 invites to the same tester on this test a day (a cancel and re-invite counts each time): over it, only they're skipped.
       if ((await tx.invite.count({ where: { testId, testerId: p.id, createdAt: { gt: new Date(now.getTime() - INVITE_WINDOW_MS) } } })) >= INVITES_PER_TESTER_PER_TEST) {
-        others.push(sameTesterLimitLine(name));
+        others.push(sameTesterLimitLine(name, p.pronoun));
         continue;
       }
       invited.push({ id: p.id, name, email: p.email, pronoun: p.pronoun });
@@ -395,13 +398,13 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   if (shown && tester) {
     const lines = testerNeedsChangedLines(displayName(tester), shown, { devices: tester.profile?.devices ?? [], languages: tester.profile?.languages ?? [] }, inv.test);
     const latest = await ratingSummary(tester.id);
-    const line = ratingChangedLine(displayName(tester), shown.rating, latest.n ? Number(latest.avg.toFixed(1)) : null);
+    const line = ratingChangedLine(displayName(tester), shown.rating, latest.n ? Number(latest.avg.toFixed(1)) : null, tester.pronoun);
     if (line) lines.push(line);
     if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, latest.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
   }
   // (Batch 16 section 21) Cancelled in another tab: this press stops once naming it, then it's already done.
   await db.$transaction((tx) => devGate(tx, testId, body, {}, extra, undefined, { acts: INVITE_ACTS, keys: [`t:${inv.testerId}`] }));
-  const gone = (status: string) => new HttpError(409, "gone", status === "joined" ? "They already joined." : status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
+  const gone = (status: string) => new HttpError(409, "gone", status === "joined" ? `${pronouns(tester?.pronoun).Subj} already joined.` : status === "replaced" ? "This invite is no longer valid: it was re-sent on the new listing." : "This invite was already cancelled.");
   if (inv.status !== "sent") throw gone(inv.status);
   // (Nov 2, §119) Only a still-open invite is cancelled: a tester who joined (or a re-send) a moment ago wins, and the refusal says what happened.
   if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "cancelled" } })).count !== 1) throw gone((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status);

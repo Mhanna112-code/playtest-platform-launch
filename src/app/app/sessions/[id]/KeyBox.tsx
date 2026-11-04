@@ -6,12 +6,13 @@ import { pressLabelOf, refusalLine } from "@/lib/pressLabels";
 import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 import { copyText } from "@/components/Cut";
+import { pronouns } from "@/lib/format";
 
 /** (§156) The report button's own words, as its refusals and stop box name it. */
 const KEY_PRESS = pressLabelOf("/api/sessions/x/key-broken");
 
 /** (Design doc 8) The tester's access key, with "This key doesn't work" (the developer is told; a free extra replaces it). */
-export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = true, fixed = false }: { sessionId: string; seenAt: string; value: string; broken: boolean; fresh?: boolean; canReport?: boolean; fixed?: boolean }) {
+export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = true, fixed = false, devPronoun = "" }: { sessionId: string; seenAt: string; value: string; broken: boolean; fresh?: boolean; canReport?: boolean; fixed?: boolean; /** (batch 35 §162) "She can send you another key" */ devPronoun?: string }) {
   const { press, error, busy, changes, finish } = usePress(seenAt); // (batch 35 §40) a key replaced meanwhile: the page redraws in place
   const [said, setSaid] = useState(false);
   const [copied, setCopied] = useState<"" | "yes" | "no">("");
@@ -30,7 +31,7 @@ export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = tr
         {copied === "no" && <span className="text-xs text-slate-400" role="status">Couldn&apos;t copy: select the key and copy it.</span>}
         {broken || said ? (
           // (Owner, Oct 30, batch 15 sections 44 and 45) A report can't be undone by the tester; the developer can mark the key as working again.
-          <span className="text-slate-400" data-key-state="broken">Marked as not working. The developer was told. They can send you another key in a message.</span>
+          <span className="text-slate-400" data-key-state="broken">Marked as not working. The developer was told. {pronouns(devPronoun).Subj} can send you another key in a message.</span>
         ) : !canReport ? null : (
           <button className="btn-ghost px-3 py-1 text-xs" disabled={busy} onClick={() => void press<{ replaced?: boolean }>(`/api/sessions/${sessionId}/key-broken`, {}, "key").then((r) => { if (!r) return; if (r.replaced) finish(); else setSaid(true); })}>This key doesn&apos;t work</button>
         )}

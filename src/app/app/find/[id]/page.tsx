@@ -4,7 +4,7 @@ import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, He
 import { CategoryBadges } from "@/components/Category";
 import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
-import { displayName, fmtDateIn, fmtDateTimeIn, money } from "@/lib/format";
+import { displayName, fmtDateIn, fmtDateTimeIn, money, pronouns } from "@/lib/format";
 import { REVIEW_DAYS, closedToNewLine, dueFromJoin, joinerDays, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
 import { ScrollText } from "@/components/ScrollText";
 import { QUESTION_BOX_AFTER, QuestionBox } from "@/components/QuestionBox";
@@ -237,7 +237,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         <div className="flex flex-wrap gap-2 text-xs text-slate-300">
           {t.status === "open" && !joinClosed && <span className="chip" title="Every tester gets the same number of days from when they join"><Clock className="h-3.5 w-3.5" /> {t.openUntil ? perTesterLine(days, t.openUntil, localDay) : `Your deadline: ${dueIfNow}`}</span>}
           {joinClosed && <span className="chip" data-join-closed=""><Clock className="h-3.5 w-3.5" /> {joinClosed}</span>}
-          <span className="chip" title="If the developer doesn't review it in time, you choose: charge them, or let it go"><Timer className="h-3.5 w-3.5" /> Not reviewed in {REVIEW_DAYS} days? You choose</span>
+          <span className="chip" title={`If the developer doesn't review it in time, you choose: charge ${pronouns(t.developer.pronoun).obj}, or let it go`}><Timer className="h-3.5 w-3.5" /> Not reviewed in {REVIEW_DAYS} days? You choose</span>
           <span className="chip" title="Later edits to the test come to you as a request: switch to the new terms or keep yours"><Lock className="h-3.5 w-3.5" /> Locked in when you join</span>
           <span className="chip"><CheckCircle2 className="h-3.5 w-3.5" /> {t.spots - testersIn} spot{t.spots - testersIn === 1 ? "" : "s"} left</span>
         </div>
@@ -252,7 +252,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             <li>Typical review: {devStats.review.value}</li>
             <li>Rating: {devRating.line || "no ratings yet"}</li>
           </ul>
-          <a href={`/app/developers/${t.developerId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-sky-300">See their profile and other tests <ArrowRight className="h-4 w-4" /></a>
+          <a href={`/app/developers/${t.developerId}`} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-sm text-sky-300">See {pronouns(t.developer.pronoun).poss} profile and other tests <ArrowRight className="h-4 w-4" /></a>
         </div>
       </section>
 

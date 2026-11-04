@@ -85,7 +85,7 @@ describe("batch 34 §16: an invite beats a waiting application", () => {
     // The panel (as its live redraw shows it) greys her with the link to her application.
     const a = await db.application.findUniqueOrThrow({ where: { testId_testerId: { testId, testerId: ana.user.id } } });
     const row = (await invitePanel(dev.user.id, testId, { q: name })).found.find((x) => x.id === ana.user.id)!;
-    expect(row).toMatchObject({ whyKind: "applied", why: "applied: answer them in Needs you →", appId: a.id });
+    expect(row).toMatchObject({ whyKind: "applied", why: "applied: answer her in Needs you →", appId: a.id });
     // A press from that page with her ticked anyway (an old client): no invite, the line says where she's answered.
     const r = await act(testId, "invite", dev.cookie, { seenAt: seen(), testerIds: [ana.user.id] });
     expect(r.status).toBe(200);

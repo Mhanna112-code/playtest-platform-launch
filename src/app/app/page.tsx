@@ -152,7 +152,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
         <DashboardActionBox id="excerpt-requests" title="Excerpt requests" count={excerptBox.length} kind="excerpts">
           {excerptBox.map((x) => (
             <li key={x.id} id={`excerpt-${x.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-              <p className="text-slate-300"><b className="text-white"><NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on their profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
+              <p className="text-slate-300"><b className="text-white"><NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on {x.testerPoss} profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               {/* (Batch 16 section 37) The question it answers, above the quote. */}
               <ExcerptQuestion question={x.question} />
@@ -217,11 +217,12 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
     for (const c of t.contracts) {
       const who = displayName(c.tester);
       const whoHref = c.tester.deletedAt ? null : `/app/testers/${c.testerId}`;
+      const poss = pronouns(c.tester.pronoun).poss; // (batch 35 §162) "sent her recording"
       // (Owner, Oct 29, batch 11) A tester who deleted their account: their sent work still waits for review when their payout account was connected.
       if (!testerPayable(c.tester)) continue;
-      for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, whoHref, text: <>sent their {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Review" });
+      for (const s of c.submissions.filter((x) => !x.review && !payShut(x.id))) items.push({ key: `s-${s.id}`, at: s.sentAt, href: `/app/tests/${t.id}#piece-${s.id}`, who, whoHref, text: <>sent {poss} {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b></>, cta: "Review" });
       // (Batch 30 §2; batch 35 §136) Something added to a piece after it was paid, while it can still be paid more: in Needs review too (it opens its row).
-      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, whoHref, text: <>{s.kind === "recording" ? "added to their recording" : "added to their written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b> after you paid</>, cta: "Review" });
+      for (const s of c.submissions.filter((x) => updateWaiting(x))) if (await updateRoomLeft(s.id, t.id)) items.push({ key: `s-u-${s.id}`, at: s.paidUpdateAt!, href: `/app/tests/${t.id}#update-${s.id}`, who, whoHref, text: <>added to {poss} {s.kind === "recording" ? "recording" : "written answers"} for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b> after you paid</>, cta: "Review" });
       // (Batch 15 section 40) A call that took place, once its measured length is final: pay it.
       for (const x of c.calls.filter((y) => y.status === "booked" && callMinutesOf(y) != null && !y.review && !payShut(y.id))) items.push({ key: `c-${x.id}`, at: x.startsAt, href: `/app/tests/${t.id}#call-${x.id}`, who, whoHref, text: <>had a live call for <b className="text-white"><NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} /></b>: pay it</>, cta: "Review" });
     }
@@ -374,7 +375,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                       <div className="space-y-1.5">
                         <p className="text-xs uppercase tracking-wide text-slate-500">Testers · {num(inIt.length)} of {num(t.spots)}</p>
                         {/* (Owner, Oct 28) Restricted: names are plain text (no hover card: no Chat with, Report, Block or profile link). */}
-                        <Seats total={t.spots} plain={restricted} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester), contractId: restricted ? undefined : c.id }))} />
+                        <Seats total={t.spots} plain={restricted} people={inIt.map((c) => ({ id: c.testerId, name: displayName(c.tester), pronoun: c.tester.pronoun, contractId: restricted ? undefined : c.id }))} />
                       </div>
                       <div className="space-y-1.5">
                         <p className="flex items-center justify-between text-xs uppercase tracking-wide text-slate-500">

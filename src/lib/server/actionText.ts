@@ -1,6 +1,6 @@
 import { T as fmtDateTime } from "@/lib/tz";
 import { db } from "@/lib/db";
-import { displayName, money } from "@/lib/server/dateFormat";
+import { displayName, money, pronouns } from "@/lib/server/dateFormat";
 import { andList } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { logAction, type Answers, type OwnAbout } from "./live";
@@ -15,6 +15,8 @@ const contractName = async (contractId: string) => {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { tester: true } });
   return c ? displayName(c.tester) : "a tester";
 };
+/** (Batch 35 §162) The contract's tester's possessive ("her"), "their" when unknown. */
+const contractPoss = async (contractId: string) => pronouns((await db.contract.findUnique({ where: { id: contractId }, select: { tester: { select: { pronoun: true } } } }))?.tester.pronoun).poss;
 
 async function callLine(callId: string, withName: boolean, otherName?: string) {
   const call = await db.call.findUnique({ where: { id: callId }, include: { contract: { include: { tester: true } } } });
@@ -147,7 +149,7 @@ export async function logTestAction(userId: string, testId: string, action: stri
       const sub = body.callId ? null : await db.submission.findUnique({ where: { id: s(body.submissionId) }, select: { kind: true } });
       const label = body.callId ? "live call" : sub?.kind === "recording" ? "recording" : "written answers";
       // (Batch 20 section 12) "You paid Ana Silva $5.00 more for their written answers in another tab": it stops every press on the test page once (BIG_OWN_ACTS).
-      text = `paid ${await contractName(s(body.contractId))} ${money(r.amountCents ?? 0)} more for their ${label}`;
+      text = `paid ${await contractName(s(body.contractId))} ${money(r.amountCents ?? 0)} more for ${await contractPoss(s(body.contractId))} ${label}`;
       about = { a: "pay-more", k: [piece, `c:${s(body.contractId)}`], ...(!body.callId ? { answers: sentAnswer(s(body.submissionId), s(body.contractId), label) } : {}) };
       break;
     }

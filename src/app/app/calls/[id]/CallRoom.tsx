@@ -12,7 +12,7 @@ import { STRICT_NETWORK_LINE } from "@/lib/callMeasure";
 import { TAB } from "@/lib/client";
 
 type Ice = { urls: string | string[]; username?: string; credential?: string }[];
-type Who = { callId: string; role: "tester" | "developer"; myName: string; otherName: string; iceServers: Ice; /** (Owner, Nov 2) only through the TURN relay (?relay=1) */ relayOnly?: boolean };
+type Who = { callId: string; role: "tester" | "developer"; myName: string; otherName: string; /** (batch 35 §162) "Sharing her screen" */ otherPoss?: string; iceServers: Ice; /** (Owner, Nov 2) only through the TURN relay (?relay=1) */ relayOnly?: boolean };
 
 const clock = (iso: string) => new Date(iso).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" });
 /** Sends one message from the room (never a press: connection messages, "connected", "left"). */
@@ -29,7 +29,7 @@ function NoVideo({ name, note }: { name: string; note: string }) {
   );
 }
 
-function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded, onLeft }: Who & { onEnded: (line: string) => void; onLeft: (measured: number) => void }) {
+function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers, relayOnly, onEnded, onLeft }: Who & { onEnded: (line: string) => void; onLeft: (measured: number) => void }) {
   const localRef = useRef<HTMLVideoElement>(null);
   const remoteRef = useRef<HTMLVideoElement>(null);
   const pcRef = useRef<RTCPeerConnection | null>(null);
@@ -283,7 +283,7 @@ function Room({ callId, role, myName, otherName, iceServers, relayOnly, onEnded,
         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">
           <video ref={remoteRef} autoPlay playsInline className="aspect-video w-full object-cover" aria-label={`${otherName}'s video`} />
           {!(otherVideo && (otherCam || otherSharing)) && <NoVideo name={otherName} note={!otherHere ? "Not here yet" : !linked ? "Connecting…" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "No video"} />}
-          {otherSharing && <span className="absolute right-3 top-3 rounded-full bg-sky-500/80 px-2.5 py-1 text-xs font-medium text-white">Sharing their screen</span>}
+          {otherSharing && <span className="absolute right-3 top-3 rounded-full bg-sky-500/80 px-2.5 py-1 text-xs font-medium text-white">Sharing {otherPoss} screen</span>}
           <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">{!otherMic && <MicOff className="h-3.5 w-3.5 text-rose-300" aria-label="muted" />}{otherName}{otherHere ? "" : " · not here yet"}</span>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">

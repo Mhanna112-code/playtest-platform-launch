@@ -170,7 +170,7 @@ export function countLabel(n: number, r: RowState) {
   return `${n} ${unit}s${last ? ` (to ${last.toLocaleDateString("en-US", { month: "short", day: "numeric" })})` : ""}`;
 }
 
-export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][];
+export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end, picker = "They pick" }: { /** (batch 35 §162) who picks, agreeing: "She picks" / "They pick" */ picker?: string; rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][];
   /** (Batch 35 §132) The server's lead (the time box's red line) and when testers' work ends (its latest time; the calls drop-down). */
   leadMinutes?: number; end?: CallEnd }) {
   const set = (i: number, patch: Partial<RowState>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -201,7 +201,7 @@ export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end }: 
         );
       })}
       {rows.length < 3 && <button type="button" className="btn-ghost" onClick={() => setRows([...rows, newRow()])}>+ Another time</button>}
-      {rows.length > 1 && <p className="note">They pick one of these.</p>}
+      {rows.length > 1 && <p className="note">{picker} one of these.</p>}
     </div>
   );
 }
