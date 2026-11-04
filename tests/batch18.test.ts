@@ -497,6 +497,7 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // (Batch 24) chargeback.ts: the team's Approve that lifts a chargeback hold sends the developer's one "running again" notice itself.
     // (Batch 29 §22, §27, §31, §34) holds.ts: the tester's 3-day / 1-day close-out lines are gone; added: the developer's closing-soon line, the developer's daily
     // "Pay now", the tester's daily "Charge or let go" and the tester's deadline reminders.
-    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Nov 3, §159) chargeback.ts also: "The team reviewed your account: you can pay what you owe now" (from the 2nd chargeback; the line promises an email).
+    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });
