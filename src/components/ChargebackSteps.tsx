@@ -9,7 +9,7 @@ import { useBankCheck } from "@/components/BankCheck";
 import { CARD_NOT_VERIFIED } from "@/lib/rules";
 import { peekBank, type Simulate } from "@/lib/bankConfirm";
 
-type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[] };
+type Steps = { cardVerified: boolean; owedPaid: boolean; approved: boolean; remaining: string[]; /** (Owner, Nov 3) from the 2nd chargeback */ reviewFirst?: boolean; count?: number };
 
 type CardElement = { mount: (el: HTMLElement) => void; on: (event: "ready", fn: () => void) => void; destroy: () => void };
 type Elements = { create: (t: "payment", o?: { wallets?: { link?: "auto" | "never"; applePay?: "auto" | "never"; googlePay?: "auto" | "never" } }) => CardElement; submit: () => Promise<{ error?: { message?: string } }> };
@@ -121,13 +121,22 @@ export function ChargebackSteps({ steps }: { steps: Steps }) {
     <div id="chargeback-steps" data-chargeback-steps="" className="space-y-2 rounded-lg border border-rose-400/40 bg-rose-500/10 p-3 text-sm text-rose-100">
       {/* (Batch 26 section 5) The chargeback wording: it's a chargeback hold, not a payment hold. */}
       <p><b>Your bank reversed a payment, so your account is on a chargeback hold.</b> Your tests are paused. To lift it:</p>
-      <ul className="space-y-1">
-        {row(steps.cardVerified, "A card verified with 3D Secure")}
-        {/* (Batch 23 section 6) Paying reserves it on the card; the team's approval takes it. */}
-        {row(steps.owedPaid, "What you owe reserved on your card")}
-        {row(steps.approved, "The team's approval")}
-      </ul>
-      {steps.remaining.length > 0 && <p data-steps-line="">{stepsLine(steps.remaining)} Paying alone doesn&apos;t lift it.</p>}
+      {steps.reviewFirst ? (
+        /* (Owner, Nov 3) From the 2nd chargeback: the team reviews the account first; then paying (one payment) lifts the hold. */
+        <ul className="space-y-1" data-review-first-steps={steps.count}>
+          {row(steps.approved, `The team's review (your account has had ${steps.count} chargebacks)`)}
+          {row(steps.cardVerified, "A card verified with 3D Secure")}
+          {row(steps.owedPaid, "What you owe paid")}
+        </ul>
+      ) : (
+        <ul className="space-y-1">
+          {row(steps.cardVerified, "A card verified with 3D Secure")}
+          {/* (Batch 23 section 6) Paying reserves it on the card; the team's approval takes it. */}
+          {row(steps.owedPaid, "What you owe reserved on your card")}
+          {row(steps.approved, "The team's approval")}
+        </ul>
+      )}
+      {steps.remaining.length > 0 && <p data-steps-line="">{stepsLine(steps.remaining)}{steps.reviewFirst ? "" : " Paying alone doesn't lift it."}</p>}
       {!steps.cardVerified && !form && (
         <button className="btn" disabled={busy || bank.open || !!done} onClick={start}>Verify a card</button>
       )}

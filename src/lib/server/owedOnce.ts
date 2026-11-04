@@ -72,7 +72,7 @@ const ROLLBACK = new Error("owed changed");
  * (Rules 5 and 6) Make the one payment and lock what it covers, all at once under the developer's row lock: every debt must still be owed, unpaid, with no check of
  * its own and not covered by another payment (else nothing is claimed: null).
  */
-async function claimOwed(devId: string, rows: { id: string; amountCents: number; chargeback: string }[], mode: "press" | "away", what: "owed" | "charges" = "owed") {
+async function claimOwed(devId: string, rows: { id: string; amountCents: number; chargeback: string }[], mode: "press" | "away", what: "owed" | "charges" = "owed", opts: { reviewFirst?: string } = {}) {
   const debts = rows.filter((r) => r.chargeback !== "open").map((r) => r.id);
   // (§122) Charges made while away, made TOGETHER as one payment (a new card, the lift): each must still wait ("deferred"), unpaid and uncovered, and the account
   // must not be on a hold or suspended (under the same row lock as deferIfHeld, so a hold starting now keeps them waiting).
@@ -84,7 +84,8 @@ async function claimOwed(devId: string, rows: { id: string; amountCents: number;
         if (!dev.deletedAt && (dev.holdStartedAt || dev.devSuspendedAt)) throw ROLLBACK; // (Owner, Nov 3) a deleted developer's charges are made anyway
         const total = rows.reduce((a, p) => a + p.amountCents, 0);
         const one = await tx.payment.create({ data: { kind: OWED_KIND, developerId: devId, testerId: devId, amountCents: total, feeCents: total, testerCents: 0, transferStatus: "none", status: "paying", note: `${mode}:charges`, warnedAt: new Date() } });
-        const n = (await tx.payment.updateMany({ where: { id: { in: debts }, developerId: devId, coveredById: null, actionPi: null, settledAt: null, status: "deferred", kind: { notIn: ["chargeback", OWED_KIND] } }, data: { coveredById: one.id } })).count;
+        // (Owner, Nov 3) With the reversed payments' repayments that waited for the lift (kind "chargeback"): one payment for all of it.
+        const n = (await tx.payment.updateMany({ where: { id: { in: debts }, developerId: devId, coveredById: null, actionPi: null, settledAt: null, status: "deferred", OR: [{ kind: { notIn: ["chargeback", OWED_KIND] } }, { kind: "chargeback", repaysId: { not: null } }] }, data: { coveredById: one.id } })).count;
         if (n !== debts.length) throw ROLLBACK;
         return one;
       });
@@ -97,6 +98,14 @@ async function claimOwed(devId: string, rows: { id: string; amountCents: number;
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${devId} FOR UPDATE`;
+      // (Owner, Nov 3) From the 2nd chargeback: allowed to pay only after the team's review, checked here under the lock (a new chargeback un-approves it).
+      if (opts.reviewFirst) {
+        const u = await tx.user.findUniqueOrThrow({ where: { id: devId }, select: { chargebackApprovedAt: true, holdReason: true, holdStartedAt: true } });
+        if (u.holdStartedAt && u.holdReason === "chargeback" && !u.chargebackApprovedAt) {
+          const n = await tx.payment.count({ where: { developerId: devId, chargeback: { not: "" } } });
+          throw new HttpError(409, "review_first", (await import("@/lib/rules")).reviewFirstLine(n));
+        }
+      }
       // A press claim left by the code before §117 ("paying" with no check open) is owed again.
       const stale = { developerId: devId, kind: { notIn: ["chargeback", OWED_KIND] }, status: "paying", actionPi: null, settledAt: null };
       await tx.payment.updateMany({ where: { ...stale, owedUntil: { not: null } }, data: { status: "failed", warnedAt: null } });
@@ -145,7 +154,13 @@ export const forCharges = (one: { note: string }) => one.note.endsWith(":charges
  */
 export async function chargesDeclined(devId: string, charges: Payment[]) {
   const holds = await import("./holds");
-  for (const p of charges) await holds.declinedPayment(devId, p.id, p.amountCents, await holds.declinedWhat(p));
+  // (Owner, Nov 3) A reversed payment's repayment in the one payment: the reversal is owed again (its chargeback reopens), a chargeback hold.
+  for (const p of charges.filter((x) => x.kind === "chargeback")) {
+    await db.payment.deleteMany({ where: { id: p.id, settledAt: null } });
+    if (p.repaysId) await db.payment.update({ where: { id: p.repaysId }, data: { chargeback: "open" } });
+    await holds.startHold(devId, "chargeback");
+  }
+  for (const p of charges.filter((x) => x.kind !== "chargeback")) await holds.declinedPayment(devId, p.id, p.amountCents, await holds.declinedWhat(p));
 }
 
 /**
@@ -183,7 +198,7 @@ export async function settleOwed(id: string, pi: string | null) {
     await settleOwedRow(dev, p, pi && stripeOn() ? pi : null, id);
     // (§122) Charges made while away keep the names their own receipts had ("… (charged by them after 7 days)").
     // (Owner, Nov 3) Full names: these go into the receipt email, which has no hover.
-    names.push(forCharges(one) ? await holds.deferredWhat(p, true) : await holds.owedItemName(p, true));
+    names.push(forCharges(one) && p.kind !== "chargeback" ? await holds.deferredWhat(p, true) : await holds.owedItemName(p, true));
     parts.push({ name: names[names.length - 1], cents: p.amountCents });
     cents += p.amountCents;
   }
@@ -195,9 +210,9 @@ export async function settleOwed(id: string, pi: string | null) {
  * "away": made while the developer isn't there (charges made while away; before §145/§148 also a daily or new-card retry of debts): the bank's check waits 3 days
  * as one "Confirm with your bank" item.
  */
-export async function chargeOwedTotal(u: Parameters<typeof chargePlatform>[0], rows: { id: string; amountCents: number; chargeback: string }[], mode: "press" | "away") {
+export async function chargeOwedTotal(u: Parameters<typeof chargePlatform>[0], rows: { id: string; amountCents: number; chargeback: string }[], mode: "press" | "away", opts: { reviewFirst?: string } = {}) {
   if (!rows.length) return { result: "skipped" as const };
-  const one = await claimOwed(u.id, rows, mode);
+  const one = await claimOwed(u.id, rows, mode, "owed", opts);
   if (!one) return { result: "skipped" as const };
   return chargeClaimed(u, one, mode);
 }

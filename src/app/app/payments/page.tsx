@@ -13,7 +13,7 @@ import { owedForBox } from "@/lib/server/holds";
 import { OwedBox } from "@/components/OwedBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { owedV } from "@/lib/server/pulseV";
-import { HOLD_APPROVAL_AFTER, reservedLine } from "@/lib/rules";
+import { HOLD_APPROVAL_AFTER, reservedLine, reviewFirstLine } from "@/lib/rules";
 import { confirmItems } from "@/lib/server/confirm";
 import { confirmAllState } from "@/lib/server/confirmAll";
 import { ConfirmList } from "./ConfirmList";
@@ -132,7 +132,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
         // (Owner, Oct 28, batch 16 section 41) A chargeback hold: paying never lifts it (step 2 shows ✓; the team's Approve, step 3, lifts it).
         // (Batch 23 section 6) Everything owed reserved on the card: "Reserved $X: it's taken when the team approves lifting your hold."
         if (!o.length) return cbSteps ? <p className="info" data-chargeback-paid="">{cbSteps.reservedCents > 0 ? reservedLine(cbSteps.reservedCents) : "Paid. Your tests stay paused until the team approves."}</p> : review ? <p className="info" data-hold-review-paid="">You&apos;ve paid what you owe. The team will review your account before your tests resume.</p> : null;
-        return <OwedBox onHold={!!u.holdStartedAt} owed={o} ranOut={ranOut} chargeback={!!cbSteps} review={review} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} />;
+        return <OwedBox onHold={!!u.holdStartedAt} owed={o} ranOut={ranOut} chargeback={!!cbSteps && !cbSteps.reviewFirst} reviewFirst={cbSteps?.reviewFirst && !cbSteps.approved ? reviewFirstLine(cbSteps.count) : ""} review={review} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} />;
       }))}
       {dev && waitingCharges.length > 0 && <section className="card space-y-3" id="waiting-charges" data-waiting-charges="">
         <h2>Charged once your tests resume</h2>
