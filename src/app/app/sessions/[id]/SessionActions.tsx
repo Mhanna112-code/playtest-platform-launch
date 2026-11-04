@@ -18,11 +18,11 @@ import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChar
 import { ChangesBox } from "@/components/ChangesBox";
 import { LongText, QUESTION_LINES } from "@/components/LongText";
 import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
-import { ADDITIONS_FULL, ADDITIONS_MAX } from "@/lib/additions";
+import { ADDITIONS_MAX } from "@/lib/additions";
 import { QuestionBox } from "@/components/QuestionBox";
-import { WRITTEN_MAX_CHARS, writtenLength } from "@/lib/rules";
+import { WRITTEN_MAX_CHARS, additionTooLongLine, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
-import { answerRule, limitEdit, limitedChange } from "@/lib/typingLimit";
+import { additionRule, answerRule, limitEdit, limitedChange } from "@/lib/typingLimit";
 import { uploadToSession } from "@/lib/upload";
 import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
@@ -65,15 +65,17 @@ const isShortLine = (m: string) => /^\W?Write at least \d+ characters \(\d+ so f
 /** One answer box with its formatting toolbar. */
 /** (Batch 16 section 10) A required answer left empty is red at its box, with the server's own line. */
 export { ANSWER_REQUIRED };
-function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short, total }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; /** (Owner, Nov 3, §140) the whole written part's count now (writtenLength) */ total: number; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
+function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short, total, alone = false }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; /** (Owner, Nov 3, §140) the whole written part's count now (writtenLength) */ total: number; /** (Owner, Nov 4, §186) an addition's box: its own text alone is limited (additionRule) */ alone?: boolean; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
   const chars = answerChars(value);
   // (Owner, Nov 3) The preview stays hidden until "Preview" is pressed (on phones it took the screen); the button names the files placed in the answer.
   const [preview, setPreview] = useState(false);
   const files = attachments.filter((a) => hasMarkerFor(value, a.id, attachments)).length;
-  // (Owner, Nov 3, batch 35 §140) Typing stops at the written part's limit: this box takes what the other answers and the notes leave of the 50,000 (counted
+  // (Owner, Nov 3, batch 35 §140) Typing stops at the written part's limit: this box takes what the other answers and the notes leave of the 20,000 (counted
   // without the file markers, as the counter and the server count). Bold / italic from the toolbar is held to it too; a file's marker never counts.
-  const rule = answerRule(total - withoutAttachmentMarkers(value).length);
+  // (Owner, Nov 4, §186) An addition's box (`alone`) takes 20,000 of its own. A draft already longer (kept from before the limit came down) is never cut: it may
+  // only shrink (limitEdit), its counter is red and its press is refused until it fits.
+  const rule = alone ? additionRule() : answerRule(total - withoutAttachmentMarkers(value).length);
   const toolbar = (v: string) => onChange(limitEdit(ref.current?.value ?? value, v, rule).value);
   return (
     <div className="space-y-1">
@@ -236,7 +238,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
           </ul>
         </div>
       )}
-      {/* (Batch 11) (Batch 14) At most 50,000 characters for the whole written part, counted live. */}
+      {/* (Batch 11) (Batch 14) At most 20,000 characters for the whole written part, counted live ((Owner, Nov 4, §186) was 50,000). */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
       <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my answers to the new questions" : "Send my answers"}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
@@ -259,13 +261,14 @@ export const ADD_OPEN = "Add to this answer";
  * (Owner, Nov 3, batch 35 §136, §167; replaces §136's one "Add more" box for the whole part) Sent written answers are locked: each question of the tester's
  * read-only list has its own "Add to this answer" box (Bold, Italic, Code block, 📎 files), sent with "Add to my answer" and added under that question. Kept as a
  * draft per question (`add:<session>:<questionKey>`), editable until it's sent; a restored draft opens its question's fold. `canSend` false (a paused test): the
- * box and its draft stay, the button is hidden. `used`: the characters already sent (the 50,000 limit counts everything). `made`: the part's additions so far
+ * box and its draft stay, the button is hidden. (Owner, Nov 4, §186) Each addition has the answers' own limit: at most 20,000 characters of its own (its counter
+ * counts only it; `used`, the characters already sent, is gone). `made`: the part's additions so far
  * (at most ADDITIONS_MAX; the page shows "3 of 10 additions left" once there is one): at 10, a grey note instead of the button, and a draft stays, read-only.
  * (Owner, Nov 4, §182) The button sits below the written answers' panel (`question` names it there); pressed, the box opens in the panel, directly under the
  * question's latest part: drawn into its `slot` (`<div data-add-slot>` at the end of that question's fold), the question's fold opened and the box brought into
  * view. The box is a fold of its own (open), and its editor scrolls inside when long; Add to my answer and Close stay under it.
  */
-export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known = [], lines = [], questionKey, question, made = 0, slot }: { sessionId: string; seenAt: string; canSend?: boolean; used: number; known?: AnswerAttachment[]; lines?: string[]; questionKey: string; question: string; made?: number; /** (§182) the data-add-slot the open box is drawn into */ slot?: string }) {
+export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], lines = [], questionKey, question, made = 0, slot }: { sessionId: string; seenAt: string; canSend?: boolean; known?: AnswerAttachment[]; lines?: string[]; questionKey: string; question: string; made?: number; /** (§182) the data-add-slot the open box is drawn into */ slot?: string }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [attachments, setAttachments] = useState(known);
@@ -303,13 +306,14 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
     el.scrollIntoView?.({ block: "nearest", behavior: "smooth" });
     el.querySelector<HTMLTextAreaElement>("textarea:not([readonly])")?.focus({ preventScroll: true });
   }, [open, slotEl]);
-  const length = used + writtenLength([text]);
+  // (Owner, Nov 4, §186) Only this addition counts toward its 20,000.
+  const length = writtenLength([text]);
   const empty = !withoutAttachmentMarkers(text).trim() && !attachments.some((a) => hasMarkerFor(text, a.id, attachments));
   const remove = (id: string) => void api(`/api/sessions/${sessionId}/recording-remove`, { recordingId: id, written: true }).then(() => setAttachments((old) => old.filter((a) => a.id !== id))).catch((e) => setErr(errOf(e)));
   async function add() {
     if (!canSend || empty || full) return;
     if (text.includes("[Uploading ")) return setErr(FIELD + "Wait for the upload to finish before sending.");
-    if (!offerShown() && length > WRITTEN_MAX_CHARS) return setErr(FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).`);
+    if (!offerShown() && length > WRITTEN_MAX_CHARS) return setErr(FIELD + additionTooLongLine(length));
     setBusy(true);
     setErr("");
     try {
@@ -322,17 +326,17 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
       setBusy(false);
     }
   }
-  const fullNote = full && <p className="note" data-additions-full="">{ADDITIONS_FULL}</p>;
+  // (Owner, Nov 4, §186) At 10 additions the page says so ONCE, directly under the answers panel (ADDITIONS_FULL), in place of every question's row: closed,
+  // this question's row is nothing (no Add button, no repeated note); a kept draft still opens read-only below.
   if (!open && !fin.done) {
+    if (full) return <div ref={root} hidden data-add-for={questionKey} />;
     return (
       <div ref={root} className="space-y-1" data-add-for={questionKey}>
-        {full ? fullNote : (
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => { pressed.current = true; setOpen(true); }}>{ADD_OPEN}</button>
-            {/* (§182) Below the panel: which question it adds to (its first line). */}
-            {slot && <span className="line-clamp-1 min-w-0 flex-1 basis-40 text-xs text-slate-400 [overflow-wrap:anywhere]" data-add-question="">{question}</span>}
-          </div>
-        )}
+        <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+          <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => { pressed.current = true; setOpen(true); }}>{ADD_OPEN}</button>
+          {/* (§182) Below the panel: which question it adds to (its first line). */}
+          {slot && <span className="line-clamp-1 min-w-0 flex-1 basis-40 text-xs text-slate-400 [overflow-wrap:anywhere]" data-add-question="">{question}</span>}
+        </div>
       </div>
     );
   }
@@ -351,7 +355,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
             ) : (
               <>
                 <p className="note">What you sent stays as it is. This is added under this answer.</p>
-                <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} value={text} onChange={setText} />
+                <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} alone value={text} onChange={setText} />
               </>
             )}
             {keep.restored && text !== "" && !full && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
@@ -360,7 +364,6 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, used, known 
           </div>
         </details>
       )}
-      {fullNote}
       <div className="flex flex-wrap items-center gap-3">
         {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? "Adding…" : ADD_PRESS}</button>}
         {!fin.done && !busy && !full && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}

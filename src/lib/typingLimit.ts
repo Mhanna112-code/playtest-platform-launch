@@ -96,7 +96,10 @@ export const QUESTION_RULE: TypingRule = { lineMax: LIMITS.question, lineMeasure
  * (Owner, Nov 3) One written-answer box: the whole written part (every answer and the notes) is at most WRITTEN_MAX_CHARS without the file markers, so a box takes
  * what is left after the others (`others`: their count).
  */
-export const answerRule = (others: number): TypingRule => ({ max: Math.max(0, WRITTEN_MAX_CHARS - others), measure: (v) => withoutAttachmentMarkers(v).length, cutNote: cutToLine(WRITTEN_MAX_CHARS, "for all your answers together") });
+export const answerRule = (others: number, what = "for all your answers together"): TypingRule => ({ max: Math.max(0, WRITTEN_MAX_CHARS - others), measure: (v) => withoutAttachmentMarkers(v).length, cutNote: cutToLine(WRITTEN_MAX_CHARS, what) });
+/** (Owner, Nov 4, §186) An addition's box: its own text alone is at most WRITTEN_MAX_CHARS (the answers sent before and the other additions don't count). */
+export const ADDITION_CUT_WHAT = "for this addition";
+export const additionRule = (): TypingRule => answerRule(0, ADDITION_CUT_WHAT);
 
 type Box = HTMLInputElement | HTMLTextAreaElement;
 const notes = new WeakMap<Element, { el: HTMLElement; timer: ReturnType<typeof setTimeout> }>();

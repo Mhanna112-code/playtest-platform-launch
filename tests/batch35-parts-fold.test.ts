@@ -137,11 +137,11 @@ describe("the tester's session page (§182)", () => {
     expect(f).toContain("useKept(`add:${sessionId}:${questionKey}`");
     expect(f).toContain("<FormMistakes text={err} press={ADD_PRESS} named={PRESS_VERBS[\"written-add\"]} />");
     // Below the panel the button names its question (its first line).
-    const closed = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", used: 0, questionKey: "qabc", question: "Where did you get stuck?", made: 2, slot: "s1:qabc" }));
+    const closed = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", questionKey: "qabc", question: "Where did you get stuck?", made: 2, slot: "s1:qabc" }));
     expect(closed).toContain(`data-add-more="written">${ADD_OPEN}</button>`);
     expect(closed).toContain('data-add-question="">Where did you get stuck?</span>');
-    const full = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", used: 0, questionKey: "qabc", question: "Q", made: 10, slot: "s1:qabc" }));
-    expect(full).toContain("data-additions-full");
+    const full = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", questionKey: "qabc", question: "Q", made: 10, slot: "s1:qabc" }));
+    expect(full).not.toContain("data-additions-full"); // (§186) said once under the panel, by the page
     expect(full).not.toContain("data-add-more");
   });
 

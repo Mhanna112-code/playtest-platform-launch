@@ -21,6 +21,7 @@ import { RestrictedCalls } from "./RestrictedCalls";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { unreadCount } from "@/lib/server/messages";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
+import { BookedAhead } from "./BookedAhead";
 
 import { InvitePanel } from "./InvitePanel";
 import { inviteExpired, invitePanel, testerRowInfo } from "@/lib/server/invites";
@@ -220,6 +221,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const partPays = await partPaymentLines(payments, fmtDateTime);
   // The developer's live-call panel: one row per working tester (terms like the parts listing) and their calls/requests.
   const whole = (c: number | null) => money(c).replace(/\.00$/, "");
+  // (Owner, Nov 4, §186) One booked call as the Live session's row shows it (and the tester row's "Booked (N)", with the same buttons).
+  const devCallOf = (c: (typeof t.contracts)[number], x: (typeof t.contracts)[number]["calls"][number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? (restricted ? (connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT) : MEASURING_LINE) : undefined }); // (batch 18 section 9) a pause doesn't cut a call in progress
   const devTesters: DevTester[] = working.map((c) => {
     const subOf = (kind: string) => c.submissions.find((x) => x.kind === kind);
     const part = (label: string, cents: number | null, kind: string) => {
@@ -235,7 +238,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       // (Owner, Oct 28 afternoon) A call that isn't a listed part (not in the listing, or not in this tester's contract) can still be requested: its pay is up to the developer.
       callListed(t, c) ? `Live call ${whole(c.liveRateCents)}/h, ${whole(callPaid)} paid so far` : `Live call: ${NOT_LISTED}`,
     ].filter(Boolean).join(" · ");
-    const toCall = (x: (typeof c.calls)[number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? (restricted ? (connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT) : MEASURING_LINE) : undefined }); // (batch 18 section 9) a pause doesn't cut a call in progress
+    const toCall = (x: (typeof c.calls)[number]): DevCall => devCallOf(c, x);
     // (Batch 15 section 42) The Live session shows only calls ahead and calls in progress; a call that's over moves to the tester's row.
     const live = c.calls.filter((x) => x.status === "booked" && !callIsOver(x));
     const setIds = [...new Set(live.filter((x) => x.setId).map((x) => x.setId!))];
@@ -720,58 +723,87 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {c.status !== "working" && c.calls.filter((x) => callInProgress(x, now)).map((x) => (
                   <p key={x.id} id={`call-${x.id}`} className="text-sm" data-in-progress-call=""><span className="text-slate-200">{fmtDateTime(x.startsAt)}</span> <span className="badge border-sky-300/40 text-sky-200">{connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT}</span></p>
                 ))}
-                {/* (Batch 15 sections 31 and 42) "Calls (N)": every call that's over, newest first, with its outcome badge; each call that took place has its own Pay more box. */}
-                {overCalls.length > 0 && (
-                  <details open={overCalls.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined} className="rounded-lg border border-white/10 p-2 text-sm" data-calls-fold={c.id}>
-                    <summary className="fold-chevron cursor-pointer font-medium text-white">Calls ({overCalls.length})</summary>
-                    {/* (Batch 20 section 11) More than 3: a scroll box about 3 calls tall (each call's Pay / Pay more / dispute controls inside it). (Owner, Nov 3,
-                        §152) It is the draggable panel. */}
-                    <div className="mt-2">
-                    <PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label={`Calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>
-                    <ul className="space-y-2" data-calls-history="" data-calls-scroll={overCalls.length > PAST_CALLS_SHOWN ? overCalls.length : undefined}>
-                      {overCalls.map((x) => {
-                        const m = callMinutesOf(x);
-                        const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m);
-                        const inNeeds = tookPlace(x) && !x.review && !restricted && testerPayable(c.tester) && !payShut(x.id);
-                        return (
-                          <li key={x.id} id={inNeeds ? `callrow-${x.id}` : `call-${x.id}`} className={`space-y-1 rounded-lg border border-white/5 p-2 ${"scroll-mt-24 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300"}`} data-over-call={x.id}>
-                            {/* (Owner, Nov 3) Each call is its own drop-down, like a part: its line, then inside its length, payments and Pay more. */}
-                            <Fold id={`row-call-${x.id}`} className="space-y-1" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={<>
-                              <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
-                              <span className={`badge ${badge.tone === "green" ? "border-emerald-400/40 text-emerald-200" : badge.tone === "amber" ? "border-amber-300/40 text-amber-200" : badge.tone === "rose" ? "border-rose-400/40 text-rose-200" : ""}`} data-call-badge="">{badge.label}</span>
-                              {/* (Owner, Nov 4, batch 35 §170) The paid amount once: not repeated here when the badge already reads "paid $15.00". */}
-                              <span className="ml-auto text-slate-300" data-call-paid="">{tookPlace(x) && !("paidShown" in badge) ? `paid ${money(partPaid(x.id))}` : ""}</span>
-                            </>}>
-                            {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
-                            {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
-                            <PartPayments id={x.id} lines={partPays.get(x.id)} />
-                            {badge.reason && <ReasonQuote text={badge.reason} />}
-                            {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
-                            {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
-                            {tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>}
-                            {bankAt(x.id)}
-                            {x.review?.teamClosedById && <p className="text-sm text-slate-300" data-team-closed="">{teamClosedLine(x.review.reason)}</p>}
-                            {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
-                              <div className="space-y-1" data-call-pay-more="">
-                              <p className="text-sm font-medium text-white">Pay more</p>
-                              <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
-                                room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
-                                listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
-                                listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
-                              </div>
-                            )}
-                            {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
-                              <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
-                            )}
-                            </Fold>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    </PanelWhen>
+                {/* (Owner, Nov 4, §186; replaces batch 15 sections 31 and 42's one "Calls (N)") The tester's calls in two drop-downs, both closed at first (each opens by
+                    itself for a jump into it, and for a call whose charge waits for your bank): "Booked (N)", every call booked and not cancelled: the ones still ahead
+                    (or running) first, soonest first, with the Live session's Join / Cancel (BookedAhead), then the ones that are over, newest first, each with its
+                    length, its payments and its Pay more as before; and "Cancelled (N)": the calls actually cancelled (by either side, or by the app: nobody joined,
+                    the site was down …), newest first, with the length they were booked for and who cancelled and why. Call requests never show here. Past 3 rows,
+                    each list is the §152 draggable panel. */}
+                {(() => {
+                  // A call in progress after their work ended keeps its own line above; the rest still ahead are listed here.
+                  const ahead = c.calls.filter((x) => x.status === "booked" && !callIsOver(x) && !(c.status !== "working" && callInProgress(x, now)))
+                    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()).map((x) => ({ ...devCallOf(c, x), whenText: fmtDateTime(x.startsAt) }));
+                  const pastBooked = overCalls.filter((x) => x.status !== "cancelled");
+                  const cancelled = overCalls.filter((x) => x.status === "cancelled");
+                  const bookedN = ahead.length + pastBooked.length;
+                  if (!bookedN && !cancelled.length) return null;
+                  const bankIn = (xs: typeof overCalls) => xs.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined;
+                  const overRow = (x: (typeof overCalls)[number]) => {
+                    const m = callMinutesOf(x);
+                    const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m);
+                    const inNeeds = tookPlace(x) && !x.review && !restricted && testerPayable(c.tester) && !payShut(x.id);
+                    return (
+                      <li key={x.id} id={inNeeds ? `callrow-${x.id}` : `call-${x.id}`} className={`space-y-1 rounded-lg border border-white/5 p-2 ${"scroll-mt-24 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300"}`} data-over-call={x.id}>
+                        {/* (Owner, Nov 3) Each call is its own drop-down, like a part: its line, then inside its length, payments and Pay more. */}
+                        <Fold id={`row-call-${x.id}`} className="space-y-1" summaryClassName="flex flex-wrap items-center gap-2 !text-sm !font-normal" summary={<>
+                          <span className="text-slate-200">{fmtDateTime(x.startsAt)}</span>
+                            {/* (Owner, Nov 4, §186) A cancelled call: the length it was booked for. */}
+                            {x.status === "cancelled" && <span className="text-slate-400" data-call-booked-length="">· {x.minutes} min</span>}
+                          <span className={`badge ${badge.tone === "green" ? "border-emerald-400/40 text-emerald-200" : badge.tone === "amber" ? "border-amber-300/40 text-amber-200" : badge.tone === "rose" ? "border-rose-400/40 text-rose-200" : ""}`} data-call-badge="">{badge.label}</span>
+                          {/* (Owner, Nov 4, batch 35 §170) The paid amount once: not repeated here when the badge already reads "paid $15.00". */}
+                          <span className="ml-auto text-slate-300" data-call-paid="">{tookPlace(x) && !("paidShown" in badge) ? `paid ${money(partPaid(x.id))}` : ""}</span>
+                        </>}>
+                        {tookPlace(x) && <p className="text-xs text-slate-400" data-call-length="">{lengthOf(x)} · {x.rateCents == null ? NOT_LISTED : `In ${pronouns(c.tester.pronoun).poss} contract`}</p>}
+                        {/* (Owner, Nov 3, batch 35 §152) This call's payments (a panel above 4). */}
+                        <PartPayments id={x.id} lines={partPays.get(x.id)} />
+                        {badge.reason && <ReasonQuote text={badge.reason} />}
+                        {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
+                        {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
+                        {tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>}
+                        {bankAt(x.id)}
+                        {x.review?.teamClosedById && <p className="text-sm text-slate-300" data-team-closed="">{teamClosedLine(x.review.reason)}</p>}
+                        {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                          <div className="space-y-1" data-call-pay-more="">
+                          <p className="text-sm font-medium text-white">Pay more</p>
+                          <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                            room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
+                            listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
+                            listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
+                          </div>
+                        )}
+                        {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
+                          <p className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
+                        )}
+                        </Fold>
+                      </li>
+                    );
+                  };
+                  return (
+                    <div className="space-y-2" data-calls-fold={c.id}>
+                      <details open={bankIn(pastBooked)} id={`calls-booked-${c.id}`} className="scroll-mt-24 rounded-lg border border-white/10 p-2 text-sm" data-calls-booked={bookedN}>
+                        <summary className="fold-chevron cursor-pointer font-medium text-white">Booked ({bookedN})</summary>
+                        <div className="mt-2">
+                        {!bookedN && <p className="note">No booked calls.</p>}
+                        <PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`} label={`Booked calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>
+                        <div className="space-y-2" data-calls-scroll={bookedN > PAST_CALLS_SHOWN ? bookedN : undefined}>
+                          <BookedAhead testId={t.id} seenAt={seenAt} name={name} calls={ahead} buttons={c.status === "working"} />
+                          {pastBooked.length > 0 && <ul className="space-y-2" data-calls-history="">{pastBooked.map(overRow)}</ul>}
+                        </div>
+                        </PanelWhen>
+                        </div>
+                      </details>
+                      <details open={bankIn(cancelled)} id={`calls-cancelled-${c.id}`} className="scroll-mt-24 rounded-lg border border-white/10 p-2 text-sm" data-calls-cancelled={cancelled.length}>
+                        <summary className="fold-chevron cursor-pointer font-medium text-white">Cancelled ({cancelled.length})</summary>
+                        <div className="mt-2">
+                        {!cancelled.length && <p className="note">No cancelled calls.</p>}
+                        <PanelWhen on={cancelled.length > PAST_CALLS_SHOWN} id={`cancelled-calls-${c.id}`} label={`Cancelled calls with ${name}`} defaultMax={LIST_PANEL.pastTester}>
+                        <ul className="space-y-2" data-calls-history="" data-calls-scroll={cancelled.length > PAST_CALLS_SHOWN ? cancelled.length : undefined}>{cancelled.map(overRow)}</ul>
+                        </PanelWhen>
+                        </div>
+                      </details>
                     </div>
-                  </details>
-                )}
+                  );
+                })()}
                 {/* (Batch 17 §11; batch 35 §80) A waiting charge whose piece isn't listed above: a link up to it in Needs you under the tester's row. */}
                 {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>)}
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}

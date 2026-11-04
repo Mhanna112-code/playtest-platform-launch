@@ -40,9 +40,11 @@ describe("§152: every call list in the draggable panel, with a stable id", () =
       ["app/app/tests/[id]/RestrictedCalls.tsx", "<ResizeBox id={person ? `booked-restricted-${testId}-${person}` : `booked-restricted-${testId}`} label=\"Booked calls\" defaultMax={LIST_PANEL.restricted}>"],
       ["app/app/CallsBox.tsx", '<ResizeBox id="dash-calls" label="Calls" defaultMax={LIST_PANEL.dashCalls}>'],
       ["app/app/page.tsx", '<ResizeBox id="dash-upcoming-calls" label="Upcoming calls" defaultMax={LIST_PANEL.dashCalls}>'],
-      ["app/app/sessions/[id]/TesterCallPanel.tsx", "panel={`booked-${p.sessionId}`} panelMax={LIST_PANEL.testerBooked}"],
-      ["app/app/tests/[id]/page.tsx", "<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`}"],
-      ["app/app/sessions/[id]/page.tsx", "<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`}"],
+      // (Owner, Nov 4, §186) The tester's booked calls head the Call history's "Booked (N)" (no panel of their own); past calls are two drop-downs on both sides.
+      ["app/app/tests/[id]/page.tsx", "<PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`}"],
+      ["app/app/tests/[id]/page.tsx", "<PanelWhen on={cancelled.length > PAST_CALLS_SHOWN} id={`cancelled-calls-${c.id}`}"],
+      ["app/app/sessions/[id]/page.tsx", "<PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`}"],
+      ["app/app/sessions/[id]/page.tsx", "<PanelWhen on={cancelled.length > PAST_CALLS_SHOWN} id={`cancelled-calls-${c.id}`}"],
       ["app/app/sessions/[id]/page.tsx", "<PayLinesBox id={id} count={1 + extras.length + (update ? 1 : 0)}>"],
       ["app/app/tests/[id]/ByQuestion.tsx", "<ResizeBox id={`by-question-${testId}-${key}`}"],
       ["app/app/tests/[id]/QuestionSearch.tsx", "<ResizeBox id={`by-question-${testId}`} label=\"Questions\" defaultMax={LIST_PANEL.questions}>"],
@@ -185,12 +187,15 @@ describe("§152: By question — search, the list in a panel, each question a fo
 // (Owner, Nov 4, §179) "Scroll box needed for different charges": the tester's "Live call: N done" lists every call with its payment box; more than 3 sit in the
 // draggable panel (`live-calls-<sessionId>`, about 3 calls tall at first), like past calls. The developer's "Calls (N)" was already a panel past 3 (§152).
 describe("§179: the tester's Live call list in the draggable panel past 3 calls", () => {
-  it("the page wraps both kinds of rows (done and not yet paid, paid) in PanelWhen with the session's id; the developer's Calls (N) is already one", () => {
+  // (Owner, Nov 4, §186) The list (each call with its payments) moved to the Call history's "Booked (N)", which is the same panel past 3 rows (`booked-calls-<id>`,
+  // the §179 height); the Live call part keeps its count, rate and "Paid so far" and a link down to it.
+  it("the calls with their payments sit in Booked (N)'s panel at the §179 height; the developer's Booked (N) is one too", () => {
     expect(LIST_PANEL.liveTester).toBe("min(27rem, 60vh)");
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain("<PanelWhen on={liveRowCount > PAST_CALLS_SHOWN} id={`live-calls-${c.id}`} label=\"Live calls and their payments\" defaultMax={LIST_PANEL.liveTester}>");
+    expect(page).toContain("<PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`} label=\"Booked calls and their payments\" defaultMax={LIST_PANEL.liveTester}>");
     expect(page).toContain("const liveRowCount = unpaidLive.length + paidLive.length;");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PanelWhen on={overCalls.length > PAST_CALLS_SHOWN} id={`past-calls-${c.id}`} label={`Calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>");
+    expect(page).not.toContain("live-calls-${c.id}");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`} label={`Booked calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>");
   });
 
   it("a notice inside a panel: the panel scrolls to it first, then the page (the least scrolling)", () => {
@@ -216,7 +221,7 @@ describe("§179: the tester's Live call list in the draggable panel past 3 calls
     }
   });
 
-  it("on the tester's page: 3 paid calls are a plain list; a 4th makes it the panel (each row's hooks kept)", async () => {
+  it("on the tester's page: 3 paid calls are a plain list in Booked (N); a 4th makes it the panel (each row's hooks kept)", async () => {
     const s = await setup();
     const j = await joined(s.testId, "Ana Silva");
     await settle();
@@ -234,17 +239,20 @@ describe("§179: the tester's Live call list in the draggable panel past 3 calls
     const page = async () => unescape(render(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
     const three = await page();
     expect(three).toContain('data-live-calls="3"');
-    expect(three).not.toContain(`data-panel="live-calls-${j.sessionId}"`);
+    expect(three).not.toContain(`data-panel="booked-calls-${j.sessionId}"`);
     await call(4);
     const four = await page();
-    expect(four).toContain(`data-panel="live-calls-${j.sessionId}"`);
-    const panel = four.slice(four.indexOf(`data-panel="live-calls-${j.sessionId}"`));
+    expect(four).toContain(`data-panel="booked-calls-${j.sessionId}"`);
+    const panel = four.slice(four.indexOf(`data-panel="booked-calls-${j.sessionId}"`));
     expect(panel).toContain("max-height:min(27rem, 60vh)");
-    expect(panel).toContain('data-live-calls="4" data-live-calls-scroll="4"');
+    expect(panel).toContain('data-calls-scroll="4"');
+    expect(panel).toContain('data-live-calls="4"');
     const inside = panel.slice(0, panel.indexOf("data-panel-grip"));
     expect(inside.match(/data-call-row=""/g)).toHaveLength(4);
     expect(inside.match(/Paid \$15\.50/g)).toHaveLength(4);
-    // Still inside the Live call part (#part-live links land on it).
-    expect(four.indexOf('id="part-live"')).toBeLessThan(four.indexOf(`data-panel="live-calls-${j.sessionId}"`));
+    // (§186) The Live call part (#part-live) comes first and links down to it; the list is in the Call history.
+    expect(four.indexOf('id="part-live"')).toBeLessThan(four.indexOf('id="call-history"'));
+    expect(four.indexOf('id="call-history"')).toBeLessThan(four.indexOf(`data-panel="booked-calls-${j.sessionId}"`));
+    expect(four).toContain(`data-live-calls-below="4"`);
   });
 });

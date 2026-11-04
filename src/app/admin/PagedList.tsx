@@ -255,7 +255,7 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       return (
         <div id={`contact-${m.id}`} className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-contact-row={m.id}>
           <p><b>{m.fromParts ? <AdminRich parts={m.fromParts} /> : m.from}</b> · {m.topic}</p>
-          {/* (Batch 15 section 21) Up to 50,000 characters: a scroll box about 8 lines tall (the email to the team has it in full). */}
+          {/* (Batch 15 section 21) Up to 20,000 characters ((Owner, Nov 4, §186) was 50,000; older, longer messages stay): a scroll box about 8 lines tall (the email to the team has it in full). */}
           <ScrollText text={m.message} lines={8} className="text-slate-300" />
           {m.replied ? <p className="note" data-replied="">{m.replied}</p> : <AdminButton action="contact-replied" id={m.id} label="Mark replied" extra={since(m)} />}
         </div>

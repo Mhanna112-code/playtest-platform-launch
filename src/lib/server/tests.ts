@@ -20,7 +20,7 @@ import { T, safeZone, renderTimes } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
-  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
@@ -1128,8 +1128,9 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
   // (§167) The 10 additions.
   const made = additionsOf(existing.additions);
   if (made.length >= ADDITIONS_MAX) return new HttpError(409, "add_full", ADDITIONS_FULL);
-  // (Batch 14) At most 50,000 characters for the written part: the latest answers, the notes and everything added.
-  const long = checkWrittenLength([...latest.map((x) => x.answer), existing.notes, ...made.map((a) => a.text ?? ""), text]);
+  // (Owner, Nov 4, §186; replaces batch 14's one limit over the answers, the notes and everything added) An addition has the same limit as the answers sent
+  // first: at most 20,000 characters of its own, whatever the others hold. Checked before the stop-once, so a too-long addition is refused on the first press.
+  const long = checkAdditionLength(text);
   if (!long.ok) return new HttpError(400, "too_long", long.message);
   return null;
 }

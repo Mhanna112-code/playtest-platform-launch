@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const u = await requireUser(req);
     const body = await readJson(req, 250_000);
     const topic = typeof body.topic === "string" && TOPICS.includes(body.topic) ? body.topic : "";
-    // (Owner, Oct 30, batch 15 section 21) Up to 50,000 characters, refused (never cut) beyond.
+    // (Owner, Oct 30, batch 15 section 21) Up to 20,000 characters ((Owner, Nov 4, §186) was 50,000), refused (never cut) beyond.
     const message = readText(body.message, LIMITS.contact.max, "bad_message");
     if (!topic) throw new HttpError(400, "bad_topic", "Choose what it's about.");
     if (message.length < 10) throw new HttpError(400, "bad_message", "Write a few words about what happened (at least 10 characters).");

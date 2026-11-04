@@ -9,7 +9,7 @@ import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
 import { blockedEitherWay } from "./blocks";
 import { labelled, reportedOver3 } from "./reports";
-import { partAnchor } from "@/lib/links";
+import { partAnchor, pieceAnchor } from "@/lib/links";
 import { isAdmin } from "./session";
 import { isUniqueClash } from "./passwords";
 import { ownChange, presserOf, youAlready, type Presser } from "./adminRace";
@@ -201,7 +201,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, pieceName({ tester: name, part: piece.label, test: c.title, when: callStart ? T(callStart) : null })); // (§178) its date and time
     // The tester is told at once (bell; their top box and stop-once read the owed payment): never "failed". (§177) The bell names the test and which call:
     // "Nora Lane's payment for your live call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST) ($15) is delayed."
-    await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents, `“${c.title}”${callStart ? ` (${T(callStart)})` : ""}`), `/app/sessions/${c.id}#${partAnchor(piece.label)}`, undefined, { payment: true, group: "tdelayed" });
+    await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents, `“${c.title}”${callStart ? ` (${T(callStart)})` : ""}`), `/app/sessions/${c.id}#${pieceAnchor(piece.label, payment!.callId)}`, undefined, { payment: true, group: "tdelayed" });
     throw new HttpError(402, "card_failed", declinedHoldLine(name, rev.amountCents, piece.label), { held: true, failed: `Your Pay on ${c.title} was declined` });
   }
   // (Batch 11) The bank wants the developer to confirm: the piece stays locked while its pop-up is open (batch 12 section 5), nothing is charged yet.
@@ -307,7 +307,7 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
       ...(rev.reason ? [`${pronouns(dev.pronoun).Poss} note: “${rev.reason}”`] : []),
       ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : []),
     ],
-    `/app/sessions/${c.id}#${partAnchor(piece.label)}`,
+    `/app/sessions/${c.id}#${pieceAnchor(piece.label, p.callId)}`,
     { payment: true, group: "tpaid" },
   );
   // (§131) The receipt names the tester, the part and the test (pieceName).
@@ -546,7 +546,7 @@ export async function decideDispute(admin: U, disputeId: string, body: Record<st
   }
   await (await import("./ratings")).maybePromptRating(c.id);
   // (Owner, Nov 4, §177) Both emails and bells name the part: "Your dispute about your live call on “Harbor Run” (Tue, Oct 27, 8:00 AM EST) was decided".
-  await notify(c.tester.email, `Your dispute about ${await partOnTest(d, "your", c.title)} was decided`, [line, ...(delayed ? [heldNow || testPaused(c.test.developer, c.test) ? "Payment may be delayed until the test resumes." : "Payment may be delayed."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? "part-live" : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
+  await notify(c.tester.email, `Your dispute about ${await partOnTest(d, "your", c.title)} was decided`, [line, ...(delayed ? [heldNow || testPaused(c.test.developer, c.test) ? "Payment may be delayed until the test resumes." : "Payment may be delayed."] : []), ...(note ? [`Their note: “${note}”`] : [])], `/app/sessions/${c.id}#${d.callId ? `call-${d.callId}` : partAnchor((await db.submission.findUnique({ where: { id: d.submissionId ?? "" } }))?.kind === "recording" ? "recording" : "written answers")}`, { group: "disputedecided" });
   await notify(c.test.developer.email, `${displayName(c.tester)}'s dispute about ${await partOnTest(d, pronouns(c.tester.pronoun).poss, c.title)} was decided`, [line, ...(note ? [`The team's note: “${note}”`] : [])], `/app/tests/${c.testId}#tester-${c.id}`, { group: "disputedecided" });
   await (await import("./live")).logAction(admin.id, c.testId, body, "decided a dispute", { a: "decide", k: [`dispute:${d.id}`], answers: { item: d.id } });
   // (Owner, Nov 3, batch 35 §163) The admin reads what the decision did, not just "Done.": "Done: raised the pay to $10.00 ($3.00 more charged)."
@@ -804,7 +804,7 @@ export async function finishExtraPay(paymentId: string, result: { status: string
     if (p.submissionId) await answerUpdate(tx, p.submissionId, p.createdAt);
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for ${await partOnTest(p, "your", c.test.title)}`; // (§177) which call
-  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`${pronouns(dev.pronoun).Poss} note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? "part-live" : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
+  await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`${pronouns(dev.pronoun).Poss} note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? `call-${p.callId}` : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
   await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title, full: true, when: await callWhen(p) })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`); // (§178)
   return { paid: true, amountCents: amount, status: result.status };
 }
