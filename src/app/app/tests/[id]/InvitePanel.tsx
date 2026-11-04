@@ -9,6 +9,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { PressDone } from "@/components/PressDone";
 import { MistakeList } from "@/components/FieldChecks";
 import { api } from "@/lib/client";
+import { bankCheckOpen } from "@/lib/bankConfirm";
 import { usePress } from "@/lib/usePress";
 import { useTesterChanges } from "@/lib/useTesterChanges";
 import type { Needs } from "@/lib/testerState";
@@ -87,7 +88,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         if (!r.ok) return;
         const j = (await r.json()) as { blocked?: { line: string; full: boolean } | null; v?: string; detailsV?: string; unavailable?: string[]; rows?: { id: string; availability: string }[]; details?: { id: string; availability: string }[] };
         if (alive && j.blocked !== undefined) setLiveBlocked(j.blocked);
-        if (alive && availability.current.v === before.v && availability.current.detailsV === before.detailsV && j.v !== undefined && (j.v !== before.v || j.detailsV !== before.detailsV)) {
+        // (§160) Never while a bank check is open on the page: the redraw would replace the box (and the bank's page) under the developer; a later check redraws.
+        if (alive && !bankCheckOpen() && availability.current.v === before.v && availability.current.detailsV === before.detailsV && j.v !== undefined && (j.v !== before.v || j.detailsV !== before.detailsV)) {
           // Selected rows from an earlier search may no longer be in the current results. Keep their keys current too.
           for (const row of j.rows ?? []) eligibilityShown.current.set(row.id, row.availability);
           for (const row of j.details ?? []) detailShown.current.set(row.id, row.availability);

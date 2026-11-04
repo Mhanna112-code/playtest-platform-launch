@@ -433,6 +433,8 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
   if (reviewFirst && !u.chargebackApprovedAt) throw new HttpError(409, "review_first", reviewFirstLine(cbCount));
   const reserving = cbHold && !reviewFirst;
   const rs = reserving ? await (await import("./chargeback")).reserveState(dev.id) : null;
+  // (Owner, Nov 3, §160) Its check is being made or waits for the bank (another tab, an older page): refused with that line, never a stop-once.
+  await refuseOwedInFlight(dev.id);
   const covered = rs?.covered ?? null;
   const locks = await once.owedLocks(dev.id);
   // (§125) What is owed and the charges waiting for the lift, as one payment.
@@ -618,11 +620,12 @@ export async function owedLines(devId: string) {
   let inFlight = new Set(locks.values()).size > 0 && (await db.payment.count({ where: { id: { in: [...new Set(locks.values())] }, kind: "owed", status: { in: ["paying", "needs_action", "needs_confirmation"] } } })) > 0;
   // (Owner, Nov 2) A chargeback hold's reservation being made or waiting for the bank counts the same: what it covers reads "Waiting for your bank" (not paid by the
   // button), and a charge that came in after it reads "Charged right after the payment above goes through" (it's charged after the lift, never added to it).
-  const opening = u?.holdStartedAt && u.holdReason === "chargeback" ? await db.reservation.findMany({ where: { developerId: devId, status: { in: ["pending", "needs_action"] } }, select: { covers: true } }) : [];
-  const reserving = new Set(opening.flatMap((r) => r.covers));
+  const opening = u?.holdStartedAt && u.holdReason === "chargeback" ? await db.reservation.findMany({ where: { developerId: devId, status: { in: ["pending", "needs_action"] } }, select: { id: true, status: true, covers: true } }) : [];
+  // (Owner, Nov 3, §160) Its rows carry the reservation's Cancel this check too (any tab), once its bank check is open; one still being made has none.
+  const reserving = new Map(opening.flatMap((r) => r.covers.map((c) => [c, r.status === "needs_action" ? r.id : ""] as const)));
   if (opening.length) inFlight = true;
   for (const p of list) {
-    if (reserving.has(p.id)) locks.set(p.id, "");
+    if (reserving.has(p.id)) locks.set(p.id, reserving.get(p.id)!);
     const checkId = locks.get(p.id) || null;
     const late = !locks.has(p.id) && inFlight && p.status === "deferred";
     const held = locks.has(p.id);
@@ -834,6 +837,8 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   await (await import("./outages")).sweepGap().catch((e) => console.error("[outage] heartbeat:", (e as Error).message));
   await (await import("./email")).retryEmails(now).catch((e) => console.error("[email] retry:", (e as Error).message));
   await (await import("./chargeback")).expireReservations(now).catch((e) => console.error("[reserve] expire:", (e as Error).message));
+  // (§160) Bank checks of the developer's own presses whose page went away (no heartbeat for 3 minutes): ended like Cancel.
+  await (await import("./bankHeartbeat")).endAllStaleChecks(now).catch((e) => console.error("[bank check] sweep:", (e as Error).message));
   await (await import("./calls")).sweepNobodyJoined(now);
   if (stripeOn()) await (await import("./stripe")).cardExpiryReminders(now).catch((e) => console.error("[card expiry]", (e as Error).message));
   await chargeReadyDeferred();
@@ -1577,4 +1582,22 @@ async function dailyReminders(now: Date) {
       return { userId: t.developerId, side: "developer", testId: t.id, reminderKey: `applications:${t.id}`, text: `“${t.title}”: ${n} ${n === 1 ? "application or rejoin ask waits" : "applications and rejoin asks wait"} for your answer`, link: `/app/tests/${t.id}#needs-you` };
     }),
   });
+}
+
+/**
+ * (Owner, Nov 3, §160) Pay what you owe's own check in flight (a chargeback hold's reservation being made or at the bank, or the one payment being charged or at the
+ * bank): another press is refused with "Pay what you owe ($91.00) is waiting for your bank in another tab or window: finish that check, or cancel it." Confirm all's
+ * one payment isn't Pay what you owe's.
+ */
+export async function owedInFlight(devId: string) {
+  const r = await db.reservation.findFirst({ where: { developerId: devId, status: { in: ["pending", "needs_action"] } }, orderBy: { createdAt: "desc" }, select: { amountCents: true } });
+  if (r) return r.amountCents;
+  const once = await import("./owedOnce");
+  // A press's one payment (being charged, or its 15-minute bank check); an away one (3 days, a new card's) locks only what it covers.
+  const p = await db.payment.findFirst({ where: { developerId: devId, kind: once.OWED_KIND, status: { in: ["paying", "needs_action"] }, note: { in: ["press", "press:charges"] } }, orderBy: { createdAt: "desc" }, select: { amountCents: true } });
+  return p ? p.amountCents : null;
+}
+export async function refuseOwedInFlight(devId: string) {
+  const cents = await owedInFlight(devId);
+  if (cents != null) throw new HttpError(409, "owed_in_flight", (await import("@/lib/bankNotice")).owedElsewhereLine(money(cents)));
 }

@@ -2,6 +2,7 @@ import { HttpError, handle, ok, readJson } from "@/lib/server/http";
 import { requireUser } from "@/lib/server/session";
 import { confirmFinish, confirmStart } from "@/lib/server/confirm";
 import { peekBankCheck } from "@/lib/server/bankPeek";
+import { heartbeat } from "@/lib/server/bankHeartbeat";
 import { logPayMore, logReview } from "@/lib/server/actionText";
 import { db } from "@/lib/db";
 
@@ -14,7 +15,12 @@ export async function POST(req: Request) {
     const body = await readJson(req);
     const paymentId = String(body.paymentId ?? "");
     // (§158) The open bank check asks whether Stripe still waits for the customer: read-only (nothing is finished, cancelled or charged), the developer's own only.
-    if (body.peek === true) return ok(await peekBankCheck(u, body));
+    if (body.peek === true) {
+      const r = await peekBankCheck(u, body);
+      // (§160) The page holding the bank window is still open: its heartbeat (an open check with none for 3 minutes is ended like Cancel).
+      await heartbeat(u.id, typeof body.paymentId === "string" && body.paymentId ? body.paymentId : typeof body.setupIntent === "string" ? body.setupIntent : "");
+      return ok(r);
+    }
     // (Batch 23 section 9) The start runs the stop-once check (the page's seen marker) and the plain refusals first.
     if (body.start === true) return ok(await confirmStart(u, paymentId, body));
     const p = await db.payment.findUnique({ where: { id: paymentId }, select: { kind: true, submissionId: true, callId: true, status: true, contractId: true, amountCents: true } });

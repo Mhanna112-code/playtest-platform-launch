@@ -133,7 +133,8 @@ export function PayBox(p: {
     finish(res.status === "closed" ? "Closed at $0." : res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : more ? `Paid ${money(res.amountCents)} more to ${p.name}.` : `Paid ${money(res.amountCents)} to ${p.name}.`);
   }
 
-  if (p.confirming) return <BankWaiting paymentId={p.confirming} line="Confirming with your bank" seenAt={p.seenAt} />;
+  // (§160) A redraw while this box's own bank check is open keeps the box (and the bank's page): only another tab's or a later visit's shows "Confirming with your bank".
+  if (p.confirming && !bank.open) return <BankWaiting own paymentId={p.confirming} line="Confirming with your bank" seenAt={p.seenAt} />;
   return (
     <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}${p.bankWaits ? " opacity-60" : ""}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-mistakes-root="">
       {p.bankWaits && <p className="info" data-pay-more-waits="">{p.bankWaits}</p>}

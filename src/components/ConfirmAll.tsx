@@ -54,7 +54,7 @@ export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt = "" }: Conf
       setChanges(null);
       if (!r.confirm) return fin.finish(r.line ?? "");
       try {
-        await bank.check(r.confirm);
+        await bank.check({ ...r.confirm, cancel: "all" }); // (§160) Cancel: nothing charged, each payment keeps waiting for the bank
       } catch (e) {
         // Nothing was charged: each payment is back to its own Confirm with your bank (the page redraws with them).
         setNote((e as Error).message.includes(ALL_BACK) ? (e as Error).message : `${(e as Error).message} ${ALL_BACK}`);

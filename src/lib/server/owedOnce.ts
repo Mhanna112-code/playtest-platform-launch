@@ -306,6 +306,9 @@ async function claimCancel(p: { id: string; developerId: string; actionPi: strin
  * already confirmed it, it is recorded as paid instead (nothing charged again).
  */
 export async function cancelOwedCheck(devId: string, id: string) {
+  // (Owner, Nov 3, §160) A chargeback hold's reservation (Pay what you owe during a chargeback hold): its Cancel this check, from any tab.
+  const res = await db.reservation.findUnique({ where: { id }, select: { developerId: true } });
+  if (res && res.developerId === devId) return (await import("./bankHeartbeat")).endReservationCheck(devId, id);
   const p = await db.payment.findUnique({ where: { id } });
   if (!p || p.developerId !== devId) throw new HttpError(404, "not_found", NO_CHECK_WAITING);
   if (!p.actionPi) {

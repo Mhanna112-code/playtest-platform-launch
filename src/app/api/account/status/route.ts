@@ -15,6 +15,9 @@ export async function GET(req: Request) {
     if (!s || s.expiresAt < new Date()) return ok({ state: "out" }, { headers: { "cache-control": "no-store" } });
     if (s.user.deletedAt) return ok({ state: "deleted" }, { headers: { "cache-control": "no-store" } });
     const u = s.user;
+    // (Owner, Nov 3, §160) Every signed-in page asks this on load and every ~20 s: a bank check of this developer's own press whose page went away (no heartbeat
+    // for 3 minutes) is ended here, like Cancel (Stripe first).
+    if (u.isDeveloper) await (await import("@/lib/server/bankHeartbeat")).endStaleChecks(u.id).catch((e) => console.error("[bank check] sweep:", (e as Error).message));
     return ok({ state: "ok", userId: u.id, name: u.name || u.email, suspended: !!u.devSuspendedAt, testerSuspended: !!u.testerSuspendedAt, held: !!u.holdStartedAt, holdReason: u.holdReason, developer: u.isDeveloper, tester: u.isTester, side: u.side, bell: await unreadEntryCount(u.id), messages: await allUnreadChats(u) }, { headers: { "cache-control": "no-store" } });
   });
 }

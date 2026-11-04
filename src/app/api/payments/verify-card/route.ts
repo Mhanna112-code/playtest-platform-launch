@@ -4,7 +4,7 @@ import { confirmCardCheck, finishCardCheck, refuseVerified, startCardVerificatio
 import { cardAttempt } from "@/lib/server/cardLimits";
 import { clientIp } from "@/lib/server/passwords";
 import { HttpError } from "@/lib/server/http";
-import { PAYMENTS_OFF, paymentsOff } from "@/lib/server/stripe";
+import { PAYMENTS_OFF, getStripe, paymentsOff, stripeOn } from "@/lib/server/stripe";
 
 // (Owner, Oct 26) Chargeback hold, step (a): start the 3D Secure card check (a Stripe SetupIntent). With no Stripe in dev it is simulated and succeeds at once.
 // (Batch 17 §11) The page's "Verify a card" shows the bank's check inline, under the button: `check` starts it (with the fake Stripe: the stand-in, verified only on its
@@ -14,7 +14,19 @@ export async function POST(req: Request) {
     const u = await requireUser(req);
     const body = await readJson(req);
     const setupIntent = typeof body.setupIntent === "string" ? body.setupIntent : "";
-    if (body.finish === true) return ok(await finishCardCheck(u.id, setupIntent, body.simulate));
+    if (body.finish === true) {
+      try {
+        return ok(await finishCardCheck(u.id, setupIntent, body.simulate));
+      } catch (e) {
+        // (Owner, Nov 3, §160) Cancel under the bank's window (or the page closed with it open): Stripe was asked first (not verified); the card check is then
+        // cancelled at Stripe, the developer's own only. One that just succeeded meanwhile can't be cancelled: it stays, and the next Verify a card uses it as usual.
+        if ((body.cancel === true || body.leave === true) && e instanceof HttpError && e.code === "not_verified" && setupIntent && stripeOn()) {
+          const si = await getStripe().setupIntents.retrieve(setupIntent).catch(() => null);
+          if (si?.metadata?.userId === u.id && !["succeeded", "canceled"].includes(si.status)) await getStripe().setupIntents.cancel(setupIntent).catch(() => null);
+        }
+        throw e;
+      }
+    }
     // (Owner, Nov 2, batch 35 §127) Starting Verify a card and each card typed into it are card attempts (5 per account, 15 per network a day; 429 with the line
     // under the button). The finish (the bank's answer, Cancel this check) isn't.
     // (§130) Live keys while payments are switched off: the plain line, and not a card attempt.
