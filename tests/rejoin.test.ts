@@ -98,7 +98,10 @@ describe("rejoining restores the session", () => {
     expect(back.body.sessionId).toBe(sessionId);
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(c).toMatchObject({ status: "working", writtenCents: 1200, endedAt: null }); // (batch 12) the days field is gone: Edit ignores it
-    expect(Math.round((c.dueAt.getTime() - Date.now()) / 86_400_000)).toBe(5); // the time they had left, not the new 3 days
+    // The time they had left (5 days), not the new 3 days, then up to that day's end (batch 35 §154): 5 to 6 days from now, whatever the time of day.
+    const left = (c.dueAt.getTime() - Date.now()) / 86_400_000;
+    expect(left).toBeGreaterThan(4.99);
+    expect(left).toBeLessThan(6);
     expect(await db.contract.count({ where: { testId, testerId: tester.user.id } })).toBe(1);
     expect(await db.contract.count({ where: { testerId: tester.user.id, status: "working" } })).toBe(1);
     // Old work, its price, the payment and the chat are all still there.
