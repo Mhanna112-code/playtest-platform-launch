@@ -6,7 +6,8 @@ import fs from "node:fs";
 describe("owed box during an open reservation", () => {
   it("treats the reservation like Pay what you owe's open check", () => {
     const src = fs.readFileSync("src/lib/server/holds.ts", "utf8");
-    expect(src).toContain('status: { in: ["pending", "needs_action"] } }, select: { covers: true } })');
-    expect(src).toContain("if (reserving.has(p.id)) locks.set(p.id, \"\");");
+    expect(src).toContain('status: { in: ["pending", "needs_action"] } }, select: { id: true, status: true, covers: true } })');
+    // (Owner, Nov 3, §160) Its rows carry the reservation's id, so other tabs show its Cancel this check.
+    expect(src).toContain("if (reserving.has(p.id)) locks.set(p.id, reserving.get(p.id)!);");
   });
 });
