@@ -136,6 +136,17 @@ export async function invitable(devId: string, testId: string) {
   return full(lean);
 }
 
+/** (Batch 30 §7) A tester who applied or asked to rejoin is answered in Needs you, not invited: greyed in every list here (and never suggested). */
+async function greyApplicants(testId: string, lean: { t: { id: string; pronoun: string | null }; grey: string | null }[]) {
+  const apps = await db.application.findMany({ where: { testId, status: "pending" }, select: { id: true, testerId: true, kind: true } });
+  const appOf = new Map(apps.map((a) => [a.testerId, a]));
+  for (const x of lean) {
+    const a = appOf.get(x.t.id);
+    if (a && !x.grey) x.grey = `${a.kind === "rejoin" ? "Asked to rejoin" : "Applied"}: answer ${pronouns(x.t.pronoun).obj} in Needs you`;
+  }
+  return appOf;
+}
+
 export type InviteFilters = { q?: unknown; devices?: unknown; languages?: unknown };
 const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
@@ -152,13 +163,7 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
   const notInvited = lean.filter((x) => !x.inv);
   const passes = (x: (typeof lean)[number]) =>
     (!devices.length || (x.t.profile?.devices ?? []).some((d) => devices.includes(d))) && (!languages.length || (x.t.profile?.languages ?? []).some((l) => languages.includes(l)));
-  // (Batch 30 §7) A tester who applied or asked to rejoin is answered in Needs you, not invited: greyed in every list here (and never suggested).
-  const apps = await db.application.findMany({ where: { testId, status: "pending" }, select: { id: true, testerId: true, kind: true } });
-  const appOf = new Map(apps.map((a) => [a.testerId, a]));
-  for (const x of lean) {
-    const a = appOf.get(x.t.id);
-    if (a && !x.grey) x.grey = `${a.kind === "rejoin" ? "Asked to rejoin" : "Applied"}: answer ${pronouns(x.t.pronoun).obj} in Needs you`;
-  }
+  const appOf = await greyApplicants(testId, lean);
   // (Batch 34 §11) People you've worked with and Suggested leave out testers CURRENTLY in this test (a working contract) and testers already invited (they're in
   // the Invited list with Cancel invite); someone who left the test shows again. The name search below still finds them, greyed with the reason.
   const worked = notInvited.filter((x) => x.section === "worked" && !x.inTest);
@@ -187,6 +192,45 @@ function whyNotInvitable(r: { invited: boolean; inviteId: string | null; grey: s
   return {};
 }
 export type InvitePanelData = Awaited<ReturnType<typeof invitePanel>>;
+
+/** (Owner, Nov 4, §173) Why a restored tick was dropped, in parentheses after the name: the search row's words (batch 30 §7) without its arrow. */
+export const BLOCKED_SINCE = "no longer in your list";
+export const ACCOUNT_CLOSED = "account closed";
+const lowerFirst = (s: string) => s.charAt(0).toLowerCase() + s.slice(1);
+
+/**
+ * (Owner, Nov 4, §173) The invite ticks this tab kept (sessionStorage) come back after a reload only for people the panel can still invite right now, by the
+ * lists' own rules (rankedTesters + the applicants' grey: not in this test, not invited, not rated it, not applied, not suspended, under 10 tests; blocked and
+ * deleted accounts are never in the lists). `keep`: their full rows (what the panel shows and sends for them, as for a person ticked from an earlier search);
+ * `drop`: everyone else, named with why. An id that was never a tester is dropped without a name.
+ */
+export async function inviteRestore(devId: string, testId: string, testerIds: string[]) {
+  await ownTest(devId, testId);
+  const ids = [...new Set(testerIds.filter((id) => /^[a-zA-Z0-9_-]{1,80}$/.test(id)))].slice(0, 500);
+  if (!ids.length) return { keep: [], drop: [] };
+  const { lean, full } = await rankedTesters(devId, testId);
+  const appOf = await greyApplicants(testId, lean);
+  const byId = new Map(lean.map((x) => [x.t.id, x]));
+  const keepLean = ids.flatMap((id) => {
+    const x = byId.get(id);
+    return x && !x.inv && !x.grey ? [x] : [];
+  });
+  const keepIds = new Set(keepLean.map((x) => x.t.id));
+  const missing = ids.filter((id) => !byId.has(id));
+  const gone = missing.length ? await db.user.findMany({ where: { id: { in: missing }, OR: [{ isTester: true }, { deletedAt: { not: null } }] }, select: { id: true, name: true, email: true, deletedAt: true } }) : [];
+  const drop = ids.flatMap((id): { id: string; name: string; why: string }[] => {
+    if (keepIds.has(id)) return [];
+    const x = byId.get(id);
+    if (x) {
+      const app = appOf.get(id);
+      const why = x.inv ? whyInvited(x.t.pronoun) : x.grey === "Already in this test" ? WHY_IN_TEST : app ? whyApplied(app.kind, x.t.pronoun).replace(/ →$/, "") : lowerFirst(x.grey ?? "");
+      return [{ id, name: x.name, why }];
+    }
+    const g = gone.find((p) => p.id === id);
+    return g ? [{ id, name: displayName(g), why: g.deletedAt ? ACCOUNT_CLOSED : BLOCKED_SINCE }] : [];
+  });
+  return { keep: await full(keepLean), drop };
+}
 
 /**
  * What the test needs that this tester's profile doesn't list, or "". (Owner, Oct 28, batch 20 section 3) Both kinds, in one: "doesn't list a language this test

@@ -2718,3 +2718,21 @@ review clocks move on at the lift, reminders wait, excerpt Allow / Deny, the tes
 - **Tests:** `tests/batch35-team-pause-suspension.test.ts` (new). Updated: `batch17-rate` (the developer's Rate waits; the tester rates), `batch19` (the banner
   line), `batch6` and `batch15-sides` (a team pause pauses that test's chat), `batch16-tester-states` (the developer's Pay after the page loaded is made with the pause
   lifted for that moment, since a team pause now refuses it).
+## §173 The invite ticks survive a reload in the same tab (owner, Nov 4)
+- The developer's Invite testers panel keeps its ticks in the tab's own storage (sessionStorage, `pt-invite-ticks:<account>:<test>`, `src/lib/inviteTicks.ts`), written as
+  the ticks change. A reload (or coming back to the test page in that tab) ticks them again. Another tab, another browser or a closed tab starts with nothing ticked.
+- On load only the people the panel can still invite right now come back ticked, by the lists' own rules (the server's `inviteRestore`, POST
+  `/api/tests/<id>/invite-restore`: not in this test, not already invited, hasn't rated it, hasn't applied or asked to rejoin, not suspended, under 10 tests, not
+  blocked either way, account not closed). Someone outside the current lists (ticked from an earlier search) stays selected and counts in "N selected", as before;
+  the panel knows their row, so Invite sends what was shown for them and the live re-check (§109) unticks them if that changes.
+- Everyone else is dropped, and one line under Invite names them with why, in the search rows' words (batch 30 §7):
+  "Not ticked any more: Ana Silva (already in this test), Dee Moss (can't join this test)." Other reasons: "already invited, waiting for her to join",
+  "applied: answer him in Needs you", "rated this test: can't join it again", "no longer in your list" (a block, never which side), "account closed". The line goes
+  at the next tick or Invite. The panel opens when anything came back or was dropped. A dropped person is never ticked again by a later reload.
+- A full, paused or closed test doesn't drop anyone: as before (batch 20 §10) Invite is disabled with its line and the ticks stay.
+- Invite going through empties the ticks and the kept copy at once; unticking everyone does too. Nothing is written until the restore has answered, so the panel's
+  empty start never wipes the kept ticks; offline at load, nothing comes back. Without storage the panel works as before.
+- The search box is not kept (unchanged). Every sign-in and sign-out clears the tab's kept ticks with its other copies (§8 item 4, SessionWatch's `forgetTyped`), so
+  after one the ticks start over.
+- **Tests:** `tests/batch35-invite-ticks-kept.test.ts` (keeping, emptying, sign-in / sign-out clearing, no storage; the restore merge and the line; the server's keep
+  and drop reasons for every case and the route; the panel clears on a successful Invite). `press-names` lists invite-restore as a read. No migration.

@@ -20,6 +20,8 @@ import { MissingNeedWords } from "@/components/MissingNeeds";
 import { PICK_CHIP } from "@/components/Choices";
 import { EVERYONE_MEETS, everyoneMeets, gapsOf, isMissingNeedLine, missingNeedLine, type GapItem } from "@/lib/gaps";
 import { LiveNotices } from "@/components/LiveNotices";
+import { inviteTicksKey, notTickedLine, readInviteTicks, restoredTicks, writeInviteTicks, type DroppedTick } from "@/lib/inviteTicks";
+import { tabStore } from "@/lib/keepTyped";
 
 type Tester = { details?: string; availability?: string; changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
 type RowUpdate = { id: string; name: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
@@ -41,7 +43,7 @@ type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; found
 /** The pause in typing before the name search asks the server (a redraw's search asks at once: batch 35 §46). */
 export const SEARCH_PAUSE = 300;
 
-export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelData; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean;
+export function InvitePanel(p: { testId: string; /** (§173) the signed-in account: the kept ticks are this account's */ userId: string; seenAt: string; initial: PanelData; sent: Sent[]; options: { devices: string[]; languages: string[] }; /** (Batch 8) false on the free plan: the "Subscribers" tag */ perks?: boolean;
   /** (Batch 20 section 10) Nobody can be invited right now (full, paused, joining closed): Invite is disabled with this line; ticks stay. */ blocked?: { line: string; full: boolean } | null;
   /** Open until, while it's ahead: at that moment Invite disables with this line. */ closes?: { at: string; line: string } }) {
   const router = useRouter();
@@ -195,6 +197,53 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   useEffect(() => {
     if (window.location.hash === "#invite") setOpen(true);
   }, []);
+  // (Owner, Nov 4, §173) The ticks survive a reload in this tab (lib/inviteTicks.ts): kept per account and test in the tab's sessionStorage as they change, gone when
+  // they empty (Invite went through). On load the kept ones come back only for people the panel can still invite right now (the server's lists' rules, invite-restore);
+  // a restored person outside the current lists stays selected like one ticked from an earlier search (their row's devices, languages and availability are known, so
+  // Invite sends what was shown and the live re-check watches them). Everyone else is dropped and named in one line under Invite. Nothing is written until the
+  // restore has answered (so the empty start never wipes the kept ticks); every sign-in and sign-out clears them (SessionWatch). The search box is never kept.
+  const ticksKey = inviteTicksKey(p.userId, p.testId);
+  const [ticksReady, setTicksReady] = useState(false);
+  const [dropped, setDropped] = useState<DroppedTick[]>([]);
+  const tickedNow = useRef(ticked);
+  tickedNow.current = ticked;
+  const restoring = useRef(false);
+  useEffect(() => {
+    setTicksReady(false);
+    const kept = readInviteTicks(tabStore(), ticksKey);
+    if (!kept.length) {
+      setTicksReady(true);
+      return;
+    }
+    let alive = true;
+    restoring.current = true;
+    void api<{ keep: Tester[]; drop: DroppedTick[] }>(`/api/tests/${p.testId}/invite-restore`, { testerIds: kept })
+      .then((r) => {
+        if (!alive || !restoring.current) return;
+        for (const t of r.keep) {
+          shown.current.set(t.id, { devices: t.devices, languages: t.languages, rating: t.ratingAvg ?? null });
+          names.current.set(t.id, t.name);
+          if (t.availability) eligibilityShown.current.set(t.id, t.availability);
+          if (t.details) detailShown.current.set(t.id, t.details);
+        }
+        const out = restoredTicks(kept, tickedNow.current, r);
+        setTicked(out.ticked);
+        setDropped(out.dropped);
+        if (out.ticked.length || out.dropped.length) setOpen(true);
+      })
+      .catch(() => null) // offline: nothing comes back ticked
+      .finally(() => {
+        if (!alive) return;
+        restoring.current = false;
+        setTicksReady(true);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [ticksKey, p.testId]);
+  useEffect(() => {
+    if (ticksReady) writeInviteTicks(tabStore(), ticksKey, ticked);
+  }, [ticked, ticksReady, ticksKey]);
 
   const displayedGapItems = confirm && ticked.every((id) => shown.current.has(id) && names.current.has(id)) ? ticked.flatMap((id) => {
     const gap = gapsOf(p.options, shown.current.get(id)!);
@@ -210,12 +259,16 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   }, [confirm, displayedGapCount, ticked.length]);
   async function invite(anyway: boolean) {
     setMsg("");
+    setDropped([]);
     pressShown.current = new Map(shown.current);
     const r = await press<{ message: string }>(`/api/tests/${p.testId}/invite`, { testerIds: ticked, anyway, seenGaps: confirm ? displayedGaps : undefined, ...(anyway && gapAt ? { confirmed: true, boxAt: gapAt } : {}), seenNeeds: p.options, seenTesters: Object.fromEntries([...ticked, ...p.sent.map((s) => s.testerId)].flatMap((id) => (shown.current.has(id) ? [[id, shown.current.get(id)!]] : []))) }, anyway ? "anyway" : "invite");
     if (r) {
       setConfirm(null);
       setMsg(r.message);
       setTicked([]);
+      // (§173) Sent: the kept ticks go now (a restore still on its way never brings them back).
+      restoring.current = false;
+      writeInviteTicks(tabStore(), ticksKey, []);
       // (Batch 35 §40, §41) The page redraws in place (the scroll stays at Invite; no jump to "#invite"); Invite stays greyed until it has, the line stays after.
       finish();
     }
@@ -283,7 +336,7 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
   // the right in grey "you rated 5.0/5 · 1 test with you" (or, greyed, why it can't be ticked). Ticks only by hand.
   const row = (t: Tester, key: string) => (
     <li key={key + t.id} data-invite-row={t.id} className={`flex flex-wrap items-center gap-2 ${t.grey ? "text-slate-500" : "text-slate-300"}`}>
-      <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
+      <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setDropped([]); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
       <span className="min-w-[8rem] flex-1 truncate" title={t.name}><NameLink text={t.name} href={`/app/testers/${t.id}`} newTab /></span>
       {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
       {/* (Batch 15 section 35) 3 items, then "+N more" which opens the rest in place. */}
@@ -389,6 +442,8 @@ export function InvitePanel(p: { testId: string; seenAt: string; initial: PanelD
         <button className="btn" disabled={busy || !!blocked} title={blocked?.line} onClick={() => (ticked.length ? invite(false) : setNone(true))}>Invite</button>
         <span className="text-xs text-slate-400">{ticked.length} selected</span>
       </div>
+      {/* (Owner, Nov 4, §173) Kept ticks that couldn't come back after a reload, each with why; it goes at the next tick or Invite. */}
+      {dropped.length > 0 && <p className="note" data-invite-dropped="">{notTickedLine(dropped)}</p>}
       {blocked && (
         <p className="note" data-invite-blocked={blocked.full ? "full" : "closed"}>
           {blocked.full ? <>This test is full. Add spots <a href={`/app/tests/${p.testId}/edit#spots`}>in Edit</a> to invite more people.</> : blocked.line}

@@ -10,6 +10,7 @@ import { sideFor } from "@/lib/sides";
 import { BELL_REFRESH, publishBell } from "./BellLink";
 import { flushKept } from "@/lib/useKept";
 import { dropAllTyped, dropStaleTyped, restoreTyped, saveTyped, tabStore, typedKey } from "@/lib/keepTyped";
+import { dropAllInviteTicks } from "@/lib/inviteTicks";
 
 // (Design doc 2; owner, Oct 27) Signed-in pages stay in step with the account: signing out in any tab signs out every tab and window of the browser
 // (they all go to the sign-in page); signing in (in any tab) brings the tabs waiting on the login page back to where they were; signing in as a
@@ -77,10 +78,14 @@ async function keepTypedBeforeSideSwitch(userId: string, side: string | null | u
   await flushKept().catch(() => null);
 }
 
-/** (Batch 35 §8) Signed out, deleted, or another account signed in: this tab's snapshots all go (a later sign-in starts from the server's drafts only). */
+/**
+ * (Batch 35 §8) Signed out, deleted, or another account signed in: this tab's snapshots all go (a later sign-in starts from the server's drafts only).
+ * (Owner, Nov 4, §173) The invite panel's kept ticks go with them: after a sign-in or sign-out the ticks start over.
+ */
 function forgetTyped() {
   try {
     dropAllTyped(tabStore());
+    dropAllInviteTicks(tabStore());
   } catch {
     // storage blocked
   }
