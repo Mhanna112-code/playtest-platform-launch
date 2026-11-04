@@ -69,12 +69,16 @@ export async function answerTermsFirst(contractId: string) {
   if (offer) throw new HttpError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, { offerId: offer.id, sessionId: contractId });
 }
 
-/** (Batch 27 section 1) Send's own stop-once, after answerTermsFirst: every other reason as before; new terms are no longer a stop-once for it (they block). */
-export async function testerSendGate(contractId: string, body: Record<string, unknown>) {
+/**
+ * (Batch 27 section 1) Send's own stop-once, after answerTermsFirst: every other reason as before; new terms are no longer a stop-once for it (they block).
+ * (Owner, Nov 4, §183) `piece`: the sent part this press adds to (its submission id; none for a first Send): a developer payment on it since the page loaded stops
+ * once whatever the tester's Alerts. `skipTerms` only drops the terms lines (an open offer already blocked the press), so the piece needs nothing more there.
+ */
+export async function testerSendGate(contractId: string, body: Record<string, unknown>, piece?: string) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
   await (await import("./workWindow")).finishWorkIfDue(c.testId);
   await (await import("./workWindow")).assertWorkOpen(db, c.testId);
-  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true });
+  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true, sendPiece: piece });
 }
 
 /**

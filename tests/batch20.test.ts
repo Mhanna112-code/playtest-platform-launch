@@ -35,6 +35,7 @@ import { userWhere } from "@/lib/server/adminLists";
 import { testSearchWhere } from "@/lib/server/findSearch";
 import { INVITE_FULL_LINE, inviteBlocked, inviteTestRefusal } from "@/lib/rules";
 import { payMoreLine } from "@/lib/server/testerGate";
+import { questionKey } from "@/lib/additions";
 import { json, makeUser, req } from "./helpers";
 import { act, addTo, atHours, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 import { pay, payMore } from "./b15";
@@ -560,7 +561,9 @@ describe("batch 20 section 12: a Pay more stops presses once", () => {
     expect(line).toBe("Nora Lane paid you $5.00 more for your written answers");
     const presses: [string, Record<string, unknown>][] = [
       ["cancel-call", { callId: call.id, reason: "Something came up at work." }],
-      ["written", { answers: ["c", "d"] }],
+      // (Owner, Nov 4, §183) A second Send of the same answers is refused at once (locked: a stop whose second press could only be refused is a single refusal);
+      // the press that adds to them, Add to this answer, stops for the Pay more on them.
+      ["written-add", { text: "One more thing.", question: questionKey("What did you like?") }],
       ["request-time", { rows: [{ startsAt: atHours(100), repeat: "once", count: 1 }], minutes: "30" }],
     ];
     for (const [action, body] of presses) {

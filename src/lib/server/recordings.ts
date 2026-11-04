@@ -159,7 +159,13 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep).
   await answerTermsFirst(contractId);
-  await testerSendGate(contractId, body);
+  // (Owner, Nov 4, §183) Adding to a sent recording stops once for a developer payment on it since the page loaded, whatever the tester's Alerts. A press that
+  // could only be refused (the team's $0 closure or an old rejection, nothing new to add) is refused at once, never after a stop (checked again under the lock).
+  const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
+  const shut = resendRefusal(sent?.review, "recording");
+  if (shut) throw new HttpError(409, "paid", shut);
+  if (sent && !(await db.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, { createdAt: { gt: new Date(Date.now() - UPLOADING_MS) } }] } }))) throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
+  await testerSendGate(contractId, body, sent?.id);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { updated, late, subId, afterPaid, n } = await db.$transaction(async (tx) => {

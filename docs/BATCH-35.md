@@ -3029,3 +3029,31 @@ count; then "the parts should have big drop down with their name then part and p
 - **Jumps.** A link to something inside a folded text opens it first (markJump's jumpTo), as it opens the details folds around it.
 - **Not changed.** The layout of Needs you and the test page (another branch is restructuring it): only the components that draw the text changed.
 - **Tests.** New `tests/batch35-parts-fold.test.ts`. Updated for the form's question fold: `batch20`, `batch26`.
+## §183 Adding to a part always stops once for the developer's payment on it (owner, Nov 4)
+- **The rule.** A tester's press that sends more to a part already sent (Add to this answer; a Send of the answers to changed questions, after a switch; adding
+  recordings, `recording-send` on a sent recording) stops once, whatever her Alerts, when the developer made a payment on THAT part since her page loaded: Pay,
+  Pay more, a team dispute decision (already forced by §171 A2), the developer's $0 answer to her update, a delayed payment going through (and its delayed line).
+  The owner's reason: "Your new payment can change whether they still want to add anything"; it mirrors the developer side's "anything on the same part always
+  stops" (§171 A1). The lines are `forced: true` in the box (no turn-off, §160b); the second press goes ahead. Payments on her other part keep following her
+  Alerts. A first Send (nothing sent on that part yet) has no piece: nothing changes for it. No other press's rules changed (an automatic call charge is n/a).
+- **How.** `testerSendGate(contractId, body, piece)` passes the part's submission id as `testerGate`'s new `sendPiece`, which uses §68's piece rule (lines whose
+  `piece` matches are kept with Alerts Off and marked forced). `skipTerms` only drops the terms lines (an open offer already blocks Send), so it needs nothing.
+  `sendWritten`, `addWritten` and `sendRecording` read the sent part before the gate and pass its id.
+- **The $0 answer to an update** had no tester line anywhere (only the bell and the part's grey line). `testerGate.zeroUpdateLines` reads it for these presses
+  only (`Submission.paidUpdateZeroAt` since the page loaded): "Nora Lane paid $0 more for what you added to your written answers" (the bell's words), kind
+  `paid`, forced. The tester's live box and her other presses are unchanged (an open question for the owner: should it also be a live-box line and follow
+  Alerts on her other presses, like a Pay more?).
+- **A single refusal, never a stop first** (owner's standing rule). Everything that could only refuse these presses is now checked before the gate as well as
+  under the lock: Add to this answer (`addRefusal`: not sent, the team's $0 closure or an old rejection, changed questions, the question gone, 10 additions, too
+  long); Send (`sendRefusal`: the closure or rejection, answers already sent for the same questions); a recording add (the closure or rejection, nothing new to
+  add; a recording still uploading keeps its own refusal under the lock).
+- **Terms** (edited in place, TERMS_VERSION stays 2): "Changes while you pay" adds "A payment by the developer on a part the tester is sending more to (Send,
+  Add to this answer, adding recordings) since the tester's page showed it also stops that press once, whatever the tester's Alerts."
+- **Code.** `testerGate.ts` (`sendPiece`, `zeroUpdateLines`), `terms.ts` (`testerSendGate`'s `piece`), `tests.ts` (`sendRefusal`, `addRefusal`, the pieces),
+  `recordings.ts` (the piece, the early refusals), `termsOfUse.ts`. No migration.
+- **Tests:** new `tests/tester-send-paid-stop-183.test.ts` (Pay more on the written answers after the page loaded: Add stops once, forced, Alerts Off, then goes;
+  the $0 answer to an update stops the next Add, forced; a payment on the recording doesn't stop an Add on the written answers with Alerts Off, and stops it
+  unforced with Alerts on; a locked Send and the team's $0 closure are single refusals; a recording add after a Pay more on the recording stops once, forced, then
+  goes; a payment on the written answers doesn't stop a recording add with Alerts Off; nothing new to add is refused at once; the Terms). Updated: `batch20`
+  (§12's list of tester presses had a second Send of the same answers, which used to stop and then be refused; it is now a single refusal, so the list uses Add
+  to this answer).

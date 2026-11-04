@@ -121,7 +121,8 @@ export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers; /** (§93) Stop/pause moments: always stop, in the same box as the shared lines. */ moments?: TestEventLike[];
-  /** (§159 rule 4) Charge / Let it go on this piece (submission or call id): a developer payment on it, or the team's decision on any of the tester's disputes. */ owedPiece?: string } = {}) {
+  /** (§159 rule 4) Charge / Let it go on this piece (submission or call id): a developer payment on it, or the team's decision on any of the tester's disputes. */ owedPiece?: string;
+  /** (Owner, Nov 4, §183) Send / Add to this answer / a recording's add on this sent part (its submission id): a developer payment on it always stops once. */ sendPiece?: string } = {}) {
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
   // these same stop-once rules (Block never stops; batch 35 §59: Leave stops like the rest).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
@@ -137,6 +138,8 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const fromBox = boxSeen && loadedAt && boxSeen > loadedAt ? boxSeen : loadedAt;
   const callsFrom = fromBox && fromBox < seenAt ? fromBox : seenAt;
   const raw0 = await testerChanges(testerId, contractId, testId, callsFrom, tabOf(body), termsFrom);
+  // (Owner, Nov 4, §183) The developer's $0 answer to what the tester added after a Pay is a payment on that part too (it has no line elsewhere: only this press reads it).
+  if (opts.sendPiece) raw0.push(...(await zeroUpdateLines(opts.sendPiece, callsFrom)));
   // Everything but the call changes still counts from `seenAt` (the later of the page's render and what the live box showed).
   const raw = raw0.filter((e) => e.kind === "terms" || (TESTER_CALL_KINDS.has(e.kind) ? e.createdAt > callsFrom : e.createdAt > seenAt));
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
@@ -148,18 +151,30 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // what they did themselves in another tab. (Owner, Oct 31, batch 35 §68) `piece` (the Dispute press): a payment on that piece since the page loaded (Pay, Pay more,
   // a dispute decision, a Charge) changes what's disputed, so it stops once even with Alerts Off, like new terms.
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
+  // (Owner, Nov 4, §183) Send, Add to this answer and a recording's add on a part already sent (`sendPiece`) stop once, whatever the tester's Alerts, for a
+  // developer payment on THAT part since the page loaded (Pay, Pay more, a team dispute decision's charge, the developer's $0 answer to an update, a delayed payment
+  // going through): "Your new payment can change whether they still want to add anything" (the developer side's "anything on the same part always stops", §171 A1).
+  // It reuses §68's piece rule. Payments on their other parts keep following their Alerts.
+  const piece = opts.piece ?? opts.sendPiece;
   // (Owner, Nov 3, batch 35 §159 rule 4) Charge / Let it go (`owedPiece`): a developer payment on THAT part (Pay, Pay more, an automatic call charge) and the team's
   // decision on ANY of this tester's disputes change what they're owed: one the page hasn't shown stops the press once even with Alerts Off. A payment on their
   // other parts follows their Alerts as before.
-  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e) || (!!opts.piece && e.piece === opts.piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece))) : r.changes;
+  const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e) || (!!piece && e.piece === piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece))) : r.changes;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
   const list = withRenamed((await unanswered(testerId, testId, [...terms, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt)])).filter((e) => !answersIt(e, opts.answers)), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, a key marked working, their own other-tab
   // actions, a stop or pause, and the piece rules (Dispute's payment on that piece; Charge / Let it go's payment on that part and any team decision) always stop.
   // (§171 A2) And the team's decision on her dispute, or the developer's side added to it, on every press.
-  const forced = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.kind) || e.kind === "stop" || disputeChange(e) || (!!opts.piece && e.piece === opts.piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece));
+  const forced = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.kind) || e.kind === "stop" || disputeChange(e) || (!!piece && e.piece === piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece));
   if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: terms.length > 0, alertsOff: !!off });
+}
+
+/** (Owner, Nov 4, §183) "Nora Lane paid $0 more for what you added to your written answers" (the bell's words), when she closed the tester's update at $0 since `since`. */
+async function zeroUpdateLines(submissionId: string, since: Date): Promise<TestEventLike[]> {
+  const s = await db.submission.findUnique({ where: { id: submissionId }, select: { id: true, kind: true, paidUpdateZeroAt: true, contract: { select: { test: { select: { developer: true } } } } } });
+  if (!s?.paidUpdateZeroAt || s.paidUpdateZeroAt <= since) return [];
+  return [{ kind: "paid", text: `${displayName(s.contract.test.developer)} paid $0 more for what you added to your ${s.kind === "recording" ? "recording" : "written answers"}`, createdAt: s.paidUpdateZeroAt, piece: s.id }];
 }
 
 /** "weekly calls from Thu, Nov 5, 3:00 PM" / "a call (pick one of 3 times)" / "a call for Thu, Nov 5, 3:00 PM". */
