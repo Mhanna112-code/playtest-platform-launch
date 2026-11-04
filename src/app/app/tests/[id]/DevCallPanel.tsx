@@ -17,9 +17,7 @@ import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
-import { alignedClash, describeRows, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
-import { CallRequestsPanel, type PanelReq } from "@/components/CallRequestsPanel";
-import { jumpTo } from "@/lib/markJump";
+import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallCheck } from "@/components/CallCheck";
 import { PressDone } from "@/components/PressDone";
 import type { CallEnd } from "@/lib/callWindow";
@@ -41,9 +39,9 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
 /**
  * The developer's live-call panel (owner layout): the rate line; one tick row per tester with their terms and
  * "N of 3 booked"; [Request a time] to everyone ticked; then per-tester blocks (ticked testers, or everyone with a call or
- * request when nothing is ticked): booked calls, daily/weekly sets as one line, waiting requests. Boxes under the button.
+ * request when nothing is ticked): booked calls, daily/weekly sets as one line ((§181) the waiting requests are the page's Call requests box). Boxes under the button.
  */
-export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", requests = [], elsewhere = [], leadMinutes, end }: { testId: string; seenAt: string; /** (Batch 29 section 20) the server's call lead, passed down */ leadMinutes: number; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; /** (Batch 16 section 33) every waiting request, both directions */ requests?: PanelReq[]; elsewhere?: OtherCall[];
+export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestReason = "", elsewhere = [], leadMinutes, end }: { testId: string; seenAt: string; /** (Batch 29 section 20) the server's call lead, passed down */ leadMinutes: number; testers: DevTester[]; canRequest: boolean; noRequestReason?: string; elsewhere?: OtherCall[];
   /** (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (the server's, in the reader's words): the time box's latest time and the calls drop-down. */
   end?: CallEnd }) {
   const router = useRouter();
@@ -110,9 +108,10 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
     if (t.requests.some((q) => q.mine && q.rows.some((x) => new Date(x.startsAt).getTime() === at))) return [`Already requested: ${t.name}, ${fmt(r.startsAt)}`];
     return [];
   }));
-  const shown = ticked.length ? testers.filter((t) => ticked.includes(t.contractId)) : testers.filter((t) => t.calls.length || t.sets.length || t.requests.length);
+  // (§181) The waiting requests are in the Call requests box: a tester shows here for their calls.
+  const shown = ticked.length ? testers.filter((t) => ticked.includes(t.contractId)) : testers.filter((t) => t.calls.length || t.sets.length);
 
-  const rowsNamed = (t: DevTester) => (t.calls.length > 0 || t.sets.length > 0 || t.requests.length > 0) && t.requests.every((r) => !r.mine);
+  const rowsNamed = (t: DevTester) => t.calls.length > 0 || t.sets.length > 0;
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
       <span className="mr-auto"><NameLink text={t.name} href={t.testerHref} /> · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
@@ -180,8 +179,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           <FormMistakes text={at === "request" && red ? error : ""} press="Request a time" />
         </div>
       )}
-      <CallRequestsPanel side="developer" seenAt={seenAt} requests={requests} path={() => `/api/tests/${testId}`} leadMinutes={leadMinutes} panelId={`call-requests-${testId}`} />
-      {shown.length === 0 && canRequest && <p className="note">No calls or requests yet.</p>}
+      {/* (Owner, Nov 4, §181) The waiting call requests (theirs and yours) are no longer here: they are the page's own Call requests box (CallRequestsBox), one
+          drop-down per person; nor is each tester's "Waiting" list below. */}
+      {shown.length === 0 && canRequest && <p className="note">No calls yet.</p>}
       {/* (Batch 15 section 33) The whole list of tester cards scrolls on its own once it's taller than about 2 screens; the tick list and the request form stay above it.
           (Owner, Nov 3, batch 35 §152) It is the draggable panel: about 2 screens at first, the grip drags it shorter (or back up to that). */}
       {shown.length > 0 && <ResizeBox id={`testers-calls-${testId}`} label="Testers' calls" defaultMax={LIST_PANEL.testersCalls} tallest={TESTERS_CALLS_TALLEST}>
@@ -190,7 +190,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           {/* (Batch 35 §79, owner Oct 31) No name heading when every row already starts with it ("fbbb · Daily · Sat 9:46 PM (4 left) · …", "fbbb requested …"). */}
           {!rowsNamed(t) && <h3><NameLink text={t.name} href={t.testerHref} /></h3>}
-          {!t.calls.length && !t.sets.length && !t.requests.length && <p className="note">No calls or requests</p>}
+          {!t.calls.length && !t.sets.length && <p className="note">No calls</p>}
           {t.warning && <p className="text-xs text-amber-200" data-calls-warning="">{t.warning}</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}
           {/* (Batch 15 sections 33 and 42) Calls ahead and in progress, soonest first, in a scroll box about 3 calls tall; calls that are over are in the tester's row.
@@ -214,17 +214,6 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             ))}
           </ul>
           </ResizeBox>}
-          {/* (Batch 16 section 33) Their waiting requests and yours, as they arrive; each opens its row in Call requests (Accept / Decline / Withdraw are there). */}
-          {t.requests.length > 0 && <p className="font-medium">Waiting</p>}
-          <ul className="space-y-1">
-            {t.requests.map((r) => (
-              <li key={r.id}>
-                <a href={`#req-${r.id}`} onClick={(e) => { e.preventDefault(); jumpTo(`req-${r.id}`); }}>
-                  {r.mine ? "You requested" : <><Cut text={t.name} /> requested</>} {describeRows(r.rows)}{r.minutes ? ` · ${r.minutes} min` : ""} · {r.rate}
-                </a>
-              </li>
-            ))}
-          </ul>
         </div>
       ))}
       </div>

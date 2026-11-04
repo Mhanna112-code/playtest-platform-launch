@@ -201,6 +201,6 @@ describe("one list per part, with Added", () => {
     expect(await testV(dev.user.id, testId)).not.toBe(before);
     // The redraw keeps the panel's own height state and the folds' DOM (no key change, no remount).
     expect(src("components/Panel.tsx")).toContain("const [height, setHeight] = useState<number | null>(null);");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('<Fold id={`needs-part-${x.id}`}');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('data={{ "data-fold": `needs-part-${x.id}` }}'); // (§181) the part's drop-down (a HoldFold)
   });
 });

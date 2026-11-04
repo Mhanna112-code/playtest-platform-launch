@@ -265,7 +265,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // The test page: under the piece (the tester's written answers), the box the link marks. (Owner, Nov 4, §175) Listed under the tester's name, the line names the
     // piece by her pronoun ("she").
     const rows = await bankWaitingOnTest(dev.user.id, testId);
-    expect(rows).toEqual([{ id: p.id, cents: 1000, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for her written answers on “Harbor Run”, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("her written answers on “Harbor Run”") }]);
+    expect(rows).toEqual([{ id: p.id, at: expect.any(Date), cents: 1000, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for her written answers, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("for her written answers, made") }]); // (Owner, Nov 4, §180) on the test's own page: no test name
     const box = renderToStaticMarkup(createElement(BankWaiting, { paymentId: p.id, line: rows[0].line }));
     expect(box).toContain(`id="bank-${p.id}"`);
     expect(box).toContain("data-[marked]:ring-2");
@@ -313,7 +313,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     expect((await confirmItems(dev.user.id)).find((i) => i.id === one.id)).toMatchObject({ href: null, text: expect.stringMatching(/^What you owe \$8\.00 \(Ana Silva's work on “Harbor Run” \$8\.00\) · confirm by /) });
     expect((await (await import("@/lib/server/holds")).owedLines(dev.user.id)).find((l) => l.id === row.id)).toMatchObject({ retry: false, waiting: true, checkId: one.id });
     expect(sessionId).toBeTruthy();
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('data-restricted-bank=""');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('"data-restricted-bank": ""'); // (§181) on each person's charges in Needs you
     // A renewal belongs to no test: Payments keeps its own "Confirm with your bank" (the same inline check), and the bell keeps "Confirm it in Payments".
     const sub = await db.payment.create({ data: { kind: "subscription", developerId: dev.user.id, testerId: dev.user.id, amountCents: 700, feeCents: 700, testerCents: 0, status: "needs_confirmation" } });
     await (await import("@/lib/server/confirm")).awayAction(sub.id, { status: "requires_action", stripePaymentIntentId: "pi_" + randomUUID(), clientSecret: "" });

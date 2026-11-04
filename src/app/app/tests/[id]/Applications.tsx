@@ -13,7 +13,7 @@ import type { Needs } from "@/lib/testerState";
 
 type App = { id: string; userId: string; name: string; note: string; tag: string; detail: string; changedAt: string; seen: { devices: string[]; languages: string[]; rating: number | null }; kind?: string; line?: string };
 
-export function Applications({ testId, seenAt, apps, needs }: { needs: Needs; testId: string; seenAt: string; apps: App[] }) {
+export function Applications({ testId, seenAt, apps, needs, embedded = false }: { needs: Needs; testId: string; seenAt: string; apps: App[]; /** (Owner, Nov 4, §181) inside its person's Needs you drop-down: the list only (the drop-down names the person; a sub-heading says what it is) */ embedded?: boolean }) {
   const router = useRouter();
   const before = useRef(new Map<string, Needs>());
   const { press, changes, setChanges, error, busy, at, doneLine, finish } = usePress(seenAt, () => router.refresh());
@@ -25,10 +25,8 @@ export function Applications({ testId, seenAt, apps, needs }: { needs: Needs; te
     // (Batch 35 §40, §41) The page redraws in place; until it has, Accept / Decline stay greyed with the result line under them.
     if (r) finish(action === "accept" ? `Accepted ${a.name}.` : `Declined ${a.name}.`);
   };
-  return (
-    <section className="panel" aria-label="Applications">
-      <h2>{apps.every((a) => a.kind === "rejoin") ? "Asks to rejoin" : apps.some((a) => a.kind === "rejoin") ? "Applications and asks to rejoin" : "Applications"}</h2>
-      <ul className="space-y-3 text-sm">
+  const list = (
+      <ul className="space-y-3 text-sm" aria-label={embedded ? "Applications" : undefined}>
         {apps.map((a) => (
           <li key={a.id} id={`item-app-${a.id}`} className={`space-y-1 ${MARKABLE}`}>
             {a.line ? <p><b><NameLink text={a.name} href={`/app/testers/${a.userId}`} /></b> {a.line.replace(a.name, "").trim()}</p> : <p><b><NameLink text={a.name} href={`/app/testers/${a.userId}`} /></b></p>}
@@ -49,6 +47,12 @@ export function Applications({ testId, seenAt, apps, needs }: { needs: Needs; te
           </li>
         ))}
       </ul>
+  );
+  if (embedded) return list;
+  return (
+    <section className="panel" aria-label="Applications">
+      <h2>{apps.every((a) => a.kind === "rejoin") ? "Asks to rejoin" : apps.some((a) => a.kind === "rejoin") ? "Applications and asks to rejoin" : "Applications"}</h2>
+      {list}
     </section>
   );
 }

@@ -79,14 +79,16 @@ describe("two folds under each part", () => {
 
   it("(owner, Nov 3) each sent part is its own drop-down: inside it the body panel, then its Pay / Pay more box", () => {
     const page = src("app/app/tests/[id]/page.tsx");
+    // (Owner, Nov 4, §181) Needs you's parts are HoldFolds (closed at first, in the person's drop-down), each with its Pay / Pay more as one more drop-down.
     for (const [part, box] of [["needs-part-${x.id}", "needs-${x.s!.id}"], ["update-part-${x.id}", "update-${x.id}"], ["row-part-${r.sub.id}", "row-${r.sub.id}"]]) {
-      const f = page.indexOf(`<Fold id={\`${part}\``), r = page.indexOf(`<ResizeBox id={\`${box}\`}`);
+      const f = Math.max(page.indexOf(`<Fold id={\`${part}\``), page.indexOf(`"data-fold": \`${part}\``)), r = page.indexOf(`<ResizeBox id={\`${box}\`}`);
       expect(f, part).toBeGreaterThan(0);
       expect(r, part).toBeGreaterThan(f); // the panel inside the part's fold
       expect(page.indexOf("<PayBox", r), part).toBeGreaterThan(r); // the Pay box after it
     }
-    // No separate folds for the body or the Pay box any more.
+    // No separate folds for the body any more; (§181) in Needs you the Pay / Pay more box is its own drop-down again (owner: "pay/pay more as own dropdowns").
     for (const old of ["needs-body-", "needs-pay-", "update-body-", "update-pay-", "row-body-"]) expect(page).not.toContain(`<Fold id={\`${old}`);
+    for (const pay of ["needs-pay-${x.id}", "update-pay-${x.id}"]) expect(page.indexOf("<PayBox", page.indexOf(`"data-fold": \`${pay}\``)), pay).toBeGreaterThan(0);
     expect(page).toContain('<Fold id={`row-call-${x.id}`}'); // each call under the Calls fold is its own drop-down too, its Pay more inside
     expect(page).not.toContain('<Fold id={`row-more-');
     expect(page).not.toContain("<AnswersBox>");

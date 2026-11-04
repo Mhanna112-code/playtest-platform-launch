@@ -10,6 +10,7 @@ import { FIELD, newPressId } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { needsBank } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
+import { useHoldOpen } from "@/components/HoldFold";
 import { payMoreWaits } from "@/lib/bankNotice";
 import { MIN_CHARGE_CENTS, NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, REASON_WHEN_UNDER_LISTING, STRIPE_MAX_LINE, ZERO_PAY_REASON, overCallsLine, overMaxLine, payUnderLine } from "@/lib/rules";
 import { amountFromRate, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
@@ -63,6 +64,8 @@ export function PayBox(p: {
   const [bankErr, setBankErr] = useState("");
   // (Batch 17 §11) The bank's check opens inline, under the button; the button stays disabled while it is open.
   const bank = useBankCheck();
+  // (Owner, Nov 4, §181) Its own bank check (or the line under it) keeps its part's and its person's drop-downs open.
+  useHoldOpen(bank.open || !!bankErr);
   // (Owner bug, Nov 4, §174) This box's own bank check (its payment): a redraw saying that very payment waits for the bank doesn't grey the box above its own check.
   const [ownCheck, setOwnCheck] = useState("");
   const bankWaits = payMoreWaits(p.bankWaits, p.bankWaitsId, { open: bank.open, checkId: ownCheck });

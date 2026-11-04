@@ -78,16 +78,16 @@ describe("live panels, the one Call requests panel, and the server's re-check (s
     expect(panel).toContain('<h3 className="text-sm font-semibold text-white">Call requests</h3>');
     expect(panel).toContain("id={`req-${r.id}`}");
     expect(panel).toContain("asked by {r.mine ? \"you\" : r.asker}");
-    expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain('<CallRequestsPanel side="developer"');
+    expect(src("app/app/tests/[id]/CallRequestsBox.tsx")).toContain('<CallRequestsPanel byPerson side="developer"'); // (§181) the test page's own Call requests box
     expect(src("components/CallRequests.tsx")).toContain("<CallRequestsPanel side={p.side}");
     expect(src("components/RequestRows.tsx")).toContain('data-clash={x.tone}');
     expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain("notes={clash.notes}");
     expect(src("components/CallRequests.tsx")).toContain("notes={clash.notes}");
-    // Needs you: no Accept / Decline of its own; the row opens the panel at the request.
+    // Needs you: no Accept / Decline of its own; (§181) one line per person jumps to their drop-down in the Call requests box.
     const needs = src("app/app/tests/[id]/NeedsRequests.tsx");
     expect(needs).not.toMatch(/acceptChoices|>Decline</);
-    expect(needs).toContain("Answer in Live session →");
-    expect(needs).toContain("jumpTo(`req-${id}`)");
+    expect(needs).toContain("call request{count === 1 ? \"\" : \"s\"} ↓");
+    expect(needs).toContain("jumpTo(id)");
     const dash = src("app/app/page.tsx");
     expect(dash).toContain("href: `/app/tests/${x.t.id}#req-${r.id}`");
     expect(dash).toContain("href: `/app/sessions/${c.id}#req-${r.id}`");

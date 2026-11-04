@@ -33,11 +33,11 @@ describe("§152: every call list in the draggable panel, with a stable id", () =
   it("call requests, booked calls (both sides, the paused view), the testers' calls, the dashboards' calls, past calls", () => {
     const checks: [string, string][] = [
       ["components/CallRequestsPanel.tsx", '<ResizeBox id={panelId} label="Call requests" defaultMax={LIST_PANEL.requests}>'],
-      ["app/app/tests/[id]/DevCallPanel.tsx", "panelId={`call-requests-${testId}`}"],
+      ["app/app/tests/[id]/CallRequestsBox.tsx", "panelId={`call-requests-${testId}`}"], // (§181) the box of its own
       ["components/CallRequests.tsx", 'panelId={`call-requests-${p.path.split("/").filter(Boolean).pop() ?? ""}`}'],
       ["app/app/tests/[id]/DevCallPanel.tsx", "<ResizeBox id={`booked-${t.contractId}`} label={`Booked calls with ${t.name}`} defaultMax={LIST_PANEL.booked}>"],
       ["app/app/tests/[id]/DevCallPanel.tsx", "<ResizeBox id={`testers-calls-${testId}`} label=\"Testers' calls\" defaultMax={LIST_PANEL.testersCalls} tallest={TESTERS_CALLS_TALLEST}>"],
-      ["app/app/tests/[id]/RestrictedCalls.tsx", "<ResizeBox id={`booked-restricted-${testId}`} label=\"Booked calls\" defaultMax={LIST_PANEL.restricted}>"],
+      ["app/app/tests/[id]/RestrictedCalls.tsx", "<ResizeBox id={person ? `booked-restricted-${testId}-${person}` : `booked-restricted-${testId}`} label=\"Booked calls\" defaultMax={LIST_PANEL.restricted}>"],
       ["app/app/CallsBox.tsx", '<ResizeBox id="dash-calls" label="Calls" defaultMax={LIST_PANEL.dashCalls}>'],
       ["app/app/page.tsx", '<ResizeBox id="dash-upcoming-calls" label="Upcoming calls" defaultMax={LIST_PANEL.dashCalls}>'],
       ["app/app/sessions/[id]/TesterCallPanel.tsx", "panel={`booked-${p.sessionId}`} panelMax={LIST_PANEL.testerBooked}"],

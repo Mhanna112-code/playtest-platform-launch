@@ -45,7 +45,8 @@ describe("the sentences that name someone link them", () => {
     expect(dash).toContain("${CARD_LINK}`}>{r.cta} <ArrowRight");
     expect(dash).toContain('<div className="relative flex flex-wrap items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-needs-row="">');
     expect(dash).toContain('<NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} />');
-    expect(src("app/app/tests/[id]/NeedsRequests.tsx")).toContain("<NameLink text={r.name} href={r.testerHref} />");
+    // (Owner, Nov 4, §181) Needs you's call requests are one line in the person's drop-down (the name is the drop-down's); the box's person drop-down names them.
+    expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink text={p.name} href={p.href} />");
   });
 
   it("tester rows, the tester's invitations and the session page's lines", () => {
