@@ -272,8 +272,8 @@ describe("§223 widened: one look for questions and answers everywhere they are 
     // A phone (375 px): the tester's name sits above the answer there, beside it from sm up (no fixed 8rem column squeezing the box).
     expect(bq).toContain('className="flex flex-col gap-1.5 py-2.5 text-sm sm:flex-row sm:gap-3"');
     const top = src("app/app/sessions/[id]/TesterTop.tsx");
-    expect(top).toContain("<QuestionText id={`offer-${offer.id}-${i}-${key}`}");
-    expect(top).toContain("<AnswerText id={`offer-${offer.id}-${i}-${key}`}");
+    expect(top).toContain("<QuestionText id={`offer-${offer.id}-${key}-before`}"); // (§242) only changed questions, each a drop-down
+    expect(top).toContain("<AnswerText id={`offer-${offer.id}-${key}-answer`}");
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
   });
 });

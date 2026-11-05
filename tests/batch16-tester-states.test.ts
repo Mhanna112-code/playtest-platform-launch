@@ -187,6 +187,6 @@ describe("a suspended tester's limited view of tests they were removed from (sec
     expect(page).toContain("off={meOff && !limited}");
     // Hidden there: chat, the key box (not working), Leave (not working), excerpt requests (excerptPicks need an active tester side).
     expect(page).toContain("!excerptPending && !u.testerSuspendedAt ? await excerptChoices(written)");
-    expect(src("app/app/page.tsx")).toContain("href={`/app/sessions/${c.id}`} className=\"text-white\" data-removed-open={c.id}");
+    expect(src("app/app/page.tsx")).toContain("<Link href={`/app/sessions/${c.id}`} data-removed-open={c.id}><TestName text={c.title} /></Link>"); // (§245) the green test name
   });
 });

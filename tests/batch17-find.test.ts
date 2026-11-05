@@ -168,7 +168,7 @@ describe("Find tests: the search box, for testers and admins (section 8)", () =>
 
   it("admins: every test with its state (Open, Full, Joining closed, Paused, Stopped, Closed, Draft, Invite only), tick boxes, search by email too", async () => {
     const tag = uniq();
-    const mk = async (state: string, over: Record<string, unknown> = {}) => (await setup({ title: `${state} ${tag}`, ...over })).testId;
+    const mk = async (state: string, over: Record<string, unknown> = {}) => (await setup({ title: `${tag} ${state}`.slice(0, 20), ...over }) /* (§245) titles at most 20: the tag first, so the search still finds it */).testId;
     const open = await mk("open");
     const full = await mk("full", { spots: 1 });
     await joined(full);
