@@ -243,7 +243,7 @@ async function ownOpen() {
   return { ...s, ...j, sub, st, paymentId: r.body.paymentId as string };
 }
 const box = (over: Record<string, unknown>) => renderToStaticMarkup(createElement(PayBox, {
-  kind: "submission", id: "sub1", name: "Ana Silva", listingCents: 1000, listingText: "$10.00", paidSoFarCents: 1000, seenAt: seen(), more: { testId: "t1", contractId: "c1" }, ...over,
+  kind: "submission", id: "sub1", name: "Ana Silva", listingCents: 1000, listingText: "$10.00", seenAt: seen(), more: { testId: "t1", contractId: "c1" }, ...over,
 }));
 
 describe("§188 B: the Pay more box waiting for the developer's own check", () => {

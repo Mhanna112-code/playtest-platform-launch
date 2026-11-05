@@ -3639,3 +3639,39 @@ New `tests/batch35-bank-notice-scroll-194.test.ts`: 3 and 4 lines (a plain list,
 
 ### Evidence
 `playtest-lite-evidence/bank-notice-scroll-nov4/` (captions.json): desktop 1280×900 and phone 375×812 with 12 lines inside Needs you's panel; a reader scrolled up stays put when a 13th line arrives; a reader at the bottom follows the 14th.
+## §195 What you've paid a tester, once, by their name; not in each Pay box (owner, Nov 4)
+
+Owner: each Pay box's "You've paid <tester> $15.00 so far on this test." is confusing inside one part's box. Show the total paid to that tester on this test
+once, next to their name at the top, on the right of the name row, wherever their name heads a group. Pay more's own line of what the part was paid stays.
+
+- **Before.** Every first Pay box (not Pay more) read "Listing: … · You've paid Ana Silva $15.00 so far on this test." (`paidSoFar`: every charged / not-set-up
+  payment on the contract, a chargeback repayment and its $15 fee included, a reversal not taken off). The tester's row in the Testers panel had "Paid in all: $X
+  · Calls: …" under the row (the same sum). Needs you's person summary (§181) was the green name and "· N things" only.
+- **After.** The Pay box reads "Listing: …" only. "paid $15.00 so far" (grey, never cut, right-aligned) sits on the right of:
+  1. **Needs you's person summary** (both views): "Maximiliana A… · 3 things            paid $15.00 so far". An applicant who hasn't joined has no figure.
+  2. **The tester's row in the Testers panel**: on the name row (the fold's heading), after the status badges. The "Paid in all: $X" part of the line under the
+     row is gone (the figure is shown once); its "Calls: 1 booked ahead, 1 done" stays, on its own ("Calls: …", only when there are calls).
+  3. **The Call requests boxes' person drop-downs** (§185's "Requests to you" / "Your requests"): "· 2 requests   paid $15.00 so far" (trivial: the page passes it
+     with each request).
+  On a phone (below the `sm` width) the figure reads "paid $15.00" (no "so far"), so the name keeps room; the name is cut with "…" first; "· N things" and the
+  figure are never cut. The Testers row's heading wraps on a phone as before (name, badges, then the figure).
+- **What it counts** (`paymentRows.paidForWork` / `workPaidCents`): what the developer paid for THAT tester's work on this test: Pay (the tester's Charge and a
+  call's automatic charge are recorded as Pay: kinds "review" / "call"), Pay more ("extra") and the team's decision charges ("dispute"), each charged or recorded
+  with payments not set up. Never: a repayment of a reversed payment or its chargeback fee, a raise charge (kind "chargeback"), subscriptions, Pay what you owe's
+  own record, a charge still waiting (for the bank, a hold, a retry). A payment the bank reversed (not won) counts less what was reversed and not paid back
+  (`reversedOf`, §133; paid back = its repayment and raises that went through, less refunds of them, less the one fee: `repaidPrincipal`, holds.repaidFor's rule;
+  §192's lowered / raised amounts follow). Not attributed: a bank reversal of Pay what you owe's ONE payment (it is on that payment, not on each tester's item).
+- **Not changed.** `paidSoFar` (payments.ts) keeps its meaning where it is still used: the Pay API's response (`paidSoFarCents`) and the stop-once refusal's
+  payload (payments.ts `review`, confirm.ts's away charge); no screen shows either. Pay more's paid line, every press, the counts.
+- **Live redraws.** The figure is drawn with the page, so every live redraw (a Pay, a Charge, a bank confirmation, a chargeback) shows the new total.
+- **Hooks.** New `data-paid-so-far="<cents>"` on the figure (`src/components/PaidSoFar.tsx`) in all three places; `data-tester-calls` on the calls line under a
+  tester's row. Every other hook unchanged.
+- **Code.** `src/lib/server/paymentRows.ts` (`WORK_KINDS`, `workPaidCents`, `repaidPrincipal`, `paidForWork`), `src/components/PaidSoFar.tsx` (new),
+  `src/app/app/tests/[id]/page.tsx` (`paidWork`; `NeedsWho.paidCents`; the row heading; the calls line; `callRequests[].paidCents`), `PayBox.tsx` (sentence and
+  `paidSoFarCents` prop removed), `src/components/CallRequestsPanel.tsx` (`PanelReq.paidCents`). No migration.
+- **Tests.** New `tests/paid-total-195.test.ts`: the sum (Pay, Pay more, decision charge, the tester's Charge, an automatic call charge counted; waiting, failed and
+  deferred charges, a repayment and its fee not; a part-reversal not repaid taken off; a repaid one and a won one whole; `paidSoFar` unchanged); a lowered amount
+  refunded / a raise charged or waiting after a repayment; the page: the long-named tester's Needs you summary, Testers row heading and Call requests person each
+  show `data-paid-so-far="1500"` "paid $15.00 so far" (" so far" hidden below `sm`; a $6 charge waiting for the bank not counted), no "Paid in all", the Pay box with its listing and no "so far
+  on this test". Updated: `batch35-restricted-needs-you` (summaries end with "paid $0.00 so far"), `batch35-tester-folds` (the summary's calls line, the heading's
+  figure), `layout-fixes-187` / `long-text-layout` (the row is `flex-1`), `anything-else-cancel-188` / `ui-fixes-189` (no `paidSoFarCents` prop).

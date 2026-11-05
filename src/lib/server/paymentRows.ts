@@ -40,6 +40,39 @@ export const paidLinesTotal = (listed: Counted[], ones: Counted[] = [], refunds:
   listed.reduce((a, p) => a + p.amountCents, 0) - refunds.reduce((a, r) => a + r.amountCents, 0)
   - [...listed, ...ones].filter((p) => p.chargebackAt && p.chargeback !== "won" && p.status !== "refunded").reduce((a, p) => a + reversedOf(p), 0);
 
+// (Owner, Nov 4, §195) What the developer has paid FOR ONE TESTER'S WORK on a test, shown once by the tester's name (Needs you's person, the Testers row, the Call
+// requests box's person): Pay (the tester's Charge and a call's automatic charge are recorded as one: kinds "review" / "call"), Pay more ("extra") and the team's
+// decision charges ("dispute"), each that went through (charged, or recorded with payments not set up). Never a repayment of a reversed payment ("chargeback": its
+// fee is the platform's), a subscription or Pay what you owe's own record; a charge still waiting (for the bank, a hold, a retry) isn't paid yet. A payment the
+// bank reversed (not won) counts less what was reversed and not paid back (the same reversal rule as paidOutTotal: reversedOf, §133).
+/** (§195) The kinds of payment that pay for a tester's work. */
+export const WORK_KINDS = ["review", "call", "extra", "dispute"];
+const WENT_THROUGH = ["charged", "not_set_up"];
+type WorkRow = { id: string; kind: string; status: string; amountCents: number; reversedCents?: number | null; chargebackAt: Date | null; chargeback: string };
+/** (§195) The sum; `repaidOf(id)`: what of that payment's reversal the developer paid back (without the chargeback fee). */
+export const workPaidCents = (rows: WorkRow[], repaidOf: (id: string) => number = () => 0) =>
+  rows.filter((p) => WORK_KINDS.includes(p.kind) && WENT_THROUGH.includes(p.status))
+    .reduce((a, p) => a + p.amountCents - (p.chargebackAt && p.chargeback !== "won" ? Math.max(0, reversedOf(p) - repaidOf(p.id)) : 0), 0);
+/**
+ * (§195) What of a reversal was paid back: its repayment and each raise charged after it that went through, less what was refunded of them (holds.repaidFor's
+ * rule), less the ONE chargeback fee the repayment carried.
+ */
+export const repaidPrincipal = (sources: { id: string; kind: string; note?: string | null; amountCents: number }[], refunds: { paymentId: string; amountCents: number }[]) =>
+  Math.max(0, sources.reduce((a, x) => a + x.amountCents - refunds.filter((r) => r.paymentId === x.id).reduce((b, r) => b + r.amountCents, 0), 0)
+    - (sources.some((x) => !raiseOf(x)) ? CHARGEBACK_FEE_CENTS : 0));
+/** (§195) Each contract's work paid (`workPaidCents`), read at once for a page: contract id → cents (0 when nothing went through). */
+export async function paidForWork(contractIds: string[]): Promise<Map<string, number>> {
+  const out = new Map(contractIds.map((id): [string, number] => [id, 0]));
+  if (!contractIds.length) return out;
+  const work = await db.payment.findMany({ where: { contractId: { in: contractIds }, kind: { in: WORK_KINDS }, status: { in: WENT_THROUGH } }, select: { id: true, kind: true, status: true, amountCents: true, reversedCents: true, chargebackAt: true, chargeback: true, contractId: true } });
+  const reversedIds = work.filter((p) => p.chargebackAt && p.chargeback !== "won").map((p) => p.id);
+  const sources = reversedIds.length ? await db.payment.findMany({ where: { repaysId: { in: reversedIds }, kind: "chargeback", status: { in: WENT_THROUGH } }, select: { id: true, kind: true, note: true, amountCents: true, repaysId: true } }) : [];
+  const refunds = sources.length ? await db.paymentRefund.findMany({ where: { paymentId: { in: sources.map((x) => x.id) }, status: { not: "failed" } }, select: { paymentId: true, amountCents: true } }) : [];
+  const repaidOf = (id: string) => repaidPrincipal(sources.filter((x) => x.repaysId === id), refunds);
+  for (const id of contractIds) out.set(id, workPaidCents(work.filter((p) => p.contractId === id), repaidOf));
+  return out;
+}
+
 /** The plain label of a paid row with no test to name ("What you've paid" shows it, and so does its Stripe description). */
 export const plainLabel = (kind: string) =>
   kind === "call" ? "Live call" : kind === "dispute" ? "Dispute decision" : kind === "extra" ? "Extra pay" : kind === "chargeback" ? "A reversed payment, paid again" : kind === "subscription" ? "Subscription" : "Sent work";

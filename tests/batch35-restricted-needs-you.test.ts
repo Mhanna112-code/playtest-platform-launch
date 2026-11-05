@@ -196,14 +196,14 @@ describe("§175 Confirm with your bank grouped by tester", () => {
     // The lines name the piece by the pronoun, not the name the heading carries.
     expect(html).toContain("Your bank wants you to confirm a $7.00 payment for her written answers, made while you were away.");
     expect(html).toContain("Your bank wants you to confirm a $6.00 payment for their written answers, made while you were away.");
-    // (§180, §181) Each drop-down is closed at first; the summary is only the green name, then "· N things" (Alex: two charges, the dispute, the excerpt request;
+    // (§180, §181) Each drop-down is closed at first; the summary is the green name, then "· N things", then (§195) "paid $0.00 so far" (Alex: two charges, the dispute, the excerpt request;
     // Bea: her written answers to pay and her charge, or only the charge while held).
     const alexTag = html.slice(alexPerson - 200, alexPerson + 100);
     expect(alexTag).toMatch(/<details class="[^"]*" data-hold-fold="" data-needs-person="/);
     expect(alexTag).not.toMatch(/<details[^>]*\sopen=""[^>]*data-needs-person=/);
     expect(html.match(/data-needs-person-toggle=""/g)).toHaveLength(2);
-    expect(html.slice(alexPerson, alexGroup)).toMatch(/<summary[^>]*data-needs-person-toggle=""[^>]*>.*data-name-link="person".*· 4 things<\/span><\/span><\/summary>/);
-    expect(html.slice(bePerson, beaGroup)).toContain(state === "held" ? "· 1 thing</span></span></summary>" : "· 2 things</span></span></summary>");
+    expect(html.slice(alexPerson, alexGroup)).toMatch(/<summary[^>]*data-needs-person-toggle=""[^>]*>.*data-name-link="person".*· 4 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
+    expect(html.slice(bePerson, beaGroup)).toMatch(new RegExp(`· ${state === "held" ? "1 thing" : "2 things"}</span><span[^>]*data-paid-so-far="0">paid \\$0\\.00<span class="hidden sm:inline"> so far</span></span></span></summary>`));
     // A sub-heading over each kind only when the person has more than one kind.
     expect(html.slice(alexPerson, bePerson)).toContain('data-needs-kind="bank">Confirm with your bank</h3>');
     expect(html.slice(bePerson).includes('data-needs-kind="bank"')).toBe(state === "active");
@@ -237,10 +237,11 @@ describe("§181 Needs you: one drop-down per person", () => {
     expect([...html.matchAll(/data-needs-person="([^"]+)"/g)].map((m) => m[1])).toEqual([f.sessionId, b.sessionId, app.id]);
     const at = (k: string) => html.indexOf(`data-needs-person="${k}"`);
     const alex = html.slice(at(f.sessionId), at(b.sessionId)), bea = html.slice(at(b.sessionId), at(app.id)), cara1 = html.slice(at(app.id));
-    // The count on Needs you is still every thing; each summary is the green name and "· N things" only.
+    // The count on Needs you is still every thing; each summary is the green name and "· N things", then (Owner, Nov 4, §195) a tester's paid so far on the right
+    // (none for an applicant who hasn't joined).
     expect(html).toMatch(/<h2 class="inline">Needs you<\/h2> <span class="text-sm font-normal text-slate-400">6<\/span>/);
-    expect(alex).toMatch(/data-name-link="person".*· 3 things<\/span><\/span><\/summary>/);
-    expect(bea).toMatch(/data-name-link="person".*· 2 things<\/span><\/span><\/summary>/);
+    expect(alex).toMatch(/data-name-link="person".*· 3 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
+    expect(bea).toMatch(/data-name-link="person".*· 2 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
     expect(cara1).toMatch(/data-name-link="person".*· 1 thing<\/span><\/span><\/summary>/);
     expect(html).not.toContain("parts to pay");
     expect(html).not.toContain("charges waiting");
@@ -274,7 +275,7 @@ describe("§181 Needs you: one drop-down per person", () => {
     expect(holds.find((x) => x.includes("data-call-requests-box"))).toMatch(/\sopen=""/);
     // The box: one drop-down per person ("· 1 request"), her request inside it with Accept / Decline; no Needs you row with buttons.
     const inBox = html.slice(html.indexOf(`id="call-requests-person-${b.sessionId}"`));
-    expect(inBox).toMatch(/data-name-link="person".*· 1 request<\/span><\/span><\/summary>/);
+    expect(inBox).toMatch(/data-name-link="person".*· 1 request<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
     expect(inBox.indexOf(`id="req-${ask.id}"`)).toBeGreaterThan(0);
     expect(inBox).toContain("Decline</button>");
     expect(html).not.toContain(`id="needs-req-${ask.id}"`);
