@@ -50,6 +50,9 @@ export function PayBox(p: {
   /** (Owner, Nov 4, §188 B) What the waiting payment is: the developer's own press ("own": Cancel this check next to the line), a charge made while away or a
    * team decision's ("away": Confirm with your bank, it can't be cancelled), or one on its way ("pending": the line only). `cents`: its amount (the over-$200 tick). */
   bankWaitsKind?: { kind: "own" | "away" | "pending"; cents: number };
+  /** (Owner, Nov 4, §199) A Pay more box in the Testers list: a charge made while away is confirmed only in Needs you, so the greyed box shows its line only (no
+   * working Confirm with your bank here); the part's "Confirm with your bank in Needs you ↑" link right under the box goes up to it. */
+  awayInNeeds?: boolean;
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
@@ -169,7 +172,7 @@ export function PayBox(p: {
     <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-pay-greyed={bankWaits ? "" : undefined} data-mistakes-root="">
       {/* (Owner, Nov 4, §188 B) The developer's own press open elsewhere: Cancel this check right next to the line. A charge made while away or a team
           decision's: Confirm with your bank for it (it can't be cancelled, only confirmed; no bank-<id> anchor here, that stays on Needs you's row). */}
-      {bankWaits && waitKind === "away" && p.bankWaitsId ? (
+      {bankWaits && waitKind === "away" && p.bankWaitsId && !p.awayInNeeds ? (
         <div data-pay-more-waits="" data-waits-kind="away"><BankWaiting anchor={false} paymentId={p.bankWaitsId} cents={p.bankWaitsKind?.cents} line={bankWaits} seenAt={p.seenAt} /></div>
       ) : bankWaits && (
         <div className="space-y-1" data-pay-more-waits="" data-waits-kind={waitKind ?? ""}>

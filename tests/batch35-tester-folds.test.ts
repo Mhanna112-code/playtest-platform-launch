@@ -40,7 +40,7 @@ describe("each tester folds by their name", () => {
     const fold = r.indexOf("<Fold id={`tester-${c.id}`}"), end = r.indexOf("</Fold>\n                <div className=\"space-y-1\" data-tester-summary=\"\">");
     expect(fold).toBeGreaterThan(0);
     expect(end).toBeGreaterThan(fold);
-    expect(r.slice(fold, fold + 800)).toContain("<NameLink text={name} href={personHref} /></h3>"); // the name heads the toggle (§166: the green profile link)
+    expect(r.slice(fold, fold + 1400)).toContain("<NameLink fit text={name} href={personHref} /></h3>"); // the name heads the toggle (§166: the green profile link; §199: fitted)
     const inside = r.slice(fold, end), summary = r.slice(end);
     for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', "<PrevSetFolds"]) expect(inside).toContain(s);
     // (Owner, Nov 4, §195) No "Paid in all:" in the summary: the paid so far is on the right of the name row (the fold's heading); the calls line stays.
