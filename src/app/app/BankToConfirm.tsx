@@ -32,7 +32,7 @@ export function BankToConfirmBox({ rows, seenAt = "", all }: { rows: BankTopRow[
   return (
     <DashboardActionBox id="bank-to-confirm" title="Your bank wants you to confirm" count={rows.length} kind="bank" top={all && <ConfirmAll {...all} seenAt={seenAt} />}>
       {/* (§147) An open Confirm all check is a row too (the count, the poll), drawn by Confirm all above the list. */}
-      {/* (Owner, Nov 5, §246) The amount and "confirm by" always show; only the "what" between them is cut at 30 (WhatLine). */}
+      {/* (Owner, Nov 5, §246) The amount and "confirm by" always show; only the "what" between them is cut at 50 (§251) (WhatLine). */}
       {rows.filter((r) => !r.all).map((r) => { const lead = splitLead(r.lead), whole = splitLead(r.full || r.lead); return (
         <li key={r.id} className="rounded-lg border border-white/10 p-3 text-sm" data-bank-top-row={r.id}>
           <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} before={lead.amount ? <><span className="whitespace-nowrap" data-bank-top-amount="">{lead.amount}</span>{lead.sep}</> : null} full={whole.what} text={lead.what} render={(t) => withTestLinks(t, r.tests)} after={<> · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} line={<>{withTestLinks(r.lead, r.tests)} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />

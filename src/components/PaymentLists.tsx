@@ -28,7 +28,7 @@ type Pay = PaidList["list"][number];
 // (Owner, Nov 5, §218; recording R10b) A chargeback the bank then decided in the developer's favour no longer reads "your bank reversed this": it says how it ended.
 const marks = (p: Pay, row: PaidRow | undefined) =>
   p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : row?.reversed && p.chargeback === "won" ? " · your bank reversed this, then decided in your favour (chargeback won)" : row?.reversed ? (row?.reversedCents ? ` · your bank reversed ${money(row.reversedCents)} of this (chargeback)` : " · your bank reversed this (chargeback)") : "";
-/** A line's "what": its test linked, then how it was paid. (Owner, Nov 5, §246; was §216's per-name cut) The "what" cut at 30 with the arrow, opened in place (WhatLine). */
+/** A line's "what": its test linked, then how it was paid. (Owner, Nov 5, §246; was §216's per-name cut) The "what" cut at 50 (§251) with the arrow, opened in place (WhatLine). */
 function What({ p, line, testId, testHref }: { p: Pay; line: { what: string; full: string; how: string } | undefined; testId: string | null | undefined; testHref: (testId: string) => string }) {
   if (!line) return <>{plainLabel(p.kind)}</>;
   return <WhatLine text={line.full || line.what} href={testId ? testHref(testId) : undefined} after={line.how ? <span className="text-slate-400">, {line.how}</span> : null} />;

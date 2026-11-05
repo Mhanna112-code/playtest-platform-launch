@@ -49,7 +49,7 @@ export const bankTopLead = (cents: number, test: string | null, what: string | n
   what == null ? `${money(cents)} for your plan` : `${money(cents)}${test ? ` on “${test}”` : ""} · ${what}`;
 
 /**
- * (Owner, Nov 5, batch 35 §246) A lead split for the row: its amount (always shown, outside the cut), the separator after it, and the "what" (cut at 30 with the
+ * (Owner, Nov 5, batch 35 §246) A lead split for the row: its amount (always shown, outside the cut), the separator after it, and the "what" (cut at 50 (§251) with the
  * arrow). A lead that doesn't start with an amount is all "what".
  */
 export function splitLead(lead: string): { amount: string; sep: string; what: string } {

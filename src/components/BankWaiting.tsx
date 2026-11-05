@@ -80,7 +80,7 @@ export function BankWaiting({ text, render, after, before, paymentId, line, full
   return (
     <div id={anchor ? bankAnchor(paymentId) : undefined} className={`min-w-0 max-w-full basis-full space-y-2 border border-sky-300/40 bg-sky-500/10 p-3 text-sm text-sky-100 ${MARKABLE}`} data-bank-waiting={paymentId}>
       {/* (Owner, Nov 4, §180) The line wraps inside the panel at every width (a long name or test name never runs past its edge). */}
-      {/* (Owner, Nov 5, §246; was §230's per-name cut) The "what" cut at 30 with the arrow, opened in place (WhatLine); `before` (the amount) and `after` (confirm by)
+      {/* (Owner, Nov 5, §246; was §230's per-name cut) The "what" cut at 50 (§251) with the arrow, opened in place (WhatLine); `before` (the amount) and `after` (confirm by)
           always show, outside the cut, and so do the buttons below. A test page's sentence ("Your bank wants you to confirm a $10.00 payment for her written answers,
           … Confirm it by …") carries its amount and date inside it, so it shows whole. */}
       <p className="[overflow-wrap:anywhere]">{before}{text != null ? <WhatLine text={full || text} render={render} after={after} /> : line}</p>

@@ -177,7 +177,7 @@ export async function confirmItems(devId: string) {
       return { what, amount: money(p.amountCents), list, on: n.c && !piece ? ` on “${n.c.title}”` : "", by: `confirm by ${fmtDateTimeIn(p.actionBy!, tz)}` };
     };
     const line = (piece: string | null, cov: Map<string, string[]>) => { const x = parts(piece, cov); return `${x.what} ${x.amount}${x.list}${x.on} · ${x.by}`; };
-    // (Owner, Nov 5, batch 35 §246) For the row: the "what" (cut at 30 with its arrow), then its amount and "confirm by", always shown outside the cut.
+    // (Owner, Nov 5, batch 35 §246) For the row: the "what" (cut at 50 (§251) with its arrow), then its amount and "confirm by", always shown outside the cut.
     const whole = parts(n.full, coversFull);
     return { id: p.id, what: `${whole.what}${whole.list}${whole.on}`, amount: whole.amount, by: whole.by, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [], cents: p.amountCents };
   });

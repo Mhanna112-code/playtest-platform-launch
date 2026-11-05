@@ -24,7 +24,7 @@ export type BellEntry = { key: string; title?: string; day?: string; lines: Bell
  * the newest line shown, an unread count); opening it shows every line of that day, each linking to its place, and marks them read.
  * (Owner, Oct 29, batch 29 §28) Read only when opened: a single line when it's clicked; a stack when it's expanded (all its lines) or one of its lines is clicked.
  * Unread entries keep the dot and bold until then; the header's bell number follows at once.
- * (Owner, Nov 5, §202) Each line, alone or inside a stack, shows its first 30 characters then "…" (bellShort); its arrow opens the whole line in place (§246:
+ * (Owner, Nov 5, §202) Each line, alone or inside a stack, shows its first 50 characters (§251; was 30) then "…" (bellShort); its arrow opens the whole line in place (§246:
  * inline, wrapped; the draggable box only over LINE_BOX_OVER, 200 characters).
  * Stack headings are unchanged.
  */
@@ -44,7 +44,7 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
     setOpen({ ...open, [e.key]: now });
     if (now) markRead(e.lines);
   }
-  // (Owner, Nov 5, §202) A line longer than 30 characters shows its first 30 (bellShort: never inside a word or an amount) and "…"; the arrow beside it opens the
+  // (Owner, Nov 5, §202) A line longer than 50 characters (§251) shows its first 50 (bellShort: never inside a word or an amount) and "…"; the arrow beside it opens the
   // WHOLE line under it (names uncut), in a small scroll box when long. The words still follow the line's link; opening the whole line reads it, like a click.
   const line = (l: BellLine) => {
     const short = bellShort(l.text);
