@@ -50,7 +50,7 @@ async function paidEntries(list: Pay[]): Promise<PaidEntry[]> {
   const ones = coverIds.length ? await db.payment.findMany({ where: { id: { in: coverIds }, kind: OWED_KIND, status: OWED_PAID, note: { not: "reserve" } } }) : [];
   const groups = new Map(ones.map((o): [string, PaidGroup] => [o.id, {
     id: o.id, label: o.note === ALL_NOTE ? "Confirm all" : "Pay what you owe", amountCents: o.amountCents, createdAt: o.createdAt, stripePaymentIntentId: o.stripePaymentIntentId,
-    reversed: !!o.chargebackAt, reversedCents: o.chargebackAt && reversedPart(o) ? reversedOf(o) : null, items: [],
+    reversed: !!o.chargebackAt && o.chargeback !== "won", reversedCents: o.chargebackAt && reversedPart(o) ? reversedOf(o) : null, items: [],
   }]));
   // The reversed payment itself is never inside the group that repaid it (only its repayment is), should it still point to it.
   const repaidIn = (p: Pay) => list.some((r) => r.kind === "chargeback" && r.repaysId === p.id && r.coveredById === p.coveredById);

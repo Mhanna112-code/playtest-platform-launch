@@ -4214,3 +4214,16 @@ covered, charges waiting), a part's payments, and Pay what you owe's box (`compo
 ## Join popup scroll (owner, Nov 5)
 The join page's "Check what this test needs now" popup is at most a screen tall (it scrolls), and its list of changes shows 3, then "Show N more" in a scroll box,
 like every other notice. Test: `tests/nov5-batch2.test.ts`.
+
+## §217 A check cancelled underneath reads as a cancel (owner, Nov 5; recording R4a re-take)
+A bank check already cancelled underneath it (the team's pause, a new card, a chargeback won) read "Your Confirm with your bank didn't go through: This payment was
+cancelled: nothing was charged." from Cancel this check (the wrong press, and as a failure), and the same from Complete in its window. Now whichever press reaches it
+reads "Cancelled: nothing was charged." (`refusalLine`, `CHECK_CANCELLED_UNDERNEATH`), and Cancel this check on it is a cancel that worked.
+
+## §218 A won chargeback's payment says how it ended (owner, Nov 5; recording R10b re-take)
+What you've paid marked a payment whose chargeback the bank then decided in the developer's favour "· your bank reversed this (chargeback)". It now reads "· your bank
+reversed this, then decided in your favour (chargeback won)"; a one payment's group line drops its "reversed" mark once won. The total was already right.
+
+## §219 Confirm all's window names a new charge once (owner, Nov 5; recording F)
+The window's notice listed a charge made meanwhile twice: as "Dee Park charged $9.00 … meanwhile: it isn't in this payment …" and again from its test's updates ("On
+“Harbor Run”: Dee Park charged $9.00 for their written answers."). The test's line is skipped when the charge is already named. Test: `tests/nov5-batch2.test.ts`.

@@ -3,6 +3,9 @@
 import { ANSWER_TERMS_FIRST } from "./answerTerms";
 import { CANCEL_CHECK, CONFIRM_WITH_BANK } from "./rules";
 import { CONFIRM_ALL } from "./confirmAllText";
+import { CANCELLED_NOTHING_CHARGED } from "./bankNotice";
+/** The server's line for a bank check cancelled underneath it (confirm.ts CONFIRM_CANCELLED: a team pause, a new card, a chargeback won). */
+export const CHECK_CANCELLED_UNDERNEATH = "This payment was cancelled: nothing was charged.";
 import { SUBSCRIPTION_PRICE } from "./subscription";
 
 export const PRESS_VERBS: Record<string, string> = {
@@ -146,5 +149,9 @@ export function refusalLine(label: string, message: string) {
   // (Batch 27 section 1) "Answer the new terms first: Switch or Keep." reads exactly so under the pressed button.
   // (§156) A line that already names its press anywhere ("Nora Lane stopped the test on Nov 3, so your Send didn't go through. …") isn't named twice.
   if (!label || label === "press" || /\b[Yy]our .*didn't go through/.test(message) || message === ANSWER_TERMS_FIRST) return message;
+  // (Owner, Nov 5, §217; recording R4a) A check already cancelled underneath it (the team's pause, a new card, a chargeback won) reads as a cancel, whichever press
+  // reached it (Cancel this check, Complete in its window, Confirm with your bank): "Cancelled: nothing was charged.", never "Your Confirm with your bank didn't go
+  // through: …".
+  if (message.trim() === CHECK_CANCELLED_UNDERNEATH) return CANCELLED_NOTHING_CHARGED;
   return `Your ${label} didn't go through: ${message.trim()}`;
 }

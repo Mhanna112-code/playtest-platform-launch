@@ -1,3 +1,4 @@
+import { CHECK_CANCELLED_UNDERNEATH } from "@/lib/pressLabels";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, fmtTimeIn, money, pronouns } from "@/lib/format";
 import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK_TO_CONFIRM_HREF, bankAnchor, bankHref, bankWaitingAllLine, bankWaitingLine, BANK_NOT_CONFIRMED, cardDeclinedConfirmLine, cut10 } from "@/lib/rules";
@@ -260,7 +261,7 @@ export const OVER_TICK_REFUSAL = `Tick “${OVER_PAY_TICK_LINE}” to pay.`;
 /** (Batch 23 section 9) Plain refusals for "Confirm with your bank": confirmed in another tab, expired, cancelled. */
 export const ALREADY_CONFIRMED = "You already confirmed this payment.";
 export const CONFIRM_EXPIRED = "This confirmation expired: nothing was charged.";
-export const CONFIRM_CANCELLED = "This payment was cancelled: nothing was charged.";
+export const CONFIRM_CANCELLED = CHECK_CANCELLED_UNDERNEATH;
 /**
  * (Owner, Nov 4, batch 35 §163) Confirmed by this developer in ANOTHER tab (its own line names the payment): "You already confirmed this payment in another tab at
  * 3:20 PM."; otherwise the plain ALREADY_CONFIRMED.

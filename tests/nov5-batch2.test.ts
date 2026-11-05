@@ -44,3 +44,21 @@ describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
     expect(g).toContain('<LongList className="list-disc space-y-0.5 pl-6" tall="max-h-52">');
   });
 });
+
+describe("(Owner, Nov 5) §217-§219, from the Nov 5 recordings", () => {
+  it("§217: a check cancelled underneath reads as a cancel, whichever press reached it", async () => {
+    const { refusalLine, CHECK_CANCELLED_UNDERNEATH } = await import("@/lib/pressLabels");
+    for (const press of ["Cancel this check", "Confirm with your bank", "Pay"]) expect(refusalLine(press, CHECK_CANCELLED_UNDERNEATH)).toBe("Cancelled: nothing was charged.");
+    expect(refusalLine("Pay", "Your card was declined.")).toBe("Your Pay didn't go through: Your card was declined.");
+    expect(read("src/components/BankWaiting.tsx")).toContain('e.code === "cancelled") return { ok: true, paid: false, line: CANCELLED_NOTHING_CHARGED }');
+  });
+
+  it("§218: a won chargeback no longer reads 'your bank reversed this' in What you've paid", () => {
+    expect(read("src/components/PaymentLists.tsx")).toContain('row?.reversed && p.chargeback === "won" ? " · your bank reversed this, then decided in your favour (chargeback won)"');
+    expect(read("src/lib/server/paymentLists.ts")).toContain('reversed: !!o.chargebackAt && o.chargeback !== "won"');
+  });
+
+  it("§219: Confirm all's window names a new charge once", () => {
+    expect(read("src/lib/server/bankPeek.ts")).toContain("!lines.includes(t) && !named.some((n) => t.includes(n))");
+  });
+});

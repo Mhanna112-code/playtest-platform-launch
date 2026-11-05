@@ -174,8 +174,12 @@ async function allChanges(devId: string, since: Date, oneId: string, tab: string
   for (const p of fresh) out.push({ text: notInAllLine(await meanwhileHead(p)), at: p.createdAt }); // (§177) who, which part, which test
   // (Owner, Nov 4, §171 A3) And everything about each covered charge's tester (its part's pay-press lines, whatever the Alerts ticks), each line once.
   const lines = [...after(out, since)];
+  // (Owner, Nov 5, §219; recording F) A new charge already named above ("Dee Park charged $9.00 … it isn't in this payment …") isn't named again from its test's
+  // lines ("On “Harbor Run”: Dee Park charged $9.00 for their written answers."): one line per change.
+  const testers = new Map((await db.contract.findMany({ where: { id: { in: fresh.map((p) => p.contractId).filter((x): x is string => !!x) } }, include: { tester: true } })).map((c) => [c.id, displayName(c.tester)]));
+  const named = fresh.filter((p) => p.contractId && testers.has(p.contractId)).map((p) => `${testers.get(p.contractId!)} charged ${money(p.amountCents)}`);
   for (const c of await db.payment.findMany({ where: { coveredById: oneId, contractId: { not: null } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] }))
-    for (const t of await pieceChanges(c, since, tab, page)) if (!lines.includes(t)) lines.push(t);
+    for (const t of await pieceChanges(c, since, tab, page)) if (!lines.includes(t) && !named.some((n) => t.includes(n))) lines.push(t);
   return lines;
 }
 

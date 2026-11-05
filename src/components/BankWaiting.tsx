@@ -10,7 +10,7 @@ import { usePress } from "@/lib/usePress";
 import { useLoadTime } from "@/components/KeepLoadTime";
 import { BANK_CONFIRMED, CONFIRM_WITH_BANK, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, bankAnchor } from "@/lib/rules";
 import { refusalLine } from "@/lib/pressLabels";
-import { CANCEL_THIS_CHECK, STILL_WAITS, alreadyConfirmedLine, cancelledCheckLine } from "@/lib/bankNotice";
+import { CANCELLED_NOTHING_CHARGED, CANCEL_THIS_CHECK, STILL_WAITS, alreadyConfirmedLine, cancelledCheckLine } from "@/lib/bankNotice";
 import { ApiError, api } from "@/lib/client";
 
 /**
@@ -26,6 +26,8 @@ export async function cancelOwnCheck(paymentId: string): Promise<{ ok: true; lin
     return { ok: true, paid: true, line: typeof r?.amountCents === "number" ? alreadyConfirmedLine(money(r.amountCents)) : BANK_CONFIRMED };
   } catch (e) {
     if (e instanceof ApiError && e.code === "not_confirmed") return { ok: true, paid: false, line: cancelledCheckLine(e.message, e.data.by) };
+    // (Owner, Nov 5, §217) Already cancelled underneath (the team's pause, a new card, a chargeback won): Cancel did what it says.
+    if (e instanceof ApiError && e.code === "cancelled") return { ok: true, paid: false, line: CANCELLED_NOTHING_CHARGED };
     return { ok: false, error: (e as Error).message };
   }
 }
