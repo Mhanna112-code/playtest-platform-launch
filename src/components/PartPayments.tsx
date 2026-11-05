@@ -1,4 +1,5 @@
 import type { PartPayLine } from "@/lib/server/partPayments";
+import { WholeLine } from "@/components/WholeLine";
 import { LIST_PANEL, PAY_LINES_SHOWN, PanelWhen } from "@/components/ScrollList";
 
 /**
@@ -16,7 +17,7 @@ export function PartPayments({ id, lines }: { /** the part: the sent work's or t
         <ul className="divide-y divide-white/5 text-sm" data-part-pay-list={panel ? "panel" : "plain"}>
           {lines.map((l) => (
             <li key={l.id} className="space-y-0.5 py-1.5" data-part-pay={l.id}>
-              <span className="block text-slate-200" title={l.full}>{l.what}{l.how && <span className="text-slate-400">, {l.how}</span>}</span>
+              <span className="block text-slate-200"><WholeLine shown={l.what} full={l.full}>{l.what}{l.how && <span className="text-slate-400">, {l.how}</span>}</WholeLine></span>
               <span className="block text-slate-400">{l.when} · <span className="whitespace-nowrap">{l.amount}</span>{l.status && ` · ${l.status}`}</span>
             </li>
           ))}

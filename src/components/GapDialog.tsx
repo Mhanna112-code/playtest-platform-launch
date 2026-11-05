@@ -2,6 +2,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Languages, Monitor, RefreshCw } from "lucide-react";
 import { api } from "@/lib/client";
+import { LongList } from "@/components/LongList";
 import { gapSources, noGaps, sameGapItems, sameGaps, TESTER_ASK, testerGapButton, testerGapText, updateLabels, type GapAsk, type Gaps, type GapTimes } from "@/lib/gaps";
 import { MissingNeedWords } from "@/components/MissingNeeds";
 import { seeItClick } from "@/components/ListingInfo";
@@ -69,11 +70,11 @@ export function PopupStop({ lines, press, seeIt }: { lines: Change[]; press: str
   return (
     <div role="alert" className="mb-3 space-y-1.5 rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-popup-stop="">
       {lines.length > 0 && (
-        <ul className="list-disc space-y-0.5 pl-6">
+        <LongList className="list-disc space-y-0.5 pl-6" tall="max-h-52">
           {lines.map((c, i) => (
             <li key={`${c.text}|${i}`}>{c.text}{seeIt && isListingLine(c) && <> · <a href={seeIt} data-see-it="" onClick={(e) => seeItClick(e, seeIt, c.at, c.saveAt, c.keys)}>See it</a></>}</li>
           ))}
-        </ul>
+        </LongList>
       )}
       <p><strong className="font-semibold text-sky-50">Your {press} didn&apos;t go through.</strong> Check what this test needs now, then press again.</p>
     </div>
@@ -201,7 +202,7 @@ export function GapDialog(p: { testId: string; ask: GapAsk; initial: Gaps; needs
   const title = shown.languages.length && shown.devices.length ? "What this test needs" : shown.devices.length ? "A device this test runs on" : shown.languages.length ? "A language this test needs" : "What this test needs";
   return (
     <dialog ref={ref} aria-labelledby={`${id}-title`} aria-describedby={`${id}-text`} onClose={p.onClose}
-      className="!m-auto w-[min(28rem,calc(100vw-2rem))] rounded-2xl border border-white/15 bg-ink-900 p-5 text-slate-200 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm">
+      className="!m-auto max-h-[calc(100dvh-2rem)] w-[min(28rem,calc(100vw-2rem))] overflow-y-auto rounded-2xl border border-white/15 bg-ink-900 p-5 text-slate-200 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm">
       {stop && <PopupStop lines={stop.lines} press={p.press} seeIt={p.seeIt} />}
       <h2 id={`${id}-title`} className="flex items-center gap-2 font-semibold text-white">{/* (Batch 35 §50) Devices only: the device icon (as on the join page's badges); a language, or both: the language icon. */}
         {shown.devices.length && !shown.languages.length ? <Monitor className="h-5 w-5 text-amber-300" data-gap-icon="device" /> : <Languages className="h-5 w-5 text-amber-300" data-gap-icon="language" />} {title}</h2>

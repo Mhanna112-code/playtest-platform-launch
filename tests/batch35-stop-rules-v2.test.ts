@@ -247,7 +247,7 @@ describe("§171 A2: a dispute by a tester, or the team's decision on it, stops e
     await settle();
     const leave = await sact(w.ana.sessionId, "leave", w.ana.tester.cookie, { seenAt: loaded2 });
     expect(leave.body.error?.code, JSON.stringify(leave.body)).toBe("stop_once");
-    expect(lines(leave)).toEqual([expect.objectContaining({ text: expect.stringMatching(/^The team decided your dispute about your written answers/), forced: true })]);
+    expect(lines(leave)).toEqual([expect.objectContaining({ text: expect.stringMatching(/^The team decided your dispute with .+ about your written answers/), forced: true })]);
   });
 });
 

@@ -41,7 +41,11 @@ export const GROUP_TITLES: Record<string, string> = {
   appwithdrawn: "Applications withdrawn",
   // (Owner, Nov 5, §201) The developer's payments that went through (every receipt line), one entry a day across tests.
   devpaid: "Paid",
+  // (Owner, Nov 5, §215) Direct messages (not about a test), one entry a day: "Direct messages · 3 today".
+  dms: "Direct messages",
 };
+/** (§215) The group of every direct-message bell line. */
+export const DMS_GROUP = "dms";
 /** (§201) The group of every developer receipt line ("You paid $X for …"): "Paid · 3 payments today". */
 export const PAID_GROUP = "devpaid";
 
@@ -58,6 +62,7 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   // (Owner, Nov 4, §185) "Call requests · 3 closed today", "Applications · 2 withdrawn today" (one stack per test and day).
   reqclosed: (_n, lines) => `Call requests · ${lines} closed today`,
   appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn today`,
+  dms: (_n, lines) => `Direct messages · ${lines} today`,
   // (Owner, Nov 5, §201) "Paid · 3 payments" (counting lines: each receipt line is one payment; a Confirm all line is one payment on the card).
   devpaid: (_n, lines) => `Paid · ${lines} payment${lines === 1 ? "" : "s"}`,
 };

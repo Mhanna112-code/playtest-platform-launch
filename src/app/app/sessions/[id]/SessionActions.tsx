@@ -30,6 +30,27 @@ import { fileSize } from "@/lib/format";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
 
+/**
+ * (Owner, Nov 5, §213) A Send refused because the test is paused: a blue notice naming the press, above the "kept as a draft" line. The page redraws for the
+ * pause (Send goes), so the refusal is kept for this tab (sessionStorage) until it shows; once Send is back (the test resumed) it goes.
+ */
+const pausedKey = (sessionId: string, press: string) => `paused-send:${sessionId}:${press}`;
+function rememberPaused(sessionId: string, press: string, message: string) {
+  try { sessionStorage.setItem(pausedKey(sessionId, press), message); } catch { /* storage off: the notice shows until the redraw */ }
+}
+function PausedSend({ sessionId, press, label = press, canSend, now }: { sessionId: string; press: string; /** the press's name in the line (`press` keys it) */ label?: string; canSend: boolean; now: string }) {
+  const [message, setMessage] = useState(now);
+  useEffect(() => {
+    try {
+      if (canSend && !now) { sessionStorage.removeItem(pausedKey(sessionId, press)); setMessage(""); return; }
+      const kept = sessionStorage.getItem(pausedKey(sessionId, press));
+      if (kept) setMessage(kept);
+    } catch { /* storage off */ }
+  }, [sessionId, press, canSend, now]);
+  if (!message && !now) return null;
+  return <p role="status" className="rounded-lg border border-sky-300/40 bg-sky-300/[0.08] p-2.5 text-sm text-sky-100" data-paused-send=""><strong className="font-semibold text-sky-50">Your {label} didn&apos;t go through:</strong> {now || message}</p>;
+}
+
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
 function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[] }) {
   const [err, setErr] = useState("");
@@ -107,6 +128,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
   const [box, setBox] = useStopBox();
+  const [pausedNow, setPausedNow] = useState("");
   const [answers0, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
   // (Batch 20 section 28, bug found by the owner) Always one answer per question shown, each a string: a shorter or holed list made a box uncontrolled (what was typed
   // showed but never reached the press), so the server got fewer answers than questions and refused "Answer every required question" with nothing red on the page.
@@ -169,6 +191,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const length = writtenLength([...answers, notes]);
   // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
   const unchanged = update && sentSame && !newFiles && same;
+  const sendPress = "Send"; // (§170) refusals name the press Send
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend) return;
@@ -193,6 +216,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       fin.finish(update ? "Sent your answers to the new questions." : "Sent your answers.");
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
+      else if (err instanceof ApiError && err.code === "paused") { rememberPaused(sessionId, sendPress, err.message); setPausedNow(err.message); }
       else {
         // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
         if (err instanceof ApiError && err.message === ANSWER_ONE) { setNeedOne(true); setBusy(false); return; }
@@ -243,6 +267,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
       <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my answers to the new questions" : "Send my answers"}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
+      <PausedSend sessionId={sessionId} press={sendPress} canSend={canSend} now={pausedNow} />
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
@@ -277,6 +302,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
   const [boxAt, setBoxAt] = useState("");
+  const [pausedNow, setPausedNow] = useState("");
   const root = useRef<HTMLDivElement>(null);
   // (§182) Where the open box is drawn (null: here, at the button's place); `pressed`: opened by the button, so it is brought into view.
   const [slotEl, setSlotEl] = useState<HTMLElement | null>(null);
@@ -323,7 +349,9 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       fin.finish("Added to your answer.");
     } catch (e) {
       const sb = stopBox(e);
-      if (sb) { setBox(sb); setBoxAt(sb.now); } else setErr(errOf(e));
+      if (sb) { setBox(sb); setBoxAt(sb.now); }
+      else if (e instanceof ApiError && e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`, e.message); setPausedNow(e.message); }
+      else setErr(errOf(e));
       setBusy(false);
     }
   }
@@ -368,6 +396,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
         {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? "Adding…" : ADD_PRESS}</button>}
         {!fin.done && !busy && !full && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}
       </div>
+      <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label="Add" canSend={canSend} now={pausedNow} />
       {!canSend && !full && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
       <PressDone line={fin.line} />
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />

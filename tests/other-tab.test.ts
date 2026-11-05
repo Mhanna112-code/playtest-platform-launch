@@ -391,7 +391,7 @@ describe("payments and disputes, only for this test", () => {
     const d = await db.dispute.findFirstOrThrow({ where: { contractId: sessionId } });
     await db.dispute.update({ where: { id: d.id }, data: { status: "decided", decidedCents: 800, decidedAt: new Date() } });
     const lines: string[] = (await live(tester.cookie, `session:${sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text);
-    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $8.00 for your written answers", "The team decided your dispute about your written answers: the pay was raised to $8.00"]));
+    expect(lines).toEqual(expect.arrayContaining(["Nora Lane paid $8.00 for your written answers", "The team decided your dispute with Nora Lane about your written answers: the pay was raised to $8.00"]));
     for (const t of lines) expect(t).not.toMatch(/fail|hold|chargeback|reversed|bank/i);
     const stop = await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(349), seenAt: pageLoaded });
     expect(stop.body.error.code).toBe("stop_once");

@@ -1,3 +1,4 @@
+import { DMS_GROUP } from "@/lib/bell";
 import { createHash, randomUUID } from "node:crypto";
 import type { Prisma, User } from "@prisma/client";
 import { db } from "@/lib/db";
@@ -73,8 +74,9 @@ export async function sendDirect(userId: string, otherId: string, raw: unknown, 
     const m = await tx.directMessage.create({ data: { conversationId: conversation.id, senderId: userId, body, clientId } });
     await tx.directConversation.update({ where: { id: conversation.id }, data: { updatedAt: m.createdAt } });
     const line = `New message from ${displayName(a.me)}`;
-    // No shared-test reach filter: this conversation is between accounts, on both sides. Bell + message commit together.
-    await notify(a.other.email, line, [line, "", body], `/app/direct/${userId}`, { side: null, recipientId: a.other.id }, tx);
+    // (Owner, Nov 5, §215; was: no reach filter) A bell (and its email line) only when the two share a test: one is or was in the other's open test, as test chat
+    // (`about`). The message itself always arrives (Messages, unread). The bell lines stack across tests, one entry a day ("dms"). Bell + message commit together.
+    await notify(a.other.email, line, [line, "", body], `/app/direct/${userId}`, { side: null, recipientId: a.other.id, about: userId, group: DMS_GROUP }, tx);
     return m;
   });
 }

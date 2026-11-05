@@ -1,4 +1,5 @@
 "use client";
+import { WholeLine } from "@/components/WholeLine";
 import { Err } from "@/components/Err";
 import { useState } from "react";
 import { useFinished } from "@/lib/usePress";
@@ -128,8 +129,8 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
         <div className={allLines ? "max-h-64 overflow-y-auto pr-1" : undefined} data-owed-lines={allLines ? "all" : "first"}>
         <ul className="list-disc pl-5">
           {owed.map((o, i) => !allLines && i >= OWED_FOLD && !cancelAt(o, i) ? null : (
-            <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined} title={o.full}>
-              {allLines ? (o.full ?? o.text) : o.text}
+            <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined}>
+              {allLines ? (o.full ?? o.text) : <WholeLine shown={o.text} full={o.full}>{o.text}</WholeLine>}
               {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
               {o.after && <> · <b data-owed-after="">{o.after}</b></>}
               {/* A row's own check: its Cancel next to it (Pay what you owe's sits under its line, below). */}
@@ -138,7 +139,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
               {o.covers && o.covers.length > 0 && (
                 <div className="mt-1 text-xs" data-owed-covers={o.id}>
                   That payment covered:
-                  <ul className="list-[circle] pl-5">{o.covers.map((x, j) => <li key={j} title={x.full}>{allLines ? (x.full ?? x.text) : x.text}</li>)}</ul>
+                  <ul className="list-[circle] pl-5">{o.covers.map((x, j) => <li key={j}>{allLines ? (x.full ?? x.text) : <WholeLine shown={x.text} full={x.full}>{x.text}</WholeLine>}</li>)}</ul>
                 </div>
               )}
             </li>

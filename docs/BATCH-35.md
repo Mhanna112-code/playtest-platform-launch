@@ -4192,3 +4192,25 @@ An upload cut off by a reload or a closed tab left its row unfinished, and Send 
 says it's still going every 20 s (`recording-alive`, `Recording.aliveAt`) and an unfinished upload holds Send (recording and written parts) only while it was heard
 from in the last 2 minutes; leaving the page mid-upload drops it at once (`pagehide`, a keepalive `recording-abandon`). The daily clean-up still removes leftovers
 after 3 hours. Migration `20261118090000_recording_alive`. Test: `tests/upload-alive-nov5.test.ts`.
+
+## §213 A Send refused during a pause says so (owner, Nov 5)
+From recording R4b: Hal's Send during the team's pause was refused (409) but the page only redrew to "Your answers are kept as a draft". Now a refused Send (written
+answers) or Add (an addition) shows a blue notice above the draft line: "Your Send didn't go through: This test is paused right now. You can send this once it
+resumes." It is kept for the tab (sessionStorage) through the page's redraw for the pause and goes once Send is back.
+
+## §214 A decided dispute names whose pay it was (owner, Nov 5)
+The tester's live line reads "The team decided your dispute with Omar Reyes about your written answers: the pay stays at $4.00" (and "… was raised to …").
+
+## §215 Direct messages ring only within a shared test, stacked a day (owner, Nov 5)
+Replaces §105's "no shared-test reach filter": a direct message makes a bell (and its summary-email line) only when the two share a test: one is or was in the
+other's open test (`inReach`, as test chat). The message itself always arrives (Messages, unread). Its bell lines stack across tests, one entry a day: "Direct
+messages · 3 today" (group "dms"), in the email too. Test chat messages are unchanged (a line in that test's day stack).
+
+## §216 Payment rows open their whole text with an arrow (owner, Nov 5)
+A payment row whose tester or test name is cut (NAME_CUT, 20) gets the bell's arrow (§202); it opens the whole row, names uncut, in a small scroll box under it.
+No hover (phones couldn't reach it). A row with nothing cut has no arrow. On the Payments page (What you've paid, refunds, what you owe and what each payment
+covered, charges waiting), a part's payments, and Pay what you owe's box (`components/WholeLine.tsx`).
+
+## Join popup scroll (owner, Nov 5)
+The join page's "Check what this test needs now" popup is at most a screen tall (it scrolls), and its list of changes shows 3, then "Show N more" in a scroll box,
+like every other notice. Test: `tests/nov5-batch2.test.ts`.

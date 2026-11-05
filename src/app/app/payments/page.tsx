@@ -1,4 +1,5 @@
 import { Cut } from "@/components/Cut";
+import { WholeLine } from "@/components/WholeLine";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { deferredForBox } from "@/lib/server/holds";
@@ -139,7 +140,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       }))}
       {dev && waitingCharges.length > 0 && <section className="card space-y-3" id="waiting-charges" data-waiting-charges="">
         <h2>Charged once your tests resume</h2>
-        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><a href={p.href} title={p.full}>{p.what}</a> · {money(p.amountCents)}</li>)}</LongList>
+        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><WholeLine shown={p.what} full={p.full}><a href={p.href}>{p.what}</a> · {money(p.amountCents)}</WholeLine></li>)}</LongList>
       </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {/* (Owner, Nov 3, §147) Confirm all above the list (its state first: a Confirm all check that ran out lets go before the list is read). */}

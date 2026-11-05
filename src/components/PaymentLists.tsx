@@ -1,4 +1,5 @@
 import { LongList } from "@/components/LongList";
+import { WholeLine } from "@/components/WholeLine";
 import { money } from "@/lib/format";
 import { OWED_BANK_WAITING } from "@/lib/rules";
 import { plainLabel } from "@/lib/server/paymentRows";
@@ -26,10 +27,10 @@ type Pay = PaidList["list"][number];
 /** A payment's marks after its amount: recorded without payments set up, refunded (a chargeback won after it was repaid), reversed by the bank (all or part). */
 const marks = (p: Pay, row: PaidRow | undefined) =>
   p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : row?.reversed ? (row?.reversedCents ? ` · your bank reversed ${money(row.reversedCents)} of this (chargeback)` : " · your bank reversed this (chargeback)") : "";
-/** A line's "what": its test linked (the hover names it in full), then how it was paid. */
+/** A line's "what": its test linked, then how it was paid. (Owner, Nov 5, §216) Cut names open the whole line with the arrow (WholeLine), not a hover. */
 function What({ p, line, testId, testHref }: { p: Pay; line: { what: string; full: string; how: string } | undefined; testId: string | null | undefined; testHref: (testId: string) => string }) {
   if (!line) return <>{plainLabel(p.kind)}</>;
-  return <>{testId ? <a className="hover:underline" href={testHref(testId)} title={line.full}>{line.what}</a> : <span title={line.full}>{line.what}</span>}{line.how ? <span className="text-slate-400">, {line.how}</span> : null}</>;
+  return <WholeLine shown={line.what} full={line.full}>{testId ? <a className="hover:underline" href={testHref(testId)}>{line.what}</a> : <span>{line.what}</span>}{line.how ? <span className="text-slate-400">, {line.how}</span> : null}</WholeLine>;
 }
 
 /** (Owner, Nov 4, §192) A refund's amount: "−$25.00" (a true minus sign). */
@@ -42,8 +43,8 @@ const minus = (cents: number) => `−${money(cents)}`;
 function RefundItem({ r, fmtDateTime, stripeUrl, inGroup }: { r: RefundLine; fmtDateTime: (d: Date) => string; stripeUrl?: Common["stripeUrl"]; inGroup: boolean }) {
   const body = (
     <>
-      <span className="text-slate-200" data-paid-refund-what="" title={r.full}>{r.what}</span>
-      <span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-refund-amount="">{minus(r.amountCents)}</span>{r.createdAt ? <> · {fmtDateTime(r.createdAt)}</> : null}{stripeUrl && <StripeLink href={stripeUrl(r.stripePaymentIntentId)} />}</span>
+      <WholeLine shown={r.what} full={r.full}><span className="text-slate-200" data-paid-refund-what="">{r.what}</span>
+      <span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-refund-amount="">{minus(r.amountCents)}</span>{r.createdAt ? <> · {fmtDateTime(r.createdAt)}</> : null}{stripeUrl && <StripeLink href={stripeUrl(r.stripePaymentIntentId)} />}</span></WholeLine>
     </>
   );
   return inGroup
@@ -150,15 +151,15 @@ export function OwedReadOnly({ owed, stripeUrl, heading = "What you owe" }: { ow
       </div>
       <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
         {owed.lines.map((o) => ({ o, covers: "covers" in o ? o.covers : undefined })).map(({ o, covers }) => (
-          <li key={o.id} className="py-2 text-slate-200" data-owed-line={o.id} title={o.full}>
-            {o.text}
+          <li key={o.id} className="py-2 text-slate-200" data-owed-line={o.id}>
+            <WholeLine shown={o.text} full={o.full}>{o.text}</WholeLine>
             {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
             {o.after && <> · <b>{o.after}</b></>}
             {stripeUrl && <StripeLink href={stripeUrl(o.id)} />}
             {covers && covers.length > 0 && (
               <div className="mt-1 text-xs text-slate-400">
                 That payment covered:
-                <ul className="list-[circle] pl-5">{covers.map((x, j) => <li key={j} title={x.full}>{x.text}</li>)}</ul>
+                <ul className="list-[circle] pl-5">{covers.map((x, j) => <li key={j}><WholeLine shown={x.text} full={x.full}>{x.text}</WholeLine></li>)}</ul>
               </div>
             )}
           </li>

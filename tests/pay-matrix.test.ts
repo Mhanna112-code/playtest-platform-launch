@@ -297,7 +297,7 @@ describe("§159 rule 4: Charge / Let it go — a payment on that part and the te
       await settle();
       const first = await choose(w, choice, { seenAt: loaded, loadedAt: loaded });
       expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-      expect(texts(first)).toEqual([expect.stringMatching(/^The team decided your dispute about your recording/)]);
+      expect(texts(first)).toEqual([expect.stringMatching(/^The team decided your dispute with .+ about your recording/)]);
       expect((await choose(w, choice, { seenAt: loaded, confirmed: true, boxAt: seen() })).status).toBe(200);
     }
   });

@@ -42,7 +42,7 @@ describe("blue notices identify the person and work they describe", () => {
     const at = new Date();
     await db.dispute.create({ data: { contractId: j.sessionId, submissionId: sub.id, testerId: j.tester.user.id, reason: "All questions answered", status: "decided", decidedAt: at, decidedCents: 800 } });
     const lines = await testerPaymentChanges(j.tester.user.id, j.sessionId, new Date(at.getTime() - 1));
-    expect(lines.find((x) => x.kind === "admin")?.text).toBe("The team decided your dispute about your written answers: the pay was raised to $8.00");
+    expect(lines.find((x) => x.kind === "admin")?.text).toBe("The team decided your dispute with Nora Lane about your written answers: the pay was raised to $8.00");
   });
 
   it("a live-call dispute decision identifies which call", async () => {
@@ -53,7 +53,7 @@ describe("blue notices identify the person and work they describe", () => {
     const at = new Date();
     await db.dispute.create({ data: { contractId: j.sessionId, callId: call.id, testerId: j.tester.user.id, reason: "Full call attended", status: "decided", decidedAt: at, decidedCents: 400 } });
     const lines = await testerPaymentChanges(j.tester.user.id, j.sessionId, new Date(at.getTime() - 1));
-    expect(lines.find((x) => x.kind === "admin")?.text).toBe(`The team decided your dispute about your live call on ${fmtDateTimeIn(call.startsAt, "UTC")}: the pay stays at $4.00`);
+    expect(lines.find((x) => x.kind === "admin")?.text).toBe(`The team decided your dispute with Nora Lane about your live call on ${fmtDateTimeIn(call.startsAt, "UTC")}: the pay stays at $4.00`);
   });
 
   it("another tab's request names the developer", async () => {

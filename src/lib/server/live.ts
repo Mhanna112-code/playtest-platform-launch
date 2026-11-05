@@ -480,7 +480,8 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
     const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
     const raised = d.decidedCents != null && r && d.decidedCents > r.amountCents;
     const part = d.call ? `live call on ${fmtDateTime(d.call.startsAt)}` : d.submission?.kind === "recording" ? "recording" : "written answers";
-    out.push({ kind: "admin", text: raised ? `The team decided your dispute about your ${part}: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute about your ${part}: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt!, piece: (d.submissionId ?? d.callId) || undefined });
+    // (Owner, Nov 5, §214) Names whose pay it was: "The team decided your dispute with Omar Reyes about your written answers: …".
+    out.push({ kind: "admin", text: raised ? `The team decided your dispute with ${dev} about your ${part}: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute with ${dev} about your ${part}: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt!, piece: (d.submissionId ?? d.callId) || undefined });
   }
   return out;
 }

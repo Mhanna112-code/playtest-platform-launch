@@ -14,7 +14,8 @@ import { allUnreadChats, directAccess, directButtonAllowed, directConversations,
 import { sendChat } from "@/lib/server/messages";
 import { CHAT_NOT_SENT, CHAT_PAUSED_NOTE } from "@/lib/rules";
 import { makeUser, req, json } from "./helpers";
-import { act, joined, setup } from "./fixtures";
+import { act, joined, listingBody, settle, setup } from "./fixtures";
+import { POST as testsPOST } from "@/app/api/tests/route";
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, adminAway: () => {} }));
@@ -26,6 +27,14 @@ type Account = Awaited<ReturnType<typeof makeUser>>;
 const send = (from: Account, to: User, body = "Hello", clientId = randomUUID()) => sendPOST(req(`/api/direct/${to.id}`, { cookie: from.cookie, body: { body, clientId } }), { params: Promise.resolve({ id: to.id }) }).then(json);
 async function fixture() {
   return { dev: await makeUser({ dev: true, name: "Nora Lane", pronoun: "they" }), tester: await makeUser({ tester: true, name: "Alex Morgan", pronoun: "they" }) };
+}
+/** (Owner, Nov 5, §215) A bell needs the two to share a test: the tester joins one of the developer's open tests. */
+async function share(dev: Account, tester: Account) {
+  const t = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody() })));
+  await settle();
+  const test = await db.test.findUniqueOrThrow({ where: { id: t.body.id } });
+  expect((await act(test.id, "join", tester.cookie, { listingVersion: test.listingVersion })).status).toBe(200);
+  await settle();
 }
 const button = (viewer: User, other: User, blocked = false) => renderToStaticMarkup(createElement(ProfileMessageButton, { viewer, other, blocked }));
 async function listAs(user: User) {
@@ -62,9 +71,15 @@ describe("batch 35 §105: account-level direct conversations from profiles", () 
     expect(await listAs(tester.user)).toContain("Direct message");
     expect(await directUnreadCount(tester.user.id)).toBe(1);
     const status = await json(await statusGET(req("/api/account/status", { cookie: tester.cookie })));
-    expect(status.body).toMatchObject({ messages: 1, bell: 1 });
+    // (Owner, Nov 5, §215) They never shared a test: the message arrives (Messages, unread) but no bell.
+    expect(status.body).toMatchObject({ messages: 1, bell: 0 });
+    expect(await db.notification.count({ where: { userId: tester.user.id, link: `/app/direct/${dev.user.id}` } })).toBe(0);
+    // Once the tester is in one of the developer's open tests, a direct message rings: "New message from Nora Lane", stacked as "Direct messages".
+    await share(dev, tester);
+    await db.notification.deleteMany({ where: { userId: tester.user.id } });
+    expect((await send(dev, tester.user, "Now that you've joined")).status).toBe(200);
     const bell = await db.notification.findFirstOrThrow({ where: { userId: tester.user.id, link: `/app/direct/${dev.user.id}` } });
-    expect(bell).toMatchObject({ text: "New message from Nora Lane", side: null, testId: null, payment: false });
+    expect(bell).toMatchObject({ text: "New message from Nora Lane", side: null, testId: null, payment: false, groupKey: "dms" });
     expect(await openAs(tester.user, dev.user)).toContain("A question before we work together");
     expect(await allUnreadChats(tester.user)).toBe(0);
     expect((await send(tester, dev.user, "Thanks for asking")).status).toBe(200);
@@ -138,6 +153,8 @@ describe("batch 35 §105: account-level direct conversations from profiles", () 
 
   it("two first messages at once make one conversation, and a retry makes one message and one bell", async () => {
     const { dev, tester } = await fixture();
+    await share(dev, tester);
+    await db.notification.deleteMany({ where: { userId: { in: [dev.user.id, tester.user.id] } } });
     const both = await Promise.all([send(dev, tester.user, "Hello from Nora"), send(tester, dev.user, "Hello from Alex")]);
     expect(both.map((r) => r.status)).toEqual([200, 200]);
     const a = await directAccess(dev.user.id, tester.user.id);
@@ -200,6 +217,8 @@ describe("batch 35 §105: account-level direct conversations from profiles", () 
     expect((await send(dev, tester.user, "   ")).body.error.code).toBe("empty");
     expect((await send(dev, tester.user, "x".repeat(4001))).body.error.code).toBe("too_long");
     expect(await db.directConversation.count({ where: { startedById: dev.user.id } })).toBe(0);
+    await share(dev, tester);
+    await db.notification.deleteMany({ where: { userId: tester.user.id } });
     await db.user.update({ where: { id: tester.user.id }, data: { emailPref: "off" } });
     expect((await send(dev, tester.user, "x".repeat(4000))).status).toBe(200);
     expect(await db.notification.count({ where: { userId: tester.user.id } })).toBe(1);
