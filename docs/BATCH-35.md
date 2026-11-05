@@ -3550,3 +3550,25 @@ New `tests/chargeback-refunds-192.test.ts`:
 - the team's copy is the same markup but for the Stripe links, with one on each refund line.
 
 Updated: `partial-dispute` (a change while reserved now waits and is refunded after the Approve; emails only for what isn't followed), `paid-list`, `admin-payments-190` and `grouped-payments-191` (the refund line, and its Stripe link in the team's copy).
+
+## §194 The bank notice's change lines scroll inside the bank box (owner, Nov 4)
+
+**Before:** the blue notice at the bottom of an open bank check (`BankNotice`, §160) listed every change line as it arrived, without limit: with 10+ lines it pushed the bank box very tall (and, in Needs you, the bank's frame and Cancel far up the panel).
+
+**After:**
+- **Up to 4 change lines:** unchanged (the heading, the plain list, then the final line).
+- **More than 4:** the list sits in a scroll box about 4–5 lines tall (8rem at first: about 5 one-line changes on a desktop, about 4 wrapped ones on a phone), with a small **"N changes"** count above it ("12 changes"; "1 change"). It is the app's own list panel (`ResizeBox`): the grip drags it taller or shorter (up to 60% of the screen), and a dragged height is kept for that check (`bank-notice-<payment id>`, this tab's sessionStorage).
+- **The newest line stays in view:** the box opens at its bottom; a line that arrives scrolls it to the bottom only if the reader was already there (within 8px). Someone who scrolled up to read isn't moved.
+- **The final line stays outside the box, always in view:** "Complete still pays … as pressed; or press Cancel." or "This bank check was cancelled: …".
+- **§187 (only the outermost panel scrolls):** the bank box usually sits inside Needs you's panel (and a person's panel), where §187 would draw an inner panel flat, with no scroll, which is exactly the growth the owner asked to stop. The bank box is its own element there (the bank's fixed-height frame and Cancel, drawn under the press and brought into view on open), so the notice's list keeps its own scroll box: a new `OwnPanel` wrapper (Panel.tsx) resets "inside a panel" for it. It is the only use; every other nested panel stays flat.
+- Unchanged: `role="status"` / `aria-live="polite"` on the whole notice; the hooks `data-bank-notice`, `data-bank-notice-line`, `data-bank-notice-still`, `data-bank-notice-cancelled`. New: `data-bank-notice-scroll` (around the scroll box) and `data-bank-notice-count`.
+
+### Code
+- `BankCheck.tsx`: `BankNotice` takes the check's `id`; `NOTICE_LINES_SHOWN` (4), `NOTICE_SCROLL_MAX` ("8rem"), `noticeCount`, `isAtBottom`; the reader's place is read from their own scrolling, and a new line scrolls to the bottom only from there.
+- `Panel.tsx`: `OwnPanel`.
+
+### Tests
+New `tests/batch35-bank-notice-scroll-194.test.ts`: 3 and 4 lines (a plain list, no scroll box, no count); 12 lines (the count, then the panel with its grip and kept id holding all 12, then the final line outside it); a cancelled check's line outside it too; inside a panel (`InsidePanel`) the list still scrolls (not `data-panel-flat`); the count's wording; `isAtBottom`, and that a new line follows only a reader at the bottom. `batch35-bank-notice` needed no change (its one-line render is the same markup).
+
+### Evidence
+`playtest-lite-evidence/bank-notice-scroll-nov4/` (captions.json): desktop 1280×900 and phone 375×812 with 12 lines inside Needs you's panel; a reader scrolled up stays put when a 13th line arrives; a reader at the bottom follows the 14th.

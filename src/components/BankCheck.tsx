@@ -1,5 +1,6 @@
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { OwnPanel, ResizeBox } from "@/components/Panel";
 import { bringInView } from "@/lib/markJump";
 import { liveBeat } from "@/lib/liveSync";
 import { checkPiOf, countBankCheck, finishPayment, leaveBeacon, peekBank, stripePopup, watchBank, type BankAction, type PeekAnswer, type PeekResult, type Simulate } from "@/lib/bankConfirm";
@@ -21,21 +22,56 @@ export function addNews(n: Notice, r: PeekResult): Notice {
   return { lines: [...n.lines, ...fresh], still, cancelled };
 }
 
+/** (Owner, Nov 4, §194) More change lines than this sit in a scroll box (about 4–5 lines tall) with their count above it. */
+export const NOTICE_LINES_SHOWN = 4;
+/** (§194) The scroll box's height at first: about 4–5 lines of the notice (its grip drags it taller or shorter). */
+export const NOTICE_SCROLL_MAX = "8rem";
+/** (§194) "12 changes" above the scroll box. */
+export const noticeCount = (n: number) => `${n} ${n === 1 ? "change" : "changes"}`;
+/** (§194) Whether a scroll box is scrolled to (within a few pixels of) its bottom. */
+export const isAtBottom = (el: { scrollHeight: number; scrollTop: number; clientHeight: number }) => el.scrollHeight - el.scrollTop - el.clientHeight < 8;
+
 /**
  * (Owner, Nov 3, §160; Nov 4: at the bottom) The blue notice INSIDE the bank check's box, at its bottom under the bank's frame and Cancel: what changed while the bank's page
  * was open that would have stopped the press ("While your bank's page was open: Ana Silva disputed the pay for her recording.", then "Complete still pays $10.00 as
  * pressed; or press Close."), or that the check was cancelled underneath it ("This bank check was cancelled: … Pressing Complete won't charge anything.").
+ * (Owner, Nov 4, §194) More than 4 change lines sit in a scroll box about 4–5 lines tall (the app's panel: a grip, its height kept per check by `id`), with
+ * "N changes" above it; it shows the newest line, and a line that arrives scrolls it to the bottom only if it was already there (someone who scrolled up to read
+ * isn't moved). The final line (Complete still pays … / cancelled …) stays outside it, always in view. The bank box is its own element inside Needs you's panel,
+ * so this list scrolls on its own (OwnPanel), an exception to §187's "only the outermost panel scrolls".
  */
-export function BankNotice({ notice }: { notice: Notice }) {
+export function BankNotice({ notice, id = "card" }: { notice: Notice; /** (§194) the check (its payment's id): the scroll box's kept height */ id?: string }) {
+  const list = useRef<HTMLUListElement>(null);
+  const atBottom = useRef(true);
+  const long = notice.lines.length > NOTICE_LINES_SHOWN;
+  // (§194) Whether the reader is at the bottom of the list (a line arriving doesn't scroll, so this is what they last left it at).
+  useEffect(() => {
+    const el = long ? list.current?.closest<HTMLElement>("[data-panel-box]") : null;
+    if (!el) return;
+    const seen = () => { atBottom.current = isAtBottom(el); };
+    el.addEventListener("scroll", seen, { passive: true });
+    return () => el.removeEventListener("scroll", seen);
+  }, [long]);
+  // (§194) The newest line in view: when the box first appears, and when a line arrives while the reader was at the bottom.
+  useLayoutEffect(() => {
+    const el = list.current?.closest<HTMLElement>("[data-panel-box]");
+    if (el && atBottom.current) el.scrollTop = el.scrollHeight;
+  }, [notice.lines.length]);
   if (!notice.lines.length && !notice.cancelled) return null;
+  const lines = <ul ref={list} className={`${long ? "" : "my-1 "}list-disc pl-5`}>{notice.lines.map((l) => <li key={l} data-bank-notice-line="">{l}</li>)}</ul>;
   return (
     <div className="info" role="status" aria-live="polite" data-bank-notice="">
       {notice.lines.length > 0 && (
         <>
           <p className="font-medium">{NOTICE_HEAD}</p>
-          <ul className="my-1 list-disc pl-5">
-            {notice.lines.map((l) => <li key={l} data-bank-notice-line="">{l}</li>)}
-          </ul>
+          {long ? (
+            <>
+              <p className="text-xs text-sky-100/80" data-bank-notice-count="">{noticeCount(notice.lines.length)}</p>
+              <div className="my-1" data-bank-notice-scroll="">
+                <OwnPanel><ResizeBox id={`bank-notice-${id}`} label="Changes while your bank's page was open" defaultMax={NOTICE_SCROLL_MAX}>{lines}</ResizeBox></OwnPanel>
+              </div>
+            </>
+          ) : lines}
         </>
       )}
       {notice.cancelled ? <p className="font-semibold" data-bank-notice-cancelled="">{notice.cancelled}</p> : notice.still && <p className="font-semibold" data-bank-notice-still="">{notice.still}</p>}
@@ -114,7 +150,7 @@ export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", 
       <p className="text-xs text-sky-100/80" data-bank-close-hint="">{CANCEL_HINTS[action.cancel ?? "press"]}</p>
       <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end()} data-bank-close="">{BANK_CANCEL}</button>
       {/* (Owner, Nov 4) The notice sits at the bottom of the box, under the frame and Cancel. */}
-      <BankNotice notice={notice} />
+      <BankNotice notice={notice} id={action.paymentId || "card"} />
     </div>
   );
 }
