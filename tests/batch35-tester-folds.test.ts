@@ -35,7 +35,7 @@ describe("the circles filter the tester list", () => {
 });
 
 describe("each tester folds by their name", () => {
-  it("closed: the name and the summary block (paid in all, ratings, Rate); open: their parts, each in a panel", () => {
+  it("closed: the name (and paid so far) and the summary block (calls, ratings, Rate); open: their parts, each in a panel", () => {
     const r = row();
     const fold = r.indexOf("<Fold id={`tester-${c.id}`}"), end = r.indexOf("</Fold>\n                <div className=\"space-y-1\" data-tester-summary=\"\">");
     expect(fold).toBeGreaterThan(0);
@@ -43,7 +43,10 @@ describe("each tester folds by their name", () => {
     expect(r.slice(fold, fold + 800)).toContain("<NameLink text={name} href={personHref} /></h3>"); // the name heads the toggle (§166: the green profile link)
     const inside = r.slice(fold, end), summary = r.slice(end);
     for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', "<PrevSetFolds"]) expect(inside).toContain(s);
-    for (const s of ["<b>Paid in all:</b>", "rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);
+    // (Owner, Nov 4, §195) No "Paid in all:" in the summary: the paid so far is on the right of the name row (the fold's heading); the calls line stays.
+    for (const s of ['data-tester-calls=""', "rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);
+    expect(summary).not.toContain("Paid in all");
+    expect(r.slice(fold, inside.indexOf("</>}>") + fold)).toContain("<PaidSoFar cents={paidSoFar(c.id)}");
     // Open by default only when there's one tester; the state is kept like every fold (sessionStorage, through redraws).
     expect(r).toContain("defaultOpen={t.contracts.length === 1}");
   });

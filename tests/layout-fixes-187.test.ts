@@ -75,7 +75,7 @@ describe("§187 item 3: names are cut only when the row is full", () => {
     expect(render(h(NameLink, { text: NAME, href: "/app/testers/t1" }))).toContain("…");
   });
   it("Needs you's people, the call request boxes and the testers' calls cards use it, in rows that may shrink", () => {
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('<span className="flex min-w-0 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span>');
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span>');
     expect(src("components/CallRequestsPanel.tsx")).toContain('<span className="min-w-0"><NameLink fit text={p.name} href={p.href} /></span>');
     const calls = src("app/app/tests/[id]/DevCallPanel.tsx");
     expect(calls.match(/<span className="mr-auto min-w-0"><NameLink fit text=\{t.name\}/g)!.length).toBe(2);

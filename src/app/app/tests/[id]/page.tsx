@@ -70,6 +70,8 @@ import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
 import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen } from "@/components/ScrollList";
 import { PartPayments } from "@/components/PartPayments";
+import { PaidSoFar } from "@/components/PaidSoFar";
+import { paidForWork } from "@/lib/server/paymentRows";
 import { partPaymentLines } from "@/lib/server/partPayments";
 import { byQuestion } from "@/lib/byQuestion";
 import { PrevSetFolds } from "@/components/AnswerSets";
@@ -136,8 +138,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (every tester's deadline, no earlier than Open until): no call time later. The request form's
   // time box stops there, its calls drop-down offers only what fits, and a waiting request's words say how many calls it covers.
   const callEnd = t.workEndedAt ?? workDeadlineOf(t, t.contracts);
-  const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
-  const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
+  // (Owner, Nov 4, §195) What the developer has paid for each tester's work on this test (paymentRows.paidForWork: never a repayment's fee; a reversal not paid back
+  // taken off), shown once by the tester's name: Needs you's person, the Testers row, the Call requests box's person. Read with the page, so every live redraw has it.
+  const paidWork = await paidForWork(t.contracts.map((c) => c.id));
+  const paidSoFar = (id: string) => paidWork.get(id) ?? 0;
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
   const callSets = await db.callSet.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } } });
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
@@ -320,9 +324,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // view's) is one drop-down per person (HoldFold: closed at first; the summary is the green name, then "· N things"), holding everything in Needs you about them,
   // with a small sub-heading over each kind only when they have more than one kind. The person whose oldest waiting thing waits longest comes first; inside, each
   // kind keeps its order. An applicant who hasn't joined is a person of their own (keyed by the application). Nothing in Needs you is about no one.
-  type NeedsWho = { key: string; name: string; href: string | null };
+  // (Owner, Nov 4, §195) `paidCents`: a tester's (someone with a contract here) paid so far, on the right of their summary; an applicant who hasn't joined has none.
+  type NeedsWho = { key: string; name: string; href: string | null; paidCents?: number };
   type NeedsKind = { kind: string; label: string; ats: Date[]; node: ReactNode; data?: Record<string, string>; /** how many things it is, when not one per time in `ats` */ count?: number };
-  const whoOf = (c: (typeof t.contracts)[number]): NeedsWho => ({ key: c.id, name: displayName(c.tester), href: c.tester.deletedAt ? null : `/app/testers/${c.testerId}` });
+  const whoOf = (c: (typeof t.contracts)[number]): NeedsWho => ({ key: c.id, name: displayName(c.tester), href: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, paidCents: paidSoFar(c.id) });
   const needsPeople = (entries: (NeedsKind & { who: NeedsWho })[]) => {
     const people: (NeedsWho & { kinds: NeedsKind[] })[] = [];
     for (const { who, ...k } of entries) {
@@ -337,7 +342,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       return (
         <HoldFold key={p.key} data={{ "data-needs-person": p.key }} toggleData={{ "data-needs-person-toggle": "" }}
           // (Owner, Nov 4, §187) The whole name, cut with "…" only when the row is full (it was cut at 12 characters with room to spare); "· N things" never cut.
-          summary={<span className="flex min-w-0 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span></span>}>
+          // (Owner, Nov 4, §195) A tester's paid so far on the right of the row ("paid $15.00 so far"), never cut either.
+          summary={<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span>{p.paidCents != null && <PaidSoFar cents={p.paidCents} />}</span>}>
           {/* (Owner, Nov 3) Each name's drop-down is its own panel (it scrolls inside; the grip drags it taller). (Owner, Nov 4, §187) Inside Needs you's panel it is
               plain: only Needs you's panel scrolls (Panel.tsx's nesting rule). */}
           <ResizeBox id={`needs-person-${p.key}`} label={`${p.name}: Needs you`} defaultMax="min(30rem, 60vh)">
@@ -478,7 +484,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
               </ResizeBox>
               <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
-              <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
+              <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
                 /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
                 note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                 listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
@@ -490,7 +496,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
               {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
               <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
-              <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
+              <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                 /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
                 note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
                 minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
@@ -515,7 +521,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
         </ResizeBox>
         <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}` }} summary="Pay more">
-        <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+        <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
           room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
         </HoldFold>
       </HoldFold>
@@ -527,7 +533,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Batch 16 sections 33 and 35) Every waiting call request, both directions: (Owner, Nov 4, §181) the page's own Call requests box (CallRequestsBox), by person.
   const callRequests = restricted ? [] : reqs.flatMap((r) => {
     const c = working.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, at: r.createdAt.toISOString(), contractId: c.id, tester: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined }] : [];
+    return c ? [{ id: r.id, at: r.createdAt.toISOString(), contractId: c.id, tester: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined, paidCents: paidSoFar(c.id) }] : [];
   });
   const needsEntries = [
     ...t.contracts.flatMap((c) => {
@@ -660,6 +666,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   <h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><NameLink text={name} href={personHref} /></h3>
                   <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
                   {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
+                  {/* (Owner, Nov 4, §195) Paid so far for their work on this test, once, on the right of the name row (it was the first line of the summary under the row). */}
+                  <PaidSoFar cents={paidSoFar(c.id)} className="!ml-0" />
                 </>}>
                 <p className="note">{pronouns(c.tester.pronoun).Poss} contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
                 <ul className="space-y-1 text-sm" data-parts-sent="">
@@ -694,7 +702,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <div className="w-full space-y-1" data-part-pay-more="">
                         <p className="text-sm font-medium text-white">Pay more</p>
-                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                         </div>
                       )}
@@ -770,7 +778,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                           <div className="space-y-1" data-call-pay-more="">
                           <p className="text-sm font-medium text-white">Pay more</p>
-                          <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                          <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
                             room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                             listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                             listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
@@ -827,7 +835,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </a>}
                     {/* (Owner, Nov 3, §166) No "See her profile": the name above is the link. */}
                   </div>
-                  <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
+                  {/* (Owner, Nov 4, §195) What was paid is no longer a line here: it is shown once, on the right of the name row. The calls line stays. */}
+                  {(bookedAhead || done || cancelledN) > 0 && <p className="text-sm" data-tester-calls="">Calls: {[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}</p>}
                   {/* (Owner, Nov 3, §166) No "<name>: 1.0 ★ (1 rating)" line here any more: the circle's hover card and the profile show the rating. */}
                   {ri?.tester && (ri.testerRevealed ? (
                     <p className="note"><NameLink text={name} href={personHref} /> rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
