@@ -277,7 +277,8 @@ export function alwaysStops(c: TestEventLike & { contractId?: string | null }, p
     // (Owner, Nov 4, §193) And a charge about that same tester, except a charge on a part this press itself confirms (`confirms`: the waiting charge's own line,
     // which the box already shows as its row; Confirm all: every part it covers): stopping for it could only show the press what it is paying.
     const ownCharge = !!c.piece && (onPart(c, press) || !!press.confirms?.includes(c.piece));
-    return !!pc && (((isTeamDecision(c) || c.kind === "left" || (!!c.charge && !ownCharge)) && c.contractId === pc) || (c.kind === "sent" && !!c.item && press.keys.includes(`sub:${c.item}`)));
+    // (Owner, Nov 5) A dispute by that tester forces it too, like the team's decision and a charge (it followed the Disputes tick before).
+    return !!pc && (((c.kind === "dispute" || isTeamDecision(c) || c.kind === "left" || (!!c.charge && !ownCharge)) && c.contractId === pc) || (c.kind === "sent" && !!c.item && press.keys.includes(`sub:${c.item}`)));
   }
   // (Owner, Nov 4, §193) A charge about the tester (their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops every press about
   // that tester once, exactly like a dispute (§171 A2). Presses about the whole test and about other testers follow the Payments tick.

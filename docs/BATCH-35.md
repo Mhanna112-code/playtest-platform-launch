@@ -3915,3 +3915,7 @@ New `tests/dash-search-204.test.ts`: `yourTestMatches` (name or product, any par
 `searchByDeveloper` / `devOrTestMatches` by developer or test name (the 1–2 character rule, exact first) and the lines; one DevSearch on the page, To do
 passed as `todo` with its three kinds of rows wrapped; the tester dashboard rendering the box above To do with the part's row. Updated:
 `batch16-dashboard-search` (the no-match line, the `todo` prop, the placeholder constant), `batch16-lists` (the cards box is in `YourTestsSearch.tsx`).
+
+## §205 Confirm with your bank also stops for a dispute by that tester (owner, Nov 5)
+
+- Confirm with your bank on a charge made while away (`awayCharge`) already stopped once, forced, for the team's decision about that tester, that tester leaving and a charge about them (§193). A dispute by that same tester now forces it too (`live.alwaysStops`); before, it followed the Disputes tick. Another tester's dispute still follows the tick. Test: `tests/charge-forces-tester-stops-193.test.ts`.
