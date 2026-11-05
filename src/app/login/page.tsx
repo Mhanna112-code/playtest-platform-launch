@@ -1,4 +1,6 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
+import { ACCOUNT_CLOSED, CONTACT_US_HREF } from "@/lib/accountClosed";
 import { AuthShell } from "@/components/AuthShell";
 import { GOOGLE_MESSAGES, googleConfigured } from "@/lib/server/google";
 import { getPageUser } from "@/lib/server/page-auth";
@@ -16,7 +18,10 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
     <AuthShell title="Log in">
       {/* (Design doc 2) A deleted account (by the team, or by you on another device) lands here from every open tab, with a red notice. */}
       {gone && <p className="err-field mb-3" role="alert" data-account-gone="">This account no longer exists.</p>}
-      {error && GOOGLE_MESSAGES[error] && <p className="err">{GOOGLE_MESSAGES[error]}</p>}
+      {/* (Owner, Nov 1, §114) Google with the email of a deleted account that wasn't clean: the line, then Contact us (as other refusals link it). */}
+      {error === "google_closed" ? (
+        <p className="err" data-account-closed="">{ACCOUNT_CLOSED} <Link href={CONTACT_US_HREF} className="underline" data-contact-us="">Contact us</Link></p>
+      ) : error && GOOGLE_MESSAGES[error] && <p className="err">{GOOGLE_MESSAGES[error]}</p>}
       <LoginForm reset={!!reset} google={googleConfigured()} next={safe(next)} nextFor={safe(next) && as ? as : undefined} />
     </AuthShell>
   );

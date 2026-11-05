@@ -14,6 +14,7 @@
 // from the red fields themselves, so the two always agree. A field a component marks red itself carries data-red-msg (its line's text).
 import { useEffect, useRef, useState } from "react";
 import { roundedMoneyText } from "@/lib/format";
+import { ACCOUNT_CLOSED, CONTACT_US_HREF } from "@/lib/accountClosed";
 import { scrollQuestionBoxTo } from "@/components/QuestionBox";
 import { digitsOnly, keyAllowed, moneyText, pastedNumber, typedMoney, wholeText } from "@/lib/numberInput";
 import { cutToLine, showCutNote } from "@/lib/typingLimit";
@@ -84,6 +85,8 @@ function ruleMessage(el: Element): string {
 }
 
 const notes = new WeakMap<Element, HTMLElement>();
+/** (§114) Each red line's own text (a line may carry a link after it, e.g. "This account was closed. Contact us": the list under the button reads the line alone). */
+const lineOf = new WeakMap<HTMLElement, string>();
 /** (Batch 35 §19) The fields this file shows red right now: re-checked whenever what decides their rule may have changed. */
 const reds = new Set<Element>();
 let ids = 0;
@@ -128,7 +131,19 @@ export function showField(el: Element) {
     el.setAttribute("aria-describedby", note.id);
     notes.set(el, note);
   }
-  if (note.textContent !== message) note.textContent = message;
+  if ((lineOf.get(note) ?? note.textContent) !== message) {
+    note.textContent = message;
+    lineOf.set(note, message);
+    // (Owner, Nov 1, §114) "This account was closed." at Email: Contact us after it, the way other refusals link it.
+    if (message === ACCOUNT_CLOSED) {
+      const a = document.createElement("a");
+      a.href = CONTACT_US_HREF;
+      a.className = "underline";
+      a.textContent = "Contact us";
+      a.setAttribute("data-contact-us", "");
+      note.append(" ", a);
+    }
+  }
   reds.add(el);
   changed();
   return false;
@@ -166,7 +181,7 @@ export function redFields(root: Element | null): { el: HTMLElement; text: string
     const note = notes.get(el);
     const described = el.getAttribute("aria-describedby");
     // (Owner, Oct 31, batch 35 §31) Never an empty bullet: a red field with no line text is named instead ("Open until needs fixing.").
-    const text = ((note?.isConnected ? note.textContent : "") || el.dataset.redMsg || (described ? document.getElementById(described.split(" ")[0])?.textContent : "") || "").trim() || needsFixingLine(fieldNameOf(el));
+    const text = ((note?.isConnected ? lineOf.get(note) ?? note.textContent : "") || el.dataset.redMsg || (described ? document.getElementById(described.split(" ")[0])?.textContent : "") || "").trim() || needsFixingLine(fieldNameOf(el));
     if (!out.some((x) => x.el === el || x.text === text)) out.push({ el, text }); // the same line once
   }
   return out;

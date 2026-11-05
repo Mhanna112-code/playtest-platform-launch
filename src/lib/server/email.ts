@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { T, safeZone } from "@/lib/tz";
 import { appUrl } from "./auth";
 import { emailHtml, type EmailButton } from "./emailLayout";
+import { originalEmail } from "./reuseEmail";
 
 /**
  * (Batch 30 §19) Every email is sent as HTML in the shared branded layout (emailLayout.ts) with its plain text alongside. `button`: the email's main link as a button
@@ -122,7 +123,9 @@ async function capUntil(now: Date) {
  * (Batch 15 section 12) In production without the key it never writes to the outbox (unless ALLOW_DEV_OUTBOX=1, staging): (batch 23) it is stored as waiting, with
  * the missing key as its error, so it goes out once the key is set. Never throws for a failed send: the email waits instead.
  */
-export async function sendEmail(e: Email, now = new Date()) {
+export async function sendEmail(e0: Email, now = new Date()) {
+  // (§114) A deleted account whose email was freed for a new sign-up keeps the original inside its tombstone: what is still emailed about the old account goes to it.
+  const e = { ...e0, to: originalEmail(e0.to) };
   const k = key();
   const html = htmlOf(e);
   if (!k && outboxEnabled()) {

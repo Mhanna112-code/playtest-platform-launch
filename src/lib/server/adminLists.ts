@@ -742,7 +742,7 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
     // §192) After the repayment it's followed too: "…: followed after repayment: refunded $8.00" / "…: charged $8.00 more" (emailed only when that fails).
     for (const e of await db.accountEvent.findMany({ where: { userId, kind: "chargeback-amount" }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("cbamount", e.id, e.createdAt, e.note));
   } else if (kind === "u-holds") {
-    const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated", "team-closed": "Team closure" }; // (batch 30 §5)
+    const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated", "team-closed": "Team closure", "email-freed": "Email freed for a new sign-up" }; // (batch 30 §5; §114)
     for (const e of await db.accountEvent.findMany({ where: { userId, kind: { not: "chargeback-amount" } }, orderBy: { createdAt: "desc" }, take: 2000 })) { // (§133) dispute amounts: in Chargebacks
       // (Batch 35 §43) A typed reason (a suspension's, a hold lift's note, a close-out's) in the quoted box.
       const head = `${labels[e.kind] ?? e.kind}${e.byId ? ` by ${await name(e.byId)}` : ""}`;

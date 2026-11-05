@@ -39,6 +39,7 @@ Claude brings this list up when a batch lands and in summaries. Newest first.
 ## Decided and built
 - **Confirm all: decided (owner, Nov 3), done in BATCH-35 §147 (branch feat/confirm-all).** Several PaymentIntents can't share one bank check, so Confirm all cancels each waiting check at Stripe and makes ONE combined payment for them all (one bank check), on the dashboard box and Payments. Renewals keep their own Confirm.
 - **Daily retries on a card that always asks the bank: decided (owner, Nov 3), done in BATCH-35 §145 (branch feat/no-daily-retry).** The daily retries of what's owed during a payment hold are gone altogether ("The only one to keep is changing the card"). What you owe is charged when you press Pay what you owe, or as soon as you save a new card; so a card that always asks the bank no longer gets a new "Confirm with your bank" every day.
+- **Signing up again with a deleted account's email: decided (owner, Nov 1; wording Nov 5), done in BATCH-35 §114 (branch feat/reuse-email).** A clean deleted account's email signs up again as a brand-new account (the old one keeps its history; its email becomes a tombstone that keeps the original, so the admin still finds it); not clean (owes money, a hold, an open chargeback, a suspension, or deleted by an admin: the open question is decided, an admin's deletion is not clean) reads "This account was closed." with Contact us. Google the same.
 
 ## Decided, not doing (owner, Oct 30)
 - Bank-check stalling on Charge (Oct 31): keep the lock as is (a developer's open bank check locks the piece for up to 15 minutes; no limit on repeats).
@@ -51,7 +52,6 @@ Claude brings this list up when a batch lands and in summaries. Newest first.
 - The admin's Suspend "Why" box cleared by a live update: the owner will test; fix only if it happens.
 
 ## Being built (Codex)
-- **Signing up again with a deleted account's email (owner, Nov 1; Codex queue #10, task 26).** Today a deleted account keeps its email, so sign-up says "An account with that email already exists" (misleading). Wanted: a CLEAN deleted account (nothing owed, no hold, no open chargeback, no suspension, not deleted by an admin) can sign up again as a brand-new account (old history stays with the old one); otherwise "This email belonged to an account that was closed. Contact us to use it again.". Open question: should an admin's deletion count as clean?
 - Task 3: the paperclip (files placed at the cursor in written answers).
 - Task 4: the admin top bar (Dashboard, Developers, Testers, Tests).
 - Task 5: Accept / Decline, Invite and Cancel invite stop only for needed devices/languages and a 1-star rating change, named.

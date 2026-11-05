@@ -9,6 +9,7 @@ import { LIMITS } from "@/lib/limits";
 import { sendEmail } from "./email";
 import { HttpError } from "./http";
 import { createSession, hashToken, newToken, readCookie, SESSION_COOKIE } from "./session";
+import { ACCOUNT_CLOSED, freeDeletedEmail, isClean } from "./reuseEmail";
 
 // (Owner, Oct 22, NEWEST+7) Sign-in like the full Playtest Platform: sign up with email + password, log in, Forgot
 // password -> Reset by email link, email confirmation, and every other device signed out when the password changes.
@@ -173,15 +174,24 @@ export async function signUp(body: Record<string, unknown>, base: string, ip = "
   // (Owner, Nov 4, batch 35 §170) Every mistake on the first press: the email and password lines no longer stop the press before the rest are read. A valid
   // email already in use is its own line at Email ("An account with that email already exists", owner, Oct 30), with the others.
   const email = emailOf(body.email);
-  const emailMistake = !isEmail(email) ? EMAIL_BAD : (await db.user.findUnique({ where: { email } })) ? EMAIL_TAKEN : "";
+  // (Owner, Nov 1, §114; wording Nov 5) A deleted account's email: a clean one signs up again as a new account (its email is freed below, as the account is made);
+  // one that isn't clean reads "This account was closed." at Email (with Contact us after it). An active account's: "already exists", as before.
+  const existing = isEmail(email) ? await db.user.findUnique({ where: { email } }) : null;
+  const reuse = existing?.deletedAt ? await isClean(existing) : false;
+  const emailMistake = !isEmail(email) ? EMAIL_BAD : existing ? (!existing.deletedAt ? EMAIL_TAKEN : reuse ? "" : ACCOUNT_CLOSED) : "";
   // (NEXT-UI 15) The full app's sign-up form also asks who you are, your name and the Terms. (Batch 35 §134) All required: no account is made without its sides,
   // so the old "Welcome to Playtest · Tell us who you are" step never comes.
   const { role, name, pronoun, bio, devices, languages } = readNewAccount(body, [emailMistake, newPasswordMistake(body.password)]);
   const password = body.password as string;
   if (ip && (await db.loginAttempt.count({ where: { kind: "signup", ok: true, ip, at: { gt: new Date(now.getTime() - 3_600_000) } } })) >= SIGNUPS_PER_NETWORK_HOUR)
     throw new HttpError(429, "too_many", TOO_MANY_SIGNUPS);
-  const user = await db.user.create({
-    data: { email, passwordHash: await hashPassword(password), name, pronoun, timeZone: readTimeZone(body.timeZone), termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, ...sidesOf(role, { devices, languages, bio }) },
+  const passwordHash = await hashPassword(password);
+  const user = await db.$transaction(async (tx) => {
+    // (§114) The clean deleted account's email is freed in the same commit as the new account (checked clean again now).
+    if (existing?.deletedAt) await freeDeletedEmail(tx, existing, () => field(ACCOUNT_CLOSED), now);
+    return tx.user.create({
+      data: { email, passwordHash, name, pronoun, timeZone: readTimeZone(body.timeZone), termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, ...sidesOf(role, { devices, languages, bio }) },
+    });
   }).catch((e) => {
     // (Owner, Nov 3, races) The same email signed up in another tab between the check above and this create: the database's unique email refuses it, with the same line.
     if (isUniqueClash(e)) throw field(EMAIL_TAKEN);
@@ -307,7 +317,8 @@ export async function confirmEmail(raw: string) {
   const row = raw && raw.length <= 200 ? await db.loginToken.findUnique({ where: { tokenHash: hashToken(raw) } }) : null;
   if (!row || row.kind !== "verify" || row.expiresAt < now) return { ok: false as const };
   const user = await db.user.findUnique({ where: { email: row.email } });
-  if (!user) return { ok: false as const };
+  // (§114) A deleted account's link confirms nothing (its links moved to its freed email's tombstone, so they never reach a new account of the same email).
+  if (!user || user.deletedAt) return { ok: false as const };
   if (!user.emailVerifiedAt) await db.user.update({ where: { id: user.id }, data: { emailVerifiedAt: now } });
   await db.loginToken.updateMany({ where: { id: row.id, usedAt: null }, data: { usedAt: now } });
   return { ok: true as const, email: user.email, userId: user.id };
