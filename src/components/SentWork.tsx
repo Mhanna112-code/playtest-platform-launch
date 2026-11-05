@@ -4,7 +4,7 @@ import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
 import { AnswerText, QuestionText } from "@/components/QA";
 import { ANSWER_LINES, LongText } from "@/components/LongText";
-import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, writtenThreads, type QuestionThread } from "@/lib/additions";
+import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, additionsUntil, isPastQuestion, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
 
@@ -35,20 +35,20 @@ export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | n
  * later are left out. `newOnly` (Needs you): only what is new since `newOnly.since` (the last payment; null: never paid, so everything sent is new): the
  * questions answered or added to since then, each with only its new answer or additions; unchanged and still-unanswered questions are left out, and so are the
  * notes and the files sent first once it was paid (Anything else shows only when something new is in it).
+ * (Owner, Nov 5, §234) `part`: "current" draws only the contract's current questions (`questions`) and Anything else (the answers panel, Needs you); "past" only
+ * the questions no longer in the contract, read-only, with no Anything else and no Add (the "Past questions" box). Without it, every question (the team's view).
  */
-export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, newOnly }: {
+export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, newOnly, part }: {
   id?: string; kind: string; answers: unknown; questions?: string[]; notes: string; additions: unknown; files: File[]; timeZone?: string | null;
   addTo?: (q: { key: string; question: string }) => ReactNode;
   /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new since this time (null: everything sent) */ newOnly?: { since: Date | string | null };
+  /** (§234) only the current questions (and Anything else), or only the past ones */ part?: "current" | "past";
 }) {
   const upTo = until ? new Date(until).getTime() : null, after = newOnly?.since ? new Date(newOnly.since).getTime() : null;
   const isNew = (at: string | undefined) => after == null || (!!at && new Date(at).getTime() > after);
   const everything = additionsOf(additions);
   // (§226) The additions this view draws: up to `until`; the files of the ones left out are left out too (never shown as files sent first).
-  const shown = upTo == null ? additions : (Array.isArray(additions) ? additions : []).filter((x) => {
-    const at = (x as { at?: unknown } | null)?.at;
-    return typeof at === "string" && new Date(at).getTime() <= upTo;
-  });
+  const shown = additionsUntil(additions, upTo == null ? null : new Date(upTo));
   const adds = additionsOf(shown);
   const uploaded = files.filter((f) => f.uploadedAt !== null);
   const later = addedFiles(everything);
@@ -114,12 +114,18 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
     );
   };
   const others = other.map((o, i) => ({ o, i })).filter(({ o }) => isNew(o.kind === "add" ? o.add.at : o.set.at));
+  // (§234) The current panel leaves the past questions out (they're in the Past questions box); the box draws only them.
+  const inPart = (t: QuestionThread) => !part || (part === "past") === isPastQuestion(t.question, questions);
+  const hiddenPast = part === "current" && threads.some((t) => !inPart(t) && showThread(t));
   const elseCount = others.length;
-  const elseShown = !newOnly || elseCount > 0 || (after == null && (!!notes.trim() || writtenFiles.length > 0));
+  const elseShown = part !== "past" && (!newOnly || elseCount > 0 || (after == null && (!!notes.trim() || writtenFiles.length > 0)));
+  const drawn = threads.filter((t) => inPart(t) && showThread(t));
   return (
     <div className="space-y-2" data-sent-work="written">
-      {threads.map((t, n) => showThread(t) && fold(t, n + 1))}
-      {newOnly && !threads.some(showThread) && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
+      {drawn.map((t, n) => fold(t, n + 1))}
+      {/* (§234) Needs you never shows a past question: what was sent to one is read in the Testers list's Past questions box. */}
+      {newOnly && hiddenPast && <p className="note" data-past-elsewhere="">Answers to past questions are in the Testers list, under Past questions.</p>}
+      {newOnly && !drawn.length && !hiddenPast && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
       {/* (Owner, Nov 4, §188) The fixed last spot: Anything else, a fold like a question's, after the last question. */}
       {elseShown && <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
         summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">

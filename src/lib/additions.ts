@@ -1,4 +1,4 @@
-import { itemsOf, type SetItem } from "./answerSets";
+import { itemsFor, itemsOf, type SetItem } from "./answerSets";
 import { qText } from "./questions";
 
 /**
@@ -214,4 +214,37 @@ export function writtenTexts(sub: { answers: unknown; notes: string; additions?:
     ...itemsOf(sub.answers).map((x) => x.answer), sub.notes,
     ...additionsOf(sub.additions).flatMap((a) => [a.text ?? "", ...(a.items ?? []).map((x) => x.answer), a.notes ?? ""]),
   ];
+}
+
+/** (Owner, Nov 5, §226) The stored additions up to `until` (the Testers list's part as last paid); all of them without one. */
+export function additionsUntil(stored: unknown, until: Date | string | null | undefined): unknown {
+  if (!until) return stored;
+  const upTo = new Date(until).getTime();
+  return (Array.isArray(stored) ? stored : []).filter((x) => {
+    const at = (x as { at?: unknown } | null)?.at;
+    return typeof at === "string" && new Date(at).getTime() <= upTo;
+  });
+}
+
+/**
+ * (Owner, Nov 5, §234) A question of a written part is PAST when it is no longer one of the contract's questions (`current`: the contract's questions now; a
+ * question is matched by its words, as everywhere). Past questions leave the answers panel for the "Past questions" box (read-only, never added to).
+ */
+export const isPastQuestion = (question: string, current: string[]) => !new Set(current.map(qText)).has(qText(question));
+/** (§234) The part's past questions (their threads: the answer and each addition), as the panel would draw them. */
+export const pastThreads = (answers: unknown, current: string[], stored: unknown) =>
+  writtenThreads(answers, current, stored).threads.filter((t) => isPastQuestion(t.question, current));
+
+/**
+ * (Owner, Nov 5, §235) What a current question already has: its answer as last sent (by its words, also after a switch to changed questions), when it was answered
+ * (a non-blank answer, or anything added to it); null for a question with no answer yet. The tester's form below the answers shows only the nulls, and a Send of it
+ * keeps every non-null one exactly as it was (the server fills them in): answered questions are added to with Add to this answer, never re-sent.
+ */
+export function carriedAnswers(sub: { answers: unknown; additions?: unknown }, questions: string[]): (string | null)[] {
+  const byText = new Map(latestItems(sub, questions).map((x) => [qText(x.question), x.answer]));
+  const keys = questionKeys(itemsFor(questions));
+  return questions.map((q, i) => {
+    const a = byText.get(qText(q)) ?? "";
+    return a.trim() || addsTo(sub.additions, keys[i]).length ? a : null;
+  });
 }

@@ -115,21 +115,17 @@ describe("every place a tester's question, answer or addition shows uses it", ()
 describe("the tester's session page (§182)", () => {
   const page = () => src("app/app/sessions/[id]/page.tsx");
 
-  it("Your written answers: a fold; every question in ONE panel; the Add to this answer buttons below the panel", () => {
+  it("Your written answers: a fold; every question in ONE panel; (Owner, Nov 5, §235) Add to this answer inside each question's fold, no rows below the panel", () => {
     const p = page();
     const fold = p.indexOf("<Fold id={`own-answers-${written.id}`}");
     const panel = p.indexOf("<ResizeBox id={`own-answers-list-${written.id}`} label=\"Your written answers\" defaultMax={LIST_PANEL.ownAnswers}>", fold);
     const sent = p.indexOf("<SentWork id={`own-${written.id}`}", panel);
-    const panelEnd = p.indexOf("</ResizeBox>", sent);
-    const buttons = p.indexOf("<WrittenAddForm key={key} slot={`${c.id}:${key}`}", panelEnd);
     expect(fold).toBeGreaterThan(0);
     expect(panel).toBeGreaterThan(fold);
     expect(sent).toBeGreaterThan(panel);
-    expect(buttons).toBeGreaterThan(panelEnd); // below the panel, not inside it
-    expect(p.indexOf("</Fold>", buttons)).toBeGreaterThan(buttons);
-    // Each current question's fold ends with the place its box opens: under the question's latest part.
-    // (Owner, Nov 4, §188) Anything else has its slot too.
-    expect(p).toContain("addTo={canAdd ? ({ key }) => (currentKeys.includes(key) || key === ANYTHING_ELSE_KEY ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined}");
+    expect(p).not.toContain("data-add-buttons");
+    // Each answered current question's fold (and Anything else's) ends with its Add to this answer, drawn in place.
+    expect(p).toContain("addTo={canAdd ? ({ key, question }) => addUnder(key, question) : undefined}");
     expect(LIST_PANEL.ownAnswers).toBe("min(28rem, 60vh)");
   });
 

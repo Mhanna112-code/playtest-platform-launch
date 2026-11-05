@@ -80,12 +80,17 @@ describe("§186 text limits: 20,000 (was 50,000)", () => {
     const page = unescape(render(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
     expect(page.match(/data-additions-full=""/g)).toHaveLength(1);
     expect(page).toContain(`data-additions-full="">${ADDITIONS_FULL}</p>`);
-    const rows = page.slice(page.indexOf("data-add-buttons"));
-    expect(rows.indexOf(`data-add-for="${k1}"`)).toBeLessThan(rows.indexOf("data-additions-full"));
-    expect(rows.indexOf("data-additions-full")).toBeLessThan(rows.indexOf(`data-add-for="${k2}"`));
+    // (Owner, Nov 5, §235) Each in its own question's fold, under its answer and additions.
+    const q1 = page.slice(page.indexOf(`data-question-body="${k1}"`), page.indexOf(`data-question-body="${k2}"`));
+    const q2 = page.slice(page.indexOf(`data-question-body="${k2}"`), page.indexOf('data-question-body="else"'));
+    const other = page.slice(page.indexOf('data-question-body="else"'));
+    expect(q1).toContain("data-additions-full");
+    expect(q1).not.toContain("data-add-more");
     // Q2 and Anything else keep their button; Q2 says how many are left.
-    expect(rows.match(/data-add-more="written"/g)).toHaveLength(2);
-    expect(rows).toContain("4 of 5 additions left");
+    expect(q2).toContain('data-add-more="written"');
+    expect(q2).toContain("4 of 5 additions left");
+    expect(other).toContain('data-add-more="written"');
+    expect(page).not.toContain("data-add-buttons");
     // The developer's side never shows the note.
     expect(src("app/app/tests/[id]/page.tsx")).not.toContain("ADDITIONS_FULL");
   });

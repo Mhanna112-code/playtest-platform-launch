@@ -116,7 +116,8 @@ describe("the developer's view: a fold per question", () => {
 
   it("every place the developer reads a written part passes its fold ids and zone; By question puts an addition under its question", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    for (const id of ["needs-${x.s!.id}", "update-${x.id}", "row-${r.sub.id}"]) expect(page).toContain(`<SentWork id={\`${id}\`} timeZone={u.timeZone}`);
+    // (Owner, Nov 5, §234) Each with its part: the current questions (the past ones in the Testers list's Past questions box).
+    for (const id of ["needs-${x.s!.id}", "update-${x.id}", "row-${r.sub.id}"]) expect(page).toMatch(new RegExp(`<SentWork id=\\{\`${id.replace(/[$!{}.]/g, (m) => `\\${m}`)}\`\\} part=\\{[^}]+\\} timeZone=\\{u\\.timeZone\\}`));
     expect(src("app/admin/DisputeWork.tsx")).toContain("timeZone={work.timeZone}");
     expect(src("lib/server/adminLists.ts")).toContain("timeZone: dateZone(), subId: s.id");
     const b = answersByQuestion({ answers: [item(Q1, "a"), item(Q2, "b")], notes: "n", additions: [{ at: at1, text: "more on Q2", files: [], questionKey: questionKey(Q2) }, { at: at2, text: "general", files: [] }] }, [], (at) => fmtStampIn(at, "UTC"));
@@ -181,8 +182,9 @@ describe("the tester adds under one question", () => {
 
   it("the tester's page: each current question's fold gets its own box, with the same editor, limits and rules", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain("addTo={canAdd ? ({ key }) =>");
-    expect(page).toContain("<WrittenAddForm key={key}");
+    // (Owner, Nov 5, §235) In the question's own fold, under its answer and additions.
+    expect(page).toContain("addTo={canAdd ? ({ key, question }) => addUnder(key, question) : undefined}");
+    expect(page).toContain("return <WrittenAddForm key={key}");
     expect(page).not.toMatch(/<WrittenAddForm sessionId=\{c\.id\} seenAt=\{seenAt\} canSend=\{!rulesPaused\} lines=\{sendLines\(written, c\.writtenCents\)\}\s+used=/);
     const h = renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: "qabc", question: Q1, made: 3 }));
     expect(h).toContain(`data-add-more="written">${ADD_OPEN}</button>`);

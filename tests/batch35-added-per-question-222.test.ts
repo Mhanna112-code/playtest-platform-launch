@@ -185,28 +185,8 @@ describe("§222 the tester's rows", () => {
     expect(f).toContain('label={first ? ANSWER_PRESS : "Add"}');
   });
 
-  it("the session page: one row per question with its own count, a full question's row closed with its note, Answer this question on the unanswered one; no part-wide line", async () => {
-    const { testId } = await setup();
-    const j = await joined(testId);
-    expect((await send(j.sessionId, j.tester.cookie, ["first", ""])).status).toBe(200);
-    await seed(j.sessionId, [[K1, 5], [null, 2]]);
-    auth.user = await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } });
-    const { default: SessionPage } = await import("@/app/app/sessions/[id]/page");
-    const page = unescape(renderToStaticMarkup(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
-    const rows = page.slice(page.indexOf("data-add-buttons"));
-    expect(rows.match(/data-additions-full=""/g)).toHaveLength(1);
-    const q1 = rows.slice(rows.indexOf(`data-add-for="${K1}"`), rows.indexOf(`data-add-for="${K2}"`));
-    expect(q1).toContain("You've added to this answer 5 times, the most it takes.");
-    expect(q1).not.toContain("data-add-more");
-    const q2 = rows.slice(rows.indexOf(`data-add-for="${K2}"`), rows.indexOf(`data-add-for="${ANYTHING_ELSE_KEY}"`));
-    expect(q2).toContain(">Answer this question</button>");
-    const other = rows.slice(rows.indexOf(`data-add-for="${ANYTHING_ELSE_KEY}"`));
-    expect(other).toContain(">Add to this answer</button>");
-    expect(other).toContain("3 of 5 additions left");
-    // The part-wide line and the one note under the panel are gone.
-    expect(page).not.toMatch(/of 10 additions left|added to this part/);
-    expect(page.slice(0, page.indexOf("data-add-buttons"))).not.toContain("data-additions-full");
-  });
+  // (Owner, Nov 5, §235) The session page's rows moved into each question's fold, and an unanswered question is answered in the form below the answers:
+  // tests/written-form-234-235.test.ts.
 });
 
 describe("§223 Your written answers: each question and its answer in draggable scroll boxes", () => {
@@ -253,7 +233,7 @@ describe("§223 Your written answers: each question and its answer in draggable 
 
   it("the developer's views draw the same component (Needs you, the update row, the tester rows, the team's See the work)", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page.match(/<SentWork /g)).toHaveLength(3);
+    expect(page.match(/<SentWork /g)).toHaveLength(4); // (§234) and the Past questions box
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
     const dev = draw("row-s1");
     expect(dev).toContain(`data-panel="row-s1-q-${K1}-answer"`);

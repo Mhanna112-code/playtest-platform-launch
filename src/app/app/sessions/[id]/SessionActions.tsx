@@ -3,7 +3,7 @@ import { VIDEO_ACCEPT } from "@/lib/videoFormats";
 import { Paperclip } from "lucide-react";
 import { withoutAttachmentMarkers } from "@/lib/answerAttachments";
 import { CharacterCount } from "@/components/CharacterCount";
-import { DISPUTE_PRESS, PRESS_VERBS, refusalLine } from "@/lib/pressLabels";
+import { DISPUTE_PRESS, PRESS_VERBS, SEND_ANSWERS, refusalLine } from "@/lib/pressLabels";
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
@@ -123,7 +123,9 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
  * Written answers: one box per question in the tester's contract. Can be updated until it's paid. `canSend` false (batch 10: the test is paused): the boxes stay and what is
  * typed is kept as a draft, but Send is hidden until the test resumes.
  */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true, sentSame = false, newFiles = false, lines = [], initialAttachments = [] }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean; initialAttachments?: AnswerAttachment[]; /** (Batch 20 section 26) what was sent is for these same questions (so the form starts from exactly it) */ sentSame?: boolean; /** an attachment added since the last send */ newFiles?: boolean }) {
+export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true, sentSame = false, newFiles = false, lines = [], initialAttachments = [], only = false, needOne: oneNeeded = true }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean; initialAttachments?: AnswerAttachment[]; /** (Batch 20 section 26) what was sent is for these same questions (so the form starts from exactly it) */ sentSame?: boolean; /** an attachment added since the last send */ newFiles?: boolean;
+  /** (Owner, Nov 5, §235) after a send: `questions` are only the current ones with no answer yet (sent with `for`); no notes box (Anything else has its Add) */ only?: boolean;
+  /** (§235) at least one answer is needed (not after a switch to changed questions: that Send moves the part onto them) */ needOne?: boolean }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -191,7 +193,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const length = writtenLength([...answers, notes]);
   // (Owner, Oct 28, batch 20 section 26) After a send: "Send my updated answers" waits until something differs from it (changing it back disables it again).
   const unchanged = update && sentSame && !newFiles && same;
-  const sendPress = "Send"; // (§170) refusals name the press Send
+  const sendPress = SEND_ANSWERS; // (§170, §235) refusals name the press Send Answers
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!canSend) return;
@@ -200,7 +202,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     const terms = offerShown();
     if (!terms && length > WRITTEN_MAX_CHARS) return setMsg({ ok: false, text: FIELD + `Your written answers can be at most ${WRITTEN_MAX_CHARS.toLocaleString("en-US")} characters in all (now ${length.toLocaleString("en-US")}).` });
     // (Batch 26 section 14) The server's rule, at once: at least one question answered, plus every Required one; red at the question.
-    const missing = terms ? null : answersMissing(questions, answers);
+    const missing0 = terms ? null : answersMissing(questions, answers);
+    const missing = missing0?.message === ANSWER_ONE && !oneNeeded ? null : missing0;
     if (missing?.message === ANSWER_ONE) return setNeedOne(true);
     if (missing) {
       setMissingAt(missing.at);
@@ -211,9 +214,9 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setMsg(null);
     try {
       setMissingAt(null);
-      await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt });
+      await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt, ...(only ? { for: questions } : {}) });
       await keep.clear();
-      fin.finish(update ? "Sent your answers to the new questions." : "Sent your answers.");
+      fin.finish("Sent your answers.");
     } catch (err) {
       const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
       else if (err instanceof ApiError && err.code === "paused") { rememberPaused(sessionId, sendPress, err.message); setPausedNow(err.message); }
@@ -232,8 +235,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   return (
     <form className="space-y-3" onSubmit={send}>
       {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
-      {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Send (as the server's own lines do), not "Your Send my answers didn't go through". */}
-      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={update ? "Send my answers to the new questions" : "Send my answers"} named={PRESS_VERBS.written}
+      {/* (Owner, Nov 4, batch 35 §170) A refusal names the press as the server's own lines do. (Owner, Nov 5, §235) The button always reads "Send Answers". */}
+      <FormMistakes top text={msg && !msg.ok ? msg.text : ""} press={SEND_ANSWERS} named={PRESS_VERBS.written}
         find={(m) => (m === ANSWER_ONE || isShortLine(m) ? document.getElementById(`a${missingAt ?? 0}`) : m === ANSWER_REQUIRED ? (missingAt != null ? document.getElementById(`a${missingAt}`) : null) ?? Array.from(document.querySelectorAll<HTMLTextAreaElement>(`textarea[data-required-msg="${ANSWER_REQUIRED}"]`)).find((t) => !t.value.trim()) : null)} />
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
@@ -248,11 +251,13 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         </div>
       ))}
       </QuestionBox>
-      <div>
+      {/* (§235) After a send, Anything else is added to in its own fold (Add to this answer): no notes box here. */}
+      {only && !questions.length && <p className="note" data-carry-over="">Your answers carry over to the changed questions. Send Answers moves them onto these questions.</p>}
+      {!only && <div>
         <label className="label" htmlFor="notes">Anything else (bugs, ideas)</label>
         <AnswerBox id="notes" rows={2} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} total={length} value={notes} onChange={setNotes} />
         {notesDraft}
-      </div>
+      </div>}
       {loose.length > 0 && (
         <div className="space-y-1 text-sm" data-loose-files="">
           <p className="text-slate-400">Files not in an answer (they go with your answers when you send them):</p>
@@ -266,7 +271,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 11) (Batch 14) At most 20,000 characters for the whole written part, counted live ((Owner, Nov 4, §186) was 50,000). */}
       <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>
       {canSend && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
-      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : update ? "Send my answers to the new questions" : "Send my answers"}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
+      <span>{canSend && <button className={`btn ${unchanged ? "!bg-white/10 !text-ink-400 !shadow-none" : ""}`} disabled={busy || length > WRITTEN_MAX_CHARS || unchanged} title={unchanged ? NOTHING_CHANGED_LINE : undefined} data-send-idle={unchanged ? "" : undefined}>{busy && !fin.done ? "Sending…" : SEND_ANSWERS}</button>}{keep.restored && [...keep.drafted].some(keep.isDraft) && <DraftButton className="ml-3 text-sm text-sky-300 underline" data-use-saved-all="" disabled={busy || fin.done} onPress={() => { setAnswers(questions.map((_, i) => initial[i] ?? "")); setNotes(initialNotes); }}>{update ? USE_SAVED_ALL_LABEL : DISCARD_ALL_LABEL}</DraftButton>}</span>
       <PausedSend sessionId={sessionId} press={sendPress} canSend={canSend} now={pausedNow} />
       {!canSend && <p className="note" data-draft-kept="">Your answers are kept as a draft. Send comes back when the test resumes.</p>}
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}

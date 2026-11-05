@@ -35,7 +35,7 @@ import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/componen
 import { Fold, ResizeBox } from "@/components/Panel";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
-import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, additionsOf, addsCounted, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
+import { ANYTHING_ELSE_KEY, additionsOf, addsCounted, carriedAnswers, isPastQuestion, latestItems, noAnswerYet, pastThreads, questionKeys } from "@/lib/additions";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
@@ -62,7 +62,8 @@ import { QuestionTexts, ValueText } from "@/components/QA";
 /** (Owner, Nov 5, §231) The listing information lines whose value can be long: each in the shared box (the others are short lines). */
 const LONG_INFO: string[] = ["title", "productName", "mature"];
 import { PrevSetFolds } from "@/components/AnswerSets";
-import { carryOver, itemsFor, prevSetsOf, sameQuestions } from "@/lib/answerSets";
+import { PastQuestions, pastCount } from "@/components/PastQuestions";
+import { carryOver, itemsFor, prevSetsOf, sameQuestions, versionsOf } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -132,6 +133,27 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (§167) Adding, per question of the current set: its keys, and how many of the part's 10 additions were made.
   const currentKeys = questionKeys(sentItems);
   const prevSets = prevSetsOf(c.prevSets);
+  // (Owner, Nov 5, §234) Everything past in one box: the questions no longer in the contract (with what was sent and added to them) and the earlier sets' folds
+  // (only their unsent drafts here: what was sent shows once, as a past question). N counts each past question once, by its words.
+  const draftSets = prevSets.filter((s) => versionsOf(s, !!written).some((v) => v.kind === "draft"));
+  const pastN = pastCount(written ? pastThreads(written.answers, writtenQuestions(c), written.additions).map((t) => t.question) : [], draftSets.flatMap((s) => s.items.map((x) => x.question)), (q) => isPastQuestion(q, writtenQuestions(c)), qText);
+  const writtenUploads = c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }));
+  // (Owner, Nov 5, §235) The current questions with no answer yet (none answered after the first send: all of them); the form below the answers holds only these.
+  const openQs = written ? writtenQuestions(c).filter((_, i) => carriedAnswers(written, writtenQuestions(c))[i] == null) : writtenQuestions(c);
+  // (§235; replaces §182's rows below the panel) "Add to this answer" sits in each answered question's fold, right under its answer and additions (and Anything
+  // else's), with its own 5, "N of 5 additions left" and its full note. A question with no answer yet is answered in the form below instead.
+  const addUnder = (key: string, question: string) => {
+    if (!written || (key !== ANYTHING_ELSE_KEY && !currentKeys.includes(key))) return null;
+    if (key !== ANYTHING_ELSE_KEY && noAnswerYet(sentItems, currentKeys, written.additions, key)) return <p className="note" data-answer-below="">Answer it in the form below.</p>;
+    return <WrittenAddForm key={key} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={question} made={addsCounted(written.additions, key)}
+      known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />;
+  };
+  const pastBox = (
+    <PastQuestions id={`own-past-${c.id}`} count={pastN}>
+      {written && <SentWork id={`own-past-${written.id}`} part="past" timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)} />}
+      <PrevSetFolds id={`own-prev-${c.id}`} draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={writtenUploads} />
+    </PastQuestions>
+  );
   // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
   const excerptPending = written ? (await db.excerpt.count({ where: { submissionId: written.id, status: "pending" } })) > 0 : false;
   const excerptPicks = written && !c.test.ndaText && !excerptPending && !u.testerSuspendedAt ? await excerptChoices(written) : [];
@@ -706,36 +728,31 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             <Fold id={`own-answers-${written.id}`} summary={<span className="font-medium text-white" data-own-answers-title="">Your written answers</span>}>
               <div className="space-y-2">
                 <ResizeBox id={`own-answers-list-${written.id}`} label="Your written answers" defaultMax={LIST_PANEL.ownAnswers}>
-                  <SentWork id={`own-${written.id}`} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
-                    addTo={canAdd ? ({ key }) => (currentKeys.includes(key) || key === ANYTHING_ELSE_KEY ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined} />
+                  {/* (§234) Only the contract's current questions and Anything else: the past ones are in the Past questions box below. */}
+                  <SentWork id={`own-${written.id}`} part="current" timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
+                    addTo={canAdd ? ({ key, question }) => addUnder(key, question) : undefined} />
                 </ResizeBox>
-                {canAdd && (
-                  <div className="space-y-2" data-add-buttons="">
-                    {/* (Owner, Nov 4, §188) One row per current question, then Anything else's (its box opens under Anything else's latest part).
-                        (Owner, Nov 5, §222; replaces §186's one note for the part's 10) Each row counts its own question's 5: "N of 5 additions left", and at 5 only
-                        that row closes, with its grey note; a question with no answer yet has "Answer this question" (free, offered after any cap). */}
-                    {[...currentKeys.map((key, at) => ({ key, question: sentItems[at].question })), { key: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE }].map(({ key, question }) => (
-                      <WrittenAddForm key={key} slot={`${c.id}:${key}`} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={question}
-                        made={addsCounted(written.additions, key)} first={noAnswerYet(sentItems, currentKeys, written.additions, key)}
-                        known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
-                    ))}
-                  </div>
-                )}
+                {/* (Owner, Nov 5, §234) The Past questions box, directly under the panel: read-only, no Add. */}
+                {pastBox}
               </div>
             </Fold>
           </div>
         )}
         {!written && (refusal || meOff || !draftsShown) && <p className="note">Nothing sent.</p>}
-        {/* Not sent yet, or sent for questions that have changed since (a switch): the form for the current questions. Sent and still open: only Add more. */}
-        {canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions) && (
-          <>
+        {/* Not sent yet: the form for the current questions. (Owner, Nov 5, §235; replaces the "update" form that refilled every question, and §222's Answer this
+            question rows) Once sent: one form below the answers with a box for each current question that has no answer yet, and only those (an answered one is
+            added to in its fold, a past one is in Past questions); after a switch to changed questions it also moves the part onto them. Always "Send Answers". */}
+        {canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions || openQs.length > 0) && (
+          <div className="space-y-2" data-answer-form={written ? "open" : "first"}>
             {written?.setUntil && <p className="note" data-set-until-form="">What you sent is for the questions until {fmtDate(written.setUntil)}. Send your answers to these questions: they&apos;re added under what you sent.</p>}
-            <WrittenForm canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={writtenQuestions(c)} initial={carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={!!written}
+            {written && openQs.length > 0 && <p className="text-sm font-medium text-white" data-open-questions-title="">Questions you haven&apos;t answered yet</p>}
+            <WrittenForm key={written ? `open:${openQs.join("|")}` : "first"} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
               initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
-          </>
+          </div>
         )}
-        {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. */}
-        <PrevSetFolds draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+        {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. (Owner, Nov 5, §234) Inside the Past questions box: under
+            "Your written answers" once something was sent, else here. */}
+        {!written && pastBox}
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
         {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for <NameLink text={dev} href={devHref} />.</p>}

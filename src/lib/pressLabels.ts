@@ -9,9 +9,12 @@ export const CHECK_CANCELLED_UNDERNEATH = "This payment was cancelled: nothing w
 import { SUBSCRIPTION_PRICE } from "./subscription";
 import { ANSWER_PRESS } from "./additions";
 
+/** (Owner, Nov 5, batch 35 §235) The written answers' one button, the first Send and every later one alike, and the press its refusals name. */
+export const SEND_ANSWERS = "Send Answers";
+
 export const PRESS_VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop the test", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Request a time", "answer-request": "Answer",
-  application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Send", written: "Send", "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
+  application: "Answer", join: "Join", apply: "Apply", "rejoin-ask": "Ask to rejoin", message: "Send", written: SEND_ANSWERS, "recording-start": "Send", "recording-send": "Send", "recording-done": "Send",
   leave: "Leave", rate: "Rate", terms: "Switch or Keep", choose: "Charge", dispute: "Dispute", "dispute-side": "Send your side", "no-show": "Report", "cancel-call": "Cancel call",
   "cancel-set": "Cancel calls", "pay-extra": "Pay more", open: "Accept testers again", review: "Pay", "post-draft": "Post the test", "delete-draft": "Delete", "withdraw-application": "Withdraw",
   // (Owner, Nov 3, races) Adding to sent answers is "Add" (its refusal named no press: "Nora Lane stopped the test on Nov 3…" alone); the removed-from card's Dismiss.

@@ -107,10 +107,10 @@ describe("§188 A: Anything else, the developer's side", () => {
 });
 
 describe("§188 A: Anything else, the tester's side", () => {
-  it("its own Add to this answer row after the questions' rows, opening under Anything else's latest part (its slot)", () => {
+  it("its own Add to this answer, (Owner, Nov 5, §235) in Anything else's fold under its latest part", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain("currentKeys.includes(key) || key === ANYTHING_ELSE_KEY ? <div data-add-slot={`${c.id}:${key}`} /> : null");
-    expect(page).toContain("{ key: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE }].map(({ key, question }) => (");
+    expect(page).toContain("if (!written || (key !== ANYTHING_ELSE_KEY && !currentKeys.includes(key))) return null;");
+    expect(page).toContain("addTo={canAdd ? ({ key, question }) => addUnder(key, question) : undefined}");
     // SentWork hands Anything else's slot to the page.
     const h = renderToStaticMarkup(createElement(SentWork, { id: "own", timeZone: "UTC", kind: "written", answers: [item(Q1, "a")], notes: "n", additions: [], files: [], addTo: ({ key }: { key: string }) => createElement("div", { "data-add-slot": `s1:${key}` }) }));
     const body = h.slice(h.indexOf(`data-question-body="${ANYTHING_ELSE_KEY}"`));

@@ -183,10 +183,10 @@ describe("one list per part, with Added", () => {
 
   it("every place sent work is read uses the one list; the old previous-set pair and 'updated version' wording are gone", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page.match(/<SentWork /g)).toHaveLength(3); // Needs you, the update row, the tester row
+    expect(page.match(/<SentWork /g)).toHaveLength(4); // Needs you, the update row, the tester row, (§234) the tester row's Past questions
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
-    expect(src("app/app/sessions/[id]/page.tsx")).toMatch(/<SentWork id=\{`own-\$\{written\.id\}`\} timeZone=\{u\.timeZone\} kind="written"/); // (§167)
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds draftsOnly");
+    expect(src("app/app/sessions/[id]/page.tsx")).toMatch(/<SentWork id=\{`own-\$\{written\.id\}`\} part="current" timeZone=\{u\.timeZone\} kind="written"/); // (§167, §234)
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("draftsOnly timeZone={u.timeZone} sets={prevSets}");
     for (const f of ["lib/moneyLines.ts", "lib/server/paidUpdates.ts", "lib/server/tests.ts", "lib/server/recordings.ts", "app/app/page.tsx"]) expect(src(f)).not.toContain("updated version");
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).not.toContain("It stays with what you sent until you send again");
   });

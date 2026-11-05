@@ -147,7 +147,7 @@ describe("batch 10 item 2: a paused test hides what doesn't work, with a banner 
     expect(page).toContain("const pausedBanner = rulesPaused ? pausedForTesters({");
     // The banner sits right under the title, above the key box and the live box.
     expect(page.indexOf('{pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}')).toBeLessThan(page.indexOf("{key && <KeyBox"));
-    expect(page).toContain("<WrittenForm canSend={!rulesPaused}");
+    expect(page).toMatch(/<WrittenForm [^>]*canSend=\{!rulesPaused\}/);
     expect(page).toContain("sendable={!rulesPaused}");
     expect(page).toContain("(canRequestCall || (pendingReqs.length > 0 && !paused && !refusal))"); // (batch 16 section 24) gone after a stop too
     expect(page).toContain("const canRequestCall = !refusal && !blockedPair && !paused;");
@@ -192,7 +192,7 @@ describe("batch 10 item 3: long written answers scroll on the developer's side",
     expect(open).toBeGreaterThan(0);
     // The question labels are inside; the Pay box comes after the box closes.
     // (Batch 35 §136) One list: the answers under their questions, the notes, then what was added.
-    expect(page.slice(open, close)).toContain("<SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions}"); // (§167) fold ids and zone
+    expect(page.slice(open, close)).toContain("<SentWork id={`needs-${x.s!.id}`} part={x.s!.kind === \"written\" ? \"current\" : undefined} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions}"); // (§167) fold ids and zone
     expect(page.slice(open, close)).not.toContain("<PayBox");
     expect(page.indexOf('<PayBox owes={owesNow} key={x.s!.id} kind="submission"')).toBeGreaterThan(close);
   });

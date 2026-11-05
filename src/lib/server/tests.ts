@@ -3,9 +3,9 @@ import { devLiftSince, devPauseSince, devStopSince, loadedOf } from "./stopMomen
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
-import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
+import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
-import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
+import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -1055,11 +1055,22 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const qs = writtenQuestions(c0);
   if ((await db.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || JSON.stringify([body.answers, body.notes]).includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
   const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim() : "")) : [];
+  // (Owner, Nov 5, §235) Once answers were sent, the form below them holds only the current questions with no answer yet (`for`: those questions, their answers
+  // in the same order); every answered question keeps exactly what it has (carriedAnswers), whatever the page sent for it.
+  const forQs = Array.isArray(body.for) ? body.for.filter((q): q is string => typeof q === "string") : null;
+  const before = forQs ? await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } } }) : null;
+  const carried = before ? carriedAnswers(before, qs) : null;
+  const typed = new Map((forQs ?? []).map((q, i) => [qText(q), sentAnswers[i] ?? ""]));
   // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
   // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
-  const answers = qs.map((_, i) => sentAnswers[i] ?? "");
+  const answers = carried ? qs.map((q, i) => carried[i] ?? typed.get(qText(q)) ?? "") : qs.map((_, i) => sentAnswers[i] ?? "");
   // (Batch 30 §14) Each answer given is at least 50 characters (answerMin): "Each answer needs at least 50 characters." with which question (and how long it is).
-  const missing = answersMissing(qs, answers, answerMin());
+  // (§235) The form's own questions only are checked (an answer sent before stays as it is), and `missing` is their place in the form; after a switch to changed
+  // questions the Send needs no new answer (it moves the part to the current questions).
+  const fresh = carried ? qs.flatMap((q, i) => (carried[i] == null ? [i] : [])) : null;
+  const switched = !!before && (!!before.setUntil || !sameQuestions(latestItems(before, qs), itemsFor(qs)));
+  const missing0 = fresh ? answersMissing(fresh.map((i) => qs[i]), fresh.map((i) => answers[i]), answerMin()) : answersMissing(qs, answers, answerMin());
+  const missing = fresh && missing0 ? (missing0.message === ANSWER_ONE && switched ? null : { ...missing0, at: Math.max(0, (forQs ?? []).findIndex((q) => qText(q) === qText(qs[fresh[missing0.at] ?? 0]))) }) : missing0;
   if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
   // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
@@ -1070,7 +1081,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   // (Owner, Nov 4, §183) A Send that adds to sent answers (the answers to changed questions) stops once for a developer payment on them since the page loaded,
   // whatever the tester's Alerts. One that could only be refused (locked, or the team's $0 closure) is refused at once, never after a stop (checked again below).
   const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-  const sentRefusal = sendRefusal(sent, qs, answers);
+  const sentRefusal = sendRefusal(sent, qs, answers, !!fresh?.some((i) => answers[i].trim()));
   if (sentRefusal) throw sentRefusal;
   await testerSendGate(contractId, body, sent?.id);
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
@@ -1082,7 +1093,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     if (refusal) throw new HttpError(409, "closed", refusal);
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    const refused = sendRefusal(existing, qs, answers);
+    const refused = sendRefusal(existing, qs, answers, !!fresh?.some((i) => answers[i].trim()));
     if (refused) throw refused;
     const paid = !!existing?.review;
     const items = itemsFor(qs, answers);
@@ -1109,13 +1120,14 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
 type SentPart = Prisma.SubmissionGetPayload<{ include: { review: true } }>;
 
 /** What refuses a Send of written answers whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock). */
-function sendRefusal(existing: SentPart | null, qs: string[], answers: string[]) {
+function sendRefusal(existing: SentPart | null, qs: string[], answers: string[], answersNew = false) {
   // (Batch 30 §2) Only an old rejection or the team's $0 closure stays locked against anything more.
   const locked = resendRefusal(existing?.review, "written");
   if (locked) return new HttpError(409, "paid", locked);
   // (Owner, Nov 3, batch 35 §136; replaces batch 13 §8's "sending replaces the sent version" and batch 20 §26's updated answers) What was sent is locked: a
   // second Send is only for the answers to changed questions (after a switch), and those are ADDED under what was sent ("Added"), never in its place.
-  if (existing && !existing.setUntil && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
+  // (Owner, Nov 5, §235) Or the first answers to current questions that had none (the form below the answers): added the same way, the answered ones unchanged.
+  if (existing && !existing.setUntil && !answersNew && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);
   return null;
 }
 

@@ -4367,3 +4367,43 @@ Narrows §90 for these two presses: rating and leaving end the tester's part, wh
 Rate or Leave press always stops once (a forced line, whatever the Alerts): "Nora Lane offered you new terms: Switch or Keep in the box above, or rating (leaving)
 closes them unanswered", even when the page already shows the offer's box. The second press goes ahead. An unseen offer keeps its usual line instead (never both).
 Test: `tests/rate-leave-open-terms-232.test.ts`; `tests/batch35-rate-all-stops.test.ts` (§90's shown-terms case now stops once).
+
+## §234 "Past questions": everything past of a written part in one box (owner, Nov 5)
+- **What it holds:** every question no longer in the tester's contract (`isPastQuestion`: matched by its words against the contract's questions now), read-only,
+  each with what was sent to it and its additions, in the QA look (each in its box): `SentWork part="past"`. Then the earlier "Previous questions and answers
+  (until <date>)" folds (PrevSetFolds), moved inside, as they were. No Add / Answer row there. `components/PastQuestions.tsx`: a draggable panel (ResizeBox; the
+  boxes inside keep their own scroll) headed **"Past questions (N)"**, drawn only when N > 0; N counts each past question once (its threads, and the earlier sets'
+  questions no longer asked).
+- **Where:** the tester's session page, directly under the "Your written answers" panel (before anything was sent, where the earlier sets' folds were); the
+  developer's Testers list, at the bottom of each written part's drop-down, under its answers panel (as paid for, §226: `until` applies, and the earlier sets'
+  folds moved here from under the tester's parts).
+- **The answers panel** (`SentWork part="current"`) now shows only the contract's current questions and Anything else, on both sides.
+- **Needs you** never shows a past question (`part="current"` there too, with §226's only-new): if something sent to one would have shown, one line says
+  "Answers to past questions are in the Testers list, under Past questions."
+- **Server (checked):** an addition to a past question is refused on the server, not only hidden: `addRefusal` takes only a key of the latest set, which must
+  be the contract's current questions (else "Your questions changed: …"), so a removed question's key gets "That question isn't one of your current questions…".
+- **Tests:** new `tests/written-form-234-235.test.ts` (the split in SentWork; both pages: the panel without the past question, the box with it and its addition,
+  read-only; Needs you without it; the server's refusal). Updated: `batch10`, `batch13`, `batch35-added-per-question(-222)`, `batch35-sent-locked`,
+  `batch35-attachment-once` (a question not in the contract is past: shown once, in the box).
+
+## §235 The tester's written part: Add under each answer; one form for the unanswered; "Send Answers" (owner, Nov 5)
+Replaces §182's "Add to this answer" rows under the panel (and their portal into the panel), §222's "Answer this question" rows, and the form's "update" mode
+that refilled every question after a switch.
+- **Add to this answer sits under each answer**, in that question's fold, right below its answer and additions (and in Anything else's fold), drawn in place
+  (`addUnder` on the session page, `WrittenAddForm` with no slot). Each question keeps its 5, "N of 5 additions left" and its full note (§222).
+- **Questions in the boxes:** every question in the panel is in its QA question box (§223); the fold's title is the question cut at 2 lines (no Show more), so
+  the two never fight.
+- **One form below the answers** for the current questions with no answer yet, and only those (`carriedAnswers`: a question answered by its words in the latest
+  set, or added to, is answered; a past question is never in it). Its heading: "Questions you haven't answered yet"; no notes box (Anything else has its Add). An
+  unanswered question's fold says "Answer it in the form below." The Send carries `for` (the form's questions); the server fills every answered question with
+  exactly what it has (whatever the page sent), checks only the form's answers (Required, the 50 characters, at least one; not "at least one" after a switch to
+  changed questions, whose Send moves the part onto them), and adds the set under what was sent. The first answers are free (a set is never one of the 5). After a
+  switch where every question already has its answer, the form is just "Your answers carry over to the changed questions. Send Answers moves them onto these
+  questions." and the button. Before the first send, the form is as before (every question and the notes).
+- **The button always reads "Send Answers"** (`SEND_ANSWERS`), the first Send and every later one, and so does the press its refusals name (`PRESS_VERBS.written`,
+  `failedLine`). Every gate and stop is unchanged. An older page's Send (no `for`) works as before.
+- The developer's side is unchanged (§226 and §234 apply).
+- **Tests:** `tests/written-form-234-235.test.ts` (the label and press; the page: Add in the answered fold, the unanswered one only in the form, no rows; the
+  server: only the open questions, the answered ones kept, the first answer free, a Send with nothing open refused; after a switch, the carry-over Send). Updated:
+  `anything-else-cancel-188`, `batch10`, `batch27`, `batch35-added-per-question` (the rows), `batch35-parts-fold`, `batch35-small-ui`, `limits-call-history` (one
+  question's 5 in its fold), `batch35-added-per-question-222` (its page test moved).
