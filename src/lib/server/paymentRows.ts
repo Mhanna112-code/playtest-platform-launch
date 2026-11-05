@@ -1,8 +1,10 @@
 import { db } from "@/lib/db";
-import { displayName, money } from "@/lib/format";
-import { CHARGEBACK_FEE_CENTS, CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, disputeDecisionName, pieceName, repaidReversedLine, reversedOf, reversedPart } from "@/lib/rules";
+import { displayName, fmtDateTimeIn, money, pronouns } from "@/lib/format";
+import { CHARGEBACK_FEE_CENTS, CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, cut10, disputeDecisionName, pieceName, repaidReversedLine, reversedOf, reversedPart } from "@/lib/rules";
+import { callAtFor } from "./dateFormat";
+import { dateZone } from "./dateZone";
 
-type Row = { id: string; kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null; reversedCents?: number | null };
+type Row = { id: string; kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null; reversedCents?: number | null; /** (§191) the one charge that paid it */ coveredById?: string | null };
 /**
  * What a payment's line is built from: a Payment row, or one about to be made (a team decision is charged before its row exists). `paidCents`: an owed reversed
  * payment's own amount (holds.owed puts what the bank reversed + the fee in `amountCents`).
@@ -12,7 +14,12 @@ export type PayingRow = { kind: string; amountCents: number; contractId: string 
  * `full` (§131): `what` with the names uncut, the row's hover on Payments. `testId` null: a row with no test to link (§133: the repayment of part of Pay what you owe's
  * one payment). `reversedCents` (§133): what the bank reversed of this payment when it was only part of it.
  */
-export type PaidRow = { what: string; full: string; how: string; testId: string | null; reversed: boolean; reversedCents?: number | null };
+export type PaidRow = { what: string; full: string; how: string; testId: string | null; reversed: boolean; reversedCents?: number | null; /** (§191) its line inside its one payment's group */ group?: GroupItem };
+/**
+ * (Owner, Nov 4, §191) An item's line inside the group of the ONE charge that paid it (Pay what you owe, Confirm all): exactly what it was, never "paid through Pay
+ * what you owe" / "confirmed with Confirm all" (the group says it). `amount`: a repayment's "$1.00 + $15.00 chargeback fee" (else the page shows the item's amount).
+ */
+export type GroupItem = { what: string; full: string; how: string; amount: string | null };
 
 type Counted = { amountCents: number; reversedCents?: number | null; chargebackAt: Date | null; chargeback: string; status: string };
 /**
@@ -40,7 +47,9 @@ async function lineContext(ps: PayingRow[]) {
   const reviews = await db.review.findMany({ where: { OR: [{ submissionId: { in: [...subs.keys()] } }, { callId: { in: all.map((p) => p.callId).filter((x): x is string => !!x) } }] }, select: { submissionId: true, callId: true, reason: true, auto: true } });
   const reviewOf = (p: PayingRow) => reviews.find((r) => (p.submissionId && r.submissionId === p.submissionId) || (p.callId && r.callId === p.callId));
   const partOf = (p: PayingRow) => (p.callId ? "live call" : subs.get(p.submissionId ?? "") === "recording" ? "recording" : "written answers");
-  return { src, contracts, reviewOf, partOf };
+  // (§191) Each call's start: a group's items name a call by its date AND time (§177/§178).
+  const calls = new Map((await db.call.findMany({ where: { id: { in: all.map((p) => p.callId).filter((x): x is string => !!x) } }, select: { id: true, startsAt: true } })).map((x) => [x.id, x.startsAt]));
+  return { src, repaid, contracts, reviewOf, partOf, calls };
 }
 type Ctx = Awaited<ReturnType<typeof lineContext>>;
 
@@ -79,6 +88,71 @@ function devLine(ctx: Ctx, p: PayingRow, full: boolean, viaKnown?: Via) {
   return { what, how, testId: c.testId };
 }
 
+/** (§191) A part named for a group's item: its tester, part and test, a call by its date and time in the reader's zone (`whose`: "her" in place of the name). */
+function groupPiece(ctx: Ctx, o: PayingRow, full: boolean, whose?: string) {
+  const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
+  if (!c) return null;
+  const start = o.callId ? ctx.calls.get(o.callId) : undefined;
+  return pieceName({ tester: displayName(c.tester), part: ctx.partOf(o), test: c.title, when: start ? callAtFor(start, null) : null, full, whose });
+}
+/** (§191) How a payment was charged: the developer's own Pay or Pay more, the team's decision, the tester's Charge, the automatic charge (7 days without a review). */
+function chargedHow(ctx: Ctx, o: PayingRow) {
+  const r = ctx.reviewOf(o);
+  const own = o.kind === "review" || o.kind === "call";
+  if (o.kind === "extra") return "more" as const;
+  if (o.kind === "dispute") return "dispute" as const;
+  if (own && r && (r.reason === CHARGED_BY_TESTER || r.reason === CHARGED_BY_TESTER_14)) return "tester" as const;
+  if (own && r?.auto) return "auto" as const;
+  return "pay" as const;
+}
+const up = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
+/**
+ * (Owner, Nov 4, §191) An item's line inside its one payment's group, naming exactly what it was (the owner: never vague): "Ana Silva's written answers on “Harbor
+ * Run”", "Ben Okafor's live call on “Harbor Run” (Tue, Oct 27, 3:25 PM)", "Pay more for …", "The team's dispute decision on …", "Ana Silva charged for her written
+ * answers on “Harbor Run”" (after 7 days without a review), "The automatic charge for Ben Okafor's live call on “Harbor Run” (Tue, Oct 27, 3:25 PM)". A repayment
+ * names the payment the bank reversed and what kind it was, then what it repaid: "Repaid: your $1.00 Pay more for bb's written answers on “Harbor Run” that your
+ * bank reversed" · "$1.00 + $15.00 chargeback fee"; "Repaid: the team's $5.00 dispute decision on …", "the $10.00 Ana Silva charged for her …", "the automatic
+ * $15.50 charge for …", "your $10.00 Pay for …", "your $35.00 Pay what you owe payment on Wed, Nov 4, 12:30 PM" (a Confirm all one the same); part of one: "$96.00
+ * of your …". A call is named by its date AND time in the reader's zone (§177/§178).
+ */
+function groupLine(ctx: Ctx, p: PayingRow, full: boolean): { what: string; how: string; amount: string | null } {
+  const cut = full ? (x: string) => x : cut10;
+  const when = (d: Date) => fmtDateTimeIn(d, dateZone());
+  if (p.kind === "chargeback" && p.repaysId) {
+    const o = ctx.repaid.get(p.repaysId);
+    const rev = o ? reversedOf(o) : p.amountCents - CHARGEBACK_FEE_CENTS;
+    const fee = p.amountCents - rev;
+    const amount = rev > 0 && fee > 0 ? `${money(rev)} + ${money(fee)} chargeback fee` : null;
+    if (!o) return { what: "Repaid: a payment your bank reversed", how: "", amount };
+    const a = money(o.amountCents);
+    const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
+    const piece = groupPiece(ctx, o, full);
+    let paid: string;
+    // A one payment (Pay what you owe's, Confirm all's, a reservation's): its kind and when it was made.
+    if (o.kind === "owed") paid = `your ${a} ${o.note === "press:all" ? "Confirm all payment" : o.note === "reserve" ? "payment reserved on your card" : "Pay what you owe payment"} on ${when(o.createdAt)}`;
+    else if (!c || !piece) paid = `your ${a} payment on ${when(o.createdAt)}`;
+    else {
+      const how = chargedHow(ctx, o);
+      paid = how === "more" ? `your ${a} Pay more for ${piece}`
+        : how === "dispute" ? `the team's ${a} dispute decision on ${piece}`
+        : how === "tester" ? `the ${a} ${cut(displayName(c.tester))} charged for ${groupPiece(ctx, o, full, pronouns(c.tester.pronoun).poss)}`
+        : how === "auto" ? `the automatic ${a} charge for ${piece}`
+        : `your ${a} Pay for ${piece}`;
+    }
+    return { what: `Repaid: ${reversedPart(o) ? `${money(rev)} of ` : ""}${paid} that your bank reversed`, how: "", amount };
+  }
+  const c = p.contractId ? ctx.contracts.get(p.contractId) : undefined;
+  const piece = groupPiece(ctx, p, full);
+  if (!c || !piece) return { what: plainLabel(p.kind), how: "", amount: null };
+  const how = chargedHow(ctx, p);
+  return how === "more" ? { what: `Pay more for ${piece}`, how: "", amount: null }
+    : how === "dispute" ? { what: up(disputeDecisionName(piece)), how: "", amount: null }
+    : how === "tester" ? { what: `${cut(displayName(c.tester))} charged for ${groupPiece(ctx, p, full, pronouns(c.tester.pronoun).poss)}`, how: "after 7 days without a review", amount: null }
+    : how === "auto" ? { what: `The automatic charge for ${piece}`, how: "after 7 days without a review", amount: null }
+    : { what: piece, how: "", amount: null };
+}
+
 type Via = "" | "all" | "owed" | "bank";
 const VIA_LINE: Record<Via, string> = { "": "", all: "confirmed with Confirm all", owed: "paid through Pay what you owe", bank: "confirmed with your bank" };
 /**
@@ -108,7 +182,11 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
   for (const p of ps) {
     if (side === "developer") {
       const cut = devLine(ctx, p, false, via.get(p.id)), whole = devLine(ctx, p, true, via.get(p.id));
-      if (cut && whole) out.set(p.id, { what: cut.what, full: whole.what, how: cut.how, testId: cut.testId, reversed: !!p.chargebackAt, reversedCents: p.chargebackAt && reversedPart(p) ? reversedOf(p) : null });
+      // (§191) Its line inside the group of the one charge that paid it (drawn only there).
+      const g = p.coveredById ? groupLine(ctx, p, false) : null;
+      const group = g ? { ...g, full: groupLine(ctx, p, true).what } : undefined;
+      if (cut && whole) out.set(p.id, { what: cut.what, full: whole.what, how: cut.how, testId: cut.testId, reversed: !!p.chargebackAt, reversedCents: p.chargebackAt && reversedPart(p) ? reversedOf(p) : null, group });
+      else if (group) out.set(p.id, { what: plainLabel(p.kind), full: plainLabel(p.kind), how: "", testId: null, reversed: !!p.chargebackAt, reversedCents: p.chargebackAt && reversedPart(p) ? reversedOf(p) : null, group });
       continue;
     }
     // The tester's rows (unchanged by §131): "from Nora Lane for your written answers on “Harbor Run”".
