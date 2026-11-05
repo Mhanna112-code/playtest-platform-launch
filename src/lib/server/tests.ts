@@ -3,6 +3,7 @@ import { devLiftSince, devPauseSince, devStopSince, loadedOf } from "./stopMomen
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
+import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
 import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
@@ -400,7 +401,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const seen = boxAt ?? (confirmed ? null : seenOf(body.seenAt));
     // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab stop Save once like every test-page press (a Pay, a call change,
     // an invite…); another tab's Save becomes the per-field lines below.
-    const dc = seen ? withRenamed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: { acts: ["edit"], keys: ["*"] } }), body) : [];
+    // (Owner, Nov 5, §250) Minus what a stop box on this page already listed. Edit's own per-field and key lines (below: what THIS Save holds against what's saved)
+    // are not updates but this Save's consequences: they always show.
+    const dc = seen ? withRenamed(notListed(await devChanges(dev.id, testId, seen, tabOf(body), tx, { press: { acts: ["edit"], keys: ["*"] } }), body), body) : [];
     // The "fields you didn't touch keep the newer values" tail only when the listing itself was saved elsewhere.
     const listingEdited = events.some((e) => e.kind === "edited" || e.kind === "edited_spots");
     const current = asListing(t);
@@ -434,7 +437,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // the fields for the box's Before / What you typed) and, ALWAYS (keys decide what can still be added), the keys' "Added: …" / "Removed: …" lines since
     // the page loaded (or its last stop box). A page that doesn't send what it loaded and holds (an older page) keeps every line.
     let dcN: (TestEventLike & { fields?: string[] })[] = dc;
-    let gateChanges = gate.go ? [] : gate.changes;
+    let gateChanges = gate.go ? [] : notListed(gate.changes.map((e) => ({ ...e, eventId: (e as { id?: string }).id })), body);
     const news = seen && !onlyOwnSaves ? await editNews(tx, testId, body, current, tzOf(body, dev)) : null;
     // (Batch 16 section 20) A key this press deletes that a joining tester was given meanwhile (the page hadn't shown it): not a mistake, a stop with the
     // warning; the second press saves the rest of the key edits.
@@ -460,7 +463,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       if (lines.length) dcN = [...dcN, ...lines];
     }
     dcN = [...dcN].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
-    const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}), ...(c.kind === "yours" ? { kind: "yours" } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: renderTimes(c.text, dateZone()), at: c.createdAt })) : null;
+    const stop = dcN.length ? dcN.map((c) => ({ ...devLine(c, false), ...(c.fields ? { fields: c.fields } : {}), ...(c.kind === "yours" ? { kind: "yours" } : {}) })) : gateChanges.length ? gateChanges.map((c) => ({ text: renderTimes(c.text, dateZone()), at: c.createdAt, ...sidOf(c) })) : null;
     if (stop) {
       // Both together: the blue stop and any red mistakes (red wins: the next press still saves nothing while red remains).
       throw new HttpError(409, "changed", dcN.length ? "Press Save again to save." : "This test changed since you opened Edit. Press Save again to save your changes on top.", {
@@ -655,7 +658,10 @@ export async function editNews(tx: Tx, testId: string, body: Record<string, unkn
  * One line of a developer's stop-once box. (Owner, Oct 28) A tester's Switch / Keep line carries its contract, so the box under the button shows "See their contract" like the top box.
  */
 export const devLine = (c: TestEventLike & { contractId?: string | null }, withAlert = true) => ({
-  text: renderTimes(c.text, dateZone()), at: c.createdAt, ...(c.kind === "terms" && c.contractId ? { kind: "terms", contract: c.contractId } : {}), ...(withAlert && alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}),
+  text: renderTimes(c.text, dateZone()), at: c.createdAt,
+  // (Owner, Nov 5, §250) Its identity: once this box lists it, no other press on the page stops for it.
+  ...sidOf(c),
+  ...(c.kind === "terms" && c.contractId ? { kind: "terms", contract: c.contractId } : {}), ...(withAlert && alertOf(c.kind) ? { alert: alertOf(c.kind) } : {}),
   // (Batch 26 section 4) A stop line says its own time: the box doesn't add it again.
   ...(c.kind === "stop" ? { kind: "stop" } : {}),
   // (Batch 20 section 4) A line that stands for one thing (a ticked tester's needs): a later stop's line with the same key replaces it in the box.
@@ -707,7 +713,9 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   const additional = await unanswered(t.developerId, testId, [...extraChanges, ...moments.filter((m) => !(own && m.text.startsWith("You stopped this test")))], tx);
   // (Batch 35 §79) Never the line about the very thing this press answers (a call request, an application). (§155) Pay, Pay more and Confirm on a piece answer
   // none of the piece's own work lines: an unseen one stops them once.
-  const raw = [...found, ...additional].filter((e) => !answersIt(e, press.answers)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Owner, Nov 5, §250) Nor a line a stop box on this page already LISTED (any button's box: `shownIds`), forced ones and the stop / pause moments included:
+  // it counts as seen for every button on the page. A line no box listed (left out by that press's Alerts) still stops by the usual rules.
+  const raw = notListed([...found, ...additional].filter((e) => !answersIt(e, press.answers)), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Owner, Oct 28) `keep`: a button that stops for only some kinds (Rate after the test closed).
   const changes = withRenamed(keep ? raw.filter((e) => e.kind === "renamed" || e.kind === "stop" || keep(e)) : raw, body);
   if (changes.length) {

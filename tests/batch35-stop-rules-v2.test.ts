@@ -134,7 +134,7 @@ describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
     await db.testEvent.create({ data: { testId: w.testId, kind: "paid", text: "Ana Silva charged $10.00 for her recording", contractId: w.ana.sessionId, link: `part-${w.anaRec.id}` } });
     const first = await pay(w.dev.cookie, { kind: "submission", id: w.anaRec.id, amount: "10.00", tickedCents: 1000, seenAt: loaded });
     expect(first.body.error?.code).toBe("stop_once");
-    expect(lines(first)).toEqual([{ text: "Ana Silva charged $10.00 for her recording", at: expect.anything(), alert: "payments", forced: true }]);
+    expect(lines(first)).toEqual([{ text: "Ana Silva charged $10.00 for her recording", at: expect.anything(), alert: "payments", forced: true, sid: expect.any(String) }]);
     // Ben's part: the same line isn't about it, and Payments is ticked off.
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.benSub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded })).status).toBe(200);
   });

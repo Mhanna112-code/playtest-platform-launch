@@ -1,4 +1,5 @@
 import { HttpError, handle, ok, readJson } from "@/lib/server/http";
+import { notListed, sidOf } from "@/lib/server/shownLines";
 import { reportNoShow, testerCancelCall } from "@/lib/server/calls";
 import { sendMessage } from "@/lib/server/messages";
 import { abandonUpload, finishRecording, sendRecording, removeRecording, startRecording, uploadAlive } from "@/lib/server/recordings";
@@ -82,7 +83,8 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
   const loaded = loadedOf(body);
   const stop = (await testerStopSince(contractId, loaded)) ?? (await testerPauseSince(contractId, loaded));
   // (Owner, Nov 5, §207) The team lifting its pause is named like the pause: "This test resumed at 3:10 AM.".
-  const found = [...(stop ? [stop] : []), ...(await testerLiftSince(contractId, loaded))];
+  // (Owner, Nov 5, §250) A moment a stop box on this page already listed is seen: the press follows its usual gate.
+  const found = notListed([...(stop ? [stop] : []), ...(await testerLiftSince(contractId, loaded))], body);
   if (!found.length) return;
   // (Batch 30, Oct 29 addition) ONE box: the stop with every other change the page hadn't shown (the press's own reasons), oldest first; the second press goes ahead.
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, testId: true } });
@@ -99,7 +101,7 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
     }
   }
   if (!more.length) stopBox(found);
-  const lines = [...found.map((m) => ({ text: m.text, at: m.createdAt, kind: "stop", forced: true })), ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const lines = [...found.map((m) => ({ text: m.text, at: m.createdAt, ...sidOf(m), kind: "stop", forced: true })), ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines, tail: "Press again to go ahead.", ...extra });
 }
 

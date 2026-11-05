@@ -4583,3 +4583,28 @@ As the new-terms "questions changed" (§233, §242): every list of questions (th
 developer's and the join page's panels, the join page's "<dev> wants to know" (open there), Terms history's then and now, Edit's other-tab notes) is the shared
 `QuestionTexts`: a drop-down "Questions (N)", its list in the draggable scroll panel, and each question its own closed drop-down ("Question 3 · Required · <its first
 words>") with its words in the question box when opened.
+
+## §250 An update listed in any stop box on a page is seen for every button there (owner, Nov 5)
+Seen in recording G (the R5 re-take): Stop stopped with a box listing Ben left, the team decided Gus's dispute, Fay disputed…; End early then stopped AGAIN with the
+same updates, and Stop's box came back with the same list. Each press only counted its own box as seen (its second press's `boxAt`); another press counted from the
+page load or what the live top box showed (§90).
+- Once a stop box has LISTED an update on a page, no other press on that page stops for that same update. Per update, not by time: a box lists only what applies
+  to its press (Stop leaves a payment out when Payments is ticked; Pay on that part is forced to stop for it, §171), so only what a box actually listed counts. An
+  update that arrived before the box but wasn't in it still stops the presses it applies to, by their usual rules; a newer update stops as usual.
+- Identity (`sid`, lib/server/shownLines.ts): the test event's row id when the line is one, otherwise its kind, time and raw text; hashed short. Every line of the
+  developer's gate (devGate, its `devLine`), the tester's gate (testerGate, `asLines`), the stop / pause / lift moments (`stopBox`, the session route's moment box)
+  and Edit's version lines carries it; the live box's lines carry it too, so a live line added to an open stop box counts once the box shows it.
+- The page: every ChangesBox that renders lines records their identities page-wide (`markShownInBox` → `noteListed`, lib/live.ts); every press with a seen marker
+  sends the newest 200 (`shownIds`, lib/client.ts; the server reads at most 300). Per page load: a reload starts fresh, and so does another page in the tab.
+- The server: devGate and testerGate (and the moments with them, the developer's Rate gate, Edit Save's own lines from devChanges and its version lines) drop a
+  line whose identity is in the list before deciding to stop. Pages: the developer's test page (Stop, End early, Pay, Pay more, call presses, Invite, Edit's Save on
+  its own page), the tester's session page (Send, Add, Rate, Leave, Dispute, call presses, Charge / Let it go), the dashboards (Confirm, Confirm all) and Payments
+  (Confirm).
+- Forced lines (§171 A2/A3: a dispute or decision about the press's tester, a payment on that part, a stop or pause moment) are seen too once a box listed them.
+- Exceptions, named in code (`everyPress`, shownLines.ts):
+  - Rate / Leave's open-terms line (§232, `openOfferMoment`) is never marked seen: it stops each of those presses once while the offer is open, whatever a box
+    listed (an offer line a box already listed no longer stands in for it).
+  - Edit Save's per-field lines ("Instructions: your version will replace the one saved in another tab", the keys' Added / Removed, a given key it deletes) compare
+    what THIS Save holds with what's saved: they are the Save's consequences, not updates, and always show.
+  - Lines without an identity never count: Pay what you owe keeps its own seenIds / seenAmounts (holds.ts), and the bank window's notice (§171 A3, a peek, not a
+    press) lists everything as before.

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { sidOf } from "./shownLines";
 import { displayName, fmtDateTimeIn, fmtTimeIn } from "@/lib/format";
 import { liftMomentLine, pauseMomentLine, stopMomentLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
@@ -122,5 +123,5 @@ export async function testerPauseSince(contractId: string, loaded: Date | null, 
  * "stop": the box shows it without adding the time again.
  */
 export function stopBox(lines: TestEventLike[], extra: Record<string, unknown> = {}): never {
-  throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines.map((e) => ({ text: e.text, at: e.createdAt, ...(e.kind === "stop" ? { kind: "stop" } : {}) })), tail: "Press again to go ahead.", ...extra });
+  throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines.map((e) => ({ text: e.text, at: e.createdAt, ...sidOf(e) /* (§250) its identity */, ...(e.kind === "stop" ? { kind: "stop" } : {}) })), tail: "Press again to go ahead.", ...extra });
 }
