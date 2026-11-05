@@ -2,6 +2,7 @@ import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { fmtDateTime } from "@/lib/server/dateFormat";
 import { HttpError } from "./http";
+import { isTombstone } from "./reuseEmail";
 
 // (Batch 17 §6) An account's suspension and deletion state as the admin's Suspend / Reinstate / Delete see it, on the Accounts list and on a profile's admin view.
 // `at` is when this state was read: Suspend and Reinstate send it back (or the Preview's time) so the server can refuse a press made from an older view.
@@ -54,7 +55,8 @@ export async function accountStates(users: Acct[]): Promise<Map<string, AccountS
         notes: { developer: u.devSuspendedAt ? u.devSuspendNote ?? "" : "", tester: u.testerSuspendedAt ? u.testerSuspendNote ?? "" : "", deleted: u.deletedAt ? u.deleteReason ?? "" : "" },
         held: u.holdStartedAt ? (u.holdReason === "chargeback" ? "chargeback" : "payment") : "",
         pronoun: u.pronoun ?? "",
-        deleted: u.deletedAt ? `Deleted ${fmtDateTime(u.deletedAt)} by ${u.deletedBy === "admin" ? deletedBy.get(u.id) ?? "the team" : "the owner of the account"}${u.deleteReason ? `: ${u.deleteReason}` : ""}` : "",
+        // (§114) "… · Its email was freed for a new sign-up" once a clean deleted account's email signed up again.
+        deleted: u.deletedAt ? `Deleted ${fmtDateTime(u.deletedAt)} by ${u.deletedBy === "admin" ? deletedBy.get(u.id) ?? "the team" : "the owner of the account"}${u.deleteReason ? `: ${u.deleteReason}` : ""}${isTombstone(u.email) ? " · Its email was freed for a new sign-up" : ""}` : "",
       },
     ]),
   );

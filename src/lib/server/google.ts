@@ -7,6 +7,7 @@ import { createSession, readCookie, sessionCookie } from "./session";
 import { HttpError } from "./http";
 import { isUniqueClash, readNewAccount, readTimeZone, sidesOf } from "./passwords";
 import { TERMS_VERSION } from "@/lib/termsOfUse";
+import { ACCOUNT_CLOSED, freeDeletedEmail, isClean } from "./reuseEmail";
 
 // Sign in with Google: plain OAuth 2.0 authorization-code flow with PKCE, no auth library.
 
@@ -43,7 +44,7 @@ export function startGoogle(req: Request) {
 export const clearGoogleCookie = () => `${GOOGLE_COOKIE}=; Path=/api/auth/google; HttpOnly; SameSite=Lax; Max-Age=0`;
 
 export class GoogleError extends Error {
-  constructor(public code: "cancelled" | "state" | "exchange" | "unverified" | "off") {
+  constructor(public code: "cancelled" | "state" | "exchange" | "unverified" | "off" | "closed") {
     super(code);
   }
 }
@@ -55,6 +56,8 @@ export const GOOGLE_MESSAGES: Record<string, string> = {
   google_exchange: "We couldn't finish signing in with Google. Try again, or use an email link.",
   google_unverified: "Your Google account's email isn't verified, so we can't use it. Use an email link instead.",
   google_off: "Google sign-in isn't available right now. Use an email link.",
+  // (Owner, Nov 1, §114; wording Nov 5) The email of a deleted account that wasn't clean: the login page adds Contact us after it.
+  google_closed: ACCOUNT_CLOSED,
 };
 
 function decodeIdToken(idToken: string) {
@@ -109,6 +112,12 @@ export async function finishGoogle(req: Request): Promise<{ pending: string } | 
   // (Batch 15 section 41, H2) Google proves the address. An existing account that never confirmed it may have been made by someone else first (a pre-hijack): before
   // Google signs into it, its password is cleared, every session ends, and any payout account is dropped; then the email counts as confirmed.
   const existing = await db.user.findUnique({ where: { email } });
+  // (Owner, Nov 1, §114) A deleted account is never signed into. Its email, when the account is clean, signs up again as a new account (the same short step; the
+  // email is freed only when the step makes the account); not clean: "This account was closed." on the login page.
+  if (existing?.deletedAt) {
+    if (!(await isClean(existing))) throw new GoogleError("closed");
+    return { pending: await startGoogleSignup(email) };
+  }
   if (existing) await claimUnconfirmed(existing);
   // (Owner, Oct 28, batch 20 section 5) A NEW account isn't made here: the browser goes to one short step (batch 35 §134: who you are and your name, then the
   // "I'm 18 or older." tick and the Terms agreement, then Continue), and the account is created only once all of them are given.
@@ -169,10 +178,16 @@ export async function finishGoogleSignup(token: string | null | undefined, body:
   if (!step || !token) throw new HttpError(409, "expired", GOOGLE_STEP_EXPIRED);
   await db.appState.deleteMany({ where: { key: stepKey(token) } });
   const now = new Date();
-  const existing = await db.user.findUnique({ where: { email: step.email } });
+  const found = await db.user.findUnique({ where: { email: step.email } });
+  // (Owner, Nov 1, §114) A deleted account with this email: never signed into. Clean (checked again now): its email is freed in the same commit as the new account;
+  // not clean any more: "This account was closed." (Contact us after it).
+  const existing = found && !found.deletedAt ? found : null;
   // Made meanwhile (another tab's sign-up): signed into it, as Google's sign-in would.
   // (Owner, Nov 3, races) Made at the same moment (two tabs' steps): the database's unique email refuses the second create, which signs into the one just made.
-  const user = existing ?? await db.user.create({ data: { email: step.email, name, pronoun, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone), ...sidesOf(role, { devices, languages, bio }) } })
+  const user = existing ?? await db.$transaction(async (tx) => {
+    if (found) await freeDeletedEmail(tx, found, () => new HttpError(409, "closed", ACCOUNT_CLOSED), now);
+    return tx.user.create({ data: { email: step.email, name, pronoun, emailVerifiedAt: now, termsVersion: TERMS_VERSION, termsAcceptedAt: now, ageConfirmedAt: now, timeZone: readTimeZone(body.timeZone), ...sidesOf(role, { devices, languages, bio }) } });
+  })
     .catch(async (e) => {
       if (!isUniqueClash(e)) throw e;
       return db.user.findUniqueOrThrow({ where: { email: step.email } });

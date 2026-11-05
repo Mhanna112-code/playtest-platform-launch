@@ -8,6 +8,8 @@ import { SubscribeLink } from "@/components/SubscribeLink";
 import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { useGoneOnNewVersion } from "@/lib/pageVersion";
 import { refusalLine } from "@/lib/pressLabels";
+import Link from "next/link";
+import { ACCOUNT_CLOSED, CONTACT_US_HREF } from "@/lib/accountClosed";
 
 /**
  * Red for a form mistake (fix the field and press again); blue for a refusal. Brought into view when it appears.
@@ -28,6 +30,8 @@ export function Err({ text, press = "" }: { text: string; press?: string }) {
   const red = text.startsWith(FIELD);
   const line = red ? text : refusalLine(press, text);
   if (!red && text.startsWith("Confirm your email first.")) return <p ref={ref} className="err flex flex-wrap items-center gap-2">{line} <ResendConfirm label="Resend the link" /></p>;
+  // (Owner, Nov 1, §114) Google's sign-up step for the email of a deleted account that wasn't clean: the line exactly, with Contact us after it.
+  if (!red && text === ACCOUNT_CLOSED) return <p ref={ref} className="err" data-account-closed="">{text} <Link href={CONTACT_US_HREF} className="underline" data-contact-us="">Contact us</Link></p>;
   if (!red && isPerkRefusal(text)) return <p ref={ref} className="err flex flex-wrap items-center gap-2" data-perk-refusal="">{line} <SubscribeLink /></p>;
   return <p ref={ref} className={red ? "err-field" : "err"} {...(!red && line !== text ? { "data-refusal-named": "" } : {})}>{red ? text.slice(1) : line}</p>;
 }

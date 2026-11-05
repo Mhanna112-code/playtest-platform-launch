@@ -3915,3 +3915,65 @@ New `tests/dash-search-204.test.ts`: `yourTestMatches` (name or product, any par
 `searchByDeveloper` / `devOrTestMatches` by developer or test name (the 1–2 character rule, exact first) and the lines; one DevSearch on the page, To do
 passed as `todo` with its three kinds of rows wrapped; the tester dashboard rendering the box above To do with the part's row. Updated:
 `batch16-dashboard-search` (the no-match line, the `todo` prop, the placeholder constant), `batch16-lists` (the cards box is in `YourTestsSearch.tsx`).
+## §114 A deleted account's email can sign up again when it was clean (owner, Nov 1; wording Nov 5)
+
+Owner: a deleted account kept its email, so signing up with it said "An account with that email already exists", which misled (signing in fails too). A CLEAN
+deleted account's email signs up again as a brand-new account; one that isn't clean is refused with "This account was closed." and Contact us, no details. The
+open question is decided: an admin's deletion is not clean. Google sign-in follows the same rules.
+
+| Before | After |
+| --- | --- |
+| Sign-up with a deleted account's email: "An account with that email already exists" (red at Email). | **Clean** (at the moment of sign-up): the sign-up goes through as a **new account**, separate from the old one (new id, nothing carried over: no tests, payments, ratings, card, Stripe ids, hold count or bio). **Not clean**: red at Email, exactly **"This account was closed."** followed by a **Contact us** link (to Contact us, `/app/help`, as RestrictedBox's refusals link it); listed with the other mistakes on the first press (§170); the bullet under Sign up reads the line alone. |
+| Continue with Google with a deleted account's email signed into nothing (a session the app never accepted, back to Log in). | Google never signs into a deleted account. **Clean**: Google's short sign-up step (§134), and Continue makes the new account. **Not clean**: the login page shows "This account was closed." with Contact us (`/login?error=google_closed`). Clean when Google answered but not by Continue: the step refuses with the same line and link (blue, not named after the press). |
+| An active account's email: "An account with that email already exists". | Unchanged. |
+
+- **Clean** (`notCleanWhy`, `isClean`; checked when the email is read and again inside the commit that makes the account): deleted by its owner (`deletedBy` "self";
+  an admin's deletion is never clean), no payment or chargeback hold (`holdStartedAt`), no suspension on either side, no open chargeback, and nothing owed: no
+  payment of the old account's that failed and isn't settled (`owedUntil`), is "owed" (a Charge or decision during a hold), "deferred" and unsettled (waiting for a
+  lift), "needs_confirmation" (waiting for the bank) or "paying" (a Pay what you owe in flight). The reason is for the code and tests only; the person reads the one line.
+- **Where the original email is kept (no migration, no schema change).** The old row's email becomes a tombstone that keeps the original inside it:
+  `ana@example.com (deleted <old id>)`. The unique email index takes the new sign-up; the tombstone has a space, so no typed email can ever be it (`isEmail` refuses
+  it); the admin's console still finds the old account by the original email (Accounts search matches any part of the email from 3 characters) and every admin line
+  shows it. The account's state line (Accounts list and the profile's admin view) ends "· Its email was freed for a new sign-up", and its Holds and suspensions box has
+  "Email freed for a new sign-up: ana@example.com" (an AccountEvent `email-freed`, note: the original email, at the moment of the sign-up).
+- **Freed in the same commit as the new account** (`freeDeletedEmail`): the old account checked clean again, its email renamed (only while it still holds that email),
+  its unused email links (reset, confirm) used up and moved to the tombstone, the event recorded, then the new account created. Two tabs signing up with the freed
+  email at once: one account; the other tab reads "An account with that email already exists" (the races rule, Nov 3); two Google steps sign both into the one account.
+- **Nothing else of the old account changes**: still deleted, every test, payment, rating, chat, dispute and excerpt stays under it (design doc "Deleted accounts":
+  history stays); holds, chargebacks and money owed are never cleared (a not-clean account keeps its email). Emails still about the old account (a receipt for a
+  charge on its saved card after a delete, §151; a summary) go to the original address, as any deleted account's do (`sendEmail` reads the address back out of the
+  tombstone), never to the tombstone.
+- **Every lookup by email, checked:**
+  - Sign-in (`logIn`): finds the new account only; the old account's password never signs in (the old row isn't found by the email, and is deleted). The one
+    "Wrong email or password" rule (batch 15 §7) is unchanged.
+  - Forgot password / reset (`requestReset`, `resetPassword`): the email goes to the address for the new account only; the old account's earlier reset links are
+    used up ("This link has expired or was already used.").
+  - Email confirmation (`confirmEmail`): a deleted account's link confirms nothing ("That link didn't work") and never the new account; the new account's own
+    3-an-hour limit doesn't count the old account's links.
+  - Google (`finishGoogle`, `finishGoogleSignup`): as in the table; an unconfirmed active account's pre-hijack clearing (batch 15 §41 H2) is unchanged.
+  - Sign-up (`signUp`): as in the table.
+  - Notifications by email (`notify`): the tombstone finds the old account (its bell), the original email the new one.
+  - Admin search (Accounts, Find tests by a developer's email): finds both by the original email; the exact match (the new account) first.
+  - Invites: by account id, never by email (nothing to change). Stripe: customers and Connect accounts are found by their stored ids, never by email; the new
+    account makes its own customer when it saves a card (the old one keeps its own ids, unique, untouched). Sign-in and sign-up attempt limits stay per typed email.
+- **Not changed.** Deleting an account (batch 12 §1, §119, §151), what a deleted account shows to others ("Deleted account"), "This account no longer exists".
+- **Hooks.** `data-account-closed` on the blue line (login page, Google's step); `data-contact-us` on its link and on the link after the red line at Email. The
+  sign-up page's Email box matches the line (`data-match="email|account was closed"`), so it is red there and not only listed under the button.
+- **Screenshots.** `playtest-lite-evidence/reuse-email-nov5` (captions.json), desktop 1280x900 and phone 375x812 (own server on 3498, a throwaway schema): the
+  refusal at Email with Contact us; the list under Sign up (one bullet, the line alone); the Google refusal on Log in. Contact us, pressed while signed out,
+  goes to Log in (`/login?next=/app/help`): Contact us needs an account (see the owner's choices).
+- **Code.** `src/lib/server/reuseEmail.ts` (new: `notCleanWhy`, `isClean`, `freeDeletedEmail`, `tombstoneOf`, `isTombstone`, `originalEmail`),
+  `src/lib/accountClosed.ts` (new: `ACCOUNT_CLOSED`, `CONTACT_US_HREF`), `passwords.ts` (`signUp`, `confirmEmail`), `google.ts` (`finishGoogle`,
+  `finishGoogleSignup`, `google_closed`), `email.ts` (`sendEmail`), `accountState.ts`, `adminLists.ts` (the event's label), `FieldChecks.tsx` (the link after the
+  red line; the bullet keeps the line), `Err.tsx`, `src/app/login/page.tsx`, `src/app/signup/page.tsx` (the Email box's match). No migration.
+
+### Tests
+New `tests/batch35-reuse-deleted-email.test.ts`: a clean deleted developer's email signs up again (a separate account with nothing of the old one's; the old one keeps
+its test, payment and rating; the tombstone; the event; the admin's search finds both, the new one first; the state line and the box line); the old account can't be
+signed into (old password wrong, the new one signs into the new account, the tombstone is "Enter a valid email", the old session stays dead); Forgot password goes to
+the new account only (the old reset and confirm links do nothing; the new link sets the new account's password, not the old one's); an email to the tombstone goes to
+the original address; a deleted tester too; refused with "This account was closed." for a failed unpaid charge, an "owed" charge, a deferred charge, a charge waiting
+for the bank, an open chargeback, a payment hold, a chargeback hold, a developer-side suspension, a tester-side suspension and an admin's deletion (nothing changes;
+with other mistakes, every line at once); an active account still "already exists"; Google: clean (no sign-in to the old account, the step makes the new one and frees
+the email, Google again signs into the new one), not clean (`google_closed`, the login page's line and link), not clean by Continue (refused, no account made), a fresh
+email and an active account unchanged; the page's sources (the link after the red line, the Err and login lines).

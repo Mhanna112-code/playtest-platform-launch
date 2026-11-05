@@ -102,31 +102,9 @@ and lists only the other file; an answer with only inline files has no list. App
 or merge.
 ```
 
-## 4. Task 26: Signing up again with a deleted account's email
+## 4. Task 26: Signing up again with a deleted account's email: DONE (Nov 5)
 
-```
-Read AGENTS.md first and follow it. Task number: 26 (schema codex26, build folder .next-codex26, branch codex/reuse-deleted-email,
-worktree C:/Users/march/Projects/pl-codex-26, branched from master).
-
-Owner decision (Nov 1): today a deleted account keeps its email, so sign-up with it says "An account with that email already
-exists" (misleading: signing in fails too). Wanted:
-- A CLEAN deleted account's email can sign up again as a brand-new account. Clean = at the moment of sign-up the deleted account
-  has nothing owed (no owed / failed-unsettled / deferred / needs_confirmation payments), no payment or chargeback hold, no open
-  chargeback, no suspension on either side, and wasn't deleted by an admin. The old account keeps its history, ratings, tests and
-  payments under it (free its email first, e.g. rename the deleted row's email to a unique "deleted+<id>@…" tombstone and keep the
-  original in a separate column for the admin's views, so the unique index allows the new sign-up; admins still find it by the
-  original email in the console). Nothing carries over to the new account.
-- A deleted account that ISN'T clean: sign-up is refused with "This email belonged to an account that was closed. Contact us to
-  use it again." (no details), linking to Contact us. Google sign-in follows the same rules.
-- Active (not deleted) accounts: unchanged ("An account with that email already exists").
-Check every place that looks up users by email (sign-in, password reset, invites by email, admin search, Stripe customer lookups)
-so the tombstone never breaks them and the old account can never be signed into.
-Tests in tests/batch35-reuse-deleted-email.test.ts: clean deleted -> new sign-up works, separate account, old history intact,
-admin finds both; deleted with money owed / on a hold / suspended / deleted by an admin -> refused with the closed line; active ->
-"already exists". Append "## §114 A deleted account's email can sign up again when it was clean (owner, Nov 1)" to
-docs/BATCH-35.md. A migration only if needed (local only; Vercel applies it on deploy). npm run check green (known flaky list as in
-the earlier tasks). Commit on the branch; don't push or merge.
-```
+Built by Claude on branch feat/reuse-email: see BATCH-35 §114 (the owner's Nov 5 wording "This account was closed."; an admin's deletion is not clean). Don't paste this one into Codex.
 
 ## 5. Task 22: Your own page is the page load on every side (optional)
 
