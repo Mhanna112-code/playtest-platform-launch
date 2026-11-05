@@ -62,7 +62,7 @@ describe("batch 35 §77 a re-send with nothing new isn't 'updated'", () => {
     expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", existing ? NO_RECORDING_TO_ADD : "Upload a recording first.");');
     // (Batch 35 §183) The same refusal, now in sendRefusal: checked before the stop-once (a single refusal, never a stop first) and again under the lock.
     const tests = src("lib/server/tests.ts");
-    expect(tests).toContain('if (existing && !existing.setUntil && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);');
+    expect(tests).toContain('if (existing && !existing.setUntil && !answersNew && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);' /* (§235) a Send answering nothing new */);
     expect(tests.indexOf("const sentRefusal = sendRefusal(sent, qs, answers);")).toBeLessThan(tests.indexOf("await testerSendGate(contractId, body, sent?.id);"));
     expect(tests).toContain("const refused = sendRefusal(existing, qs, answers);");
     expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", NO_RECORDING_TO_ADD);'); // §183: the recordings' nothing-to-add, before the gate too

@@ -53,7 +53,7 @@ describe("batch 7 item 2: a stopped test shows only what still works", () => {
 
   it("tester: Send and the request tools hide; the sent work stays readable with each part's status", () => {
     const s = src("app/app/sessions/[id]/page.tsx");
-    expect(s).toContain("{canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions) && ("); // (batch 35 §136) sent work shows read-only; only the forms hide
+    expect(s).toContain("{canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions || openQs.length > 0) && ("); // (batch 35 §136) sent work shows read-only; only the forms hide
     expect(s).toContain('data-sent-answers=""');
     expect(s).toContain('<TesterPaymentTag review={sub.review}');
     expect(s).toContain("const canRequestCall = !refusal && !blockedPair && !paused;");
