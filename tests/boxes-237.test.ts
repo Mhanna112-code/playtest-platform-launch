@@ -55,21 +55,21 @@ describe("§237 item 1: ReasonQuote is the draggable box, with its quote look", 
 
 describe("§237 items 2 and 3: the lists and See the work are draggable panels", () => {
   it("ScrollList: the panel at its old height (per screen width), kept by its label; its list inside", () => {
-    const html = render(h(ScrollList, { label: "Tests visited" }, h("li", null, "a")));
+    const html = render(h(ScrollList, { label: "Tests visited", children: h("li", null, "a") }));
     expect(html).toContain('data-panel="list-tests-visited"');
     expect(count(html, "data-panel-grip")).toBe(1);
     expect(html).toContain("max-height:var(--list-max)");
     expect(html).toContain("[--list-max:22rem]");
     expect(html).toMatch(/<ul class="space-y-2" data-scroll-list="rows" aria-label="Tests visited"><li>a<\/li><\/ul>/);
-    const cards = render(h(ScrollList, { size: "cards", className: "grid gap-4 md:grid-cols-2" }, h("li", null, "c")));
+    const cards = render(h(ScrollList, { size: "cards", className: "grid gap-4 md:grid-cols-2" , children: h("li", null, "c")}));
     expect(cards).toContain("[--list-max:54rem] md:[--list-max:38rem]");
     expect(cards).toContain('data-panel="list-cards"');
-    expect(render(h(ScrollList, { id: "rating-comments", size: "lines" }, null))).toContain('data-panel="rating-comments"');
+    expect(render(h(ScrollList, { id: "rating-comments", size: "lines", children: null }))).toContain('data-panel="rating-comments"');
     // The boxes inside keep their own (a dispute's reason in Disputes: add your side).
-    expect(count(render(h(ScrollList, { label: "Disputes" }, h("li", null, h(ReasonQuote, { text: LONG })))), "data-panel-grip")).toBe(2);
+    expect(count(render(h(ScrollList, { label: "Disputes", children: h("li", null, h(ReasonQuote, { text: LONG })) })), "data-panel-grip")).toBe(2);
   });
   it("AnswersBox: the panel, 20rem at first, kept by the piece", () => {
-    const html = render(h(AnswersBox, { id: "answers-s1" }, "answers"));
+    const html = render(h(AnswersBox, { id: "answers-s1", children: "answers" }));
     expect(html).toContain('data-panel="answers-s1"');
     expect(html).toContain(`max-height:${ANSWERS_BOX_MAX}`);
     expect(html).toContain('data-answers-box="panel"');

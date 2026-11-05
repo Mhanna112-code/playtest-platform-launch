@@ -14,6 +14,7 @@ import { qRequired, qText } from "@/lib/questions";
 export type NoteItem = { name?: string; before?: string | string[]; after?: string | string[]; typed?: string | string[]; lines?: string[] };
 
 /** Short values stay on one line ("Spots: 4 → 5"); long text is in its box (FoldText). */
+const NL = String.fromCharCode(10);
 const isShort = (s: string) => s.length <= 80 && !s.includes("\n");
 
 /**
@@ -66,8 +67,10 @@ export function NoteItems({ items, inlineFirst = false }: { items: NoteItem[]; i
         const line = shortLine(it);
         return (
           <div key={i} className="space-y-0.5" data-note-item="">
-            {it.lines && <LongList as="div" className="space-y-0.5">{it.lines.map((l) => <p key={l}>{l}</p>)}</LongList>}
-            {line && <p data-note-short="">{line}</p>}
+            {/* (Owner, Nov 5, §241) Every other-tab change in its draggable box too: the keys' lines ("Added: …"), and short changes ("Categories: a → b",
+                selections, spots), not only long text. */}
+            {it.lines && <ValueText id={textId("note-lines", it.lines.join("|"))} label={it.name ?? "Changes"}><span data-note-lines="">{it.lines.join(NL)}</span></ValueText>}
+            {line && <ValueText id={textId("note-short", line)} label={it.name ?? "Change"}><span data-note-short="">{line}</span></ValueText>}
             {/* Long text (steps, questions, NDA): "<Field>:" then the text it replaced (the new one is in the box). */}
             {!line && it.before !== undefined && <Value label={`${it.name ?? "Before"}:`} value={it.before} />}
             {it.typed !== undefined && <Value label="What you typed (not saved):" value={it.typed} copy />}

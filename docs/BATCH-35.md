@@ -4491,3 +4491,7 @@ No Show more inside a box; long words wrap anywhere, so a 375px phone never scro
 - **Tests:** new `tests/boxes-237.test.ts`. Updated: `batch16-dashboard-search`, `batch16-edit-tabs`, `batch16-excerpt-question`, `batch16-lists`,
   `batch17-stop-reason`, `batch20`, `batch23`, `batch35-admin-tabs`, `batch35-excerpt-live`, `batch35-numbers-notes`, `batch35-parts-fold`,
   `excerpt-delete-only-196`, `layout-fixes-187`.
+
+## §241 Every other-tab change note in its box (owner, Nov 5)
+Edit's "Changed in another tab or device at …" notes (FieldNote) put every change in the shared draggable box, not only long text: the access keys' lines ("Added:
+…", "Removed: …"), short changes ("Categories: a → b", devices, languages, spots and the other selections), the replaced long text and "What you typed (not saved)".
