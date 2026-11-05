@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, fmtTimeIn } from "@/lib/format";
-import { pauseMomentLine, stopMomentLine, type TestEventLike } from "@/lib/rules";
+import { liftMomentLine, pauseMomentLine, stopMomentLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
 import { seenOf } from "./live";
 
@@ -62,6 +62,48 @@ export async function devPauseSince(testId: string, loaded: Date | null, now = n
   const [cause, at] = causes[0];
   const tz = t.developer.timeZone;
   return { kind: "stop", text: pauseMomentLine("developer", cause, at, (d) => fmtTimeIn(d, tz), (d) => fmtDateTimeIn(d, tz), now), createdAt: at };
+}
+
+/** (§172) The team's own pause and lift of one test, as recorded (restrictions.ts pauseTest / unpauseTest). */
+export const TEAM_PAUSED_EVENT = "The team paused this test";
+export const TEAM_LIFTED_EVENT = "The team lifted the pause on this test";
+
+/**
+ * (Owner, Nov 5, §207) The team lifting its pause on this test since the page loaded is named like the pause itself: the next press stops once with "The team
+ * lifted its pause on this test at 3:10 AM." (testers: "This test resumed at 3:10 AM."). A pause that began after the page loaded and was lifted since is named
+ * too ("The team paused this test at …"), since the page showed neither and devPauseSince only names a pause still on. Oldest first.
+ */
+async function teamLiftsSince(testId: string, loaded: Date, side: "tester" | "developer", tz: string | null | undefined, now: Date): Promise<TestEventLike[]> {
+  const evs = await db.testEvent.findMany({
+    where: { testId, createdAt: { gt: loaded }, OR: [{ kind: "paused", text: TEAM_PAUSED_EVENT }, { kind: "resumed", text: TEAM_LIFTED_EVENT }] },
+    orderBy: { createdAt: "asc" },
+    take: 20,
+  });
+  if (!evs.some((e) => e.kind === "resumed")) return [];
+  const time = (d: Date) => fmtTimeIn(d, tz), dateTime = (d: Date) => fmtDateTimeIn(d, tz);
+  return evs.flatMap((e, i): TestEventLike[] => {
+    if (e.kind === "resumed") return [{ kind: "stop", text: liftMomentLine(side, e.createdAt, time, dateTime, now), createdAt: e.createdAt }];
+    // A pause still on is devPauseSince's / testerPauseSince's line: only one that a later lift ended is said here.
+    return evs.slice(i + 1).some((x) => x.kind === "resumed") ? [{ kind: "stop", text: pauseMomentLine(side, "team", e.createdAt, time, dateTime, now), createdAt: e.createdAt }] : [];
+  });
+}
+
+/** (§207) The developer's page: the team's lift of this test's pause since the page loaded (and the pause it ended, when that came after the load too). */
+export async function devLiftSince(testId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
+  if (!loaded) return [];
+  const t = await db.test.findUnique({ where: { id: testId }, select: { developer: { select: { timeZone: true } } } });
+  return t ? teamLiftsSince(testId, loaded, "developer", t.developer.timeZone, now) : [];
+}
+
+/**
+ * (§207) A tester's page: "This test resumed at 3:10 AM." once the team lifted its pause since the page loaded. Not while the developer's own hold or suspension
+ * still keeps the test paused for testers (it hasn't resumed for them).
+ */
+export async function testerLiftSince(contractId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
+  if (!loaded) return [];
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { testId: true, tester: { select: { timeZone: true } }, test: { select: { developer: { select: { holdStartedAt: true, devSuspendedAt: true } } } } } });
+  if (!c || c.test.developer.holdStartedAt || c.test.developer.devSuspendedAt) return [];
+  return teamLiftsSince(c.testId, loaded, "tester", c.tester.timeZone, now);
 }
 
 /** (Batch 29 section 11) The same for a tester's page: "This test was paused at 3:10 PM." (testers read only "paused": never why, never "hold" or "suspended"). */

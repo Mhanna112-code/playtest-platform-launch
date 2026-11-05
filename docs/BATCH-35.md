@@ -3989,3 +3989,53 @@ email and an active account unchanged; the page's sources (the link after the re
 - "New total $X." now also shows when only the bank's amount changed (it read just the press-again line before).
 - The chargeback hold's reservation stop (`reserveOwed` in `src/lib/server/chargeback.ts`: the bank changed the amount while the reservation was being made) has the same shape: one bullet per amount the bank changed, then "New total $X. <press-again line>" keyed `owed-total` (they were joined with "; " before).
 - Tests updated: `batch10`, `batch3`, `batch35-payment-proofs`, `batch35-stop-rules-v2` (§171 B6c), `owed-over200` (three cases), `pay-matrix` (§159 rule 5: the total bullet on both stops), `owed-dispute-change` (two cases), `partial-dispute` (§133 dispute.updated), `races-nov3` (race 3, the reservation's stop). Also in `batch35-stop-rules-v2`, §171 item 7 follows §205: her dispute now stops Confirm with your bank once, forced (the payment line on her part still doesn't); the press after it goes through and the window's notice still lists both.
+## §207 Fixes from the Nov 5 recordings (owner, Nov 5)
+
+Five bugs from the night's recordings (captions: `playtest-lite-evidence/recordings-nov5/captions.json` and `recordings-nov4/captions.json`). No settled rule
+changed: each fix makes the app do what its section already says.
+
+1. **The Alerts menu opens inside the screen (R5, P1, P2, P5, P6).** On the developer's test page the menu (`absolute right-0 … w-72`) hung past the LEFT edge
+   when its button sat near the left (the header's buttons wrapped under the title), so its ticks couldn't be pressed. It is now placed from where its button is
+   when it opens (and again when the window changes size): right edges together when there's room on the left, as before; otherwise left edges together; and
+   when neither fits, slid in from the edge it would cross, 8 px from it (`menuLeft`). Phones keep it in the page under the button (static, full width).
+   Measured at 1280, 1024, 768 and 375: all of it on the screen, its ticks pressable (at 768 its left edge was at x = -78 before).
+2. **The team lifting its pause is named like the pause (R4b).** A press from a page drawn before the lift stops once with "The team lifted its pause on this
+   test at 3:08 AM." (`devLiftSince`, from the lift's own event), as the pause stops once with "The team paused this test at 3:08 AM."; a page from before both
+   names both, oldest first. The tester side had the same gap: "This test resumed at 3:08 AM." (`testerLiftSince`; testers still never read why; not while the
+   developer's own hold or suspension keeps the test paused for them). It is a forced stop line like the pause's (no "turn off" for it); the second press goes
+   ahead. Developer: every press with the pause line (devGate). Tester: the presses that name the pause (Charge / Let it go, Dispute, call presses, terms, Rate).
+   A hold's lift (the developer's own Pay what you owe) and a suspension's reinstatement are unchanged.
+3. **Accept on a withdrawn call request from an older page shows its refusal (R8c, Nov 4; §185).** The server's single refusal ("409 gone: Ana Silva withdrew
+   this request.") was shown under the button, but the refusal's own redraw took the row away and the line with it, and the kept line (§116) went too: on the
+   recording's older page the page's version couldn't be read at the refusal, so the version the page still showed (from before the withdrawal) became the
+   baseline and the refusal's own redraw counted as a newer version. Now (a) when the version can't be read, the first version shown after the refusal is its own
+   redraw (the baseline) and only a later one clears the line (`watchNewPageVersion`, `serverVersionOrNull`; §116 unchanged otherwise); (b) the request boxes
+   (both sides) keep the named line above their people once the row is gone: "Your Accept didn't go through: Ana Silva withdrew this request."
+   (`lostRefusal`, `[data-request-refusal]`). When the box itself goes (it was the only request), the kept line shows at the top of the page (§116).
+4. **Verify a card's own Cancel reads as a cancel (R1e, Nov 4).** Cancel under the card check's bank window (the check not finished) now reads "Cancelled: your
+   card wasn't changed." (a plain line, as Pay's "Cancelled: nothing was charged."), never "Your Verify this card didn't go through: The card wasn't
+   verified…". The window's Cancel tells the finish it was the developer's (`pressedCancel`); the server cancels the card check at Stripe as before and answers
+   `{ verified: false, cancelled: true }` (no 409, so no refusal is kept and the page doesn't redraw for it). The bank refusing the card, the peek ending it
+   and leaving the page still read as before; a check that had gone through still verifies the card.
+5. **A bank window whose check is cancelled underneath it stays open with its notice (R10b and R1c, Nov 4; §160, §171 B6 b).** Whatever ends a check cancels it
+   at Stripe FIRST, then lets go of it in the app and (Pay what you owe's one payment) marks it cancelled. A 3-second peek landing in between read Stripe's
+   "canceled" while the app still held the check (or the check let go of but not yet marked) and answered "done": the page ran its finish at once and the window
+   closed by itself with "Your Pay what you owe didn't go through: This payment was cancelled: nothing was charged." Now such a peek waits (up to 2.5 s,
+   `SETTLE_MS`) for the app to finish ending it and answers from that: "This bank check was cancelled: your bank decided a chargeback in your favour, so what you
+   owe changed. Pressing Complete won't charge anything." (or the cancel's own reason), the window open until Complete or Cancel. The same for Pay, Pay more,
+   Confirm and a chargeback hold's reservation. A check Stripe shows cancelled that the app never lets go of still keeps the window open ("…it was ended
+   elsewhere…"). The one payment's reason is now written with its cancel (`releaseOwed(id, failure)`), so no peek reads it cancelled without its reason.
+
+- **Code.** `AlertsMenu.tsx` (`menuLeft`, `MENU_EDGE`, placed on open and resize), `rules.ts` (`liftMomentLine`), `stopMoment.ts` (`devLiftSince`,
+  `testerLiftSince`, `TEAM_PAUSED_EVENT`, `TEAM_LIFTED_EVENT`), `tests.ts` (devGate), `api/sessions/[id]/[action]` (stateMoment), `ratings.ts` (the tester's
+  Rate), `pageVersion.ts` (`serverVersionOrNull`, `watchNewPageVersion`), `CallRequestsPanel.tsx` (`requestOfPress`, `lostRefusal`), `BankCheck.tsx`
+  (`BankFinish`: the box's Cancel says so), `ChargebackSteps.tsx` (`CardCheckCancelled`, the plain line), `api/payments/verify-card` (`pressedCancel`),
+  `bankNotice.ts` (`CARD_CHECK_CANCELLED`), `bankPeek.ts` (`piState`, `settled`, `SETTLE_MS`), `owedOnce.ts` (`releaseOwed`'s failure). No migration.
+- **Tests.** New `tests/rec-findings-nov5.test.ts` (1: the placement at the four widths' button spots, the edges, the phone; 2: the lines, the developer's Stop
+  after the lift (R4b), a page from before both, the tester's press after the lift and from before both; 3: the server's single named refusal, the panel's
+  kept line, the kept refusal surviving its own redraw when the version can't be read, and the read case as before; 4: the pressed Cancel's answer, the bank's
+  refusal still a refusal, a Cancel after it went through verifies; the window's Cancel and the steps box). `tests/batch35-stop-rules-v2.test.ts` "§207":
+  the peek between Stripe's cancel and the app's (a chargeback won), between the let-go and the mark (Pay what you owe's release; Cancel this check), a check
+  never let go of, a Pay cancelled by a hold starting.
+- **Screenshots.** `playtest-lite-evidence/rec-fixes-nov5` (captions.json; own server on 3499, a throwaway schema): the Alerts menu open on the test page at
+  1280 and 375; the refusal line kept in "Requests to you" after Accept on Ana Silva's withdrawn request from an older page.

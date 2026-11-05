@@ -44,12 +44,50 @@ export async function serverVersion() {
   return versionOf(m);
 }
 
-/** The refusal's own redraw brings this server version; only a later shown version clears it. */
+/** (Owner, Nov 5, §207) The page's version on the server now, or null when any of its checks couldn't be read (offline, held back): never the shown one instead. */
+export async function serverVersionOrNull() {
+  const m = new Map(shownBy);
+  let unread = false;
+  await Promise.all([...sources].map(async ([q, f]) => {
+    const v = await f().catch(() => null);
+    if (v === null) unread = true;
+    else m.set(q, v);
+  }));
+  return unread ? null : versionOf(m);
+}
+
+/**
+ * The refusal's own redraw brings this server version; only a later shown version clears it.
+ * (Owner, Nov 5, §207; bug in the Nov 4 recording R8c) When the server's version couldn't be read at that moment, the baseline was the version the page still
+ * showed (from before the change the refusal is about), so the refusal's own redraw counted as a newer version and took the line away at once ("Your Accept
+ * didn't go through: Ana Silva withdrew this request." never showed). Now the first version shown after the refusal is its own redraw (the baseline), and only a
+ * later one clears it.
+ */
 export function watchNewPageVersion(onNew: () => void) {
   let alive = true;
   let base: string | undefined;
-  void serverVersion().then((v) => { if (alive) base = v; });
-  const onShown = () => { if (isNewVersion(base, shownVersion())) onNew(); };
+  let unread = false;
+  const start = shownVersion();
+  let firstNew: string | undefined;
+  void serverVersionOrNull().then((v) => {
+    if (!alive) return;
+    if (v !== null) base = v;
+    else {
+      unread = true;
+      base = firstNew;
+    }
+  });
+  const onShown = () => {
+    const now = shownVersion();
+    if (base === undefined) {
+      if (firstNew === undefined && now !== start) {
+        firstNew = now;
+        if (unread) base = now;
+      }
+      return;
+    }
+    if (isNewVersion(base, now)) onNew();
+  };
   subs.add(onShown);
   return () => { alive = false; subs.delete(onShown); };
 }

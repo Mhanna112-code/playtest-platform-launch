@@ -10,6 +10,8 @@ import { BANK_CHECK_TITLE, BANK_STAND_IN, BANK_STAND_IN_NOTE } from "@/lib/rules
 type Ended = { ok: true; value: unknown } | { ok: false; error: Error };
 /** (§158) The open check's question; (§160) `since`: when its box opened (the press). */
 export type Peek = (since: string) => Promise<PeekAnswer | PeekResult>;
+/** (Owner, Nov 5, §207) How the box ends: the stand-in's answer, and `cancel` when the developer pressed the box's own Cancel (not the bank's answer). */
+export type BankFinish = (s?: Simulate, cancel?: boolean) => Promise<unknown>;
 /** (§160) What the blue notice shows: every change line once, in the order they arrived; what Complete still does; or that the check was cancelled. */
 export type Notice = { lines: string[]; still: string; cancelled: string };
 export const NO_NOTICE: Notice = { lines: [], still: "", cancelled: "" };
@@ -90,18 +92,18 @@ export function BankNotice({ notice, id = "card" }: { notice: Notice; /** (§194
  * Plain changes never close the box (the developer decides: Complete still pays as pressed, or Close); a cancelled check stays open with its notice until the
  * bank's return or Close ends it with the usual finish.
  */
-export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", notice: initial = NO_NOTICE }: { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; onEnd: (r: Ended) => void; peek?: Peek; /** (§160) the page goes away with the window open: what Cancel does, as a beacon */ leave?: () => void; since?: string; /** tests and recordings: a notice to start with */ notice?: Notice }) {
+export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", notice: initial = NO_NOTICE }: { action: BankAction; finish: BankFinish; onEnd: (r: Ended) => void; peek?: Peek; /** (§160) the page goes away with the window open: what Cancel does, as a beacon */ leave?: () => void; since?: string; /** tests and recordings: a notice to start with */ notice?: Notice }) {
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<Notice>(initial);
   const box = useRef<HTMLDivElement>(null);
   const ended = useRef(false);
   const opened = useRef(since || new Date().toISOString());
-  const end = useCallback(async (simulate?: Simulate) => {
+  const end = useCallback(async (simulate?: Simulate, cancel = false) => {
     if (ended.current) return;
     ended.current = true;
     setBusy(true);
     try {
-      onEnd({ ok: true, value: await finish(simulate) });
+      onEnd({ ok: true, value: await finish(simulate, cancel) });
     } catch (e) {
       onEnd({ ok: false, error: e instanceof Error ? e : new Error(String(e)) });
     }
@@ -138,7 +140,7 @@ export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", 
         <p className="text-xs text-amber-200/80">{BANK_STAND_IN_NOTE}</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" className="btn px-3 py-1.5 text-sm" disabled={busy} onClick={() => end("succeeded")} data-bank-confirm="">Confirm</button>
-          <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end("failed")} data-bank-cancel="">Cancel</button>
+          <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end("failed", true)} data-bank-cancel="">Cancel</button>
         </div>
       </div>
     );
@@ -148,14 +150,14 @@ export function BankCheckView({ action, finish, onEnd, peek, leave, since = "", 
       <p className="font-semibold text-white">{BANK_CHECK_TITLE}</p>
       <iframe src={action.checkUrl} title={BANK_CHECK_TITLE} className="h-[28rem] w-full rounded-lg border border-white/10 bg-white" />
       <p className="text-xs text-sky-100/80" data-bank-close-hint="">{CANCEL_HINTS[action.cancel ?? "press"]}</p>
-      <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end()} data-bank-close="">{BANK_CANCEL}</button>
+      <button type="button" className="btn-ghost px-3 py-1.5 text-sm" disabled={busy} onClick={() => end(undefined, true)} data-bank-close="">{BANK_CANCEL}</button>
       {/* (Owner, Nov 4) The notice sits at the bottom of the box, under the frame and Cancel. */}
       <BankNotice notice={notice} id={action.paymentId || "card"} />
     </div>
   );
 }
 
-type Open = { action: BankAction; finish: (s?: Simulate) => Promise<unknown>; peek?: Peek; leave?: () => void; since: string; resolve: (v: unknown) => void; reject: (e: Error) => void };
+type Open = { action: BankAction; finish: BankFinish; peek?: Peek; leave?: () => void; since: string; resolve: (v: unknown) => void; reject: (e: Error) => void };
 
 /**
  * (Batch 17 §11) A button's inline bank check: `check(action)` opens it (render `view` directly under the button) and resolves with the server's result when the payment
@@ -171,7 +173,7 @@ export function useBankCheck() {
     countBankCheck(1);
     return () => countBankCheck(-1);
   }, [open]);
-  const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate) => Promise<T>, peek?: Peek, leave?: () => void): Promise<T> => {
+  const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate, cancel?: boolean) => Promise<T>, peek?: Peek, leave?: () => void): Promise<T> => {
     const fin = finish ?? ((s?: Simulate) => finishPayment<T>(a.paymentId, s));
     // (Owner, Nov 4, §171 B4) The peek names this window's own check (its PaymentIntent, from the client secret): the server says when it is no longer the live one.
     const look: Peek | undefined = peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId, ...(checkPiOf(a.clientSecret) ? { pi: checkPiOf(a.clientSecret) } : {}) }, since) : undefined);
