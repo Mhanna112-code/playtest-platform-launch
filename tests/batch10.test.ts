@@ -358,7 +358,7 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Refund: your bank's chargeback of $10.00 was reversed" } })).toBe(1);
     // The hold lifted on the Approve; the refund doesn't bring it back.
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
-    expect(src("app/app/payments/page.tsx")).toContain("refunded (your bank's chargeback was reversed)");
+    expect(src("components/PaymentLists.tsx")).toContain("refunded (your bank's chargeback was reversed)"); // (§190) Payments' paid list, shared with the admin box
   });
 
   it("from the 4th hold on, Approve is still needed; anything else still owed keeps the (payment) hold", async () => {

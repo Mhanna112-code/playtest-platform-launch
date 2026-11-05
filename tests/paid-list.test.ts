@@ -14,8 +14,10 @@ describe("What you've paid", () => {
     const repay = { amountCents: 5400, chargebackAt: null, chargeback: "", status: "charged" };
     expect(paidOutTotal([reversed, repay])).toBe(5400);
     expect(paidOutTotal([{ ...reversed, chargeback: "won" }, { ...repay, status: "refunded" }])).toBe(3900);
-    const page = fs.readFileSync("src/app/app/payments/page.tsx", "utf8");
-    expect(page).toContain("Total {money(paidOutTotal(paidOut, reversedOnes))}");
+    // (§190) Read by the shared developerPaid and drawn by the shared DevPaidList (Payments and the admin box).
+    expect(fs.readFileSync("src/lib/server/paymentLists.ts", "utf8")).toContain("totalCents: paidOutTotal(list, reversedOnes)");
+    const page = fs.readFileSync("src/components/PaymentLists.tsx", "utf8");
+    expect(page).toContain("Total {money(paid.totalCents)}");
     expect(page).toContain('<li key={p.id} className="space-y-0.5 py-2">');
     expect(page).toContain('<span className="block text-slate-400">{fmtDateTime(p.createdAt)}');
   });
