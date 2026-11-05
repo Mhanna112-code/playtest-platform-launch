@@ -2,6 +2,7 @@ import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { notFound } from "next/navigation";
 import { Brand } from "@/components/Brand";
+import { Cut } from "@/components/Cut";
 import { db } from "@/lib/db";
 
 import { requirePageUser } from "@/lib/server/page-auth";
@@ -186,7 +187,7 @@ export default async function AdminPage({ searchParams }: { searchParams: Promis
                 <div className="space-y-1" data-emails-failed="">
                   <p className="font-semibold text-rose-200">{mail.failedCount} email{mail.failedCount === 1 ? "" : "s"} failed for good (tried for 48 hours, kept):</p>
                   <ul className="max-h-52 list-disc space-y-0.5 overflow-y-auto pl-5">
-                    {mail.failed.map((m) => <li key={m.id}>To {m.to} · “{m.subject}” · written {clock(m.createdAt)} · {m.lastError}</li>)}
+                    {mail.failed.map((m) => <li key={m.id} className="[overflow-wrap:anywhere]" data-email-failed-row="">To <Cut text={m.to} kind="email" /> · “{m.subject}” · written {clock(m.createdAt)} · {m.lastError}</li>)}
                   </ul>
                   <AdminButton action="emails-clear" id="all" label="Clear this list (the emails are kept)" />
                 </div>

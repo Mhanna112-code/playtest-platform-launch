@@ -4422,3 +4422,42 @@ that refilled every question after a switch.
 - **Tests:** new `tests/terms-history-236.test.ts` (the cut and whole versions line up; NameLine's … and arrow, the link when nothing is cut; the page: the panel,
   a contract note with a long developer name and a long quoted test name cut with two … and the arrow). Also fixed here: `batch15-stops` and `restrictions` (the
   press "Send Answers", §235) and `batch32-fixes` (§231's boxes).
+
+## §238 Names cut at 20 on the remaining rows, with "…" and the arrow (owner, Nov 5)
+§220's pattern (names cut at NAME_CUT, 20, with "…"; each "…" opens its name in place, the arrow opens the whole line in place in the draggable box) on the rows
+that still drew a long name whole or only as a `truncate` + `title` hover:
+- **Tester dashboard, To do:** "<developer> offered new terms: <diff>" is a WholeLine: the developer's name cut at 20 and a long diff at DIFF_CUT (40), each with
+  its "…" (`offerLine`, `src/lib/cutNames.ts`); "<developer> asked for a live call" cuts the name the same way (`cutNamesIn`). The row now opens through a link
+  laid over the card (as Messages' rows, §124), so the line's "…" and arrow and the test's name (its own link) sit above it; the rest of the card opens the row as
+  before. The test's name lost its `truncate` + `title`.
+- **Waiting for the developer:** the "Application waiting" / "Ask to rejoin waiting" card and the invite-only card cut the test's name with `Cut` (kind "test"),
+  in place of `truncate` (+ `title` on the first; the invite-only card had none).
+- **Ratings to give:** each "Rate <name> on “<test>”" row is a WholeLine of its names (the row carries `names`), no hover; the row's link lies over it.
+- **Join page:** "<developer> approves each tester" (the badge, no link inside it) and "<developer> invited you" (the name linked to the profile when whole) cut the
+  developer's name with "…" opening it in place and the arrow (NameLine).
+- **Admin console:** the Reports rows cut the reporter's and the reported person's names (still links to their profiles) and their emails in the middle (Cut,
+  kind "email"); the "Reported more than 3 times" label follows the email. Checked the other lists (developers, testers, the account's admin box, disputes,
+  payments, holds, lifts, no-shows, contact): their names and emails were already cut (AdminRich). Also cut here: the failed emails' "To <email>" (Settings), the
+  admin box's "Payments as <name> sees them" heading and the dispute decision's tick "Charge <developer> $… more".
+- Phones (375px): the rows wrap (`overflow-wrap:anywhere`), never scroll sideways.
+- **Tests:** new `tests/names-sweep-238.test.ts` (offerLine; the dashboard's offer row rendered with a long developer name and diff: two "…", the arrow, the
+  overlay link; the waiting cards; Ratings to give; the join page; the Reports row rendered: names and emails cut, links and label kept). Fixed: the stale
+  NameLink count in `batch35-name-links` (§236 moved the Terms history lines to NameLine).
+
+## §239 No notes on recordings (owner, Nov 5)
+Replaces §182's notes block on a recording. Testers no longer add a note when sending recordings: the recording's Send has no notes box and sends none, and the
+server ignores a `notes` field on `recording-send` and stores nothing (`sendRecording`). Stored notes on old recordings are never shown (no migration): SentWork's
+recording view drops its "Notes" block, which covers the tester's and the developer's views (Needs you, the updates, the Testers list) and the admin's See the
+work in a dispute. No email or bell named them. The written part's notes and "Anything else" are not affected. **Tests:** new
+`tests/recording-notes-239.test.ts` (an old note not shown, the written part's still shown; a Send with notes stores none; no notes in RecordingUpload); updated
+`batch35-listing-paid-parts` (the paid recording's row shows its file above Pay more, not its old note).
+
+## §240 Pay what you owe: a charge from before the hold waiting for the bank says so (owner, Nov 5; from the recordings)
+A charge made before the hold (status "deferred", made before `holdStartedAt`) read "… · waiting until your tests resume" in Pay what you owe's box even while its
+bank check was open (Pay what you owe's one payment covering it waiting for the bank). When its check is really open (its own `actionPi`, the one payment covering
+it in needs_action / needs_confirmation with a check, or the chargeback hold's reservation's check) it now reads "… · waiting for your bank (Confirm with your
+bank)" (`OWED_BANK_WAIT_TAIL`, `owedLines` in `src/lib/server/holds.ts`). A charge truly waiting for the lift keeps "waiting until your tests resume" (and goes
+back to it when the check ends with nothing charged). The rule is one helper, `bankCheckOpen` (holds.ts), and a part's payments on the developer's test page
+(`partPayStatus` / `partPaymentLines`, `src/lib/server/partPayments.ts`) use it too: a waiting charge reads "waiting for your bank (Confirm with your bank)" only
+while its check is open, else "waiting until your tests resume". **Tests:** `tests/payment-piece-names.test.ts` (§240: the lift line, the one payment's open
+check, the check cancelled, its own check; a part's payments, the same three cases).

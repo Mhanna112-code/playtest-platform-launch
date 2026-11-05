@@ -47,7 +47,9 @@ describe("listing folds, paid parts and sent-part labels (owner, Nov 1)", () => 
     auth.user = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     const { default: Page } = await import("@/app/app/tests/[id]/page");
     const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ id: f.testId }), searchParams: Promise.resolve({}) }));
-    for (const [sub, text] of [[written, "Paid answer remains visible"], [recording, "Recording context remains visible"]] as const) {
+    // (Owner, Nov 5, §239) Recordings carry no notes: an old recording's stored notes are never shown; its file is what stays above Pay more.
+    expect(html).not.toContain("Recording context remains visible");
+    for (const [sub, text] of [[written, "Paid answer remains visible"], [recording, "paid-screen.webm"]] as const) {
       const row = html.split(`id="part-${sub.id}"`)[1]?.split('id="part-')[0];
       expect(row).toBeTruthy();
       expect(row).toContain(text);

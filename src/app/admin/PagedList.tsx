@@ -101,6 +101,22 @@ function PauseToggle({ t }: { t: TestVM }) {
   );
 }
 
+/**
+ * (Owner, Nov 5, §238) A person on a Reports row: the name cut at 20 (Cut) as the link to the profile, the email cut in the middle after it, then the
+ * "Reported more than 3 times" label (`labelled` is the name with it; an older row with no `name` is cut whole).
+ */
+function ReportWho({ name, labelled, href, email }: { name?: string; labelled: string; href: string; email?: string }) {
+  const n = name && labelled.startsWith(name) ? name : labelled;
+  const label = labelled.slice(n.length);
+  return (
+    <>
+      {href ? <a href={href} data-report-name=""><Cut text={n} /></a> : <Cut text={n} />}
+      {email ? <> (<Cut text={email} kind="email" />)</> : null}
+      {label}
+    </>
+  );
+}
+
 function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
   switch (kind) {
     case "disputes":
@@ -146,8 +162,8 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       const r = row as ReportVM;
       return (
         <div id={`report-${r.id}`} className="scroll-mt-24 space-y-0.5 rounded border-t border-white/[0.06] py-2 text-sm first:border-t-0 data-[marked]:ring-2 data-[marked]:ring-sky-300" data-report-row={r.id}>
-          {/* (Batch 33 §1) Each name opens the profile, its email after it. */}
-          <p><a href={r.reporterHref}>{r.reporter}</a>{r.reporterEmail ? ` (${r.reporterEmail})` : ""} reported <a href={r.reportedHref}>{r.reported}</a>{r.reportedEmail ? ` (${r.reportedEmail})` : ""} · {r.when}</p>
+          {/* (Batch 33 §1) Each name opens the profile, its email after it. (Owner, Nov 5, §238) Each name cut at 20 and each email in the middle (Cut), still links. */}
+          <p className="[overflow-wrap:anywhere]"><ReportWho name={r.reporterName} labelled={r.reporter} href={r.reporterHref} email={r.reporterEmail} /> reported <ReportWho name={r.reportedName} labelled={r.reported} href={r.reportedHref} email={r.reportedEmail} /> · {r.when}</p>
           <ReasonQuote text={r.note} className="text-slate-300" />{/* (batch 35 §43) */}
         </div>
       );

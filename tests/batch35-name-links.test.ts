@@ -58,7 +58,9 @@ describe("the sentences that name someone link them", () => {
     expect(src("app/app/page.tsx")).toContain("invited you to “<NameLink text={i.test.title} kind=\"test\" href={`/app/find/${i.testId}`} />”");
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).toContain("const devHref = devGone ? null : `/app/developers/${c.test.developerId}`;");
-    expect(session.match(/<NameLink text=\{dev\} href=\{devHref\} \/>/g)!.length).toBeGreaterThanOrEqual(6); // (§236) the Terms history cuts the name (NameLine), so one fewer whole-name link
+    // (§236) The Terms history lines name the developer through NameLine (its whole name linked), so one fewer NameLink here.
+    expect(session.match(/<NameLink text=\{dev\} href=\{devHref\} \/>/g)!.length).toBeGreaterThanOrEqual(6);
+    expect(session).toContain("<NameLine shown={x.shown} full={x.full} name={dev} href={devHref} />");
   });
 
   it("the excerpt and dispute rows carry the tester's profile link (none for a deleted account)", async () => {
