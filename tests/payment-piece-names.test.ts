@@ -137,7 +137,7 @@ describe("§240 a charge made before the hold that's waiting for the bank (owner
     const tail = (lines: { id: string; text: string }[]) => lines.find((l) => l.id === waits.id)!.text.split(" · ").pop();
     expect(tail(await owedLines(w.dev.user.id))).toBe("waiting until your tests resume");
     // Pay what you owe pressed: its one payment covers the charge and its bank check is open.
-    const one = await db.payment.create({ data: { kind: "owed", developerId: w.dev.user.id, testerId: w.dev.user.id, amountCents: 10400, feeCents: 10400, testerCents: 0, transferStatus: "none", status: "needs_action", note: "press", ...bankWait() } });
+    const one = await db.payment.create({ data: { kind: "owed", developerId: w.dev.user.id, testerId: w.dev.user.id, amountCents: 10400, feeCents: 10400, testerCents: 0, transferStatus: "none", note: "press", ...bankWait() } });
     await db.payment.update({ where: { id: waits.id }, data: { coveredById: one.id } });
     const lines = await owedLines(w.dev.user.id);
     expect(tail(lines)).toBe(OWED_BANK_WAIT_TAIL);
