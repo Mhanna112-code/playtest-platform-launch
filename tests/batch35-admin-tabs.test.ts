@@ -229,16 +229,18 @@ describe("batch 35 §43: admin reasons in the quoted box", () => {
     expect(withoutNote("Deleted Oct 28, 3:10 PM by a@playtest.test: Asked", "Asked", "deleted")).toBe("Deleted Oct 28, 3:10 PM by a@playtest.test");
   });
 
-  it("long unbroken words wrap; every admin reason uses the quoted box; Contact us keeps its 8-line ScrollText", () => {
+  it("long unbroken words wrap; every admin reason uses the quoted box; Contact us in its draggable box (§237)", () => {
     const st = src("components/ScrollText.tsx");
-    expect(st.match(/\[overflow-wrap:anywhere\]/g)?.length).toBe(2);
+    expect(st.match(/\[overflow-wrap:anywhere\]/g)?.length).toBe(1);
     expect(src("app/admin/DisputeDecision.tsx")).toContain(":<ReasonQuote text={side.text} className=\"mt-0.5\" /></div>");
     const list = src("app/admin/PagedList.tsx");
     expect(list).toContain("<ReasonQuote text={r.note} className=\"text-slate-300\" />");
     expect(list).toContain("Developer&apos;s side:<ReasonQuote text={d.devSide} className=\"mt-0.5\" />");
     expect(list).toContain("{d.decisionNote && <ReasonQuote text={d.decisionNote} className=\"mt-0.5\" />}");
     expect(list).toContain("{t.em && <ReasonQuote text={t.em} className=\"mt-0.5\" />}");
-    expect(list).toContain("<ScrollText text={m.message} lines={8} className=\"text-slate-300\" />");
+    // (Owner, Nov 5, §237) Contact us: the shared draggable box for long text, about 8 lines at first.
+    expect(list).toContain("<ValueText id={`contact-msg-${m.id}`} label=\"Message\" defaultMax={MESSAGE_BOX_MAX}>{m.message}</ValueText>");
+    expect(list).toContain('const MESSAGE_BOX_MAX = "12rem";');
     expect(list).not.toMatch(/“\{r\.note\}”|“\{d\.devSide\}”/);
     const lists = src("lib/server/adminLists.ts");
     expect(lists).toContain("`'s reason:`, quoted(d.reason)");

@@ -27,7 +27,8 @@ export function MineLine({ m }: { m: MineVM }) {
       className="cursor-pointer"
       data-mine-line={jump}
       onClick={(e) => {
-        if ((e.target as HTMLElement).closest("a")) return;
+        // (§237) A link, or the reason box's grip (dragging it ends in a click), doesn't jump.
+        if ((e.target as HTMLElement).closest("a, [data-panel-grip]")) return;
         goToMine(jump, fallback);
       }}
     >

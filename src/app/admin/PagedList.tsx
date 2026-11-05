@@ -8,7 +8,8 @@ import { refusalLine } from "@/lib/pressLabels";
 import { LIVE_POLL_MS, LOADING_LINE, SEARCHABLE, SEARCH_MAX, SEARCH_PAUSE_MS, atTop, endLine, headingText, isSearchKind, mergeTop, nearEnd, newRowsAhead, newRowsPill, searchOf, shownWithFresh } from "@/lib/adminScroll";
 import { AccountActions } from "./AccountActions";
 import { DisputeWork } from "./DisputeWork";
-import { ReasonQuote, ScrollText } from "@/components/ScrollText";
+import { ReasonQuote } from "@/components/ScrollText";
+import { ValueText } from "@/components/QA";
 import type { ContactVM } from "@/lib/server/adminLists";
 import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, ReportVM, TestVM, TextVM, UserVM } from "@/lib/server/adminLists";
 import { AdminButton } from "./AdminButton";
@@ -22,6 +23,9 @@ import { adminDraftKey } from "@/lib/keptText";
 import { usePauseDraftGoes } from "./TestActions";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
+
+/** (§237) A Contact us message's first height: about 8 lines, as the old scroll box. */
+const MESSAGE_BOX_MAX = "12rem";
 
 type AnyRow = ContactVM | DisputeVM | MineVM | UserVM | TestVM | TextVM | PausedVM | ChargebackVM | LiftVM | ReportVM;
 /** (Owner, Oct 30, batch 34 §1) A row's page time (when the server read it): its buttons send it, so a press on a row older than another admin's change stops once. */
@@ -255,8 +259,9 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       return (
         <div id={`contact-${m.id}`} className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-contact-row={m.id}>
           <p><b>{m.fromParts ? <AdminRich parts={m.fromParts} /> : m.from}</b> · {m.topic}</p>
-          {/* (Batch 15 section 21) Up to 20,000 characters ((Owner, Nov 4, §186) was 50,000; older, longer messages stay): a scroll box about 8 lines tall (the email to the team has it in full). */}
-          <ScrollText text={m.message} lines={8} className="text-slate-300" />
+          {/* (Batch 15 section 21) Up to 20,000 characters ((Owner, Nov 4, §186) was 50,000; older, longer messages stay): a scroll box about 8 lines tall (the email to the team has it in full).
+              (Owner, Nov 5, §237) The shared draggable box for long text (QA's ValueText): 12rem (about 8 lines) at first, the grip drags it taller. */}
+          <ValueText id={`contact-msg-${m.id}`} label="Message" defaultMax={MESSAGE_BOX_MAX}>{m.message}</ValueText>
           {m.replied ? <p className="note" data-replied="">{m.replied}</p> : <AdminButton action="contact-replied" id={m.id} label="Mark replied" extra={since(m)} />}
         </div>
       );

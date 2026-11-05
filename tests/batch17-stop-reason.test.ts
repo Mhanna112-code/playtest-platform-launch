@@ -112,8 +112,8 @@ describe("what testers read (section 15)", () => {
     // (Owner §98, already on master) History now links to the session with a Stopped tag; the reason stays on that session.
     expect(src("app/app/page.tsx")).toContain('data-history-tag="">{tag}</span>');
     expect(src("app/app/page.tsx")).toContain('c.endKind === "stopped" ? "Stopped"');
-    // ReasonQuote is the italic scroll box End early's reason uses.
-    expect(src("components/ScrollText.tsx")).toMatch(/export function ReasonQuote[\s\S]*overflow-y-auto[\s\S]*italic/);
+    // ReasonQuote is the italic box End early's reason uses: (Owner, Nov 5, §237) the shared draggable box (ResizeBox in OwnPanel).
+    expect(src("components/ScrollText.tsx")).toMatch(/export function ReasonQuote[\s\S]*<OwnPanel>[\s\S]*<ResizeBox[\s\S]*italic/);
   });
 });
 

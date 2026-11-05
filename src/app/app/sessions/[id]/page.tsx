@@ -31,8 +31,8 @@ import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
 import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
-import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/components/ScrollList";
-import { Fold, ResizeBox } from "@/components/Panel";
+import { BIG_PANEL_TALLEST, LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/components/ScrollList";
+import { Fold, OwnPanel, ResizeBox } from "@/components/Panel";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
 import { ANYTHING_ELSE_KEY, additionsOf, addsCounted, carriedAnswers, isPastQuestion, latestItems, noAnswerYet, pastThreads, questionKeys } from "@/lib/additions";
@@ -410,8 +410,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       </section>
 
       {myRating && !rated.testerRevealed && <p className="note">You rated <NameLink text={dev} href={devHref} />.</p>}
-      {myRating && rated.testerRevealed && <p className="note">You rated <NameLink text={dev} href={devHref} />: {myRating.stars} ★{myRating.comment ? ` · “${myRating.comment}”` : ""}</p>}
-      {rated.developer && <p className="note"><NameLink text={dev} href={devHref} /> rated you: {rated.developer.stars} ★{rated.developer.comment ? ` · “${rated.developer.comment}”` : ""}</p>}
+      {/* (Owner, Nov 5, §237) The rating lines stay; a comment is in its reason box under its line (drags taller; no Show more). */}
+      {myRating && rated.testerRevealed && <div className="note" data-my-rating="">You rated <NameLink text={dev} href={devHref} />: {myRating.stars} ★{myRating.comment && <ReasonQuote id={`my-rating-${c.id}`} label="Your comment" text={myRating.comment} className="mt-1" />}</div>}
+      {rated.developer && <div className="note" data-rated-you=""><NameLink text={dev} href={devHref} /> rated you: {rated.developer.stars} ★{rated.developer.comment && <ReasonQuote id={`rated-you-${c.id}`} label="Their comment" text={rated.developer.comment} className="mt-1" />}</div>}
       {rateState.kind === "closed" && !meOff && <p className="note" data-rating-closed="">{rateState.line}</p>}
       {(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && (
         <RateBox
@@ -434,8 +435,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           information (always the current listing, live; a line changed since joining carries "Updated <time>": before → now). The top box's See it opens it. */}
       <details className="card scroll-mt-24" id="scope" data-scope="">
         <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><FileSignature className="h-5 w-5 text-indigo-300" /> Your agreed scope</summary>
-        {/* (Owner, Oct 31, batch 35 §91) The whole scope in one scroll box (about 32rem tall), so the page below stays close. */}
-        <div className="mt-1 max-h-[32rem] overflow-y-auto pr-1" data-scope-scroll="">
+        {/* (Owner, Oct 31, batch 35 §91) The whole scope in one scroll box (about 32rem tall), so the page below stays close. (Owner, Nov 5, §237) It is the draggable
+            panel (ResizeBox, 32rem at first); the boxes inside (questions, NDA, listing texts, Terms history) keep their own. */}
+        <ResizeBox id={`scope-${c.id}`} label="Your agreed scope" defaultMax={LIST_PANEL.scope} tallest={BIG_PANEL_TALLEST} className="mt-1">
+        <div data-scope-scroll="">
         {/* (Owner, Oct 31, batch 35 §29) Both parts list their fields as the Listing panel does (§15): the label small, muted and uppercase on its own line (with its
             "Updated" tag), the value bright below it; the questions numbered with "Required" as a small tag; long texts in their scroll boxes. */}
         <p className="mt-3 text-sm font-medium text-white">Your contract</p>
@@ -493,6 +496,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <summary className="fold-chevron cursor-pointer font-medium text-white">Terms history</summary>
           {/* (Owner, Nov 5, §236) The whole history in its own draggable scroll panel; the boxes inside (questions, NDA, before / after, an opened line) keep their
               own scroll (OwnPanel). Every name in a line is cut at 20 (NAME_CUT): each "…" opens that name in place, the arrow the whole line (WholeLine, §220). */}
+          {/* (§237) In OwnPanel: inside the scope's panel it stays its own draggable panel. */}
+          <OwnPanel>
           <ResizeBox id={`terms-history-${c.id}`} label="Terms history">
           <ul className="space-y-1.5 text-slate-300" data-terms-history-list="">
             <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
@@ -531,8 +536,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}
           </ul>
           </ResizeBox>
+          </OwnPanel>
         </details>
         </div>
+        </ResizeBox>
       </details>
 
       {/* The full app's "Your parts" card: each part on its own, sent, reviewed and paid in any order. */}

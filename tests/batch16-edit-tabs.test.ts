@@ -173,23 +173,25 @@ describe("the notes under Edit's fields and in Save's stop box (sections 17-19)"
     expect(html).not.toMatch(/now:|Before:/);
   });
 
-  it("(section 19) a 20,000-character field: \"Instructions:\" and the text it replaced, folded (3 lines, Show more), kept whole; typed text in full with Copy", () => {
+  it("(section 19) a 20,000-character field: \"Instructions:\" and the text it replaced, in its box (§237), kept whole; typed text in full with Copy", () => {
     const long = "Sail to the reef and back. ".repeat(800).slice(0, 20_000);
     const typed = "Only the first reef. ".repeat(500);
     const html = renderToStaticMarkup(createElement(FieldNote, { label: "Changed in another tab or device at 7:16 AM", items: [{ name: "Instructions", before: long, after: "Sail on.", typed }] }));
     expect(html).toContain("Changed in another tab or device at 7:16 AM:</p>");
     expect(html).toContain("<b>Instructions:</b>");
-    expect(html).toContain('data-fold-text="closed"');
-    expect(html).toContain("line-clamp-3");
-    expect(html).toContain(">Show more</button>");
+    // (Owner, Nov 5, §237) Each long value in the shared draggable box (QA's ValueText), no Show more.
+    expect(html.match(/data-qa-text="value"/g)?.length).toBe(2);
+    expect(html).toContain("data-panel-grip");
+    expect(html).not.toContain("Show more");
     expect(html).toContain(long); // never cut
     expect(html).toContain("<b>What you typed (not saved):</b>");
     expect(html).toContain('data-copy-typed=""');
     expect(html).toContain(typed.trim().slice(0, 200));
-    // The questions: a list, 3 then "+N more".
+    // The questions: (§237) each in its question box, all of them (no "+N more").
     const qs = renderToStaticMarkup(createElement(FieldNote, { label: "Changed in another tab or device at 7:16 AM", items: [{ name: "Questions", before: ["A?", "B?", "C?", "D?", "E?"], after: ["A?"] }] }));
     expect(qs).toContain("<b>Questions:</b>");
-    expect(qs).toContain("+2 more");
-    expect(src("components/FieldNote.tsx")).toContain("max-h-48 overflow-y-auto");
+    expect(qs).not.toContain("+2 more");
+    expect(qs.match(/data-qa="question"/g)?.length).toBe(5);
+    expect(qs).toContain(">Question 5<");
   });
 });

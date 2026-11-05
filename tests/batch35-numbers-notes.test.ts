@@ -119,7 +119,7 @@ describe("batch 35 §26: notes under untouched Edit fields", () => {
     expect(html).not.toContain("Use theirs");
     const long = renderToStaticMarkup(createElement(WasNote, { items: [{ field: "description", time: "9:05 AM", was: "Step one\nStep two\nStep three\nStep four" }] }));
     expect(long).toContain("Changed in another tab at 9:05 AM: was</p>");
-    expect(long).toContain("data-fold-text");
+    expect(long).toContain('data-qa-text="value"'); // (§237) in the shared draggable box
     expect(renderToStaticMarkup(createElement(WasNote, { items: [] }))).toBe("");
   });
 

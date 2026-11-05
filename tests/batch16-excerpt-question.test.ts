@@ -23,14 +23,17 @@ const ex = (cookie: string, body: Record<string, unknown>) => excerptsPOST(req("
 const ANSWER = "The harbour level felt great, but the second boss was far too hard for me.";
 
 describe("the question above each excerpt (section 37)", () => {
-  it("small grey text cut to 2 lines with Show more; \"[not required]\" left out; the Anything else box by its label", () => {
+  it("(§237) in its question box (no Show more); \"[not required]\" left out; the Anything else box by its label", () => {
     expect(excerptQuestion("What did you like?")).toBe("What did you like?");
     expect(excerptQuestion(`${NOT_REQUIRED}Where did you get stuck?`)).toBe("Where did you get stuck?");
     expect(excerptQuestion("")).toBe(ANYTHING_ELSE);
     expect(ANYTHING_ELSE).toBe("Anything else (bugs, ideas)");
-    const html = renderToStaticMarkup(h(ExcerptQuestion, { question: "What did you like?" }));
+    const html = renderToStaticMarkup(h(ExcerptQuestion, { id: "x1", question: "What did you like?" }));
     expect(html).toContain('data-excerpt-question=""');
-    expect(html).toMatch(/class="[^"]*text-xs text-slate-400[^"]*"[^>]*style="[^"]*-webkit-line-clamp:2/i);
+    // (Owner, Nov 5, §237) The question box (QA's QuestionText): "Question", the text in the draggable box, no Show more.
+    expect(html).toContain('data-panel="excerpt-q-x1"');
+    expect(html).toContain('data-qa-text="question"');
+    expect(html).not.toContain("Show more");
     expect(html).toContain("What did you like?");
   });
 
@@ -60,11 +63,11 @@ describe("the question above each excerpt (section 37)", () => {
     const page = src("app/app/tests/[id]/page.tsx");
     // (Batch 35 §181) Both views draw a person's excerpt requests through one excerptKind (Needs you's drop-down per person), so the question is written once
     // there and used by the active view and the restricted one.
-    expect(page.match(/<ExcerptQuestion question=\{x\.question\} \/>/g)?.length).toBe(1);
+    expect(page.match(/<ExcerptQuestion id=\{x\.id\} question=\{x\.question\} \/>/g)?.length).toBe(1);
     const kind = page.slice(page.indexOf("const excerptKind = "), page.indexOf("const excerptKind = ") + 1500);
-    expect(kind).toContain("<ExcerptQuestion question={x.question} />");
+    expect(kind).toContain("<ExcerptQuestion id={x.id} question={x.question} />");
     expect(page).toContain('excerptKind(c, { "data-restricted-excerpts": "" })');
     expect(page).toContain("excerptKind(c),");
-    expect(src("app/app/page.tsx")).toContain("<ExcerptQuestion question={x.question} />");
+    expect(src("app/app/page.tsx")).toContain("<ExcerptQuestion id={x.id} question={x.question} />");
   });
 });

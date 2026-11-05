@@ -30,7 +30,8 @@ export function LivePanel({ minutes, children, id = "live", fold = false }: { mi
  */
 export function LiveSection({ title, children, empty, show = true, id, panel, panelMax }: { title: string; children?: ReactNode; empty?: string; show?: boolean; id?: string; panel?: string; panelMax?: string }) {
   if (!show && !empty) return null;
-  const list = <ul className={`divide-y divide-white/5 ${title === LIVE_SECTIONS.past ? "max-h-72 overflow-y-auto pr-1" : ""}`} data-scroll={title === LIVE_SECTIONS.past ? "past-calls" : undefined}>{children}</ul>;
+  // (Owner, Nov 5, §237) Past calls have no inner scroll box of their own (it was a fixed max-h-72 box inside the panel): the panel (`panel`) scrolls them.
+  const list = <ul className="divide-y divide-white/5" data-scroll={title === LIVE_SECTIONS.past ? "past-calls" : undefined}>{children}</ul>;
   return (
     <section className="space-y-1.5" data-live-section={title} id={id}>
       <h3 className="text-sm font-semibold text-white">{title}</h3>

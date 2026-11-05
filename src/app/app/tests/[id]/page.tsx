@@ -64,7 +64,6 @@ import { keyBoxes } from "@/lib/server/accessKeys";
 import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
 import { ChatWithButton } from "@/components/ChatWithButton";
-import { ClampText } from "@/components/ClampText";
 import { RowsBox } from "./RowsBox";
 import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
@@ -79,7 +78,7 @@ import { PastQuestions, pastCount } from "@/components/PastQuestions";
 import { prevSetsOf } from "@/lib/answerSets";
 import { qStored, qText } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
-import { ExcerptQuestion, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
+import { ExcerptQuestion, ExcerptQuote, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision } from "@/components/Excerpts";
 import { UPDATED_AT_CAP, pieceDay, teamClosedLine, updateWaiting } from "@/lib/moneyLines";
 
@@ -384,7 +383,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     return { who: whoOf(c), kind: "disputes", label: "Disputes", ats: mine.map((d) => d.at), data: extra, node: mine.map((d) => (
       <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-2 text-sm sm:p-3">
         <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink fit text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
-        <ResizeBox id={`dispute-${d.id}`} label={`${d.Poss} reason`}><ReasonQuote text={d.reason} /></ResizeBox>
+        {/* (Owner, Nov 5, §237) The reason in one box (it was a fixed scroll box inside a panel): the draggable reason box itself. */}
+        <ReasonQuote id={`dispute-${d.id}`} label={`${d.Poss} reason`} text={d.reason} />
         </Fold>
         <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
       </div>
@@ -398,9 +398,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink fit text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
         <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
           {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
-          <ExcerptQuestion question={x.question} />
-          <ClampText text={`“${x.text}”`} className="text-slate-200" />
-          <ExcerptReplaces texts={x.replaces} />
+          <ExcerptQuestion id={x.id} question={x.question} />
+          <ExcerptQuote id={`excerpt-text-${x.id}`} text={x.text} />
+          <ExcerptReplaces id={x.id} texts={x.replaces} />
         </ResizeBox>
         </Fold>
         <ExcerptDecision excerptId={x.id} seenAt={seenAt} />
@@ -455,7 +455,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         {shownEx.length > 0 && <section className="card space-y-2" aria-label="Shown excerpts">
             {shownEx.map((e) => (
               <div key={e.id} className="flex flex-wrap items-start gap-2 text-sm" data-shown-excerpt="">
-                <span className="min-w-0 flex-1"><span className="text-slate-400">On a tester&apos;s profile: </span><ClampText text={`“${e.text}”`} className="text-slate-200" /></span>
+                <div className="min-w-0 flex-1 space-y-1"><span className="block text-slate-400">On a tester&apos;s profile:</span><ExcerptQuote id={`shown-excerpt-${e.id}`} text={e.text} /></div>
               </div>
             ))}
         </section>}
@@ -671,7 +671,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       >
       {/* (NEXT-UI 21; owner, Oct 27) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary and the agreed scope (their current contract only: no history fold for developers). No Pay boxes here. */}
       {t.contracts.length > 0 && (
-        <RowsBox many={t.contracts.length > 6}>
+        <RowsBox many={t.contracts.length > 6} id={`tester-rows-${t.id}`}>
           {t.contracts.map((c) => {
             const name = displayName(c.tester);
             // (Batch 35 §137) Their name in a sentence links to their profile (cut, with its hover and tap pop-up).
@@ -883,7 +883,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   {(bookedAhead || done || cancelledN) > 0 && <p className="text-sm" data-tester-calls="">Calls: {[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}</p>}
                   {/* (Owner, Nov 3, §166) No "<name>: 1.0 ★ (1 rating)" line here any more: the circle's hover card and the profile show the rating. */}
                   {ri?.tester && (ri.testerRevealed ? (
-                    <p className="note"><NameLink text={name} href={personHref} /> rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>
+                    // (Owner, Nov 5, §237) The line stays; the comment is in its reason box under it.
+                    <div className="note" data-rated-you=""><NameLink text={name} href={personHref} /> rated you: {ri.tester.stars} ★{ri.tester.comment && <ReasonQuote id={`rated-you-${c.id}`} label="Their comment" text={ri.tester.comment} className="mt-1" />}</div>
                   ) : (
                     <p className="note"><NameLink text={name} href={personHref} /> rated you: you&apos;ll see it after you rate {pronouns(c.tester.pronoun).obj} (or on {fmtDate(ri.revealOn!)}).</p>
                   ))}

@@ -21,7 +21,7 @@ export function DisputeWork({ work }: { work: DisputedWork | null }) {
         {work.kind === "call" ? (
           <p className="text-slate-300" data-dispute-call="">Live call · {work.when} · {work.length} · {work.rate}</p>
         ) : (
-          <AnswersBox>
+          <AnswersBox id={`answers-${work.subId ?? "work"}`}>
             {work.part === "written" && work.setUntil && <p className="note" data-set-until="">Sent for the questions until {new Date(work.setUntil).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</p>}
             {/* (Batch 35 §136, §167) What was sent first, a fold per question with what was added to it, dated. */}
             <SentWork id={`dispute-${work.subId ?? "work"}`} timeZone={work.timeZone} kind={work.part} answers={work.items} notes={work.notes} additions={work.additions ?? []} files={work.files} />
