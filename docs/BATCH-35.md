@@ -4577,3 +4577,9 @@ do: "Your bank's chargeback of $10.00 on your $10.00 payment for Ana Silva's wri
 ## §248 Google sign-in is off (owner, Nov 5)
 The owner wants email and password as the only sign-in for now: "Continue with Google" is gone from Log in and Sign up, and the Google routes answer as switched off,
 even when the Google keys are set. `googleConfigured()` needs GOOGLE_SIGNIN=on as well as the keys (not set anywhere), so it can come back later by the owner's call.
+
+## §249 Every list of questions: one drop-down, a scroll panel, each question a drop-down (owner, Nov 5)
+As the new-terms "questions changed" (§233, §242): every list of questions (the tester's contract terms in "Your agreed scope", the listing information on the
+developer's and the join page's panels, the join page's "<dev> wants to know" (open there), Terms history's then and now, Edit's other-tab notes) is the shared
+`QuestionTexts`: a drop-down "Questions (N)", its list in the draggable scroll panel, and each question its own closed drop-down ("Question 3 · Required · <its first
+words>") with its words in the question box when opened.

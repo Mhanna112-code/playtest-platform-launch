@@ -10,8 +10,6 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateIn, fmtDateTimeIn, money, pronouns } from "@/lib/format";
 import { REVIEW_DAYS, closedToNewLine, dueFromJoin, joinerDays, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
 import { QuestionTexts } from "@/components/QA";
-import { QUESTION_BOX_AFTER } from "@/components/QuestionBox";
-import { LIST_PANEL, PanelWhen } from "@/components/ScrollList";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
@@ -207,9 +205,8 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
           {l.questions.length ? (
             // (Batch 20 section 1) More than 3 questions sit in a panel. (Owner, Nov 5, §237) Each question in its question box ("Question N", "Required" a tag:
             // QA's QuestionTexts, drags taller, no Show more); more than 3 in the draggable panel (PanelWhen), each box keeping its own scroll.
-            <PanelWhen on={l.questions.length > QUESTION_BOX_AFTER} id={`join-questions-${t.id}`} label="Questions" defaultMax={LIST_PANEL.questions}>
-              <QuestionTexts id={`join-q-${t.id}`} items={l.questions.map((q) => ({ text: qText(q), required: qRequired(q) }))} />
-            </PanelWhen>
+            // (Owner, Nov 5, §249) The shared questions drop-down (its own scroll panel, each question a drop-down), open here: it's what the page is for.
+            <QuestionTexts open id={`join-q-${t.id}`} items={l.questions.map((q) => ({ text: qText(q), required: qRequired(q) }))} />
           ) : (
             <p className="text-sm text-slate-400">Where you got stuck, any bugs, and what you liked.</p>
           )}

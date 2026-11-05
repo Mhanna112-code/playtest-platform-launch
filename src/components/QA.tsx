@@ -71,12 +71,35 @@ export function ValueText({ id, label, defaultMax = QA_BOX_MAX, children }: { id
 }
 
 /** (§231) A contract's or a listing's questions: each its own question box ("Question N", "Required" a tag), in order. `id`: unique on the page. */
-export function QuestionTexts({ id, items, empty = "none" }: { id: string; items: { text: string; required?: boolean }[]; empty?: string }) {
+/**
+ * (Owner, Nov 5, §249; as the new-terms "questions changed", §233/§242) Every list of questions (the contract's terms, the listing information on both sides, the join
+ * page, Terms history, Edit's notes): one drop-down "Questions (N)", its list in the draggable scroll panel, and each question its own drop-down ("Question 3 ·
+ * Required · <its first words>", closed), its words in the question box when opened.
+ */
+export function QuestionTexts({ id, items, empty = "none", open = false, label = "Questions" }: { id: string; items: { text: string; required?: boolean }[]; empty?: string; /** the outer drop-down starts open */ open?: boolean; label?: string }) {
   if (!items.length) return <span>{empty}</span>;
   return (
-    <ol className="space-y-2" data-question-texts="">
-      {items.map((q, i) => <li key={i} data-question=""><QuestionText id={`${id}-${i}`} label={`Question ${i + 1}`} required={q.required}>{q.text}</QuestionText></li>)}
-    </ol>
+    <details className="group/qs" open={open} data-question-texts="">
+      <summary className="cursor-pointer font-medium text-slate-200" data-questions-toggle="">{label} ({items.length})</summary>
+      <div className="mt-1.5">
+        <OwnPanel><ResizeBox id={`${id}-list`} label={label} defaultMax="min(24rem, 55vh)" tallest={0.8}>
+          <ol className="space-y-1.5">
+            {items.map((q, i) => (
+              <li key={i} data-question="">
+                <details className="rounded-lg border border-white/10 px-2 py-1.5">
+                  <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 text-sm" data-question-summary="">
+                    <span className="font-medium">Question {i + 1}</span>
+                    {q.required && <span className="badge text-xs">Required</span>}
+                    <span className="min-w-0 flex-1 truncate font-normal text-slate-400">{q.text}</span>
+                  </summary>
+                  <div className="mt-1.5"><QuestionText id={`${id}-${i}`} label={`Question ${i + 1}`} required={q.required}>{q.text}</QuestionText></div>
+                </details>
+              </li>
+            ))}
+          </ol>
+        </ResizeBox></OwnPanel>
+      </div>
+    </details>
   );
 }
 

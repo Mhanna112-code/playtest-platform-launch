@@ -458,7 +458,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           ))}
           {/* (Owner, Nov 5, §231; was batch 20's one scroll box for all the questions) The contract's questions, each in its own question box ("Question N",
               "Required" a tag), the same look as the answers' (components/QA.tsx). */}
-          {writtenQuestions(c).length > 0 && <li data-scope-questions=""><FieldLabel>Questions</FieldLabel><FieldValue><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></li>}
+          {writtenQuestions(c).length > 0 && <li data-scope-questions=""><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></li>}
           {c.ndaText && c.ndaAcceptedAt ? (
             <li data-nda="">
               <FieldLabel>NDA</FieldLabel>

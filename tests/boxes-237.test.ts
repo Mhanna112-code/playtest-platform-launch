@@ -116,7 +116,7 @@ describe("§237 items 4–11: long texts in boxes", () => {
   });
   it("the join page's questions are QA's question boxes; no ClampText or ScrollText there", () => {
     const find = src("app/app/find/[id]/page.tsx");
-    expect(find).toContain("<QuestionTexts id={`join-q-${t.id}`}");
+    expect(find).toContain("<QuestionTexts open id={`join-q-${t.id}`}"); // (§249) the shared drop-down, open on the join page
     expect(find).not.toMatch(/ClampText|ScrollText|<QuestionBox/);
     expect(src("components/ScrollText.tsx")).not.toContain("export function ScrollText");
   });
