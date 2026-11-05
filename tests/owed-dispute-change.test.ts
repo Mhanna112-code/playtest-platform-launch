@@ -26,7 +26,8 @@ async function chargebackHold() {
   const u = await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } });
   return { ...s, u, p, pi };
 }
-const changeLine = /^Your bank changed the amount it took back from your \$40\.00 payment for .+'s written answers on “.+”: \$12\.00 → \$20\.00 \(now \$20\.00 \+ \$15\.00 fee = \$35\.00\)\. /;
+// (Owner, Nov 5, §206) The bank's change is its own bullet; the new total with the press-again line is the last one.
+const changeLine = /^Your bank changed the amount it took back from your \$40\.00 payment for .+'s written answers on “.+”: \$12\.00 → \$20\.00 \(now \$20\.00 \+ \$15\.00 fee = \$35\.00\)$/;
 
 describe("(Nov 3) the stop names the bank's change and carries the lines", () => {
   it("bankChangedLine words it", () => {
@@ -42,9 +43,8 @@ describe("(Nov 3) the stop names the bank's change and carries the lines", () =>
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.e.code).toBe("stop_once");
-    const text = (r.e.data!.changes as { text: string }[])[0].text;
-    expect(text).toMatch(changeLine);
-    expect(text.endsWith(pressAgainLine(3500, { cardVerified: true }))).toBe(true);
+    const texts = (r.e.data!.changes as { text: string }[]).map((c) => c.text);
+    expect(texts).toEqual([expect.stringMatching(changeLine), `New total $35.00. ${pressAgainLine(3500, { cardVerified: true })}`]);
     expect(r.e.data!.totalCents).toBe(3500);
     // The lines come with the stop: the bullet now reads $20 + $15, the same as the button's $35.00.
     const lines = r.e.data!.lines as { id: string; amountCents: number; text: string }[];
@@ -57,7 +57,7 @@ describe("(Nov 3) the stop names the bank's change and carries the lines", () =>
     const w = await chargebackHold();
     await disputeAmountChanged(w.pi, 2000);
     const r = await outcome(payOwed(w.u, { seenTotalCents: 2700, seenIds: [w.p.id] }));
-    expect(!r.ok && (r.e.data!.changes as { text: string }[])[0].text).toMatch(changeLine);
+    expect(!r.ok && (r.e.data!.changes as { text: string }[]).map((c) => c.text)).toEqual([expect.stringMatching(changeLine), `New total $35.00. ${pressAgainLine(3500, { cardVerified: true })}`]);
   });
 
   it("the box draws the stop's lines (and keeps its own when a stop carries none)", () => {

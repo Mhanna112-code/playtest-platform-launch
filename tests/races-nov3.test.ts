@@ -212,8 +212,8 @@ describe("(Nov 3, races) 3: Pay what you owe while the bank changes the disputed
         expect(r.ok).toBe(false);
         if (!r.ok) {
           expect(r.e.code).toBe("stop_once");
-          expect((r.e.data!.changes as { text: string }[])[0].text).toMatch(/^Your bank changed the amount it took back from your \$40\.00 payment for .+: \$12\.00 → \$20\.00 \(now \$20\.00 \+ \$15\.00 fee = \$35\.00\)\. /);
-          expect((r.e.data!.changes as { text: string }[])[0].text.endsWith(pressAgainLine(3500, { cardVerified: true }))).toBe(true);
+          // (Owner, Nov 5, §206) The bank's change is its own bullet; the new total with the press-again line is the last one.
+          expect((r.e.data!.changes as { text: string }[]).map((c) => c.text)).toEqual([expect.stringMatching(/^Your bank changed the amount it took back from your \$40\.00 payment for .+: \$12\.00 → \$20\.00 \(now \$20\.00 \+ \$15\.00 fee = \$35\.00\)$/), `New total $35.00. ${pressAgainLine(3500, { cardVerified: true })}`]);
           expect(r.e.data!.totalCents).toBe(3500);
         }
         // The second press (its box showed $35.00) reserves $35.00.

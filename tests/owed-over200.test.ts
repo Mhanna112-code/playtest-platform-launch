@@ -85,8 +85,11 @@ describe("§150 Pay what you owe over $200 needs the tick", () => {
     await w.charge(8_000, "owed");
     const stop = await w.press({ seenTotalCents: 15_000, seenIds: [w.row.id] });
     expect([stop.status, stop.body.error.code, stop.body.error.totalCents]).toEqual([409, "stop_once", 23_000]);
-    const text: string = stop.body.error.changes[0].text;
-    expect(text).toMatch(/^Added to what you owe meanwhile: .*\$80\.00.*\. New total \$230\.00\. Tick “I confirm this payment is over \$200\.” and press again to pay \$230\.00\.$/);
+    // (Owner, Nov 5, §206) One bullet per change, then the new total with the tick's press-again line as the last bullet.
+    const texts: string[] = stop.body.error.changes.map((c: { text: string }) => c.text);
+    expect(texts).toHaveLength(2);
+    expect(texts[0]).toMatch(/^Added to what you owe meanwhile: .*\$80\.00/);
+    expect(texts[1]).toBe("New total $230.00. Tick “I confirm this payment is over $200.” and press again to pay $230.00.");
     // The second press without the tick (the box redrew with it showing, unticked): refused again, nothing charged.
     const again = await w.press({ seenTotalCents: 23_000, seenIds: stop.body.error.ids, confirmed: true });
     expect(again.body.error).toMatchObject({ code: "stop_once", message: OWED_OVER_TICK });
@@ -102,7 +105,7 @@ describe("§150 Pay what you owe over $200 needs the tick", () => {
     const w = await held(21_000);
     await w.charge(2_000, "owed");
     const stop = await w.press({ seenTotalCents: 21_000, seenIds: [w.row.id], over200: true });
-    expect(stop.body.error.changes[0].text).toMatch(/New total \$230\.00\. Press again to pay \$230\.00\.$/);
+    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(/^Added to what you owe meanwhile: .*\$20\.00/), "New total $230.00. Press again to pay $230.00."]);
   });
 
   it("a tester's Charge that came in after the page drew is left out: it never makes the press need the tick", async () => {
@@ -132,7 +135,7 @@ describe("§150 Pay what you owe over $200 needs the tick", () => {
     const made2 = fakeStripe();
     await x.charge(8_000, "owed");
     const stop = await x.press({ seenTotalCents: 15_000, seenIds: [x.row.id] });
-    expect(stop.body.error.changes[0].text).toMatch(/New total \$230\.00\. Tick “I confirm this payment is over \$200\.” and press again to reserve \$230\.00 on your card: it's taken when the team approves lifting your hold\.$/);
+    expect(stop.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(/^Added to what you owe meanwhile: .*\$80\.00/), "New total $230.00. Tick “I confirm this payment is over $200.” and press again to reserve $230.00 on your card: it's taken when the team approves lifting your hold."]);
     expect(made2).toEqual([]);
     const reserved = await x.press({ seenTotalCents: 23_000, seenIds: stop.body.error.ids, confirmed: true, over200: true });
     expect(reserved.body).toMatchObject({ reservedCents: 23_000 });

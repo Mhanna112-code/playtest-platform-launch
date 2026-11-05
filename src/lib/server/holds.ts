@@ -573,18 +573,21 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     const cbLines = lines.filter((l) => l.retry && l.source === "chargeback" && seenIds.includes(l.id));
     let moved = cbLines.flatMap((l) => { const was = seenAmounts?.[l.id]; return typeof was === "number" && was !== l.amountCents ? [{ l, was }] : []; });
     if (!seenAmounts && !goneIds.length && !fresh.length && cbLines.length === 1 && total !== seen && cbLines[0].amountCents - (total - seen) > CHARGEBACK_FEE_CENTS) moved = [{ l: cbLines[0], was: cbLines[0].amountCents - (total - seen) }];
-    const movedText = moved.map(({ l, was }) => ("cb" in l && l.cb ? bankChangedLine(l.cb.paidCents, l.cb.piece, was - CHARGEBACK_FEE_CENTS, l.cb.reversedCents, l.cb.one) : "")).filter(Boolean).join("; ");
+    const movedTexts = moved.map(({ l, was }) => ("cb" in l && l.cb ? bankChangedLine(l.cb.paidCents, l.cb.piece, was - CHARGEBACK_FEE_CENTS, l.cb.reversedCents, l.cb.one) : "")).filter(Boolean);
     // (Owner, Nov 4, §171 B6c) EVERY change since the page drew, each with its amount, in one stop (they no longer replace each other): what was added, a chargeback
     // won (taken off), an amount the bank raised or lowered; then the new total and the press-again line with it.
+    // (Owner, Nov 5, §206) Each change is its own bullet (one per item added, failed, won or changed), as in every other stop box; the new total and the press-again
+    // line are the last bullet, keyed so a later stop replaces it (mergeChanges) instead of adding a second total (the one-line "What you owe changed" too).
     const parts = [
-      ...(fresh.length ? [`${freshLines.every((l) => l.source === "failed") ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh.join(", ")}`] : []),
+      ...freshLines.map((l, i) => `${l.source === "failed" ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh[i]}`),
       // (§133) what it reversed; what leaves the total: what the page showed for it, else what the bank reversed + the fee.
       ...won.map((w) => { const was = seenAmounts?.[w.id]; return `Your bank's chargeback of ${money(reversedOf(w))} was reversed in your favour: ${money(typeof was === "number" ? was : reversedOf(w) + CHARGEBACK_FEE_CENTS)} taken off`; }),
-      ...(movedText ? [movedText] : []),
+      ...movedTexts,
     ];
-    const text = parts.length ? `${parts.join(". ")}. ${fresh.length || won.length ? `New total ${money(total)}. ` : ""}${again}` : `What you owe changed: now ${money(total)}. ${again}`;
+    const at = new Date();
+    const changes = parts.length ? [...parts.map((text) => ({ text, at })), { text: `${fresh.length || won.length || movedTexts.length ? `New total ${money(total)}. ` : ""}${again}`, at, key: "owed-total" }] : [{ text: `What you owe changed: now ${money(total)}. ${again}`, at, key: "owed-total" }];
     // (Owner, Nov 3) The lines come with the stop, so the box redraws them with the new total (a bullet never disagrees with the button).
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text, at: new Date() }], totalCents: total, ids: nowIds, lines });
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes, totalCents: total, ids: nowIds, lines });
   }
   // (§150) Unchanged but over $200 without the tick (a page that never showed it, or a press without it): refused, stopping once with the tick's line; the box shows it.
   if (tickMissing) throw new HttpError(409, "stop_once", OWED_OVER_TICK, { changes: [{ text: pressAgainLine(total, reserving ? { cardVerified: !!u.chargebackCardVerifiedAt } : null, true), at: new Date() }], totalCents: total, ids: nowIds, lines });

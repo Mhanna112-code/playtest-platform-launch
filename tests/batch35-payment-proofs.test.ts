@@ -612,7 +612,9 @@ describe("a chargeback on an OLDER payment while Pay what you owe's press check 
     expect(st.made.length).toBe(n);
     // (§129) During the chargeback hold the second press doesn't pay: it asks to verify the card, then reserves. The line says so.
     const total = r.body.error.totalCents as number;
-    const text = r.body.error.changes[0].text as string;
+    // (Owner, Nov 5, §206) The press-again line is the stop's last bullet, with the new total.
+    const text = r.body.error.changes.at(-1).text as string;
+    expect(text.startsWith(`New total ${money(total)}. `)).toBe(true);
     expect(text).not.toContain("Press again to pay");
     expect(R.pressAgainLine(2200)).toBe("Press again to pay $22.00."); // outside a chargeback hold it still pays
     expect(text.endsWith(`Press again to verify your card, then reserve ${money(total)} on it: it's taken when the team approves lifting your hold.`)).toBe(true);
@@ -621,7 +623,12 @@ describe("a chargeback on an OLDER payment while Pay what you owe's press check 
     await db.user.update({ where: { id: w.dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
     const r2 = await press(w.dev.cookie, { seenTotalCents: 800, seenIds: [] });
     expect(r2.body.error.code).toBe("stop_once");
-    expect(r2.body.error.changes[0].text).toBe(`Added to what you owe meanwhile: Your bank reversed $7 you paid for Cid Moreau's written answers on “Harbor Run” (${fmtDate(new Date()).replace(/, \d{4}$/, "")}): $7 + $15 chargeback fee, Ana Silva's written answers on “Harbor Run” $8.00. New total ${money(total)}. Press again to reserve ${money(total)} on your card: it's taken when the team approves lifting your hold.`);
+    // (Owner, Nov 5, §206) One bullet per item (the declined $8.00 payment reads as one), then the new total with the press-again line.
+    expect(r2.body.error.changes.map((c: { text: string }) => c.text)).toEqual([
+      `Added to what you owe meanwhile: Your bank reversed $7 you paid for Cid Moreau's written answers on “Harbor Run” (${fmtDate(new Date()).replace(/, \d{4}$/, "")}): $7 + $15 chargeback fee`,
+      "Another payment failed meanwhile: Ana Silva's written answers on “Harbor Run” $8.00",
+      `New total ${money(total)}. Press again to reserve ${money(total)} on your card: it's taken when the team approves lifting your hold.`,
+    ]);
     const done = await press(w.dev.cookie, { seenTotalCents: total, seenIds: r2.body.error.ids, confirmed: true });
     expect(done.body).toMatchObject({ paid: 0, reservedCents: total, lifted: false });
     expect(st.succeeded()).toEqual([]);
