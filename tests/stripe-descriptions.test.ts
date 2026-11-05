@@ -165,7 +165,8 @@ describe("every charge sends it", () => {
     await chargebackOpened(one.stripePaymentIntentId!, 1000);
     await db.user.update({ where: { id: w.dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
     expect(await payOwed(w.dev.user, {})).toMatchObject({ reservedCents: 2500 });
-    expect(made.at(-1)).toMatchObject({ capture_method: "manual", description: "Playtest: Reserved for the team's review: Repaid $10 reversed from your $20.50 payment ($10 + $15 chargeback fee) $25.00" });
+    // (§193b) The reversed Pay what you owe payment names when it was made and what it covered.
+    expect(made.at(-1)).toMatchObject({ capture_method: "manual", description: expect.stringMatching(/^Playtest: Reserved for the team's review: Repaid \$10 reversed from your \$20\.50 Pay what you owe payment on .+ \(.*written answers on .+\) \(\$10 \+ \$15 chargeback fee\) \$25\.00$/) });
     void d1;
   });
 
