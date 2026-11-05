@@ -147,7 +147,10 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
     await later();
     await edit(s.testId, s.dev.cookie, { writtenCents: "13.00" });
     expect(await db.termsOffer.count({ where: { contractId: k.sessionId, status: "open" } })).toBe(1);
-    expect((await sact(k.sessionId, "leave", k.tester.cookie, { seenAt: seen() })).status).toBe(200);
+    // (Owner, Nov 5, §232) Leave with an open offer stops once (leaving closes it unanswered); the second press leaves.
+    const leave1 = await sact(k.sessionId, "leave", k.tester.cookie, { seenAt: seen() });
+    expect(leave1.body.error?.code).toBe("stop_once");
+    expect((await sact(k.sessionId, "leave", k.tester.cookie, { seenAt: seen(), confirmed: true, boxAt: leave1.body.error.now })).status).toBe(200);
   });
 
   it("the page: the blocked presses, the line exactly under the button (no 'didn't go through' prefix), the move up to Switch / Keep", () => {
