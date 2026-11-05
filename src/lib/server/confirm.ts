@@ -348,6 +348,7 @@ export async function confirmStart(dev: { id: string }, paymentId: string, body:
         if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./payments")).refuseSuspendedLocked(tx, dev.id, "Confirm with your bank");
         if (p.kind !== "owed" && p.kind !== "chargeback") await (await import("./teamPause")).refuseTeamPausedTest(tx, c.testId, "Confirm with your bank"); // (§172) under the test's lock
         // (Owner, Nov 4, §171 item 7) The press-time gate stays as it was (`awayCharge`: §159's rules, not §171 A1/A2) while the owner decides the waiting-charge rules.
+        // (Owner, Nov 4, §193) Plus a charge about the same tester on another part (never the line of the charge this press confirms).
         await devGate(tx, c.testId, body, { paidSoFarCents: await paidSoFar(c.id, tx), name: displayName(c.tester) }, [], undefined, { ...payPressOf(c.id, piece), awayCharge: true });
       }).catch((e) => {
         // (Owner, Nov 4, §177) Pressed away from the test's own page (the dashboard's "Your bank wants you to confirm"): each stop line names the test.

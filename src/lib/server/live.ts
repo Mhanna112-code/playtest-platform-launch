@@ -44,6 +44,8 @@ export type Press = {
    * (not §171 A1/A2) while the owner decides the waiting-charge rules. Their open windows still get A3 and B4.
    */
   awayCharge?: boolean;
+  /** (Owner, Nov 4, §193) With `awayCharge`: the parts (submission or call ids) this press confirms. Confirm all: every covered part; a charge line on one never forces. */
+  confirms?: readonly string[];
 };
 /**
  * (Owner, Oct 31, batch 35 §79) A press never stops once for the line about the very thing it answers (Accept on a call request that just arrived, Accept on an
@@ -204,7 +206,10 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
     // (Owner, Nov 4, §171 A1) A line about one part ("part-<submission>", "call-<call>": work sent, a Charge, an automatic call charge…) names it (`piece`), so a
     // payment press on that very part always stops for it.
     const piece = /^(?:part|call)-/.test(e.link) ? e.link.replace(/^(?:part|call)-/, "") : "";
-    return [{ ...e, ...(/^(?:req|part|item-app|item-dispute)-/.test(e.link) ? { item: e.link.replace(/^(?:req|part|item-app|item-dispute)-/, "") } : {}), ...(piece ? { piece } : {}) }];
+    // (Owner, Nov 4, §193) A charge about a tester: their Charge on a part, or an automatic call charge on one of their calls (a "paid" line on a part that isn't the
+    // developer's own "You paid …"; those never reach here). A call closed with nothing to pay charged nothing: not a charge.
+    const charge = e.kind === "paid" && !!piece && !!e.contractId && !e.text.endsWith(" closed with nothing to pay");
+    return [{ ...e, ...(/^(?:req|part|item-app|item-dispute)-/.test(e.link) ? { item: e.link.replace(/^(?:req|part|item-app|item-dispute)-/, "") } : {}), ...(piece ? { piece } : {}), ...(charge ? { charge } : {}) }];
   });
   // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box;
   // (batch 35 §67) every action of theirs in another tab stops every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines). A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
@@ -262,14 +267,21 @@ const onPart = (c: TestEventLike, press?: Press) => {
  * (§171 A2) A dispute by the tester a press is about, or the team's decision on one, stops EVERY press about that tester once (Pay, Pay more, Confirm with your
  * bank on any of her parts; End early including her; call requests with her and answering or cancelling them). Presses about the whole test and about other
  * testers follow the Disputes / Decisions ticks.
+ * (Owner, Nov 4, §193) A charge about that tester (`charge`: their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops the
+ * same presses once; the developer's own payments are never charges. Presses about the whole test and about other testers follow the Payments tick.
  */
 export function alwaysStops(c: TestEventLike & { contractId?: string | null }, press?: Press) {
   if (press?.awayCharge) {
     // (§171 item 7) As before §171: the team's decision about that tester, that tester leaving, work sent on the very part.
     const pc = payContractOf(press);
-    return !!pc && (((isTeamDecision(c) || c.kind === "left") && c.contractId === pc) || (c.kind === "sent" && !!c.item && press.keys.includes(`sub:${c.item}`)));
+    // (Owner, Nov 4, §193) And a charge about that same tester, except a charge on a part this press itself confirms (`confirms`: the waiting charge's own line,
+    // which the box already shows as its row; Confirm all: every part it covers): stopping for it could only show the press what it is paying.
+    const ownCharge = !!c.piece && (onPart(c, press) || !!press.confirms?.includes(c.piece));
+    return !!pc && (((isTeamDecision(c) || c.kind === "left" || (!!c.charge && !ownCharge)) && c.contractId === pc) || (c.kind === "sent" && !!c.item && press.keys.includes(`sub:${c.item}`)));
   }
-  if ((c.kind === "dispute" || isTeamDecision(c)) && !!c.contractId && pressContracts(press).includes(c.contractId)) return true;
+  // (Owner, Nov 4, §193) A charge about the tester (their Charge on any part, an automatic call charge, the team's dispute-decision charge) stops every press about
+  // that tester once, exactly like a dispute (§171 A2). Presses about the whole test and about other testers follow the Payments tick.
+  if ((c.kind === "dispute" || isTeamDecision(c) || !!c.charge) && !!c.contractId && pressContracts(press).includes(c.contractId)) return true;
   const payContract = payContractOf(press);
   if (!payContract) return false;
   return (c.kind === "left" && c.contractId === payContract) || onPart(c, press);
@@ -418,8 +430,12 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
     // reinstatement (§72) it shows in the live box but never stops their press. A tester's Charge, a dispute decision or a failed payment stop as before.
     // (Owner, Nov 4, §171 A1) Each names its part (`piece`): a payment on the part being paid always stops that press.
     const piece = (p.submissionId ?? p.callId) || undefined;
-    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt, contractId: p.contractId, key: `pay:${p.id}`, ...(piece ? { piece } : {}), ...(p.owedUntil ? { quiet: true } : {}) } as TestEventLike);
-    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt, contractId: p.contractId, key: `pay:${p.id}`, ...(piece ? { piece } : {}) } as TestEventLike);
+    // (Owner, Nov 4, §193) A charge about the tester (`charge`): the team's dispute-decision charge, and the tester's Charge or an automatic call charge (a "review"
+    // or "call" row the developer never pressed: no press key). The developer's own Pay keeps its press key; Pay more is "extra": never a charge.
+    const charge = p.kind === "dispute" || ((p.kind === "review" || p.kind === "call") && !p.pressKey);
+    const tags = { ...(piece ? { piece } : {}), ...(charge ? { charge } : {}) };
+    if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt, contractId: p.contractId, key: `pay:${p.id}`, ...tags, ...(p.owedUntil ? { quiet: true } : {}) } as TestEventLike);
+    else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt, contractId: p.contractId, key: `pay:${p.id}`, ...tags } as TestEventLike);
   }
   // Chargebacks opened / resolved on the developer's OTHER tests (this test's come as its own events).
   const others = await tx.testEvent.findMany({ where: { kind: { in: ["chargeback", "payment"] }, createdAt: { gt: since }, testId: { not: testId }, test: { developerId: devId } }, include: { test: { select: { title: true } } }, take: 50 });

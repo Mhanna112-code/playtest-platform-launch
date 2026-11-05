@@ -98,13 +98,21 @@ async function itemStops(tx: Parameters<Parameters<typeof db.$transaction>[0]>[0
   if (!seenOf(body.seenAt) || (body.confirmed === true && !seenOf(body.boxAt))) return;
   const { devGate } = await import("./tests");
   const found = new Map<string, { text: string; at: Date | string; items: string[] }>();
+  // (Owner, Nov 4, §193) The parts Confirm all pays: a charge line on one of them is one of its own rows, never a forced stop for another item of the same tester.
+  const confirms: string[] = [];
+  for (const p of rows) {
+    const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await tx.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
+    const id = p.submissionId ?? p.callId ?? orig?.submissionId ?? orig?.callId;
+    if (id) confirms.push(id);
+  }
   for (const p of rows) {
     const c = p.contractId ? await tx.contract.findUnique({ where: { id: p.contractId }, select: { id: true, testId: true } }) : null;
     if (!c) continue;
     const orig = p.kind === "chargeback" && p.repaysId && !p.submissionId && !p.callId ? await tx.payment.findUnique({ where: { id: p.repaysId }, select: { submissionId: true, callId: true } }) : null;
     try {
       // (Owner, Nov 4, §171 item 7) Its press-time gate stays as it was (`awayCharge`: §159's rules) while the owner decides the waiting-charge rules.
-      await devGate(tx, c.testId, body, {}, [], undefined, { ...payPressOf(c.id, { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null }), awayCharge: true });
+      // (Owner, Nov 4, §193) Plus a charge about the same tester on a part Confirm all doesn't cover.
+      await devGate(tx, c.testId, body, {}, [], undefined, { ...payPressOf(c.id, { submissionId: p.submissionId ?? orig?.submissionId ?? null, callId: p.callId ?? orig?.callId ?? null }), awayCharge: true, confirms });
     } catch (e) {
       if (!(e instanceof HttpError && e.code === "stop_once")) throw e;
       const name = await nameOf(p);

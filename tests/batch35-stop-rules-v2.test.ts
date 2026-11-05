@@ -107,7 +107,7 @@ async function admin() {
 }
 
 describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
-  it("another payment on the part being paid (Payments ticked off) stops Pay more once, forced; on the tester's other part it follows the tick", async () => {
+  it("another payment on the part being paid (Payments ticked off) stops Pay more once, forced; a charge also forces on her other part (§193), another tester's follows the tick", async () => {
     const w = await world(["payments", "work", "disputes", "admin", "calls"]);
     const loaded = seen();
     await settle();
@@ -118,9 +118,12 @@ describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
     expect(lines(first)).toEqual([expect.objectContaining({ text: expect.stringMatching(/^Payment went through on Harbor Run: \$3\.00 to Ana Silva/), forced: true })]);
     expect((await payMore(w, w.anaSub.id, loaded, { confirmed: true, boxAt: first.body.error!.now })).status).toBe(200);
-    // Her recording (another part): the same payment line follows the Payments tick (off): Pay goes straight through.
+    // (Owner, Nov 4, §193; was: her recording followed the Payments tick) A decision's charge is a charge about Ana: it stops Pay on her other part once too,
+    // forced. Ben's part follows the tick (off): Pay goes straight through.
     const rec = await pay(w.dev.cookie, { kind: "submission", id: w.anaRec.id, amount: "10.00", tickedCents: 1000, seenAt: loaded });
-    expect(rec.status, JSON.stringify(rec.body)).toBe(200);
+    expect(rec.body.error?.code, JSON.stringify(rec.body)).toBe("stop_once");
+    expect(lines(rec)).toEqual([expect.objectContaining({ forced: true })]);
+    expect((await pay(w.dev.cookie, { kind: "submission", id: w.benSub.id, amount: "10.00", tickedCents: 1000, seenAt: loaded })).status).toBe(200);
   });
 
   it("a Charge on that part (its line names the part) stops Pay on it once, forced", async () => {

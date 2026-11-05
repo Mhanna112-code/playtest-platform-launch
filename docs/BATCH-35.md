@@ -3550,3 +3550,42 @@ New `tests/chargeback-refunds-192.test.ts`:
 - the team's copy is the same markup but for the Stripe links, with one on each refund line.
 
 Updated: `partial-dispute` (a change while reserved now waits and is refunded after the Approve; emails only for what isn't followed), `paid-list`, `admin-payments-190` and `grouped-payments-191` (the refund line, and its Stripe link in the team's copy).
+
+## §193 A charge about a tester stops every press about that tester once (owner, Nov 4)
+- **The rule.** A CHARGE about a tester (her Charge on any of her parts, an automatic call charge on one of her calls, the team's dispute-decision charge) now
+  stops once, whatever the Alerts ticks (forced, §160b), exactly the presses a dispute does (§171 A2). Presses about the whole test and about other testers keep
+  following the Payments tick. The developer's own payments (Pay, Pay more, Confirm: "You paid …" and their own other-tab lines) are not charges.
+
+| Press | Before | After |
+| --- | --- | --- |
+| Pay / Pay more on the part she charged | Forced (§171 A1: anything on the part); Pay itself is one refusal ("Ana Silva already charged $10.00 for her recording.") | Unchanged |
+| Pay / Pay more on her OTHER part | Her Charge followed Payments (ticked off: no stop) | Stops once, forced |
+| End early including her | Followed Payments | Stops once, forced |
+| A call request with her; answering, withdrawing or cancelling one | Followed Payments | Stops once, forced |
+| Confirm with your bank on a waiting charge of hers (`awayCharge`, §171 item 7) | §159's forced set only; her charge on another part followed Payments | Her charge on another part stops once, forced. The line of the charge it confirms (its own part) never stops it; Confirm all: a charge on any part it covers never does |
+| Stop, Next round, Edit Save, Invite (the whole test) | Followed Payments | Unchanged |
+| Any press about ANOTHER tester | Followed Payments | Unchanged |
+| The blue notice in an open bank window | Everything about that tester, whatever the ticks (§171 A3) | Unchanged (the notice lists plain lines) |
+
+- **What counts as a charge** (`TestEventLike.charge`). Test events: a `paid` line on a part (`part-<id>` / `call-<id>`) with a contract (the tester's Charge,
+  an automatic call charge, also one waiting for a lift); "… closed with nothing to pay" charged nothing and isn't one. Payment lines (`devPaymentChanges`:
+  went through / failed): a `dispute` payment (the team's decision), or a `review` / `call` payment with no press key (the tester's Charge, an automatic call
+  charge; the developer's own Pay always keeps its press key, Pay more is `extra`). The decision's own line (`The team decided …`) was already forced (§171 A2).
+- **Confirm with your bank while away** (§171 item 7 kept, widened): a charge about the same tester forces, except one on a part the press itself confirms. Without
+  that exception the dashboard's Confirm (which keeps its first load's time, §176) would stop for the very charge it confirms, and Confirm all for the other
+  charges it pays (`Press.confirms`: the covered parts, passed by `confirmAll.itemStops`).
+- **Never a stop whose second press can only be refused.** Pay on the very part she charged stays one refusal before the gate (§163). The new forced presses
+  (Pay more on another part, End early, call presses) are not settled by a charge, so their second press goes ahead.
+- **Checked, no change:** an automatic call charge never happens while the developer's own Pay on that call is at the bank (`autoChargeCalls` → `pieceLocked`):
+  it waits; once that Pay completes the call has its review and is skipped for good; when the Pay is cancelled (or fails), the next sweep charges it.
+- **Terms** (edited in place, TERMS_VERSION stays 2): "Changes while you pay" lists "a charge about that tester (their Charge, an automatic charge for one of
+  their calls, or the charge of the team's decision on their dispute; your own payments aren't charges)" among what always stops, and "… and so does a charge
+  about that tester; presses about the whole test and about other testers follow your Alerts."
+- **Code.** `rules.ts` (`TestEventLike.charge`), `live.ts` (`devChanges` tags charge lines, `devPaymentChanges` tags charge payments, `alwaysStops`,
+  `Press.confirms`), `confirmAll.ts` (`confirms`), `confirm.ts` (comment), `termsOfUse.ts`, `docs/BLUE-NOTICES.md`. No migration.
+- **Tests:** new `tests/charge-forces-tester-stops-193.test.ts` (her Charge on part A with Payments ticked off: Pay more on part B, a call request to her, End
+  early including her, answering her request each stop once, forced, then go; Pay on the charged part is one refusal; another tester's Charge follows the tick
+  (off: goes; on: stops unforced); Stop follows the tick; own payments aren't charges; a real automatic call charge and a decision charge's payment line force;
+  which presses a charge is about; Confirm while away: her Charge on another part forces, its own charge's line and Ben's don't; the auto charge waits for the
+  developer's Pay at the bank, skipped once it completes, charged after it is cancelled; the Terms). Updated: `batch35-stop-rules-v2` (a decision charge on her
+  written answers now also stops Pay on her recording, forced; Ben's part still follows the tick).
