@@ -38,7 +38,7 @@ describe("Charge / Let it go at day 14", () => {
     const r = await sact(sessionId, "choose", tester.cookie, { submissionId: sub.id, choice: "charge" });
     expect(r.body).toMatchObject({ choice: "charge", amountCents: 1000 });
     // (Owner, Oct 27) A receipt follows the setting like any payment line: the daily job's email carries it (at most once).
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $10.00" }, payment: true } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "You paid $10.00" }, payment: true } })).toBe(1);
     // The developer's Pay is now final, naming the tester's choice.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true })).body.error.message).toBe("Ana Silva already charged $10.00 for her written answers."); // (batch 35 §162) Ana is "she"
   });
@@ -103,9 +103,9 @@ describe("(batch 11 section 4; §145, §148) what is owed during a hold is charg
     await payOwed(dev.user, {}); // the developer's press
     expect(calls).toBe(1); // (batch 35 §117) one payment for the total
     // (Batch 25 section 5) ONE receipt, naming what was paid.
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Receipt: you paid $31.00 for what you owed: Ana Silva's work on “Harbor Run” and a payment your bank had reversed (Ana Silva's work on “Harbor Run”)" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "You paid $31.00 for what you owed: Ana Silva's work on “Harbor Run” and a payment your bank had reversed (Ana Silva's work on “Harbor Run”)" } })).toBe(1);
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ status: "charged" });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "We charged your card" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "You paid ", contains: " for: " } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: { endsWith: "paid $9.00 for your written answers" }, groupKey: "tarrived" } })).toBe(1);
     // The chargeback is repaid too (to the platform: the tester keeps their share), but the hold stays on until the admin resolves it.
     expect(await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "chargeback" } })).toMatchObject({ amountCents: 2200, testerCents: 0, status: "charged" });

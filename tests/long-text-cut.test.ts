@@ -7,34 +7,35 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { copyText, Cut, cutText, openLabel, opensPopup, touchOnly } from "@/components/Cut";
 import { cut10, cutEmail, cutTo } from "@/lib/rules";
 
-// (Owner, Nov 3) Names listed on a page are cut at 12 characters (was 10) with "…" (emails in the middle); the full text stays in the page (copy, hover, screen readers),
+// (Owner, Nov 3) Names listed on a page are cut at 12 characters (was 10; owner, Nov 5, §203: 20) with "…" (emails in the middle); the full text stays in the page (copy, hover, screen readers),
 // and on a touch screen a tap on a cut name opens a pop-up with the full text, its link and Copy.
 (globalThis as unknown as { React: typeof React }).React = React;
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 const html = (text: string, kind?: "person" | "test" | "product" | "email") => renderToStaticMarkup(createElement(Cut, { text, kind }));
 
 describe("the cut rule", () => {
-  it("cuts a name longer than 12 characters at 12, with …; 12 or fewer stay as they are", () => {
+  it("cuts a name longer than 20 characters at 20, with …; 20 or fewer stay as they are (§203: was 12)", () => {
     expect(cutTo("Ana Silva")).toBe("Ana Silva");
     expect(cutTo("Abcdefghij")).toBe("Abcdefghij");
-    expect(cutTo("Abcdefghijklm")).toBe("Abcdefghijkl…");
-    expect(cutTo("Abcdefghijkl")).toBe("Abcdefghijkl");
-    expect(cutTo("Alexandria Montgomery")).toBe("Alexandria M…");
+    expect(cutTo("Abcdefghijklmnopqrstu")).toBe("Abcdefghijklmnopqrst…");
+    expect(cutTo("Abcdefghijklmnopqrst")).toBe("Abcdefghijklmnopqrst");
+    expect(cutTo("Alexandria Montgomery")).toBe("Alexandria Montgomer…");
     // A space at the cut is dropped, as cut10 does; the payment lines' rule is unchanged.
-    expect(cutTo("Harbor Runs again")).toBe("Harbor Runs…");
-    expect(cutTo("Harbor Runs again")).toBe(cut10("Harbor Runs again"));
+    expect(cutTo("Harbor Runs Seventy and on")).toBe("Harbor Runs Seventy…");
+    expect(cutTo("Harbor Runs Seventy and on")).toBe(cut10("Harbor Runs Seventy and on"));
     // By characters: an emoji is never split in half.
-    expect(cutTo("😀".repeat(13))).toBe(`${"😀".repeat(12)}…`);
+    expect(cutTo("😀".repeat(21))).toBe(`${"😀".repeat(20)}…`);
   });
 
-  it("cuts an email in the middle: 12 characters before @ when that part is longer than 13; the domain only past 14", () => {
+  it("cuts an email in the middle: 20 characters before @ when that part is longer than 21; the domain only past 14 (§203: was 12)", () => {
     expect(cutEmail("ana@playtest.test")).toBe("ana@playtest.test");
     expect(cutEmail("abcdefg@playtest.test")).toBe("abcdefg@playtest.test");
-    expect(cutEmail("maximiliana.alexandrina@playtest.test")).toBe("maximiliana.…@playtest.test");
+    expect(cutEmail("maximiliana.alexandrina@playtest.test")).toBe("maximiliana.alexandr…@playtest.test");
+    expect(cutEmail("maximiliana.alexandri@playtest.test")).toBe("maximiliana.alexandri@playtest.test"); // 21: not cut
     expect(cutEmail("ana@very-long-company-domain.example.com")).toBe("ana@very-long-comp…");
-    expect(cutEmail("maximiliana.alexandrina@very-long-company-domain.example.com")).toBe("maximiliana.…@very-long-comp…");
+    expect(cutEmail("maximiliana.alexandrina@very-long-company-domain.example.com")).toBe("maximiliana.alexandr…@very-long-comp…");
     expect(cutEmail("abc@exactly14chars")).toBe("abc@exactly14chars");
-    expect(cutText("maximiliana.alexandrina@playtest.test", "email")).toBe("maximiliana.…@playtest.test");
+    expect(cutText("maximiliana.alexandrina@playtest.test", "email")).toBe("maximiliana.alexandr…@playtest.test");
   });
 });
 
@@ -48,12 +49,12 @@ describe("<Cut>", () => {
     const h = html("Alexandria Montgomery-Wellington");
     expect(h).toContain('title="Alexandria Montgomery-Wellington"');
     expect(h).toContain('aria-label="Alexandria Montgomery-Wellington"');
-    expect(h).toMatch(/<span aria-hidden="true" class="select-none underline decoration-dotted[^"]*" data-cut-shown="">Alexandria M…<\/span>/);
+    expect(h).toMatch(/<span aria-hidden="true" class="select-none underline decoration-dotted[^"]*" data-cut-shown="">Alexandria Montgomer…<\/span>/);
     // The full name, visually hidden, right after the cut one: selecting and copying the row gives the full name.
     expect(h).toContain('<span class="sr-only" data-cut-full="">Alexandria Montgomery-Wellington</span>');
     expect(h).toContain('data-cut="person"');
     const e = html("maximiliana.alexandrina@playtest.test", "email");
-    expect(e).toContain(">maximiliana.…@playtest.test</span>");
+    expect(e).toContain(">maximiliana.alexandr…@playtest.test</span>");
     expect(e).toContain('data-cut-full="">maximiliana.alexandrina@playtest.test</span>');
   });
 

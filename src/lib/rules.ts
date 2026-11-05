@@ -1015,8 +1015,8 @@ export const CHARGEBACK_FEE_CENTS = 1500;
 const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
 /** The Payments line of an open chargeback: "Your bank reversed a $X payment: $X + $15 chargeback fee." */
 // (Owner, Nov 2) With what it paid for, when known: "Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run” (Nov 2): $10 + $15 chargeback fee".
-// (Owner, Nov 2) The tester's and the test's names are cut with "…" so the line stays short: at NAME_CUT characters (owner, Nov 3: 12, was 10).
-export const NAME_CUT = 12;
+// (Owner, Nov 2) The tester's and the test's names are cut with "…" so the line stays short: at NAME_CUT characters (owner, Nov 5, §203: 20, was 12; Nov 3: 12, was 10).
+export const NAME_CUT = 20;
 export const cut10 = (s: string) => cutTo(s);
 /**
  * (Owner, Nov 3) A name LISTED on a page (a person, a test, a product; components/Cut.tsx): the same rule as cut10, at `n` characters (NAME_CUT unless given), counted by character so
@@ -1027,8 +1027,8 @@ export const cutTo = (s: string, n = NAME_CUT) => {
   return chars.length > n ? `${chars.slice(0, n).join("").trimEnd()}…` : s;
 };
 /**
- * (Owner, Nov 3) An email listed on a page, cut in the middle: the part before "@" keeps its first NAME_CUT characters then "…" (only when it is longer than NAME_CUT + 1; owner, Nov 3: 12, was 6), and
- * the domain stays whole unless it is over 14 characters, then its first 14 and "…". "maximiliana.alexandrina@playtest.test" → "maximiliana.…@playtest.test".
+ * (Owner, Nov 3) An email listed on a page, cut in the middle: the part before "@" keeps its first NAME_CUT characters then "…" (only when it is longer than NAME_CUT + 1; owner, Nov 5, §203: 20, was 12; Nov 3: 12, was 6), and
+ * the domain stays whole unless it is over 14 characters, then its first 14 and "…". "maximiliana.alexandrina.lopez@playtest.test" → "maximiliana.alexandr…@playtest.test".
  */
 export function cutEmail(email: string) {
   const at = email.lastIndexOf("@");
@@ -1043,7 +1043,7 @@ export const partOf = (callId: string | null | undefined, subKind: string | null
   callId ? "live call" : subKind === "recording" ? "recording" : subKind ? "written answers" : "work";
 /**
  * (Owner, Nov 2, §131) THE name of what a payment is for, in every developer-facing payment line: WHICH tester, WHICH part and WHICH test, the tester's and the
- * test's names cut at 12 characters with "…": "Marc Hanna's written answers on “chargechar…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
+ * test's names cut at NAME_CUT (20; owner, Nov 5, §203, was 12) characters with "…": "Marc Hanna's written answers on “chargechargechargecha…”". `when` (a call's day) follows in brackets: "Ana Silva's live call on
  * “Harbor Run” (Oct 30)". `full`: the names uncut, for the hover (`title`) of a line shown on a page (emails and bells stay cut).
  */
 export const pieceName = ({ tester, part, test, when, full = false, whose }: { tester: string; part: PiecePart | string;

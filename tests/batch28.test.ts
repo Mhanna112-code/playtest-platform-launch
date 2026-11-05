@@ -308,7 +308,7 @@ describe("batch 28 §8: Pay what you owe reserves once; what's added after is ch
     expect(later).toHaveLength(1);
     expect(later[0].p).toMatchObject({ off_session: true });
     expect(await db.payment.findUniqueOrThrow({ where: { id: added.id } })).toMatchObject({ status: "charged", transferStatus: "sent" });
-    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: "Receipt: you paid $5.00 for Ana Silva's written answers on “Harbor Run” (charged by her after 7 days)" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: "You paid $5.00 for Ana Silva's written answers on “Harbor Run” (charged by her after 7 days)" } })).toBe(1);
     expect(await db.notification.count({ where: { userId: x.tester.user.id, text: { contains: "paid $5.00 for your written answers" } } })).toBe(1);
     // Nothing is charged twice (the lift's charging runs again with nothing deferred).
     await (await import("@/lib/server/holds")).chargeDeferred(x.dev.user.id);
@@ -471,7 +471,7 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     expect(made[0].p).toMatchObject({ amount: 1500, off_session: true });
     expect(await db.review.findUniqueOrThrow({ where: { callId: x.call.id } })).toMatchObject({ amountCents: 1500, reason: R.AUTO_CHARGED_CALL, auto: true });
     expect(await db.payment.findFirstOrThrow({ where: { callId: x.call.id } })).toMatchObject({ status: "charged", amountCents: 1500, transferStatus: "sent" });
-    const receipt = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "Receipt: you paid $15.00 for Ana Silva's live call on “Harbor Run” (" } } });
+    const receipt = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "You paid $15.00 for Ana Silva's live call on “Harbor Run” (" } } });
     expect(receipt.text).toContain(", charged automatically after 7 days)");
     expect(await db.notification.count({ where: { userId: x.tester.user.id, text: { startsWith: "Nora Lane paid you $15.00 for your call on" } } })).toBe(1);
   });
@@ -541,13 +541,13 @@ describe("batch 28 §18: payment lines are emailed the same evening whatever the
     const { notify, sendSummaries } = await import("@/lib/server/notify");
     const u = await makeUser({ dev: true, name: "Nora Lane" });
     await db.user.update({ where: { id: u.user.id }, data: { emailPref: "off" } });
-    await notify(u.user.email, "Receipt: you paid $8.00 for Ana Silva's written answers", ["x"], "/app/payments", { payment: true });
+    await notify(u.user.email, "You paid $8.00 for Ana Silva's written answers", ["x"], "/app/payments", { payment: true });
     await notify(u.user.email, "Ana Silva sent written answers for “Harbor Run”", ["x"], "/app/tests/x");
     await sendSummaries(new Date(), [u.user.id]);
     const mail = await db.outboxEmail.findMany({ where: { to: u.user.email } });
     expect(mail).toHaveLength(1);
     expect(mail[0].subject).toBe("Your Playtest payment updates: 1");
-    expect(mail[0].text).toContain("Receipt: you paid $8.00 for Ana Silva's written answers");
+    expect(mail[0].text).toContain("You paid $8.00 for Ana Silva's written answers");
     expect(mail[0].text).not.toContain("sent written answers");
     expect(await db.notification.count({ where: { userId: u.user.id, summarizedAt: null } })).toBe(1); // the other line stays in the bell only
     await sendSummaries(new Date(), [u.user.id]);
@@ -691,7 +691,7 @@ describe("batch 28 §21: during a suspension the automatic charge waits for the 
     await db.user.update({ where: { id: s.dev.user.id }, data: { devSuspendedAt: null } });
     await chargeDeferred(s.dev.user.id);
     expect(await db.payment.findFirstOrThrow({ where: { callId: call.id } })).toMatchObject({ status: "charged" });
-    const r = await db.notification.findFirstOrThrow({ where: { userId: s.dev.user.id, text: { startsWith: "Receipt: you paid $15.00 for Ana Silva's live call on “Harbor Run” (" } } });
+    const r = await db.notification.findFirstOrThrow({ where: { userId: s.dev.user.id, text: { startsWith: "You paid $15.00 for Ana Silva's live call on “Harbor Run” (" } } });
     expect(r.text).toContain(", charged automatically after 7 days)");
   });
 });

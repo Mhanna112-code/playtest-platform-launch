@@ -393,10 +393,10 @@ describe("§133 Stripe changes the disputed amount (charge.dispute.updated)", ()
 
 describe("§133 the line helpers", () => {
   it("whole and partial wording", () => {
-    const paidFor = { name: "Marc Hanna", part: "written answers", test: "chargechargecharge", date: "Nov 3" };
+    const paidFor = { name: "Marc Hanna", part: "written answers", test: "chargechargechargecharge", date: "Nov 3" }; // (§203: names cut at 20)
     expect(R.chargebackOwedLine(9600, undefined, false, 44467)).toBe("Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee");
-    expect(R.chargebackOwedLine(9600, paidFor, false, 44467)).toBe("Your bank reversed $96 of the $444.67 you paid for Marc Hanna's written answers on “chargecharge…” (Nov 3): $96 + $15 chargeback fee");
-    expect(R.chargebackOwedLine(9600, paidFor, true, 44467)).toBe("Your bank reversed $96 of the $444.67 you paid for Marc Hanna's written answers on “chargechargecharge” (Nov 3): $96 + $15 chargeback fee");
+    expect(R.chargebackOwedLine(9600, paidFor, false, 44467)).toBe("Your bank reversed $96 of the $444.67 you paid for Marc Hanna's written answers on “chargechargechargech…” (Nov 3): $96 + $15 chargeback fee");
+    expect(R.chargebackOwedLine(9600, paidFor, true, 44467)).toBe("Your bank reversed $96 of the $444.67 you paid for Marc Hanna's written answers on “chargechargechargecharge” (Nov 3): $96 + $15 chargeback fee");
     expect(R.chargebackOwedLine(44467, undefined, false, 44467)).toBe("Your bank reversed a $444.67 payment: $444.67 + $15 chargeback fee");
     expect(R.chargebackOwedLine(1000)).toBe("Your bank reversed a $10 payment: $10 + $15 chargeback fee");
     expect(R.repaidReversedLine({ amountCents: 44467, reversedCents: 9600 }, " payment", null)).toBe("Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)");

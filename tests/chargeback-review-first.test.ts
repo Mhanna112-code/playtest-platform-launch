@@ -186,9 +186,9 @@ describe("(Owner, Nov 3) everything that waited for the lift is charged as ONE p
     const c = await db.payment.findUniqueOrThrow({ where: { id: x.charge.id } });
     expect(c).toMatchObject({ status: "charged", coveredById: one.id, transferStatus: "sent" });
     expect(st.transfers.map((t) => [t.amount, t.destination])).toEqual([[c.testerCents, (await user(w.t[1].tester.user.id)).stripeAccountId]]);
-    const receipts = await db.notification.findMany({ where: { userId: w.dev.user.id, text: { startsWith: "Receipt:" } } });
+    const receipts = await db.notification.findMany({ where: { userId: w.dev.user.id, text: { startsWith: "You paid " } } });
     expect(receipts.map((r) => r.text)).toHaveLength(1);
-    expect(receipts[0].text).toMatch(/^Receipt: you paid \$35\.00 for .*reversed.*Ben Okafor|^Receipt: you paid \$35\.00 for .*Ben Okafor.*reversed/);
+    expect(receipts[0].text).toMatch(/^You paid \$35\.00 for .*reversed.*Ben Okafor|^You paid \$35\.00 for .*Ben Okafor.*reversed/);
   });
 
   it("declined: the reversal is owed again (its chargeback reopens: a chargeback hold) and the tester's Charge is a debt", async () => {

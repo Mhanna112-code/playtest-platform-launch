@@ -7,6 +7,8 @@ import { HttpError } from "./http";
 import { notify, renderFor } from "./notify";
 import { charge, stripeOn } from "./stripe";
 import { serverKey } from "./pressKeys";
+import { paidAllLine } from "@/lib/moneyLines";
+import { PAID_GROUP } from "@/lib/bell";
 import { stripeDescription } from "./paymentRows";
 import { ALL_NOTE, OWED_ACTIVE, OWED_KIND, isAll } from "./owedOnce";
 
@@ -285,14 +287,18 @@ export async function clampToEarliest(oneId: string) {
   if (one?.actionBy && first?.actionBy && first.actionBy < one.actionBy) await db.payment.update({ where: { id: oneId }, data: { actionBy: first.actionBy } });
 }
 
-/** ONE receipt naming every payment it paid: "We charged your card $42.00 for: Ana Silva's written answers on “Harbor Run” $10.00, …". */
+/**
+ * ONE receipt naming every payment it paid: "You paid $42.00 for: Ana Silva's written answers on “Harbor Run” $10.00, …". (Owner, Nov 5, §201) The same form as
+ * every other receipt (it was "We charged your card $42.00 for: …", or "Receipt: you paid …" with payments not set up; the email body still says which), and it
+ * stacks in the same daily "Paid · N payments" entry, as one payment (one charge on the card).
+ */
 export async function allReceipt(email: string, parts: { name: string; cents: number }[], status: string) {
   if (!parts.length) return;
   const cents = sum(parts.map((p) => ({ amountCents: p.cents })));
   const list = parts.map((p) => `${p.name} ${money(p.cents)}`).join(", ");
   const set = status !== "not_set_up";
-  const line = set ? `We charged your card ${money(cents)} for: ${list}` : `Receipt: you paid ${money(cents)} for: ${list}`;
-  await notify(email, line, [line + ".", set ? "Charged to your saved card." : "Payments aren't set up yet, so this was recorded and nothing was charged."], "/app/payments", { side: "developer", payment: true });
+  const line = paidAllLine(cents, list);
+  await notify(email, line, [line + ".", set ? "Charged to your saved card." : "Payments aren't set up yet, so this was recorded and nothing was charged."], "/app/payments", { side: "developer", payment: true, group: PAID_GROUP });
 }
 
 /** "Cancel this check" next to the open Confirm all line (another tab's, or one left open). */

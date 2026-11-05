@@ -454,13 +454,13 @@ describe("the final list of emails that ignore Off, and each notification emaile
     const u = await makeUser({ tester: true });
     await db.user.update({ where: { id: u.user.id }, data: { emailPref: "weekly", lastSummaryAt: new Date() } });
     await notify(u.user.email, "Ordinary", ["x"], "/app");
-    await notify(u.user.email, "Receipt: you paid $5.00 for x", ["x"], "/app/payments", { payment: true });
+    await notify(u.user.email, "You paid $5.00 for x", ["x"], "/app/payments", { payment: true });
     await notify(u.user.email, "Your account is paused", ["x"], "/app/help", { always: true });
     await sendSummaries();
     await sendSummaries();
     const mails = await db.outboxEmail.findMany({ where: { to: u.user.email } });
     expect(mails).toHaveLength(1);
-    expect(mails[0].text).toContain("Receipt: you paid $5.00");
+    expect(mails[0].text).toContain("You paid $5.00");
     expect(mails[0].text).toContain("Your account is paused");
     expect(mails[0].text).not.toContain("Ordinary");
     // A line that is both payment-related and must-send (the owed reminder) is in that one email only, never again in the weekly summary.
@@ -470,11 +470,11 @@ describe("the final list of emails that ignore Off, and each notification emaile
     await sendSummaries();
     const all = (await db.outboxEmail.findMany({ where: { to: u.user.email } })).map((m) => m.text);
     expect(all.filter((t) => t.includes("Pay $9.00 by")).length).toBe(1);
-    expect(all.filter((t) => t.includes("Receipt: you paid $5.00")).length).toBe(1);
+    expect(all.filter((t) => t.includes("You paid $5.00")).length).toBe(1);
     // Off: (batch 28 §18) a payment line goes out the same evening anyway; a must-send line sends in the one email.
     const off = await makeUser({ dev: true });
     await db.user.update({ where: { id: off.user.id }, data: { emailPref: "off" } });
-    await notify(off.user.email, "Receipt: you paid $7.00 for x", ["x"], "/app/payments", { payment: true });
+    await notify(off.user.email, "You paid $7.00 for x", ["x"], "/app/payments", { payment: true });
     await sendSummaries();
     expect((await db.outboxEmail.findMany({ where: { to: off.user.email } })).map((m) => m.subject)).toEqual(["Your Playtest payment updates: 1"]);
     await notify(off.user.email, "The team stopped “Harbor Run”", ["x"], "/app/tests/x", { always: true, group: "team" });
@@ -498,6 +498,7 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // (Batch 29 §22, §27, §31, §34) holds.ts: the tester's 3-day / 1-day close-out lines are gone; added: the developer's closing-soon line, the developer's daily
     // "Pay now", the tester's daily "Charge or let go" and the tester's deadline reminders.
     // (Owner, Nov 3, §161) chargeback.ts also: "The team reviewed your account: you can pay what you owe now" (from the 2nd chargeback; the line promises an email).
-    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Nov 5, §201) holds.ts also: the team's Approve of a payment hold lift sends its one "The team approved lifting your hold: your tests are running again." itself.
+    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

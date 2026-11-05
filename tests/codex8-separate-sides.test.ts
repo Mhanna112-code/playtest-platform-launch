@@ -336,7 +336,7 @@ describe("Task 8 (finish), the owner's proof: nothing of the other side leaks", 
     expect(lines.filter((n) => n.side === "tester").length).toBeGreaterThan(0);
 
     const words = {
-      developer: ["Owned Harbor", "Receipt:", "What you've paid", "Your card", "Ana Silva"],
+      developer: ["Owned Harbor", "You paid $10.00 for", "What you've paid", "Your card", "Ana Silva"],
       tester: ["Joined Lagoon", "paid you", "Everything you sent", "Your earnings", "Where your money goes"],
     };
     for (const side of ["developer", "tester"] as const) {
@@ -350,7 +350,7 @@ describe("Task 8 (finish), the owner's proof: nothing of the other side leaks", 
         messages: visible(renderToStaticMarkup(await Messages())),
       };
       for (const [page, text] of Object.entries(pages)) for (const w of words[other]) expect(text, `${side} ${page}: "${w}"`).not.toContain(w);
-      expect(pages.notifications, side).toContain(side === "developer" ? "Receipt:" : "paid you");
+      expect(pages.notifications, side).toContain(side === "developer" ? "You paid $10.00 for" : "paid you");
       expect(pages.messages, side).toContain(side === "developer" ? "Owned Harbor" : "Joined Lagoon");
       // The bell's number is this side's (plus the account's) only.
       const mine = await db.notification.findMany({ where: { userId: bo.user.id, readAt: null, OR: [{ side }, { side: null }] } });
@@ -363,7 +363,7 @@ describe("Task 8 (finish), the owner's proof: nothing of the other side leaks", 
     expect(mail.text).toContain("As a tester");
     const dev = mail.text.slice(mail.text.indexOf("As a developer"), mail.text.indexOf("As a tester"));
     const tester = mail.text.slice(mail.text.indexOf("As a tester"));
-    expect(dev).toContain("Receipt: you paid $10.00 for Ana Silva's written answers");
+    expect(dev).toContain("You paid $10.00 for Ana Silva's written answers");
     expect(dev).not.toContain("Joined Lagoon");
     expect(tester).toContain("Joined Lagoon");
     expect(tester).not.toContain("Owned Harbor");

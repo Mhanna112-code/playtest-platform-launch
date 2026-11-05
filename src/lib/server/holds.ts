@@ -438,6 +438,10 @@ async function tellAdminsLiftWaiting(dev: { id: string; email: string; name: str
   }
 }
 
+/** (§201) The team's Approve before the developer has paid: "The team approved lifting your hold: it lifts once you have paid what you owe". */
+export const approvedWaitingLine = () => "The team approved lifting your hold: it lifts once you have paid what you owe";
+/** (Owner, Nov 5, §201) The team's note on its own decision, IN the bell line: " Their note: “Thanks for paying quickly.”" (nothing without a note). */
+export const theirNote = (note: string) => (note ? ` Their note: “${note}”` : "");
 /** Admin: approve lifting a payment hold (the 4th hold onward). First press wins. The hold lifts once everything owed is paid. */
 export async function approveHoldLift(adminId: string, devId: string, note: string, seen: import("./adminRace").AdminSeen | null = null) {
   const dev = await db.user.findUnique({ where: { id: devId } });
@@ -478,9 +482,21 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
     return r;
   });
   if (claimed.count !== 1) throw await already();
-  const lifted = await liftHoldIfClear(devId);
-  if (!lifted) await notify(dev.email, "The team approved lifting your hold", ["The team approved lifting your hold. It lifts once you have paid what you owe." + (note ? ` Their note: “${note}”` : "")], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
-  else if (note) await notify(dev.email, "A note from the team about your hold", [note], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
+  // (Owner, Nov 5, §201) ONE line that says what the team did (it was "A note from the team about your hold" beside "Your tests are running again", or only the latter
+  // with no note, which never said it was the team): the lift says so itself, like the chargeback hold's Approve (batch 24). The owner (Nov 5) wants the team's note IN
+  // the bell line: "… Their note: “…”" (an exception to batch 15's "no notes in bell lines", for the team's notes on its own decisions; the email has it too).
+  const lifted = await liftHoldIfClear(devId, { quietDev: true });
+  const noted = theirNote(note);
+  if (!lifted) {
+    const line = `${approvedWaitingLine()}.${noted}`;
+    await notify(dev.email, note ? line : approvedWaitingLine(), [line], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
+  } else {
+    const after = await db.user.findUniqueOrThrow({ where: { id: devId }, select: { devSuspendedAt: true, holdStartedAt: true } });
+    const cb = await import("./chargeback");
+    // A payment charged right after the lift was declined (a new hold), or a suspension still keeps the tests paused: the same one line says so.
+    const line = (after.holdStartedAt ? `${cb.APPROVED_LINE}. A waiting payment was declined, so your tests are paused again.` : after.devSuspendedAt ? cb.approvedStillSuspendedLine(0) : cb.approvedLiftedLine(0)) + noted;
+    await notify(dev.email, line, [line, ...(after.holdStartedAt || after.devSuspendedAt ? [] : ["Everything you owed is paid, and every deadline moved on by the pause."])], after.holdStartedAt ? "/app/payments#owed" : "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
+  }
   return { ok: true, lifted };
 }
 
@@ -1673,7 +1689,7 @@ export async function autoChargeCalls(now: Date) {
     }
     if (!gone && await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
       // (Owner, Nov 4, §177) Which call: its date, as every other payment line names a call ("Ana Silva's live call on “Harbor Run” (Oct 27)").
-      await bell(dev.id, `${pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt) })} (${money(amount)}) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+      await bell(dev.id, `${pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt), full: true })} (${money(amount)}) is added to what you owe: it's paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
       await tellDelayed();
       await logged(`${call} is waiting to be charged once your tests resume: ${money(amount)}`);
       n++;
@@ -1707,7 +1723,7 @@ export async function autoChargeCalls(now: Date) {
       const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
       await tellDelayed();
       // (A deleted developer: no hold to start; it stays "delayed" for the tester and is listed for the admins, as declinedPayment says.)
-      await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt) }));
+      await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: name, part: "live call", test: c.title, when: T(x.startsAt), full: true }));
       outcome = gone ? `The automatic charge for ${call} (${money(amount)}) was declined` : `The automatic charge for ${call} (${money(amount)}) was declined: it was added to what you owe`;
     }
     await logged(outcome);
@@ -1775,7 +1791,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   // (Batch 35 §113) During a hold the tester's choice waits separately until the hold lifts; it never grows Pay what you owe.
   // During an admin suspension with no hold, or the team's pause, it is charged at once below.
   if (await deferIfHeld({ kind: "review", submissionId: s.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-    await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+    await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title, full: true })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id, "", `part-${s.id}`));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
   }
@@ -1807,7 +1823,7 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
     // (Owner, Oct 27) A declined Charge starts the payment hold at once (the tester reads only "delayed").
     const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
     await notify(c.tester.email, `Payment for your work on “${c.title}” may be delayed`, ["Payment for your work may be delayed."], `/app/sessions/${c.id}#part-${s.kind}`, { side: "tester", payment: true, group: "tdelayed" });
-    await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title }));
+    await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title, full: true }));
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} ${label}`, false, {}, c.id, "", `part-${s.id}`));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };
@@ -1914,7 +1930,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     return { choice, amountCents: 0 };
   }
   if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {
-    await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt) })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
+    await bell(dev.id, `Charged by the tester: ${money(amount)} for ${pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt), full: true })}, added to what you owe and paid with it, as one payment`, "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
     // (Owner, Nov 4, §177) Which call: "Ana Silva charged $15.00 for her call on Tue, Oct 27, 8:00 AM" (the developer's zone).
     await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)}`, false, {}, c.id, "", `call-${x.id}`));
     return { choice, amountCents: amount, status: "deferred", message: chargedDelayedLine(amount) };
@@ -1943,7 +1959,7 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
     status = "failed";
     const failed = await db.payment.update({ where: { id: row.id }, data: { status: "failed", failure: (e as Error).message, owedUntil: new Date() } });
     await notify(c.tester.email, `Payment for your call on “${c.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
-    await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt) }));
+    await declinedPayment(dev.id, failed.id, amount, pieceName({ tester: displayName(tester), part: label, test: c.title, when: T(x.startsAt), full: true }));
   }
   await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${displayName(tester)} charged ${money(amount)} for ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)}`, false, {}, c.id, "", `call-${x.id}`));
   return { choice, amountCents: amount, status, ...(status === "needs_confirmation" ? { message: `Charged ${money(amount)}. Payment may be delayed.` } : {}) };

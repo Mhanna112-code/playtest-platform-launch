@@ -566,8 +566,9 @@ export async function declineChargebackReserve(devId: string, note = "", adminId
     const released = await releasedBy(devId, adminId, seen?.since ?? null, seen?.tab);
     throw new HttpError(409, "nothing_reserved", released ? `Nothing is reserved on that account (${released}).` : "Nothing is reserved on that account.");
   }
-  const line = notApprovedLine(cents);
-  await notify(u.email, line, [line, ...(note ? [`Their note: “${note}”`] : [])], "/app/payments#chargeback-steps", { side: "developer", payment: true, group: "admindecision" });
+  // (Owner, Nov 5, §201) The team's note is in the bell line too (it was only in the email).
+  const line = notApprovedLine(cents) + (await import("./holds")).theirNote(note);
+  await notify(u.email, line, [line], "/app/payments#chargeback-steps", { side: "developer", payment: true, group: "admindecision" });
   return { ok: true, releasedCents: cents };
 }
 /** "The team didn't approve lifting your hold: the $23.00 reserved on your card was released, and nothing was taken." */

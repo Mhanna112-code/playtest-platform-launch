@@ -26,7 +26,8 @@ import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "
 import { callsLeftCents } from "./callMoney";
 import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
-import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, updateWaiting } from "@/lib/moneyLines";
+import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, paidLine, updateWaiting } from "@/lib/moneyLines";
+import { PAID_GROUP } from "@/lib/bell";
 import { teamPausedWaits } from "@/lib/restricted";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
@@ -198,7 +199,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
     });
     // (Owner, Nov 4, §177) A call is named with its day, as every payment line names a call ("Ana Silva's live call on “Harbor Run” (Oct 27)").
     const callStart = payment!.callId ? (await db.call.findUnique({ where: { id: payment!.callId }, select: { startsAt: true } }))?.startsAt ?? null : null;
-    await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, pieceName({ tester: name, part: piece.label, test: c.title, when: callStart ? T(callStart) : null })); // (§178) its date and time
+    await (await import("./holds")).declinedPayment(dev.id, payment!.id, rev.amountCents, pieceName({ tester: name, part: piece.label, test: c.title, when: callStart ? T(callStart) : null, full: true })); // (§178) its date and time
     // The tester is told at once (bell; their top box and stop-once read the owed payment): never "failed". (§177) The bell names the test and which call:
     // "Nora Lane's payment for your live call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST) ($15) is delayed."
     await bell(c.testerId, delayedPayLine(displayName(dev), piece.label, rev.amountCents, `“${c.title}”${callStart ? ` (${T(callStart)})` : ""}`), `/app/sessions/${c.id}#${pieceAnchor(piece.label, payment!.callId)}`, undefined, { payment: true, group: "tdelayed" });
@@ -569,10 +570,15 @@ async function decidedByLine(byId: string | null, at: Date | null, p: Presser | 
   return `${who} already decided this dispute${at ? ` at ${fmtTime(at)}` : ""}.`;
 }
 
-/** A payment receipt to the developer for every payment that goes through: bell + email, always sent. */
+/**
+ * A payment receipt to the developer for every payment that goes through: bell + email, always sent. (Owner, Nov 5, §201) No "Receipt:" prefix: "You paid $10.00 for
+ * Ana Silva's written answers on “Harbor Run”" (the same words whoever pressed: a decision charge, the tester's Charge and an automatic call charge keep their own
+ * "(charged by her after 7 days)" / "(… charged automatically after 7 days)" / "the team's dispute decision on …" naming). Every one stacks under ONE "Paid ·
+ * N payments" entry a day across tests (`PAID_GROUP`), in the bell and in the end-of-day email.
+ */
 export async function receipt(devEmail: string, what: string, cents: number, status: string, path: string) {
-  const line = `Receipt: you paid ${money(cents)} for ${what}`;
-  await notify(devEmail, line, [line + ".", status === "not_set_up" ? "Payments aren't set up yet, so this was recorded and nothing was charged." : "Charged to your saved card."], path, { side: "developer", payment: true });
+  const line = paidLine(cents, what);
+  await notify(devEmail, line, [line + ".", status === "not_set_up" ? "Payments aren't set up yet, so this was recorded and nothing was charged." : "Charged to your saved card."], path, { side: "developer", payment: true, group: PAID_GROUP });
 }
 
 /** The developer adds their side to a dispute once; it shows under that piece of work and the admin sees both. */
@@ -755,7 +761,7 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
     // (Owner, Oct 27) A declined extra pay starts the payment hold at once, like any declined payment.
     await db.payment.update({ where: { id: row.id }, data: { failure: (e as Error).message } });
     if (row.submissionId) await answerUpdate(db, row.submissionId, row.createdAt); // (batch 30 §2) it was pressed: the update's row goes (the amount is owed)
-    await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${pieceName({ tester: name, part: piece.label, test: c.title, when: await callWhen(row) })}`); // (§178)
+    await (await import("./holds")).declinedPayment(dev.id, row.id, amount!, `extra pay for ${pieceName({ tester: name, part: piece.label, test: c.title, when: await callWhen(row), full: true })}`); // (§178)
     throw new HttpError(402, "card_failed", `Your card was declined, so ${name} wasn't paid ${money(amount)} extra yet. Your tests are paused until you pay what you owe: open Payments.`, { held: true, failed: `Your extra pay on ${c.test.title} was declined` });
   }
   if (result.status === "requires_action") return suspendedAfterCheck(dev.id, row.id, "extra pay", await (await import("./confirm")).pressAction(row.id, result as NeedsAction & Record<string, unknown>));

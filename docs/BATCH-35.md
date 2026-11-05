@@ -3789,3 +3789,94 @@ New `tests/change-payout-200.test.ts`: the button only when connected (not with 
 
 ### Evidence
 `playtest-lite-evidence/payout-nov5/` (captions.json): the connected box with the button, desktop 1280×900 and phone 375×812 (page and box alone), and the press answered with a 303 to the account's Express dashboard login link (fake Stripe).
+
+## §201 The developer's payments: "You paid …", stacked under one "Paid" entry a day (owner, Nov 5)
+- **No "Receipt:" prefix.** Every payment that went through gives the developer one line (bell and email) in ONE form, whoever pressed:
+  "You paid $10.00 for Ana Silva's written answers on “Harbor Run”". The rest of each line is unchanged, as specific as before:
+  - Pay more: "You paid $5.00 for extra pay for Ana Silva's written answers on “Harbor Run”";
+  - the team's dispute decision: "You paid $6.00 for the team's dispute decision on Ana Silva's written answers on “Harbor Run”";
+  - the tester's Charge: "You paid $10.00 for Ben Okafor's written answers on “Sky Lab” (charged by him after 7 days)";
+  - an automatic call charge: "You paid $15.00 for Cara Diaz's live call on “Sky Lab” (Tue, Oct 27, 3:25 PM EST, charged automatically after 7 days)";
+  - Pay what you owe / owed payments: "You paid $35.00 for what you owed: …"; a reservation taken on the team's approval: "You paid $8.00 for what you owed (reserved on your card, taken on the team's approval)";
+  - a subscription charge: "You paid $7.00 for your subscription ($7/month)".
+  - **Choice:** "You paid" for every one, including charges the developer didn't press (decision, the tester's Charge, the automatic call charge): it is their card
+    and their money either way, and the existing "(charged by … after 7 days)", "(…, charged automatically after 7 days)" and "the team's dispute decision on …"
+    words already say who started it. A neutral "Paid $10.00 for …" was the alternative; it would also be the stack's heading word, so "You paid" reads clearer.
+- **Confirm all's combined line** takes the same form: "You paid $42.00 for: Ana Silva's written answers on “Harbor Run” $10.00, Ben Okafor's recording on “Sky
+  Lab” $32.00" (it was "We charged your card $42.00 for: …", and "Receipt: you paid … for: …" with payments not set up). The email body still says "Charged to your
+  saved card." or "Payments aren't set up yet, so this was recorded and nothing was charged."
+- **One stack a day, across tests.** Every one of these lines is in the new `devpaid` group (`PAID_GROUP`, lib/bell.ts): one entry a day across all tests,
+  "Paid · 3 payments today" (`GROUP_COUNT_TITLES.devpaid`, counting lines: each line is one payment on the card; a Confirm all line is one payment). A day with
+  one payment shows that line alone, like every stack. Unread count, mark read (expanding the stack reads all its lines; clicking one reads it), the Notifications
+  page and the live redraw follow the existing groups unchanged (`bellKeyIn`, `unreadEntryCount`, `BellList`).
+- **Only successful payments.** Failures ("Another payment was declined …", a hold starting), bank-confirmation lines, chargebacks, refunds, owed lines and
+  everything else keep their lines and groups exactly as before (the "Payments and holds" stack, or their own line).
+- **Subscription receipts stack too** (no rule says otherwise: BATCH-8 §8.5 put the subscription's *notices* (renewal declined, ended, free launch ending) in
+  "Payments and holds", and those stay there; the subscription's receipt was always a receipt line).
+- **The end-of-day email stacks them the same way** (`emailLines` in notify.ts now stacks `EMAIL_STACKED`: "deadlines" and "devpaid"): "• Paid · 4 payments" with
+  each "• You paid …" line under it; one line of a kind stays a plain line.
+- **Rules this supersedes** (doc agent, DESIGN-DOC.md "The bell"): "Receipts, a pause being lifted or extended, and outages are always their own line." now reads
+  that receipts stack in "Paid" (pauses lifted and outages unchanged); the "Every bell line" row for receipts reads "You paid $X for <what>" and stacks in "Paid";
+  the receipt examples drop "Receipt:". "One line for the same money" is unchanged: still one line per payment.
+
+### The team's Approve of a hold lift (owner, Nov 5)
+- It was "A note from the team about your hold" (the note only in the email) beside "Your tests are running again", or with no note only the latter, which never
+  said the team approved it. Now ONE line in "The team decided" says what happened, with the team's note in it (the owner asked for the note IN the bell line: an
+  exception to batch 15's "notes never in bell lines", for the team's notes on its own decisions only; Pay notes, stop and End early reasons stay out):
+  - lifted: "The team approved lifting your hold: your tests are running again. Their note: “…”";
+  - lifted, a suspension still on: "The team approved lifting your hold. Your tests stay paused while your account is suspended. Their note: “…”";
+  - lifted, then a payment charged right after it declined: "The team approved lifting your hold. A waiting payment was declined, so your tests are paused again.";
+  - not lifted yet (money still owed): "The team approved lifting your hold: it lifts once you have paid what you owe. Their note: “…”".
+  No note: the same lines without "Their note". No separate "Your tests are running again" line any more for this lift (`liftHoldIfClear(…, { quietDev })`,
+  as the chargeback hold's Approve already did).
+- The other "The team decided" lines: the chargeback hold's Don't approve now carries the team's note too ("The team didn't approve lifting your hold: the $8.00
+  reserved on your card was released, and nothing was taken. Their note: “…”"). The others already say what was decided and have no note for the developer
+  (the chargeback Approve's lines, "The team reviewed your account: you can pay what you owe now", "Your developer account is paused / active again": a
+  suspension's reason is never sent to the person).
+
+### Code
+- `moneyLines.ts`: `paidLine`, `paidAllLine`. `bell.ts`: `PAID_GROUP`, `GROUP_TITLES.devpaid`, `GROUP_COUNT_TITLES.devpaid`. `payments.ts` `receipt` and
+  `confirmAll.ts` `allReceipt`: the new words and the group (every caller goes through these two). `notify.ts`: `EMAIL_STACKED`, `emailLines` (exported).
+- `holds.ts`: `approveHoldLift`'s one line, `approvedWaitingLine`, `theirNote`. `chargeback.ts`: Don't approve's note in the line. No migration.
+
+### Tests
+New `tests/paid-stack-201.test.ts`: a Pay and a decision charge on “Harbor Run”, the tester's Charge and an automatic call charge on “Sky Lab”, one day: four
+"You paid …" lines, none with "Receipt", one group and one bell key across both tests; the Notifications page shows ONE "Paid · 4 payments" entry (counted) with
+the four lines; a declined Pay's lines stay outside it; the bell's number counts the stack once and reading it takes it off; the end-of-day email stacks them
+under "• Paid · 4 payments". Confirm all's line and a subscription charge stack too; `emailLines` (one line stays plain, two kinds stack side by side). The
+hold-lift Approve: one line with the note, one without, one before the money is paid. Updated for the words: `addition`, `batch8`, `batch11`, `batch18`,
+`batch24`, `batch25`, `batch28`, `batch35-one-card-checks`, `batch35-payment-proofs`, `chargeback-review-first`, `choice`, `codex8-separate-sides`,
+`confirm-all`, `press-races`; `batch23` (Don't approve's note in the line).
+
+## §202 Bell lines: the first 30 characters, then the whole line on its arrow (owner, Nov 5)
+- **Each bell line** (alone, or inside an opened stack) shows its first 30 characters then "…" when it is longer (`bellShort`, lib/bell.ts; `BELL_LINE_SHOWN`
+  = 30). The cut never lands inside a word or an amount: if the 30th character is inside one ("$1,000.00" has no space), it goes back to the space before it
+  ("Charged by the tester: $1,000.00 for …" → "Charged by the tester…"; a trailing ":" or "," goes with the cut); a single word longer than 30 is cut as is, by
+  character (an emoji is never split). Lines of 30 characters or fewer show whole, with no arrow.
+- **The arrow** beside a cut line (a button: `aria-expanded`, "Show the whole line" / "Hide the whole line", `data-bell-toggle`) opens the WHOLE line under it,
+  names uncut, in a small scroll box (`max-h-32`, `data-bell-full`), amounts kept whole (`keepAmounts`). The words still follow the line's link. Opening the
+  whole line marks it read, like clicking it; nothing else about reading changes (a stack is read when expanded).
+- **Stack headings are unchanged** ("Paid · 3 payments today", "Disputes decided · 2 updates today", a test's cut name "· 3 updates"); the closed stack's preview
+  of its newest line is cut at 30 the same way.
+- **The whole line, names uncut.** A few bell lines were built with the cut names (12, now 20, characters): a declined charge ("Another payment was declined:
+  $5.00 for Alexandria M…'s recording on “chargecharge…” …"), the tester's Charge and an automatic call charge added to what is owed during a hold. They now name
+  the tester and the test in full (`pieceName({ full: true })`): every other bell line (receipts, disputes, decisions, joins, leaves, call requests, chargebacks
+  since §193b) already did. So the stored line IS the full version: **no new column or migration** (the bell cuts it for display, and the emails, which use
+  the same text, get the full names too). (A `full` column was considered: the worktree's node_modules is shared with the 3400 site, so a `prisma generate`
+  there would hand the running site a client expecting a column its database lacks; and with the bell cutting at 30 it would only duplicate the text.)
+- **Where:** the bell list is the Notifications page (`BellList`; the header's bell is a link to it with the count, there is no separate dropdown), desktop and
+  phone alike.
+
+### Tests
+New `tests/bell-lines-202.test.ts`: `bellShort` (short lines whole; an amount at the cut; exactly at a space; an emoji word); the list's markup (the cut words in
+the link, one arrow per long line with `aria-expanded="false"`, none on a short line, the heading unchanged; the whole line opened by the arrow reads it, in a
+scroll box). Updated: `payment-piece-names` (the decline's bell line in full).
+
+## §203 Listed names cut at 20 characters (owner, Nov 5; was 12)
+- `NAME_CUT` (lib/rules.ts) is 20: every listed person, test and product name cut with "…" (`cutTo`, `cut10`, `<Cut>`, `pieceName` without `full`, `onTestLine`,
+  `partAway`), and an email's part before "@" (`cutEmail`: its first 20 characters then "…" when it is longer than 21; the domain rule, 14, is unchanged).
+  "Alexandria Montgomery" → "Alexandria Montgomer…"; "maximiliana.alexandrina@playtest.test" → "maximiliana.alexandr…@playtest.test". Nothing else was
+  hard-coded at 12 for names (the comments in `Cut.tsx`, `AdminRich.tsx`, `BellList.tsx` and `rules.ts` now say 20). Places drawn with `NameLink fit` (cut only
+  when the row is full, §187) are unchanged.
+- **Tests** updated for 20: `long-text-cut`, `chargeback-line-names`, `partial-dispute`, `payment-piece-names`, `specific-lines-177`; `bell-lines-202` checks
+  `NAME_CUT`, `cutTo`, `cutEmail` and `pieceName` at 20.
