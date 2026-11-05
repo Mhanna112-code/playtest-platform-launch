@@ -13,7 +13,7 @@ export function jumpTo(id: string) {
   let folded = false;
   for (let p = el.parentElement; p; p = p.parentElement) if (p.dataset?.foldText === "closed") { p.dispatchEvent(new Event(OPEN_FOLD_TEXT)); folded = true; }
   if (folded) el = document.getElementById(id) ?? el;
-  // (Batch 15 section 42) A target inside a fold (a tester row's "Calls (N)", the tester's Call history) opens it first.
+  // (Batch 15 section 42) A target inside a fold (a tester row's "Had (N)" / "Cancelled (N)", the same two in the tester's Live session, §209) opens it first.
   for (let p = el.parentElement; p; p = p.parentElement) if (p instanceof HTMLDetailsElement && !p.open) p.open = true;
   if (el instanceof HTMLDetailsElement && !el.open) el.open = true;
   // (Batch 35 §139) A link straight to a part (or to its Pay / Pay more) opens the folds under it: its answers or recordings and its Pay box.
@@ -58,10 +58,15 @@ export function bringInView(el: HTMLElement | null) {
 }
 
 /**
+ * (Owner, Nov 5, §209) The tester's "Call history" card and its "Booked (N)" are gone: an older link to them ("#call-history", "#calls-booked-<id>", e.g. a
+ * page or tab kept from before) opens the Live session, where the booked calls and Had / Cancelled are now.
+ */
+const RETIRED = /^(call-history|calls-booked-[\w-]+)$/;
+/**
  * (Owner, Oct 30, batch 35 §7) Where a link goes when its target isn't on the page: a sent piece ("piece-<id>", in Needs you) that was paid since is shown on its
  * tester's row ("part-<id>", the part's line there). The first of these on the page wins.
  */
-export const hashTargets = (id: string) => (id.startsWith("piece-") ? [id, `part-${id.slice("piece-".length)}`] : [id]);
+export const hashTargets = (id: string) => (id.startsWith("piece-") ? [id, `part-${id.slice("piece-".length)}`] : RETIRED.test(id) ? [id, "live"] : [id]);
 
 /** The classes a jump target carries. */
 export const MARKABLE = "scroll-mt-24 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300";

@@ -637,7 +637,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </li>
               );
             })}
-            {/* (Batch 35 §118) A call that took place, waiting for the developer's Pay: it opens that call on the session page (its Call history row). */}
+            {/* (Batch 35 §118) A call that took place, waiting for the developer's Pay: it opens that call on the session page ((Owner, Nov 5, §209) its row in the Live
+                session's "Had (N)", which opens for the jump). */}
             {waitingCalls.map(({ c, x, minutes, cents }) => {
               const inner = (
                 <>
@@ -694,8 +695,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               {upcoming.map(({ c, x }) => (
                 <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long).
-                      (Owner, Nov 4, §186) It opens the session's Call history "Booked (N)", where the booked calls (Join call) now are (was #live). */}
-                  <Link href={`/app/sessions/${c.id}#calls-booked-${c.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><span className="min-w-0 max-w-full truncate"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <Cut text={c.title} kind="test" /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
+                      (Owner, Nov 5, §209; was §186's Call history "Booked (N)") It opens that call's own row in the session's Live session, with its Join call. */}
+                  <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><span className="min-w-0 max-w-full truncate"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <Cut text={c.title} kind="test" /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
                   {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
                   {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
                   {/* (Batch 18 section 13; batch 21) The camera and microphone check, once per upcoming call. */}

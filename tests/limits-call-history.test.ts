@@ -9,16 +9,13 @@ import { LIMITS } from "@/lib/limits";
 import { WRITTEN_MAX_CHARS, additionTooLongLine, checkAdditionLength, checkWrittenLength } from "@/lib/rules";
 import { ADDITION_CUT_WHAT, additionRule, cutToLine, limitEdit } from "@/lib/typingLimit";
 import { ADDITIONS_FULL, questionKeys } from "@/lib/additions";
-import { pieceAnchor } from "@/lib/links";
-import { LIST_PANEL } from "@/components/ScrollList";
 import { POST as helpPOST } from "@/app/api/help/route";
 import { WrittenAddForm } from "@/app/app/sessions/[id]/SessionActions";
-import { joined, sact, seen, settle, setup } from "./fixtures";
+import { joined, sact, seen, setup } from "./fixtures";
 import { json, req } from "./helpers";
 
 // (Owner, Nov 4, §186) Every 50,000-character limit is 20,000; an addition ("Add to this answer") has the same limit as the answers sent first, on its own. The
-// call history on both sides: two drop-downs, "Booked (N)" (ahead first, soonest first, then the ones that took place, newest first, with their payments) and
-// "Cancelled (N)" (calls actually cancelled, newest first; requests never show).
+// call history on both sides (two drop-downs, "Booked (N)" and "Cancelled (N)") was replaced by §209 (tests/calls-had-cancelled-209.test.ts).
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
@@ -29,7 +26,6 @@ vi.mock("next/navigation", () => ({ usePathname: () => "/app/tests/test", useRou
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 const unescape = (html: string) => html.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
 const Q1 = "What did you like?", Q2 = "Where did you get stuck?";
-const DAY = 86_400_000, HOUR = 3_600_000;
 
 describe("§186 text limits: 20,000 (was 50,000)", () => {
   it("the written part and Contact us", () => {
@@ -119,154 +115,4 @@ describe("§186 text limits: 20,000 (was 50,000)", () => {
   });
 });
 
-/** One call with this tester, straight in the database. */
-async function call(testId: string, contractId: string, startsAt: Date, data: Record<string, unknown> = {}) {
-  const slot = await db.callSlot.create({ data: { testId, startsAt, minutes: 30, allowedTesterIds: [], status: "booked" } });
-  return db.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes: 30, rateCents: 3100, ...data } });
-}
-const cancelled = (by: string, note: string) => ({ status: "cancelled", cancelledBy: by, cancelledAt: new Date(Date.now() - 4 * DAY), cancelNote: note });
-const tookPlace = { actualMinutes: 30, measuredAt: new Date() };
-/** The text between two markers (the first after the other). */
-const between = (html: string, from: string, to: string) => {
-  const a = html.indexOf(from);
-  expect(a, from).toBeGreaterThan(-1);
-  const b = html.indexOf(to, a + from.length);
-  return html.slice(a, b < 0 ? undefined : b);
-};
-
-describe("§186 call history: the developer's tester row", () => {
-  it("only cancelled calls (and closed requests): Booked (0) and Cancelled (N), newest first, with who cancelled and why; no request shows", async () => {
-    const s = await setup();
-    const j = await joined(s.testId, "Ana Silva");
-    await settle();
-    const older = await call(s.testId, j.sessionId, new Date(Date.now() - 6 * DAY), cancelled("tester", "My train was late"));
-    const newer = await call(s.testId, j.sessionId, new Date(Date.now() - 2 * DAY), cancelled("developer", ""));
-    // Requests that were withdrawn, declined or closed never appear in the call history.
-    for (const status of ["withdrawn", "declined", "closed"]) await db.callRequest.create({ data: { testId: s.testId, contractId: j.sessionId, fromSide: "tester", startsAt: new Date(Date.now() - 3 * DAY), minutes: 45, status } });
-    auth.user = await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } });
-    const { default: TestPage } = await import("@/app/app/tests/[id]/page");
-    const html = unescape(render(await TestPage({ params: Promise.resolve({ id: s.testId }), searchParams: Promise.resolve({}) })));
-    const row = between(html, `data-calls-fold="${j.sessionId}"`, "data-tester-summary");
-    expect(row).toMatch(/<details id="calls-booked-[^"]+"[^>]*data-calls-booked="0"><summary[^>]*>Booked \(0\)<\/summary>/);
-    expect(row).toContain("No booked calls.");
-    expect(row).toMatch(/<details id="calls-cancelled-[^"]+"[^>]*data-calls-cancelled="2"><summary[^>]*>Cancelled \(2\)<\/summary>/);
-    // Both closed at first.
-    expect(row).not.toMatch(/<details open[^>]*data-calls-(booked|cancelled)/);
-    const list = row.slice(row.indexOf("data-calls-cancelled"));
-    expect(list.indexOf(`data-over-call="${newer.id}"`)).toBeLessThan(list.indexOf(`data-over-call="${older.id}"`));
-    expect(list).toContain("Cancelled by you");
-    expect(list).toContain("Cancelled by Ana Silva");
-    expect(list).toContain("My train was late");
-    expect(list.match(/data-call-booked-length="">· 30 min/g)).toHaveLength(2);
-    expect(row).not.toContain("45 min");
-  });
-
-  it("Booked (N): ahead first (soonest first) with Join / Cancel, then the ones that took place (newest first) with their payments; past 3 rows it is the panel", async () => {
-    const s = await setup();
-    const j = await joined(s.testId, "Ana Silva");
-    await settle();
-    const later = await call(s.testId, j.sessionId, new Date(Date.now() + 3 * DAY));
-    const sooner = await call(s.testId, j.sessionId, new Date(Date.now() + 2 * DAY));
-    const paid = await call(s.testId, j.sessionId, new Date(Date.now() - 5 * DAY), tookPlace);
-    const unpaid = await call(s.testId, j.sessionId, new Date(Date.now() - 1 * DAY), tookPlace);
-    const gone = await call(s.testId, j.sessionId, new Date(Date.now() - 3 * DAY), cancelled("tester", "Sick"));
-    await db.review.create({ data: { callId: paid.id, contractId: j.sessionId, amountCents: 1550, agreedCents: 1550, rateCents: 3100, payKey: "k-" + paid.id } });
-    await db.payment.create({ data: { kind: "review", amountCents: 1550, status: "charged", contractId: j.sessionId, callId: paid.id, developerId: s.dev.user.id, testerId: j.tester.user.id, feeCents: 0, testerCents: 0 } });
-    auth.user = await db.user.findUniqueOrThrow({ where: { id: s.dev.user.id } });
-    const { default: TestPage } = await import("@/app/app/tests/[id]/page");
-    const html = unescape(render(await TestPage({ params: Promise.resolve({ id: s.testId }), searchParams: Promise.resolve({}) })));
-    const row = between(html, `data-calls-fold="${j.sessionId}"`, "data-tester-summary");
-    expect(row).toContain(">Booked (4)</summary>");
-    expect(row).toContain(">Cancelled (1)</summary>");
-    const booked = between(row, "data-calls-booked", "data-calls-cancelled");
-    const order = [sooner, later, unpaid, paid].map((x) => booked.indexOf(`="${x.id}"`));
-    expect(order.every((i) => i > -1)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(booked).not.toContain(gone.id);
-    // The calls ahead: their own rows (the Live session keeps call-<id>), with Add to calendar and Cancel.
-    expect(booked).toContain(`id="booked-call-${sooner.id}"`);
-    expect(between(booked, `id="booked-call-${sooner.id}"`, "</li>")).toContain("Add to calendar");
-    expect(between(booked, `id="booked-call-${sooner.id}"`, "</li>")).toContain("Cancel");
-    expect(html).toContain(`id="call-${sooner.id}"`); // the Live session's row
-    // The paid call: its amount once in the badge, its payment line under it.
-    expect(booked).toContain("Took place · 30 min · paid $15.50");
-    expect(booked).toContain(`data-part-payments="${paid.id}"`);
-    expect(booked).toContain("not paid yet");
-    // 4 rows: the draggable panel at the developer's past-calls height.
-    expect(booked).toContain(`data-panel="booked-calls-${j.sessionId}"`);
-    expect(booked).toContain(`max-height:${LIST_PANEL.pastDeveloper}`);
-    expect(row).not.toContain(`data-panel="cancelled-calls-${j.sessionId}"`);
-  });
-});
-
-describe("§186 call history: the tester's session page", () => {
-  it("only cancelled calls: the two drop-downs under the call requests, Booked (0), Cancelled (N) newest first; no request shows", async () => {
-    const s = await setup();
-    const j = await joined(s.testId, "Ana Silva");
-    await settle();
-    const older = await call(s.testId, j.sessionId, new Date(Date.now() - 6 * DAY), cancelled("developer", "Out of office"));
-    const newer = await call(s.testId, j.sessionId, new Date(Date.now() - 2 * DAY), { status: "cancelled", cancelledBy: "system", cancelledAt: new Date(), cancelNote: "Nobody joined the call." });
-    await db.callRequest.create({ data: { testId: s.testId, contractId: j.sessionId, fromSide: "developer", startsAt: new Date(Date.now() - 3 * DAY), minutes: 45, status: "declined" } });
-    auth.user = await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } });
-    const { default: SessionPage } = await import("@/app/app/sessions/[id]/page");
-    const html = unescape(render(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
-    const hist = between(html, 'id="call-history"', "</section>");
-    // Under the Live session (where the call requests are).
-    expect(html.indexOf('data-live-panel=""')).toBeLessThan(html.indexOf('id="call-history"'));
-    expect(hist).toContain(">Booked (0)</summary>");
-    expect(hist).toContain("No booked calls.");
-    expect(hist).toContain(">Cancelled (2)</summary>");
-    expect(hist).not.toMatch(/<details open/);
-    expect(hist.indexOf(newer.id)).toBeLessThan(hist.indexOf(older.id));
-    expect(hist).toContain("Nobody joined");
-    expect(hist).toContain("Cancelled by Nora Lane");
-    expect(hist).toContain("Out of office");
-    expect(hist).not.toContain("45 min");
-  });
-
-  it("Booked (N): the calls ahead (Join / Cancel, no longer in the Live session) then the ones that took place with their payments, listed once", async () => {
-    const s = await setup();
-    const j = await joined(s.testId, "Ana Silva");
-    await settle();
-    const later = await call(s.testId, j.sessionId, new Date(Date.now() + 3 * DAY));
-    const sooner = await call(s.testId, j.sessionId, new Date(Date.now() + 2 * DAY));
-    const paid = await call(s.testId, j.sessionId, new Date(Date.now() - 5 * DAY), tookPlace);
-    const unpaid = await call(s.testId, j.sessionId, new Date(Date.now() - 1 * DAY - HOUR), { ...tookPlace, payBy: new Date(Date.now() + 6 * DAY) });
-    const gone = await call(s.testId, j.sessionId, new Date(Date.now() - 3 * DAY), cancelled("tester", ""));
-    await db.review.create({ data: { callId: paid.id, contractId: j.sessionId, amountCents: 1550, agreedCents: 1550, rateCents: 3100, payKey: "k-" + paid.id } });
-    auth.user = await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } });
-    const { default: SessionPage } = await import("@/app/app/sessions/[id]/page");
-    const html = unescape(render(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
-    const hist = between(html, 'id="call-history"', "</section>");
-    expect(hist).toContain(">Booked (4)</summary>");
-    expect(hist).toContain(">Cancelled (1)</summary>");
-    const booked = between(hist, "data-calls-booked", "data-calls-cancelled");
-    const order = [sooner, later, unpaid, paid].map((x) => booked.indexOf(`id="call-${x.id}"`));
-    expect(order.every((i) => i > -1)).toBe(true);
-    expect([...order].sort((a, b) => a - b)).toEqual(order);
-    expect(booked).not.toContain(gone.id);
-    expect(between(booked, `id="call-${sooner.id}"`, "</li>")).toContain("Add to calendar");
-    // Payments as the tester saw them in "Live call": the paid line, and the automatic charge of the unpaid one.
-    expect(booked).toContain("Paid $15.50");
-    expect(booked).toContain('data-auto-charge=""');
-    expect(booked.match(/data-call-row=""/g)).toHaveLength(2);
-    // Each call once on the page: no second row in the Live session or in the Live call part.
-    for (const x of [sooner, later, paid, unpaid]) expect(html.split(`id="call-${x.id}"`)).toHaveLength(2);
-    expect(html.match(/Paid \$15\.50/g)).toHaveLength(1);
-    const live = between(html, 'id="part-live"', "</li>");
-    expect(live).toContain("2 done");
-    expect(live).toContain(`href="#calls-booked-${j.sessionId}"`);
-    expect(live).not.toContain("data-call-row");
-    expect(between(html, 'data-live-panel=""', 'id="call-history"')).not.toContain("Add to calendar");
-    // 4 rows: the draggable panel (the §179 height, rows carry payment boxes).
-    expect(booked).toContain(`data-panel="booked-calls-${j.sessionId}"`);
-    expect(booked).toContain(`max-height:${LIST_PANEL.liveTester}`);
-  });
-
-  it("a payment's bell opens the call's own row; the dashboard's upcoming call opens Booked", () => {
-    expect(pieceAnchor("live call", "c1")).toBe("call-c1");
-    expect(pieceAnchor("written answers", null)).toBe("part-written");
-    expect(pieceAnchor("live call")).toBe("part-live");
-    expect(src("app/app/page.tsx")).toContain("<Link href={`/app/sessions/${c.id}#calls-booked-${c.id}`}");
-  });
-});
+// (Owner, Nov 5, §209) §186's call history (Booked / Cancelled, the tester's Call history card) was replaced: tests/calls-had-cancelled-209.test.ts.

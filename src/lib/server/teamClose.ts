@@ -146,7 +146,7 @@ async function settledBy(pieces: { kind: "submission" | "call"; id: string }[], 
 async function tellEveryone(adminId: string, scope: TeamCloseScope, closed: Piece[], reason: string) {
   for (const p of closed) {
     const line = `“${p.title}”: the team closed your ${p.part} for $0`;
-    // (Owner, Nov 4, §186) A call opens its own row in the Call history's "Booked (N)" (its payments are there now).
+    // (Owner, Nov 4, §186; §209) A call opens its own row in the Live session's "Had (N)" (its payments are there).
     const anchor = p.kind === "call" ? `call-${p.id}` : p.part === "recording" ? "part-recording" : "part-written";
     await notify(p.testerEmail, line, [line + ".", `The team's reason: “${reason}”`], `/app/sessions/${p.contractId}#${anchor}`, { side: "tester", payment: true, group: "tpaid" });
   }

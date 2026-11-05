@@ -44,8 +44,9 @@ async function parts(f: Awaited<ReturnType<typeof fixture>>) {
   auth.user = await db.user.findUniqueOrThrow({ where: { id: f.tester.user.id } });
   const { default: Page } = await import("@/app/app/sessions/[id]/page");
   const html = renderToStaticMarkup(await Page({ params: Promise.resolve({ id: f.sessionId }) }));
-  // (Owner, Nov 4, §186) A call's payment tag is in the Call history's "Booked (N)" now (the Live call part lists them no more): both sections.
-  return (html.match(/<section id="parts"[\s\S]*?<\/section>/)?.[0] ?? "") + (html.match(/<section [^>]*id="call-history"[\s\S]*?<\/section>/)?.[0] ?? "");
+  // (Owner, Nov 4, §186) A call's payment tag is in a drop-down of its own now (the Live call part lists them no more): both sections. (Owner, Nov 5, §209) That
+  // drop-down is the Live session's "Had (N)".
+  return (html.match(/<section id="parts"[\s\S]*?<\/section>/)?.[0] ?? "") + (html.includes("data-calls-had=") ? html.slice(html.indexOf("data-calls-had="), html.indexOf("data-calls-cancelled=")) : "");
 }
 
 describe("batch 35 §107: an on-session Pay is not reviewed until confirmed", () => {
