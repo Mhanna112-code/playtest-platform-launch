@@ -49,7 +49,7 @@ describe("§177 the wording helpers", () => {
     expect(onTestLine("Harbor Run", "Nina Park disputed the pay for her live call on Tue, Oct 27, 8:00 AM")).toBe("On “Harbor Run”: Nina Park disputed the pay for her live call on Tue, Oct 27, 8:00 AM");
     expect(onTestLine("Harbor Run", "The team decided Nina Park's dispute on her recording: kept the pay at $4.00")).toBe("On “Harbor Run”: the team decided Nina Park's dispute on her recording: kept the pay at $4.00");
     expect(onTestLine("Harbor Run", "You invited Lee Park in another tab")).toBe("On “Harbor Run”: you invited Lee Park in another tab");
-    expect(onTestLine("excerptexcerptexcerpt", "Ana Silva left the test")).toBe("On “excerptexcer…”: Ana Silva left the test");
+    expect(onTestLine("excerptexcerptexcerpt", "Ana Silva left the test")).toBe("On “excerptexcerptexcerp…”: Ana Silva left the test"); // (§203: cut at 20)
     expect(onTestLine("Harbor Run", "On Sky Lab: your bank reversed your $10.00 payment")).toBe("On Sky Lab: your bank reversed your $10.00 payment");
     expect(onTestLine("Harbor Run", "Payment went through on Sky Lab: $5.00 to Ana Silva for the recording")).toBe("Payment went through on Sky Lab: $5.00 to Ana Silva for the recording");
     expect(awayFromTest(undefined, "t1")).toBe(false); // an older page: its own test page

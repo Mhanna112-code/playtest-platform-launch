@@ -3697,3 +3697,36 @@ under "• Paid · 4 payments". Confirm all's line and a subscription charge sta
 hold-lift Approve: one line with the note, one without, one before the money is paid. Updated for the words: `addition`, `batch8`, `batch11`, `batch18`,
 `batch24`, `batch25`, `batch28`, `batch35-one-card-checks`, `batch35-payment-proofs`, `chargeback-review-first`, `choice`, `codex8-separate-sides`,
 `confirm-all`, `press-races`; `batch23` (Don't approve's note in the line).
+
+## §202 Bell lines: the first 30 characters, then the whole line on its arrow (owner, Nov 5)
+- **Each bell line** (alone, or inside an opened stack) shows its first 30 characters then "…" when it is longer (`bellShort`, lib/bell.ts; `BELL_LINE_SHOWN`
+  = 30). The cut never lands inside a word or an amount: if the 30th character is inside one ("$1,000.00" has no space), it goes back to the space before it
+  ("Charged by the tester: $1,000.00 for …" → "Charged by the tester…"; a trailing ":" or "," goes with the cut); a single word longer than 30 is cut as is, by
+  character (an emoji is never split). Lines of 30 characters or fewer show whole, with no arrow.
+- **The arrow** beside a cut line (a button: `aria-expanded`, "Show the whole line" / "Hide the whole line", `data-bell-toggle`) opens the WHOLE line under it,
+  names uncut, in a small scroll box (`max-h-32`, `data-bell-full`), amounts kept whole (`keepAmounts`). The words still follow the line's link. Opening the
+  whole line marks it read, like clicking it; nothing else about reading changes (a stack is read when expanded).
+- **Stack headings are unchanged** ("Paid · 3 payments today", "Disputes decided · 2 updates today", a test's cut name "· 3 updates"); the closed stack's preview
+  of its newest line is cut at 30 the same way.
+- **The whole line, names uncut.** A few bell lines were built with the cut names (12, now 20, characters): a declined charge ("Another payment was declined:
+  $5.00 for Alexandria M…'s recording on “chargecharge…” …"), the tester's Charge and an automatic call charge added to what is owed during a hold. They now name
+  the tester and the test in full (`pieceName({ full: true })`): every other bell line (receipts, disputes, decisions, joins, leaves, call requests, chargebacks
+  since §193b) already did. So the stored line IS the full version: **no new column or migration** (the bell cuts it for display, and the emails, which use
+  the same text, get the full names too). (A `full` column was considered: the worktree's node_modules is shared with the 3400 site, so a `prisma generate`
+  there would hand the running site a client expecting a column its database lacks; and with the bell cutting at 30 it would only duplicate the text.)
+- **Where:** the bell list is the Notifications page (`BellList`; the header's bell is a link to it with the count, there is no separate dropdown), desktop and
+  phone alike.
+
+### Tests
+New `tests/bell-lines-202.test.ts`: `bellShort` (short lines whole; an amount at the cut; exactly at a space; an emoji word); the list's markup (the cut words in
+the link, one arrow per long line with `aria-expanded="false"`, none on a short line, the heading unchanged; the whole line opened by the arrow reads it, in a
+scroll box). Updated: `payment-piece-names` (the decline's bell line in full).
+
+## §203 Listed names cut at 20 characters (owner, Nov 5; was 12)
+- `NAME_CUT` (lib/rules.ts) is 20: every listed person, test and product name cut with "…" (`cutTo`, `cut10`, `<Cut>`, `pieceName` without `full`, `onTestLine`,
+  `partAway`), and an email's part before "@" (`cutEmail`: its first 20 characters then "…" when it is longer than 21; the domain rule, 14, is unchanged).
+  "Alexandria Montgomery" → "Alexandria Montgomer…"; "maximiliana.alexandrina@playtest.test" → "maximiliana.alexandr…@playtest.test". Nothing else was
+  hard-coded at 12 for names (the comments in `Cut.tsx`, `AdminRich.tsx`, `BellList.tsx` and `rules.ts` now say 20). Places drawn with `NameLink fit` (cut only
+  when the row is full, §187) are unchanged.
+- **Tests** updated for 20: `long-text-cut`, `chargeback-line-names`, `partial-dispute`, `payment-piece-names`, `specific-lines-177`; `bell-lines-202` checks
+  `NAME_CUT`, `cutTo`, `cutEmail` and `pieceName` at 20.

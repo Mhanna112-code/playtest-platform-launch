@@ -74,3 +74,21 @@ export function bellKeyIn(n: { id: string; testId: string | null; own: boolean; 
 
 /** Legacy callers group in UTC; page callers supply their viewer zone. */
 export const bellKey = (n: Parameters<typeof bellKeyIn>[0]) => bellKeyIn(n);
+
+/**
+ * (Owner, Nov 5, §202) A bell line shows its first BELL_LINE_SHOWN (30) characters, then "…", when it is longer; the whole line opens under it. The cut never
+ * splits a word or an amount ("$1,000.00" has no space): inside one, it falls back to the last space before it (a single word longer than that is cut as is).
+ * Counted by character, so an emoji is never split. null: the line is short enough to show whole.
+ */
+export const BELL_LINE_SHOWN = 30;
+export function bellShort(text: string, n = BELL_LINE_SHOWN): string | null {
+  const chars = Array.from(text);
+  if (chars.length <= n) return null;
+  let head = chars.slice(0, n);
+  if (!/\s/.test(chars[n]) && !/\s/.test(head[n - 1])) {
+    let i = head.length - 1;
+    while (i > 0 && !/\s/.test(head[i])) i--;
+    if (i > 0) head = head.slice(0, i);
+  }
+  return `${head.join("").trimEnd().replace(/[,:;(“"]+$/, "").trimEnd()}…`;
+}
