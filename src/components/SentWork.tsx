@@ -32,15 +32,16 @@ export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | n
  * - A recording: the recordings sent first, then each addition under "Added · <date>".
  * `id`: the place's prefix for the folds' ids (kept open or closed in this tab); `timeZone`: the viewer's, for the dates.
  * (Owner, Nov 5, §226) `until`: only what was sent up to then (the Testers list: the part as last paid); later additions, their files and the questions answered
- * later are left out. `since`: only what is new after then (Needs you): the questions answered or added to after it, each with only its new answer or additions;
- * unchanged and still-unanswered questions, the notes and the files sent first are left out (Anything else shows only when something new is in it).
+ * later are left out. `newOnly` (Needs you): only what is new since `newOnly.since` (the last payment; null: never paid, so everything sent is new): the
+ * questions answered or added to since then, each with only its new answer or additions; unchanged and still-unanswered questions are left out, and so are the
+ * notes and the files sent first once it was paid (Anything else shows only when something new is in it).
  */
-export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, since = null }: {
+export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, newOnly }: {
   id?: string; kind: string; answers: unknown; questions?: string[]; notes: string; additions: unknown; files: File[]; timeZone?: string | null;
   addTo?: (q: { key: string; question: string }) => ReactNode;
-  /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new after this time */ since?: Date | string | null;
+  /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new since this time (null: everything sent) */ newOnly?: { since: Date | string | null };
 }) {
-  const upTo = until ? new Date(until).getTime() : null, after = since ? new Date(since).getTime() : null;
+  const upTo = until ? new Date(until).getTime() : null, after = newOnly?.since ? new Date(newOnly.since).getTime() : null;
   const isNew = (at: string | undefined) => after == null || (!!at && new Date(at).getTime() > after);
   const everything = additionsOf(additions);
   // (§226) The additions this view draws: up to `until`; the files of the ones left out are left out too (never shown as files sent first).
@@ -82,9 +83,10 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
   }
   const { threads, other } = writtenThreads(answers, questions, shown);
   const writtenFiles = first.filter((f) => f.part !== "recording");
-  // (§226) Only the new: a question answered after `since` (it came with changed questions, or its first answer), or added to after it.
-  const freshAnswer = (t: QuestionThread) => t.fresh && !!t.answer.trim() && isNew(t.at);
-  const showThread = (t: QuestionThread) => after == null || freshAnswer(t) || t.adds.some((a) => isNew(a.at));
+  // (§226) Only the new (newOnly): an answer sent since then (never paid: every answer; paid: a question that came with changed questions since), or an addition
+  // since then. A question with neither (unchanged, or still unanswered) is left out.
+  const freshAnswer = (t: QuestionThread) => !newOnly || (!!t.answer.trim() && (after == null || (t.fresh && isNew(t.at))));
+  const showThread = (t: QuestionThread) => !newOnly || freshAnswer(t) || t.adds.some((a) => isNew(a.at));
   const fold = (t: QuestionThread, n: number) => {
     const newAdds = t.adds.map((a, i) => ({ a, i })).filter(({ a }) => isNew(a.at));
     return (
@@ -102,7 +104,7 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
         <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body={t.key}>
           {/* (§223) The question, whole, in its box; then the answer in its own ("(no answer)" in grey only while nothing was added to it, §222). */}
           <div data-set-question=""><QuestionText id={`${id}-q-${t.key}-question`} label={`Question ${n}`} required={t.required}>{t.question}</QuestionText></div>
-          {(after == null || freshAnswer(t)) && (t.answer.trim() || !t.adds.length) && (
+          {freshAnswer(t) && (t.answer.trim() || !t.adds.length) && (
             <div data-set-answer="">{t.answer.trim() ? answerBox(t.answer, `${id}-q-${t.key}-answer`, "Answer", "Answer") : <AnswerText id={`${id}-q-${t.key}-answer`} empty />}</div>
           )}
           {newAdds.map(({ a, i }) => addedText(a, i, `${id}-q-${t.key}-add-${i}`))}
@@ -113,11 +115,11 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
   };
   const others = other.map((o, i) => ({ o, i })).filter(({ o }) => isNew(o.kind === "add" ? o.add.at : o.set.at));
   const elseCount = others.length;
-  const elseShown = after == null || elseCount > 0;
+  const elseShown = !newOnly || elseCount > 0 || (after == null && (!!notes.trim() || writtenFiles.length > 0));
   return (
     <div className="space-y-2" data-sent-work="written">
       {threads.map((t, n) => showThread(t) && fold(t, n + 1))}
-      {after != null && !threads.some(showThread) && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
+      {newOnly && !threads.some(showThread) && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
       {/* (Owner, Nov 4, §188) The fixed last spot: Anything else, a fold like a question's, after the last question. */}
       {elseShown && <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
         summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">

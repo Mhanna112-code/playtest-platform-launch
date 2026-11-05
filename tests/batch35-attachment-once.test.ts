@@ -75,7 +75,8 @@ describe("§115: a file placed inline is not listed again", () => {
     auth.user = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     const { default: TestPage } = await import("@/app/app/tests/[id]/page");
     const unpaid = render(await TestPage({ params: Promise.resolve({ id: f.testId }), searchParams: Promise.resolve({}) }));
-    expect(unpaid.split('<details id="by-question"')[0].match(/<img [^>]*alt="screen.png"/g)).toHaveLength(1);
+    // (Owner, Nov 5, §226) Unpaid, the part shows in Needs you and (what was sent) in the Testers list: once in each, never listed again.
+    expect(unpaid.split('<details id="by-question"')[0].match(/<img [^>]*alt="screen.png"/g)).toHaveLength(2);
     expect(unpaid).toContain(href(file.id));
     await db.review.create({ data: { contractId: j.sessionId, submissionId: sub.id, amountCents: 1000, agreedCents: 1000, payKey: randomUUID() } });
     await db.payment.create({ data: { kind: "review", contractId: j.sessionId, submissionId: sub.id, developerId: f.dev.user.id, testerId: j.tester.user.id, amountCents: 1000, feeCents: 200, testerCents: 800, status: "charged" } });

@@ -37,8 +37,8 @@ import { CallRequestsBox } from "./CallRequestsBox";
 import { callEndProps, devRateLabel, pageRows, rateLabel } from "@/lib/server/requests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { DisputeSide } from "./DisputeSide";
-import { OwedBox } from "@/components/OwedBox";
-import { HOLD_APPROVAL_AFTER, inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, stopReasonOf, workDeadlineOf } from "@/lib/rules";
+import { PayOwedLink } from "@/components/PayOwedLink";
+import { inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsLine, joiningClosedLine, closeOutSoon, closedNotPaidLine, payClosesLine, testerPayable, stopReasonOf, workDeadlineOf } from "@/lib/rules";
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
@@ -54,6 +54,7 @@ import { panelRows } from "@/lib/listingPanel";
 import { lastListingSave } from "@/lib/server/listingPanel";
 import { Fold, ResizeBox } from "@/components/Panel";
 import { SentWork } from "@/components/SentWork";
+import { lastPaidAt } from "@/lib/paidCut";
 import { additionsOf, answersByQuestion } from "@/lib/additions";
 import { bankWaitsOf, pieceOf, pieceRoom } from "@/lib/server/payments";
 import { TopPanel } from "./TopPanel";
@@ -227,6 +228,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const payments = await db.payment.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } }, orderBy: { createdAt: "asc" } });
   // (Owner, Nov 3, batch 35 §152) Each part's payments, listed under it (Payments' "What you've paid" lines, with their date, amount and status).
   const partPays = await partPaymentLines(payments, fmtDateTime);
+  // (Owner, Nov 5, §226) A part's cut-off: its last Pay or Pay more (lib/paidCut.ts). The Testers list shows the part up to it; Needs you only what came after it.
+  const paidCut = (s: { id: string; review?: { amountCents: number; createdAt: Date } | null; paidUpdateZeroAt?: Date | null }) => lastPaidAt(s, payments);
   // The developer's live-call panel: one row per working tester (terms like the parts listing) and their calls/requests.
   const whole = (c: number | null) => money(c).replace(/\.00$/, "");
   // One booked call as the Live session's row shows it (with Join call / Cancel). (Owner, Nov 5, §209) Only there: the tester rows list calls that are over.
@@ -493,7 +496,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <ResizeBox id={`needs-${x.s!.id}`} label={x.s!.kind === "written" ? "Written answers" : "Recordings"}>
                 {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
                 {x.s!.kind === "written" && x.s!.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(x.s!.setUntil)}</p>}
-                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
+                {/* (Owner, Nov 5, §226) Only what is new: never paid, every answered question (not the unanswered ones). */}
+                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} />
               </ResizeBox>
               <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
               <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
@@ -530,10 +534,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
         <PartPayments id={x.id} lines={partPays.get(x.id)} />
         <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
-          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
+          {/* (Owner, Nov 5, §226) Only what came after the last payment: the questions answered or added to since, with just the new parts. */}
+          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} />
         </ResizeBox>
-        <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}` }} summary="Pay more">
-        <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
+        {/* (Owner, Nov 5, §226) In Needs you the press for what's new on a paid part is "Pay" (Pay more's route, checks and stops; the Testers list keeps Pay more). */}
+        <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}` }} summary="Pay">
+        <PayBox more={{ testId: t.id, contractId: c.id }} moreLabel="Pay" update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
           room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
         </HoldFold>
       </HoldFold>
@@ -722,11 +728,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />}
                       {/* (Batch 17 §19) Unpaid at close-out: it stays unpaid. */}
                       {r.sub && !r.sub.review && payShut(r.sub.id) && testerPayable(c.tester) && <span className="w-full text-sm text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(r.sub.id))}</span>}
-                      {/* (Batch 35 §139; owner, Nov 3) Inside the part's drop-down: the answers or recordings in a small panel, then its Pay more box. */}
-                      {r.sub?.review && <div className="w-full" data-paid-part-content="">
+                      {/* (Batch 35 §139; owner, Nov 3) Inside the part's drop-down: the answers or recordings in a small panel, then its Pay more box.
+                          (Owner, Nov 5, §226) Only what was paid for: the part up to its last payment (newer additions wait in Needs you); before the first
+                          payment, what was sent. */}
+                      {r.sub && <div className="w-full" data-paid-part-content="" data-paid-until={paidCut(r.sub)?.toISOString() ?? ""}>
                         <ResizeBox id={`row-${r.sub.id}`} label={r.sub.kind === "written" ? "Written answers" : "Recordings"}>
                           {r.sub.kind === "written" && r.sub.setUntil && <p className="note" data-set-until="">Sent for the questions until {fmtDate(r.sub.setUntil)}</p>}
-                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} />
+                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} />
                         </ResizeBox>
                       </div>}
                       {/* (Owner, Oct 29, batch 11 section 6 / batch 12 section 3) A paid piece keeps its Pay box as "Pay more" until its cap is reached. */}
@@ -879,7 +887,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       )}
       </TestersJoined>
       {cbSteps && <ChargebackSteps steps={cbSteps} />}
-      {(u.holdStartedAt || (owedList.length > 0 && !u.devSuspendedAt)) && <OwedBox onHold={!!u.holdStartedAt} owed={owedList} ranOut={await (await import("@/lib/server/owedOnce")).ranOutLine(u.id)} chargeback={!!cbSteps && !cbSteps.reviewFirst} reviewFirst={cbSteps?.reviewFirst && !cbSteps.approved ? (await import("@/lib/rules")).reviewFirstLine(cbSteps.count) : ""} verifyFirst={!!cbSteps && !cbSteps.cardVerified} reservedCents={cbSteps?.reservedCents ?? 0} reserveExpired={cbSteps?.expired ?? false} review={!!(u.holdStartedAt && u.holdReason !== "chargeback" && u.holdCount > HOLD_APPROVAL_AFTER)} />}
+      {/* (Owner, Nov 5, §227; was OwedBox here) Pay what you owe never shows on the test page: it is on Payments (and the dashboard, and the bell). A failed
+          payment owed before any pause: one line linking there (the paused banner links there itself). */}
+      {!u.holdStartedAt && !u.devSuspendedAt && owedList.length > 0 && <p className="info text-sm" data-owed-on-payments="">A payment didn&apos;t go through, so you owe it. <PayOwedLink /></p>}
       {soon && <p className="rounded-lg border border-amber-400/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">{closesInLine(t.title, t.openUntil!, new Date(), "developer")}</p>}
       <DevCallPanel
         leadMinutes={CALL_MIN_AHEAD_MINUTES}

@@ -1,5 +1,6 @@
 import { ReasonQuote } from "@/components/ScrollText";
 import { CHARGEBACK_STEPS_HREF } from "@/lib/rules";
+import { PayOwedLink } from "@/components/PayOwedLink";
 
 export type BannerCause = "team-paused" | "team-stopped" | "hold" | "chargeback" | "suspended" | "stopped";
 
@@ -36,6 +37,8 @@ export function TestBanner({ cause, reason, failed, allowed }: { cause: BannerCa
   return (
     <section role="alert" data-test-banner={cause} className="space-y-2 rounded-2xl border border-rose-400/50 bg-rose-500/10 p-4 text-sm text-rose-100">
       <p className="font-semibold">{cause === "chargeback" ? <>Your tests are paused until <a href={CHARGEBACK_STEPS_HREF} className="underline" data-chargeback-steps="">the chargeback steps</a> are done.</> : BANNER_TITLES[cause]}</p>
+      {/* (Owner, Nov 5, §227) Paused for what's owed: the way to pay it, on Payments (Pay what you owe is never on the test page). */}
+      {cause === "hold" && <p data-banner-owed=""><PayOwedLink /></p>}
       {reason && <ReasonQuote text={reason} className="text-rose-50" />}
       {failed && <p data-failed-line="">{why && !failed.includes(":") ? `${failed.replace(/\.$/, "")}: ${why}.` : /[.!]$/.test(failed) ? failed : `${failed}.`}</p>}
       {allowed && <p className="text-rose-100/80" data-allowed-line="">{allowed}</p>}

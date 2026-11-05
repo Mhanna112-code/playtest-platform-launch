@@ -159,7 +159,8 @@ describe("§170 (3) refusals name the press, not the button's sentence", () => {
     expect(html(createElement(FormMistakes, { text: "The test is paused.", press: "Add to my answer", named: PRESS_VERBS["written-add"] }))).toContain("Your Add didn&#x27;t go through: The test is paused.");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(form).toContain('press={update ? "Send my answers to the new questions" : "Send my answers"} named={PRESS_VERBS.written}');
-    expect(form).toContain('<FormMistakes text={err} press={ADD_PRESS} named={PRESS_VERBS["written-add"]} />');
+    // (Owner, Nov 5, §222) Or, for a question's first answer, the press Answer this question.
+    expect(form).toContain('<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />');
     // Without `named`, FormMistakes names the button as before.
     expect(html(createElement(FormMistakes, { text: "Your account is paused.", press: "Save profile" }))).toContain("Your Save profile didn&#x27;t go through: Your account is paused.");
   });

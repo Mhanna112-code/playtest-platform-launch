@@ -134,6 +134,8 @@ export function pressLabelOf(path: string, body?: unknown): string {
   if (p[1] === "sessions" && p[3] === "recording-send" && b.add === true) return "Add";
   // (Owner, Nov 5, §222) A written question's first answer (it had none) is the press Answer this question (its form sends `first: true`), not Add.
   if (p[1] === "sessions" && p[3] === "written-add" && b.first === true) return ANSWER_PRESS;
+  // (Owner, Nov 5, §226) Needs you's Pay for what's new on a paid part goes by Pay more's route and says so (`press: "Pay"`); the Testers list's is Pay more.
+  if (p[1] === "tests" && p[3] === "pay-extra" && b.press === "Pay") return "Pay";
   if (p[1] === "sessions" && p[3] === "dismiss-removed" && b.all === true) return "Dismiss all";
   // (§156) Switch / Keep and Charge / Let it go name the button pressed; the broken-key Dismiss its count ("Dismiss 2").
   if (p[1] === "sessions" && p[3] === "terms" && (b.choice === "keep" || b.choice === "switch")) return b.choice === "keep" ? "Keep my current terms" : "Switch to the new terms";
