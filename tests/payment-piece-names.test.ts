@@ -68,12 +68,12 @@ describe("§131 the bank-confirm items", () => {
     expect(item.full).toMatch(/^The team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe” \$320\.00 · confirm by /);
     // (§230) The cut line opens with the arrow (and each "…" its name), never a hover.
     const listHtml = renderToStaticMarkup(createElement(ConfirmList, { items: [item] }));
-    expect(listHtml).not.toContain(`title="${html(item.full)}"`);
+    expect(listHtml).toContain(`title="${html(item.full)}"`); // (§244) a hover shows the whole line too
     expect(listHtml).toContain('data-whole-toggle=""');
     const [row] = await bankToConfirm(w.dev.user.id);
     expect(row).toMatchObject({ id: p.id, lead: "$320.00 · the team's dispute decision on Alexandria Montgomer…'s written answers on “chargechargeback run…”", full: "$320.00 · the team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe”" });
     const boxHtml = renderToStaticMarkup(createElement(BankToConfirmBox, { rows: [row] }));
-    expect(boxHtml).not.toContain(`title="${html(`${row.full} · ${row.by}`)}"`);
+    expect(boxHtml).toContain(`title="${html(row.full)}"`); // (§244) a hover shows the whole line too
     expect(boxHtml).toContain('data-whole-toggle=""');
     const [onTest] = await bankWaitingOnTest(w.dev.user.id, w.testId);
     expect(onTest.line).toMatch(/^Your bank wants you to confirm a \$320\.00 payment for the team's dispute decision on her written answers, made while you were away\./); // (Owner, Nov 4, §175) under the tester's name; (§180) no test name on its own page
@@ -109,7 +109,7 @@ describe("§131 the owed box", () => {
       "The team's dispute decision on Alexandria Montgomery's recording on “chargechargeback run deluxe” $96.00 · decided while your tests were paused",
     ]);
     const box = renderToStaticMarkup(createElement(OwedBox, { onHold: true, owed: lines }));
-    for (const l of lines) expect(box).not.toContain(`title="${html(l.full)}"`);
+    for (const l of lines.filter((x) => x.full !== x.text)) expect(box).toContain(`title="${html(l.full)}"`); // (§244) a hover shows the whole line too
     expect(box.match(/data-whole-toggle=""/g)?.length).toBe(lines.filter((l) => l.full !== l.text).length);
     // (§202) The bell for a later decline names them in full (the bell cuts the line itself at 30 characters, and opens it whole).
     const failed = await db.payment.create({ data: { ...w.base, kind: "review", submissionId: w.recording.id, amountCents: 500, status: "pending" } });

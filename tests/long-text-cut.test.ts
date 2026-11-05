@@ -60,7 +60,7 @@ describe("<Cut>", () => {
 
   it("the pop-up opens only for a cut name on a touch screen (no hover); with a mouse a click does what it did", () => {
     expect(opensPopup(true, true)).toBe(true);
-    expect(opensPopup(true, false)).toBe(false);
+    expect(opensPopup(true, false)).toBe(true); // (§244) every device
     expect(opensPopup(false, true)).toBe(false);
     expect(opensPopup(false, false)).toBe(false);
     const media = (hoverNone: boolean) => vi.stubGlobal("window", { matchMedia: (q: string) => ({ matches: q === "(hover: none)" && hoverNone }) });
@@ -74,7 +74,7 @@ describe("<Cut>", () => {
     expect(openLabel("test")).toBe("Open test →");
     expect(openLabel("product")).toBe("Open test →");
     const cut = src("components/Cut.tsx");
-    expect(cut).toContain("if (!opensPopup(fit ? overflows(e.currentTarget) : cut, touchOnly())) return;"); // (§187) a fitted name: when it is cut right now
+    expect(cut).toContain("if (!opensPopup(fit ? overflows(e.currentTarget) && Array.from(full).length > n : cut, touchOnly())) return;"); // (§244) 20 characters or fewer never opens it // (§187) a fitted name: when it is cut right now
     expect(cut).toContain("max-w-[78vw]");
     expect(cut).toContain("max-h-36 overflow-y-auto"); // the full text: a scroll box about 6 lines tall
     expect(cut).toContain("[overflow-wrap:anywhere]");

@@ -4506,3 +4506,8 @@ After and your answer so far in their boxes (the list keeps §233's panel). `que
 Refines §241: in Edit's notes ("Changed in another tab or device at …", "Saved in another tab or device at … · Use theirs", "Changed in another tab at …: was …"
 and the keys' "Updated at …" lines), Open until, categories, languages and the tech requirements (devices) stay plain lines; every other field's value, and the
 keys' lines, is in the draggable box however short (`plainField` in FieldNote.tsx).
+
+## §244 Every cut name or email opens on a click, in its box; hovers kept (owner, Nov 5)
+A name or email cut at 20 (Cut / NameLink, admin side included) now opens on a click on every device (was a touch screen only): the pop-up holds the whole name or
+email in the draggable box (it scrolls, the grip drags it taller), with its link and Copy. A name of 20 characters or fewer never opens it, even when a tight row
+cuts it by width. A mouse hover still shows the whole name or email everywhere (Cut's title, the cut payment rows' and confirm rows' title, a cut bell line's title).
