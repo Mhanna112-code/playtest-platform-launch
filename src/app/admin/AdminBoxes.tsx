@@ -11,6 +11,10 @@ import { PagedList } from "./PagedList";
 import { TeamCloseBox } from "./TeamCloseBox";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { adminPersonV } from "@/lib/server/pulseV";
+import { accountPaymentsForAdmin, stripeUrl } from "@/lib/server/paymentLists";
+import { DevPaidList, OwedReadOnly, TesterEarnedList } from "@/components/PaymentLists";
+import { testHref } from "@/lib/server/adminLinks";
+import { displayName, fmtDateTimeIn } from "@/lib/format";
 
 // (Owner, Oct 27) Admin-only boxes on a person's profile and on a test's own page, newest first. Never shown to anyone else. (Batch 17 §7) Each is a scroll box
 // that loads the next 25 as it nears its end, its heading keeping the total.
@@ -31,12 +35,16 @@ function Box({ title, kind, arg, page }: { title: string; kind: Kind; arg: strin
  * (batch 33 §3) payment failures, payouts, disputes, chargebacks, holds and suspensions, tests posted or joined, reports against them (and, for a tester, their sent parts).
  */
 export async function AdminPersonBoxes({ userId, adminId, developer, tester }: { userId: string; adminId: string; developer: boolean; tester: boolean }) {
-  return withDateZone((await db.user.findUnique({ where: { id: adminId }, select: { timeZone: true } }))?.timeZone, async () => {
+  const admin = await db.user.findUnique({ where: { id: adminId } });
+  return withDateZone(admin?.timeZone, async () => {
 
   // (Owner, Oct 30, batch 33 §7) The fingerprint as of BEFORE the boxes are read: another admin's suspend, reinstate, delete or $0 close-out redraws this box.
   const liveV = await adminPersonV(userId);
   // (Batch 35 §162) The box titles in the person's own pronoun ("Payments she made", "Payouts to him", "Parts they sent").
-  const p = pronouns((await db.user.findUnique({ where: { id: userId }, select: { pronoun: true } }))?.pronoun);
+  const who = await db.user.findUnique({ where: { id: userId }, select: { pronoun: true, name: true, email: true, deletedAt: true } });
+  const p = pronouns(who?.pronoun);
+  // (Owner, Nov 4, §190) Their Payments lists as they see them (admins only: null for anyone else).
+  const theirs = admin ? await accountPaymentsForAdmin(admin, userId) : null;
   const totals = await userTotals(userId);
   const acct = await accountState(userId);
   const [payments, payouts, disputes, chargebacks, holds, tests, reports, parts, failures] = await Promise.all(
@@ -48,6 +56,7 @@ export async function AdminPersonBoxes({ userId, adminId, developer, tester }: {
       <AutoRefresh query={`adminPerson=${userId}`} v={liveV} />
       <p className="text-sm text-slate-200" data-admin-totals="">{totals.line}</p>
       {acct && <div className="text-sm text-slate-300" data-admin-account=""><AccountActions initial={acct} /></div>}
+      {theirs && (theirs.developer || theirs.tester) && <TheirPayments name={who ? displayName(who) : "This account"} theirs={theirs} fmt={(d) => fmtDateTimeIn(d, admin?.timeZone)} />}
       {developer && <Box title={`Payments ${p.subj} made`} kind="u-payments" arg={userId} page={payments} />}
       {/* (Owner, Oct 30, batch 33 §3) Every charge of theirs that failed, newest first, and what became of it (paid later, still owed, settled by the team). */}
       {developer && <Box title="Payment failures" kind="u-failures" arg={userId} page={failures} />}
@@ -67,6 +76,23 @@ export async function AdminPersonBoxes({ userId, adminId, developer, tester }: {
   );
 
   });
+}
+
+/**
+ * (Owner, Nov 4, §190) The person's own Payments lists, read-only, exactly as they read them (the same component and the same lines: "you", "your bank"), with dates
+ * in the admin's time zone, each test opening its team page, and a "Stripe" link on each payment with a PaymentIntent. No Pay, Confirm or Cancel.
+ */
+function TheirPayments({ name, theirs, fmt }: { name: string; theirs: NonNullable<Awaited<ReturnType<typeof accountPaymentsForAdmin>>>; /** a date in the admin's zone (bound here: the lists draw after this request's zone store) */ fmt: (d: Date) => string }) {
+  return (
+    <section className="space-y-3" data-admin-their-payments="">
+      <h3 className="font-semibold text-white">Payments as {name} sees them</h3>
+      <p className="text-xs text-slate-400">Their Payments page&apos;s lists, read-only: each line as they read it, dates in your time zone.</p>
+      {/* As on their page: Pay what you owe (during a hold) above what they've paid. */}
+      {theirs.owed && <OwedReadOnly owed={theirs.owed} stripeUrl={theirs.owedStripe} />}
+      {theirs.developer && <DevPaidList paid={theirs.developer} fmtDateTime={fmt} stripeUrl={stripeUrl} testHref={testHref} />}
+      {theirs.tester && <TesterEarnedList earned={theirs.tester} fmtDateTime={fmt} stripeUrl={stripeUrl} />}
+    </section>
+  );
 }
 
 /** On a test's own page: the timeline, the contract changes (the terms each tester joined on, and offers), and the payments. */

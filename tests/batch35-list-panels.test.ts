@@ -91,7 +91,7 @@ describe("§152: each part's payments on the developer's test page", () => {
     expect(partPayStatus({ status: "charged" }, { reversed: true, reversedCents: null })).toBe("your bank reversed this (chargeback)");
     expect(partPayStatus({ status: "charged" }, { reversed: true, reversedCents: 9600 })).toBe("your bank reversed $96.00 of this (chargeback)");
     // The same words as Payments' "What you've paid" list (so the two can't drift apart unnoticed).
-    const payments = src("app/app/payments/page.tsx");
+    const payments = src("components/PaymentLists.tsx"); // (§190) Payments' paid lists, drawn by the shared component
     for (const w of ["recorded (payments not set up)", "refunded (your bank's chargeback was reversed)", "your bank reversed this (chargeback)", "of this (chargeback)"]) expect(payments).toContain(w);
   });
 

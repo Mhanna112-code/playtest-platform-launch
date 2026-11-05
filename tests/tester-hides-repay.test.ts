@@ -5,7 +5,8 @@ import { describe, expect, it } from "vitest";
 describe("tester views leave out a developer's chargeback repayments", () => {
   it("Payments' earnings and owed lists, and the tester's live lines, exclude chargeback and owed rows", () => {
     const page = fs.readFileSync("src/app/app/payments/page.tsx", "utf8");
-    expect(page).toContain('kind: { notIn: ["subscription", "chargeback", "owed"] }, status: { in: ["charged", "not_set_up"] }');
+    // (§190) Your earnings is read by the shared testerEarned (Payments and the admin box).
+    expect(fs.readFileSync("src/lib/server/paymentLists.ts", "utf8")).toContain('kind: { notIn: ["subscription", "chargeback", "owed"] }, status: { in: ["charged", "not_set_up"] }');
     expect(page).toContain('testerId: u.id, kind: { notIn: ["chargeback", "owed"] }, OR: [');
     expect(fs.readFileSync("src/lib/server/live.ts", "utf8")).toContain('kind: { notIn: ["chargeback", "owed"] }, contractId: onlyHere');
   });

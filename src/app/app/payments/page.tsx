@@ -23,7 +23,8 @@ import { hasBoth, sideFor } from "@/lib/sides";
 import { OtherSidePage } from "@/components/OtherSidePage";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { LongList } from "@/components/LongList";
-import { paidOutTotal, paidRows, plainLabel } from "@/lib/server/paymentRows";
+import { developerPaid, testerEarned } from "@/lib/server/paymentLists";
+import { DevPaidList, TesterEarnedList } from "@/components/PaymentLists";
 import { testerShare } from "@/lib/rules";
 import { SubscriptionBox } from "./SubscriptionBox";
 import { launchState } from "@/lib/server/subscription";
@@ -93,15 +94,9 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   // (Batch 32 §3) A paid part's total, Pay more and extra pay included (as the session page's "Paid so far").
   const partPaid = tester ? new Map((await db.payment.groupBy({ by: ["submissionId", "callId"], where: { testerId: u.id, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } })).map((g) => [g.submissionId ?? g.callId ?? "", g._sum.amountCents ?? 0])) : new Map<string, number>();
-  const [paidOut, paidIn] = await Promise.all([
-    // (Batch 10) A repaid chargeback refunded after the platform won it stays in the list, marked refunded (not in the total).
-    dev ? db.payment.findMany({ where: { developerId: u.id, OR: [{ status: { in: ["charged", "not_set_up"] } }, { status: "refunded", kind: "chargeback" }] }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
-    tester ? db.payment.findMany({ where: { testerId: u.id, kind: { notIn: ["subscription", "chargeback", "owed"] }, status: { in: ["charged", "not_set_up"] } }, orderBy: { createdAt: "desc" }, take: 500 }) : [],
-  ]);
-  // (Batch 32 §18) What each paid line was for (who, which part, which test, how it was paid; a reversed payment says so).
-  const rows = new Map([...(dev ? await paidRows(paidOut, "developer") : []), ...(tester ? await paidRows(paidIn, "tester") : [])]);
-  // (Owner, Nov 3, §133) Pay what you owe's one payments the bank reversed (not listed themselves: the items they paid for are): what was reversed leaves the total.
-  const reversedOnes = dev ? await db.payment.findMany({ where: { developerId: u.id, kind: "owed", chargebackAt: { not: null } }, select: { amountCents: true, reversedCents: true, chargebackAt: true, chargeback: true, status: true } }) : [];
+  // (Owner, Nov 4, §190) "What you've paid" and "Your earnings" are read by the shared functions (lib/server/paymentLists.ts: the queries, each line by paidRows, the
+  // totals) and drawn by the shared lists (components/PaymentLists.tsx): a person's admin box shows the team the same lists.
+  const [paid, earned] = await Promise.all([dev ? developerPaid(u.id) : null, tester ? testerEarned(u.id) : null]);
   // (Owner, Oct 28, batch 16 section 27) Change card / payout setup stopped once (the account changed in another tab or device): the box under that button.
   const seenAt = new Date().toISOString();
   const since = q.since ? new Date(q.since) : null;
@@ -168,24 +163,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             {q.error === "card_limit" && <p className="err" data-card-limit="">{refused("card_limit")}</p>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Your full card number and security code are entered on Stripe&apos;s page and never reach this site.</p>
           </section>
-          <section className="card space-y-3">
-            {/* (Owner, Nov 3, long text) The total is never split: it moves under the heading when there is no room beside it. */}
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <h2 className="font-semibold text-white">What you&apos;ve paid</h2>
-              <span className="whitespace-nowrap text-sm text-slate-400" data-paid-total="">Total {money(paidOutTotal(paidOut, reversedOnes))}{/* (Owner, Nov 2) a payment your bank reversed counts once, as its repayment; (§133) part of one: the rest of it counts */}</span>
-            </div>
-            {/* Newest first: 8 rows, then "Show N more" opening a scroll box (the long-list rule). */}
-            <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
-              {paidOut.map((p) => (
-                <li key={p.id} className="space-y-0.5 py-2">
-                  <span className="block text-slate-200" data-paid-what="">{rows.get(p.id) ? <>{rows.get(p.id)!.testId ? <a className="hover:underline" href={`/app/tests/${rows.get(p.id)!.testId}`} title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</a> : <span title={rows.get(p.id)!.full}>{rows.get(p.id)!.what}</span>}{rows.get(p.id)!.how ? <span className="text-slate-400">, {rows.get(p.id)!.how}</span> : null}</> : plainLabel(p.kind)}</span>
-                  {/* (§133) Part of a payment reversed: "your bank reversed $96.00 of this (chargeback)". */}
-                  <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · <span className="whitespace-nowrap">{money(p.amountCents)}</span>{p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : rows.get(p.id)?.reversed ? (rows.get(p.id)?.reversedCents ? ` · your bank reversed ${money(rows.get(p.id)!.reversedCents!)} of this (chargeback)` : " · your bank reversed this (chargeback)") : ""}</span>
-                </li>
-              ))}
-              {paidOut.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}
-            </LongList>
-          </section>
+          {paid && <DevPaidList paid={paid} fmtDateTime={fmtDateTime} />}
         </>
       )}
 
@@ -231,21 +209,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             {on && !u.payoutsReady && <AccountFormButton action="/api/payments/payout" seenAt={seenAt} press={u.stripeAccountId ? "Continue setup" : "Connect a payout account"} stop={stopFor("payout")}><Banknote className="h-4 w-4" /> {u.stripeAccountId ? "Continue setup" : "Connect a payout account"}</AccountFormButton>}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Bank details go to Stripe and never reach this site.</p>
           </section>
-          <section className="card space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
-              <h2 className="font-semibold text-white">Your earnings</h2>
-              <span className="whitespace-nowrap text-sm text-slate-400">Total {money(paidIn.reduce((a, p) => a + p.testerCents, 0))}</span>
-            </div>
-            <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
-              {paidIn.map((p) => (
-                <li key={p.id} className="space-y-0.5 py-2">
-                  <span className="block text-slate-200" data-earned-what="">You get <span className="whitespace-nowrap">{money(p.testerCents)}</span>{rows.get(p.id) ? ` ${rows.get(p.id)!.what}${rows.get(p.id)!.how ? `, ${rows.get(p.id)!.how}` : ""}` : p.kind === "extra" ? " · extra pay" : ""}</span>
-                  <span className="block text-slate-400">{fmtDateTime(p.createdAt)}{p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}</span>
-                </li>
-              ))}
-              {paidIn.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}
-            </LongList>
-          </section>
+          {earned && <TesterEarnedList earned={earned} fmtDateTime={fmtDateTime} />}
         </>
       )}
     </div>

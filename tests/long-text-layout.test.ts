@@ -32,9 +32,9 @@ describe("amounts stay whole", () => {
   });
 
   it("totals and amounts in rows never split", () => {
-    const pay = src("app/app/payments/page.tsx");
-    expect(pay.match(/<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">/g)?.length).toBe(2);
-    expect(pay.match(/<span className="whitespace-nowrap text-sm text-slate-400"[^>]*>Total \{money\(/g)?.length).toBe(2);
+    const pay = src("components/PaymentLists.tsx"); // (§190) Payments' paid lists, drawn by the shared component
+    expect(pay.match(/<div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">/g)?.length).toBe(3); // the two paid lists and the team's read-only What you owe
+    expect(pay.match(/<span className="whitespace-nowrap text-sm text-slate-400"[^>]*>Total \{money\(/g)?.length).toBe(3);
     expect(pay).toContain('· <span className="whitespace-nowrap">{money(p.amountCents)}</span>');
     expect(src("app/app/find/page.tsx")).toContain('<p className="whitespace-nowrap text-lg font-bold text-emerald-300">{fromText(t)}</p>');
     expect(src("app/app/sessions/[id]/ChoiceBox.tsx")).toContain('<span className="whitespace-nowrap">{money(cents)}</span>');
