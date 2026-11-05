@@ -73,11 +73,14 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
   // (Batch 17 §11) The bank's check opens inline, under Pay what you owe (one after another when several need it).
   const bank = useBankCheck();
   const [allLines, setAllLines] = useState(false);
-  // One check covers every debt it paid: its Cancel sits next to the first of them (shown even while the list is folded).
-  const cancelAt = (o: Line, i: number) => !!(o.waiting && o.checkId && owed.findIndex((x) => x.checkId === o.checkId) === i);
-  const retry = owed.filter((o) => o.retry);
   // (§160) The rows a check of Pay what you owe covers (a reservation or its one payment: their check isn't the row's own).
-  const elsewhereCents = owed.filter((o) => o.waiting && o.checkId && o.checkId !== o.id && !o.after).reduce((s, o) => s + o.amountCents, 0);
+  const covered = owed.filter((o) => o.waiting && o.checkId && o.checkId !== o.id && !o.after);
+  const elsewhereCents = covered.reduce((s, o) => s + o.amountCents, 0);
+  // (Owner, Nov 5) Pay what you owe's own check: its "Cancel this check" sits under the line that names it ("Pay what you owe ($154.00) is waiting for your bank…"),
+  // not on the first row it covers. A row with its own check keeps its Cancel next to it (shown even while the list is folded).
+  const sharedChecks = [...new Set(covered.map((o) => o.checkId!))];
+  const cancelAt = (o: Line, i: number) => !!(o.waiting && o.checkId && !sharedChecks.includes(o.checkId) && owed.findIndex((x) => x.checkId === o.checkId) === i);
+  const retry = owed.filter((o) => o.retry);
   const seenTotal = retry.reduce((s, o) => s + o.amountCents, 0);
   // What the page / the stop box showed last: every press (the second too) is checked against it.
   const [total, setTotal] = useState(seenTotal);
@@ -127,7 +130,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
               {allLines ? (o.full ?? o.text) : o.text}
               {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
               {o.after && <> · <b data-owed-after="">{o.after}</b></>}
-              {/* One check covers every debt it paid: its Cancel sits next to the first of them. */}
+              {/* A row's own check: its Cancel next to it (Pay what you owe's sits under its line, below). */}
               {cancelAt(o, i) && o.checkId && <> <CancelCheck id={o.checkId} /></>}
               {/* (Owner, Nov 3, §133) Part of a payment that paid for several items: what it covered, underneath (the bank gives only an amount, so none is named). */}
               {o.covers && o.covers.length > 0 && (
@@ -149,6 +152,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
       )}
       {/* (Owner, Nov 3, §160) Pay what you owe's check is open in another tab (or window): no button here; the line says so (Cancel this check sits on its rows). */}
       {!bank.open && !done && retry.length === 0 && elsewhereCents > 0 && <p data-owed-elsewhere="">{owedElsewhereLine(money(elsewhereCents))}</p>}
+      {sharedChecks.length > 0 && <div className="flex flex-wrap gap-2" data-owed-cancel="">{sharedChecks.map((id) => <CancelCheck key={id} id={id} />)}</div>}
       {retry.length > 0 && <div className="flex flex-wrap items-center gap-2">
       {over && (
         <label className="flex max-w-xs items-start gap-2 text-sm" data-over-tick="">
