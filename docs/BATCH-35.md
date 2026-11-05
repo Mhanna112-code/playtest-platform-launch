@@ -4334,3 +4334,9 @@ The developer's test page (`src/app/app/tests/[id]/page.tsx`).
   place of the box: "A payment didn't go through, so you owe it. Pay what you owe on Payments".
 - **Tests:** `tests/paid-cut-226-227.test.ts` (no OwedBox on the page; the banner, the boxes' line and the refusals link to Payments; the anchor exists there;
   the one line when owing before a pause). The tests that read OwedBox itself are unchanged.
+
+## §232 Rate and Leave stop once for open new terms, even when shown (owner, Nov 5)
+Narrows §90 for these two presses: rating and leaving end the tester's part, which closes an open new-terms offer unanswered. So while an offer is open, the first
+Rate or Leave press always stops once (a forced line, whatever the Alerts): "Nora Lane offered you new terms: Switch or Keep in the box above, or rating (leaving)
+closes them unanswered", even when the page already shows the offer's box. The second press goes ahead. An unseen offer keeps its usual line instead (never both).
+Test: `tests/rate-leave-open-terms-232.test.ts`; `tests/batch35-rate-all-stops.test.ts` (§90's shown-terms case now stops once).

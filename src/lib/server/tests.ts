@@ -26,7 +26,7 @@ import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gap
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
-import { testerGate } from "./testerGate";
+import { openOfferMoment, testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
@@ -1025,7 +1025,7 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
   // for changes the page hasn't shown (Alerts Off: only contract changes; new terms send the page up to the offer box), the confirmed press leaves. A refusal
   // (leaving can't happen) comes first and is unchanged.
   refused(c0);
-  await testerGate(tester.id, contractId, c0.testId, body);
+  await testerGate(tester.id, contractId, c0.testId, body, undefined, { moments: await openOfferMoment(contractId, body, "leaving") }); // (§232)
   const c = await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });
