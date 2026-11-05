@@ -126,7 +126,7 @@ describe("batch 33 §1: every person, test and payment the team reads is a link"
     // The rendered box: each link is an <a>, the Stripe ones in a new tab.
     const html = renderToStaticMarkup(createElement(PagedList, { kind: "u-payments", initial: { rows: pays, next: null, total: pays.length }, title: "Payments they made", level: 3 }));
     // (Owner, Nov 3) The email is cut in the middle (Cut): the full one is its tooltip and its hidden full copy.
-    expect(html).toContain(`<a href="${tester(testerId)}">Ana Silva</a> (<span title="${w.tester.user.email}"`);
+    expect(html).toContain(`<a href="${tester(testerId)}">Ana Silva</a> (<span class="cursor-pointer" title="${w.tester.user.email}"`); // (§244) the email opens on a click
     expect(html).toContain(`data-cut-full="">${w.tester.user.email}</span></span>)`);
     expect(html).toContain(`<a href="https://dashboard.stripe.com/payments/${pi}" target="_blank" rel="noopener noreferrer" data-stripe-link="">${pi}</a>`);
   });
