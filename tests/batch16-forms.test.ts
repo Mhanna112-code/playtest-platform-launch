@@ -13,7 +13,7 @@ const FORMS: [file: string, uses: "FormMistakes" | "MistakeList", press: string]
   ["app/app/help/ContactForm.tsx", "FormMistakes", 'press="Send to the team"'],
   ["app/app/sessions/[id]/SessionActions.tsx", "FormMistakes", 'press="Send the dispute"'],
   ["components/RateBox.tsx", "FormMistakes", 'press={p.working ? "Rate and finish" : "Rate"}'],
-  ["app/app/tests/[id]/PayBox.tsx", "FormMistakes", 'press={more ? "Pay more" : "Pay"}'],
+  ["app/app/tests/[id]/PayBox.tsx", "FormMistakes", 'press={pressName}'],
   ["app/app/sessions/[id]/ChoiceBox.tsx", "FormMistakes", 'press="Charge"'],
   ["app/app/sessions/[id]/RecordingUpload.tsx", "FormMistakes", "press={err.startsWith(FIELD) ? press : errPress || press}"] /* (batch 35 §136) Send or Add; (§156) a refused upload names its own press */,
   ["app/admin/DisputeDecision.tsx", "FormMistakes", 'press="Decide"'],
