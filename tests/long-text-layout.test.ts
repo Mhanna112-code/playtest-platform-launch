@@ -26,7 +26,9 @@ describe("amounts stay whole", () => {
   it("is used where a line can be cut or squeezed: bell lines and previews, Find's and the tester dashboard's pay lines", () => {
     const bell = src("app/app/notifications/BellList.tsx");
     expect(bell).toContain('<span className="block truncate text-sm text-slate-400">{keepAmounts(bellShort(e.lines[0].text) ?? e.lines[0].text)}</span>');
-    expect(bell.match(/\{keepAmounts\(l\.text\)\}/g)?.length).toBe(2);
+    // (§202) A line shows its 30-character cut (keepAmounts(short ?? l.text)) and its arrow opens the whole line (keepAmounts(l.text)).
+    expect(bell).toContain("keepAmounts(short ?? l.text)");
+    expect(bell.match(/\{keepAmounts\(l\.text\)\}/g)?.length).toBe(1);
     expect(src("app/app/find/page.tsx")).toContain("{keepAmounts(termsLine(asListing(t), true))}");
     expect(src("app/app/page.tsx")).toContain("{keepAmounts(pays(asListing(t)))}");
   });
