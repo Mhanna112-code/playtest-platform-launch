@@ -70,6 +70,8 @@ import { testerStats } from "@/lib/server/profileStats";
 import { ByQuestion } from "./ByQuestion";
 import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen } from "@/components/ScrollList";
 import { PartPayments } from "@/components/PartPayments";
+import { PaidSoFar } from "@/components/PaidSoFar";
+import { paidForWork } from "@/lib/server/paymentRows";
 import { partPaymentLines } from "@/lib/server/partPayments";
 import { byQuestion } from "@/lib/byQuestion";
 import { PrevSetFolds } from "@/components/AnswerSets";
@@ -136,8 +138,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (every tester's deadline, no earlier than Open until): no call time later. The request form's
   // time box stops there, its calls drop-down offers only what fits, and a waiting request's words say how many calls it covers.
   const callEnd = t.workEndedAt ?? workDeadlineOf(t, t.contracts);
-  const paid = await db.payment.groupBy({ by: ["contractId"], where: { contractId: { in: t.contracts.map((c) => c.id) }, status: { in: ["charged", "not_set_up"] } }, _sum: { amountCents: true } });
-  const paidSoFar = (id: string) => paid.find((p) => p.contractId === id)?._sum.amountCents ?? 0;
+  // (Owner, Nov 4, §195) What the developer has paid for each tester's work on this test (paymentRows.paidForWork: never a repayment's fee; a reversal not paid back
+  // taken off), shown once by the tester's name: Needs you's person, the Testers row, the Call requests box's person. Read with the page, so every live redraw has it.
+  const paidWork = await paidForWork(t.contracts.map((c) => c.id));
+  const paidSoFar = (id: string) => paidWork.get(id) ?? 0;
   const termsRows = await termsRowLines(t.contracts.map((c) => c.id));
   const callSets = await db.callSet.findMany({ where: { contractId: { in: t.contracts.map((c) => c.id) } } });
   const reqs = await db.callRequest.findMany({ where: { testId: id, status: "pending", startsAt: { gt: new Date() } }, orderBy: { startsAt: "asc" } });
@@ -186,7 +190,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const waitsKindOf = (id: string) => ((w) => (w ? { kind: w.kind, cents: w.cents } : undefined))(bankWaits.get(id));
   // (Batch 23 section 9) "Confirm with your bank" stops once like Pay: it sends this page's seen marker.
   // (Owner, Oct 31, batch 35 §80) Confirmed in Needs you (where the dashboard's box, Payments and the bell link); under the piece only a link up to it.
-  const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>);
+  // (Owner, Nov 4, §199) "Confirm with your bank" only in Needs you, never as a working box in the Testers list: the link up in every view (the restricted branch
+  // that drew the full box here is gone; the restricted view lists the charges in its Needs you, bankKind, and has no Testers list of its own).
+  const bankUp = (b: (typeof bankRows)[number]) => <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>;
+  const bankAt = (pieceId: string) => bankRows.filter((b) => b.pieceId === pieceId).map(bankUp);
   // (Owner, Nov 4, §175, §180; §181) Needs you lists the waiting charges under each tester's name, inside that person's drop-down (needsPeople below), oldest first
   // (bankRows comes oldest first), each with its own Confirm with your bank. The links up from the tester's row still land on the charge itself, inside its drop-down.
   const bankOf = (contractId: string) => bankRows.filter((b) => b.contractId === contractId);
@@ -320,9 +327,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   // view's) is one drop-down per person (HoldFold: closed at first; the summary is the green name, then "· N things"), holding everything in Needs you about them,
   // with a small sub-heading over each kind only when they have more than one kind. The person whose oldest waiting thing waits longest comes first; inside, each
   // kind keeps its order. An applicant who hasn't joined is a person of their own (keyed by the application). Nothing in Needs you is about no one.
-  type NeedsWho = { key: string; name: string; href: string | null };
+  // (Owner, Nov 4, §199) Each kind under a person is now its own drop-down ("Pay (2)"), Rate excepted; applications and asks to rejoin left the people for one
+  // "Applications (N)" drop-down above all the names (needsApplications below).
+  // (Owner, Nov 4, §195) `paidCents`: a tester's (someone with a contract here) paid so far, on the right of their summary; an applicant who hasn't joined has none.
+  type NeedsWho = { key: string; name: string; href: string | null; paidCents?: number };
   type NeedsKind = { kind: string; label: string; ats: Date[]; node: ReactNode; data?: Record<string, string>; /** how many things it is, when not one per time in `ats` */ count?: number };
-  const whoOf = (c: (typeof t.contracts)[number]): NeedsWho => ({ key: c.id, name: displayName(c.tester), href: c.tester.deletedAt ? null : `/app/testers/${c.testerId}` });
+  const whoOf = (c: (typeof t.contracts)[number]): NeedsWho => ({ key: c.id, name: displayName(c.tester), href: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, paidCents: paidSoFar(c.id) });
   const needsPeople = (entries: (NeedsKind & { who: NeedsWho })[]) => {
     const people: (NeedsWho & { kinds: NeedsKind[] })[] = [];
     for (const { who, ...k } of entries) {
@@ -337,16 +347,25 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       return (
         <HoldFold key={p.key} data={{ "data-needs-person": p.key }} toggleData={{ "data-needs-person-toggle": "" }}
           // (Owner, Nov 4, §187) The whole name, cut with "…" only when the row is full (it was cut at 12 characters with room to spare); "· N things" never cut.
-          summary={<span className="flex min-w-0 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span></span>}>
+          // (Owner, Nov 4, §195) A tester's paid so far on the right of the row ("paid $15.00 so far"), never cut either.
+          summary={<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span>{p.paidCents != null && <PaidSoFar cents={p.paidCents} />}</span>}>
           {/* (Owner, Nov 3) Each name's drop-down is its own panel (it scrolls inside; the grip drags it taller). (Owner, Nov 4, §187) Inside Needs you's panel it is
               plain: only Needs you's panel scrolls (Panel.tsx's nesting rule). */}
           <ResizeBox id={`needs-person-${p.key}`} label={`${p.name}: Needs you`} defaultMax="min(30rem, 60vh)">
-            <div className="min-w-0 space-y-3">
-              {p.kinds.map((k) => (
-                <div key={k.kind} className="min-w-0 space-y-2" data-needs-kinds={k.kind} {...k.data}>
-                  {p.kinds.length > 1 && <h3 className="text-xs font-semibold text-slate-400" data-needs-kind={k.kind}>{k.label}</h3>}
+            <div className="min-w-0 space-y-2">
+              {/* (Owner, Nov 4, §199; replaces §181's sub-headings) Each kind is a drop-down of its own, even when it is the person's only kind: closed at first,
+                  "Pay (2)", "Confirm with your bank (1)", "Disputes (1)" (the count is how many items it holds: parts, charges, disputes, requests…). It is a HoldFold
+                  like the person's: a link to anything inside opens it, and it stays open while a bank box, a press, a stop box or a refusal shows inside. No border
+                  or padding of its own (no extra indent on a phone, §187) and no panel of its own (only Needs you's panel scrolls). Rate is the exception: its line
+                  stays plain under the name, no drop-down. */}
+              {p.kinds.map((k) => k.kind === "rate" ? (
+                <div key={k.kind} className="min-w-0 space-y-2" data-needs-kinds={k.kind} {...k.data}>{k.node}</div>
+              ) : (
+                <HoldFold key={k.kind} className="min-w-0" summaryClassName="flex items-center gap-2 text-sm font-semibold text-slate-200" bodyClassName="mt-2 min-w-0 space-y-2"
+                  data={{ "data-needs-kinds": k.kind, "data-needs-kind-fold": k.kind, ...k.data }}
+                  summary={<span data-needs-kind={k.kind}>{k.label} ({k.ats.length})</span>}>
                   {k.node}
-                </div>
+                </HoldFold>
               ))}
             </div>
           </ResizeBox>
@@ -478,7 +497,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} />
               </ResizeBox>
               <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
-              <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
+              <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
                 /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
                 note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                 listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
@@ -490,7 +509,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               <p className="text-sm text-slate-200" data-call-length="">{lengthOf(x.x!)}</p>
               {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
               <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}` }} summary="Pay">
-              <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} paidSoFarCents={paidSoFar(x.c.id)} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
+              <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                 /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
                 note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
                 minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
@@ -515,19 +534,19 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
         </ResizeBox>
         <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}` }} summary="Pay more">
-        <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+        <PayBox more={{ testId: t.id, contractId: c.id }} update owes={owesNow} kind="submission" id={x.id} name={displayName(c.tester)} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
           room={rooms.get(x.id)?.box} listingCents={x.agreedCents} listingText={`${money(x.agreedCents)} for ${x.kind === "recording" ? "a recording" : "written answers"}`} />
         </HoldFold>
       </HoldFold>
     </div>
   );
   // (Owner, Nov 4, §181) Everything in Needs you, by person, each person's kinds in this order: their parts to pay (and updates after paying), their charges waiting
-  // for the bank, their disputes (Add your side), their call requests (the row opens the Live session's Call requests panel there, as before), their application or
-  // ask to rejoin (Accept / Decline), their excerpt requests (Allow / Deny), their Rate. An applicant who hasn't joined is a person of their own.
+  // for the bank, their disputes (Add your side), their call requests (the row opens the Live session's Call requests panel there, as before), their excerpt
+  // requests (Allow / Deny), their Rate. (Owner, Nov 4, §199) Applications and asks to rejoin are in the one Applications drop-down above the names instead.
   // (Batch 16 sections 33 and 35) Every waiting call request, both directions: (Owner, Nov 4, §181) the page's own Call requests box (CallRequestsBox), by person.
   const callRequests = restricted ? [] : reqs.flatMap((r) => {
     const c = working.find((x) => x.id === r.contractId);
-    return c ? [{ id: r.id, at: r.createdAt.toISOString(), contractId: c.id, tester: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined }] : [];
+    return c ? [{ id: r.id, at: r.createdAt.toISOString(), contractId: c.id, tester: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, asker: r.fromSide === "developer" ? "you" : displayName(c.tester), rows: pageRows(r, callEnd), minutes: r.minutes, mine: r.fromSide === "developer", rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun), warning: callsWarn.get(c.id) || undefined, paidCents: paidSoFar(c.id) }] : [];
   });
   const needsEntries = [
     ...t.contracts.flatMap((c) => {
@@ -539,14 +558,27 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         disputeKind(c),
         // (Owner, Nov 4, §181) Their call requests are answered in the Call requests box: here one line, "2 call requests ↓", jumping to them there (one thing).
         { who: whoOf(c), kind: "requests", label: "Call requests", ats: asks.map((r) => r.at), count: 1, node: <NeedsRequests contractId={c.id} count={asks.length} /> },
-        ...apps.filter((a) => a.contractId === c.id).map((a) => ({ who: whoOf(c), kind: "application", label: a.kind === "rejoin" ? "Ask to rejoin" : "Application", ats: [a.at], node: <Applications embedded needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={[a]} /> })),
         excerptKind(c),
         { who: whoOf(c), kind: "rate", label: "Rate", ats: rate.map((r) => r.at), node: rate.map((r) => <p key={`rate-need-${r.id}`} className="text-sm" data-rate-need={r.id}><a href={`#rate-${r.id}`}>{r.line}</a></p>) },
       ];
     }),
-    ...apps.filter((a) => !a.contractId).map((a) => ({ who: { key: a.id, name: a.name, href: `/app/testers/${a.userId}` }, kind: "application", label: a.kind === "rejoin" ? "Ask to rejoin" : "Application", ats: [a.at],
-      node: <Applications embedded needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={[a]} /> })),
   ];
+  // (Owner, Nov 4, §199) One "Applications (N)" drop-down above all the names: every pending application and ask to rejoin on this test, oldest first, each with its
+  // own Accept / Decline exactly as before (one Applications per request, so a press on one never greys the others, §181). They are no longer in the people's
+  // drop-downs: an applicant who hasn't joined is no longer a name of their own; a rejoiner with other things keeps those under their name. Closed at first, a
+  // HoldFold like the people's (a link to "#item-app-<id>" opens it; a press or its result inside holds it open). Needs you's count is unchanged.
+  const needsApplications = apps.length > 0 && (
+    <HoldFold data={{ "data-needs-applications": String(apps.length) }} toggleData={{ "data-needs-applications-toggle": "" }}
+      summary={<span>Applications ({apps.length})</span>}>
+      <div className="min-w-0 space-y-2">
+        {[...apps].sort((a, b) => a.at.getTime() - b.at.getTime()).map((a) => (
+          <div key={a.id} className="min-w-0 rounded-lg border border-white/10 p-2 sm:p-3" data-needs-application={a.id}>
+            <Applications embedded needs={{ devices: t.devices, languages: t.languages }} testId={t.id} seenAt={seenAt} apps={[a]} />
+          </div>
+        ))}
+      </div>
+    </HoldFold>
+  );
   return (
     // (Batch 34 §14) Every stop box under any button on this page: a listing line's See it goes to the Listing panel.
     <SeeItTarget target="#listing">
@@ -604,7 +636,11 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {needsCount > 0 && !restricted && (
         <NeedsYou count={needsCount}>
           {/* (Owner, Nov 4, §181) One drop-down per person, holding everything in Needs you about them (needsEntries). */}
-          <div className="space-y-2" data-needs-people="">{needsPeople(needsEntries)}</div>
+          {/* (Owner, Nov 4, §199) The Applications drop-down first, above all the names. */}
+          <div className="space-y-2">
+            {needsApplications}
+            <div className="space-y-2" data-needs-people="">{needsPeople(needsEntries)}</div>
+          </div>
         </NeedsYou>
       )}
       {/* (Owner, Nov 4, §181) Call requests: right under Needs you. (§185) Two boxes: "Requests to you" (Needs you's "2 call requests ↓" lines jump here) and "Your requests". */}
@@ -657,9 +693,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <Fold id={`tester-${c.id}`} defaultOpen={t.contracts.length === 1} className="space-y-2" summaryClassName="flex flex-wrap items-baseline gap-2 !text-base" summary={<>
                   {/* (Owner, Nov 3, §166) The name is the green link to their profile (no "See her profile" any more). A press on the name opens the profile; a press
                       anywhere else on the heading (the arrow, the badges, the space after the name) still opens or closes the fold. */}
-                  <h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><NameLink text={name} href={personHref} /></h3>
-                  <span className="badge">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
-                  {c.ndaAcceptedAt && <span className="badge">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
+                  {/* (Owner, Nov 4, §199; the §187 rule) The whole name, cut with "…" only when the row is actually full (it was cut at 12 characters with room to
+                      spare): `NameLink fit`, the heading `min-w-0` so it can shrink, never wider than the row less the arrow (so the arrow stays beside it); the badges and the paid figure (§195) never cut (they wrap below on a phone). */}
+                  <h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /></h3>
+                  <span className="badge shrink-0 whitespace-nowrap">{c.status === "working" ? `Working · due ${fmtDate(c.dueAt)}` : c.status === "left" ? "Left the test" : "Work ended"}</span>
+                  {c.ndaAcceptedAt && <span className="badge shrink-0 whitespace-nowrap">NDA accepted {fmtDate(c.ndaAcceptedAt)}</span>}
+                  {/* (Owner, Nov 4, §195) Paid so far for their work on this test, once, on the right of the name row (it was the first line of the summary under the row). */}
+                  <PaidSoFar cents={paidSoFar(c.id)} className="!ml-0" />
                 </>}>
                 <p className="note">{pronouns(c.tester.pronoun).Poss} contract: {termsLine(c)} · joined {fmtDate(c.joinedAt)}</p>
                 <ul className="space-y-1 text-sm" data-parts-sent="">
@@ -694,7 +734,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       {r.sub && r.sub.review && !r.sub.review.rejected && !restricted && !r.sub.review.teamClosedById && payMore.open && (rooms.get(r.sub.id)?.room ?? 0) > 0 && (
                         <div className="w-full space-y-1" data-part-pay-more="">
                         <p className="text-sm font-medium text-white">Pay more</p>
-                        <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                        <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission" id={r.sub.id} name={name} seenAt={seenAt} bankWaits={waitsOf(r.sub.id)} bankWaitsId={waitsIdOf(r.sub.id)} bankWaitsKind={waitsKindOf(r.sub.id)} note={payMore.line || undefined}
                           room={rooms.get(r.sub.id)?.box} listingCents={r.sub.agreedCents} listingText={`${money(r.sub.agreedCents)} for ${r.name === "Recording" ? "a recording" : "written answers"}`} />
                         </div>
                       )}
@@ -770,7 +810,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                           <div className="space-y-1" data-call-pay-more="">
                           <p className="text-sm font-medium text-white">Pay more</p>
-                          <PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} paidSoFarCents={paidSoFar(c.id)} note={payMore.line || undefined}
+                          <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
                             room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
                             listingCents={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).cents}
                             listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
@@ -810,7 +850,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   );
                 })()}
                 {/* (Batch 17 §11; batch 35 §80) A waiting charge whose piece isn't listed above: a link up to it in Needs you under the tester's row. */}
-                {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map((b) => restricted ? <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} /> : <a key={b.id} href={`#${bankAnchor(b.id)}`} className="block text-xs" data-bank-up={b.id}>{CONFIRM_WITH_BANK} in Needs you ↑</a>)}
+                {bankRows.filter((b) => b.contractId === c.id && !(b.pieceId && (partRows.some((r) => r.on && r.sub?.id === b.pieceId) || overCalls.some((x) => x.id === b.pieceId)))).map(bankUp)}
                 {termsRows.get(c.id) && <p className="note">{termsRows.get(c.id)}</p>}
                 {/* (Owner, Oct 31, batch 35 §33) Only the terms line: the contract changes (renames, a Stop's note…) are still recorded for the tester's own page, never
                     listed under the developer's row. */}
@@ -827,7 +867,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                     </a>}
                     {/* (Owner, Nov 3, §166) No "See her profile": the name above is the link. */}
                   </div>
-                  <p className="text-sm"><b>Paid in all:</b> {money(paidSoFar(c.id))}{(bookedAhead || done || cancelledN) ? ` · Calls: ${[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}` : ""}</p>
+                  {/* (Owner, Nov 4, §195) What was paid is no longer a line here: it is shown once, on the right of the name row. The calls line stays. */}
+                  {(bookedAhead || done || cancelledN) > 0 && <p className="text-sm" data-tester-calls="">Calls: {[bookedAhead ? `${bookedAhead} booked ahead` : "", done ? `${done} done` : "", cancelledN ? `${cancelledN} cancelled` : ""].filter(Boolean).join(", ")}</p>}
                   {/* (Owner, Nov 3, §166) No "<name>: 1.0 ★ (1 rating)" line here any more: the circle's hover card and the profile show the rating. */}
                   {ri?.tester && (ri.testerRevealed ? (
                     <p className="note"><NameLink text={name} href={personHref} /> rated you: {ri.tester.stars} ★{ri.tester.comment ? ` · “${ri.tester.comment}”` : ""}</p>

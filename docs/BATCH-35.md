@@ -3682,3 +3682,83 @@ developer's Allow / Deny row, the bell and the profile show it with its " … " 
   cuts at the start, middle and end (red counter, then in range), Use original answer. Checked in the same run: typing, Enter, a paste
   and an inserted text left the box unchanged; Ctrl+Backspace deleted; a request with a middle gap sent from the page went through ("Your excerpt request is
   waiting for Nora Lane.").
+## §195 What you've paid a tester, once, by their name; not in each Pay box (owner, Nov 4)
+
+Owner: each Pay box's "You've paid <tester> $15.00 so far on this test." is confusing inside one part's box. Show the total paid to that tester on this test
+once, next to their name at the top, on the right of the name row, wherever their name heads a group. Pay more's own line of what the part was paid stays.
+
+- **Before.** Every first Pay box (not Pay more) read "Listing: … · You've paid Ana Silva $15.00 so far on this test." (`paidSoFar`: every charged / not-set-up
+  payment on the contract, a chargeback repayment and its $15 fee included, a reversal not taken off). The tester's row in the Testers panel had "Paid in all: $X
+  · Calls: …" under the row (the same sum). Needs you's person summary (§181) was the green name and "· N things" only.
+- **After.** The Pay box reads "Listing: …" only. "paid $15.00 so far" (grey, never cut, right-aligned) sits on the right of:
+  1. **Needs you's person summary** (both views): "Maximiliana A… · 3 things            paid $15.00 so far". An applicant who hasn't joined has no figure.
+  2. **The tester's row in the Testers panel**: on the name row (the fold's heading), after the status badges. The "Paid in all: $X" part of the line under the
+     row is gone (the figure is shown once); its "Calls: 1 booked ahead, 1 done" stays, on its own ("Calls: …", only when there are calls).
+  3. **The Call requests boxes' person drop-downs** (§185's "Requests to you" / "Your requests"): "· 2 requests   paid $15.00 so far" (trivial: the page passes it
+     with each request).
+  On a phone (below the `sm` width) the figure reads "paid $15.00" (no "so far"), so the name keeps room; the name is cut with "…" first; "· N things" and the
+  figure are never cut. The Testers row's heading wraps on a phone as before (name, badges, then the figure).
+- **What it counts** (`paymentRows.paidForWork` / `workPaidCents`): what the developer paid for THAT tester's work on this test: Pay (the tester's Charge and a
+  call's automatic charge are recorded as Pay: kinds "review" / "call"), Pay more ("extra") and the team's decision charges ("dispute"), each charged or recorded
+  with payments not set up. Never: a repayment of a reversed payment or its chargeback fee, a raise charge (kind "chargeback"), subscriptions, Pay what you owe's
+  own record, a charge still waiting (for the bank, a hold, a retry). A payment the bank reversed (not won) counts less what was reversed and not paid back
+  (`reversedOf`, §133; paid back = its repayment and raises that went through, less refunds of them, less the one fee: `repaidPrincipal`, holds.repaidFor's rule;
+  §192's lowered / raised amounts follow). Not attributed: a bank reversal of Pay what you owe's ONE payment (it is on that payment, not on each tester's item).
+- **Not changed.** `paidSoFar` (payments.ts) keeps its meaning where it is still used: the Pay API's response (`paidSoFarCents`) and the stop-once refusal's
+  payload (payments.ts `review`, confirm.ts's away charge); no screen shows either. Pay more's paid line, every press, the counts.
+- **Live redraws.** The figure is drawn with the page, so every live redraw (a Pay, a Charge, a bank confirmation, a chargeback) shows the new total.
+- **Hooks.** New `data-paid-so-far="<cents>"` on the figure (`src/components/PaidSoFar.tsx`) in all three places; `data-tester-calls` on the calls line under a
+  tester's row. Every other hook unchanged.
+- **Code.** `src/lib/server/paymentRows.ts` (`WORK_KINDS`, `workPaidCents`, `repaidPrincipal`, `paidForWork`), `src/components/PaidSoFar.tsx` (new),
+  `src/app/app/tests/[id]/page.tsx` (`paidWork`; `NeedsWho.paidCents`; the row heading; the calls line; `callRequests[].paidCents`), `PayBox.tsx` (sentence and
+  `paidSoFarCents` prop removed), `src/components/CallRequestsPanel.tsx` (`PanelReq.paidCents`). No migration.
+- **Tests.** New `tests/paid-total-195.test.ts`: the sum (Pay, Pay more, decision charge, the tester's Charge, an automatic call charge counted; waiting, failed and
+  deferred charges, a repayment and its fee not; a part-reversal not repaid taken off; a repaid one and a won one whole; `paidSoFar` unchanged); a lowered amount
+  refunded / a raise charged or waiting after a repayment; the page: the long-named tester's Needs you summary, Testers row heading and Call requests person each
+  show `data-paid-so-far="1500"` "paid $15.00 so far" (" so far" hidden below `sm`; a $6 charge waiting for the bank not counted), no "Paid in all", the Pay box with its listing and no "so far
+  on this test". Updated: `batch35-restricted-needs-you` (summaries end with "paid $0.00 so far"), `batch35-tester-folds` (the summary's calls line, the heading's
+  figure), `layout-fixes-187` / `long-text-layout` (the row is `flex-1`), `anything-else-cancel-188` / `ui-fixes-189` (no `paidSoFarCents` prop).
+
+## §199 Needs you: each kind its own drop-down; Confirm with your bank only in Needs you; one Applications drop-down; whole names in the Testers list (owner, Nov 4)
+
+Owner: each kind under a person in Needs you should be its own drop-down with its count; "Confirm with your bank" only in Needs you, never as a working box in
+the Testers list; an "Applications" drop-down above all the names. Coordinator, same day: the Testers list heading still cut a name at 12 characters with room
+to spare, against §187's rule.
+
+| Before | After |
+| --- | --- |
+| Inside a person's drop-down (§181), each kind was a small `h3` sub-heading (only when the person had more than one kind) with its items always showing under it. | **Each kind is its own drop-down**, closed at first, labelled with the kind and how many items it holds: "Pay (2)", "Confirm with your bank (1)", "Disputes (1)", "Excerpt requests (1)", "Call requests (1)" (restricted: "Booked calls (N)"). Also when it is the person's only kind. **Rate is the exception**: its line ("Rate Dan Reyes · 14 days left") stays plain under the name, no drop-down. Both views. |
+| Each application and ask to rejoin sat in its person's drop-down; an applicant who hasn't joined was a person of their own. | **"Applications (N)"**, one drop-down above all the names (closed), every pending application and ask to rejoin on this test, oldest first, each with its Details and its own Accept / Decline exactly as before. They left the people: an applicant who hasn't joined is no longer a name; a rejoiner with other things keeps those under their name. The restricted view shows no applications (as before), so no group there. |
+| The Testers list's code drew a working Confirm with your bank box under a part (`bankAt`) and for a charge on no listed part when `restricted`; a part's greyed Pay more box in a tester row held a working Confirm with your bank for a charge made while away (§188 B). | **Only the link up** "Confirm with your bank in Needs you ↑" (`bankUp`), in every view. The greyed Pay more box in a tester row shows the line only ("Confirm Alex Morgan's $6.00 charge with your bank first."; `PayBox awayInNeeds`), with the link right under it. Needs you's own Pay more (an update after paying) keeps §188 B's working copy (it is in Needs you). |
+| The Testers row heading cut a name at 12 characters ("Maximiliana…") even on a wide screen. | **`NameLink fit`** (§187): the whole name, cut with "…" only when the row is actually full; the heading `min-w-0`, never wider than the row less the arrow (so the arrow stays beside the name on a phone). The status badges (`shrink-0 whitespace-nowrap`) and §195's paid figure are never cut; on a phone they wrap below the name as before. |
+
+- **Kind drop-downs.** A `HoldFold` like the person's: a link to anything inside (`#bank-<id>`, `#piece-<id>`, `#call-<id>`, `#update-<id>`, `#item-dispute-<id>`,
+  `#excerpt-<id>`, `#item-app-<id>`) opens it and every drop-down around it before the browser scrolls; it stays open while a bank box, a press, a stop box
+  or a refusal shows inside. Not remembered across reloads. No border or padding of its own (no extra indent on a phone, §187) and no panel of its own (only
+  Needs you's panel scrolls). Inside Pay, each part, its Pay / Pay more drop-downs are unchanged (§175 / §180 / §181).
+- **Counts.** A kind's count is how many items it holds. The person's "· N things" is unchanged (§181: their call requests line counts as one thing), so with two
+  requests from one person "Call requests (2)" sits under "· N things" counting it as 1. Needs you's badge is unchanged (it still counts every application).
+- **The restricted view and the Testers list.** The restricted view (hold, suspension, the team's pause) returns before the Testers list (batch 15 §29), so its
+  tester rows never existed: the `restricted ?` branches that drew BankWaiting there were unreachable and are gone. Its charges are confirmed in its Needs you,
+  inside the person's "Confirm with your bank (N)" drop-down (`data-restricted-bank`).
+- **The jump, checked in a browser** (3494, desktop and phone): the tester row's link opened Alex's person drop-down and his Confirm with your bank drop-down
+  (both closed before) and landed on the charge, ringed, in view; nothing else opened; no page-wide sideways scroll.
+- **Hooks.** New: `data-needs-kind-fold="<kind>"` on each kind's `<details>` (which also carries `data-needs-kinds` and the kind's own hooks:
+  `data-bank-group`, `data-restricted-*`); `data-needs-kind` is now on the label in its summary (was the `h3`); `data-needs-applications="<N>"` on the group,
+  `data-needs-applications-toggle` on its summary, `data-needs-application="<id>"` on each request's box. Rate's block keeps `data-needs-kinds="rate"` (a
+  `<div>`). Every other hook and anchor unchanged.
+- **Code.** `src/app/app/tests/[id]/page.tsx` (`needsPeople`, `needsApplications`, `needsEntries` without applications, `bankUp` / `bankAt`, the Testers row
+  heading), `PayBox.tsx` (`awayInNeeds`). No migration.
+- **Screenshots.** `playtest-lite-evidence/needs-folds-nov4` (captions.json): Needs you closed with Applications on top; a person's kinds closed, then Pay and
+  Confirm with your bank open; Rate plain beside a Call requests drop-down; Applications open (an application, an ask to rejoin, an application); the tester
+  row's link up and where it lands; the restricted view's kinds; the Testers headings and the long name at 1280 and 375.
+
+### Tests
+New `tests/needs-kind-folds-199.test.ts`: each kind a closed drop-down with its count (Alex: bank, disputes, excerpts; Eve's only kind, Pay, still a drop-down
+with her part and Pay drop-downs inside), no `h3` sub-headings; Rate plain (with a Call requests drop-down, and alone); the Applications group inside Needs you
+above every name, closed, "Applications (3)", oldest first (Fay, Eve's ask to rejoin, Cara) each with Accept / Decline, no applicant as a person, nothing
+of theirs under a name, the badge unchanged (9); one working bank box on the page, inside the person's and the kind's drop-downs, the tester row's link to it,
+the row's greyed Pay more with the line only; the restricted view (the charge in its Needs you, no Applications, the kinds as drop-downs; in the code
+BankWaiting only in `bankKind`); the Testers heading with `NameLink fit`, the long name whole in the markup, badges and the paid figure uncut. Updated:
+`batch35-restricted-needs-you` (labels with counts on drop-downs; Cara in Applications; 12 drop-downs), `batch35-green-names`, `long-text-cut`,
+`batch35-tester-folds` (the fitted heading).

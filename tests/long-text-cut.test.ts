@@ -97,7 +97,7 @@ describe("names listed on pages use <Cut>", () => {
     expect(page).toContain('<b className="text-white"><Cut text={r.title} kind="test" /></b>');
     expect(page).toContain('<p className="kicker"><Cut text={t.productName} kind="product" /></p>');
     const test = src("app/app/tests/[id]/page.tsx");
-    expect(test).toContain('<h3 className="mr-auto inline font-semibold text-white" data-tester-fold-name=""><NameLink text={name} href={personHref} /></h3>'); // (batch 35 §140) the name folds the row; (§166) it is the green profile link
+    expect(test).toContain('<h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /></h3>'); // (batch 35 §140) the name folds the row; (§166) it is the green profile link
     expect(src("app/app/find/page.tsx")).toContain("by <Cut text={displayName(t.developer)} />");
     expect(src("app/app/messages/page.tsx")).toContain('<Cut text={r.title} kind="test" />');
     expect(src("components/PersonHover.tsx")).toContain("<NameLink text={p.name} href={p.href}"); // (§166) NameLink cuts it too

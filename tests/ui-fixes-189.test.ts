@@ -27,7 +27,7 @@ describe("§189 small UI fixes", () => {
 
   it("the Pay more box's Note fills the box and never more (no 14rem minimum); a long name in its label wraps", () => {
     const h = renderToStaticMarkup(createElement(PayBox, {
-      kind: "submission", id: "sub1", name: "Bartholomewfeatherstonehaughmaximiliana", listingCents: 1000, listingText: "$10.00", paidSoFarCents: 1000, seenAt: seen(), more: { testId: "t1", contractId: "c1" },
+      kind: "submission", id: "sub1", name: "Bartholomewfeatherstonehaughmaximiliana", listingCents: 1000, listingText: "$10.00", seenAt: seen(), more: { testId: "t1", contractId: "c1" },
     }));
     expect(h).toContain('data-pay-more="sub1"');
     expect(h).toContain('<div class="w-full min-w-0 max-w-full" data-pay-note="">');

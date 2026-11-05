@@ -1,5 +1,6 @@
 "use client";
 import { NameLink } from "@/components/Cut";
+import { PaidSoFar } from "@/components/PaidSoFar";
 import { useEffect, useRef, useState } from "react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
@@ -13,7 +14,7 @@ import { HoldFold, useHoldOpen } from "@/components/HoldFold";
 import { FIND_SEARCH_MAX } from "@/lib/findSearch";
 
 /** One waiting call request: `tester` (whose test session it is), `asker` (who asked: "you" when it's yours). */
-export type PanelReq = { id: string; contractId: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string;
+export type PanelReq = { id: string; contractId: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; asker: string; rows: RowJson[]; minutes: number; mine: boolean; rate: string; warning?: string; /** (Owner, Nov 4, §195) the developer's box by person: what they have paid this tester so far on the test */ paidCents?: number;
   /** (Owner, Nov 4, §181) when it was sent (ISO): the developer's box lists each person's requests oldest first */ at?: string };
 
 /**
@@ -159,12 +160,12 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
   // (Owner, Nov 4, §181) The developer's box: one drop-down per person (closed; the green name, then "· N requests"), in the order of each person's oldest request;
   // inside, all their requests oldest first, both kinds together (theirs to answer with Accept / Decline, and yours with Withdraw), in a panel of its own.
   const sent = (r: PanelReq) => (r.at ? Date.parse(r.at) : first(r));
-  const people: { id: string; name: string; href?: string | null; reqs: PanelReq[] }[] = [];
+  const people: { id: string; name: string; href?: string | null; paidCents?: number; reqs: PanelReq[] }[] = [];
   if (byPerson) {
     for (const r of [...requests].sort((a, b) => sent(a) - sent(b))) {
       const p = people.find((x) => x.id === r.contractId);
       if (p) p.reqs.push(r);
-      else people.push({ id: r.contractId, name: r.tester, href: r.testerHref, reqs: [r] });
+      else people.push({ id: r.contractId, name: r.tester, href: r.testerHref, paidCents: r.paidCents, reqs: [r] });
     }
   }
   // (Owner, Nov 4, §185) The name search keeps a person whose request has a press under way, its stop box or refusal showing (never hidden mid-press).
@@ -192,8 +193,8 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
               // (§185) Hidden, not removed, while the search leaves them out: a drop-down keeps whether it was open.
               <div key={p.id} hidden={!shown(p) || undefined}>
               <HoldFold data={{ id: anchor(p.id), "data-call-requests-person": p.id }} toggleData={{ "data-call-requests-person-toggle": "" }}
-                // (Owner, Nov 4, §187) The whole name, cut only when the row is full.
-                summary={<span className="flex min-w-0 items-baseline gap-1"><span className="min-w-0"><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400">· {p.reqs.length} request{p.reqs.length === 1 ? "" : "s"}</span></span>}>
+                // (Owner, Nov 4, §187) The whole name, cut only when the row is full. (Owner, Nov 4, §195) Then, on the right, what you've paid them so far on the test.
+                summary={<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0"><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400">· {p.reqs.length} request{p.reqs.length === 1 ? "" : "s"}</span>{p.paidCents != null && <PaidSoFar cents={p.paidCents} />}</span>}>
                 {/* A press on one of their requests (under way, its stop box or refusal) keeps their drop-down open. */}
                 <HoldWhile on={held(p)} />
                 <ResizeBox id={`${panelId}-${p.id}`} label={`Call requests with ${p.name}`} defaultMax={LIST_PANEL.requests}>
