@@ -4495,3 +4495,9 @@ No Show more inside a box; long words wrap anywhere, so a 375px phone never scro
 ## §241 Every other-tab change note in its box (owner, Nov 5)
 Edit's "Changed in another tab or device at …" notes (FieldNote) put every change in the shared draggable box, not only long text: the access keys' lines ("Added:
 …", "Removed: …"), short changes ("Categories: a → b", devices, languages, spots and the other selections), the replaced long text and "What you typed (not saved)".
+
+## §242 The questions changed: only the changed ones, each a drop-down (owner, Nov 5)
+The new-terms box's "The questions changed" lists only questions that actually changed, matched by their words (and Required), so removing one never makes the ones
+after it look changed: an edited question (Before and After), a new one ("Before: (new)") and a removed one ("After: (removed: after Switch it moves to Past
+questions)"). Unchanged questions aren't listed. Each is its own drop-down, closed: "Question N · Changed / New / Removed" and the start of its words; inside, Before,
+After and your answer so far in their boxes (the list keeps §233's panel). `questionChanges` in TesterTop.tsx. Test: `tests/question-changes-242.test.ts`.
