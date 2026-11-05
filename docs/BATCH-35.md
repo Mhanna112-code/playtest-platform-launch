@@ -4218,7 +4218,7 @@ like every other notice. Test: `tests/nov5-batch2.test.ts`.
 ## §217 A check cancelled underneath reads as a cancel (owner, Nov 5; recording R4a re-take)
 A bank check already cancelled underneath it (the team's pause, a new card, a chargeback won) read "Your Confirm with your bank didn't go through: This payment was
 cancelled: nothing was charged." from Cancel this check (the wrong press, and as a failure), and the same from Complete in its window. Now whichever press reaches it
-reads "Cancelled: nothing was charged." (`refusalLine`, `CHECK_CANCELLED_UNDERNEATH`), and Cancel this check on it is a cancel that worked.
+reads "Cancelled: nothing was charged." (`refusalLine` and the kept line `keptRefusalLine`, `CHECK_CANCELLED_UNDERNEATH`), and Cancel this check on it is a cancel that worked.
 
 ## §218 A won chargeback's payment says how it ended (owner, Nov 5; recording R10b re-take)
 What you've paid marked a payment whose chargeback the bank then decided in the developer's favour "· your bank reversed this (chargeback)". It now reads "· your bank

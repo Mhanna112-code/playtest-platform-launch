@@ -4,7 +4,8 @@
 // (Owner, Oct 29, batch 32 §10) It sits IN the page, inside the part or row the pressed button was in (the nearest one with an id that survived the
 // redraw), not floating over the text; with none left, at the top of the page. It lives outside the page (the root layout's KeptRefusal), so it survives
 // the redraw. When the button is still there, or the page already says the same thing anywhere, it stays hidden (never twice).
-import { refusalLine } from "./pressLabels";
+import { CHECK_CANCELLED_UNDERNEATH, refusalLine } from "./pressLabels";
+import { CANCELLED_NOTHING_CHARGED } from "./bankNotice";
 
 /** How long the kept line stays at most: (batch 32 §10) until the next press. */
 export const KEEP_MS = Number.POSITIVE_INFINITY;
@@ -29,6 +30,8 @@ const LOWER_FIRST = new Set(["This", "That", "These", "Those", "The", "Your", "Y
 export function keptRefusalLine(label: string, message: string) {
   const m = message.trim();
   if (/^Your .*didn't go through/.test(m)) return m;
+  // (Owner, Nov 5, §217; recording R4a re-take) A check cancelled underneath reads as a cancel here too (before the first word is lowercased).
+  if (m === CHECK_CANCELLED_UNDERNEATH) return CANCELLED_NOTHING_CHARGED;
   const first = m.split(/\s+/)[0] ?? "";
   const lowered = LOWER_FIRST.has(first) ? m.charAt(0).toLowerCase() + m.slice(1) : m;
   const line = refusalLine(label, lowered);

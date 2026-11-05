@@ -83,3 +83,12 @@ describe("(Owner, Nov 5) §220 a cut row opens in place", () => {
     expect(b).not.toContain("ml-5 mt-1 max-h-32 overflow-y-auto");
   });
 });
+
+describe("(Owner, Nov 5) §217 on the kept refusal too (recording R4a re-take)", () => {
+  it("the line kept on screen after a press reads as a cancel, never lowercased into 'Your … didn't go through: this payment was cancelled'", async () => {
+    const { keptRefusalLine } = await import("@/lib/keptRefusal");
+    const { CHECK_CANCELLED_UNDERNEATH } = await import("@/lib/pressLabels");
+    for (const press of ["Confirm with your bank", "Cancel this check", "Pay"]) expect(keptRefusalLine(press, CHECK_CANCELLED_UNDERNEATH)).toBe("Cancelled: nothing was charged.");
+    expect(keptRefusalLine("Join call", "This call isn't available.")).toBe("Your Join call didn't go through: this call isn't available.");
+  });
+});
