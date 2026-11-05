@@ -64,7 +64,7 @@ describe("batch 35 §77 a re-send with nothing new isn't 'updated'", () => {
     const tests = src("lib/server/tests.ts");
     expect(tests).toContain('if (existing && !existing.setUntil && !answersNew && sameQuestions(latestItems(existing, qs), itemsFor(qs, answers))) return new HttpError(409, "locked", SENT_ANSWERS_LOCKED);' /* (§235) a Send answering nothing new */);
     expect(tests.indexOf("const sentRefusal = sendRefusal(sent, qs, answers);")).toBeLessThan(tests.indexOf("await testerSendGate(contractId, body, sent?.id);"));
-    expect(tests).toContain("const refused = sendRefusal(existing, qs, answers);");
+    expect(tests).toContain("const refused = sendRefusal(existing, qs, answers, !!fresh?.some((i) => answers[i].trim()));"); // (§235) says whether the press answers anything new
     expect(src("lib/server/recordings.ts")).toContain('throw new HttpError(400, "none", NO_RECORDING_TO_ADD);'); // §183: the recordings' nothing-to-add, before the gate too
   });
 });
