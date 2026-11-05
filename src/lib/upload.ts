@@ -12,14 +12,23 @@ export async function uploadToSession(sessionId: string, file: Blob, filename: s
   const contentType = videoTypeOf(filename, given) ?? (given || "application/octet-stream");
   // (Batch 35 §4) `tag`: the short tag of a written answer's marker ("[📎 map.png #k3f9]"), unique among the contract's uploads.
   const { recordingId, tag, uploadUrl } = await api<{ recordingId: string; tag: string; uploadUrl: string }>(`/api/sessions/${sessionId}/recording-start`, { filename, size: file.size, contentType, part });
+  // (Owner, Nov 5) While the file goes up, the page says so every 20 s (an unfinished upload holds Send only while it does); leaving the page mid-upload
+  // drops it at once, so a reload or a closed tab never leaves Send refused.
+  const alive = setInterval(() => void fetch(`/api/sessions/${sessionId}/recording-alive`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ recordingId }) }).catch(() => null), 20_000);
+  const leave = () => void fetch(`/api/sessions/${sessionId}/recording-abandon`, { method: "POST", keepalive: true, headers: { "content-type": "application/json" }, body: JSON.stringify({ recordingId }) }).catch(() => null);
+  window.addEventListener("pagehide", leave);
   try {
     await put(uploadUrl, file, contentType, onProgress);
+    window.removeEventListener("pagehide", leave);
     await api(`/api/sessions/${sessionId}/recording-done`, { recordingId });
   } catch (e) {
     // (Batch 31 section 2) A failed upload leaves nothing behind: its row and any partial file go, so pressing again starts clean (best effort; the daily clean-up
     // catches the rest).
     await api(`/api/sessions/${sessionId}/recording-abandon`, { recordingId }).catch(() => null);
     throw e;
+  } finally {
+    clearInterval(alive);
+    window.removeEventListener("pagehide", leave);
   }
   return { id: recordingId, tag };
 }

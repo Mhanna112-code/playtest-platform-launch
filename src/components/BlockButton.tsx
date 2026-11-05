@@ -29,7 +29,7 @@ export function BlockButton({ userId, name, effect, plain }: { userId: string; n
             setBusy(false);
           }
         }}>
-        Block {name}
+        <span className="[overflow-wrap:anywhere]">Block {name}</span>
       </ConfirmButton>
       <Err text={err} press="Block" />
     </div>
@@ -44,7 +44,7 @@ export function UnblockButton({ userId, say = false, name = "" }: { userId: stri
   return (
     <span className="inline-flex flex-wrap items-center gap-2">
       <button className="btn-secondary px-3 py-1.5 text-sm" disabled={fin.done} data-unblock="" onClick={() => api("/api/blocks", { userId, action: "unblock" }).then(() => fin.finish(say ? "Unblocked." : ""), (e) => setErr(errOf(e)))}>
-        {name ? `Unblock ${name}` : "Unblock"}
+        <span className="[overflow-wrap:anywhere]">{name ? `Unblock ${name}` : "Unblock"}</span>
       </button>
       {done && <span className="text-emerald-300" role="status">Unblocked.</span>}
       <Err text={err} press="Unblock" />

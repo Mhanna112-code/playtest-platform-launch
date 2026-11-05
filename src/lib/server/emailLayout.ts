@@ -53,7 +53,7 @@ function button(b: EmailButton) {
 function line(raw: string) {
   const indent = /^\s+/.exec(raw)?.[0].length ?? 0;
   const text = raw.trim();
-  const style = `margin:0 0 6px ${indent ? 18 : 0}px;font-family:${FONT};font-size:15px;line-height:22px;color:${TEXT};`;
+  const style = `margin:0 0 6px ${indent ? 18 : 0}px;font-family:${FONT};font-size:15px;line-height:22px;color:${TEXT};overflow-wrap:anywhere;word-break:break-word;`;
   const tail = /^(.*\S)\s+(https?:\/\/\S+)$/.exec(text);
   const inner = tail && !/https?:\/\//.test(tail[1]) ? link(tail[2], esc(tail[1]), `color:${TEXT};text-decoration:underline;`) : linkify(text);
   return `<p style="${style}">${inner}</p>`;

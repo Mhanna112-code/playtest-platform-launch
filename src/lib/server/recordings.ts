@@ -52,7 +52,7 @@ export async function startRecording(tester: U, contractId: string, body: Record
   if (!video && mine.filter((r) => r.part === "written" && !isVideo(r.contentType)).length >= MAX_ATTACHMENTS) throw new HttpError(409, "too_many", `You can attach at most ${MAX_ATTACHMENTS} files to your written answers.`);
   const ext = filename.includes(".") ? filename.slice(filename.lastIndexOf(".")).toLowerCase() : ".mp4";
   const storageKey = `recordings/${contractId}/${randomBytes(12).toString("hex")}${ext}`;
-  const rec = await db.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part } });
+  const rec = await db.recording.create({ data: { contractId, storageKey, filename, sizeBytes: size, contentType: type, part, aliveAt: new Date() } });
   // (Batch 35 §4) The short tag its marker carries ("[📎 map.png #k3f9]"): the end of its id, unique among the contract's uploads.
   const ids = (await db.recording.findMany({ where: { contractId }, select: { id: true } })).map((r) => r.id);
   return { recordingId: rec.id, tag: attachmentTag(rec.id, ids), uploadUrl: uploadTarget(rec.id, storageKey, size, type) };
@@ -120,8 +120,19 @@ export const TOO_MANY_RECORDINGS = `You can add at most ${MAX_RECORDINGS} record
 /** (Batch 35 §136) All 5 recordings sent: none can be removed, so no more can be added. */
 export const ALL_RECORDINGS_SENT = `You've sent ${MAX_RECORDINGS} recordings, the most this part takes.`;
 export const STILL_UPLOADING = "A recording is still uploading. Send once it's done.";
-/** An upload started this recently and not finished counts as still uploading (an abandoned one stops blocking Send after this). */
-const UPLOADING_MS = 3 * 3_600_000;
+/**
+ * (Owner, Nov 5; was: any upload started in the last 3 hours) An unfinished upload counts as still uploading only while its page keeps saying so (every 20 s,
+ * `uploadAlive`): one cut off by a reload or a closed tab stops holding Send within 2 minutes. The daily clean-up still removes it after 3 hours.
+ */
+const ALIVE_MS = 2 * 60_000;
+export const stillUploading = (part: "recording" | "written") => ({ part, uploadedAt: null, aliveAt: { gt: new Date(Date.now() - ALIVE_MS) } });
+
+/** (Owner, Nov 5) The uploading page's "still going": only this tester's own unfinished upload. */
+export async function uploadAlive(tester: U, contractId: string, body: Record<string, unknown>) {
+  await ownContract(tester.id, contractId);
+  const n = await db.recording.updateMany({ where: { id: String(body.recordingId ?? ""), contractId, uploadedAt: null }, data: { aliveAt: new Date() } });
+  return { alive: n.count === 1 };
+}
 
 /**
  * (Owner, Oct 29, batch 13 section 7) Remove a recording from the Recording part (with a confirm): one not sent yet is deleted and its slot is free at once.
@@ -164,7 +175,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
   const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
   const shut = resendRefusal(sent?.review, "recording");
   if (shut) throw new HttpError(409, "paid", shut);
-  if (sent && !(await db.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, { createdAt: { gt: new Date(Date.now() - UPLOADING_MS) } }] } }))) throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
+  if (sent && !(await db.recording.count({ where: { contractId, part: "recording", submissionId: null, OR: [{ uploadedAt: { not: null } }, stillUploading("recording")] } }))) throw new HttpError(400, "none", NO_RECORDING_TO_ADD);
   await testerSendGate(contractId, body, sent?.id);
 
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
@@ -176,7 +187,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
     // (Batch 13 section 7) All of them go together as ONE piece; a Send from another tab while one is still uploading waits for it.
-    if (await tx.recording.count({ where: { contractId, part: "recording", uploadedAt: null, createdAt: { gt: new Date(Date.now() - UPLOADING_MS) } } })) throw new HttpError(409, "uploading", STILL_UPLOADING);
+    if (await tx.recording.count({ where: { contractId, ...stillUploading("recording") } })) throw new HttpError(409, "uploading", STILL_UPLOADING);
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "recording" } }, include: { review: true } });
     const locked = resendRefusal(existing?.review, "recording"); // (batch 30 §2) an old rejection or the team's closure only
     if (locked) throw new HttpError(409, "paid", locked);

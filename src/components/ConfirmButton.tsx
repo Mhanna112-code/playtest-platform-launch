@@ -36,7 +36,7 @@ export function ConfirmButton({ className, title, body, confirmLabel, onConfirm,
         {confirmDisabled && confirmHint && <p className="mt-3 text-right text-xs text-slate-400" data-say-why="">{confirmHint}</p>}
         <div className="mt-4 flex flex-wrap justify-end gap-2">
           <button type="button" className="btn-secondary px-3 py-1.5 text-sm" onClick={() => dialog.current?.close()} autoFocus>Cancel</button>
-          <button type="button" className="btn-danger px-3 py-1.5 text-sm" data-confirm={confirmLabel} disabled={confirmDisabled} onClick={() => { dialog.current?.close(); onConfirm(); }}>{confirmLabel}</button>
+          <button type="button" className="btn-danger px-3 py-1.5 text-sm" data-confirm={confirmLabel} disabled={confirmDisabled} onClick={() => { dialog.current?.close(); onConfirm(); }}><span className="min-w-0 [overflow-wrap:anywhere]">{confirmLabel}</span></button>
         </div>
       </dialog>
     </>

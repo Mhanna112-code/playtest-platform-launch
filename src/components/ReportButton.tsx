@@ -21,7 +21,7 @@ export function ReportButton({ userId, name, reportedOn }: { userId: string; nam
   return (
     <div className="space-y-2" data-mistakes-root="">
       {!open ? (
-        <button type="button" className="text-xs text-slate-500 hover:text-rose-200" onClick={() => setOpen(true)}>Report {name}</button>
+        <button type="button" className="text-xs text-slate-500 hover:text-rose-200" onClick={() => setOpen(true)}><span className="[overflow-wrap:anywhere]">Report {name}</span></button>
       ) : (
         <div className="space-y-2 rounded-lg border border-white/10 p-3 text-sm" data-report-box="">
           <label className="label req" htmlFor={`report-${userId}`}>What happened? (the team reads it)</label>

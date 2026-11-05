@@ -318,7 +318,7 @@ function Room({ callId, role, myName, otherName, otherPoss = "their", iceServers
           <video ref={remoteRef} autoPlay playsInline className="aspect-video w-full object-cover" aria-label={`${otherName}'s video`} />
           {!(otherVideo && flowing && (otherCam || otherSharing)) && <NoVideo name={otherName} note={!otherHere ? "Not here yet" : !linked ? "Connecting…" : otherNoCamera ? "No camera" : !otherCam ? "Camera off" : "No video"} />}
           {otherSharing && <span className="absolute right-3 top-3 rounded-full bg-sky-500/80 px-2.5 py-1 text-xs font-medium text-white">Sharing {otherPoss} screen</span>}
-          <span className="absolute left-3 top-3 flex items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white">{!otherMic && <MicOff className="h-3.5 w-3.5 text-rose-300" aria-label="muted" />}{otherName}{otherHere ? "" : " · not here yet"}</span>
+          <span className="absolute left-3 top-3 flex max-w-[calc(100%-1.5rem)] items-center gap-1 rounded-full bg-black/60 px-2.5 py-1 text-xs text-white" title={otherName}>{!otherMic && <MicOff className="h-3.5 w-3.5 shrink-0 text-rose-300" aria-label="muted" />}<span className="min-w-0 truncate">{otherName}{otherHere ? "" : " · not here yet"}</span></span>
         </div>
         <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-black">
           <video ref={localRef} autoPlay playsInline muted className="aspect-video w-full object-cover" aria-label="Your video" />

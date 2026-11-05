@@ -1053,7 +1053,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   // (Batch 27 section 1) An open new-terms offer blocks Send until it's answered (Switch or Keep): nothing is checked or sent before.
   await answerTermsFirst(contractId);
   const qs = writtenQuestions(c0);
-  if ((await db.recording.count({ where: { contractId, part: "written", uploadedAt: null, createdAt: { gt: new Date(Date.now() - 3 * 3_600_000) } } })) || JSON.stringify([body.answers, body.notes]).includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
+  if ((await db.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || JSON.stringify([body.answers, body.notes]).includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
   const sentAnswers = Array.isArray(body.answers) ? body.answers.map((a) => (typeof a === "string" ? a.trim() : "")) : [];
   // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
   // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
@@ -1158,7 +1158,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   const key = typeof body.question === "string" ? body.question : "";
   if (!key) throw new HttpError(409, "pick_question", ADD_UNDER_QUESTION);
   const text = typeof body.text === "string" ? body.text.trim() : "";
-  if ((await db.recording.count({ where: { contractId, part: "written", uploadedAt: null, createdAt: { gt: new Date(Date.now() - 3 * 3_600_000) } } })) || text.includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
+  if ((await db.recording.count({ where: { contractId, ...(await import("./recordings")).stillUploading("written") } })) || text.includes("[Uploading ")) throw new HttpError(409, "uploading", "Wait for the upload to finish before sending.");
   if (!sessionRefusal(c0, c0.test, displayName(c0.test.developer)) && testerPaused(c0.test.developer, c0.test)) throw new HttpError(409, "paused", PAUSED_SEND);
   // (§167) Only the uploads placed in this text (by their markers) go with it.
   const placedIn = (rows: { id: string; filename: string }[]) => {

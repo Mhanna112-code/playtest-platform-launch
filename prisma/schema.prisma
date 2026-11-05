@@ -421,6 +421,8 @@ model Recording {
   contentType  String
   /// Set once the upload finished
   uploadedAt   DateTime?
+  /// (Owner, Nov 5) When the uploading page last said it is still going (every 20 s). An unfinished upload holds Send only while this is recent.
+  aliveAt      DateTime?
   /// (Batch 11) Which part it belongs to: "recording" (the Recording part) or "written" (an attachment on the written part: a file, or a screen recording)
   part         String      @default("recording")
   createdAt    DateTime    @default(now())

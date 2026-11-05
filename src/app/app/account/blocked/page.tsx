@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { displayName } from "@/lib/server/dateFormat";
 import { requirePageUser } from "@/lib/server/page-auth";
 import { UnblockButton } from "@/components/BlockButton";
+import { Cut } from "@/components/Cut";
 import { anySuspended } from "@/lib/restricted";
 
 export const metadata = { title: "Blocked people · Playtest" };
@@ -39,7 +40,7 @@ export default async function BlockedPage() {
             return (
               <li key={b.id} className="flex items-center justify-between gap-3 py-2.5">
                 <span className="min-w-0">
-                  <span className="block truncate font-medium text-white">{x ? displayName(x) : "Someone"}</span>
+                  <span className="block font-medium text-white">{x ? <Cut text={displayName(x)} /> : "Someone"}</span>
                   <span className="text-xs text-slate-500">Blocked {fmtDate(b.createdAt)}</span>
                 </span>
                 {/* (Owner, Oct 27) Unblock works for a held account; a suspended one reads the list only. */}

@@ -144,15 +144,15 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         intro={`The listing as it is now. A field ${dev}'s last save changed shows when: tap it for before and now.`}
         after={{ spots: <> · {plural(Math.max(0, t.spots - testersIn), "spot")} left</> }}
         head={<>
-        <div className="flex items-start gap-4">
+        <div className="flex flex-wrap items-start gap-4">
           <CategoryTile category={mainCategory(t.categories)} size="h-14 w-14" />
-          <div className="min-w-0 flex-1">
+          <div className="min-w-[min(100%,12rem)] flex-1">
             {t.productName && <p className="kicker">{t.productName}</p>}
             {/* (Owner, Nov 3, batch 35 §168) The team opening a Next round's draft with no name yet: "Untitled draft (round 2)". */}
             <h1 className="text-2xl font-bold tracking-tight text-white">{testTitleOf(t)}</h1>
             <p className="text-sm text-slate-400">
               by <NameLink text={dev} href={`/app/developers/${t.developerId}`} />{devRating.line && ` · ${devRating.line}`}
-              {invite ? <span className="badge ml-2 border-emerald-400/40 text-emerald-200">Invited</span> : t.joinMode === "apply" && <span className="badge ml-2 border-sky-300/40 text-sky-200">{dev} approves each tester</span>}
+              {invite ? <span className="badge ml-2 border-emerald-400/40 text-emerald-200">Invited</span> : t.joinMode === "apply" && <span className="badge ml-2 max-w-full border-sky-300/40 text-sky-200 [overflow-wrap:anywhere]">{dev} approves each tester</span>}
             </p>
           </div>
           <div className="text-right">

@@ -4178,3 +4178,17 @@ tester's "Call history" card holding Booked / Cancelled) and the queued §197 ("
   window finished it → the plain line without this check's `pi`; the normal path then another tab → "… in another tab …"; (d) Pay (a hold starting), Pay more and
   Confirm with your bank (a new card), Confirm all (a new card) → paid; an item's own old window after Confirm all paid it → the plain line; the page sends `pi`.
   Updated `tests/pay-matrix-2.test.ts` §159 R10 (a): the page's own finish with its `pi` reads as paid (without it, the plain line).
+
+## §211 Long names never widen the page (owner, Nov 5)
+The long-name sweep (evidence `long-names-nov5`) found names with no spaces widening pages on a phone. Fixed: Report / Block / Unblock and the Block dialog's
+confirm button break the name anywhere (buttons keep `break-word`, which can't break one word); Find's test header wraps (the price box drops below, the title keeps
+12rem) and its "<developer> approves each tester" badge breaks; the profile headings keep 12rem beside the avatar; email lines break long words (the summary email
+was 717px wide on a 375px phone); the Blocked people list uses Cut (full name on press); the session page's "Chat with <developer>" wraps; the tester's To-do row
+wraps instead of hiding the part name; the header's hover reads "<name> · <email>"; the admin header's name is cut at 12rem with its title; the call room's name pill
+is capped and cut. Test: `tests/upload-alive-nov5.test.ts`.
+
+## §212 A cut-off upload no longer holds Send (owner, Nov 5)
+An upload cut off by a reload or a closed tab left its row unfinished, and Send read "A recording is still uploading" for up to 3 hours. Now the uploading page
+says it's still going every 20 s (`recording-alive`, `Recording.aliveAt`) and an unfinished upload holds Send (recording and written parts) only while it was heard
+from in the last 2 minutes; leaving the page mid-upload drops it at once (`pagehide`, a keepalive `recording-abandon`). The daily clean-up still removes leftovers
+after 3 hours. Migration `20261118090000_recording_alive`. Test: `tests/upload-alive-nov5.test.ts`.

@@ -564,7 +564,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <li className="card flex flex-wrap items-center gap-3 p-4" data-todo-part={`${c.id}:${p.key}`}>
                   <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
                   <div className="min-w-[12rem] flex-1">
-                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={`${c.title} · ${p.name}`}><Cut text={c.title} kind="test" /> · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]" title={`${c.title} · ${p.name}`}><Cut text={c.title} kind="test" /> · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                     <div className="mt-1 flex flex-wrap gap-2">
                       <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> Due {fmtDate(c.dueAt)}{due ? ` · ${due}` : ""}</span>
                       {messages > 0 && <span className="badge border-fuchsia-300/40 text-fuchsia-200"><MessagesSquare className="h-3.5 w-3.5" /> {plural(messages, "unread message")}</span>}

@@ -17,7 +17,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <Brand /><AdminNav /><PageLoad />
         <div className="ml-auto flex items-center gap-2">
           <BellLink unread={await unreadEntryCount(user.id)} />
-          <Link href="/app/account" className="nav-link" title="Your account">{user.name.trim() || user.email}</Link>
+          <Link href="/app/account" className="nav-link block max-w-[12rem] truncate" title={`Your account: ${user.name.trim() || user.email}`}>{user.name.trim() || user.email}</Link>
           <SignOut />
         </div>
       </div>
