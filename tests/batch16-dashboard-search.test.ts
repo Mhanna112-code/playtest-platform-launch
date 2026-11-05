@@ -50,7 +50,7 @@ describe("Search by developer (section 13)", () => {
     expect(searchByDeveloper(rows, "cara")).toEqual([]);
     // No match, and a blank box (the normal dashboard).
     expect(searchByDeveloper(rows, "zed")).toEqual([]);
-    expect(noDevMatchLine(" Zed ")).toBe("No tests with a developer named “Zed”.");
+    expect(noDevMatchLine(" Zed ")).toBe("No tests match “Zed”."); // (§204) the box searches test names too
     expect(searchByDeveloper(rows, "   ")).toEqual([]);
     expect(rows.every((r) => r.href === `/app/sessions/${r.id}`)).toBe(true);
     expect((await testerSearchRows(tester.user.id, false)).every((r) => r.href === null)).toBe(true); // a suspended tester side: no links
@@ -67,13 +67,13 @@ describe("Search by developer (section 13)", () => {
 
   it("the dashboard: the box at the top over ALL the tester's contracts, full width on phones; typing replaces the sections, clearing brings them back; results in the plain scroll box (section 14)", () => {
     const page = src("app/app/page.tsx");
-    expect(page).toContain("<DevSearch rows={devSearchRows(contracts, !suspended)}>");
+    expect(page).toContain("<DevSearch rows={devSearchRows(contracts, !suspended)} todo={"); // (§204) To do stays, filtered
     expect(page.indexOf("<DevSearch")).toBeLessThan(page.indexOf('id="suspended-tests"'));
     expect(page.indexOf("</DevSearch>")).toBeGreaterThan(page.indexOf("History</h2>"));
     // The dashboard's contracts query is every contract of the tester (no take / no status filter).
     expect(page).toMatch(/const contracts = await db\.contract\.findMany\(\{\s*where: \{ testerId: userId \},\s*orderBy: \{ joinedAt: "desc" \},/);
     const box = src("app/app/DevSearch.tsx");
-    expect(box).toContain('placeholder="Search by developer"');
+    expect(box).toContain("placeholder={DEV_SEARCH_LABEL}"); // (§204) "Search by developer or test"
     expect(box).toContain('className="flex w-full items-center gap-2 sm:max-w-sm"');
     expect(box).toContain("{!typed && children}");
     expect(box).toContain('<ScrollList className="space-y-2" label="Tests found">');

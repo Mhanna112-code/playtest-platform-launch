@@ -3880,3 +3880,38 @@ scroll box). Updated: `payment-piece-names` (the decline's bell line in full).
   when the row is full, §187) are unchanged.
 - **Tests** updated for 20: `long-text-cut`, `chargeback-line-names`, `partial-dispute`, `payment-piece-names`, `specific-lines-177`; `bell-lines-202` checks
   `NAME_CUT`, `cutTo`, `cutEmail` and `pieceName` at 20.
+## §204 Searching the dashboards: Your tests (developer) and Search by developer or test (tester) (owner, Nov 5)
+
+Owner: a search box on the developer's "Your tests" (test name or product name) and on the tester's "To do" (test name or developer name), any part, any case,
+as they type. Coordinator, same day: the tester dashboard already has "Search by developer" right above To do: no second box; that box now searches the
+developer's name OR the test's name, says so, and filters To do by either; everything else about it stays.
+
+| Before | After |
+| --- | --- |
+| "Your tests" had no search; the category chips were the only filter. | **A search box above the cards** ("Search by test or product", label "Search your tests by test or product name", `maxLength` `FIND_SEARCH_MAX` = 100 as the Call requests and By question boxes, `type="search"` with the browser's own ×). As you type, only the tests whose name (as the card shows it, "Untitled draft (round 2)" included) or product name contains it, any case, trimmed (`yourTestMatches`, the same rule as §185's `matchesName`). Nothing matches: "No tests match “zzz”." and the cards box goes until the search is cleared. Works inside the category chip in use. |
+| The tester's "Search by developer" matched only the developer's name ("No tests with a developer named “nora”."); typing replaced every section below it with the results. | **"Search by developer or test"** (placeholder and label): the developer's name OR the test's name, by the same name-search rule as before (batch 20 §9: 1–2 characters the start of a word or the whole name, 3+ any part), an exact developer or test name first, then most recently joined. No match: "No tests match “zed”.". The results box is unchanged. **To do now stays** under the results while the box is typed in, showing only its rows for the matching tests (the answers to give, each unsent part, "Every part sent"); none: "No tests in To do match “zed”.". The other sections still give way to the results, and clearing the box brings everything back. |
+
+- **One list on the page, so no paging to worry about.** Your tests draws every card (the batch 16 §14 scroll box, no Show more); To do is every row. The
+  searches filter what is drawn, so they cover every test, not just the ones in view; the scroll boxes are unchanged.
+- **When the box shows.** As the Call requests boxes (§185: whenever the list has anyone, even one): Your tests' box shows whenever the developer has a test
+  (not on "No tests yet"); the tester's box was always there and still is.
+- **Live redraws keep what was typed** (each box's own state): checked in a browser, "sky" stayed in the box while a new test posted from the page arrived by
+  the dashboard's poll, and the new card showed filtered with it.
+- **Limits.** Your tests' box stops at 100 characters (the brief, as §185). The tester's box keeps §140's "Not limited" rule for "Search by developer"
+  (unchanged: no `maxLength`, no counter).
+- **Hooks.** New: `data-your-tests` (the wrapper), `data-your-tests-search` (the box), `data-your-tests-none` (the no-match line); `data-todo-search-none`
+  (To do's no-match line). Every other hook unchanged (`#devSearch`, `data-dev-search`, `data-dev-search-row`, `data-dev-search-none`, `#to-do`,
+  `data-todo-part`, `data-todo-sent`, `data-test-card`).
+- **Code.** `src/lib/yourTestsSearch.ts` (new: `YOUR_TESTS_SEARCH_LABEL`, `yourTestMatches`, `noYourTestsLine`), `src/app/app/YourTestsSearch.tsx` (new: the box
+  and the cards box, each card drawn on the server and passed in), `src/lib/devSearch.ts` (`devOrTestMatches`, `DEV_SEARCH_LABEL`, `noTodoMatchLine`;
+  `searchByDeveloper` and `noDevMatchLine` on either name), `src/app/app/DevSearch.tsx` (the `todo` prop, `DevSearchHit`, `DevSearchList`),
+  `src/app/app/page.tsx` (Your tests through `YourTestsSearch`; To do passed as `todo`, each row in `DevSearchHit`). No migration.
+- **Screenshots.** `playtest-lite-evidence/dash-search-nov5` (captions.json): Your tests empty, "sea" (product), "lantern", no match, and after a live redraw;
+  the tester's box empty, "ben" (a developer), "harbor" and "forge" (test names), desktop 1280×900 and phone 375×812.
+
+### Tests
+New `tests/dash-search-204.test.ts`: `yourTestMatches` (name or product, any part, any case, trimmed, blank keeps all) and its line; the box rendered with
+`maxLength="100"`, its label and placeholder, above the cards box; the developer dashboard rendering the box over both tests and none with no tests;
+`searchByDeveloper` / `devOrTestMatches` by developer or test name (the 1–2 character rule, exact first) and the lines; one DevSearch on the page, To do
+passed as `todo` with its three kinds of rows wrapped; the tester dashboard rendering the box above To do with the part's row. Updated:
+`batch16-dashboard-search` (the no-match line, the `todo` prop, the placeholder constant), `batch16-lists` (the cards box is in `YourTestsSearch.tsx`).
