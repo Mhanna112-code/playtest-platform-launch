@@ -102,7 +102,7 @@ describe("batch 35 §41: a finished press stays finished until the page has redr
   it("Pay more: the amount, note and ticks are hidden and the button stays greyed with “Paid $10.00 more to <name>.”; after the redraw it's empty again", () => {
     const pay = code("app/app/tests/[id]/PayBox.tsx");
     expect(pay).not.toContain("setTimeout(");
-    expect(pay).toContain("more ? `Paid ${money(res.amountCents)} more to ${p.name}.` : `Paid ${money(res.amountCents)} to ${p.name}.`");
+    expect(pay).toContain("more && !p.moreLabel ? `Paid ${money(res.amountCents)} more to ${p.name}.` : `Paid ${money(res.amountCents)} to ${p.name}.`"); // (§226) Needs you's Pay: "Paid $10.00 to <name>."
     expect(pay).toContain("{!done && <>");
     expect(pay).toContain("{!done && cents != null && cents > 0 && (");
     expect(pay).toContain("{!done && over && (");

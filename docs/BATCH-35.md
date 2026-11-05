@@ -4261,3 +4261,76 @@ developer's test page. Needs you's "2 call requests ↓" lines still jump to it.
 "Your bank wants you to confirm" (Payments' list, the dashboard's box, a charge's Confirm with your bank on the test page) named its payment with the names cut and the
 whole line only as a mouse hover. Now each line opens like a payment row (§220): each "…" opens its name, the arrow opens the whole line in place in the draggable
 box; quoted test names still link to their tests. No hover.
+## §222 Additions: 5 per question, replacing the part's 10 (owner, Nov 5)
+Replaces §167's "at most 10 additions per written part" and §186's one grey note under the answers panel.
+- **The cap:** each current question takes at most **5 additions**, and "Anything else" its own 5 (`ADDITIONS_MAX = 5`, `addsCounted` in `src/lib/additions.ts`).
+  Only what Add to this answer made counts (`addsTo`): the answers to changed questions and their send's notes never count (that Send is never refused for
+  it). Additions made before §167 (no question) are Anything else's, so they count toward its 5.
+- **The rows** (below "Your written answers", `WrittenAddForm`): each row counts its own question: "3 of 5 additions left" once it has one (the part-wide line
+  is gone). At 5 only that row closes: no button, the question's name and under it the grey note "You've added to this answer 5 times, the most it takes."
+  (Anything else: "You've added to Anything else 5 times, the most it takes."). The other rows stay open. A kept draft still shows read-only.
+- **A question with no answer yet** (`noAnswerYet`: its latest answer is blank and nothing was added to it; typically a "new question" the tester left empty)
+  gets an **"Answer this question"** row in place of Add to this answer (the box's note: "This is your answer to this question."; done: "Your answer was sent.").
+  That first answer is stored with `first: true` and is not one of its 5; it is offered after any cap. Once answered, the question follows the normal 5.
+  Anything else is never "unanswered". The developer reads it like any addition (its "(no answer)" line goes once something was added).
+- **The press** is named "Answer this question" in its refusals (`FormMistakes named`, the paused line) and in the failed-press lines (`pressLabelOf`: the form
+  sends `first: true`). The server decides what is free from the stored part, never from that flag.
+- **Server** (`addRefusal` / `addWritten` in `src/lib/server/tests.ts`): the same per-question count, before the stop-once and again under the test's lock (two
+  adds at a question's 4 give exactly one 5th), 409 `add_full` with the lines above; the free first answer is never refused for the cap.
+- No migration: `first` is a field of the JSON additions.
+- **Tests:** new `tests/batch35-added-per-question-222.test.ts` (the counts and lines; old untied ones on Anything else; the 6th refused per question and on
+  Anything else while other rows stay open; the race at the 4th; the free first answer after every other cap, then its 5; `first` from a page never makes an
+  answered question free; the press name; the rows; the session page). Updated: `batch35-added-per-question` (its 10-cap block moved here),
+  `anything-else-cancel-188` (its own 5), `limits-call-history` (one row closed), `batch35-parts-fold`, `press-names`.
+
+## §223 Questions and answers in draggable scroll boxes, in one look everywhere (owner, Nov 5)
+Replaces §182 / §187's long-text fold (3 lines, Show more) and the question title's own Show more wherever a question is shown with its answer.
+- **One shared component** (`src/components/QA.tsx`): `QuestionText`: a small label "Question N" (a "Required" tag beside it), the question's whole text in a
+  quieter tone (italic, medium, slate) on a faint background; `AnswerText`: a label "Answer" (or "Added · <date>" for an addition), the text in the normal bright
+  tone with a volt left accent border; "(no answer)" in grey for an empty one. Each text is its own box that scrolls and drags taller (ResizeBox, 6rem at first,
+  the grip to 60% of the screen) inside `OwnPanel` (they always sit inside another panel, where a nested ResizeBox is flat otherwise, §187). One scroll per text:
+  no Show more inside a box. Long words wrap anywhere, so a 375 px phone never scrolls sideways.
+- **Where:** the tester's "Your written answers" and the developer's Needs you, update rows and Testers list drop-downs and the team's "See the work" (all
+  `SentWork`: inside each question's fold, the question box, the answer box, then each addition's box; Anything else's notes and additions too); the previous
+  sets on both sides (`SetView` / `PrevSetFolds`, with their own ids; the 24rem scroll around a set is gone, so no two scrolls are stacked); "By question"
+  (the question box above its answers panel, each answer in its own box; the tester's name above the answer on a phone, beside it from `sm`); the new terms'
+  "The questions changed" blocks (§221: Before and After as questions, "Your answer so far" as an answer).
+- A question fold's title is the question cut at 2 lines by CSS (no Show more: its box inside holds it whole). The answer form's question labels keep their
+  inline Show more (they are not shown answers). A recording's notes keep the long-text fold.
+- **Tests:** `tests/batch35-added-per-question-222.test.ts` (each text its own box, not flat, 6rem, the grips; no Show more inside; the look's classes; the
+  previous sets, By question, the new terms and every SentWork view use it; the phone layout of By question). Updated: `batch35-parts-fold`,
+  `layout-fixes-187`, `batch26`, `anything-else-cancel-188`, `nov5-batch2`, `batch35-added-per-question`.
+
+## §226 The Testers list shows what was paid for; Needs you only what's new, with "Pay" (owner, Nov 5)
+The developer's test page (`src/app/app/tests/[id]/page.tsx`).
+- **The cut-off** (`lastPaidAt`, `src/lib/paidCut.ts`): the review's last payment time, the latest of: each Pay or Pay more on the part that went through (a
+  Payment of kind "review" or "extra" with status charged, not_set_up or bundled), at its `createdAt` (the press, the same moment that decides whether an
+  addition came "after you paid": reviewDraft's addedWhilePaying and a Pay more's answerUpdate); the review itself when it charged nothing (a $0 Pay, an old
+  rejection, the team's $0 closure, or a Pay whose payment hasn't gone through); a $0 Pay more closing an update (`paidUpdateZeroAt`). Null before the first
+  payment. A dispute decided by the team doesn't move it. An addition (or a changed-questions send) at or before the cut-off is paid for; after it, it is new.
+- **Testers list** (each part's drop-down): the part as it was when last paid: `SentWork until={cut}` leaves out the additions after it, their files and the
+  questions first answered after it (they read "(no answer)" there). Before the first payment it shows what was sent (the drop-down now shows the answers before
+  any payment too). It keeps **Pay more**.
+- **Needs you** (a part's row and an "added after you paid" update row): only what's new since the cut-off (`SentWork newOnly={{ since: cut }}`): the questions
+  answered or added to since then, each with only its new answer (a question that came with changed questions since) or its new additions; unchanged answers,
+  still-unanswered questions, the notes and the files sent first are left out; Anything else only when something new is in it; "Nothing new since you paid."
+  if nothing is. Never paid: every answered question (not the unanswered ones). So an addition the developer pays for moves into the Testers list, and the next
+  one shows only in Needs you until it is paid.
+- **"Pay" in Needs you:** the update row's drop-down and button read **Pay** (`PayBox moreLabel="Pay"`): Pay more's route (`pay-extra`) and every check it has
+  (the cap and its tick, paid in another tab, the stop-once and §183's stops, the bank's check, $0 closing an update); the request says `press: "Pay"`, so its
+  refusals, stops and failed-press line name Pay (`pressLabelOf`); done: "Paid $2.00 to Ana Silva.". The Testers list keeps "Pay more".
+- Each question and answer in Needs you is in the §223 boxes (SentWork).
+- **Tests:** new `tests/paid-cut-226-227.test.ts` (the cut-off rule; until and newOnly; the page: an addition after a Pay only in Needs you with Pay, the
+  Testers list as paid with Pay more; paid with Pay, it moves there and the next one waits in Needs you; the press names). Updated: `press-names`,
+  `batch35-after-press` (the done line), `needs-kind-folds-199` (`moreLabel`), `batch35-attachment-once` (the unpaid part now shows in the Testers list too).
+
+## §227 Pay what you owe never on the developer's test page (owner, Nov 5)
+- The test page no longer draws **OwedBox** (Pay what you owe). Payments, the dashboard and the bell keep it as they are. The chargeback steps
+  (ChargebackSteps) stay: they have no Pay what you owe button of their own.
+- Wherever the test page says something is owed it links to Payments: **"Pay what you owe on Payments"** → `/app/payments#owed` (OwedBox's own anchor there;
+  `PAY_OWED_HREF`, `PAY_OWED_LINK` in `src/lib/rules.ts`, `components/PayOwedLink.tsx`): the paused banner for a payment hold ("Your tests are paused until you
+  pay what you owe."), the Pay and Pay more boxes' "Pay what you owe first." (was "Pay what you owe ↑" to the box on the page), and any refusal about what's
+  owed ("Pay what you owe first." from Request a time, and the like: `Err` adds the link). Owing a failed payment before any pause, the page shows one line in
+  place of the box: "A payment didn't go through, so you owe it. Pay what you owe on Payments".
+- **Tests:** `tests/paid-cut-226-227.test.ts` (no OwedBox on the page; the banner, the boxes' line and the refusals link to Payments; the anchor exists there;
+  the one line when owing before a pause). The tests that read OwedBox itself are unchanged.

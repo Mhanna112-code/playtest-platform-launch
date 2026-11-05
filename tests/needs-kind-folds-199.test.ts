@@ -170,7 +170,7 @@ describe("§199 Needs you: each kind a drop-down, Rate plain, one Applications d
     expect(waits.indexOf(`data-bank-up="${w.charge.id}"`)).toBeGreaterThan(0);
     expect(src()).toMatch(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} awayInNeeds owes=\{owesNow\} kind="submission"/);
     expect(src()).toMatch(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} awayInNeeds owes=\{owesNow\} kind="call"/);
-    expect(src()).toMatch(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} update owes/);
+    expect(src()).toMatch(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} moreLabel="Pay" update owes/); // (§226) named Pay in Needs you
   });
 
   it("the Testers list heading: the whole name, cut only by the width it has (§187's fit); the badges and the paid figure never cut", async () => {

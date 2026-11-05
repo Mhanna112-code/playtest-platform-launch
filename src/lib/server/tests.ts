@@ -5,7 +5,7 @@ import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
-import { ADDITIONS_FULL, ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsOf, latestItems, questionKeys } from "@/lib/additions";
+import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -1129,9 +1129,9 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
   if (existing.setUntil || !sameQuestions(latest, itemsFor(qs))) return new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
   // (Owner, Nov 4, §188) Anything else is always there (the fixed last spot of every written part), under the same rules as a question.
   if (key !== ANYTHING_ELSE_KEY && questionKeys(latest).indexOf(key) < 0) return new HttpError(409, "question_gone", QUESTION_GONE);
-  // (§167) The 10 additions.
-  const made = additionsOf(existing.additions);
-  if (made.length >= ADDITIONS_MAX) return new HttpError(409, "add_full", ADDITIONS_FULL);
+  // (Owner, Nov 5, §222; replaces §167's 10 per part) This question's 5 (Anything else's own 5). A question with no answer yet: its first answer (Answer this
+  // question) is free and never refused for it.
+  if (!noAnswerYet(latest, questionKeys(latest), existing.additions, key) && addsCounted(existing.additions, key) >= ADDITIONS_MAX) return new HttpError(409, "add_full", additionsFull(key));
   // (Owner, Nov 4, §186; replaces batch 14's one limit over the answers, the notes and everything added) An addition has the same limit as the answers sent
   // first: at most 20,000 characters of its own, whatever the others hold. Checked before the stop-once, so a too-long addition is refused on the first press.
   const long = checkAdditionLength(text);
@@ -1145,9 +1145,11 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
  * reviews already made stay as they are; after a Pay, Pay more can pay for it (batch 30 §2's update row).
  * (Owner, Nov 3, §167; replaces §136's one "Add more" for the whole part) Each addition is to ONE question (`question`: its key, questionKeys of the current
  * questions), and the developer is told which ("Ana added to her answer to “…”"). An older page's general Add more (no question) is refused (ADD_UNDER_QUESTION).
- * Only the files placed in this text go with it (another question's box may hold the others). At most 10 additions per part (ADDITIONS_MAX: every addition
- * counts, old ones with no question and the answers to changed questions too), checked under the test's lock, so two adds at the 10th give exactly one.
- * (Owner, Nov 4, §188) Or to Anything else (`question: "else"`, ANYTHING_ELSE_KEY), the fixed last spot after the questions: the same rules (the 10, the 20,000,
+ * Only the files placed in this text go with it (another question's box may hold the others). (Owner, Nov 5, §222; replaces §167's 10 per part) At most 5
+ * additions per question (ADDITIONS_MAX, `addsCounted`: only Add to this answer's own, not the answers to changed questions), checked under the test's lock, so
+ * two adds at a question's 5th give exactly one. A question with no answer yet (`noAnswerYet`) takes its first answer ("Answer this question") free, stored with
+ * `first`, even past any cap; then the normal 5.
+ * (Owner, Nov 4, §188) Or to Anything else (`question: "else"`, ANYTHING_ELSE_KEY), the fixed last spot after the questions: the same rules (its own 5, the 20,000,
  * the stop-once, the single refusals), named "added to “Anything else” in her written answers".
  */
 export async function addWritten(tester: U, contractId: string, body: Record<string, unknown>) {
@@ -1167,7 +1169,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   };
   const unsent = { contractId, part: "written", uploadedAt: { not: null }, submissionId: null };
   if (!withoutAttachmentMarkers(text).trim() && !placedIn(await db.recording.findMany({ where: unsent, select: { id: true, filename: true } })).length) throw new HttpError(400, "empty", NOTHING_TO_ADD);
-  // (§167) Already at 10 (an older page): refused before any stop box. (Owner, Nov 4, §183) So is everything else that could only refuse it (the team's $0 closure,
+  // (§222) Already at the question's 5 (an older page): refused before any stop box. (Owner, Nov 4, §183) So is everything else that could only refuse it (the team's $0 closure,
   // changed questions, a question gone, too long): a developer payment on these answers since the page loaded now stops the press once whatever the tester's
   // Alerts, and a stop whose second press could only be refused is a single refusal instead (owner's standing rule).
   const before = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
@@ -1182,12 +1184,14 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
-    // (§167) The 10 additions (and every other refusal) counted again under the lock.
+    // (§222) The question's 5 (and every other refusal) counted again under the lock.
     const refused = addRefusal(existing, c, key, text);
     if (refused || !existing) throw refused ?? new HttpError(409, "not_sent", "Send your answers first.");
     const latest = latestItems(existing, writtenQuestions(c));
     const at = questionKeys(latest).indexOf(key);
     const made = additionsOf(existing.additions);
+    // (§222) The first answer to a question that had none: stored with `first`, so it isn't one of the question's 5.
+    const first = noAnswerYet(latest, questionKeys(latest), existing.additions, key);
     const now = new Date();
     // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
     // payment once that Pay is recorded.
@@ -1195,7 +1199,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     const late = existing.late || isLate(c.dueAt, now);
     const fresh = placedIn(await tx.recording.findMany({ where: unsent, select: { id: true, filename: true } }));
     const sub = await tx.submission.update({ where: { id: existing.id }, data: {
-      additions: [...made, { at: now.toISOString(), text, files: fresh.map((f) => f.id), questionKey: key }] as unknown as Prisma.InputJsonValue,
+      additions: [...made, { at: now.toISOString(), text, files: fresh.map((f) => f.id), questionKey: key, ...(first ? { first: true } : {}) }] as unknown as Prisma.InputJsonValue,
       late, updatedAt: now,
       ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
     } });

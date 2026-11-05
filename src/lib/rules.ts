@@ -923,6 +923,9 @@ export function pauseShiftMs(start: Date, now: Date, others: (Date | null | unde
   return Math.max(0, until - start.getTime());
 }
 export const PAY_WAITS = "Pay what you owe first.";
+/** (Owner, Nov 5, §227) The test page's link to Pay what you owe, which lives on Payments only (and the dashboard, and the bell). */
+export const PAY_OWED_HREF = "/app/payments#owed";
+export const PAY_OWED_LINK = "Pay what you owe on Payments";
 /** (Owner, Oct 29, batch 11) A charge made while the developer wasn't there waits this long for their bank confirmation, then counts as declined. */
 export const CONFIRM_DAYS = 3;
 /** (Batch 12 section 5) A press's confirmation pop-up locks the piece for at most this long. */

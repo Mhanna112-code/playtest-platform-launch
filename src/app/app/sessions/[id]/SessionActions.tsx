@@ -18,7 +18,7 @@ import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChar
 import { ChangesBox } from "@/components/ChangesBox";
 import { LongText, QUESTION_LINES } from "@/components/LongText";
 import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
-import { ADDITIONS_MAX, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE } from "@/lib/additions";
+import { ADDITIONS_MAX, ANSWER_PRESS, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, additionsFull, additionsLeftLine } from "@/lib/additions";
 import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, additionTooLongLine, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
@@ -288,13 +288,15 @@ export const ADD_OPEN = "Add to this answer";
  * read-only list has its own "Add to this answer" box (Bold, Italic, Code block, 📎 files), sent with "Add to my answer" and added under that question. Kept as a
  * draft per question (`add:<session>:<questionKey>`), editable until it's sent; a restored draft opens its question's fold. `canSend` false (a paused test): the
  * box and its draft stay, the button is hidden. (Owner, Nov 4, §186) Each addition has the answers' own limit: at most 20,000 characters of its own (its counter
- * counts only it; `used`, the characters already sent, is gone). `made`: the part's additions so far
- * (at most ADDITIONS_MAX; the page shows "3 of 10 additions left" once there is one): at 10, a grey note instead of the button, and a draft stays, read-only.
+ * counts only it; `used`, the characters already sent, is gone). (Owner, Nov 5, §222; replaces §167's part-wide 10) `made`: this question's additions so far
+ * (at most ADDITIONS_MAX, 5): the row says "3 of 5 additions left" once there is one; at 5 only this row closes, its grey note under the question's name, and a
+ * draft stays, read-only. `first`: a question with no answer yet: the row is "Answer this question" (ANSWER_PRESS, the press's name in its refusals too), free and
+ * offered after any cap; sent, the question follows the normal 5.
  * (Owner, Nov 4, §182) The button sits below the written answers' panel (`question` names it there); pressed, the box opens in the panel, directly under the
  * question's latest part: drawn into its `slot` (`<div data-add-slot>` at the end of that question's fold), the question's fold opened and the box brought into
  * view. The box is a fold of its own (open), and its editor scrolls inside when long; Add to my answer and Close stay under it.
  */
-export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], lines = [], questionKey, question, made = 0, slot }: { sessionId: string; seenAt: string; canSend?: boolean; known?: AnswerAttachment[]; lines?: string[]; questionKey: string; question: string; made?: number; /** (§182) the data-add-slot the open box is drawn into */ slot?: string }) {
+export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], lines = [], questionKey, question, made = 0, first = false, slot }: { sessionId: string; seenAt: string; canSend?: boolean; known?: AnswerAttachment[]; lines?: string[]; questionKey: string; question: string; made?: number; /** (§222) a question with no answer yet: "Answer this question" */ first?: boolean; /** (§182) the data-add-slot the open box is drawn into */ slot?: string }) {
   const [text, setText] = useState("");
   const [open, setOpen] = useState(false);
   const [attachments, setAttachments] = useState(known);
@@ -314,7 +316,9 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
     const found = document.querySelector<HTMLElement>(`[data-add-slot="${CSS.escape(slot)}"]`);
     if (found !== slotEl) setSlotEl(found);
   });
-  const full = made >= ADDITIONS_MAX;
+  // (§222) This question's 5 (never for its free first answer); the buttons' words and the press named in refusals.
+  const full = !first && made >= ADDITIONS_MAX;
+  const opener = first ? ANSWER_PRESS : ADD_OPEN, sender = first ? ANSWER_PRESS : ADD_PRESS;
   const fin = useFinished(() => { setBusy(false); setText(""); setOpen(false); setBox(null); setBoxAt(""); });
   const keep = useKept(`add:${sessionId}:${questionKey}`, { text }, text === "", (v) => {
     if (typeof v.text === "string" && v.text) {
@@ -344,9 +348,9 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
     setBusy(true);
     setErr("");
     try {
-      await api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt });
+      await api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt, ...(first ? { first: true } : {}) });
       await keep.clear();
-      fin.finish("Added to your answer.");
+      fin.finish(first ? "Your answer was sent." : "Added to your answer.");
     } catch (e) {
       const sb = stopBox(e);
       if (sb) { setBox(sb); setBoxAt(sb.now); }
@@ -355,17 +359,25 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       setBusy(false);
     }
   }
-  // (Owner, Nov 4, §186) At 10 additions the page says so ONCE, directly under the answers panel (ADDITIONS_FULL), in place of every question's row: closed,
-  // this question's row is nothing (no Add button, no repeated note); a kept draft still opens read-only below.
+  // (Owner, Nov 5, §222; replaces §186's one note for the part) At this question's 5 only its row closes: no button, the question's name and under it the grey
+  // note ("You've added to this answer 5 times, the most it takes."); the other rows stay open. A kept draft still opens read-only below.
+  const name = slot && <span className="line-clamp-1 min-w-0 flex-1 basis-40 text-xs text-slate-400 [overflow-wrap:anywhere]" data-add-question="">{question}</span>;
   if (!open && !fin.done) {
-    if (full) return <div ref={root} hidden data-add-for={questionKey} />;
+    if (full) return (
+      <div ref={root} className="space-y-0.5" data-add-for={questionKey} data-add-closed="">
+        {name}
+        <p className="note" data-additions-full="">{additionsFull(questionKey)}</p>
+      </div>
+    );
     return (
       <div ref={root} className="space-y-1" data-add-for={questionKey}>
         <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-          <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" onClick={() => { pressed.current = true; setOpen(true); }}>{ADD_OPEN}</button>
+          <button type="button" className="btn-secondary px-3 py-1.5 text-sm" data-add-more="written" data-answer-first={first ? "" : undefined} onClick={() => { pressed.current = true; setOpen(true); }}>{opener}</button>
           {/* (§182) Below the panel: which question it adds to (its first line). */}
-          {slot && <span className="line-clamp-1 min-w-0 flex-1 basis-40 text-xs text-slate-400 [overflow-wrap:anywhere]" data-add-question="">{question}</span>}
+          {name}
         </div>
+        {/* (§222) The row's own count, once this question has an addition. */}
+        {!first && made > 0 && <p className="note" data-additions-left="">{additionsLeftLine(made)}</p>}
       </div>
     );
   }
@@ -374,16 +386,16 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       {!fin.done && (
         // (§182) The box folds (open at first); what's typed scrolls inside it when long.
         <details open className="group/fold" data-add-fold="">
-          <summary className="fold-chevron cursor-pointer text-sm font-medium text-slate-200">{ADD_OPEN}</summary>
+          <summary className="fold-chevron cursor-pointer text-sm font-medium text-slate-200">{opener}</summary>
           <div className="mt-2 max-h-[min(24rem,60vh)] space-y-2 overflow-y-auto pr-1" data-add-scroll="">
-            <label className="sr-only" htmlFor={`add-${sessionId}-${questionKey}`}>{ADD_OPEN}</label>
+            <label className="sr-only" htmlFor={`add-${sessionId}-${questionKey}`}>{opener}</label>
             <p className="sr-only">{question}</p>
             {full ? (
-              // (§167) At 10 the draft is kept, read-only.
+              // (§167, §222) At the question's 5 the draft is kept, read-only.
               <textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly="" />
             ) : (
               <>
-                <p className="note">{questionKey === ANYTHING_ELSE_KEY ? `What you sent stays as it is. This is added under ${ANYTHING_ELSE_TITLE}.` /* (Owner, Nov 4, §188) */ : "What you sent stays as it is. This is added under this answer."}</p>
+                <p className="note">{questionKey === ANYTHING_ELSE_KEY ? `What you sent stays as it is. This is added under ${ANYTHING_ELSE_TITLE}.` /* (Owner, Nov 4, §188) */ : first ? "What you sent stays as it is. This is your answer to this question." /* (§222) */ : "What you sent stays as it is. This is added under this answer."}</p>
                 <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} alone value={text} onChange={setText} />
               </>
             )}
@@ -393,15 +405,16 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
         </details>
       )}
       <div className="flex flex-wrap items-center gap-3">
-        {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? "Adding…" : ADD_PRESS}</button>}
+        {canSend && !full && <button type="button" className="btn" data-add-send="written" disabled={busy || fin.done || empty || length > WRITTEN_MAX_CHARS} title={empty ? NOTHING_TO_ADD : undefined} onClick={add}>{busy && !fin.done ? (first ? "Sending…" : "Adding…") : sender}</button>}
         {!fin.done && !busy && !full && <button type="button" className="btn-ghost text-sm" onClick={() => setOpen(false)}>Close</button>}
       </div>
-      <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label="Add" canSend={canSend} now={pausedNow} />
+      <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label={first ? ANSWER_PRESS : "Add"} canSend={canSend} now={pausedNow} />
       {!canSend && !full && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
       <PressDone line={fin.line} />
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
-      <FormMistakes text={err} press={ADD_PRESS} named={PRESS_VERBS["written-add"]} />
+      {/* (§222) A question's first answer is the press Answer this question. */}
+      <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
     </div>
   );
   // (§182) Open: drawn in the panel under the question's latest part (its slot); nothing stays at the button's place below the panel.

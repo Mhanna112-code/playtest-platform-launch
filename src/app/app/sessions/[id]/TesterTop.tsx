@@ -6,7 +6,7 @@ import { jumpTo } from "@/lib/markJump";
 import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
 import { NdaBox } from "@/components/NdaBox";
-import { ResizeBox } from "@/components/Panel";
+import { AnswerText, QuestionText } from "@/components/QA";
 import { FieldLabel } from "@/components/FieldLines";
 import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
@@ -108,12 +108,13 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
           <ol className="mt-2 space-y-3" data-question-changes="">
             {Array.from({ length: Math.max(offer.fromQuestions.length, offer.questions.length) }, (_, i) => {
               const before = offer.fromQuestions![i], after = offer.questions![i], answer = offer.answers?.[i] ?? "";
+              // (Owner, Nov 5, §223) The one look for questions and answers (components/QA.tsx): Before and After as questions (quiet box, "Required" a tag),
+              // your answer as an answer (bright, accent border).
               const box = (label: string, key: string, q: OfferQuestion | undefined, text?: string) => (
-                <div className="space-y-1" data-question-change-part={key}>
-                  <FieldLabel>{label}{q?.required ? <span className="ml-1 rounded border border-white/20 px-1 text-[10px] normal-case">Required</span> : null}</FieldLabel>
-                  {q || text ? <ResizeBox id={`offer-${offer.id}-${i}-${key}`} label={`Question ${i + 1}: ${label}`} defaultMax="6rem" tallest={0.6}>
-                    <p className="whitespace-pre-wrap break-words">{q ? q.text : text}</p>
-                  </ResizeBox> : <p className="text-xs text-sky-200/70">{key === "before" ? "(new)" : key === "after" ? "(removed)" : "(no answer yet)"}</p>}
+                <div data-question-change-part={key}>
+                  {key === "answer" ? <AnswerText id={`offer-${offer.id}-${i}-${key}`} label={label} name={`Question ${i + 1}: ${label}`} empty={!text} emptyText="(no answer yet)">{text}</AnswerText>
+                    : q ? <QuestionText id={`offer-${offer.id}-${i}-${key}`} label={label} required={q.required}>{q.text}</QuestionText>
+                    : <><FieldLabel>{label}</FieldLabel><p className="text-xs text-sky-200/70">{key === "before" ? "(new)" : "(removed)"}</p></>}
                 </div>
               );
               return (

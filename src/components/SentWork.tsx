@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
-import { ANSWER_LINES, LongText, QuestionTitle } from "@/components/LongText";
+import { AnswerText, QuestionText } from "@/components/QA";
+import { ANSWER_LINES, LongText } from "@/components/LongText";
 import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
@@ -25,35 +26,53 @@ export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | n
  *   else", on every written part: the notes sent with the answers and the files sent first not placed in an answer (its original), then, oldest first, each
  *   addition made there (and the old ones with no question) and each changed-questions send's own notes and loose files, under "Added · <date>".
  *   `addTo`: the tester's own page puts its "Add to this answer" box at the end of a question's fold (none for a question no longer asked), and of Anything else.
+ *   (Owner, Nov 5, §223; replaces §182 / §187's LongText fold and the title's own Show more here) Inside a fold: "Question N" and the question's whole text, then
+ *   "Answer" and the answer, then each addition under its "Added · <date>", each in its own box that scrolls and drags taller, in the one look for questions and
+ *   answers (components/QA.tsx). The fold's title is the question cut at 2 lines with no Show more (the box holds it whole).
  * - A recording: the recordings sent first, then each addition under "Added · <date>".
  * `id`: the place's prefix for the folds' ids (kept open or closed in this tab); `timeZone`: the viewer's, for the dates.
+ * (Owner, Nov 5, §226) `until`: only what was sent up to then (the Testers list: the part as last paid); later additions, their files and the questions answered
+ * later are left out. `newOnly` (Needs you): only what is new since `newOnly.since` (the last payment; null: never paid, so everything sent is new): the
+ * questions answered or added to since then, each with only its new answer or additions; unchanged and still-unanswered questions are left out, and so are the
+ * notes and the files sent first once it was paid (Anything else shows only when something new is in it).
  */
-export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo }: {
+export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, newOnly }: {
   id?: string; kind: string; answers: unknown; questions?: string[]; notes: string; additions: unknown; files: File[]; timeZone?: string | null;
   addTo?: (q: { key: string; question: string }) => ReactNode;
+  /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new since this time (null: everything sent) */ newOnly?: { since: Date | string | null };
 }) {
-  const adds = additionsOf(additions);
+  const upTo = until ? new Date(until).getTime() : null, after = newOnly?.since ? new Date(newOnly.since).getTime() : null;
+  const isNew = (at: string | undefined) => after == null || (!!at && new Date(at).getTime() > after);
+  const everything = additionsOf(additions);
+  // (§226) The additions this view draws: up to `until`; the files of the ones left out are left out too (never shown as files sent first).
+  const shown = upTo == null ? additions : (Array.isArray(additions) ? additions : []).filter((x) => {
+    const at = (x as { at?: unknown } | null)?.at;
+    return typeof at === "string" && new Date(at).getTime() <= upTo;
+  });
+  const adds = additionsOf(shown);
   const uploaded = files.filter((f) => f.uploadedAt !== null);
-  const later = addedFiles(adds);
-  const first = uploaded.filter((f) => !later.has(f.id));
+  const later = addedFiles(everything);
+  const first = after == null ? uploaded.filter((f) => !later.has(f.id)) : [];
   const all = uploaded.map(asAttachment);
   const byId = (ids: string[]) => uploaded.filter((f) => ids.includes(f.id));
-  // (Owner, Nov 4, §182) Every answer, addition and note folds the same way (LongText): its first 3 lines, then Show more opening a scroll box about 8 lines tall.
-  const answerFold = (text: string, panel: string, label: string) => <LongText text={text} lines={ANSWER_LINES} id={panel} label={label}><AnswerWithAttachments text={text} attachments={all} /></LongText>;
-  const notesBlock = (text: string, panel = `${id}-notes`) => <div className="text-sm"><p className="font-medium text-ink-200">Notes</p>{answerFold(text, panel, "Notes")}</div>;
+  // (Owner, Nov 4, §182) A recording's notes fold with LongText: its first 3 lines, then Show more opening a scroll box about 8 lines tall.
+  const notesBlock = (text: string, panel = `${id}-notes`) => (
+    <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><LongText text={text} lines={ANSWER_LINES} id={panel} label="Notes"><AnswerWithAttachments text={text} attachments={all} /></LongText></div>
+  );
+  // (§223) An answer, an addition or a note in its own box (`panel`: its unique id, which keeps its dragged height).
+  const answerBox = (text: string, panel: string, label: ReactNode, name: string) => <AnswerText id={panel} label={label} name={name}><AnswerWithAttachments text={text} attachments={all} /></AnswerText>;
   const addedText = (a: { at: string; text: string; files: string[] }, i: number, panel = `${id}-add-${i}`) => (
     <div key={i} className="space-y-1" data-addition={i}>
-      <AddedLabel at={a.at} timeZone={timeZone} />
-      {a.text.trim() !== "" && <div className="text-sm [overflow-wrap:anywhere]">{answerFold(a.text, panel, "Added")}</div>}
+      {a.text.trim() !== "" ? answerBox(a.text, panel, <AddedLabel at={a.at} timeZone={timeZone} />, "Added") : <AddedLabel at={a.at} timeZone={timeZone} />}
       <AttachmentList items={byId(a.files)} inlineText={[a.text]} />
     </div>
   );
   if (kind === "recording") {
     return (
       <div className="space-y-2" data-sent-work="recording">
-        {notes && notesBlock(notes)}
+        {after == null && notes && notesBlock(notes)}
         <AttachmentList items={first} />
-        {adds.map((a, i) => (
+        {adds.map((a, i) => isNew(a.at) && (
           <div key={i} className="space-y-1 border-t border-white/10 pt-2" data-addition={i}>
             <AddedLabel at={a.at} timeZone={timeZone} />
             <AttachmentList items={byId(a.files)} />
@@ -62,51 +81,64 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
       </div>
     );
   }
-  const { threads, other } = writtenThreads(answers, questions, additions);
+  const { threads, other } = writtenThreads(answers, questions, shown);
   const writtenFiles = first.filter((f) => f.part !== "recording");
-  const fold = (t: QuestionThread) => (
-    <Fold key={t.key} id={`${id}-q-${t.key}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
-      // The tags go under the question when the line is narrow (a phone), never squeezing it.
-      summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">
-        {/* (Owner, Nov 4, §187) A long question's Show more sits right after it in the title (not alone on a line under it). */}
-        <QuestionTitle className="basis-40 text-slate-200" text={t.question}>{t.required && <span aria-label="required"> *</span>}</QuestionTitle>
-        {(t.fresh || t.adds.length > 0) && <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-          {t.fresh && <span className="badge border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}
-          {t.adds.length > 0 && <span className="text-emerald-300" data-added-count={t.adds.length}>{addedCount(t.adds.length)}</span>}
-        </span>}
-      </span>}>
-      {/* (Owner, Nov 4, §187) One step in: 8px on a phone (each level of a stack at most 8px there). */}
-      <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body={t.key}>
-        <div className="text-sm" data-set-answer="">{t.answer.trim() ? answerFold(t.answer, `${id}-q-${t.key}-answer`, "Answer") : <p className="text-slate-500" data-no-answer="">(no answer)</p>}</div>
-        {t.adds.map((a, i) => addedText(a, i, `${id}-q-${t.key}-add-${i}`))}
-        {addTo?.({ key: t.key, question: t.question })}
-      </div>
-    </Fold>
-  );
-  const elseCount = other.length;
+  // (§226) Only the new (newOnly): an answer sent since then (never paid: every answer; paid: a question that came with changed questions since), or an addition
+  // since then. A question with neither (unchanged, or still unanswered) is left out.
+  const freshAnswer = (t: QuestionThread) => !newOnly || (!!t.answer.trim() && (after == null || (t.fresh && isNew(t.at))));
+  const showThread = (t: QuestionThread) => !newOnly || freshAnswer(t) || t.adds.some((a) => isNew(a.at));
+  const fold = (t: QuestionThread, n: number) => {
+    const newAdds = t.adds.map((a, i) => ({ a, i })).filter(({ a }) => isNew(a.at));
+    return (
+      <Fold key={t.key} id={`${id}-q-${t.key}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
+        // The tags go under the question when the line is narrow (a phone), never squeezing it.
+        summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">
+          {/* (Owner, Nov 5, §223; was §187's title with its own Show more) The title: the question cut at 2 lines; its whole text is the first box inside. */}
+          <span className="line-clamp-2 min-w-0 flex-1 basis-40 text-slate-200 [overflow-wrap:anywhere]" data-question-title="">{t.question}{t.required && <span aria-label="required"> *</span>}</span>
+          {(t.fresh || newAdds.length > 0) && <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+            {t.fresh && <span className="badge border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}
+            {newAdds.length > 0 && <span className="text-emerald-300" data-added-count={newAdds.length}>{addedCount(newAdds.length)}</span>}
+          </span>}
+        </span>}>
+        {/* (Owner, Nov 4, §187) One step in: 8px on a phone (each level of a stack at most 8px there). */}
+        <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body={t.key}>
+          {/* (§223) The question, whole, in its box; then the answer in its own ("(no answer)" in grey only while nothing was added to it, §222). */}
+          <div data-set-question=""><QuestionText id={`${id}-q-${t.key}-question`} label={`Question ${n}`} required={t.required}>{t.question}</QuestionText></div>
+          {freshAnswer(t) && (t.answer.trim() || !t.adds.length) && (
+            <div data-set-answer="">{t.answer.trim() ? answerBox(t.answer, `${id}-q-${t.key}-answer`, "Answer", "Answer") : <AnswerText id={`${id}-q-${t.key}-answer`} empty />}</div>
+          )}
+          {newAdds.map(({ a, i }) => addedText(a, i, `${id}-q-${t.key}-add-${i}`))}
+          {addTo?.({ key: t.key, question: t.question })}
+        </div>
+      </Fold>
+    );
+  };
+  const others = other.map((o, i) => ({ o, i })).filter(({ o }) => isNew(o.kind === "add" ? o.add.at : o.set.at));
+  const elseCount = others.length;
+  const elseShown = !newOnly || elseCount > 0 || (after == null && (!!notes.trim() || writtenFiles.length > 0));
   return (
     <div className="space-y-2" data-sent-work="written">
-      {threads.map(fold)}
+      {threads.map((t, n) => showThread(t) && fold(t, n + 1))}
+      {newOnly && !threads.some(showThread) && !elseShown && <p className="note" data-nothing-new="">Nothing new since you paid.</p>}
       {/* (Owner, Nov 4, §188) The fixed last spot: Anything else, a fold like a question's, after the last question. */}
-      <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
+      {elseShown && <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
         summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">
           <span className="min-w-0 flex-1 basis-40 text-slate-200" data-question-title="" data-else-title="">{ANYTHING_ELSE_TITLE}</span>
           {elseCount > 0 && <span className="shrink-0 whitespace-nowrap text-emerald-300" data-added-count={elseCount}>{addedCount(elseCount)}</span>}
         </span>}>
         <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body={ANYTHING_ELSE_KEY} data-anything-else="">
-          {notes.trim() ? <div className="text-sm" data-set-answer="" data-else-original="">{answerFold(notes, `${id}-notes`, ANYTHING_ELSE_TITLE)}</div>
-            : !writtenFiles.length && <p className="text-sm text-slate-500" data-no-answer="">(nothing)</p>}
+          {after == null && (notes.trim() ? <div data-set-answer="" data-else-original="">{answerBox(notes, `${id}-notes`, "Notes", ANYTHING_ELSE_TITLE)}</div>
+            : !writtenFiles.length && <p className="text-sm text-slate-500" data-no-answer="">(nothing)</p>)}
           <AttachmentList items={writtenFiles} inlineText={threads.filter((t) => !t.fresh).map((t) => t.answer)} inlineIds={[...markerIds(notes, uploaded)]} />
-          {other.map((o, i) => o.kind === "add" ? addedText(o.add, i, `${id}-else-${i}`) : (
+          {others.map(({ o, i }) => o.kind === "add" ? addedText(o.add, i, `${id}-else-${i}`) : (
             <div key={i} className="space-y-1" data-set-extra={i}>
-              <AddedLabel at={o.set.at} timeZone={timeZone} />
-              {o.set.notes && <div className="text-sm [overflow-wrap:anywhere]">{answerFold(o.set.notes, `${id}-extra-${i}-notes`, ANYTHING_ELSE_TITLE)}</div>}
+              {o.set.notes ? answerBox(o.set.notes, `${id}-extra-${i}-notes`, <AddedLabel at={o.set.at} timeZone={timeZone} />, ANYTHING_ELSE_TITLE) : <AddedLabel at={o.set.at} timeZone={timeZone} />}
               <AttachmentList items={byId(o.set.files)} inlineText={[...o.set.texts, o.set.notes]} />
             </div>
           ))}
           {addTo?.({ key: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE })}
         </div>
-      </Fold>
+      </Fold>}
     </div>
   );
 }

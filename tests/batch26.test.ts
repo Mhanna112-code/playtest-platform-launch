@@ -448,14 +448,17 @@ describe("batch 26 section 15: previous sets show each question as a label above
   it("a small grey question label, the answer indented under it, “(no answer)” in grey", () => {
     const html = renderToStaticMarkup(createElement(SetView, { items: [{ question: "aaaa", required: false, answer: "m;ll" }, { question: "dddd", required: true, answer: "" }] }));
     expect(html).toContain('data-set-question=""');
-    expect(html).toContain('class="flex items-start gap-0.5 text-xs text-slate-400"');
-    expect(html).toContain('class="border-l border-white/10 pl-3" data-set-answer=""');
+    // (Owner, Nov 5, §223) The one look for questions and answers: "Question N" over the question's quiet box ("Required" a tag), the answer in its own box.
+    expect(html).toContain('data-qa-label="">Question 1</p>');
+    expect(html).toContain('data-qa-label="">Question 2<span');
+    expect(html).toContain('data-set-answer=""><div class="min-w-0 space-y-1" data-qa="answer">');
     expect(html).toContain('data-no-answer="">(no answer)</p>');
     expect(html).not.toContain("not required");
     // (Batch 35 §136) Sent work is read through SentWork, which draws each set with SetView.
     for (const f of ["app/app/sessions/[id]/page.tsx", "app/app/tests/[id]/page.tsx", "app/admin/DisputeWork.tsx"]) expect(src(f)).toMatch(/<(SetView|PrevSetFolds|SentWork)/);
     // (§167) SentWork draws each question as its own fold (its answer indented under it, "(no answer)" in grey); SetView stays for the previous sets.
-    expect(src("components/SentWork.tsx")).toContain('<p className="text-slate-500" data-no-answer="">(no answer)</p>');
+    expect(src("components/SentWork.tsx")).toContain('<AnswerText id={`${id}-q-${t.key}-answer`} empty />');
+    expect(src("components/QA.tsx")).toContain('<p className="text-sm text-slate-500" data-no-answer="">{emptyText}</p>');
   });
 
   it("switching to terms that only tick Required doesn't move the current set into “Previous questions and answers”", async () => {

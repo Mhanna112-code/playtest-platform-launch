@@ -99,7 +99,9 @@ describe("(Owner, Nov 5) §221 the questions changed: one block per question", (
     expect(s).toContain('{box("Before", "before", before)}');
     expect(s).toContain('{box("After", "after", after)}');
     expect(s).toContain('{box("Your answer so far", "answer", undefined, answer)}');
-    expect(s).toContain('<ResizeBox id={`offer-${offer.id}-${i}-${key}`}');
+    // (Owner, Nov 5, §223) In the one look for questions and answers (components/QA.tsx: ResizeBox in OwnPanel).
+    expect(s).toContain('<QuestionText id={`offer-${offer.id}-${i}-${key}`} label={label} required={q.required}>');
+    expect(s).toContain('<AnswerText id={`offer-${offer.id}-${i}-${key}`}');
     expect(s).not.toContain("Your answers so far:");
   });
 });

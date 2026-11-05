@@ -8,6 +8,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { money, toCents } from "@/lib/format";
 import { FIELD, newPressId } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
+import { PayOwedLink } from "@/components/PayOwedLink";
 import { needsBank } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
 import { useHoldOpen } from "@/components/HoldFold";
@@ -53,9 +54,14 @@ export function PayBox(p: {
   /** (Owner, Nov 4, §199) A Pay more box in the Testers list: a charge made while away is confirmed only in Needs you, so the greyed box shows its line only (no
    * working Confirm with your bank here); the part's "Confirm with your bank in Needs you ↑" link right under the box goes up to it. */
   awayInNeeds?: boolean;
+  /** (Owner, Nov 5, §226) Needs you's box for what's new on a paid part: Pay more's route, checks and stops, named "Pay" (its button, its refusals and stops; the
+   * request says so with `press: "Pay"`, so the server's failed-press line names Pay too). The Testers list keeps "Pay more". */
+  moreLabel?: "Pay";
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
+  // (§226) The press's name: Pay or Pay more (a Needs you Pay more is "Pay").
+  const pressName = !more || p.moreLabel === "Pay" ? "Pay" : "Pay more";
   const isCall = p.kind === "call" && !more;
   const start = more ? null : p.listingCents;
   const minutes = p.minutes ?? 0;
@@ -146,6 +152,7 @@ export function PayBox(p: {
     const r = more
       ? await press<{ status?: string; amountCents: number }>(`/api/tests/${more.testId}/pay-extra`, {
         contractId: more.contractId, ...(p.kind === "call" ? { callId: p.id } : { submissionId: p.id }), amount, note: reason, payKey, tickedCents: ticked ? cents : null, over200: over && over200,
+        ...(p.moreLabel ? { press: p.moreLabel } : {}),
       }, "pay")
       : await press<{ status?: string; amountCents: number }>("/api/review", {
         kind: p.kind, id: p.id, payKey, amount, reason, ...(isCall && rate ? { rate, typed } : {}), tickedCents: ticked ? cents : null, over200: over && over200,
@@ -162,7 +169,7 @@ export function PayBox(p: {
       try { res = await bank.check<typeof r>(r); } catch (e) { setBankErr((e as Error).message); setPayKey(newPressId()); return; }
     }
     await keep.clear();
-    finish(res.status === "closed" ? "Closed at $0." : res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : more ? `Paid ${money(res.amountCents)} more to ${p.name}.` : `Paid ${money(res.amountCents)} to ${p.name}.`);
+    finish(res.status === "closed" ? "Closed at $0." : res.status === "not_set_up" ? `Recorded ${money(res.amountCents)}: payments aren't set up yet, so nothing was charged.` : res.amountCents === 0 ? "Paid $0." : more && !p.moreLabel ? `Paid ${money(res.amountCents)} more to ${p.name}.` : `Paid ${money(res.amountCents)} to ${p.name}.`);
   }
 
   // (§160) A redraw while this box's own bank check is open keeps the box (and the bank's page): only another tab's or a later visit's shows "Confirming with your bank".
@@ -185,7 +192,7 @@ export function PayBox(p: {
       )}
       {!bankWaits && cancelled && !done && <p className="ok" data-check-cancelled="">{cancelled.line}</p>}
       <p className="text-sm">
-        {more && <b className="text-white">Pay more · </b>}
+        {more && <b className="text-white">{pressName} · </b>}
         <b>{listed ? `Listing: ${p.listingText}` : NOT_LISTED}</b>
         {/* (Owner, Nov 4, §195) No "You've paid <name> $X so far on this test." here any more (confusing inside one part's box): the tester's paid so far is
             shown once, by their name (Needs you's person, the Testers row). Pay more keeps its own line of what this part was paid. */}
@@ -228,20 +235,21 @@ export function PayBox(p: {
             <input type="checkbox" id={`over-${p.id}`} className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
           </label>
         )}
-        <button className="btn-green" disabled={busy || bank.open || !!bankWaits || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{more ? "Pay more" : "Pay"}</button>
-        {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <a href="#owed">Pay what you owe ↑</a></span>}
+        <button className="btn-green" disabled={busy || bank.open || !!bankWaits || cents == null || !tickOk || !!p.owes || overCap || reasonMissing || reason.length > LIMITS.reason || (!!more && cents === 0 && !p.update)} onClick={(e) => checkFields(e.currentTarget.closest("div.space-y-3")) && go()}>{pressName}</button>
+        {/* (Owner, Nov 5, §227) Pay what you owe is on Payments, never on the test page: the link goes there. */}
+        {!done && p.owes && <span className="text-xs text-amber-200" data-owes-note="">{PAY_WAITS} <PayOwedLink /></span>}
         {!done && <span className="text-xs text-slate-500">at least $0.50 (or 0)</span>}
       </div>
       {bank.view}
       <PressDone line={doneLine} />
-      {at === "pay" && <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} press={`${more ? "Pay more" : "Pay"} on ${p.name}'s ${p.kind === "call" ? "call" : /recording/.test(p.listingText) ? "recording" : "written answers"}`} />}
-      <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={more ? "Pay more" : "Pay"} />
+      {at === "pay" && <ChangesBox changes={changes} error={error.startsWith(FIELD) ? "" : error} press={`${pressName} on ${p.name}'s ${p.kind === "call" ? "call" : /recording/.test(p.listingText) ? "recording" : "written answers"}`} />}
+      <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={pressName} />
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
-      {bankErr && <p className="info" data-bank-not-confirmed="">{refusalLine(more ? "Pay more" : "Pay", bankErr)}</p>}
+      {bankErr && <p className="info" data-bank-not-confirmed="">{refusalLine(pressName, bankErr)}</p>}
       {!done && !more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
       {!done && more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this row (a note is optional).</p>}
       {!done && p.note && <p className="note">{p.note}</p>}
-      {error === "Pay what you owe first." && <a className="text-sm" href="#owed">Pay what you owe ↑</a>}
+      {error === PAY_WAITS && <PayOwedLink className="text-sm underline" />}
     </div>
   );
 }

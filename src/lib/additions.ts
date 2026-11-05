@@ -9,7 +9,8 @@ import { qText } from "./questions";
  * - a recording: the recordings added (`files`).
  * `at`: when it was sent (every addition has had one since §136). `files`: the uploads sent with it (their ids).
  */
-export type Addition = { at: string; text?: string; items?: SetItem[]; notes?: string; files: string[]; /** (§167) the question it was added to */ questionKey?: string };
+export type Addition = { at: string; text?: string; items?: SetItem[]; notes?: string; files: string[]; /** (§167) the question it was added to */ questionKey?: string;
+  /** (§222) the first answer to a question that had none ("Answer this question"): not one of its 5 */ first?: boolean };
 
 /** The word above every addition. */
 export const ADDED_LABEL = "Added";
@@ -34,11 +35,34 @@ export const NEW_QUESTION_TAG = "new question";
 /** (§167) A question fold's count: "· 2 added". */
 export const addedCount = (n: number) => `· ${n} added`;
 
-/** (Owner, Nov 3, §167) At most 10 additions per written part, across all its questions (old ones with no question and the answers to changed questions too). */
-export const ADDITIONS_MAX = 10;
-export const ADDITIONS_FULL = `You've added to this part ${ADDITIONS_MAX} times, the most it takes.`;
-/** "3 of 10 additions left" (shown once a part has at least one addition). */
+/**
+ * (Owner, Nov 5, §222; replaces §167's 10 per part, across all its questions) At most 5 additions per current question, and Anything else has its own 5. Only what
+ * Add to this answer made counts (`addsTo`): the answers to changed questions and their send's notes never count (that Send is never refused for it). Additions
+ * made before §167 (no question) are Anything else's, so they count toward its 5. A question with no answer yet gets "Answer this question" instead: that first
+ * answer is stored with `first` and never counts, and it is offered after any cap; once answered, the question follows the normal 5.
+ */
+export const ADDITIONS_MAX = 5;
+/** (§222) The grey note under a question's row at its 5 (Anything else's names it). */
+export const additionsFull = (key: string) =>
+  key === ANYTHING_ELSE_KEY ? `You've added to ${ANYTHING_ELSE_TITLE} ${ADDITIONS_MAX} times, the most it takes.` : `You've added to this answer ${ADDITIONS_MAX} times, the most it takes.`;
+export const ADDITIONS_FULL = additionsFull("");
+/** (§222) "3 of 5 additions left" (a row's own, shown once that question has at least one addition). */
 export const additionsLeftLine = (made: number) => `${Math.max(0, ADDITIONS_MAX - made)} of ${ADDITIONS_MAX} additions left`;
+/** (§222) The press (and its button) for a question with no answer yet. */
+export const ANSWER_PRESS = "Answer this question";
+/** (§222) What Add to this answer made under `key` (Anything else: its key and the old ones with no question), oldest first. */
+export const addsTo = (stored: unknown, key: string) =>
+  additionsOf(stored).filter((a) => !a.items && (key === ANYTHING_ELSE_KEY ? isElseKey(a.questionKey) : a.questionKey === key));
+/** (§222) How many of a question's 5 are used: its additions, but not the free first answer. */
+export const addsCounted = (stored: unknown, key: string) => addsTo(stored, key).filter((a) => !a.first).length;
+/**
+ * (§222) A current question with no answer yet: its latest answer is blank and nothing was added to it (typically one that came with changed questions and was
+ * left empty). Anything else is never one (it isn't a question).
+ */
+export const noAnswerYet = (latest: { answer: string }[], keys: string[], stored: unknown, key: string) => {
+  const at = keys.indexOf(key);
+  return key !== ANYTHING_ELSE_KEY && at >= 0 && !latest[at].answer.trim() && addsTo(stored, key).length === 0;
+};
 /** (§167) An older page's general "Add more" (no question): refused. */
 export const ADD_UNDER_QUESTION = "Add to one question: open it in your answers and use Add to this answer.";
 /** (§167) A question that isn't in the current questions (an older page after a change). */
@@ -85,6 +109,7 @@ export function additionsOf(stored: unknown): Addition[] {
       ...(Array.isArray(o.items) ? { items: itemsOf(o.items) } : {}),
       ...(typeof o.notes === "string" && o.notes ? { notes: o.notes } : {}),
       ...(typeof o.questionKey === "string" && o.questionKey ? { questionKey: o.questionKey } : {}),
+      ...(o.first === true ? { first: true } : {}),
     }];
   });
 }
