@@ -83,13 +83,13 @@ describe("batch 20 section 1: more than 3 questions sit in a scroll box", () => 
   it("every read-only list uses it; the answer form puts questions and answer boxes in the box (notes, counter, files and Send below) and a red mistake scrolls the box", () => {
     const session = src("app/app/sessions/[id]/page.tsx");
     // (Owner, Nov 5, §231; replaces the one box for all the questions) Each contract or listing question in its own question box (QuestionTexts).
-    expect(session).toContain('<li data-scope-questions=""><FieldLabel>Questions</FieldLabel><FieldValue><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></li>');
+    expect(session).toContain('<li data-scope-questions=""><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></li>');
     expect(session).toContain("<FieldLabel>Then</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-then`} items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue>");
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('label="Before" required={x.before.required}'); // (batch 35 §29)
     expect(src("app/app/tests/[id]/ListingPanel.tsx")).toContain("<QuestionTexts id={`listing-${side}-q`} items="); // (§231; batch 34 §14) the Listing panel replaced Contract changes
     // (Owner, Nov 5, §237) The join page: each question in its question box; more than 3 in the draggable panel.
-    expect(src("app/app/find/[id]/page.tsx")).toContain("<PanelWhen on={l.questions.length > QUESTION_BOX_AFTER} id={`join-questions-${t.id}`}");
-    expect(src("app/app/find/[id]/page.tsx")).toContain("<QuestionTexts id={`join-q-${t.id}`} items={l.questions.map((q) => ({ text: qText(q), required: qRequired(q) }))} />");
+    expect(src("app/app/find/[id]/page.tsx")).toContain("<QuestionTexts open id={`join-q-${t.id}`}"); // (§249) the shared drop-down holds its own scroll panel
+    expect(src("app/app/find/[id]/page.tsx")).toContain("<QuestionTexts open id={`join-q-${t.id}`} items={l.questions.map((q) => ({ text: qText(q), required: qRequired(q) }))} />");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
     const box = form.indexOf('<QuestionBox count={questions.length} size="form"');
     expect(box).toBeGreaterThan(0);

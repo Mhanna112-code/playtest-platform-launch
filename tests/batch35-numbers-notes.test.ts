@@ -199,7 +199,7 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
     const s = src("app/app/sessions/[id]/page.tsx");
     const scope = s.slice(s.indexOf('<details className="card scroll-mt-24" id="scope"'), s.indexOf("{/* (Design doc 9) The terms history"));
     expect(scope).toContain("<FieldLabel>{x.name}</FieldLabel>");
-    expect(scope).toContain("<FieldLabel>Questions</FieldLabel><FieldValue><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />"); // (§231)
+    expect(scope).toContain("<QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />"); // (§231)
     expect(scope).toContain("<FieldLabel>NDA</FieldLabel>");
     expect(scope).toContain("<FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue>");
     expect(scope).toContain('<FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>');
