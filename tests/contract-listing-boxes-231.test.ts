@@ -100,3 +100,12 @@ describe("§231 the tester's \"Your agreed scope\"", () => {
     expect(info).not.toContain('data-qa="question"');
   });
 });
+
+describe("(Owner, Nov 5) §233 the questions changed list scrolls as one panel", () => {
+  it("the question blocks sit in one draggable panel", async () => {
+    const fs = await import("node:fs"); const path = await import("node:path");
+    const s = fs.readFileSync(path.resolve(__dirname, "../src/app/app/sessions/[id]/TesterTop.tsx"), "utf8");
+    expect(s).toContain('<ResizeBox id={`offer-${offer.id}-questions`} label="The questions changed"');
+    expect(s.indexOf("<ResizeBox id={`offer-${offer.id}-questions`}")).toBeLessThan(s.indexOf('data-question-changes=""'));
+  });
+});

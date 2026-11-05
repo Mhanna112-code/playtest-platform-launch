@@ -4358,3 +4358,7 @@ the grip drags it to 60% of the screen, its own scroll inside any outer scroll),
   Listing panel shows the listing's current questions.)
 - **Tests:** new `tests/contract-listing-boxes-231.test.ts`. Updated: `batch13`, `batch15-stops` (§223's PrevSetFolds id), `batch20`, `batch30-session-info`,
   `batch34-listing-panel`, `batch35-numbers-notes`, `batch35-panel-labels`.
+
+## §233 The questions changed: the whole list in a scroll panel (owner, Nov 5)
+In the new-terms box, "The questions changed" puts all its question blocks (Question N: Before, After, your answer so far) in one draggable scroll panel (about
+26rem, or 55% of the screen; the grip drags it taller), so many questions never stretch the box. Each Before / After / answer keeps its own box inside.
