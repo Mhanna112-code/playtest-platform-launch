@@ -240,6 +240,10 @@ describe("§209 links land on the call in its new place and open its drop-downs"
     for (const f of ["app/app/page.tsx", "app/app/sessions/[id]/page.tsx", "app/app/tests/[id]/page.tsx", "lib/server/payments.ts", "lib/server/teamClose.ts", "lib/server/calls.ts"]) {
       expect(src(f), f).not.toMatch(/#calls-booked-|#call-history|href=\{`#calls-booked/);
     }
+    // HashJump sits in the layout: a Link from the dashboard to another page with "#call-<id>" jumps too (it ran only on load and on "hashchange").
+    const hj = src("components/HashJump.tsx");
+    expect(hj).toContain("const pathname = usePathname();");
+    expect(hj).toContain("if (shown.current === pathname) return;");
     // A set's calls open when the hash names one of them (so the jump finds the row).
     expect(src("app/app/sessions/[id]/TesterCallPanel.tsx")).toContain('window.addEventListener("hashchange", show)');
   });

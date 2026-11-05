@@ -4039,3 +4039,59 @@ changed: each fix makes the app do what its section already says.
   never let go of, a Pay cancelled by a hold starting.
 - **Screenshots.** `playtest-lite-evidence/rec-fixes-nov5` (captions.json; own server on 3499, a throwaway schema): the Alerts menu open on the test page at
   1280 and 375; the refusal line kept in "Requests to you" after Accept on Ana Silva's withdrawn request from an older page.
+
+## §209 Calls: Had and Cancelled under each tester; upcoming calls in Live session; no Call history panel (owner, Nov 5)
+
+**Replaces** §186 parts B and C's layout (the "Booked (N)" drop-down that listed the calls ahead together with the ones that took place, on both sides, and the
+tester's "Call history" card holding Booked / Cancelled) and the queued §197 ("one Call history box", never built: not built now either). §186 part A (the
+20,000 limits), §179's panel height, §187's nesting rule (only the outermost panel scrolls) and §152's panels are unchanged.
+
+| Before (§186) | After (§209) |
+| --- | --- |
+| Developer, each tester's row: "Booked (N)" (calls ahead with Join / Cancel, `booked-call-<id>`, then the calls that took place) and "Cancelled (N)" | **"Had (N)"** (`calls-had-<contractId>`, `data-calls-had="N"`): the calls that took place, newest first, each its own fold with its badge, length, payment lines (`part-pays-<id>`), Pay more / "paid the most", the waiting bank check; and **"Cancelled (N)"** as before. Both closed at first (a jump into one, or a call's charge waiting for your bank, opens it). The calls ahead are **not** in the row: only in the Live session's Booked (Join call, Add to calendar, Cancel, Report a problem), as before §186. `BookedAhead.tsx` is gone. |
+| Tester, session page: a card "Call history" (`id="call-history"`, `data-call-history`) under the Live session with "Booked (N)" (calls ahead with Join / Cancel, then the ones that took place) and "Cancelled (N)"; the Live session only linked down ("Your booked calls (Join call, Cancel): Call history, Booked ↓") | **No Call history card.** The Live session holds, in order: the rate line and warnings; **Booked** (the calls ahead or running: Join call / Add to calendar / Cancel / Report a problem, sets with Show calls / Cancel the remaining calls; the §152 panel `booked-<sessionId>` at `LIST_PANEL.testerBooked`, as before §186; the late-booking note); then **"Had (N)"** (`calls-had-<sessionId>`: each call that took place with its time, "Took place · 30 min", its payment tag, its length line, "If … doesn't pay by …, it's charged automatically.", and its payment box: Paid $… ($…/h): you get …, extras, the Pay more line, **Dispute the pay**) and **"Cancelled (N)"** (`calls-cancelled-<sessionId>`), both closed; then Requests. |
+
+- **What goes where (both sides; batch 15 §42 / §186's classification and badges kept).** Had = every call that's over and not cancelled: it took place in a
+  form that can be paid or disputed. That includes a call with a **no-show report** (one side never came): measuring ends it at 0 minutes, still booked, so it
+  reads "Took place · 0 min · not paid yet" and can be paid (or $0) and disputed like any call. Cancelled = status cancelled: by either side ("Cancelled by Ana
+  Silva · 3:05 PM", the reason quoted), or by the app: **"Nobody joined"**, **"Couldn't connect"** (both in the room, never connected), **"Missed: the site was
+  down"**, **"Missed: the test was paused"**, a stop or end's "Cancelled: <why>". Nothing is ever charged for those, so they can't be paid or disputed. A blocked
+  pair's calls on the tester's page read "Cancelled: not available", except one that took place (it stays in Had with its payments), as before. Call requests
+  (waiting, withdrawn, declined, closed) never show in either.
+- **Calls waiting to connect / in progress** stay in the Live session (the developer's "Waiting to connect" / "Call in progress" badge, the tester's measuring
+  line). A tester whose work ended during a call keeps the developer's one-line "in progress" row above Had, as before (the Live session lists working testers
+  only; their calls ahead were cancelled with the end).
+- **Panels (§152, §179, §187).** Past 3 rows each list is the draggable panel; only that outer panel scrolls, the payment lines' panels inside it are flat.
+  Developer: Had `had-calls-<contractId>` at `LIST_PANEL.pastDeveloper` (27rem), Cancelled `cancelled-calls-<contractId>` at `pastTester` (16rem). Tester: Had
+  `had-calls-<sessionId>` at `LIST_PANEL.liveTester` (§179's 27rem), Cancelled `cancelled-calls-<sessionId>` at 16rem. Empty: "No calls took place yet." /
+  "No cancelled calls.". Gone ids: `booked-calls-<id>`, `calls-booked-<id>`, `booked-call-<id>`, `call-history`.
+- **Shown even when nothing else works.** The tester's Live session now also shows (with only Had and Cancelled) when their tester side is closed (`limited`:
+  suspended after their work ended), since the Call history card that held these calls there is gone.
+- **Links.**
+  - The tester dashboard's Upcoming calls row opens that call's own row, `/app/sessions/<id>#call-<callId>` (was `#calls-booked-<id>`). A call that belongs to a
+    set opens its set's calls first (`TesterCallPanel` reads the hash on load and on `hashchange`), so the jump finds the row.
+  - The dashboard's "Waiting for the developer" call, payment bells and emails (paid, Pay more, delayed, a dispute decided, the team's $0 closure) and the
+    Nobody joined bells keep `#call-<callId>`: the row in Had / Cancelled; `jumpTo` opens every drop-down around it and marks it.
+  - **Fixed on the way (found by the screenshot run):** `HashJump` sits in the app layout, so a Link from another page of the app (the dashboard rows above)
+    neither mounted it again nor fired `hashchange`: the session page opened without the jump, the call's drop-down closed. It now also jumps when the page
+    (pathname) changes.
+  - The Live call part's line reads "Each call and what it was paid: Live session, Had ↓" (`#calls-had-<sessionId>`); the Live session's "Your booked calls …:
+    Call history, Booked ↓" line is gone (the calls are right there).
+  - An older link to the retired places (`#call-history`, `#calls-booked-<id>`, e.g. a tab kept from before) lands on the Live session (`hashTargets`).
+- **Code.** `app/app/tests/[id]/page.tsx` (the row's Had / Cancelled; `BookedAhead.tsx` deleted), `app/app/sessions/[id]/page.tsx` (the Live session holds
+  Booked, Had, Cancelled, Requests; no Call history), `TesterCallPanel.tsx` (back in the Live session's Booked section and panel; a hashed call opens its set),
+  `app/app/page.tsx` (the upcoming call's link), `components/HashJump.tsx` (jumps on a page change), `lib/markJump.ts` (`hashTargets` for the retired ids);
+  comments in `links.ts`, `calls.ts`, `teamClose.ts`, `callMeasure.ts`. DESIGN-DOC.md's call history lines now say Had / Cancelled (edited in place). No schema
+  change, no migration.
+- **Tests.** New `tests/calls-had-cancelled-209.test.ts`: the developer's row with only cancelled calls (Had (0), Cancelled (3) closed, newest first, who / why,
+  the app's Nobody joined, no request, no "Booked (" or Call history anywhere); the row with 2 ahead + 4 that took place (one a 0-minute no-show) + a cancel +
+  "Missed: the site was down" (Had (4) newest first with payments, the no-show in Had, the ahead calls absent from the row and once each in the Live session
+  with Add to calendar / Cancel, the Had panel at 27rem); the tester's page with only cancelled calls (inside the Live session, no Call history) and with 2
+  ahead + 4 that took place + 1 cancel (Booked first with its panel, then Had / Cancelled before Requests, Paid $15.50, Dispute the pay, the automatic charge
+  line, every call once, the Live call part's link, the panel); a blocked pair; the links (dashboard, bells, `hashTargets`, HashJump's page change) and `jumpTo`
+  opening Had and the tester fold around a call. Updated (§186's structure): `limits-call-history` (its call history tests moved here), `batch20`,
+  `batch35-list-panels` (§152 ids, §179 in Had), `batch35-payment-tags` and `batch35-pending-pay-state` (a call's tag is in Had), `call-limit-request-boxes-185`
+  (a cancelled call in the Live session's Cancelled).
+- **Screenshots.** `playtest-lite-evidence/calls-had-nov5` (captions.json; own server on 3491, a throwaway schema dropped after): the developer's row with Had
+  (2) and Cancelled (1) closed and open, the Live session with the upcoming call; the tester's Live session with Booked + Had + Cancelled open; desktop
+  1280×900 and phone 375×812; a bell link, the dashboard's upcoming call and its waiting call landing on the call with its drop-down open.
