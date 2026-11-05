@@ -106,7 +106,7 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     for (const s of [
       "Ana Silva's written answers on “Harbor Run”", "Pay more for Ana Silva's written answers", "Confirm all", "confirmed with your bank",
       "Pay what you owe", "Repaid the reversed $10.00 payment for Ben Okafor's written answers", "refunded (your bank's chargeback was reversed)",
-      "your bank reversed this (chargeback)", "recorded (payments not set up)",
+      "your bank reversed this, then decided in your favour (chargeback won)", "recorded (payments not set up)",
     ]) expect(text, s).toContain(s);
     // Total: everything that went through; the refunded repayment is out, the won chargeback's payment counts (paidOutTotal).
     expect(text).toContain(`Total $${((1000 + 500 + 1200 + 800 + 900 + 1000 + 700) / 100).toFixed(2)}`);

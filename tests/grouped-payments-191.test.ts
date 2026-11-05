@@ -206,7 +206,8 @@ describe("§191 What you've paid groups the items one charge paid", () => {
     // The reversed originals keep their own lines, marked.
     for (const p of [w.own.morePaid, w.own.wonPay, w.own.testerCharge, w.own.decision, w.own.autoCall]) {
       const li = html.match(new RegExp(`<li[^>]*>(?:(?!</li>)[\\s\\S])*?${fmtDateTimeIn(p.createdAt, "America/New_York")}(?:(?!</li>)[\\s\\S])*?</li>`))?.[0] ?? "";
-      expect(text(li), p.id).toContain("your bank reversed this (chargeback)");
+      // (§218) The one the platform then won says so.
+      expect(text(li), p.id).toContain(p === w.own.wonPay ? "your bank reversed this, then decided in your favour (chargeback won)" : "your bank reversed this (chargeback)");
     }
     expect(text(html)).toContain("your bank reversed $96.00 of this (chargeback)");
     // A Pay what you owe payment the bank reversed: its group line says so.

@@ -88,7 +88,7 @@ describe("§131 the bank-confirm items", () => {
 });
 
 describe("§131 the owed box", () => {
-  it("each line names the tester, the part and the test; the line's hover has the full names", async () => {
+  it("each line names the tester, the part and the test; (§216) a cut line opens its full names with the arrow, not a hover", async () => {
     const w = await world();
     await db.payment.create({ data: { ...w.base, kind: "review", submissionId: w.written.id, amountCents: 800, status: "failed", owedUntil: new Date(), createdAt: new Date(Date.now() - 2000) } });
     await db.payment.create({ data: { ...w.base, kind: "dispute", submissionId: w.recording.id, amountCents: 9600, status: "owed", createdAt: new Date(Date.now() - 1000) } });
@@ -103,7 +103,8 @@ describe("§131 the owed box", () => {
       "The team's dispute decision on Alexandria Montgomery's recording on “chargechargeback run deluxe” $96.00 · decided while your tests were paused",
     ]);
     const box = renderToStaticMarkup(createElement(OwedBox, { onHold: true, owed: lines }));
-    for (const l of lines) expect(box).toContain(`title="${html(l.full)}"`);
+    for (const l of lines) expect(box).not.toContain(`title="${html(l.full)}"`);
+    expect(box.match(/data-whole-toggle=""/g)?.length).toBe(lines.filter((l) => l.full !== l.text).length);
     // (§202) The bell for a later decline names them in full (the bell cuts the line itself at 30 characters, and opens it whole).
     const failed = await db.payment.create({ data: { ...w.base, kind: "review", submissionId: w.recording.id, amountCents: 500, status: "pending" } });
     await (await import("@/lib/server/holds")).declinedPayment(w.dev.user.id, failed.id, 500, pieceName({ tester: LONG_NAME, part: "recording", test: LONG_TEST, full: true }));
