@@ -57,7 +57,7 @@ describe("the shared long-text fold", () => {
     expect(foldGuess(undefined, 3)).toBeNull();
     const f = src("components/LongText.tsx");
     expect(f).toContain("setLong(el.scrollHeight > el.clientHeight + 1)");
-    expect(f).toContain('clone.addEventListener("load", check, true)');
+    expect(f).toContain('el.addEventListener("load", check, true)');
   });
 
   it("FieldNote's fold is the same component (3 lines, Show more)", () => {
@@ -90,8 +90,9 @@ describe("every place a tester's question, answer or addition shows uses it", ()
   it("a long question: the title shows its first 2 lines; inside, Show more opens the whole question (the first lines aren't shown twice)", () => {
     const q = "Tell us everything about the harbour level, from the dock to the lighthouse, and what you would change first before release?";
     const h = html(createElement(SentWork, { id: "row-s1", timeZone: "UTC", kind: "written", answers: [item(q, "fine")], notes: "", additions: [], files: [] }));
-    expect(h).toContain('class="line-clamp-2 min-w-0 flex-1 basis-40');
-    expect(h).toMatch(/data-set-question=""><div class="min-w-0 relative" data-fold-text="[a-z]+" data-fold-lines="2"><div class="line-clamp-2 [^"]*invisible absolute[^"]*" aria-hidden="true" data-fold-cut="bare">/); // only measured: the title shows its 2 lines
+    // (Owner, Nov 4, §187) The title (QuestionTitle) cuts it at 2 lines and its own Show more sits right after it there; nothing between the title and the answer.
+    expect(h).toMatch(/class="flex min-w-0 flex-1 basis-40 text-slate-200" data-fold-text="[a-z]+" data-fold-lines="2"><span class="min-w-0 flex-1 \[overflow-wrap:anywhere\]" data-question-title="" data-question-clamp="">/);
+    expect(h).not.toContain("data-set-question");
     expect(src("components/SentWork.tsx")).not.toContain("<ScrollText");
   });
 
@@ -101,9 +102,9 @@ describe("every place a tester's question, answer or addition shows uses it", ()
     expect(set).toMatch(/data-set-answer=""><div class="min-w-0" data-fold-text="closed" data-fold-lines="3"/);
     const bq = html(createElement(ByQuestion, { testId: "t1", blocks: [{ title: Q1, required: false, answers: [{ contractId: "c1", tester: "Ana Silva", text: LONG, sentAt: new Date(at), status: "waiting" as const, paidCents: 0 }] }] }));
     expect(bq).toContain('data-fold-text="closed" data-fold-lines="3"');
-    expect(bq).toContain(`data-question-title="">${Q1.replace("?", "?")}</span>`);
+    expect(bq).toContain(`data-question-title="" data-question-clamp="">${Q1.replace("?", "?")}</span>`);
     expect(bqKey(Q1)).toBe(bqKey(Q1));
-    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("<LongText text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />");
+    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("<LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />"); // (§187) Show more beside the question
   });
 });
 

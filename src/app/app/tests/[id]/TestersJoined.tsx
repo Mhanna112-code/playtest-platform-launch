@@ -24,7 +24,7 @@ function TesterAvatar({ seat }: { seat: Seat }) {
       {/* (Batch 35 §140) The circle filters the list below to this tester; (owner, Nov 3, §166) the card's name links to the profile. */}
       <AvatarButton testerId={seat.testerId} name={seat.name} obj={pronouns(seat.pronoun).obj} />
       <span role="tooltip"
-        className="invisible absolute left-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+        className="hidden absolute left-0 top-full z-40 mt-2 w-80 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm shadow-2xl before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:block group-hover:block" data-hover-card="">
         <span className="block font-semibold text-white" data-card-name=""><NameLink text={seat.name} href={`/app/testers/${seat.testerId}`} whole /></span>
         {/* Devices and languages: 3, then "+N more". */}
         {seat.summary.map((l, i) => <span key={l} className="block text-slate-300">{i === 0 && l.includes(", ") ? <PlusMore items={l.split(", ")} /> : l}</span>)}

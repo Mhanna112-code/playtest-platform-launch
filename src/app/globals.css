@@ -117,3 +117,10 @@ details[open] > summary.fold-chevron::before { transform: rotate(90deg); }
    and the Needs you caps of 60-70% of the screen) or a scroll list holding one grows to fit the whole box (the bank's frame, Cancel and the blue notice) while it
    is open, so Complete never sits inside a scroll box. The panel's own height comes back when the check closes. */
 [data-panel-box]:has([data-bank-check]), [data-scroll-list]:has([data-bank-check]) { max-height: none !important; height: auto !important; }
+
+/* (Owner, Nov 4, §187) A question fold's Show more / Show less (QuestionTitle, in its summary) shows only while that question's fold is open. */
+details:not([open]) > summary [data-question-more] { display: none; }
+/* (§187) The question title cut at 2 lines (QuestionTitle) with its Show more at the right end of the 2nd line: a float as tall as the title minus one line pushes the
+   button (floated right, below it) down to the last line, and the words wrap around it. The title is a stretched flex item, so 100% is its own clamped height. */
+[data-question-clamp] { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
+[data-question-clamp]::before { content: ""; float: right; height: calc(100% - 1lh); }

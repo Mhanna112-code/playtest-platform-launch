@@ -334,8 +334,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       const count = p.kinds.reduce((n, k) => n + (k.count ?? k.ats.length), 0);
       return (
         <HoldFold key={p.key} data={{ "data-needs-person": p.key }} toggleData={{ "data-needs-person-toggle": "" }}
-          summary={<span className="min-w-0 [overflow-wrap:anywhere]"><span data-needs-person-name=""><NameLink text={p.name} href={p.href} /></span>{" "}<span className="whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span></span>}>
-          {/* (Owner, Nov 3) Each name's drop-down is its own panel (it scrolls inside; the grip drags it taller). */}
+          // (Owner, Nov 4, §187) The whole name, cut with "…" only when the row is full (it was cut at 12 characters with room to spare); "· N things" never cut.
+          summary={<span className="flex min-w-0 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span></span>}>
+          {/* (Owner, Nov 3) Each name's drop-down is its own panel (it scrolls inside; the grip drags it taller). (Owner, Nov 4, §187) Inside Needs you's panel it is
+              plain: only Needs you's panel scrolls (Panel.tsx's nesting rule). */}
           <ResizeBox id={`needs-person-${p.key}`} label={`${p.name}: Needs you`} defaultMax="min(30rem, 60vh)">
             <div className="min-w-0 space-y-3">
               {p.kinds.map((k) => (
@@ -356,8 +358,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const disputeKind = (c: (typeof t.contracts)[number], extra: Record<string, string> = {}) => {
     const mine = disputesWaiting.filter((d) => d.contractId === c.id);
     return { who: whoOf(c), kind: "disputes", label: "Disputes", ats: mine.map((d) => d.at), data: extra, node: mine.map((d) => (
-      <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm">
-        <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
+      <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-2 text-sm sm:p-3">
+        <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink fit text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
         <ResizeBox id={`dispute-${d.id}`} label={`${d.Poss} reason`}><ReasonQuote text={d.reason} /></ResizeBox>
         </Fold>
         <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
@@ -367,9 +369,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const excerptKind = (c: (typeof t.contracts)[number], extra: Record<string, string> = {}) => {
     const mine = excerptReqs.filter((x) => x.contractId === c.id);
     return { who: whoOf(c), kind: "excerpts", label: "Excerpt requests", ats: mine.map((x) => x.at), data: extra, node: mine.map((x) => (
-      <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-3 text-sm scroll-mt-24" data-excerpt-request="">
+      <div key={x.id} id={`excerpt-${x.id}`} className="space-y-2 rounded-lg border border-white/10 p-2 text-sm scroll-mt-24 sm:p-3" data-excerpt-request="">
         {/* (Owner, Nov 3, batch 35 §140) Each request its own fold: the one-line summary, then (open) the full content in a panel; its buttons stay under it. */}
-        <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
+        <Fold id={`needs-excerpt-${x.id}`} summary={<span className="text-slate-300"><b className="text-white">Excerpt request</b> · <NameLink fit text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile</span>}>
         <ResizeBox id={`excerpt-${x.id}`} label="Excerpt request">
           {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
           <ExcerptQuestion question={x.question} />
@@ -453,7 +455,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const partNode = (x: (typeof pieces)[number]) => {
     const anchor = x.kind === "sub" ? `piece-${x.id}` : `call-${x.id}`;
     return (
-      <div key={x.id} id={anchor} className="rounded-lg border border-white/10 p-3 scroll-mt-24">
+      // (Owner, Nov 4, §187) Each level of the stack indents at most 8px on a phone.
+      <div key={x.id} id={anchor} className="rounded-lg border border-white/10 p-2 scroll-mt-24 sm:p-3">
         <HoldFold openOn={[anchor]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-part-${x.id}` }}
           summary={x.kind === "sub" ? (x.s!.kind === "written" ? "Written answers" : "Recording") : `Live call on ${fmtDateTime(x.x!.startsAt)}`}>
           <p className="text-xs text-slate-400" data-part-when="">
@@ -500,7 +503,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   };
   // (Batch 30 §2) An updated version sent after its part was paid (below its cap while Pay more is open): (§181) that part's drop-down, with Pay more.
   const updateNode = ({ c, s: x }: (typeof updates)[number]) => (
-    <div key={`update-${x.id}`} id={`update-${x.id}`} className="rounded-lg border border-white/10 p-3 scroll-mt-24" data-update-row={x.id}>
+    <div key={`update-${x.id}`} id={`update-${x.id}`} className="rounded-lg border border-white/10 p-2 scroll-mt-24 sm:p-3" data-update-row={x.id}>
       <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-part-${x.id}` }} summary={x.kind === "written" ? "Written answers" : "Recording"}>
         <p className="text-xs text-slate-400" data-part-when="">Updated {fmtDateTime(x.paidUpdateAt!)}</p>
         <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>

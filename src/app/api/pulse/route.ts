@@ -103,7 +103,11 @@ export async function GET(req: Request) {
     const reqIds = (q.get("requests") ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 100);
     if (q.has("requests")) {
       const { requestGoneLine } = await import("@/lib/server/requests");
-      const rows = reqIds.length ? await db.callRequest.findMany({ where: { id: { in: reqIds } }, select: { id: true, status: true, closedReason: true, contractId: true } }) : [];
+      const rows = reqIds.length ? await db.callRequest.findMany({ where: { id: { in: reqIds } }, select: { id: true, status: true, closedReason: true, contractId: true, callId: true } }) : [];
+      // (Owner, Nov 4, §187) A "one of" request shows one row per time: once booked, the booked time's row reads "Booked" and its other times' rows "Another time
+      // of this request was booked" (the page compares each row's time with `bookedAt`).
+      const bookedIds = rows.flatMap((r) => (r.status === "booked" && r.callId ? [r.callId] : []));
+      const bookedAt = new Map((bookedIds.length ? await db.call.findMany({ where: { id: { in: bookedIds } }, select: { id: true, startsAt: true } }) : []).map((x) => [x.id, x.startsAt.toISOString()]));
       // (Batch 35 §162) With the tester's pronoun ("Closed: the tester finished her part").
       // (Owner, Nov 4, §184) And the reader's side with the request's other person: a request dropped when a call was booked reads "Closed: fbbb is no longer free at
       // that time" (or the reader's own "Closed: you have another call at that time").
@@ -114,7 +118,7 @@ export async function GET(req: Request) {
       return ok({ gone: rows.filter((r) => mine.has(r.contractId) && r.status !== "pending").map((r) => {
         const c = mine.get(r.contractId)!;
         const side = c.testerId === u.id ? ("tester" as const) : ("developer" as const);
-        return { id: r.id, line: requestGoneLine(r, c.tester.pronoun, { side, other: displayName(side === "tester" ? c.test.developer : c.tester) }) };
+        return { id: r.id, line: requestGoneLine(r, c.tester.pronoun, { side, other: displayName(side === "tester" ? c.test.developer : c.tester) }), ...(r.callId && bookedAt.has(r.callId) ? { bookedAt: bookedAt.get(r.callId) } : {}) };
       }), restricted: false });
     }
     let testId = q.get("test") ?? "";

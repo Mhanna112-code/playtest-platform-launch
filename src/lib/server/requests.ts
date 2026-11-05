@@ -309,6 +309,17 @@ async function bookAt(contractId: string, startsAt: Date, minutes: number, rateC
 type DropBell = { userId: string; text: string; link: string; testId: string };
 
 type DropExcept = { id?: string; batchId?: string };
+/** A "one of" request's times left, stored as a request sent with only them would be (readKind): §184's drop and (§187) a Decline / Withdraw of one time. */
+const keptRowsData = (kept: CallRow[]) => {
+  const single = kept.length === 1 && kept[0].repeat !== "once" && kept[0].count > 0 ? kept[0] : null;
+  return { rows: toJson(kept) as Prisma.InputJsonValue, times: kept.map((x) => x.startsAt), startsAt: kept[0].startsAt, weeks: single?.count ?? 0, repeat: single?.repeat ?? "" };
+};
+/** (Owner, Nov 4, §187) The same time (a row's time as sent back by the page). */
+const sameTime = (a: Date, b: Date) => a.getTime() === b.getTime();
+/** (§187) A Decline / Withdraw of a time no longer in the request (a booking dropped it, or it was declined or withdrawn meanwhile). */
+export const TIME_GONE = "That time is no longer in this request.";
+/** (§187) Pressed on another time of a "one of" request after one of its times was booked. */
+export const OTHER_TIME_BOOKED = "Another time of this request was booked.";
 /**
  * (Owner, Nov 4, §184) A call was just booked (inside its transaction): every other WAITING call request that involves either person in it (as the developer or as
  * the tester, sent by either side, on any test) and has a time overlapping the call is dropped. A single time (or a daily / weekly set: accepting it would refuse
@@ -343,8 +354,7 @@ async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date
     const partial = rows.length > 1 && kept.length > 0;
     if (partial) {
       // The times left, stored as a request sent with only them would be (readKind).
-      const single = kept.length === 1 && kept[0].repeat !== "once" && kept[0].count > 0 ? kept[0] : null;
-      const done = await tx.callRequest.updateMany({ where: { id: r.id, status: "pending" }, data: { rows: toJson(kept) as Prisma.InputJsonValue, times: kept.map((x) => x.startsAt), startsAt: kept[0].startsAt, weeks: single?.count ?? 0, repeat: single?.repeat ?? "" } });
+      const done = await tx.callRequest.updateMany({ where: { id: r.id, status: "pending" }, data: keptRowsData(kept) });
       if (!done.count) continue;
     } else {
       const done = await tx.callRequest.updateMany({ where: { id: r.id, status: "pending" }, data: { status: "closed", closedReason: reason, decidedAt: now } });
@@ -614,7 +624,13 @@ export async function requestTime(user: U, contractId: string, body: Record<stri
   return side === "developer" ? devRequestTime(user, c.testId, { ...body, contractIds: [contractId] }) : testerRequestTime(user, contractId, body);
 }
 
-/** Accept (the other side; "choose one": pick one time) / Decline / Withdraw (your own). */
+/**
+ * Accept (the other side; "choose one": pick one time) / Decline / Withdraw (your own).
+ * (Owner, Nov 4, §187, option A) A "one of" request shows ONE ROW PER TIME, each with its own buttons, and the press names its time (`time`): Accept books that
+ * time (the request's other times close with it: it is one request); Decline (theirs) or Withdraw (yours) on a row takes out just that time, and the last time
+ * taken out declines / withdraws the request. It stays one request for the limits (3 in total, 3 sends a day). A press on a time no longer in a waiting request:
+ * Accept "Pick one of the times." (as before), Decline / Withdraw TIME_GONE; on another time of a request already booked: OTHER_TIME_BOOKED.
+ */
 export async function answerRequest(user: U, contractId: string, body: Record<string, unknown>) {
   const x = await ctx(user.id, contractId);
   const { c, side, other } = x;
@@ -630,6 +646,13 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   // (Owner, Nov 4, §185) Likewise one the OTHER side withdrew: never a stop for anyone; answering it is ONE refusal, "Ana Silva withdrew this request."
   const theyWithdrew = fresh.status === "withdrawn" && !mine;
   if (fresh.status !== "pending" && side === "developer" && !(fresh.status === "closed" && isDropReason(fresh.closedReason)) && !theyWithdrew) await db.$transaction((tx) => devGate(tx, c.testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: [`req:${r.id}`, `c:${contractId}`] }));
+  // (§187) The press names a time: on a request booked at another of its times, the line says so (not "This time was booked").
+  const pick = body.time ? new Date(String(body.time)) : null;
+  if (pick && isNaN(pick.getTime())) throw new HttpError(400, "pick", "Pick one of the times.");
+  if (fresh.status === "booked" && pick && fresh.callId) {
+    const call = await db.call.findUnique({ where: { id: fresh.callId }, select: { startsAt: true } });
+    if (call && !sameTime(call.startsAt, pick) && rowsOf(fresh).length > 1) throw new HttpError(409, "gone", mine ? OTHER_TIME_BOOKED : `You already accepted another time of this request at ${fmtTime(fresh.updatedAt)}.`);
+  }
   if (fresh.status !== "pending") throw new HttpError(409, "gone", refusalFor(fresh, displayName(other), mine));
   if (action === "withdraw" ? !mine : mine) throw new HttpError(409, "not_yours", mine ? "You can't answer your own request: withdraw it instead." : "Only the person who asked can withdraw it.");
   // (Owner, Nov 4, §185) Accepting with the pair already over 3 (booked + waiting, from before the limit): refused at once, before the gate. An Accept turns this
@@ -651,11 +674,11 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     try {
       // Every call books at the contract rate, fixed at acceptance (every week of a weekly); a call that isn't a listed part has none (`rate`, above).
       // The other side picks ONE row; a repeating row books its whole set (Forever: the next 4 ahead).
-      const rowsR = rowsOf(r);
-      if (rowsR.length === 1) row = rowsR[0];
+      // (§187) Read as claimed (a Decline / Withdraw of another time may have taken times out meanwhile); a named time must still be in it.
+      const rowsR = rowsOf(await db.callRequest.findUniqueOrThrow({ where: { id: r.id } }));
+      if (rowsR.length === 1 && (!pick || sameTime(rowsR[0].startsAt, pick))) row = rowsR[0];
       else {
-        const pick = body.time ? new Date(String(body.time)) : null;
-        const chosen = pick ? rowsR.find((x) => x.startsAt.getTime() === pick.getTime()) : undefined;
+        const chosen = pick ? rowsR.find((x) => sameTime(x.startsAt, pick)) : undefined;
         if (!chosen) throw new HttpError(400, "pick", "Pick one of the times.");
         row = chosen;
       }
@@ -703,11 +726,33 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";
+  // (Owner, Nov 4, §187) A Decline / Withdraw on one row of a "one of" request takes out just that time; the last one left declines / withdraws the request.
+  const rowsNow = rowsOf(fresh);
+  const hit = pick ? rowsNow.find((x) => sameTime(x.startsAt, pick)) : undefined;
+  if (pick && !hit) throw new HttpError(409, "gone", TIME_GONE);
+  if (hit && rowsNow.length > 1) {
+    const kept = rowsNow.filter((x) => x !== hit);
+    // Only over the times as read (a booking, a drop or another press changing them meanwhile wins; this press then reads what happened).
+    const done = await db.callRequest.updateMany({ where: { id: r.id, status: "pending", times: { equals: fresh.times } }, data: keptRowsData(kept) });
+    if (!done.count) {
+      const now = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
+      throw new HttpError(409, "gone", now.status !== "pending" ? refusalFor(now, displayName(other), mine) : rowsOf(now).some((x) => sameTime(x.startsAt, pick!)) ? "This request changed meanwhile. Press again." : TIME_GONE);
+    }
+    await timeAnswered(user, c, side, other, status, hit.startsAt);
+    return { [status]: true, time: hit.startsAt.toISOString(), left: kept.length };
+  }
   await claimRequest(r.id, status, other, mine);
+  await timeAnswered(user, c, side, other, status, hit?.startsAt ?? r.startsAt);
+  return { [status]: true };
+}
+
+/** The live lines (and a withdrawal's bell) for a declined or withdrawn request, or (§187) one time of it: "You declined Ana Silva's call request for …". */
+async function timeAnswered(user: U, c: Ctx["c"], side: Side, other: Ctx["other"], status: "withdrawn" | "declined", at: Date) {
+  const contractId = c.id;
   // (Owner bug, Oct 31, batch 35 §74) The developer's own withdraw / decline is theirs ("You …": never a stop from the same page; another tab's is the action log's
   // "You withdrew a call request for … in another tab"), and the past tense is "withdrew" (it read "dev withdrawn a call request").
   const verb = status === "withdrawn" ? "withdrew" : "declined";
-  const when = T(r.startsAt);
+  const when = T(at);
   const text = side === "developer" ? `You ${verb} ${status === "withdrawn" ? "a" : `${displayName(other)}'s`} call request for ${when}` : `${displayName(user)} ${verb} a call request for ${when}`;
   // (Owner, Nov 4, §185) A tester's withdrawal ("withdrew_req") is a quiet live-box line for the developer (DEV_QUIET_KINDS), never a stop; a decline (an answer
   // to the developer's request) stops as a Call change.
@@ -718,7 +763,6 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     const line = `${displayName(user)} withdrew a call request for ${when}`;
     await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}` : `/app/tests/${c.testId}`, undefined, { testId: c.testId, group: `reqclosed:${c.testId}` });
   }
-  return { [status]: true };
 }
 
 

@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
-import { ANSWER_LINES, LongText, QUESTION_LINES } from "@/components/LongText";
+import { ANSWER_LINES, LongText, QuestionTitle } from "@/components/LongText";
 import { ADDED_GENERAL, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
@@ -66,15 +66,15 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
     <Fold key={t.key} id={`${id}-q-${t.key}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
       // The tags go under the question when the line is narrow (a phone), never squeezing it.
       summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">
-        <span className="line-clamp-2 min-w-0 flex-1 basis-40 text-slate-200 [overflow-wrap:anywhere]" data-question-title="">{t.question}{t.required && <span aria-label="required"> *</span>}</span>
+        {/* (Owner, Nov 4, §187) A long question's Show more sits right after it in the title (not alone on a line under it). */}
+        <QuestionTitle className="basis-40 text-slate-200" text={t.question}>{t.required && <span aria-label="required"> *</span>}</QuestionTitle>
         {(t.fresh || t.adds.length > 0) && <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
           {t.fresh && <span className="badge border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}
           {t.adds.length > 0 && <span className="text-emerald-300" data-added-count={t.adds.length}>{addedCount(t.adds.length)}</span>}
         </span>}
       </span>}>
-      <div className="space-y-2 border-l border-white/10 pl-3" data-question-body={t.key}>
-        {/* (§167) A long question is cut to 2 lines in its fold's title. (§182) A longer one gets Show more here (measured: none when it fits), opening the whole question. */}
-        <div className="text-xs text-slate-400 has-[[data-fold-text=short]]:hidden" data-set-question=""><LongText bare text={t.question} lines={QUESTION_LINES} id={`${id}-q-${t.key}-question`} label="Question" /></div>
+      {/* (Owner, Nov 4, §187) One step in: 8px on a phone (each level of a stack at most 8px there). */}
+      <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body={t.key}>
         <div className="text-sm" data-set-answer="">{t.answer.trim() ? answerFold(t.answer, `${id}-q-${t.key}-answer`, "Answer") : <p className="text-slate-500" data-no-answer="">(no answer)</p>}</div>
         {t.adds.map((a, i) => addedText(a, i, `${id}-q-${t.key}-add-${i}`))}
         {addTo?.({ key: t.key, question: t.question })}
@@ -96,7 +96,7 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
       {general.length > 0 && (
         <Fold id={`${id}-q-general`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="!text-sm"
           summary={<span className="text-slate-200" data-question-title="" data-general-title="">{ADDED_GENERAL}</span>}>
-          <div className="space-y-2 border-l border-white/10 pl-3" data-question-body="general">
+          <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body="general">
             {general.map((a, i) => addedText({ at: a.at, text: a.text ?? "", files: a.files }, i, `${id}-general-${i}`))}
           </div>
         </Fold>

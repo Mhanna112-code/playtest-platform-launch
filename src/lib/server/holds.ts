@@ -4,7 +4,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
@@ -1498,12 +1498,11 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const s = await db.submission.findUnique({ where: { id: String(body.submissionId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!s || s.contractId !== contractId || s.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That work doesn't exist.");
   const c = s.contract, dev = c.test.developer, label = s.kind === "recording" ? "recording" : "written answers";
-  // (Owner, Oct 29, batch 12 section 5) While the developer's bank confirms a payment for this piece, Charge and Let it go wait.
-  if (await (await import("./confirm")).pieceLocked({ submissionId: s.id })) throw new HttpError(409, "locked", PIECE_LOCKED);
-  // (Owner, Nov 3, batch 35 §163) The developer paid anything on this part: ONE final refusal, before any stop-once ("Nora Lane paid $6.00 for this meanwhile: you
-  // can dispute it if you think it should be more.").
-  const paidRefusal = await devPaidRefusal(db, { submissionId: s.id }, displayName(dev), s.review);
-  if (paidRefusal) throw paidRefusal;
+  // (Owner, Nov 4, §187) In this order: the tester's own Charge waiting for the developer's bank ("You already charged $10.00 for your written answers. It's waiting
+  // for Nora Lane's bank."); then (batch 35 §163) the developer paid anything on this part: ONE final refusal, before any stop-once ("Nora Lane paid $6.00 for this
+  // meanwhile: you can dispute it if you think it should be more."), even while another payment of theirs on it is at the bank (paid-anything wins); only then
+  // (batch 12 section 5) a developer's payment being confirmed with nothing paid yet (their first Pay at the bank): "A payment for this is being confirmed right now."
+  await chargeRefusals({ submissionId: s.id }, displayName(dev), s.review, `your ${label}`);
   // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).
   await chargeCloseOutGate({ submissionId: s.id });
   // (Batch 30 §3) Work sent after the tester's own deadline never opens Charge or Let it go.
@@ -1581,11 +1580,12 @@ async function claimChoice(testId: string, where: { submissionId: string } | { c
   try {
     return await db.$transaction(async (tx) => {
       await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${testId} FOR UPDATE`;
-      // (A Pay that went through made its review in the same step. What's still on its way or at the bank holds the part.)
-      if (await tx.payment.findFirst({ where: { ...where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", PIECE_LOCKED);
-      // (Owner, Nov 3, batch 35 §163) The developer's Pay landed first (the same moment): the same one final refusal, decided here under the lock.
+      // (Owner, Nov 3, batch 35 §163) The developer's Pay landed first (the same moment): the same one final refusal, decided here under the lock. (Owner, Nov 4,
+      // §187) Paid anything wins over a payment of theirs still at the bank.
       const paid = await devPaidRefusal(tx, where, devName, await tx.review.findFirst({ where }));
       if (paid) throw paid;
+      // (A Pay that went through made its review in the same step. What's still on its way or at the bank holds the part.)
+      if (await tx.payment.findFirst({ where: { ...where, kind: { in: ["review", "call"] }, status: { in: ["pending", "needs_action", "needs_confirmation"] } } })) throw new HttpError(409, "locked", PIECE_LOCKED);
       return tx.review.create({ data });
     });
   } catch (e) {
@@ -1617,6 +1617,22 @@ async function devPaidRefusal(tx: Prisma.TransactionClient | typeof db, where: {
   return new HttpError(409, "done", paidMeanwhileLine(devName, pay, more));
 }
 
+/**
+ * (Owner, Nov 4, §187) The refusals a Charge / Let it go meets first, in order: (1) the tester's own Charge on this part waiting for the developer's bank:
+ * ownChargeWaitingLine ("You already charged $10.00 for your written answers. It's waiting for Nora Lane's bank."); (2) the developer paid anything on it: §163's
+ * one final refusal, even while another payment of theirs on it is being confirmed; (3) a payment being confirmed with nothing paid yet: PIECE_LOCKED.
+ */
+async function chargeRefusals(where: { submissionId: string } | { callId: string }, devName: string, review: { amountCents: number; rejected: boolean; reason: string } | null, what: string) {
+  const locked = await (await import("./confirm")).pieceLocked(where);
+  if (locked && review && chargedByTester(review.reason)) {
+    const own = await db.payment.findFirst({ where: { ...where, kind: { in: ["review", "call"] }, status: { in: ["needs_action", "needs_confirmation"] } }, orderBy: { createdAt: "desc" } });
+    if (own) throw new HttpError(409, "locked", ownChargeWaitingLine(own.amountCents, what, devName));
+  }
+  const paidRefusal = await devPaidRefusal(db, where, devName, review);
+  if (paidRefusal) throw paidRefusal;
+  if (locked) throw new HttpError(409, "locked", PIECE_LOCKED);
+}
+
 /** (Batch 17 §19) Charge and Let it go close on the piece's own closing date for the tester (final: the piece stays unpaid). */
 async function chargeCloseOutGate(where: { submissionId: string } | { callId: string }) {
   const at = await pieceCloseOut(where, "tester");
@@ -1628,10 +1644,8 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const x = await db.call.findUnique({ where: { id: String(body.callId ?? "") }, include: { review: true, contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   if (!x || x.contractId !== contractId || x.contract.testerId !== tester.id) throw new HttpError(404, "not_found", "That call doesn't exist.");
   const c = x.contract, dev = c.test.developer, label = "live call";
-  if (await (await import("./confirm")).pieceLocked({ callId: x.id })) throw new HttpError(409, "locked", PIECE_LOCKED);
-  // (Owner, Nov 3, batch 35 §163) As for written work: the developer paid anything on this call, one final refusal.
-  const paidRefusal = await devPaidRefusal(db, { callId: x.id }, displayName(dev), x.review);
-  if (paidRefusal) throw paidRefusal;
+  // (Owner, Nov 4, §187) As for written work: the tester's own Charge at the bank, then the developer paid anything (one final refusal), then "being confirmed".
+  await chargeRefusals({ callId: x.id }, displayName(dev), x.review, `your call on ${callAtFor(x.startsAt, c.tester)}`);
   // (Owner, Oct 29, batch 28 §21) A listed call is charged automatically: no Charge or Let it go (an older page's press).
   if (x.rateCents != null) throw new HttpError(409, "auto_charge", AUTO_CHARGE_NO_CHOICE);
   // (Batch 17 §19) After the piece closed nothing is offered any more (even a piece whose Charge never opened).

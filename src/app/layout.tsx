@@ -6,6 +6,7 @@ import { ShellWatch } from "@/components/ShellWatch";
 import { FieldChecks } from "@/components/FieldChecks";
 import { KeptRefusal } from "@/components/KeptRefusal";
 import { TouchResize } from "@/components/TouchResize";
+import { HoverFit } from "@/components/HoverFit";
 // Fonts are bundled with the site (no requests to font hosts), as on the full Playtest Platform.
 import "@fontsource-variable/bricolage-grotesque";
 import "@fontsource-variable/inter";
@@ -28,6 +29,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <KeptRefusal />
         {/* (Owner, Nov 3) Phones have no drag corner on text boxes: this gives every one a grip a finger can drag. */}
         <TouchResize />
+        {/* (Owner, Nov 4, §187) A hover card that would run past the screen's right edge moves left to fit. */}
+        <HoverFit />
         <footer className="mt-16 border-t border-white/[0.06]">
           <div className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-4 px-4 py-8 text-sm text-slate-500">
             <div className="flex items-center gap-3">

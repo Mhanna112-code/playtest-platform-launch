@@ -73,8 +73,8 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
   it("the developer's test page and its panels: the tester's name is a NameLink in every heading and row", () => {
     const page = src("app/app/tests/[id]/page.tsx");
     expect(page).toContain('data-tester-fold-name=""><NameLink text={name} href={personHref} /></h3>');
-    expect(page).toContain("<span data-needs-person-name=\"\"><NameLink text={p.name} href={p.href} /></span>"); // (§181) Needs you's person drop-down
-    expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink text={p.name} href={p.href} />"); // (§181) the Call requests box's person drop-down (an update is in its person's drop-down now)
+    expect(page).toContain("<span className=\"min-w-0\" data-needs-person-name=\"\"><NameLink fit text={p.name} href={p.href} /></span>"); // (§181) Needs you's person drop-down; (§187) fitted
+    expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink fit text={p.name} href={p.href} />"); // (§181) the Call requests box's person drop-down (an update is in its person's drop-down now)
     expect(page).not.toMatch(/<a href=\{`\/app\/testers\/[^`]*`\}[^>]*>\s*<Cut /);
     // (Owner, Nov 3) The "<name>: 1.0 ★ (1 rating)" line left the tester's section; the circle's card keeps the rating summary.
     expect(page).not.toContain("{ri?.avg");
@@ -86,10 +86,11 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
     expect(invite.match(/<NameLink text=\{t\.name\} href=\{`\/app\/testers\/\$\{t\.id\}`\} newTab \/>/g)).toHaveLength(2);
     expect(invite).toContain("<NameLink text={s.name} href={`/app/testers/${s.testerId}`} newTab /> · {s.status}");
     const calls = src("app/app/tests/[id]/DevCallPanel.tsx");
-    expect(calls).toContain("{!rowsNamed(t) && <h3><NameLink text={t.name} href={t.testerHref} /></h3>}");
-    expect(calls.match(/<span className="mr-auto"><NameLink text=\{t\.name\} href=\{t\.testerHref\} \/>/g)).toHaveLength(2);
-    expect(src("components/CallRequestsPanel.tsx")).toContain('<b className="text-white"><NameLink text={r.tester} href={r.testerHref} /></b>');
-    expect(src("app/app/tests/[id]/RestrictedCalls.tsx")).toContain("<NameLink text={c.who} href={c.whoHref} />");
+    // (Owner, Nov 4, §187) The testers' calls cards, the call request rows and the held view's calls: the whole name, cut only when the row is full (`fit`).
+    expect(calls).toContain('{!rowsNamed(t) && <h3 className="min-w-0"><NameLink fit text={t.name} href={t.testerHref} /></h3>}');
+    expect(calls.match(/<span className="mr-auto min-w-0"><NameLink fit text=\{t\.name\} href=\{t\.testerHref\} \/>/g)).toHaveLength(2);
+    expect(src("components/CallRequestsPanel.tsx")).toContain('<b className="text-white"><NameLink fit text={r.tester} href={r.testerHref} /></b>');
+    expect(src("app/app/tests/[id]/RestrictedCalls.tsx")).toContain("<NameLink fit text={c.who} href={c.whoHref} />");
     expect(src("app/app/tests/[id]/KeysNotice.tsx")).toContain("<NameLink text={k.tester} href={k.testerHref} />");
     expect(src("app/app/tests/KeyBoxes.tsx")).toContain("<NameLink text={k.tester} href={k.testerHref} />");
     expect(src("lib/server/accessKeys.ts")).toContain("testerHref: k.contract!.tester.deletedAt ? null : `/app/testers/${k.contract!.tester.id}`");

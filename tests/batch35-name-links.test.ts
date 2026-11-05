@@ -35,8 +35,9 @@ describe("the sentences that name someone link them", () => {
     expect(dash).toContain('<NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on {x.testerPoss} profile');
     expect(dash).toContain('<NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} on “<NameLink text={d.testTitle} kind="test" href={`/app/tests/${d.testId}`} />”');
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("<NameLink text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile");
-    expect(page).toContain("<NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for");
+    // (Owner, Nov 4, §187) In Needs you the name is whole, cut only when the line is full (`fit`).
+    expect(page).toContain("<NameLink fit text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile");
+    expect(page).toContain("<NameLink fit text={d.name} href={d.testerHref} /></b> disputed what you paid for");
   });
 
   it("Needs you rows: the row's own link lies over the card, so the names' links sit above it", () => {
@@ -46,7 +47,7 @@ describe("the sentences that name someone link them", () => {
     expect(dash).toContain('<div className="relative flex flex-wrap items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-needs-row="">');
     expect(dash).toContain('<NameLink text={t.title} kind="test" href={`/app/tests/${t.id}`} />');
     // (Owner, Nov 4, §181) Needs you's call requests are one line in the person's drop-down (the name is the drop-down's); the box's person drop-down names them.
-    expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink text={p.name} href={p.href} />");
+    expect(src("components/CallRequestsPanel.tsx")).toContain("<NameLink fit text={p.name} href={p.href} />");
   });
 
   it("tester rows, the tester's invitations and the session page's lines", () => {

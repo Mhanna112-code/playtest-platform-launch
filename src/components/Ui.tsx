@@ -77,7 +77,7 @@ export function Seats({ total, people, plain = false }: { total: number; people:
               {p.name.trim().charAt(0).toUpperCase()}
             </Link>
             <span role="tooltip" data-tester-card={p.id}
-              className="invisible absolute left-0 top-full z-40 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm opacity-0 shadow-2xl transition before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:visible group-focus-within:opacity-100 group-hover:visible group-hover:opacity-100">
+              className="hidden absolute left-0 top-full z-40 mt-2 w-64 max-w-[calc(100vw-2rem)] rounded-2xl border border-white/15 bg-slate-900 p-4 text-sm shadow-2xl before:absolute before:inset-x-0 before:-top-2 before:h-2 before:content-[''] group-focus-within:block group-hover:block" data-hover-card="">
               <span className="block font-semibold text-white" data-card-name=""><NameLink text={p.name} href={`/app/testers/${p.id}`} whole /></span>
               {p.contractId && <span className="mt-3 block border-t border-white/10 pt-2"><ChatWithButton contractId={p.contractId} name={p.name} /></span>}
             </span>

@@ -3285,3 +3285,81 @@ shrink; both sides rendered: only cancelled calls with closed requests (Booked (
 `batch14` (20,000), `batch20`, `batch35-list-panels` (§152 ids, §179 now in Booked), `batch35-payment-tags`, `batch35-pending-pay-state` (a call's tag is in the
 Call history), `batch35-added-per-question`, `batch35-parts-fold` (no `used`; the 10-additions note no longer in each form). New: 2 questions at 10 additions
 render the note exactly once, under the panel, with no Add button.
+
+## §187 Layout fixes from the Nov 4 screenshot run; the tester's Charge refusals; a "one of" request as one row per time (owner, Nov 4)
+
+Found by the screenshot run (`playtest-lite-evidence/new-ui-nov4`); the after pictures are in `playtest-lite-evidence/layout-fixes-nov4` (captions.json names
+each one's before picture).
+
+1. **Expanded answers squeezed.** Before: Show more (LongText, §182) opened an 8-line scroll box even inside other scroll panels (the answers panel, in the
+   person, in Needs you), so about 4 lines showed on a desktop and 2.5 on a phone. After: inside a scroll panel (`useInPanel`: a ResizeBox, or a list that says
+   so with `InsidePanel`, e.g. ScrollList) the open text is drawn inline (`data-fold-open="inline"`, no box of its own) and the outer panel scrolls it.
+   Outside any panel it keeps the 8-line box. (`components/LongText.tsx`, `components/Panel.tsx`)
+2. **Nested scroll panels.** Before: Needs you stacked 3–5 panels, each with its own scroll and grip, each level indented further. After: only the OUTERMOST
+   panel in a stack scrolls and resizes; a ResizeBox inside another panel is plain (`data-panel-flat`: no scroll box, no grip, no border or padding); the
+   folds above it still open and close it. This is the rule at every width (the squeeze of item 1 was on desktops too): Needs you, the call request boxes'
+   person panels, the testers' calls cards' booked lists, the parts' payment lines. Per-level indent on phones at most 8px: the part / update / dispute /
+   excerpt boxes `p-2 sm:p-3` (was `p-3`), a question's body `pl-2 sm:pl-3` (was `pl-3`). (`Panel.tsx`, `ScrollList.tsx`, the test page, `SentWork.tsx`)
+3. **Names cut too short.** Before: names were cut at 12 characters (NAME_CUT) even with room. After: `NameLink fit` / `Cut fit` draws the whole name and cuts
+   it with "…" only when the row is actually full (CSS truncate on the width it has, rows `min-w-0`); the tooltip and the phone tap pop-up only when it is cut
+   right now. Used in Needs you's people (and their dispute / excerpt lines), both call request boxes (people and rows), the testers' calls cards (rows,
+   heading, the tick list; its fieldset `min-w-0`: a fieldset is otherwise never narrower than its content) and the held view's booked calls. Elsewhere the
+   12-character cut is unchanged. (`components/Cut.tsx`, the test page, `CallRequestsPanel.tsx`, `DevCallPanel.tsx`, `RestrictedCalls.tsx`)
+4. **Testers' calls panel** (`testers-calls-<testId>`). Before: `min(28rem, 70vh)`, about 2.5 tester cards. After: `min(37rem, 80vh)`, about 3.5 cards with 2
+   booked calls each on a desktop (a card is about 154px); on a phone 80% of the screen is the limit (its cards are about 314px, so about 2). (`ScrollList.tsx`)
+5. **Held view repeated the name.** Before: every booked-call row inside a person's Needs you drop-down read "<time> · <name> · 30 min". After: inside their own
+   drop-down "<time> · 30 min" (the name is on the drop-down, once); the standalone list keeps the name. (`RestrictedCalls.tsx`)
+6. **A question's Show more alone on a line.** Before: a long question's Show more sat on its own line between the question's title and the answer (§182's
+   `bare` fold). After: `QuestionTitle` (the question fold's summary) cuts the question at 2 lines with Show more floated at the right end of its 2nd line, the
+   words running up to it; pressed, the whole question shows in the title with Show less right after its last word. The buttons show only while that
+   question's fold is open; closing it goes back to 2 lines. Both sides (SentWork: Needs you, the tester rows, the tester's own page; By question). A question
+   shown above its answer (the earlier sets, the tester's answer form) uses `LongText inline`: Show more beside its last line, Show less after its last word.
+   `bare` is gone. (`LongText.tsx`, `SentWork.tsx`, `ByQuestion.tsx`, `AnswerSets.tsx`, `SessionActions.tsx`, `globals.css`)
+7. **Sideways scroll at 375px on the tester's session page.** Before: the hidden hover card on the developer's name (`invisible absolute … w-80`) still took
+   room past the screen's edge (2px). After: hover cards (PersonHover, Testers joined, the dashboard's tester circles; `data-hover-card`) are `display: none`
+   until hover or focus, and a shown card that would pass the right edge moves left to fit (8px from the edge, never past the left one: `HoverFit`, mounted
+   once in the root layout, `hoverShift`). (`PersonHover.tsx`, `TestersJoined.tsx`, `Ui.tsx`, `HoverFit.tsx`, `app/layout.tsx`)
+8. **Phone header 171px.** Before: on a phone the links wrapped to 3 rows. After: below 640px the side's links fold into ONE "Menu" button (`NavMenu`: a
+   disclosure with `aria-expanded` / `aria-controls`, the same links in a drop-down; it closes on a link, on navigation, on Escape (focus back on Menu) and on
+   a press outside). A dot on Menu while Messages has unread chats (its label says how many); the bell keeps its own number in the header, with the account
+   and sign-out. The header is one row (59px). From 640px up nothing changes. The header is now `z-30`: the test page's top panel (`z-20`) painted over it,
+   and over the drop-down, when scrolled under it. (`components/NavMenu.tsx`, `app/app/layout.tsx`)
+9. **The tester's Charge refusals** (`chooseOutcome` / `chooseCallOutcome`, `src/lib/server/holds.ts`, `chargeRefusals`). Before: a Charge on a part whose own
+   tester Charge was waiting for the developer's bank read "A payment for this is being confirmed right now.", and that "being confirmed" check ran before
+   "the developer paid", so a developer payment at the bank hid §163's final refusal. After, in this order:
+   (a) her own Charge at the bank: `You already charged $10.00 for your written answers. It's waiting for Nora Lane's bank.` (a recording: "for your
+   recording"; a call: "for your call on <date/time>", in her zone) (`ownChargeWaitingLine`, `src/lib/rules.ts`);
+   (b) the developer paid anything on the part: §163's final refusal (`Nora Lane paid $6.00 for this meanwhile: you can dispute it if you think it should be
+   more.`), even while another payment of theirs on it is being confirmed (paid-anything wins; also under the lock in `claimChoice`);
+   (c) "A payment for this is being confirmed right now." only when nothing was paid yet and the developer's first Pay is at the bank.
+   The same for Let it go. Read this way (check): the owner's quote of the final refusal had no "meanwhile"; §163's line is kept as it is.
+10. **"One of" call requests (option A).** Before: one row "one of: Thu 4:22 PM · Thu 4:22 PM · … · asked by Ana Silva" with "Accept Thu 4:22 PM" twice (two
+    Thursdays). After, in both boxes on both sides (Requests to you / Your requests; the tester's page too): ONE ROW PER TIME, in time order, each
+    `Thu, Nov 12, 4:22 PM · 30 min · Contract $31/h [Accept] [Decline]` (yours: `[Withdraw]`); no "one of:" and no "asked by" anywhere in these boxes. The
+    press names its time (`time`). It stays ONE request for the limits (3 in total, 3 sends a day) and for the counts ("Requests to you (N)", "· N requests").
+    - **Accept** on a row books that time; the request's other times close with it (their rows go on the redraw). Live, before the redraw, the booked time's
+      row reads "Booked" and the other times' rows `Another time of this request was booked` (the pulse returns the booked call's time, `bookedAt`;
+      `goneLineFor`). A press on one of those other times from an older page: `Another time of this request was booked.` (the requester; the accepter's other
+      tab: `You already accepted another time of this request at <time>.`).
+    - **Decline** on a row takes out just that time (stored as §184's drop rewrites a request: `keptRowsData`); the last time declined declines the request.
+      **Withdraw** the same for your own (the other person's bell names the time); the last one withdraws it. The live lines name the time as before ("You
+      declined Ana Silva's call request for …"). Taking out a time only goes through over the times as read (a booking, a drop or another press meanwhile wins).
+    - A Decline / Withdraw of a time no longer in the request: `That time is no longer in this request.`; an Accept of one: "Pick one of the times." (as
+      before; now also when a single time is left and the page named another, so it never books the other time).
+    - Labels: Accept never names a time now (one row per time; a repeating row keeps "Accept all N"); `acceptChoices`, where a label still names a time, names
+      its date (`Accept Thu, Nov 12, 4:22 PM`). The overlap, limit and refusal rules are unchanged.
+    (`requests.ts` `answerRequest` and `timeAnswered`, `components/CallRequestsPanel.tsx` `timeRows`, `RequestRows.tsx`, `api/pulse/route.ts`)
+
+No schema change.
+
+### Tests
+New `tests/layout-fixes-187.test.ts`: nested panels flat (one box, one grip), ScrollList / InsidePanel as the outer panel, LongText's inline branch, the phone
+indents; `NameLink fit` drawn whole and its uses; `LIST_PANEL.testersCalls`; the held view's calls without the name in the person's drop-down; the question's
+Show more in the summary (none under the title; CSS shows it only when open), a short question with none, `LongText inline`; hover cards `display: none` until
+shown, and `hoverShift`; NavMenu (the button, aria, the dot, the links' container, the layout's use, Escape / navigation / outside / link close); Charge (a)
+written and call, (b) paid plus another payment at the bank, (c) the first Pay at the bank; one row per time (3 rows, no "one of" / "asked by", Accept without a
+time, labels with dates), `goneLineFor`, Decline per time down to the declined request (one request for the limit; a removed time: TIME_GONE / "Pick one of the
+times."), Withdraw per time with the bell, Accept on a row then OTHER_TIME_BOOKED, Accept of a removed time with one time left refused. Updated (old structure):
+`batch16-calls-live` (no "asked by"; the anchor on the first row), `batch26` and `batch35-parts-fold` (`LongText inline` for the form's question; the
+QuestionTitle structure; `el` not `clone`), `batch35-added-per-question` (`pl-2 sm:pl-3`; the title's clamp attribute), `batch35-green-names` and
+`batch35-name-links` (`NameLink fit`), `call-limit-request-boxes-185` (the fitted name; 4 rows for 3 requests), `long-text-cut` (the fitted pop-up check).

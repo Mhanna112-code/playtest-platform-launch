@@ -55,13 +55,14 @@ type At = { x: number; y: number; below: boolean; href: string | null };
  *   →" when the name is a link, and Copy ("Copied"). It closes on a tap outside it, on Escape or when the page scrolls, and it stays on the screen (at most 78% of
  *   its width). Tapping a name that isn't cut works as before.
  */
-export function Cut({ text, kind = "person", n = NAME_CUT, className = "" }: { text: string; kind?: CutKind; n?: number; className?: string }) {
+export function Cut({ text, kind = "person", n = NAME_CUT, className = "", fit = false }: { text: string; kind?: CutKind; n?: number; className?: string;
+  /** (Owner, Nov 4, §187) cut only when the row is actually full: the whole name, cut with "…" by the width it has (CSS), never at a fixed number of characters */ fit?: boolean }) {
   const full = text ?? "";
   const shown = cutText(full, kind, n);
   const cut = shown !== full;
   const [at, setAt] = useState<At | null>(null);
   const onClick = useCallback((e: ReactMouseEvent<HTMLSpanElement>) => {
-    if (!opensPopup(cut, touchOnly())) return;
+    if (!opensPopup(fit ? overflows(e.currentTarget) : cut, touchOnly())) return;
     // The tap opens the pop-up instead of following the link the name sits in (the pop-up offers that link).
     e.preventDefault();
     e.stopPropagation();
@@ -70,8 +71,18 @@ export function Cut({ text, kind = "person", n = NAME_CUT, className = "" }: { t
     link?.blur(); // a hover card shown on focus (PersonHover) gives way to the pop-up
     const below = r.bottom + 180 < window.innerHeight;
     setAt({ x: r.left, y: below ? r.bottom + 6 : r.top - 6, below, href: link?.getAttribute("href") ?? null });
-  }, [cut]);
+  }, [cut, fit]);
   const close = useCallback(() => setAt(null), []);
+  // (Owner, Nov 4, §187) Fitted: the whole name, cut by the width it has; the tooltip (with a mouse) and the tap pop-up only when it is cut now.
+  if (fit) {
+    return (
+      <span className={`inline-block min-w-0 max-w-full truncate align-bottom ${className}`} data-cut-fit={kind} onClick={onClick}
+        onMouseEnter={(e) => { e.currentTarget.title = overflows(e.currentTarget) ? full : ""; }}>
+        {full}
+        {at && <CutPopup full={full} kind={kind} at={at} onClose={close} />}
+      </span>
+    );
+  }
   // Not cut: exactly the text, as before (no wrapper, no underline, no title).
   if (!cut) return className ? <span className={className}>{full}</span> : <>{full}</>;
   return (
@@ -82,6 +93,9 @@ export function Cut({ text, kind = "person", n = NAME_CUT, className = "" }: { t
     </span>
   );
 }
+
+/** (§187) Whether a fitted name is cut right now (its text is wider than the room it has). */
+const overflows = (el: HTMLElement) => el.scrollWidth > el.clientWidth + 1;
 
 /** The touch pop-up: the full text in a scroll box, the name's link when it has one, and Copy. Drawn on the page's top layer, kept on the screen. */
 function CutPopup({ full, kind, at, onClose }: { full: string; kind: CutKind; at: At; onClose: () => void }) {
@@ -131,12 +145,14 @@ function CutPopup({ full, kind, at, onClose }: { full: string; kind: CutKind; at
  * (Owner, Nov 3, §166) "The name itself should be green everywhere": also a person's name in a heading, a row or a hover card, never a separate "See her
  * profile" link next to it.
  */
-export function NameLink({ text, href, kind = "person", className = "", whole = false, newTab = false }: { text: string; href?: string | null; kind?: CutKind; className?: string;
+export function NameLink({ text, href, kind = "person", className = "", whole = false, newTab = false, fit = false }: { text: string; href?: string | null; kind?: CutKind; className?: string;
   /** (Owner, Nov 3, §166) The name drawn whole (a hover card's own heading, which is there to show the full name), wrapping anywhere instead of cut. */
   whole?: boolean;
   /** (Owner, Nov 3, §166) Opens in a new tab (the Invite box's rows, so the ticks stay). */
-  newTab?: boolean }) {
-  const words = whole ? <span className="[overflow-wrap:anywhere]">{text}</span> : <Cut text={text} kind={kind} />;
-  if (!href) return whole ? <span className={className || undefined}>{words}</span> : <Cut text={text} kind={kind} className={className} />;
-  return <a href={href} className={`relative z-10 ${className}`} data-name-link={kind} {...(newTab ? { target: "_blank", rel: "noopener" } : {})}>{words}</a>;
+  newTab?: boolean;
+  /** (Owner, Nov 4, §187) In a row (Needs you's people, the call request boxes, the testers' calls cards): the whole name, cut only when the row is full (Cut's `fit`) */
+  fit?: boolean }) {
+  const words = whole ? <span className="[overflow-wrap:anywhere]">{text}</span> : <Cut text={text} kind={kind} fit={fit} />;
+  if (!href) return whole ? <span className={className || undefined}>{words}</span> : <Cut text={text} kind={kind} className={className} fit={fit} />;
+  return <a href={href} className={`relative z-10 ${fit ? "inline-block min-w-0 max-w-full align-bottom " : ""}${className}`} data-name-link={kind} {...(newTab ? { target: "_blank", rel: "noopener" } : {})}>{words}</a>;
 }

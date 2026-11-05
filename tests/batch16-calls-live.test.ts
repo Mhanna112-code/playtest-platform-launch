@@ -78,8 +78,9 @@ describe("live panels, the one Call requests panel, and the server's re-check (s
     const panel = src("components/CallRequestsPanel.tsx");
     // (Owner, Nov 4, §185) Its heading is its list's name: "Requests to you (N)" / "Your requests (N)" on the tester's page.
     expect(panel).toContain('<h3 className="text-sm font-semibold text-white">{title}{showCount && <span className="font-normal text-slate-400"> ({sorted.length})</span>}</h3>');
-    expect(panel).toContain("id={`req-${r.id}`}");
-    expect(panel).toContain("asked by {r.mine ? \"you\" : r.asker}");
+    // (Owner, Nov 4, §187) One row per time; the request's anchor on its first row; no "asked by" (the box says whose).
+    expect(panel).toContain("id={i === 0 ? `req-${r.id}` : undefined}");
+    expect(panel).not.toContain("· asked by");
     expect(src("app/app/tests/[id]/CallRequestsBox.tsx")).toContain('<CallRequestsPanel byPerson side="developer"'); // (§181) the test page's own Call requests box
     expect(src("components/CallRequests.tsx")).toContain("<CallRequestsPanel side={p.side}");
     expect(src("components/RequestRows.tsx")).toContain('data-clash={x.tone}');

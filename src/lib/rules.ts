@@ -968,6 +968,11 @@ export const bankHref = (testId: string, paymentId: string) => `/app/tests/${tes
 /** (Batch 17 §11) The line above "Confirm with your bank" on the test page. */
 export const bankWaitingLine = (cents: number, what: string, by: string) => `Your bank wants you to confirm a ${money(cents)} payment for ${what}, made while you were away. Confirm it by ${by}.`;
 export const PIECE_LOCKED = "A payment for this is being confirmed right now.";
+/**
+ * (Owner, Nov 4, §187) Charge (or Let it go) pressed on a part whose OWN tester Charge is waiting for the developer's bank: "You already charged $10.00 for your
+ * written answers. It's waiting for Nora Lane's bank." (a call: "for your call on Thu, Nov 5, 3:00 PM"). PIECE_LOCKED is only for the developer's first Pay at the bank.
+ */
+export const ownChargeWaitingLine = (cents: number, what: string, dev: string) => `You already charged ${money(cents)} for ${what}. It's waiting for ${dev}'s bank.`;
 /** (Owner, Nov 3, batch 35 §145, §148) How what's owed gets paid during a payment hold: no daily retries and no new-card charge, only Pay what you owe (Payments' owed box, the Terms). */
 export const OWED_HOW = "What you owe is charged when you press Pay what you owe.";
 /** (Batch 25 section 5) Items named in one line: "A", "A and B", "A, B and C"; more than 3: "A, B, C and 2 more". */

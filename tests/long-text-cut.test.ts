@@ -73,7 +73,7 @@ describe("<Cut>", () => {
     expect(openLabel("test")).toBe("Open test →");
     expect(openLabel("product")).toBe("Open test →");
     const cut = src("components/Cut.tsx");
-    expect(cut).toContain("if (!opensPopup(cut, touchOnly())) return;");
+    expect(cut).toContain("if (!opensPopup(fit ? overflows(e.currentTarget) : cut, touchOnly())) return;"); // (§187) a fitted name: when it is cut right now
     expect(cut).toContain("max-w-[78vw]");
     expect(cut).toContain("max-h-36 overflow-y-auto"); // the full text: a scroll box about 6 lines tall
     expect(cut).toContain("[overflow-wrap:anywhere]");

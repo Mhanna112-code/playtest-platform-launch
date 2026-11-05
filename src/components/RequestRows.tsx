@@ -66,7 +66,8 @@ export function describeRows(rows: RowJson[]) {
     const from = n == null ? `Forever, from ${fmt(r.startsAt)}` : `${callsWord(n)} from ${fmt(r.startsAt)}${r.count === 0 && r.untilDay ? ` ${untilEndWords(r.untilDay)}` : ""}`;
     return `${unit(r).toLowerCase()} calls: ${short(r.startsAt)} · ${from}`;
   }
-  return `one of: ${rows.map(rowText).join(" · ")}`;
+  // (Owner, Nov 4, §187) No "one of:" any more: the boxes show one row per time (CallRequestsPanel's timeRows); several rows in one line are just listed.
+  return rows.map(rowText).join(" · ");
 }
 
 /** The Accept button(s) of a waiting request: one per row when there is a choice, else one. (Batch 35 §132) "Accept all N" counts the calls it books (up to the end). */
@@ -76,7 +77,8 @@ export function acceptChoices(rows: RowJson[]): { label: string; time?: string }
     const n = r.repeat !== "once" && r.count ? countOf(r) : null;
     return [{ label: n && n > 1 ? `Accept all ${n}` : "Accept" }];
   }
-  return rows.map((r) => ({ label: `Accept ${r.repeat === "once" ? short(r.startsAt) : rowText(r)}`, time: r.startsAt }));
+  // (Owner, Nov 4, §187) A label that names a time names its date too ("Accept Thu 4:22 PM" twice, for two Thursdays, was the bug).
+  return rows.map((r) => ({ label: `Accept ${r.repeat === "once" ? fmt(r.startsAt) : rowText(r)}`, time: r.startsAt }));
 }
 
 /**

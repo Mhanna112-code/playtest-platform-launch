@@ -31,6 +31,20 @@ export const matchesName = (name: string, query: string) => name.toLowerCase().i
 /** (§185) What the box says when nobody matches: "No one matches “ana”". */
 export const noMatchLine = (query: string) => `No one matches “${query.trim()}”`;
 export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
+/** (Owner, Nov 4, §187) A press on one time's row: "a-<request id>@<time>" (Accept / Decline / Withdraw on that time). */
+export const timePressKey = (k: "a" | "d" | "w", requestId: string, time: string) => `${k}-${requestId}@${time}`;
+/** (§187) The other side's line on a row whose request was booked at ANOTHER of its times. */
+export const OTHER_TIME_BOOKED_LINE = "Another time of this request was booked";
+/**
+ * (Owner, Nov 4, §187, option A) A request's rows as the boxes show them: ONE ROW PER TIME ("one of" request: each of its times; else its one row), in time order.
+ * The line is the time (a repeating row: "weekly calls: Thu 3:00 PM · 4 calls from …"), the length and the rate; never "one of:" or "asked by" (the box says whose).
+ */
+export function timeRows(rows: RowJson[]) {
+  return [...rows].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).map((x) => ({ row: x, text: describeRows([x]), accept: acceptChoices([x])[0].label }));
+}
+/** (§187) What a row says once its request is no longer waiting (the pulse): "Booked" on the booked time, OTHER_TIME_BOOKED_LINE on its other times. */
+export const goneLineFor = (gone: { line: string; bookedAt?: string } | undefined, time: string) =>
+  !gone ? "" : gone.bookedAt && Date.parse(gone.bookedAt) !== Date.parse(time) ? OTHER_TIME_BOOKED_LINE : gone.line;
 
 export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 0, panelId, byPerson = false, title = "Call requests", sectionId = "call-requests", anchor = callRequestsAnchor, search, showCount = false }: { side: "developer" | "tester"; seenAt: string; requests: PanelReq[]; /** where answer-request goes for a request */ path: (r: PanelReq) => string;
   /** (Owner, Nov 2, batch 35 §132) The server's call lead: a time less than it away can't be booked any more. */
@@ -75,10 +89,9 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
     const t = setInterval(() => setNow(Date.now()), 30_000);
     return () => clearInterval(t);
   }, []);
-  const bookable = (r: PanelReq) => acceptChoices(r.rows).filter((x) => bookableNow(x.time ?? r.rows[0].startsAt, leadMinutes, now));
   // (Owner, Oct 29, batch 26 section 10) A shown request that closed meanwhile (the tester finished their part, left, a block, a stop…) or was answered elsewhere says
   // so in its row at once ("Closed: the tester finished their part") and its buttons go, without waiting for the page to refresh.
-  const [gone, setGone] = useState<Record<string, string>>({});
+  const [gone, setGone] = useState<Record<string, { line: string; bookedAt?: string }>>({});
   const ids = requests.map((r) => r.id).join(",");
   useEffect(() => {
     if (!ids) return;
@@ -88,8 +101,8 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
       try {
         const r = await fetch(`/api/pulse?requests=${encodeURIComponent(ids)}`, { cache: "no-store" });
         if (!r.ok) return;
-        const { gone: rows } = (await r.json()) as { gone?: { id: string; line: string }[] };
-        if (alive && rows) setGone(Object.fromEntries(rows.map((x) => [x.id, x.line])));
+        const { gone: rows } = (await r.json()) as { gone?: { id: string; line: string; bookedAt?: string }[] };
+        if (alive && rows) setGone(Object.fromEntries(rows.map((x) => [x.id, { line: x.line, bookedAt: x.bookedAt }])));
       } catch {
         // offline: next time
       }
@@ -109,31 +122,39 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
   };
   const first = (r: PanelReq) => Math.min(...r.rows.map((x) => new Date(x.startsAt).getTime()));
   const sorted = [...requests].sort((a, b) => first(a) - first(b));
-  const pressed = (r: PanelReq) => at === "a-" + r.id || at === "d-" + r.id || at === "w-" + r.id;
-  const row = (r: PanelReq) => (
-    <li key={r.id} id={`req-${r.id}`} className={`flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 ${MARKABLE}`} data-request-row={r.mine ? "mine" : "theirs"}>
-      <span className="mr-auto text-slate-300">
-        {/* (§181) In a person's drop-down the name is on the drop-down, once. */}
-        {side === "developer" && !byPerson && <><b className="text-white"><NameLink text={r.tester} href={r.testerHref} /></b> · </>}
-        {describeRows(r.rows)} · {r.minutes} min · {r.rate} · asked by {r.mine ? "you" : r.asker}
-      </span>
-      {gone[r.id] ? (
-        <span className="text-xs font-medium text-amber-200" data-request-gone="">{gone[r.id]}</span>
-      ) : r.mine ? (
-        <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "withdraw" }, "w-" + r.id)}>Withdraw</button>
-      ) : (
-        <>
-          {bookable(r).map((x) => (
-            <button key={x.label} className="btn" disabled={busy} onClick={() => go(r, { action: "accept", ...(x.time ? { time: x.time } : {}) }, "a-" + r.id)}>{x.label}</button>
-          ))}
-          <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "decline" }, "d-" + r.id)}>Decline</button>
-        </>
-      )}
-      {!gone[r.id] && bookable(r).length === 0 && <span className="basis-full text-xs text-amber-200" data-too-soon="">{tooSoonNote(leadMinutes)}</span>}
-      {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}
-      {pressed(r) && <div className="basis-full"><ChangesBox side={side} changes={changes} error={error} press={requestPressName(at)} /></div>}
-    </li>
-  );
+  // (Owner, Nov 4, §187) Pressed: any of the request's rows (its drop-down stays open over it).
+  const pressed = (r: PanelReq) => ["a", "d", "w"].some((k) => at === `${k}-${r.id}` || at.startsWith(`${k}-${r.id}@`));
+  // (Owner, Nov 4, §187, option A) One row per time: "Thu, Nov 12, 4:22 PM · 30 min · Contract $31/h [Accept] [Decline]" (yours: [Withdraw]). Accept books that
+  // time (the request's other times close with it); Decline / Withdraw take out just that time (the last one: the whole request). The press names its time.
+  const row = (r: PanelReq) => timeRows(r.rows).map(({ row: x, text, accept }, i) => {
+    const key = (k: "a" | "d" | "w") => timePressKey(k, r.id, x.startsAt);
+    const time = { time: x.startsAt };
+    const canBook = bookableNow(x.startsAt, leadMinutes, now);
+    const goneLine = goneLineFor(gone[r.id], x.startsAt);
+    return (
+      <li key={`${r.id}@${x.startsAt}`} id={i === 0 ? `req-${r.id}` : undefined} className={`flex flex-wrap items-center gap-2 rounded-lg border border-white/10 p-2 ${MARKABLE}`}
+        data-request-row={r.mine ? "mine" : "theirs"} data-request-id={r.id} data-request-time={x.startsAt}>
+        <span className="mr-auto min-w-0 text-slate-300">
+          {/* (§181) In a person's drop-down the name is on the drop-down, once. */}
+          {side === "developer" && !byPerson && <><b className="text-white"><NameLink fit text={r.tester} href={r.testerHref} /></b> · </>}
+          {text} · {r.minutes} min · {r.rate}
+        </span>
+        {goneLine ? (
+          <span className="text-xs font-medium text-amber-200" data-request-gone="">{goneLine}</span>
+        ) : r.mine ? (
+          <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "withdraw", ...time }, key("w"))}>Withdraw</button>
+        ) : (
+          <>
+            {canBook && <button className="btn" disabled={busy} onClick={() => go(r, { action: "accept", ...time }, key("a"))}>{accept}</button>}
+            <button className="btn-ghost" disabled={busy} onClick={() => go(r, { action: "decline", ...time }, key("d"))}>Decline</button>
+          </>
+        )}
+        {!goneLine && !canBook && <span className="basis-full text-xs text-amber-200" data-too-soon="">{tooSoonNote(leadMinutes)}</span>}
+        {r.warning && <span className="basis-full text-xs text-amber-200" data-calls-warning="">{r.warning}</span>}
+        {(at === key("a") || at === key("d") || at === key("w")) && <div className="basis-full"><ChangesBox side={side} changes={changes} error={error} press={requestPressName(at)} /></div>}
+      </li>
+    );
+  });
   // (Owner, Nov 4, §181) The developer's box: one drop-down per person (closed; the green name, then "· N requests"), in the order of each person's oldest request;
   // inside, all their requests oldest first, both kinds together (theirs to answer with Accept / Decline, and yours with Withdraw), in a panel of its own.
   const sent = (r: PanelReq) => (r.at ? Date.parse(r.at) : first(r));
@@ -170,7 +191,8 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
               // (§185) Hidden, not removed, while the search leaves them out: a drop-down keeps whether it was open.
               <div key={p.id} hidden={!shown(p) || undefined}>
               <HoldFold data={{ id: anchor(p.id), "data-call-requests-person": p.id }} toggleData={{ "data-call-requests-person-toggle": "" }}
-                summary={<span className="min-w-0 [overflow-wrap:anywhere]"><NameLink text={p.name} href={p.href} />{" "}<span className="whitespace-nowrap font-normal text-slate-400">· {p.reqs.length} request{p.reqs.length === 1 ? "" : "s"}</span></span>}>
+                // (Owner, Nov 4, §187) The whole name, cut only when the row is full.
+                summary={<span className="flex min-w-0 items-baseline gap-1"><span className="min-w-0"><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400">· {p.reqs.length} request{p.reqs.length === 1 ? "" : "s"}</span></span>}>
                 {/* A press on one of their requests (under way, its stop box or refusal) keeps their drop-down open. */}
                 <HoldWhile on={held(p)} />
                 <ResizeBox id={`${panelId}-${p.id}`} label={`Call requests with ${p.name}`} defaultMax={LIST_PANEL.requests}>

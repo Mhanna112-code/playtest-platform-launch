@@ -1,5 +1,5 @@
 "use client";
-import { useCallback, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useLayoutEffect, useRef, useState, type KeyboardEvent, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 /**
  * (Owner, Nov 3, batch 35 §139) Sent work in its own panel: written answers and recordings in the developer's tester rows and in Needs you sit in a box with its
@@ -53,11 +53,25 @@ function write(key: string, value: string) {
 }
 
 /**
+ * (Owner, Nov 4, §187) "Only the OUTERMOST panel in a stack scrolls": inside a panel (a ResizeBox, or a scroll list that says so with InsidePanel) every inner
+ * panel is plain: no scroll box of its own, no grip, no padding (its fold above it still opens and closes it), and the outer panel's scroll covers it. Before,
+ * Needs you stacked 3–5 panels each with its own scroll and grip (an answer opened with Show more got about 4 lines on a desktop, 2.5 on a phone).
+ */
+const InPanel = createContext(false);
+/** (§187) Whether this is drawn inside a panel that scrolls (a ResizeBox or an InsidePanel list). */
+export const useInPanel = () => useContext(InPanel);
+/** (§187) Tells what's inside that it already sits in a scroll panel (a scroll list that isn't a ResizeBox: ScrollList). */
+export function InsidePanel({ children }: { children?: ReactNode }) {
+  return <InPanel.Provider value={true}>{children}</InPanel.Provider>;
+}
+
+/**
  * (Owner, Nov 3, batch 35 §152) The call lists (call requests, booked and past calls, the dashboards' calls) and the payment lists sit in this same panel: `defaultMax`
  * keeps each list's old height at first (a CSS max-height), and `tallest` is how tall the grip drags it (60% of the screen, unless the list was already taller).
  */
 export function ResizeBox({ id, children, label, className = "", defaultMax = PANEL_DEFAULT_MAX, tallest = PANEL_MAX_SHARE }: { /** unique on the page, e.g. "needs-sub-<id>" */ id: string; children?: ReactNode; /** what's inside, for screen readers */ label: string; className?: string;
   /** (§152) the height at first, a CSS max-height */ defaultMax?: string; /** (§152) the tallest the grip drags it, as a share of the screen */ tallest?: number }) {
+  const nested = useContext(InPanel);
   const box = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState<number | null>(null);
   const drag = useRef<{ y: number; h: number } | null>(null);
@@ -90,7 +104,10 @@ export function ResizeBox({ id, children, label, className = "", defaultMax = PA
     e.preventDefault();
     set(to, true);
   };
+  // (Owner, Nov 4, §187) Inside another panel: plain (no scroll box, no grip, no border or padding: no extra indent); the outer panel scrolls it.
+  if (nested) return <div className={`min-w-0 space-y-2 ${className}`} data-panel={id} data-panel-flat="" aria-label={label}>{children}</div>;
   return (
+    <InPanel.Provider value={true}>
     <div className={`relative rounded-lg border border-white/10 bg-white/[0.02] ${className}`} data-panel={id}>
       <div ref={box} tabIndex={0} aria-label={`${label} (scroll for more)`} data-panel-box="" data-panel-height={height ?? "default"}
         className="space-y-2 overflow-y-auto p-2 pb-4 pr-3"
@@ -104,6 +121,7 @@ export function ResizeBox({ id, children, label, className = "", defaultMax = PA
         <svg viewBox="0 0 10 10" className="h-2.5 w-2.5" aria-hidden="true"><path d="M9 3 3 9M9 6 6 9" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" fill="none" /></svg>
       </span>
     </div>
+    </InPanel.Provider>
   );
 }
 
