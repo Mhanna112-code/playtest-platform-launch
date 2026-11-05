@@ -149,7 +149,7 @@ describe("B. approve vs cancel race", () => {
     expect(await db.payment.count({ where: { coveredById: one.id, status: "charged" } })).toBe(2);
     expect(st.succeeded()).toEqual([2100]);
     expect(st.cancelled).toEqual([]);
-    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { startsWith: "Receipt: you paid" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: w.dev.user.id, text: { startsWith: "You paid " } } })).toBe(1);
   });
 
   it("not yet approved when the hold starts: cancelled at Stripe and waits; never charged twice", async () => {

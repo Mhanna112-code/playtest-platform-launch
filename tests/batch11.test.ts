@@ -248,8 +248,8 @@ describe("batch 11 item 4 (batch 35 §145, §148): what is owed during a hold is
     const { dev } = await held();
     fakeStripe();
     expect(await payOwed(dev.user, {})).toMatchObject({ paid: 1, lifted: true });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $8.00 for what you owed" } } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "We charged your card" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "You paid $8.00 for what you owed" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "You paid ", contains: " for: " } } })).toBe(0);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
   });
 

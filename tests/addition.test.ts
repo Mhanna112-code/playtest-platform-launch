@@ -34,7 +34,7 @@ describe("newest addition", () => {
     const { dev, sub } = await sent();
     await db.user.update({ where: { id: dev.user.id }, data: { emailPref: "off" } });
     await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 });
-    const line = "Receipt: you paid $10.00 for Ana Silva's written answers on “Harbor Run”";
+    const line = "You paid $10.00 for Ana Silva's written answers on “Harbor Run”";
     expect(await db.outboxEmail.count({ where: { to: dev.user.email, text: { contains: line } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: line } })).toBe(1);
   });

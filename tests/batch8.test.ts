@@ -142,7 +142,7 @@ describe("batch 8 items 2-3: Payments, subscribe, cancel, keep", () => {
     expect(Math.round((u.subscriptionRenewsAt!.getTime() - Date.now()) / DAY)).toBeGreaterThanOrEqual(28);
     const p = await db.payment.findFirstOrThrow({ where: { developerId: dev.user.id, kind: "subscription" } });
     expect(p).toMatchObject({ amountCents: 700, status: "charged", testerCents: 0 });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Receipt: you paid $7.00 for your subscription ($7/month)" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: "You paid $7.00 for your subscription ($7/month)" } })).toBe(1);
     expect(S.subState(u)).toBe("active");
     expect((await sub(dev.cookie, "subscribe")).body.error.message).toBe("You're already subscribed.");
     expect((await sub(dev.cookie, "cancel")).status).toBe(200);

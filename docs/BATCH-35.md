@@ -3639,3 +3639,61 @@ New `tests/batch35-bank-notice-scroll-194.test.ts`: 3 and 4 lines (a plain list,
 
 ### Evidence
 `playtest-lite-evidence/bank-notice-scroll-nov4/` (captions.json): desktop 1280×900 and phone 375×812 with 12 lines inside Needs you's panel; a reader scrolled up stays put when a 13th line arrives; a reader at the bottom follows the 14th.
+
+## §201 The developer's payments: "You paid …", stacked under one "Paid" entry a day (owner, Nov 5)
+- **No "Receipt:" prefix.** Every payment that went through gives the developer one line (bell and email) in ONE form, whoever pressed:
+  "You paid $10.00 for Ana Silva's written answers on “Harbor Run”". The rest of each line is unchanged, as specific as before:
+  - Pay more: "You paid $5.00 for extra pay for Ana Silva's written answers on “Harbor Run”";
+  - the team's dispute decision: "You paid $6.00 for the team's dispute decision on Ana Silva's written answers on “Harbor Run”";
+  - the tester's Charge: "You paid $10.00 for Ben Okafor's written answers on “Sky Lab” (charged by him after 7 days)";
+  - an automatic call charge: "You paid $15.00 for Cara Diaz's live call on “Sky Lab” (Tue, Oct 27, 3:25 PM EST, charged automatically after 7 days)";
+  - Pay what you owe / owed payments: "You paid $35.00 for what you owed: …"; a reservation taken on the team's approval: "You paid $8.00 for what you owed (reserved on your card, taken on the team's approval)";
+  - a subscription charge: "You paid $7.00 for your subscription ($7/month)".
+  - **Choice:** "You paid" for every one, including charges the developer didn't press (decision, the tester's Charge, the automatic call charge): it is their card
+    and their money either way, and the existing "(charged by … after 7 days)", "(…, charged automatically after 7 days)" and "the team's dispute decision on …"
+    words already say who started it. A neutral "Paid $10.00 for …" was the alternative; it would also be the stack's heading word, so "You paid" reads clearer.
+- **Confirm all's combined line** takes the same form: "You paid $42.00 for: Ana Silva's written answers on “Harbor Run” $10.00, Ben Okafor's recording on “Sky
+  Lab” $32.00" (it was "We charged your card $42.00 for: …", and "Receipt: you paid … for: …" with payments not set up). The email body still says "Charged to your
+  saved card." or "Payments aren't set up yet, so this was recorded and nothing was charged."
+- **One stack a day, across tests.** Every one of these lines is in the new `devpaid` group (`PAID_GROUP`, lib/bell.ts): one entry a day across all tests,
+  "Paid · 3 payments today" (`GROUP_COUNT_TITLES.devpaid`, counting lines: each line is one payment on the card; a Confirm all line is one payment). A day with
+  one payment shows that line alone, like every stack. Unread count, mark read (expanding the stack reads all its lines; clicking one reads it), the Notifications
+  page and the live redraw follow the existing groups unchanged (`bellKeyIn`, `unreadEntryCount`, `BellList`).
+- **Only successful payments.** Failures ("Another payment was declined …", a hold starting), bank-confirmation lines, chargebacks, refunds, owed lines and
+  everything else keep their lines and groups exactly as before (the "Payments and holds" stack, or their own line).
+- **Subscription receipts stack too** (no rule says otherwise: BATCH-8 §8.5 put the subscription's *notices* (renewal declined, ended, free launch ending) in
+  "Payments and holds", and those stay there; the subscription's receipt was always a receipt line).
+- **The end-of-day email stacks them the same way** (`emailLines` in notify.ts now stacks `EMAIL_STACKED`: "deadlines" and "devpaid"): "• Paid · 4 payments" with
+  each "• You paid …" line under it; one line of a kind stays a plain line.
+- **Rules this supersedes** (doc agent, DESIGN-DOC.md "The bell"): "Receipts, a pause being lifted or extended, and outages are always their own line." now reads
+  that receipts stack in "Paid" (pauses lifted and outages unchanged); the "Every bell line" row for receipts reads "You paid $X for <what>" and stacks in "Paid";
+  the receipt examples drop "Receipt:". "One line for the same money" is unchanged: still one line per payment.
+
+### The team's Approve of a hold lift (owner, Nov 5)
+- It was "A note from the team about your hold" (the note only in the email) beside "Your tests are running again", or with no note only the latter, which never
+  said the team approved it. Now ONE line in "The team decided" says what happened, with the team's note in it (the owner asked for the note IN the bell line: an
+  exception to batch 15's "notes never in bell lines", for the team's notes on its own decisions only; Pay notes, stop and End early reasons stay out):
+  - lifted: "The team approved lifting your hold: your tests are running again. Their note: “…”";
+  - lifted, a suspension still on: "The team approved lifting your hold. Your tests stay paused while your account is suspended. Their note: “…”";
+  - lifted, then a payment charged right after it declined: "The team approved lifting your hold. A waiting payment was declined, so your tests are paused again.";
+  - not lifted yet (money still owed): "The team approved lifting your hold: it lifts once you have paid what you owe. Their note: “…”".
+  No note: the same lines without "Their note". No separate "Your tests are running again" line any more for this lift (`liftHoldIfClear(…, { quietDev })`,
+  as the chargeback hold's Approve already did).
+- The other "The team decided" lines: the chargeback hold's Don't approve now carries the team's note too ("The team didn't approve lifting your hold: the $8.00
+  reserved on your card was released, and nothing was taken. Their note: “…”"). The others already say what was decided and have no note for the developer
+  (the chargeback Approve's lines, "The team reviewed your account: you can pay what you owe now", "Your developer account is paused / active again": a
+  suspension's reason is never sent to the person).
+
+### Code
+- `moneyLines.ts`: `paidLine`, `paidAllLine`. `bell.ts`: `PAID_GROUP`, `GROUP_TITLES.devpaid`, `GROUP_COUNT_TITLES.devpaid`. `payments.ts` `receipt` and
+  `confirmAll.ts` `allReceipt`: the new words and the group (every caller goes through these two). `notify.ts`: `EMAIL_STACKED`, `emailLines` (exported).
+- `holds.ts`: `approveHoldLift`'s one line, `approvedWaitingLine`, `theirNote`. `chargeback.ts`: Don't approve's note in the line. No migration.
+
+### Tests
+New `tests/paid-stack-201.test.ts`: a Pay and a decision charge on “Harbor Run”, the tester's Charge and an automatic call charge on “Sky Lab”, one day: four
+"You paid …" lines, none with "Receipt", one group and one bell key across both tests; the Notifications page shows ONE "Paid · 4 payments" entry (counted) with
+the four lines; a declined Pay's lines stay outside it; the bell's number counts the stack once and reading it takes it off; the end-of-day email stacks them
+under "• Paid · 4 payments". Confirm all's line and a subscription charge stack too; `emailLines` (one line stays plain, two kinds stack side by side). The
+hold-lift Approve: one line with the note, one without, one before the money is paid. Updated for the words: `addition`, `batch8`, `batch11`, `batch18`,
+`batch24`, `batch25`, `batch28`, `batch35-one-card-checks`, `batch35-payment-proofs`, `chargeback-review-first`, `choice`, `codex8-separate-sides`,
+`confirm-all`, `press-races`; `batch23` (Don't approve's note in the line).

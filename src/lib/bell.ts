@@ -39,7 +39,11 @@ export const GROUP_TITLES: Record<string, string> = {
   // tester withdrawing her application.
   reqclosed: "Call requests closed",
   appwithdrawn: "Applications withdrawn",
+  // (Owner, Nov 5, §201) The developer's payments that went through (every receipt line), one entry a day across tests.
+  devpaid: "Paid",
 };
+/** (§201) The group of every developer receipt line ("You paid $X for …"): "Paid · 3 payments today". */
+export const PAID_GROUP = "devpaid";
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
 export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => string> = {
@@ -54,6 +58,8 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   // (Owner, Nov 4, §185) "Call requests · 3 closed today", "Applications · 2 withdrawn today" (one stack per test and day).
   reqclosed: (_n, lines) => `Call requests · ${lines} closed today`,
   appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn today`,
+  // (Owner, Nov 5, §201) "Paid · 3 payments" (counting lines: each receipt line is one payment; a Confirm all line is one payment on the card).
+  devpaid: (_n, lines) => `Paid · ${lines} payment${lines === 1 ? "" : "s"}`,
 };
 /** (§185) A group key may name its test after a colon ("reqclosed:<testId>": one stack per test and day); its titles are the part before it. */
 export const groupBase = (key: string) => key.split(":")[0];

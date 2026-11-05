@@ -167,7 +167,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     const day = fmtIn("UTC", call.startsAt, "datetime"); // (Owner, Nov 4, §178) a call by its date and time (a receipt names the zone)
     return { dev, rows, day };
   }
-  const moneyLines = (userId: string, since: Date) => db.notification.findMany({ where: { userId, createdAt: { gte: since }, OR: [{ text: { startsWith: "Receipt:" } }, { text: { startsWith: "We charged your card" } }] } });
+  const moneyLines = (userId: string, since: Date) => db.notification.findMany({ where: { userId, createdAt: { gte: since }, text: { startsWith: "You paid " } } });
 
   // (§148) "A retry of one item / several items: one 'We charged your card' line" are retired: nothing charges what's owed automatically any more.
 
@@ -177,7 +177,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     const before = new Date();
     const r = await owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body: { seenTotalCents: 1800, seenIds: rows.map((p) => p.id) } })).then(json);
     expect(r.status).toBe(200);
-    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $18.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}) and Ben Okafor's written answers on “Harbor Run”`]);
+    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`You paid $18.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day}) and Ben Okafor's written answers on “Harbor Run”`]);
   });
 
   it("an away one payment from before §148 that waits for the bank sends no line; the bank's confirmation gives one receipt for that money, never two", async () => {
@@ -193,7 +193,7 @@ describe("batch 25 section 5: one bell line for an automatic retry", () => {
     const confirm = (body: Record<string, unknown>) => confirmPOST(req("/api/payments/confirm", { cookie: dev.cookie, body })).then(json);
     expect((await confirm({ paymentId: waitingRow.id, start: true })).status).toBe(200);
     expect((await confirm({ paymentId: waitingRow.id })).status).toBe(200);
-    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`Receipt: you paid $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day})`]);
+    expect((await moneyLines(dev.user.id, before)).map((n) => n.text)).toEqual([`You paid $10.00 for what you owed: Ana Silva's live call on “Harbor Run” (${day})`]);
     expect(await db.notification.count({ where: { userId: dev.user.id, createdAt: { gte: before }, text: { contains: "$10.00" }, NOT: { text: { startsWith: "Your bank wants you to confirm" } } } })).toBe(1);
   });
 

@@ -121,7 +121,7 @@ describe("§157 1: Subscribe while another tab's Subscribe waits for the bank", 
       expect([c1.status, c2.status].filter((s) => s === 200).length).toBeGreaterThanOrEqual(1);
       expect([c1.status, c2.status]).not.toContain(500);
       expect((await userRow(dev.user.id)).subscriptionStatus).toBe("active");
-      expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Receipt: you paid $7.00 for your subscription" } } })).toBe(1);
+      expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "You paid $7.00 for your subscription" } } })).toBe(1);
       expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "You're subscribed" } } })).toBe(1);
       await db.user.update({ where: { id: dev.user.id }, data: { subscriptionStatus: "ended", subscriptionEndReason: "cancelled" } });
     } finally {

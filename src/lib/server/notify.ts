@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes } from "@/lib/tz";
-import { bellKeyIn, groupTitle } from "@/lib/bell";
+import { PAID_GROUP, bellKeyIn, groupTitle } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 
@@ -107,14 +107,19 @@ export async function adminUsers() {
  * go in ONE end-of-day email ("Your Playtest payment updates", or "account updates" when it holds a must-send line that isn't about a payment); nothing else.
  * The daily job runs this once a day, after every notification of the day exists.
  */
-/** (Owner, Oct 29, batch 29 §34) The email's lines; the testers' deadline reminders stack under one "Deadlines · 2 tests" heading, as in the bell (§27). */
-function emailLines<N extends { text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string) {
-  const stacked = items.filter((n) => n.groupKey === "deadlines");
-  if (stacked.length < 2) return items.map(line);
+/**
+ * (Owner, Oct 29, batch 29 §34) The email's lines; the testers' deadline reminders stack under one "Deadlines · 2 tests" heading, as in the bell (§27). (Owner, Nov 5,
+ * §201) So do the developer's receipts: "Paid · 3 payments" with each "You paid …" line under it (in the end-of-day payment email and the summary alike). A kind
+ * with one line keeps its plain line, as in the bell.
+ */
+export const EMAIL_STACKED = ["deadlines", PAID_GROUP] as const;
+export function emailLines<N extends { text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string) {
+  const stacks = new Map(EMAIL_STACKED.map((k) => [k as string, items.filter((n) => n.groupKey === k)]));
   const out: string[] = [];
   for (const n of items) {
-    if (n.groupKey !== "deadlines") out.push(line(n));
-    else if (n === stacked[0]) out.push(`• ${groupTitle("deadlines", new Set(stacked.map((x) => x.testId ?? x.id)).size, stacked.length)}`, ...stacked.map((x) => `  ${line(x)}`));
+    const stacked = n.groupKey ? stacks.get(n.groupKey) : undefined;
+    if (!stacked || stacked.length < 2) out.push(line(n));
+    else if (n === stacked[0]) out.push(`• ${groupTitle(n.groupKey!, new Set(stacked.map((x) => x.testId ?? x.id)).size, stacked.length)}`, ...stacked.map((x) => `  ${line(x)}`));
   }
   return out;
 }

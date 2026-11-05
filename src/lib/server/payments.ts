@@ -26,7 +26,8 @@ import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "
 import { callsLeftCents } from "./callMoney";
 import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
-import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, updateWaiting } from "@/lib/moneyLines";
+import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, paidLine, updateWaiting } from "@/lib/moneyLines";
+import { PAID_GROUP } from "@/lib/bell";
 import { teamPausedWaits } from "@/lib/restricted";
 
 type U = { id: string; email: string; name: string; pronoun: string; isAdmin?: boolean };
@@ -569,10 +570,15 @@ async function decidedByLine(byId: string | null, at: Date | null, p: Presser | 
   return `${who} already decided this dispute${at ? ` at ${fmtTime(at)}` : ""}.`;
 }
 
-/** A payment receipt to the developer for every payment that goes through: bell + email, always sent. */
+/**
+ * A payment receipt to the developer for every payment that goes through: bell + email, always sent. (Owner, Nov 5, §201) No "Receipt:" prefix: "You paid $10.00 for
+ * Ana Silva's written answers on “Harbor Run”" (the same words whoever pressed: a decision charge, the tester's Charge and an automatic call charge keep their own
+ * "(charged by her after 7 days)" / "(… charged automatically after 7 days)" / "the team's dispute decision on …" naming). Every one stacks under ONE "Paid ·
+ * N payments" entry a day across tests (`PAID_GROUP`), in the bell and in the end-of-day email.
+ */
 export async function receipt(devEmail: string, what: string, cents: number, status: string, path: string) {
-  const line = `Receipt: you paid ${money(cents)} for ${what}`;
-  await notify(devEmail, line, [line + ".", status === "not_set_up" ? "Payments aren't set up yet, so this was recorded and nothing was charged." : "Charged to your saved card."], path, { side: "developer", payment: true });
+  const line = paidLine(cents, what);
+  await notify(devEmail, line, [line + ".", status === "not_set_up" ? "Payments aren't set up yet, so this was recorded and nothing was charged." : "Charged to your saved card."], path, { side: "developer", payment: true, group: PAID_GROUP });
 }
 
 /** The developer adds their side to a dispute once; it shows under that piece of work and the admin sees both. */

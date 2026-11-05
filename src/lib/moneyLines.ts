@@ -60,3 +60,14 @@ export const canSendAgain = (s: { review?: { rejected: boolean; teamClosedById?:
  * UTC), never in the server's clock. The developer's "If you don't pay by …", the tester's "If <dev> hasn't paid by …", and the listed call's automatic charge.
  */
 export const pieceDay = (at: Date, tz: string | null | undefined) => fmtIn(tz, at, "date");
+
+// ---------- (Owner, Nov 5, §201) The developer's receipt lines ----------
+
+/**
+ * (Owner, Nov 5, §201) Every payment that went through: "You paid $10.00 for Ana Silva's written answers on “Harbor Run”", no "Receipt:" prefix. The same words
+ * whoever pressed (the developer's Pay, a dispute decision, the tester's Charge, an automatic call charge, Pay what you owe, a renewal): it is the developer's card
+ * either way, and `what` keeps the existing "(charged by her after 7 days)", "(…, charged automatically after 7 days)" and decision naming.
+ */
+export const paidLine = (cents: number, what: string) => `You paid ${money(cents)} for ${what}`;
+/** (§201) Confirm all's one combined payment, the same form: "You paid $42.00 for: Ana Silva's written answers on “Harbor Run” $10.00, …". */
+export const paidAllLine = (cents: number, list: string) => `You paid ${money(cents)} for: ${list}`;

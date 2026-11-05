@@ -139,8 +139,8 @@ describe("§147 Confirm all: one payment, one bank check", () => {
     for (const p of await rowsOf(w.items.map((x) => x.id))) expect(p).toMatchObject({ status: "charged", coveredById: one.id, stripePaymentIntentId: one.actionPi, settledAt: expect.any(Date), actionPi: null });
     expect(await db.payment.findUniqueOrThrow({ where: { id: one.id } })).toMatchObject({ status: OWED_PAID });
     expect(st.transfers.map((t) => [t.amount, t.source_transaction])).toEqual([1000, 1200, 2000].map((c) => [R.splitFee(c).testerCents, one.actionPi!.replace(/^pi_/, "ch_")]));
-    const receipts = await db.notification.findMany({ where: { userId: w.devId, OR: [{ text: { startsWith: "We charged your card" } }, { text: { startsWith: "Receipt:" } }] } });
-    expect(receipts.map((n) => n.text)).toEqual([`We charged your card $42.00 for: ${NAMES.join(", ")}`]);
+    const receipts = await db.notification.findMany({ where: { userId: w.devId, text: { startsWith: "You paid " } } });
+    expect(receipts.map((n) => n.text)).toEqual([`You paid $42.00 for: ${NAMES.join(", ")}`]);
     // Each tester sees their part paid as usual.
     const anaLines = (await db.notification.findMany({ where: { userId: w.ana.tester.user.id } })).map((n) => n.text);
     // (Owner, Nov 4, §177) Each bell names WHICH test: Ana has written answers on two tests.
@@ -169,7 +169,7 @@ describe("§147 Confirm all: one payment, one bank check", () => {
     st.approve(one.actionPi!);
     await confirm(w.dev.cookie, { paymentId: one.id });
     for (const p of await rowsOf(w.items.map((x) => x.id))) expect(p.status).toBe("charged");
-    expect((await db.notification.findMany({ where: { userId: w.devId, text: { startsWith: "We charged your card" } } })).map((n) => n.text)).toEqual([`We charged your card $32.00 for: ${NAMES[1]}, ${NAMES[2]}`]);
+    expect((await db.notification.findMany({ where: { userId: w.devId, text: { startsWith: "You paid $32.00 for: " } } })).map((n) => n.text)).toEqual([`You paid $32.00 for: ${NAMES[1]}, ${NAMES[2]}`]);
   });
 
   it("the bank refuses the one check: nothing charged; each back to its own Confirm with its ORIGINAL date (a new off-session PaymentIntent each)", async () => {
@@ -273,7 +273,7 @@ describe("§147 Confirm all: one payment, one bank check", () => {
       // Whatever won, A is never in the one payment, and nothing was charged twice.
       for (const one of ones) expect(await db.payment.count({ where: { id: a.id, coveredById: one.id } })).toBe(0);
       expect(ones.reduce((s, o) => s + (o.status === "cancelled" ? 0 : o.amountCents), 0)).toBeLessThanOrEqual(3200);
-      expect(await db.notification.count({ where: { userId: w.devId, text: { startsWith: "Receipt: you paid $10.00" } } })).toBe(1);
+      expect(await db.notification.count({ where: { userId: w.devId, text: { startsWith: "You paid $10.00" } } })).toBe(1);
     }
   });
 

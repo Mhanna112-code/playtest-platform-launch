@@ -313,7 +313,7 @@ describe("batch 23 leftovers (added in batch 24)", () => {
     await settle();
     const before = new Date();
     expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);
-    const mine = await db.notification.findMany({ where: { userId: dev.user.id, createdAt: { gte: before }, NOT: { text: { startsWith: "Receipt:" } } } });
+    const mine = await db.notification.findMany({ where: { userId: dev.user.id, createdAt: { gte: before }, NOT: { text: { startsWith: "You paid " } } } });
     expect(mine.map((n) => n.text)).toEqual([approvedLiftedLine(800)]);
     expect(approvedLiftedLine(800)).toBe("The team approved lifting your hold: the $8.00 reserved on your card was taken, and your tests are running again.");
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "“Harbor Run” is running again" } })).toBe(1);

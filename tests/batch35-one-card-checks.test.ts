@@ -109,7 +109,7 @@ async function threeDebts() {
 const confirm = (cookie: string, body: Record<string, unknown>) => confirmPOST(req("/api/payments/confirm", { cookie, body })).then(json);
 const owedPress = (cookie: string, body: Record<string, unknown>) => owedPOST(req("/api/payments/owed", { cookie, body })).then(json);
 const oneOf = (devId: string) => db.payment.findFirstOrThrow({ where: { developerId: devId, kind: "owed" }, orderBy: { createdAt: "desc" } });
-const receipts = (userId: string) => db.notification.findMany({ where: { userId, text: { startsWith: "Receipt: you paid" } } });
+const receipts = (userId: string) => db.notification.findMany({ where: { userId, text: { startsWith: "You paid " } } });
 const hold = async (devId: string) => (await db.user.findUniqueOrThrow({ where: { id: devId } })).holdStartedAt;
 
 describe("§117 rule 6: Pay what you owe is ONE payment", () => {
@@ -138,7 +138,7 @@ describe("§117 rule 6: Pay what you owe is ONE payment", () => {
     expect(st.transfers.map((t) => t.source_transaction)).toEqual([one.actionPi!.replace(/^pi_/, "ch_"), one.actionPi!.replace(/^pi_/, "ch_"), one.actionPi!.replace(/^pi_/, "ch_")]);
     const rc = await receipts(w.dev.user.id);
     expect(rc).toHaveLength(1);
-    expect(rc[0].text).toBe("Receipt: you paid $16.00 for what you owed: Ana Silva's written answers on “Harbor Run”, the team's dispute decision on Ana Silva's work on “Harbor Run” and Ana Silva's work on “Harbor Run”");
+    expect(rc[0].text).toBe("You paid $16.00 for what you owed: Ana Silva's written answers on “Harbor Run”, the team's dispute decision on Ana Silva's work on “Harbor Run” and Ana Silva's work on “Harbor Run”");
     expect(st.made).toHaveLength(1);
     expect(await hold(w.dev.user.id)).toBeNull();
     // A second Confirm (another tab) never pays it again.
@@ -724,7 +724,7 @@ describe("§145, §148 (owner, Nov 3): no daily retries, and a new card charges 
     st.card.next = pm;
     await saveCardFromCheckout(w.dev.user.id, "cs_" + randomUUID());
   }
-  const charged = (devId: string) => db.notification.findMany({ where: { userId: devId, text: { startsWith: "We charged your card" } } });
+  const charged = (devId: string) => db.notification.findMany({ where: { userId: devId, text: { startsWith: "You paid ", contains: " for: " } } });
   const ids = (w: Awaited<ReturnType<typeof threeDebts>>) => w.debts.map((d) => d.id);
   const payable = async (w: Awaited<ReturnType<typeof threeDebts>>) => expect((await owedLines(w.dev.user.id)).map((l) => [l.id, l.retry, !!l.waiting])).toEqual(ids(w).map((id) => [id, true, false]));
 

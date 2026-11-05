@@ -438,6 +438,10 @@ async function tellAdminsLiftWaiting(dev: { id: string; email: string; name: str
   }
 }
 
+/** (§201) The team's Approve before the developer has paid: "The team approved lifting your hold: it lifts once you have paid what you owe". */
+export const approvedWaitingLine = () => "The team approved lifting your hold: it lifts once you have paid what you owe";
+/** (Owner, Nov 5, §201) The team's note on its own decision, IN the bell line: " Their note: “Thanks for paying quickly.”" (nothing without a note). */
+export const theirNote = (note: string) => (note ? ` Their note: “${note}”` : "");
 /** Admin: approve lifting a payment hold (the 4th hold onward). First press wins. The hold lifts once everything owed is paid. */
 export async function approveHoldLift(adminId: string, devId: string, note: string, seen: import("./adminRace").AdminSeen | null = null) {
   const dev = await db.user.findUnique({ where: { id: devId } });
@@ -478,9 +482,21 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
     return r;
   });
   if (claimed.count !== 1) throw await already();
-  const lifted = await liftHoldIfClear(devId);
-  if (!lifted) await notify(dev.email, "The team approved lifting your hold", ["The team approved lifting your hold. It lifts once you have paid what you owe." + (note ? ` Their note: “${note}”` : "")], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
-  else if (note) await notify(dev.email, "A note from the team about your hold", [note], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
+  // (Owner, Nov 5, §201) ONE line that says what the team did (it was "A note from the team about your hold" beside "Your tests are running again", or only the latter
+  // with no note, which never said it was the team): the lift says so itself, like the chargeback hold's Approve (batch 24). The owner (Nov 5) wants the team's note IN
+  // the bell line: "… Their note: “…”" (an exception to batch 15's "no notes in bell lines", for the team's notes on its own decisions; the email has it too).
+  const lifted = await liftHoldIfClear(devId, { quietDev: true });
+  const noted = theirNote(note);
+  if (!lifted) {
+    const line = `${approvedWaitingLine()}.${noted}`;
+    await notify(dev.email, note ? line : approvedWaitingLine(), [line], "/app/payments", { side: "developer", payment: true, group: "admindecision" });
+  } else {
+    const after = await db.user.findUniqueOrThrow({ where: { id: devId }, select: { devSuspendedAt: true, holdStartedAt: true } });
+    const cb = await import("./chargeback");
+    // A payment charged right after the lift was declined (a new hold), or a suspension still keeps the tests paused: the same one line says so.
+    const line = (after.holdStartedAt ? `${cb.APPROVED_LINE}. A waiting payment was declined, so your tests are paused again.` : after.devSuspendedAt ? cb.approvedStillSuspendedLine(0) : cb.approvedLiftedLine(0)) + noted;
+    await notify(dev.email, line, [line, ...(after.holdStartedAt || after.devSuspendedAt ? [] : ["Everything you owed is paid, and every deadline moved on by the pause."])], after.holdStartedAt ? "/app/payments#owed" : "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
+  }
   return { ok: true, lifted };
 }
 

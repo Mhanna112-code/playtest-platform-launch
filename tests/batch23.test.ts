@@ -310,7 +310,7 @@ describe("batch 23 section 6: a chargeback hold's Pay what you owe reserves the 
     expect(st.captured).toEqual([]);
     expect(st.cancelled).toHaveLength(1);
     expect((await userOf(x.dev.user.id)).holdStartedAt).not.toBeNull();
-    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: notApprovedLine(800) } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: x.dev.user.id, text: `${notApprovedLine(800)} Their note: “Please call us first.”` } })).toBe(1); // (Owner, Nov 5, §201) the team's note in the bell line
     expect(await chargebackSteps(x.dev.user.id)).toMatchObject({ owedPaid: false, reservedCents: 0 });
   });
 
