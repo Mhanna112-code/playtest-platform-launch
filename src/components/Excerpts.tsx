@@ -15,9 +15,8 @@ import { allKept, deletedRange, deleteFrom, excerptOf, GAP, keptChars, runsOf, s
 
 const MIN = 10, MAX = 500;
 
-/** (§196) The trim box: about 5 lines at first, about 16 (never more than 60% of the screen) opened taller; it scrolls inside at either height. */
+/** (§196) The trim box: about 5 lines, scrolling inside; (owner, Nov 5) no "Open the box taller" button: its corner drags it taller, up to 60% of the screen. */
 export const TRIM_BOX_SHUT = "calc(5lh + 1rem)";
-export const TRIM_BOX_OPEN = "min(calc(16lh + 1rem), 60vh)";
 
 /**
  * "Show an excerpt on your profile" on a paid written part: pick one answer and trim it. (Batch 18 section 7) It always reads "From <test>": no "Don't name the product" tick.
@@ -33,7 +32,6 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
   const [index, setIndex] = useState(choices[0]?.index ?? 0);
   const original = choices.find((c) => c.index === index)?.text ?? "";
   const [kept, setKept] = useState(() => allKept(choices[0]?.text ?? ""));
-  const [tall, setTall] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const box = useRef<HTMLTextAreaElement>(null);
@@ -106,11 +104,10 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
           </div>
           {/* (§196) Its own limiter (data-typing-limit): it never takes more than the answer, so the paste note "Cut to the N-character limit." never shows here. */}
           <label className="label req" htmlFor={`excerpt-text-${submissionId}`}>The excerpt (delete what you don&apos;t want)</label>
-          <textarea id={`excerpt-text-${submissionId}`} ref={box} className="input block min-w-0 max-w-full resize-y overflow-y-auto" style={{ height: tall ? TRIM_BOX_OPEN : TRIM_BOX_SHUT }}
+          <textarea id={`excerpt-text-${submissionId}`} ref={box} className="input block min-w-0 max-w-full resize-y overflow-y-auto" style={{ height: TRIM_BOX_SHUT, maxHeight: "60vh" }}
             data-typing-limit="" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} data-excerpt-box="" data-match="an excerpt is|trim the excerpt"
             value={shown} onChange={change} onDrop={(e) => e.preventDefault()} />
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" aria-expanded={tall} data-excerpt-box-toggle="" onClick={() => setTall(!tall)}>{tall ? "Make the box smaller" : "Open the box taller"}</button>
             <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" disabled={!cut} data-excerpt-restore="" onClick={() => setKept(allKept(original))}>Use original answer</button>
           </div>
           {/* (§196) How it will read, when that isn't just the box's text: " … " where a part of the middle was left out. */}

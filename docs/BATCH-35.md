@@ -3654,8 +3654,7 @@ stretch of the answer (a contiguous substring).
   is put back at once with the caret where the change began. Deleting works however it's done: Backspace, Delete, word deletes, cut, a selection deleted, a
   phone's keyboard. Desktop browsers also refuse insertions before they happen (`beforeinput`); phones are covered by the comparison. The box has no spell
   check, autocorrect or autocapitalize, and is its own limiter (`data-typing-limit`: it never grows, so the paste note "Cut to the N-character limit." never shows).
-- **The box is about 5 lines at first and scrolls inside**; "Open the box taller" makes it about 16 lines (never more than 60% of the screen), "Make the box
-  smaller" goes back; it can also be dragged by its corner. It never makes the page wider (checked at 375px: page width 375).
+- **The box is about 5 lines and scrolls inside**; its corner drags it taller (up to 60% of the screen). (Owner, Nov 5) No "Open the box taller" button. It never makes the page wider (checked at 375px: page width 375).
 - **What's deleted is struck through in the answer above, live**, highlighted (a `<del>`, `data-excerpt-left-out`); the label reads "Your answer (struck through:
   what you're leaving out)" once anything is.
 - **"Use original answer"** puts the whole answer back (greyed while nothing is left out). Picking another answer starts again from its whole text.
@@ -3680,6 +3679,6 @@ developer's Allow / Deny row, the bell and the profile show it with its " … " 
   developer's row shows it; the box's own result at start, middle and end accepted; the render: the answer folded above the box, the box with the whole
   answer (not cut to 500), Use original answer, the red counter). The existing excerpt tests needed no change (none relied on the 500-character prefill).
 - **Evidence:** `playtest-lite-evidence/excerpt-nov4/` (captions.json): desktop 1280×900 and phone 375×812 with a 3,241-character answer: opened, Show more,
-  cuts at the start, middle and end (red counter, then in range), the box opened taller, Use original answer. Checked in the same run: typing, Enter, a paste
+  cuts at the start, middle and end (red counter, then in range), Use original answer. Checked in the same run: typing, Enter, a paste
   and an inserted text left the box unchanged; Ctrl+Backspace deleted; a request with a middle gap sent from the page went through ("Your excerpt request is
   waiting for Nora Lane.").

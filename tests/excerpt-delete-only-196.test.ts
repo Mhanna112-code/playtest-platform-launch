@@ -159,14 +159,14 @@ describe("§196 the tester's box", () => {
     expect(html).not.toContain("data-excerpt-left-out"); // nothing struck through yet
   });
 
-  it("the box starts with the WHOLE answer (not cut to 500), delete-only hooks, opens taller", () => {
+  it("the box starts with the WHOLE answer (not cut to 500), delete-only hooks, no "Open the box taller" button", () => {
     expect(LONG.length).toBeGreaterThan(600);
     const box = html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)!;
     expect(box[1]).toBe(LONG);
     expect(box[0]).toContain('data-typing-limit=""'); // its own limiter: no maxLength, no "Cut to the N-character limit." note on a refused paste
     expect(box[0]).toContain('data-excerpt-box=""');
     expect(box[0]).toMatch(/spellcheck="false"/i);
-    expect(html).toContain('data-excerpt-box-toggle="">Open the box taller</button>');
+    expect(html).not.toContain("Open the box taller"); // (owner, Nov 5) removed: the corner drags it
   });
 
   it("\"Use original answer\" (greyed while nothing is left out), the counter red outside 10 to 500, Ask the developer greyed", () => {
