@@ -111,7 +111,7 @@ export const overCeilingLine = (roomCents: number) => `This is more than you can
 // ---------- (Batch 15 section 42) A call that's over: its outcome badge ----------
 type OverCall = { status: string; cancelledBy: string | null; cancelledAt: Date | null; cancelNote: string; review: { amountCents: number; rejected: boolean; reason: string } | null };
 /**
- * One call that's over, in the tester row's "Calls (N)" fold and the tester's Call history: "Took place · 29 min · paid $14.50", "Cancelled by Ana · 3:05 PM" (the reason
+ * One call that's over, in the tester row's and the tester's Live session's "Had (N)" / "Cancelled (N)" (§209): "Took place · 29 min · paid $14.50", "Cancelled by Ana · 3:05 PM" (the reason
  * shown under it), "Nobody joined", "Missed: the site was down" and so on.
  */
 export function callOverBadge(x: OverCall, who: { developer: string; tester: string }, side: "developer" | "tester", fmtTime: (d: Date) => string, paidCents: number, minutes: number | null) {
@@ -136,7 +136,7 @@ export function callOverBadge(x: OverCall, who: { developer: string; tester: str
   if (paidCents === 0 && x.review.amountCents === 0) return { label: `Took place${len} · Paid $0`, tone: "green" as Tone, reason: x.review.reason || undefined, paidShown: true };
   return { label: `Took place${len} · paid ${money(paidCents)}`, tone: "green" as Tone, paidShown: true };
 }
-/** Whether a call is over (it moves from the Live session to the tester row / Call history): cancelled, or its length is final. */
+/** Whether a call is over (it moves from the calls ahead to Had / Cancelled, §209): cancelled, or its length is final. */
 export const callIsOver = (x: { status: string; measuredAt: Date | null; actualMinutes: number | null }) => x.status === "cancelled" || x.measuredAt != null || x.actualMinutes != null;
 
 // ---------- (Owner, Oct 28 evening, batch 18 section 3) A call ends when its pay would pass the $1,000 for that tester's calls ----------

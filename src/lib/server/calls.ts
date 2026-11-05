@@ -31,7 +31,7 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     if (!c || c.contract.testId !== testId) throw new HttpError(404, "not_found", "That call doesn't exist.");
     const name = displayName(c.contract.tester);
     // (Owner, Nov 4, §185; replaces batch 16 section 21's stop first) A Cancel on a call already cancelled (by the tester, in another tab, by a stop) from an old
-    // page is refused once, never a stop first; the row then leaves the booked list with the page's redraw (the call is in Call history, Cancelled).
+    // page is refused once, never a stop first; the row then leaves the booked list with the page's redraw (the call is in the Live session's Cancelled, §209).
     if (c.status === "cancelled") throw new HttpError(409, "cancelled", `The call with ${name} was already cancelled.` + (await staleNote(testId, body.seenAt)));
     const ok = checkCancel(c.startsAt, new Date(), reason);
     if (!ok.ok) throw new HttpError(400, "reason", ok.message);
@@ -428,7 +428,7 @@ async function cancelNobodyJoined(id: string, now: Date, note = NOBODY_JOINED) {
   await db.callSignal.deleteMany({ where: { callId: id } });
   const call = await db.call.findUniqueOrThrow({ where: { id }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } } });
   const line = `Your call on ${T(call.startsAt)}: ${note}`;
-  // (Batch 15 section 42) A call that's over links to the tester's Call history / the developer's tester row (#call-<id> is there once it's over).
+  // (Batch 15 section 42) A call that's over links to its row (#call-<id>): the tester's Live session / the developer's tester row, Had or Cancelled (§209).
   await notify(call.contract.tester.email, line, [line, "Nothing is charged."], `/app/sessions/${call.contractId}#call-${call.id}`);
   await notify(call.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(call.contract.tester)}`), [line, "Nothing is charged."], `/app/tests/${call.contract.testId}#call-${call.id}`);
 }

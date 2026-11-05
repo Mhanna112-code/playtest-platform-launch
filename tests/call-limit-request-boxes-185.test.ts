@@ -262,7 +262,7 @@ describe("§185 a new request, an answer and a cancellation still stop per Alert
 });
 
 describe("§185 Join or Cancel on a call already cancelled: refused once; the row leaves the booked list", () => {
-  it("both sides' Cancel and Join from an old page: a single refusal, never a stop first; the call is in Call history, Cancelled", async () => {
+  it("both sides' Cancel and Join from an old page: a single refusal, never a stop first; the call is in the Live session's Cancelled (§209)", async () => {
     const f = await setup();
     const a = await joined(f.testId);
     expect((await devReq(f.testId, f.dev.cookie, a.sessionId, { times: [atHours(50)] })).status).toBe(200);
@@ -285,12 +285,14 @@ describe("§185 Join or Cancel on a call already cancelled: refused once; the ro
     expect(e).toBeInstanceOf(HttpError);
     expect((e as HttpError).message).toMatch(/^Your Join call didn't go through: Ana Silva cancelled this call at /);
     expect((e as HttpError).data).toMatchObject({ cancelled: true });
-    // The tester's page: not in the booked list; in Call history with its Cancelled badge.
+    // The tester's page: not in the booked list; in the Live session's Cancelled (N) with its Cancelled badge (§209; was §186's Call history).
     auth.user = await db.user.findUniqueOrThrow({ where: { id: a.tester.user.id } });
     const html = await sessionPage(a.sessionId);
     expect(html).not.toContain(`id="call-${call.id}" data-call="booked"`);
-    const hist = html.slice(html.indexOf('data-call-history=""'));
-    expect(hist.indexOf("Cancelled")).toBeGreaterThan(0);
+    const hist = html.slice(html.indexOf('data-calls-cancelled="1"'));
+    expect(html).not.toContain('data-call-history=""');
+    expect(hist.indexOf(`id="call-${call.id}"`)).toBeGreaterThan(0);
+    expect(hist.indexOf("Cancelled by you")).toBeGreaterThan(0);
   });
 });
 

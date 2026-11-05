@@ -4,7 +4,7 @@ import { hashTargets, jumpTo } from "@/lib/markJump";
 import { restorePlace } from "@/lib/keepPlace";
 
 /**
- * (Batch 15 section 42) A link from a bell line or the live box ("…#call-<id>") opens the fold it is in (a tester row's "Calls (N)", the tester's Call history) and marks it,
+ * (Batch 15 section 42) A link from a bell line or the live box ("…#call-<id>") opens the fold it is in (a tester row's "Had (N)" / "Cancelled (N)", the tester's Live session's, §209) and marks it,
  * the same highlight as an in-page jump. Runs on load and when the hash changes. (Batch 35 §7) A target that's gone has a fallback: a paid piece's link
  * ("#piece-<id>", no longer in Needs you) goes to that part's line on its tester's row.
  * (Batch 35 §40) A page loaded again by `reloadKeepingPlace` comes back where it was (its "#…" was dropped first, so nothing is jumped to).

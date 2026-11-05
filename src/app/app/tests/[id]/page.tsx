@@ -21,7 +21,6 @@ import { RestrictedCalls } from "./RestrictedCalls";
 import { asListing, writtenQuestions } from "@/lib/server/tests";
 import { unreadCount } from "@/lib/server/messages";
 import { DevCallPanel, type DevCall, type DevTester } from "./DevCallPanel";
-import { BookedAhead } from "./BookedAhead";
 
 import { InvitePanel } from "./InvitePanel";
 import { inviteExpired, invitePanel, testerRowInfo } from "@/lib/server/invites";
@@ -230,7 +229,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const partPays = await partPaymentLines(payments, fmtDateTime);
   // The developer's live-call panel: one row per working tester (terms like the parts listing) and their calls/requests.
   const whole = (c: number | null) => money(c).replace(/\.00$/, "");
-  // (Owner, Nov 4, §186) One booked call as the Live session's row shows it (and the tester row's "Booked (N)", with the same buttons).
+  // One booked call as the Live session's row shows it (with Join call / Cancel). (Owner, Nov 5, §209) Only there: the tester rows list calls that are over.
   const devCallOf = (c: (typeof t.contracts)[number], x: (typeof t.contracts)[number]["calls"][number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? (restricted ? (connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT) : MEASURING_LINE) : undefined }); // (batch 18 section 9) a pause doesn't cut a call in progress
   const devTesters: DevTester[] = working.map((c) => {
     const subOf = (kind: string) => c.submissions.find((x) => x.kind === kind);
@@ -768,20 +767,17 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {c.status !== "working" && c.calls.filter((x) => callInProgress(x, now)).map((x) => (
                   <p key={x.id} id={`call-${x.id}`} className="text-sm" data-in-progress-call=""><span className="text-slate-200">{fmtDateTime(x.startsAt)}</span> <span className="badge border-sky-300/40 text-sky-200">{connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT}</span></p>
                 ))}
-                {/* (Owner, Nov 4, §186; replaces batch 15 sections 31 and 42's one "Calls (N)") The tester's calls in two drop-downs, both closed at first (each opens by
-                    itself for a jump into it, and for a call whose charge waits for your bank): "Booked (N)", every call booked and not cancelled: the ones still ahead
-                    (or running) first, soonest first, with the Live session's Join / Cancel (BookedAhead), then the ones that are over, newest first, each with its
-                    length, its payments and its Pay more as before; and "Cancelled (N)": the calls actually cancelled (by either side, or by the app: nobody joined,
-                    the site was down …), newest first, with the length they were booked for and who cancelled and why. Call requests never show here. Past 3 rows,
-                    each list is the §152 draggable panel. */}
+                {/* (Owner, Nov 5, §209; replaces §186's "Booked (N)", which also listed the calls ahead) The tester's calls that are over in two drop-downs, both
+                    closed at first (each opens by itself for a jump into it, and for a call whose charge waits for your bank): "Had (N)", the calls that took place
+                    (in any form that can be paid or disputed, a no-show report's 0-minute call too), newest first, each with its length, its payments and its Pay
+                    more as before; and "Cancelled (N)": the calls actually cancelled (by either side, or by the app: nobody joined, couldn't connect, the site was
+                    down, the test was paused …), newest first, with the length they were booked for and who cancelled and why. The calls ahead (or in progress)
+                    are only in the Live session, with Join call and Cancel (as before §186). Call requests never show here. Past 3 rows, each list is the §152
+                    draggable panel (§187: the only panel that scrolls; the payments' panels inside it are flat). */}
                 {(() => {
-                  // A call in progress after their work ended keeps its own line above; the rest still ahead are listed here.
-                  const ahead = c.calls.filter((x) => x.status === "booked" && !callIsOver(x) && !(c.status !== "working" && callInProgress(x, now)))
-                    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime()).map((x) => ({ ...devCallOf(c, x), whenText: fmtDateTime(x.startsAt) }));
-                  const pastBooked = overCalls.filter((x) => x.status !== "cancelled");
+                  const had = overCalls.filter((x) => x.status !== "cancelled");
                   const cancelled = overCalls.filter((x) => x.status === "cancelled");
-                  const bookedN = ahead.length + pastBooked.length;
-                  if (!bookedN && !cancelled.length) return null;
+                  if (!had.length && !cancelled.length) return null;
                   const bankIn = (xs: typeof overCalls) => xs.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined;
                   const overRow = (x: (typeof overCalls)[number]) => {
                     const m = callMinutesOf(x);
@@ -825,15 +821,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   };
                   return (
                     <div className="space-y-2" data-calls-fold={c.id}>
-                      <details open={bankIn(pastBooked)} id={`calls-booked-${c.id}`} className="scroll-mt-24 rounded-lg border border-white/10 p-2 text-sm" data-calls-booked={bookedN}>
-                        <summary className="fold-chevron cursor-pointer font-medium text-white">Booked ({bookedN})</summary>
+                      <details open={bankIn(had)} id={`calls-had-${c.id}`} className="scroll-mt-24 rounded-lg border border-white/10 p-2 text-sm" data-calls-had={had.length}>
+                        <summary className="fold-chevron cursor-pointer font-medium text-white">Had ({had.length})</summary>
                         <div className="mt-2">
-                        {!bookedN && <p className="note">No booked calls.</p>}
-                        <PanelWhen on={bookedN > PAST_CALLS_SHOWN} id={`booked-calls-${c.id}`} label={`Booked calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>
-                        <div className="space-y-2" data-calls-scroll={bookedN > PAST_CALLS_SHOWN ? bookedN : undefined}>
-                          <BookedAhead testId={t.id} seenAt={seenAt} name={name} calls={ahead} buttons={c.status === "working"} />
-                          {pastBooked.length > 0 && <ul className="space-y-2" data-calls-history="">{pastBooked.map(overRow)}</ul>}
-                        </div>
+                        {!had.length && <p className="note">No calls took place yet.</p>}
+                        <PanelWhen on={had.length > PAST_CALLS_SHOWN} id={`had-calls-${c.id}`} label={`Calls with ${name}`} defaultMax={LIST_PANEL.pastDeveloper}>
+                        <ul className="space-y-2" data-calls-history="" data-calls-scroll={had.length > PAST_CALLS_SHOWN ? had.length : undefined}>{had.map(overRow)}</ul>
                         </PanelWhen>
                         </div>
                       </details>
