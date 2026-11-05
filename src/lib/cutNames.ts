@@ -13,3 +13,16 @@ export function cutNamesIn(text: string, names: (string | null | undefined)[], n
   shown = shown.replace(/“([^”]+)”/g, (m, inner: string) => (Array.from(inner).length > n && !inner.includes("…") ? `“${cutTo(inner, n)}”` : m));
   return { shown, full: shown === text ? null : text };
 }
+
+/** (Owner, Nov 5, §238) How much of a new-terms diff a closed row shows ("written $8 → $10, added a recording ($12), …"); the rest opens with its "…". */
+export const DIFF_CUT = 40;
+
+/**
+ * (Owner, Nov 5, batch 35 §238) The tester's To do row "<developer> offered new terms: <diff>": the developer's name cut at NAME_CUT (20) and a long diff cut at
+ * DIFF_CUT (40), each with "…" (WholeLine: each "…" opens its piece in place, the arrow the whole line). `full` is null when nothing was cut.
+ */
+export function offerLine(dev: string, diff: string): { shown: string; full: string | null } {
+  const text = `${dev} offered new terms: ${diff}`;
+  const shown = `${cutTo(dev)} offered new terms: ${cutTo(diff, DIFF_CUT)}`;
+  return { shown, full: shown === text ? null : text };
+}

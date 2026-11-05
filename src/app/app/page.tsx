@@ -12,6 +12,8 @@ import { compact, compactMoney, displayName, fmtDate, fmtDateTime, money, num } 
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { invitesV } from "@/lib/server/pulseV";
 import { RatingsToGive } from "./RatingsToGive";
+import { WholeLine } from "@/components/WholeLine";
+import { cutNamesIn, offerLine } from "@/lib/cutNames";
 import { BankToConfirm } from "./BankToConfirm";
 import { LiveTop } from "@/components/LiveTop";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
@@ -485,8 +487,9 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
   // (Owner, Oct 28) A suspended tester's session pages are closed: nothing here links to them.
   const answers = suspended ? [] : [
     // (Batch 35 §118) Only a part still working has terms to answer: an ended part's offer is closed (an old row still "open" is never shown).
-    ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c && c.status === "working" ? [{ key: `offer-${o.id}`, c, text: `${displayName(c.test.developer)} offered new terms: ${o.diff}`, href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),
-    ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, text: `${displayName(c.test.developer)} asked for a live call`, href: `/app/sessions/${c.id}#req-${r.id}`, cta: "Answer in Live session →" }] : []; }), // (batch 16 section 35)
+    // (Owner, Nov 5, §238) Each line's developer name cut at 20 and a long diff at 40, with "…" and the arrow (WholeLine).
+    ...offers.flatMap((o) => { const c = byId.get(o.contractId); return c && c.status === "working" ? [{ key: `offer-${o.id}`, c, ...offerLine(displayName(c.test.developer), o.diff), href: `/app/sessions/${c.id}`, cta: "Switch or keep your terms" }] : []; }),
+    ...devReqs.flatMap((r) => { const c = byId.get(r.contractId); return c ? [{ key: `req-${r.id}`, c, ...cutNamesIn(`${displayName(c.test.developer)} asked for a live call`, [displayName(c.test.developer)]), href: `/app/sessions/${c.id}#req-${r.id}`, cta: "Answer in Live session →" }] : []; }), // (batch 16 section 35)
   ];
   const upcoming = suspended ? [] : contracts.flatMap((c) => c.calls.map((x) => ({ c, x }))).sort((a, b) => a.x.startsAt.getTime() - b.x.startsAt.getTime());
   const more = recommended.filter((t) => !t.contracts.some((c) => c.status === "working")).slice(0, 4);
@@ -544,15 +547,16 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           <ScrollList className="space-y-2">
             {answers.map((a) => (
               <DevSearchHit key={a.key} title={a.c.title} developer={displayName(a.c.test.developer)}>
-              <li>
-                <Link href={a.href} className="card card-hover flex flex-wrap items-center gap-3 border-sky-300/40 p-4 no-underline hover:no-underline">
-                  <CategoryTile category={mainCategory(a.c.test.categories)} size="h-10 w-10" />
-                  <div className="min-w-[12rem] flex-1">
-                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={a.c.title}><Cut text={a.c.title} kind="test" /></span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
-                    <p className="text-sm text-slate-400">{a.text}</p>
-                  </div>
-                  <span className="btn px-3 py-1.5 text-sm">{a.cta} <ArrowRight className="h-4 w-4" /></span>
-                </Link>
+              {/* (Owner, Nov 5, §238) The row opens through a link laid over the card (as Messages' rows, §124), so the line's "…" and arrow (WholeLine) and the
+                  test's name sit above it and work on their own; the rest of the card opens the row as before. */}
+              <li className="card card-hover relative flex flex-wrap items-center gap-3 border-sky-300/40 p-4 hover:z-10 focus-within:z-10" data-todo-answer={a.key}>
+                <Link href={a.href} aria-label={`${a.cta.replace(/ →$/, "")}: ${a.full ?? a.shown}`} className="absolute inset-0 rounded-2xl no-underline hover:no-underline" />
+                <CategoryTile category={mainCategory(a.c.test.categories)} size="h-10 w-10" />
+                <div className="min-w-[12rem] flex-1">
+                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><NameLink text={a.c.title} kind="test" href={a.href} className="text-white no-underline hover:underline" /></span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                  <div className="text-sm text-slate-400 [overflow-wrap:anywhere] [&_[data-whole-line]]:relative [&_[data-whole-line]]:z-10 [&_button]:relative [&_button]:z-10" data-todo-answer-line=""><WholeLine shown={a.shown} full={a.full} /></div>
+                </div>
+                <span className="btn px-3 py-1.5 text-sm">{a.cta} <ArrowRight className="h-4 w-4" /></span>
               </li>
               </DevSearchHit>
             ))}
@@ -604,7 +608,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {waitingApps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={appTests.get(a.testId)?.title ?? "A test"}>{appTests.get(a.testId)?.title ?? "A test"} {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-app-waiting-title=""><Cut text={appTests.get(a.testId)?.title ?? "A test"} kind="test" /> {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {a.kind === "rejoin" ? "Ask to rejoin waiting" : "Application waiting"}</span>
                 </Link>
               </li>
@@ -612,7 +616,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {inviteOnlyApps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-invite-only="">
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white">{appTests.get(a.testId)?.title ?? "A test"}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-invite-only-title=""><Cut text={appTests.get(a.testId)?.title ?? "A test"} kind="test" /></p>
                   <span className="badge border-slate-400/40 text-slate-300">Closed to new testers (invite only)</span>
                 </Link>
               </li>

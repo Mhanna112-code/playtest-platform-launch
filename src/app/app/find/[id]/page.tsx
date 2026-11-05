@@ -1,5 +1,7 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import { NameLink } from "@/components/Cut";
+import { NameLine } from "@/components/WholeLine";
+import { cutNamesIn } from "@/lib/cutNames";
 import { notFound, redirect } from "next/navigation";
 import { ArrowRight, BarChart3, CheckCircle2, Clock, FileSignature, FileText, HelpCircle, Languages, Lock, Monitor, Radio, Timer, Users, Video } from "lucide-react";
 import { CategoryBadges } from "@/components/Category";
@@ -109,6 +111,9 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   }
   const closed = paused || t.status !== "open" || testersIn >= t.spots || (t.openUntil && t.openUntil < new Date());
   const dev = displayName(t.developer);
+  // (Owner, Nov 5, §238) A line naming the developer: the name cut at 20 with "…" opening it in place, the arrow the whole line; whole, it links to their profile.
+  // `linked`: the badge keeps its plain words (no link inside the pill).
+  const devLine = (text: string, linked = true) => { const x = cutNamesIn(text, [dev]); return <NameLine shown={x.shown} full={x.full} {...(linked ? { name: dev, href: `/app/developers/${t.developerId}` } : {})} />; };
   // (Owner, Oct 30, batch 15 section 18) Every tester gets the same days from when they join: "Your deadline: Dec 3 (14 days from joining)".
   const localDay = (d: Date) => fmtDateIn(d, u.timeZone).replace(/, \d{4}$/, "");
   const days = joinerDays(t, t.developer.timeZone); // (batch 35 §32) the same helper as the developer's Listing panel
@@ -150,10 +155,11 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             {t.productName && <p className="kicker">{t.productName}</p>}
             {/* (Owner, Nov 3, batch 35 §168) The team opening a Next round's draft with no name yet: "Untitled draft (round 2)". */}
             <h1 className="text-2xl font-bold tracking-tight text-white">{testTitleOf(t)}</h1>
-            <p className="text-sm text-slate-400">
+            <div className="text-sm text-slate-400">
               by <NameLink text={dev} href={`/app/developers/${t.developerId}`} />{devRating.line && ` · ${devRating.line}`}
-              {invite ? <span className="badge ml-2 border-emerald-400/40 text-emerald-200">Invited</span> : t.joinMode === "apply" && <span className="badge ml-2 max-w-full border-sky-300/40 text-sky-200 [overflow-wrap:anywhere]">{dev} approves each tester</span>}
-            </p>
+              {/* (Owner, Nov 5, §238) The developer's name cut at 20: its "…" opens the name in place, the arrow the whole line (NameLine, §220). */}
+              {invite ? <span className="badge ml-2 border-emerald-400/40 text-emerald-200">Invited</span> : t.joinMode === "apply" && <span className="badge ml-2 max-w-full border-sky-300/40 text-sky-200 [overflow-wrap:anywhere]" data-approves-badge=""><span className="min-w-0">{devLine(`${dev} approves each tester`, false)}</span></span>}
+            </div>
           </div>
           <div className="text-right">
             <p className="text-2xl font-bold text-emerald-300">{(fixed.length > 1 || (fixed.length && t.liveRateCents != null)) && <span className="text-sm font-medium">from </span>}{big}</p>
@@ -177,7 +183,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       {invite && !blocked && (
         <section className="card flex flex-wrap items-start gap-3 border-emerald-400/30" id="invitation">
           <div className="min-w-0 flex-1 space-y-1">
-            <p className="font-semibold text-white">{dev} invited you</p>
+            <div className="font-semibold text-white [overflow-wrap:anywhere]" data-invited-by="">{devLine(`${dev} invited you`)}</div>
             <p className="text-sm text-slate-300" data-join-deadline="">Your deadline: {dueIfNow}</p>
             <p className="text-xs text-slate-400">Join below straight away{t.joinMode === "apply" ? ", no need to apply" : ""}.</p>
           </div>

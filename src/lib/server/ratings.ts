@@ -353,14 +353,14 @@ export async function ratingReminders(now = new Date()) {
  * Rate rules exactly (a dispute opening, a suspension or a hold, a rating given takes it away). Nothing while the viewer's own side is suspended or on a hold.
  */
 export async function ratingsToGive(user: { id: string; testerSuspendedAt: Date | null; devSuspendedAt: Date | null; holdStartedAt: Date | null }, side: Side, now = new Date()) {
-  const rows: { id: string; text: string; href: string; at: number }[] = [];
+  const rows: { id: string; text: string; href: string; at: number; /** (§238) the names in `text` (the person's, the test's), cut at 20 on the row */ names: string[] }[] = [];
   if (side === "tester") {
     if (user.testerSuspendedAt) return rows;
     const cs = await db.contract.findMany({ where: { testerId: user.id, OR: [{ submissions: { some: {} } }, { calls: { some: { status: "booked", startsAt: { lte: now } } } }] }, include: { test: { include: { developer: true } } }, orderBy: { joinedAt: "desc" }, take: 500 });
     const rated = new Set((await db.rating.findMany({ where: { contractId: { in: cs.map((c) => c.id) }, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
     for (const c of cs.filter((x) => !rated.has(x.id))) {
       if ((await testerRateState(c.id, now)).kind !== "open") continue;
-      rows.push({ id: c.id, text: `Rate ${displayName(c.test.developer)} on “${c.title}”`, href: `/app/sessions/${c.id}#rate`, at: (c.endedAt ?? c.joinedAt).getTime() });
+      rows.push({ id: c.id, text: `Rate ${displayName(c.test.developer)} on “${c.title}”`, href: `/app/sessions/${c.id}#rate`, at: (c.endedAt ?? c.joinedAt).getTime(), names: [displayName(c.test.developer), c.title] });
     }
   } else {
     if (user.devSuspendedAt || user.holdStartedAt) return rows;
@@ -371,7 +371,7 @@ export async function ratingsToGive(user: { id: string; testerSuspendedAt: Date 
       const s = states.get(c.id);
       if (!s || s.kind !== "open" || !s.endsAt) continue;
       const days = Math.max(1, Math.ceil((s.endsAt.getTime() - now.getTime()) / DAY));
-      rows.push({ id: c.id, text: `Rate ${displayName(c.tester)} on “${c.title}” · ${days} day${days === 1 ? "" : "s"} left`, href: `/app/tests/${c.testId}#rate-${c.id}`, at: s.opensAt!.getTime() });
+      rows.push({ id: c.id, text: `Rate ${displayName(c.tester)} on “${c.title}” · ${days} day${days === 1 ? "" : "s"} left`, href: `/app/tests/${c.testId}#rate-${c.id}`, at: s.opensAt!.getTime(), names: [displayName(c.tester), c.title] });
     }
   }
   return rows.sort((a, b) => b.at - a.at);

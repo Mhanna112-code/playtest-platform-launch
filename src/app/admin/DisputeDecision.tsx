@@ -11,6 +11,10 @@ import { adminDraftKey } from "@/lib/keptText";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
 import { ReasonQuote } from "@/components/ScrollText";
+import { Cut } from "@/components/Cut";
+
+/** (Owner, Nov 5, §238) A line with the developer's name in it: the name cut at 20 (Cut: the full name on hover, on a tap and when copied). */
+const nameCut = (line: string, name: string) => (name && line.includes(name) ? line.split(name).flatMap((part, i) => (i ? [<Cut key={i} text={name} />, part] : [part])) : line);
 
 const dollars = (c: number) => `$${(c / 100).toFixed(2)}`;
 
@@ -128,7 +132,7 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
       {extra > 0 && (
         <label className="flex items-start gap-2 text-sm" data-decide-tick="">
           <input type="checkbox" className="mt-1" checked={ticked} onChange={(e) => setTickedFor(e.target.checked ? typed : null)} />
-          <span>{decideTickLabel(dev, extra, typed!)}</span>
+          <span className="[overflow-wrap:anywhere]">{nameCut(decideTickLabel(dev, extra, typed!), dev)}</span>
         </label>
       )}
       </>}

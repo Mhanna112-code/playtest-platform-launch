@@ -87,7 +87,7 @@ export type TextVM = { id: string; at: string; text: string; href?: string; em?:
 /** A hold lift waiting for an admin's Approve (the 4th hold onward), in its own box: styled like a dispute row. */
 export type LiftVM = { id: string; at: string; head: string; owed: string; paid: string; /** (Batch 33 §1) the developer as a link */ headParts?: Rich };
 /** A profile report: who reported whom, when, why, with links to both profiles. */
-export type ReportVM = { id: string; at: string; reporter: string; reporterHref: string; reported: string; reportedHref: string; when: string; note: string; /** (Batch 33 §1) the email after each name */ reporterEmail?: string; reportedEmail?: string };
+export type ReportVM = { id: string; at: string; reporter: string; reporterHref: string; reported: string; reportedHref: string; when: string; note: string; /** (Batch 33 §1) the email after each name */ reporterEmail?: string; reportedEmail?: string; /** (§238) each name alone (cut at 20), its label after it */ reporterName?: string; reportedName?: string };
 export type PausedVM = { id: string; at: string; text: string; closure: string; extended: boolean; /** (Batch 33 §1) the test and the developer as links */ parts?: Rich };
 export type ChargebackVM = { id: string; at: string; email: string; since: string; chargebacks: string[]; cardVerified: boolean; owedPaid: boolean; owedLine: string; /** (Owner, Nov 3) from the 2nd chargeback: the team's review first (Approve allows paying) */ reviewFirst?: boolean; count?: number; approved?: boolean; /** (Batch 23 section 6) money reserved on the card; the last reservation lapsed */ reservedCents: number; expired: boolean; /** (Batch 33 §1) the developer as a link, and each chargeback with its Stripe id as a Dashboard link */ who?: Rich; chargebackParts?: Rich[] };
 
@@ -631,7 +631,7 @@ async function reports(cursor: string | null): Promise<Page<ReportVM>> {
   return {
     rows: page.map((r) => {
       const a = users.get(r.reporterId), b = users.get(r.reportedId);
-      return { id: r.id, at: r.createdAt.toISOString(), reporter: a ? labelled(displayName(a), flagged.has(a.id)) : "?", reporterHref: a ? profileHref(a) : "", reported: b ? labelled(displayName(b), flagged.has(b.id)) : "?", reportedHref: b ? profileHref(b) : "", reporterEmail: a?.email ?? "", reportedEmail: b?.email ?? "", when: fmtDateTime(r.createdAt), note: r.note };
+      return { id: r.id, at: r.createdAt.toISOString(), reporter: a ? labelled(displayName(a), flagged.has(a.id)) : "?", reporterHref: a ? profileHref(a) : "", reported: b ? labelled(displayName(b), flagged.has(b.id)) : "?", reportedHref: b ? profileHref(b) : "", reporterEmail: a?.email ?? "", reportedEmail: b?.email ?? "", reporterName: a ? displayName(a) : "?", reportedName: b ? displayName(b) : "?", when: fmtDateTime(r.createdAt), note: r.note };
     }),
     next: list.length > PAGE && last ? cur(last.createdAt, last.id) : null,
     total,

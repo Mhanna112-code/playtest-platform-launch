@@ -4,6 +4,8 @@ import { Star } from "lucide-react";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { ScrollList } from "@/components/ScrollList";
 import { ratingsToGive } from "@/lib/server/ratings";
+import { WholeLine } from "@/components/WholeLine";
+import { cutNamesIn } from "@/lib/cutNames";
 
 /**
  * (Owner, Oct 28, batch 17 section 17) "Ratings to give": a small box on each dashboard, in a plain scroll box (batch 16 section 14), each row opening the rating box
@@ -21,10 +23,11 @@ export async function RatingsToGive({ user, side }: { user: { timeZone?: string 
           </h2>
           <ScrollList className="space-y-2">
             {rows.map((r) => (
-              <li key={r.id}>
-                <Link href={r.href} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline" data-rate-row="">
-                  <span className="min-w-0 flex-1 truncate text-slate-200" title={r.text}>{r.text}</span>
-                </Link>
+              // (Owner, Nov 5, §238) The names cut at 20 with "…" and the arrow (WholeLine), no hover: the row opens through a link laid over it, and the
+              // line's "…" and arrow sit above that link.
+              <li key={r.id} className="relative flex items-center gap-3 rounded-lg border border-white/10 p-3 transition-colors hover:bg-white/5" data-rate-row="">
+                <Link href={r.href} aria-label={r.text} className="absolute inset-0 rounded-lg no-underline hover:no-underline" />
+                <div className="min-w-0 flex-1 text-slate-200 [overflow-wrap:anywhere] [&_[data-whole-line]]:relative [&_[data-whole-line]]:z-10 [&_button]:relative [&_button]:z-10" data-rate-line="">{(() => { const x = cutNamesIn(r.text, r.names); return <WholeLine shown={x.shown} full={x.full} />; })()}</div>
               </li>
             ))}
           </ScrollList>

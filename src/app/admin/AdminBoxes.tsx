@@ -15,6 +15,7 @@ import { accountPaymentsForAdmin, stripeUrl } from "@/lib/server/paymentLists";
 import { DevPaidList, OwedReadOnly, TesterEarnedList } from "@/components/PaymentLists";
 import { testHref } from "@/lib/server/adminLinks";
 import { displayName, fmtDateTimeIn } from "@/lib/format";
+import { Cut } from "@/components/Cut";
 
 // (Owner, Oct 27) Admin-only boxes on a person's profile and on a test's own page, newest first. Never shown to anyone else. (Batch 17 §7) Each is a scroll box
 // that loads the next 25 as it nears its end, its heading keeping the total.
@@ -85,7 +86,7 @@ export async function AdminPersonBoxes({ userId, adminId, developer, tester }: {
 function TheirPayments({ name, theirs, fmt }: { name: string; theirs: NonNullable<Awaited<ReturnType<typeof accountPaymentsForAdmin>>>; /** a date in the admin's zone (bound here: the lists draw after this request's zone store) */ fmt: (d: Date) => string }) {
   return (
     <section className="space-y-3" data-admin-their-payments="">
-      <h3 className="font-semibold text-white">Payments as {name} sees them</h3>
+      <h3 className="font-semibold text-white [overflow-wrap:anywhere]">Payments as <Cut text={name} /> sees them</h3>{/* (§238) the name cut at 20 */}
       <p className="text-xs text-slate-400">Their Payments page&apos;s lists, read-only: each line as they read it, dates in your time zone.</p>
       {/* As on their page: Pay what you owe (during a hold) above what they've paid. */}
       {theirs.owed && <OwedReadOnly owed={theirs.owed} stripeUrl={theirs.owedStripe} />}
