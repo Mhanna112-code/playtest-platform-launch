@@ -4443,3 +4443,19 @@ that still drew a long name whole or only as a `truncate` + `title` hover:
 - **Tests:** new `tests/names-sweep-238.test.ts` (offerLine; the dashboard's offer row rendered with a long developer name and diff: two "…", the arrow, the
   overlay link; the waiting cards; Ratings to give; the join page; the Reports row rendered: names and emails cut, links and label kept). Fixed: the stale
   NameLink count in `batch35-name-links` (§236 moved the Terms history lines to NameLine).
+
+## §239 No notes on recordings (owner, Nov 5)
+Replaces §182's notes block on a recording. Testers no longer add a note when sending recordings: the recording's Send has no notes box and sends none, and the
+server ignores a `notes` field on `recording-send` and stores nothing (`sendRecording`). Stored notes on old recordings are never shown (no migration): SentWork's
+recording view drops its "Notes" block, which covers the tester's and the developer's views (Needs you, the updates, the Testers list) and the admin's See the
+work in a dispute. No email or bell named them. The written part's notes and "Anything else" are not affected. **Tests:** new
+`tests/recording-notes-239.test.ts` (an old note not shown, the written part's still shown; a Send with notes stores none; no notes in RecordingUpload); updated
+`batch35-listing-paid-parts` (the paid recording's row shows its file above Pay more, not its old note).
+
+## §240 Pay what you owe: a charge from before the hold waiting for the bank says so (owner, Nov 5; from the recordings)
+A charge made before the hold (status "deferred", made before `holdStartedAt`) read "… · waiting until your tests resume" in Pay what you owe's box even while its
+bank check was open (Pay what you owe's one payment covering it waiting for the bank). When its check is really open (its own `actionPi`, the one payment covering
+it in needs_action / needs_confirmation with a check, or the chargeback hold's reservation's check) it now reads "… · waiting for your bank (Confirm with your
+bank)" (`OWED_BANK_WAIT_TAIL`, `owedLines` in `src/lib/server/holds.ts`). A charge truly waiting for the lift keeps "waiting until your tests resume" (and goes
+back to it when the check ends with nothing charged). **Tests:** `tests/payment-piece-names.test.ts` (§240: the lift line, the one payment's open check, the check
+cancelled, its own check).

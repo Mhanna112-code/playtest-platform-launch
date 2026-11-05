@@ -704,6 +704,9 @@ export async function tellArrived(p: { contractId: string | null; submissionId: 
   await notify(email, line, [line + "."], p.contractId ? `/app/sessions/${p.contractId}#${p.callId ? `call-${p.callId}` : sub?.kind === "recording" ? "part-recording" : "part-written"}` : "/app/payments", { side: "tester", payment: true, group: "tarrived" });
 }
 
+/** (Owner, Nov 5, §240) Pay what you owe's line for a charge made before the hold whose bank check is still open. */
+export const OWED_BANK_WAIT_TAIL = "waiting for your bank (Confirm with your bank)";
+
 /** (§125) A charge that came in while the one payment is in flight. */
 export const OWED_AFTER_CHECK = "Charged right after the payment above goes through";
 
@@ -761,9 +764,13 @@ export async function owedLines(devId: string) {
     // (Owner, Nov 4, §178) A reversed call payment names the call (its date and time), not the day it was paid: "Your bank reversed $15.50 you paid for bb's live
     // call on “excerptexcer…” (Tue, Oct 27, 7:15 AM)" (it read "(Nov 4)", the payment's day, for two different calls).
     const paidFor = c ? { name: displayName(c.tester), part, test: c.test.title, date: when ?? fmtDate(p.createdAt).replace(/, \d{4}$/, "") } : undefined;
+    // (Owner, Nov 5, §240) A charge made before the hold whose bank check is open (its own, the one payment's covering it, or the hold's reservation's) is waiting for
+    // the bank, never for the lift: "… · waiting for your bank (Confirm with your bank)".
+    const before = p.status === "deferred" && !!u?.holdStartedAt && p.createdAt < u.holdStartedAt;
+    const bankWait = before && (!!p.actionPi || !!reserving.get(p.id) || (!!p.coveredById && !!(await db.payment.findFirst({ where: { id: p.coveredById, actionPi: { not: null }, status: { in: ["needs_action", "needs_confirmation"] } }, select: { id: true } }))));
     const tail = p.status === "owed" || p.status === "deferred" || (p.status === PAYING && !p.owedUntil)
       // (Owner, Nov 2) One made before this hold started (its bank check paused when the hold began) reads "waiting until your tests resume", not "… while paused".
-      ? ` ${money(p.amountCents)} · ${p.status === "deferred" && u?.holdStartedAt && p.createdAt < u.holdStartedAt ? "waiting until your tests resume" : `${p.kind === "dispute" ? "decided" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused`}`
+      ? ` ${money(p.amountCents)} · ${bankWait ? OWED_BANK_WAIT_TAIL : before ? "waiting until your tests resume" : `${p.kind === "dispute" ? "decided" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused`}`
       : null;
     // (Owner, Nov 3, §133) The bank reversed only PART of the payment: "Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee" (a payment for one
     // piece names it: "… of the $444.67 you paid for …"). Pay what you owe's one payment paid for several items and the bank gives only an amount: what it covered

@@ -3,7 +3,6 @@ import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
 import { AnswerText, QuestionText } from "@/components/QA";
-import { ANSWER_LINES, LongText } from "@/components/LongText";
 import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, additionsUntil, isPastQuestion, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
@@ -55,10 +54,6 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
   const first = after == null ? uploaded.filter((f) => !later.has(f.id)) : [];
   const all = uploaded.map(asAttachment);
   const byId = (ids: string[]) => uploaded.filter((f) => ids.includes(f.id));
-  // (Owner, Nov 4, §182) A recording's notes fold with LongText: its first 3 lines, then Show more opening a scroll box about 8 lines tall.
-  const notesBlock = (text: string, panel = `${id}-notes`) => (
-    <div className="text-sm"><p className="font-medium text-ink-200">Notes</p><LongText text={text} lines={ANSWER_LINES} id={panel} label="Notes"><AnswerWithAttachments text={text} attachments={all} /></LongText></div>
-  );
   // (§223) An answer, an addition or a note in its own box (`panel`: its unique id, which keeps its dragged height).
   const answerBox = (text: string, panel: string, label: ReactNode, name: string) => <AnswerText id={panel} label={label} name={name}><AnswerWithAttachments text={text} attachments={all} /></AnswerText>;
   const addedText = (a: { at: string; text: string; files: string[] }, i: number, panel = `${id}-add-${i}`) => (
@@ -69,8 +64,8 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
   );
   if (kind === "recording") {
     return (
+      // (Owner, Nov 5, §239; replaces §182's notes block) Recordings carry no notes: an old recording's stored notes are never shown.
       <div className="space-y-2" data-sent-work="recording">
-        {after == null && notes && notesBlock(notes)}
         <AttachmentList items={first} />
         {adds.map((a, i) => isNew(a.at) && (
           <div key={i} className="space-y-1 border-t border-white/10 pt-2" data-addition={i}>

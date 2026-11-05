@@ -202,6 +202,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     const data = { late: lateNow, updatedAt: now, ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(lateNow ? { choiceOfferedAt: null, choiceBy: null } : {}) }) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data: { ...data, additions: [...additionsOf(existing.additions), { at: now.toISOString(), files: fresh.map((r) => r.id) }] as unknown as Prisma.InputJsonValue } })
+      // (Owner, Nov 5, §239) A recording takes no notes: a `notes` in the body is ignored and nothing is stored (the written part keeps its own).
       : await tx.submission.create({ data: { contractId, kind: "recording", agreedCents: c.recordingCents, ...data } });
     await tx.recording.updateMany({ where: { id: { in: fresh.map((r) => r.id) } }, data: { submissionId: sub.id } });
     const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "recording", added: !!existing, paid, n: fresh.length });

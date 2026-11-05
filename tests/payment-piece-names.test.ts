@@ -9,7 +9,7 @@ import { ConfirmList } from "@/app/app/payments/ConfirmList";
 import { OwedBox } from "@/components/OwedBox";
 import { chargebackOwedLine, cut10, disputeDecisionName, partOf, pieceName } from "@/lib/rules";
 import { bankToConfirm, bankWaitingOnTest, confirmItems } from "@/lib/server/confirm";
-import { owedLines, startHold } from "@/lib/server/holds";
+import { OWED_BANK_WAIT_TAIL, owedLines, startHold } from "@/lib/server/holds";
 import { joined, sact, setup } from "./fixtures";
 
 // (Owner, Nov 2, §131) Every developer-facing payment line names WHICH tester, WHICH part and WHICH test, with one helper (pieceName): the tester's and the test's names
@@ -125,5 +125,29 @@ describe("a charge paused by a hold that started after it (owner, Nov 2)", () =>
     await startHold(w.dev.user.id, "unpaid");
     const lines = await owedLines(w.dev.user.id);
     expect(lines.map((l) => l.text)).toContain("The team's dispute decision on Alexandria Montgomer…'s recording on “chargechargeback run…” $96.00 · waiting until your tests resume");
+  });
+});
+
+describe("§240 a charge made before the hold that's waiting for the bank (owner, Nov 5)", () => {
+  it("reads 'waiting for your bank (Confirm with your bank)' when its check is open (Pay what you owe's one payment covering it); one waiting for the lift keeps its line", async () => {
+    const w = await world();
+    await db.payment.create({ data: { ...w.base, kind: "review", submissionId: w.written.id, amountCents: 800, status: "failed", owedUntil: new Date(), createdAt: new Date(Date.now() - 3000) } });
+    const waits = await db.payment.create({ data: { ...w.base, kind: "dispute", submissionId: w.recording.id, amountCents: 9600, status: "deferred", createdAt: new Date(Date.now() - 2000) } });
+    await startHold(w.dev.user.id, "unpaid");
+    const tail = (lines: { id: string; text: string }[]) => lines.find((l) => l.id === waits.id)!.text.split(" · ").pop();
+    expect(tail(await owedLines(w.dev.user.id))).toBe("waiting until your tests resume");
+    // Pay what you owe pressed: its one payment covers the charge and its bank check is open.
+    const one = await db.payment.create({ data: { kind: "owed", developerId: w.dev.user.id, testerId: w.dev.user.id, amountCents: 10400, feeCents: 10400, testerCents: 0, transferStatus: "none", status: "needs_action", note: "press", ...bankWait() } });
+    await db.payment.update({ where: { id: waits.id }, data: { coveredById: one.id } });
+    const lines = await owedLines(w.dev.user.id);
+    expect(tail(lines)).toBe(OWED_BANK_WAIT_TAIL);
+    expect(OWED_BANK_WAIT_TAIL).toBe("waiting for your bank (Confirm with your bank)");
+    expect(lines.find((l) => l.id === waits.id)!.text).toBe("The team's dispute decision on Alexandria Montgomer…'s recording on “chargechargeback run…” $96.00 · waiting for your bank (Confirm with your bank)");
+    // The check ended (cancelled, nothing charged): it waits for the lift again.
+    await db.payment.update({ where: { id: one.id }, data: { status: "cancelled", actionPi: null } });
+    expect(tail(await owedLines(w.dev.user.id))).toBe("waiting until your tests resume");
+    // Its own check open (a check made before §117): the bank too.
+    await db.payment.update({ where: { id: waits.id }, data: { coveredById: null, actionPi: "pi_" + randomUUID() } });
+    expect(tail(await owedLines(w.dev.user.id))).toBe(OWED_BANK_WAIT_TAIL);
   });
 });
