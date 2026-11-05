@@ -3565,7 +3565,8 @@ once, next to their name at the top, on the right of the name row, wherever thei
      row is gone (the figure is shown once); its "Calls: 1 booked ahead, 1 done" stays, on its own ("Calls: …", only when there are calls).
   3. **The Call requests boxes' person drop-downs** (§185's "Requests to you" / "Your requests"): "· 2 requests   paid $15.00 so far" (trivial: the page passes it
      with each request).
-  On a phone the name is cut with "…" first; "· N things" and the figure are never cut.
+  On a phone (below the `sm` width) the figure reads "paid $15.00" (no "so far"), so the name keeps room; the name is cut with "…" first; "· N things" and the
+  figure are never cut. The Testers row's heading wraps on a phone as before (name, badges, then the figure).
 - **What it counts** (`paymentRows.paidForWork` / `workPaidCents`): what the developer paid for THAT tester's work on this test: Pay (the tester's Charge and a
   call's automatic charge are recorded as Pay: kinds "review" / "call"), Pay more ("extra") and the team's decision charges ("dispute"), each charged or recorded
   with payments not set up. Never: a repayment of a reversed payment or its chargeback fee, a raise charge (kind "chargeback"), subscriptions, Pay what you owe's
@@ -3583,6 +3584,6 @@ once, next to their name at the top, on the right of the name row, wherever thei
 - **Tests.** New `tests/paid-total-195.test.ts`: the sum (Pay, Pay more, decision charge, the tester's Charge, an automatic call charge counted; waiting, failed and
   deferred charges, a repayment and its fee not; a part-reversal not repaid taken off; a repaid one and a won one whole; `paidSoFar` unchanged); a lowered amount
   refunded / a raise charged or waiting after a repayment; the page: the long-named tester's Needs you summary, Testers row heading and Call requests person each
-  show `data-paid-so-far="1500"` "paid $15.00 so far" (a $6 charge waiting for the bank not counted), no "Paid in all", the Pay box with its listing and no "so far
+  show `data-paid-so-far="1500"` "paid $15.00 so far" (" so far" hidden below `sm`; a $6 charge waiting for the bank not counted), no "Paid in all", the Pay box with its listing and no "so far
   on this test". Updated: `batch35-restricted-needs-you` (summaries end with "paid $0.00 so far"), `batch35-tester-folds` (the summary's calls line, the heading's
   figure), `layout-fixes-187` / `long-text-layout` (the row is `flex-1`), `anything-else-cancel-188` / `ui-fixes-189` (no `paidSoFarCents` prop).

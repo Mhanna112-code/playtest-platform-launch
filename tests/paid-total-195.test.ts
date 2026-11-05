@@ -104,19 +104,19 @@ describe("§195 the figure by the tester's name; not in the Pay box", () => {
     const person = html.indexOf(`data-needs-person="${j.sessionId}"`);
     expect(person).toBeGreaterThan(0);
     const summary = html.slice(person, html.indexOf("</summary>", person));
-    expect(summary).toMatch(/data-needs-person-count="">· 3 things<\/span><span class="ml-auto shrink-0 whitespace-nowrap[^"]*" data-paid-so-far="1500">paid \$15\.00 so far<\/span>/);
+    expect(summary).toMatch(/data-needs-person-count="">· 3 things<\/span><span class="ml-auto shrink-0 whitespace-nowrap[^"]*" data-paid-so-far="1500">paid \$15\.00<span class="hidden sm:inline"> so far<\/span><\/span>/);
     // The Testers row: in its name row (the fold's summary), after the badges.
     const row = html.indexOf(`id="tester-${j.sessionId}"`);
     expect(row).toBeGreaterThan(person);
     const heading = html.slice(row, html.indexOf("</summary>", row));
     expect(heading).toContain("data-tester-fold-name=");
-    expect(heading).toContain('data-paid-so-far="1500">paid $15.00 so far</span>');
+    expect(heading).toContain('data-paid-so-far="1500">paid $15.00<span class="hidden sm:inline"> so far</span></span>');
     expect(heading.indexOf("data-paid-so-far")).toBeGreaterThan(heading.indexOf('class="badge"'));
     expect(html).not.toContain("Paid in all");
     // The Call requests box's person: the same figure on the right of "· 1 request".
     const box = html.indexOf(`data-call-requests-person="${j.sessionId}"`);
     expect(box).toBeGreaterThan(0);
-    expect(html.slice(box, html.indexOf("</summary>", box))).toMatch(/· 1 request<\/span><span[^>]*data-paid-so-far="1500">paid \$15\.00 so far<\/span>/);
+    expect(html.slice(box, html.indexOf("</summary>", box))).toMatch(/· 1 request<\/span><span[^>]*data-paid-so-far="1500">paid \$15\.00<span class="hidden sm:inline"> so far<\/span><\/span>/);
     // Once per group: Needs you's person, the Testers row, the Call requests box's person.
     expect(html.match(/data-paid-so-far="/g)).toHaveLength(3);
     // The Pay box: its listing, no "so far on this test" sentence.

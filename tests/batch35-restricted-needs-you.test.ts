@@ -202,8 +202,8 @@ describe("§175 Confirm with your bank grouped by tester", () => {
     expect(alexTag).toMatch(/<details class="[^"]*" data-hold-fold="" data-needs-person="/);
     expect(alexTag).not.toMatch(/<details[^>]*\sopen=""[^>]*data-needs-person=/);
     expect(html.match(/data-needs-person-toggle=""/g)).toHaveLength(2);
-    expect(html.slice(alexPerson, alexGroup)).toMatch(/<summary[^>]*data-needs-person-toggle=""[^>]*>.*data-name-link="person".*· 4 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00 so far<\/span><\/span><\/summary>/);
-    expect(html.slice(bePerson, beaGroup)).toMatch(new RegExp(`· ${state === "held" ? "1 thing" : "2 things"}</span><span[^>]*data-paid-so-far="0">paid \\$0\\.00 so far</span></span></summary>`));
+    expect(html.slice(alexPerson, alexGroup)).toMatch(/<summary[^>]*data-needs-person-toggle=""[^>]*>.*data-name-link="person".*· 4 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
+    expect(html.slice(bePerson, beaGroup)).toMatch(new RegExp(`· ${state === "held" ? "1 thing" : "2 things"}</span><span[^>]*data-paid-so-far="0">paid \\$0\\.00<span class="hidden sm:inline"> so far</span></span></span></summary>`));
     // A sub-heading over each kind only when the person has more than one kind.
     expect(html.slice(alexPerson, bePerson)).toContain('data-needs-kind="bank">Confirm with your bank</h3>');
     expect(html.slice(bePerson).includes('data-needs-kind="bank"')).toBe(state === "active");
@@ -240,8 +240,8 @@ describe("§181 Needs you: one drop-down per person", () => {
     // The count on Needs you is still every thing; each summary is the green name and "· N things", then (Owner, Nov 4, §195) a tester's paid so far on the right
     // (none for an applicant who hasn't joined).
     expect(html).toMatch(/<h2 class="inline">Needs you<\/h2> <span class="text-sm font-normal text-slate-400">6<\/span>/);
-    expect(alex).toMatch(/data-name-link="person".*· 3 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00 so far<\/span><\/span><\/summary>/);
-    expect(bea).toMatch(/data-name-link="person".*· 2 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00 so far<\/span><\/span><\/summary>/);
+    expect(alex).toMatch(/data-name-link="person".*· 3 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
+    expect(bea).toMatch(/data-name-link="person".*· 2 things<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
     expect(cara1).toMatch(/data-name-link="person".*· 1 thing<\/span><\/span><\/summary>/);
     expect(html).not.toContain("parts to pay");
     expect(html).not.toContain("charges waiting");
@@ -275,7 +275,7 @@ describe("§181 Needs you: one drop-down per person", () => {
     expect(holds.find((x) => x.includes("data-call-requests-box"))).toMatch(/\sopen=""/);
     // The box: one drop-down per person ("· 1 request"), her request inside it with Accept / Decline; no Needs you row with buttons.
     const inBox = html.slice(html.indexOf(`id="call-requests-person-${b.sessionId}"`));
-    expect(inBox).toMatch(/data-name-link="person".*· 1 request<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00 so far<\/span><\/span><\/summary>/);
+    expect(inBox).toMatch(/data-name-link="person".*· 1 request<\/span><span[^>]*data-paid-so-far="0">paid \$0\.00<span class="hidden sm:inline"> so far<\/span><\/span><\/span><\/summary>/);
     expect(inBox.indexOf(`id="req-${ask.id}"`)).toBeGreaterThan(0);
     expect(inBox).toContain("Decline</button>");
     expect(html).not.toContain(`id="needs-req-${ask.id}"`);
