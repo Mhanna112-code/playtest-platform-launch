@@ -6,8 +6,8 @@ import { jumpTo } from "@/lib/markJump";
 import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
 import { NdaBox } from "@/components/NdaBox";
-import { QuestionList } from "@/components/QuestionList";
-import { FieldLabel, FieldValue } from "@/components/FieldLines";
+import { ResizeBox } from "@/components/Panel";
+import { FieldLabel } from "@/components/FieldLines";
 import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
@@ -103,10 +103,29 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       {offer.questions && offer.fromQuestions && JSON.stringify(offer.questions) !== JSON.stringify(offer.fromQuestions) && (
         <details className="text-sm" open>
           <summary className="cursor-pointer font-medium">The questions changed: before and after</summary>
-          {/* (Owner, Oct 31, batch 35 §29) As the Listing panel (§15): each list under its own small uppercase label, numbered, Required as a small tag. */}
-          <div className="mt-1 text-xs text-sky-200/80"><FieldLabel>Before</FieldLabel><FieldValue><QuestionList numbered items={offer.fromQuestions} /></FieldValue></div>
-          <div className="mt-1"><FieldLabel>After</FieldLabel><FieldValue><QuestionList numbered items={offer.questions} /></FieldValue></div>
-          {offer.answers && offer.answers.some(Boolean) && <p className="mt-1 whitespace-pre-wrap text-xs text-sky-200/80">Your answers so far: {offer.answers.filter(Boolean).join(" / ")}</p>}
+          {/* (Owner, Nov 5, §221; was two numbered lists, Before then After, and the answers run together) One block per question number: its Before, its After and
+              your answer so far, each in its own box that scrolls and drags taller (ResizeBox). A question only one side has says "(new)" or "(removed)". */}
+          <ol className="mt-2 space-y-3" data-question-changes="">
+            {Array.from({ length: Math.max(offer.fromQuestions.length, offer.questions.length) }, (_, i) => {
+              const before = offer.fromQuestions![i], after = offer.questions![i], answer = offer.answers?.[i] ?? "";
+              const box = (label: string, key: string, q: OfferQuestion | undefined, text?: string) => (
+                <div className="space-y-1" data-question-change-part={key}>
+                  <FieldLabel>{label}{q?.required ? <span className="ml-1 rounded border border-white/20 px-1 text-[10px] normal-case">Required</span> : null}</FieldLabel>
+                  {q || text ? <ResizeBox id={`offer-${offer.id}-${i}-${key}`} label={`Question ${i + 1}: ${label}`} defaultMax="6rem" tallest={0.6}>
+                    <p className="whitespace-pre-wrap break-words">{q ? q.text : text}</p>
+                  </ResizeBox> : <p className="text-xs text-sky-200/70">{key === "before" ? "(new)" : key === "after" ? "(removed)" : "(no answer yet)"}</p>}
+                </div>
+              );
+              return (
+                <li key={i} className="space-y-2 rounded-lg border border-white/10 p-2" data-question-change={i + 1}>
+                  <p className="font-medium">Question {i + 1}</p>
+                  {box("Before", "before", before)}
+                  {box("After", "after", after)}
+                  {box("Your answer so far", "answer", undefined, answer)}
+                </li>
+              );
+            })}
+          </ol>
           {offer.switchNote && <p className="mt-1" data-switch-questions="">{offer.switchNote}</p>}
         </details>
       )}

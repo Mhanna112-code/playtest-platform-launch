@@ -4233,3 +4233,8 @@ A payment row (Payments, Pay what you owe's box, a part's payments, the charges 
 row itself into the whole line, every name whole, in the draggable panel (ResizeBox: it starts small and the grip drags it taller, to half the screen; inside another
 panel it keeps its own scroll, OwnPanel); the arrow again closes it. No copy under the row. Closed, each "…" in the row is a button that opens just that name in
 place (`cutPieces` lines the cut text up with the whole line). A row with nothing cut is plain, with no arrow. Test: `tests/nov5-batch2.test.ts`.
+
+## §221 The questions changed: one block per question (owner, Nov 5)
+The new-terms box's "The questions changed: before and after" listed all the Before questions, then all the After ones, then "Your answers so far: a / b / c" run
+together. Now one block per question number: "Question 1", its Before, its After and your answer so far, each in its own box that scrolls and drags taller
+(ResizeBox); a question only one side has reads "(new)" or "(removed)", and an unanswered one "(no answer yet)". Test: `tests/nov5-batch2.test.ts`.

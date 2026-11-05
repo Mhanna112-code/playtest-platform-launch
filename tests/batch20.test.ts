@@ -84,7 +84,7 @@ describe("batch 20 section 1: more than 3 questions sit in a scroll box", () => 
     const session = src("app/app/sessions/[id]/page.tsx");
     expect(session).toContain('<li data-scope-questions=""><FieldLabel>Questions</FieldLabel><FieldValue><QuestionList numbered items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></li>'); // (batch 35 §29)
     expect(session).toContain("<FieldLabel>Then</FieldLabel><FieldValue><QuestionList numbered items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue>"); // (batch 35 §29)
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("<QuestionList numbered items={offer.fromQuestions} />"); // (batch 35 §29)
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('{box("Before", "before", before)}'); // (batch 35 §29)
     expect(src("app/app/tests/[id]/ListingPanel.tsx")).toContain("<QuestionList numbered items="); // (batch 35 §15 numbered; batch 34 §14) the Listing panel replaced Contract changes
     expect(src("app/app/find/[id]/page.tsx")).toContain("<QuestionBox count={l.questions.length} as=\"ul\"");
     const form = src("app/app/sessions/[id]/SessionActions.tsx");

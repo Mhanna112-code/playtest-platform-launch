@@ -92,3 +92,14 @@ describe("(Owner, Nov 5) §217 on the kept refusal too (recording R4a re-take)",
     expect(keptRefusalLine("Join call", "This call isn't available.")).toBe("Your Join call didn't go through: this call isn't available.");
   });
 });
+
+describe("(Owner, Nov 5) §221 the questions changed: one block per question", () => {
+  it("each question number shows its Before, After and your answer so far, each in its own draggable scroll box", () => {
+    const s = read("src/app/app/sessions/[id]/TesterTop.tsx");
+    expect(s).toContain('{box("Before", "before", before)}');
+    expect(s).toContain('{box("After", "after", after)}');
+    expect(s).toContain('{box("Your answer so far", "answer", undefined, answer)}');
+    expect(s).toContain('<ResizeBox id={`offer-${offer.id}-${i}-${key}`}');
+    expect(s).not.toContain("Your answers so far:");
+  });
+});

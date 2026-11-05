@@ -208,8 +208,9 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
 
   it("the new-terms offer (Switch / Keep) and the terms history's questions then and now", () => {
     const top = src("app/app/sessions/[id]/TesterTop.tsx");
-    expect(top).toContain("<FieldLabel>Before</FieldLabel><FieldValue><QuestionList numbered items={offer.fromQuestions} /></FieldValue>");
-    expect(top).toContain("<FieldLabel>After</FieldLabel><FieldValue><QuestionList numbered items={offer.questions} /></FieldValue>");
+    // (§221) Labels still apart from values: one block per question, each part under its own label.
+    expect(top).toContain("<FieldLabel>{label}");
+    expect(top).toContain('{box("Before", "before", before)}');
     expect(top).not.toMatch(/>Before: <QuestionList|>After: <QuestionList/);
     const s = src("app/app/sessions/[id]/page.tsx");
     expect(s).toContain("fromQuestions: ((c.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) })),");
