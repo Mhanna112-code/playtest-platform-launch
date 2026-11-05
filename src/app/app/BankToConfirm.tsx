@@ -34,7 +34,7 @@ export function BankToConfirmBox({ rows, seenAt = "", all }: { rows: BankTopRow[
       {/* (§147) An open Confirm all check is a row too (the count, the poll), drawn by Confirm all above the list. */}
       {rows.filter((r) => !r.all).map((r) => (
         <li key={r.id} className="rounded-lg border border-white/10 p-3 text-sm" data-bank-top-row={r.id}>
-          <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} full={`${r.full} · ${r.by}`} line={<>{withTestLinks(r.lead, r.tests)} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
+          <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} full={r.full} text={r.lead} render={(t) => withTestLinks(t, r.tests)} after={<> · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} line={<>{withTestLinks(r.lead, r.tests)} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
         </li>
       ))}
     </DashboardActionBox>

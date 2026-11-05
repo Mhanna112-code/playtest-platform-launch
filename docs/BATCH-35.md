@@ -4256,3 +4256,8 @@ named refusal at the top of the box (lostRefusal, §207).
 ## §229 Call requests under the Live session panel (owner, Nov 5)
 Replaces §181's place ("right under Needs you"): the Call requests box ("Requests to you" and "Your requests") sits right under the Live session panel on the
 developer's test page. Needs you's "2 call requests ↓" lines still jump to it.
+
+## §230 The confirm lists open like payment rows (owner, Nov 5)
+"Your bank wants you to confirm" (Payments' list, the dashboard's box, a charge's Confirm with your bank on the test page) named its payment with the names cut and the
+whole line only as a mouse hover. Now each line opens like a payment row (§220): each "…" opens its name, the arrow opens the whole line in place in the draggable
+box; quoted test names still link to their tests. No hover.

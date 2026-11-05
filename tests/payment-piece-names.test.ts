@@ -59,16 +59,21 @@ async function world() {
 const bankWait = () => ({ status: "needs_confirmation", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 2 * DAY) });
 
 describe("§131 the bank-confirm items", () => {
-  it("a dispute decision waiting for the bank names its piece on Payments, the dashboard and the test page; the full names are the hover", async () => {
+  it("a dispute decision waiting for the bank names its piece on Payments, the dashboard and the test page; the full names open with the arrow (§230)", async () => {
     const w = await world();
     const p = await db.payment.create({ data: { ...w.base, kind: "dispute", submissionId: w.written.id, amountCents: 32000, ...bankWait() } });
     const [item] = await confirmItems(w.dev.user.id);
     expect(item.text).toMatch(/^The team's dispute decision on Alexandria Montgomer…'s written answers on “chargechargeback run…” \$320\.00 · confirm by /);
     expect(item.full).toMatch(/^The team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe” \$320\.00 · confirm by /);
-    expect(renderToStaticMarkup(createElement(ConfirmList, { items: [item] }))).toContain(`title="${html(item.full)}"`);
+    // (§230) The cut line opens with the arrow (and each "…" its name), never a hover.
+    const listHtml = renderToStaticMarkup(createElement(ConfirmList, { items: [item] }));
+    expect(listHtml).not.toContain(`title="${html(item.full)}"`);
+    expect(listHtml).toContain('data-whole-toggle=""');
     const [row] = await bankToConfirm(w.dev.user.id);
     expect(row).toMatchObject({ id: p.id, lead: "$320.00 · the team's dispute decision on Alexandria Montgomer…'s written answers on “chargechargeback run…”", full: "$320.00 · the team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe”" });
-    expect(renderToStaticMarkup(createElement(BankToConfirmBox, { rows: [row] }))).toContain(`title="${html(`${row.full} · ${row.by}`)}"`);
+    const boxHtml = renderToStaticMarkup(createElement(BankToConfirmBox, { rows: [row] }));
+    expect(boxHtml).not.toContain(`title="${html(`${row.full} · ${row.by}`)}"`);
+    expect(boxHtml).toContain('data-whole-toggle=""');
     const [onTest] = await bankWaitingOnTest(w.dev.user.id, w.testId);
     expect(onTest.line).toMatch(/^Your bank wants you to confirm a \$320\.00 payment for the team's dispute decision on her written answers, made while you were away\./); // (Owner, Nov 4, §175) under the tester's name; (§180) no test name on its own page
     expect(onTest.full).toContain("for the team's dispute decision on her written answers, made while you were away.");

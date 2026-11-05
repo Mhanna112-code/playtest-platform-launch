@@ -25,18 +25,20 @@ export function cutPieces(shown: string, full: string): { text: string; hidden?:
  * each "…" opens just that name in place. The arrow opens the WHOLE row in place, every name whole, in the draggable panel (it starts small and the grip drags it
  * taller, to half the screen); the arrow again closes it. A row with nothing cut is plain. `href` links the words; `after` follows them (amounts, how it was paid).
  */
-export function WholeLine({ shown, full, href, after, className = "", children }: { shown: string; full?: string | null; href?: string; after?: ReactNode; className?: string; /** (older callers) the closed row as given */ children?: ReactNode }) {
+export function WholeLine({ shown, full, href, after, className = "", render, children }: { shown: string; full?: string | null; href?: string; after?: ReactNode; className?: string;
+  /** (§230) how a piece of the text is drawn (the confirm lists link the quoted test names) */ render?: (t: string) => ReactNode; /** (older callers) the closed row as given */ children?: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [names, setNames] = useState<number[]>([]);
   const id = useId();
   const cut = !!full && full !== shown;
+  const draw = render ?? keepAmounts;
   const words = (t: ReactNode) => (href ? <a className="hover:underline" href={href}>{t}</a> : <span className={className}>{t}</span>);
-  if (!cut) return children ? <>{children}</> : <>{href ? <a className="hover:underline" href={href}>{shown}</a> : className ? <span className={className}>{shown}</span> : shown}{after}</>;
+  if (!cut) return children ? <>{children}</> : <>{href ? <a className="hover:underline" href={href}>{render ? render(shown) : shown}</a> : className ? <span className={className}>{render ? render(shown) : shown}</span> : render ? render(shown) : shown}{after}</>;
   const pieces = cutPieces(shown, full!);
   const closed = pieces
-    ? pieces.map((p, i) => p.hidden == null ? <span key={i}>{keepAmounts(p.text)}</span> : names.includes(i) ? <span key={i} data-name-open="">{p.hidden}</span>
+    ? pieces.map((p, i) => p.hidden == null ? <span key={i}>{draw(p.text)}</span> : names.includes(i) ? <span key={i} data-name-open="">{p.hidden}</span>
       : <button key={i} type="button" className="rounded px-0.5 text-sky-300 hover:bg-white/10" aria-label="Show the whole name" data-name-toggle="" onClick={() => setNames([...names, i])}>…</button>)
-    : keepAmounts(shown);
+    : draw(shown);
   const arrow = (
     <button type="button" className="ml-1 inline-flex rounded p-0.5 align-middle text-slate-400 hover:bg-white/10 hover:text-slate-100" aria-expanded={open}
       aria-label={open ? "Hide the whole line" : "Show the whole line"} data-whole-toggle="" onClick={() => setOpen(!open)}>
@@ -48,7 +50,7 @@ export function WholeLine({ shown, full, href, after, className = "", children }
     <span className="block" data-whole-line="">
       <OwnPanel>
         <ResizeBox id={`whole-${id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>
-          <span className="block whitespace-pre-wrap break-words font-normal">{words(keepAmounts(full!))}{after}</span>
+          <span className="block whitespace-pre-wrap break-words font-normal">{words(draw(full!))}{after}</span>
         </ResizeBox>
       </OwnPanel>
       {arrow}

@@ -110,7 +110,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     // Payments' row for a renewal is the inline box carrying that anchor (marked by HashJump).
     // (Owner, Nov 4, §188 B) Every list's row keeps it (`anchor` true by default; only the Pay more box's second copy leaves it out).
     expect(src("components/BankWaiting.tsx")).toContain("id={anchor ? bankAnchor(paymentId) : undefined}");
-    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} full={i.full} />");
+    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} text={i.text}");
   });
 
   it("under 24 hours left the confirm-by part is red and names the day", async () => {

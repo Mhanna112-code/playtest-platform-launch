@@ -1,4 +1,5 @@
 "use client";
+import { WholeLine } from "@/components/WholeLine";
 import { useState, type ReactNode } from "react";
 import { useBankCheck } from "@/components/BankCheck";
 import { useBankGroupHold } from "@/components/HoldFold";
@@ -39,7 +40,7 @@ export async function cancelOwnCheck(paymentId: string): Promise<{ ok: true; lin
  * (Owner, Oct 29, batch 23 section 9) On a test page the press runs the developer's stop-once check first, exactly like Pay on that piece: anything the page hasn't shown
  * stops it once in the blue box under the button; the second press opens the bank's check. Refusals (already confirmed, expired, cancelled) are plain.
  */
-export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, cents, own = false, anchor = true }: { paymentId: string; /** (Owner, Nov 4, §188 B) false: a second copy (in a Pay more box) without the `bank-<id>` anchor, which stays on the list's row */ anchor?: boolean; /** (§160) the developer's own press (a Pay or Pay more whose bank window is open in another tab, or was left): Cancel this check is offered */ own?: boolean; line: ReactNode; /** (§131) the line with the names uncut: its hover */ full?: string; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string; /** (Owner, Nov 3) its amount: over $200 the tick "I confirm this payment is over $200." is needed (as Pay's) */ cents?: number }) {
+export function BankWaiting({ text, render, after, paymentId, line, full, seenAt = "", wide = false, cents, own = false, anchor = true }: { /** (§230) the line as plain text (cut names), with `render` for its pieces and `after` (a date) — it then opens like a payment row */ text?: string; render?: (t: string) => ReactNode; after?: ReactNode; paymentId: string; /** (Owner, Nov 4, §188 B) false: a second copy (in a Pay more box) without the `bank-<id>` anchor, which stays on the list's row */ anchor?: boolean; /** (§160) the developer's own press (a Pay or Pay more whose bank window is open in another tab, or was left): Cancel this check is offered */ own?: boolean; line: ReactNode; /** (§131) the line with the names uncut: its hover */ full?: string; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string; /** (Owner, Nov 3) its amount: over $200 the tick "I confirm this payment is over $200." is needed (as Pay's) */ cents?: number }) {
   const bank = useBankCheck();
   // (Batch 35 §40, §41) Confirmed: the page redraws in place; until it has, the button stays greyed with the confirmed line.
   // (§176) On the dashboard: from its first load, never a redraw's render time (elsewhere: the page's own marker, unchanged).
@@ -79,7 +80,8 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
   return (
     <div id={anchor ? bankAnchor(paymentId) : undefined} className={`min-w-0 max-w-full basis-full space-y-2 border border-sky-300/40 bg-sky-500/10 p-3 text-sm text-sky-100 ${MARKABLE}`} data-bank-waiting={paymentId}>
       {/* (Owner, Nov 4, §180) The line wraps inside the panel at every width (a long name or test name never runs past its edge). */}
-      <p title={full} className="[overflow-wrap:anywhere]">{line}</p>
+      {/* (Owner, Nov 5, §230) A cut line opens the payment rows' way (§220): "…" opens a name, the arrow the whole line in place; no hover. */}
+      <p className="[overflow-wrap:anywhere]">{text != null ? <WholeLine shown={text} full={full} render={render} after={after} /> : typeof line === "string" ? <WholeLine shown={line} full={full} /> : line}</p>
       {over && !doneLine && (
         <label className="flex max-w-xs items-start gap-2 text-sm" data-over-tick="">
           <input type="checkbox" className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}

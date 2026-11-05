@@ -1,4 +1,5 @@
 "use client";
+import { WholeLine } from "@/components/WholeLine";
 import { BankWaiting } from "@/components/BankWaiting";
 import { CONFIRM_WITH_BANK } from "@/lib/rules";
 import { withTestLinks, type TestLink } from "@/components/TestLinks";
@@ -21,11 +22,11 @@ export function ConfirmList({ items, all, seenAt = "" }: { items: { id: string; 
           <li key={i.id} className="flex flex-wrap items-center gap-2" data-confirm-item={i.id}>
             {i.href ? (
               <>
-                <span className="mr-auto text-slate-200" title={i.full}>{withTestLinks(i.text, i.tests)}</span>
+                <span className="mr-auto text-slate-200"><WholeLine shown={i.text} full={i.full} render={(t) => withTestLinks(t, i.tests)} /></span>
                 <a href={i.href} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-bank-link="">{CONFIRM_WITH_BANK} →</a>
               </>
             ) : (
-              <BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} full={i.full} />
+              <BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} text={i.text} render={(t) => withTestLinks(t, i.tests)} full={i.full} />
             )}
           </li>
         ))}
