@@ -3639,3 +3639,47 @@ New `tests/batch35-bank-notice-scroll-194.test.ts`: 3 and 4 lines (a plain list,
 
 ### Evidence
 `playtest-lite-evidence/bank-notice-scroll-nov4/` (captions.json): desktop 1280×900 and phone 375×812 with 12 lines inside Needs you's panel; a reader scrolled up stays put when a 13th line arrives; a reader at the bottom follows the 14th.
+## §196 The excerpt box is delete-only, with the answer shown above it (owner, Nov 4)
+
+**Before:** "Show an excerpt on your profile" pre-filled a free textarea with the answer cut to its first 500 characters; the tester could type anything, and the
+server refused added words ("Trim the excerpt from your answer: it can only leave words out, not add any.") only after Ask the developer. The excerpt had to be one
+stretch of the answer (a contiguous substring).
+
+**After** (`ExcerptPicker`, `src/components/Excerpts.tsx`; the shared rules in the new `src/lib/excerptTrim.ts`):
+- **The answer, read-only, above the box** ("Your answer"): §182's long-text fold (`LongText`), 3 lines, then Show more opens the whole answer in the 8-line
+  scroll box (the draggable panel, kept per `excerpt-original-<submission>`). Answers up to 20,000 characters.
+- **The box starts with the WHOLE answer** (its plain text, as before: no formatting, no files) and is **delete-only**. What's kept is a per-character mask over
+  the answer. Each change is compared with the box's previous text (common prefix and suffix, the caret placing the cut when the text alone can't tell): it's
+  accepted only when it removed one stretch; anything else (typing, Enter, pasting, dropping, an input method's or autocorrect's insertion or replacement, undo)
+  is put back at once with the caret where the change began. Deleting works however it's done: Backspace, Delete, word deletes, cut, a selection deleted, a
+  phone's keyboard. Desktop browsers also refuse insertions before they happen (`beforeinput`); phones are covered by the comparison. The box has no spell
+  check, autocorrect or autocapitalize, and is its own limiter (`data-typing-limit`: it never grows, so the paste note "Cut to the N-character limit." never shows).
+- **The box is about 5 lines at first and scrolls inside**; "Open the box taller" makes it about 16 lines (never more than 60% of the screen), "Make the box
+  smaller" goes back; it can also be dragged by its corner. It never makes the page wider (checked at 375px: page width 375).
+- **What's deleted is struck through in the answer above, live**, highlighted (a `<del>`, `data-excerpt-left-out`); the label reads "Your answer (struck through:
+  what you're leaving out)" once anything is.
+- **"Use original answer"** puts the whole answer back (greyed while nothing is left out). Picking another answer starts again from its whole text.
+- **Deleting from the middle**: where a part of the middle was left out (words kept on both sides), the excerpt reads " … " there. Nothing marks a cut at the very
+  start or end, and leaving out only spaces or line breaks keeps one space (words are never glued together). Line breaks and runs of spaces read as one space,
+  as before. Under the buttons, "Shown as:" shows exactly what will be sent and stored, each " … " in amber, in a small box (about 4 lines, scrolling inside;
+  not a fold, so no fold "…" can be mistaken for a gap). It shows only when that differs from the box's text.
+- **The counter** counts the excerpt as it will be stored, ellipses included: "N / 500 (at least 10)", red outside 10–500; Ask the developer is greyed outside it.
+
+**The server** (`requestExcerpt`, `fromAnswer`): the text is accepted when its "…"-separated pieces each appear in the answer, in order (whitespace tidied, after
+`excerptPlain` as before). A text with no "…" is the old rule (one stretch of the answer). Anything added, a piece not in the answer or pieces out of order: the
+same refusal, "Trim the excerpt from your answer: it can only leave words out, not add any." The 10–500 check counts the stored text with its ellipses. Every
+other refusal (NDA, not paid, one pending per part / per question, duplicates, at most 3) is unchanged. The stored text is what was sent (squashed), so the
+developer's Allow / Deny row, the bell and the profile show it with its " … " as they show any excerpt today.
+
+- **Code.** `src/lib/excerptTrim.ts` (new: `allKept`, `keptChars`, `runsOf`, `excerptOf`, `deletedRange`, `deleteFrom`, `fromAnswer`, `squash`, `GAP`),
+  `src/components/Excerpts.tsx` (`ExcerptPicker`; `defaultOpen` draws it open, for tests), `src/lib/server/excerpts.ts` (`squash` moved to excerptTrim; the
+  check). No migration.
+- **Tests:** new `tests/excerpt-delete-only-196.test.ts` (a change accepted only as one removed stretch, the caret placing it; deletions mapped back onto the
+  answer; the stored text's " … " only in the middle, none at the start or end, a space for spaces; the server's piece check; requests: middle cuts accepted
+  and stored with the ellipsis, added words / pieces out of order refused with the same line, 9 and 502 characters with ellipses refused, 497 accepted, the
+  developer's row shows it; the box's own result at start, middle and end accepted; the render: the answer folded above the box, the box with the whole
+  answer (not cut to 500), Use original answer, the red counter). The existing excerpt tests needed no change (none relied on the 500-character prefill).
+- **Evidence:** `playtest-lite-evidence/excerpt-nov4/` (captions.json): desktop 1280×900 and phone 375×812 with a 3,241-character answer: opened, Show more,
+  cuts at the start, middle and end (red counter, then in range), the box opened taller, Use original answer. Checked in the same run: typing, Enter, a paste
+  and an inserted text left the box unchanged; Ctrl+Backspace deleted; a request with a middle gap sent from the page went through ("Your excerpt request is
+  waiting for Nora Lane.").
