@@ -64,6 +64,14 @@ export const useInPanel = () => useContext(InPanel);
 export function InsidePanel({ children }: { children?: ReactNode }) {
   return <InPanel.Provider value={true}>{children}</InPanel.Provider>;
 }
+/**
+ * (Owner, Nov 4, §194) The one exception to §187: a box that is its own element inside a panel (the open bank check: its own frame and Cancel, drawn under the
+ * press and brought into view) gives its panels their own scroll again. The bank notice's list of changes uses it, so a long list scrolls inside the bank box
+ * instead of pushing it taller (and the outer Needs you panel's content past the bank's frame).
+ */
+export function OwnPanel({ children }: { children?: ReactNode }) {
+  return <InPanel.Provider value={false}>{children}</InPanel.Provider>;
+}
 
 /**
  * (Owner, Nov 3, batch 35 §152) The call lists (call requests, booked and past calls, the dashboards' calls) and the payment lists sit in this same panel: `defaultMax`
