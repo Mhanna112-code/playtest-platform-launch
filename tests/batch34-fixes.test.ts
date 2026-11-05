@@ -236,7 +236,8 @@ describe("batch 34 §13: no rejoin card on the session page; the test's own page
     expect(page).not.toContain('id="rejoin"');
     expect(page).not.toContain("invited you back to");
     expect(page).not.toContain("`Ask to rejoin ${title}`");
-    expect(page).toContain('<a className="text-sm" href={`/app/find/${c.testId}`} data-test-page-link="">Open the test&apos;s page</a>');
+    // (Owner, Nov 5) Only once their work there is over (left, ended): not while they're working on it.
+    expect(page).toContain('{c.status !== "working" && <a className="text-sm" href={`/app/find/${c.testId}`} data-test-page-link="">Open the test&apos;s page</a>}');
     // The test's page: a tester who left asks to rejoin there (an invited one just joins).
     const box = src("app/app/find/[id]/JoinBox.tsx");
     expect(box).toContain("const rejoining = !!p.rejoin && !p.invited;");

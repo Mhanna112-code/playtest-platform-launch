@@ -314,8 +314,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <div className="min-w-0">
           {c.test.productName && <p className="kicker">{c.test.productName}</p>}
           <h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>
-          {/* (Batch 34 §13) The test's own page (where a tester who left asks to rejoin). */}
-          <a className="text-sm" href={`/app/find/${c.testId}`} data-test-page-link="">Open the test&apos;s page</a>
+          {/* (Batch 34 §13) The test's own page (where a tester who left asks to rejoin). (Owner, Nov 5) Not while they're working on the test: they're in it. */}
+          {c.status !== "working" && <a className="text-sm" href={`/app/find/${c.testId}`} data-test-page-link="">Open the test&apos;s page</a>}
         </div>
         {/* (Batch 15 section 26) The tester's one-press Alerts, at the top right. */}
         {/* (Batch 16 section 24) After the work is over, only while something left on the page can still stop (Charge / Let it go, Dispute, Rate). */}
