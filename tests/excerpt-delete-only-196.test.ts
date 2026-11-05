@@ -159,7 +159,7 @@ describe("§196 the tester's box", () => {
     expect(html).not.toContain("data-excerpt-left-out"); // nothing struck through yet
   });
 
-  it("the box starts with the WHOLE answer (not cut to 500), delete-only hooks, no "Open the box taller" button", () => {
+  it("the box starts with the WHOLE answer (not cut to 500), delete-only hooks, no Open-the-box-taller button", () => {
     expect(LONG.length).toBeGreaterThan(600);
     const box = html.match(/<textarea[^>]*>([\s\S]*?)<\/textarea>/)!;
     expect(box[1]).toBe(LONG);
