@@ -11,7 +11,8 @@ import { decideDispute } from "@/lib/server/payments";
 import { chargebackOpened, chargebackWon, declinedPayment, disputeAmountChanged, owedLines, payOwed, startHold } from "@/lib/server/holds";
 import { approveChargebackHold } from "@/lib/server/chargeback";
 import { awayAction } from "@/lib/server/confirm";
-import { OWED_REVIEW_AGAIN, OWED_WON_MEANWHILE } from "@/lib/server/owedOnce";
+import { OWED_REVIEW_AGAIN, OWED_WON_MEANWHILE, releaseOwed } from "@/lib/server/owedOnce";
+import { SETTLE_MS } from "@/lib/server/bankPeek";
 import { alwaysStops, callLengthLine, callProblemLine, logEvent, pressContracts, type Press } from "@/lib/server/live";
 import { fmtDateTime } from "@/lib/server/dateFormat";
 import { setStripeForTests } from "@/lib/server/stripe";
@@ -516,6 +517,65 @@ describe("§171 B6: Pay what you owe while chargebacks change underneath it", ()
     const r = (await payOwed(w.dev.user, again)) as { paid: number };
     expect(r.paid).toBeGreaterThan(0);
     expect(w.st.made.slice(before).map((m) => m.amount)).toEqual([4400]);
+  });
+});
+
+describe("§207 (Nov 4 recordings R1c, R10b): a check cancelled underneath its open window keeps the window open with its notice", () => {
+  const wonLine = "This bank check was cancelled: your bank decided a chargeback in your favour, so what you owe changed. Pressing Complete won't charge anything.";
+  const later = (ms: number, f: () => Promise<unknown>) => new Promise((done, fail) => setTimeout(() => f().then(done, fail), ms));
+
+  it("a peek landing after Stripe cancelled it but before the app let go of it waits for the app, then says why (it answered \"done\" and the window closed)", async () => {
+    const w = await cbWorld();
+    const { reversed, one, since } = await reviewFirstOpen(w);
+    // The chargeback won: chargebackWon cancels the check at Stripe first; the peek reads Stripe in that moment.
+    w.st.pis.set(one.actionPi!, "canceled");
+    const [answer] = await Promise.all([peek(w.dev.cookie, { paymentId: one.id, since, pi: one.actionPi }), later(300, () => chargebackWon(reversed.stripePaymentIntentId!))]);
+    expect(answer.body).toEqual({ status: "waiting", cancelled: wonLine });
+  });
+
+  it("a peek landing after the app let go of it but before it was marked cancelled (Pay what you owe's release) waits too", async () => {
+    const w = await cbWorld();
+    const { one, since } = await reviewFirstOpen(w);
+    w.st.pis.set(one.actionPi!, "canceled");
+    await db.payment.update({ where: { id: one.id }, data: { actionPi: null, actionBy: null } }); // claimed (cancelOpenOwed / Cancel this check)
+    const [answer] = await Promise.all([
+      peek(w.dev.cookie, { paymentId: one.id, since }),
+      later(300, async () => { await releaseOwed(one.id); await db.payment.update({ where: { id: one.id }, data: { failure: OWED_WON_MEANWHILE } }); }),
+    ]);
+    expect(answer.body).toEqual({ status: "waiting", cancelled: wonLine });
+    // Ended by Cancel this check in another tab (no reason kept): ended elsewhere, the window still open.
+    const w2 = await cbWorld();
+    const o2 = await reviewFirstOpen(w2);
+    await db.payment.update({ where: { id: o2.one.id }, data: { actionPi: null, actionBy: null } });
+    const [a2] = await Promise.all([peek(w2.dev.cookie, { paymentId: o2.one.id, since: o2.since }), later(200, () => releaseOwed(o2.one.id))]);
+    expect(a2.body).toEqual({ status: "waiting", cancelled: cancelledLine(CANCELLED_WHY.elsewhere) });
+  });
+
+  it("cancelled at Stripe and never let go of in the app: after the wait the window still stays open (Complete charges nothing); went through: done as before", async () => {
+    const w = await cbWorld();
+    const { one, since } = await reviewFirstOpen(w);
+    w.st.pis.set(one.actionPi!, "canceled");
+    const t0 = Date.now();
+    expect((await peek(w.dev.cookie, { paymentId: one.id, since })).body).toEqual({ status: "waiting", cancelled: cancelledLine(CANCELLED_WHY.elsewhere) });
+    expect(Date.now() - t0).toBeGreaterThanOrEqual(SETTLE_MS - 50);
+    w.st.pis.set(one.actionPi!, "succeeded");
+    expect((await peek(w.dev.cookie, { paymentId: one.id, since })).body).toEqual({ status: "done" });
+    // A page from before §160 (no `since`): Stripe's answer, as before.
+    w.st.pis.set(one.actionPi!, "canceled");
+    expect((await peek(w.dev.cookie, { paymentId: one.id })).body).toEqual({ status: "done" });
+  });
+
+  it("the same for a Pay whose check a hold start cancels: Stripe first, then the row", async () => {
+    const w = await world();
+    w.st.ask = true;
+    const r = await payMore(w, w.anaSub.id, seen(), { confirmed: true, boxAt: seen() });
+    const id = r.body.paymentId as string;
+    const pi = (await db.payment.findUniqueOrThrow({ where: { id } })).actionPi!;
+    await settle();
+    const since = seen();
+    w.st.pis.set(pi, "canceled");
+    const [answer] = await Promise.all([peek(w.dev.cookie, { paymentId: id, since, pi }), later(300, () => startHold(w.dev.user.id, "unpaid"))]);
+    expect(answer.body).toEqual({ status: "waiting", cancelled: cancelledLine(CANCELLED_WHY.hold) });
   });
 });
 

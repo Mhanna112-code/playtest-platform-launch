@@ -8,7 +8,7 @@ import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
-import { devStopSince, loadedOf, stopBox, testerStopSince, testerPauseSince } from "./stopMoment";
+import { devStopSince, loadedOf, stopBox, testerLiftSince, testerStopSince, testerPauseSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
@@ -209,7 +209,7 @@ async function testerRateGate(testerId: string, contractId: string, testId: stri
   const since = body.confirmed === true ? seenOf(body.boxAt) : seenOf(body.seenAt) ?? seenOf(body.pageSeenAt);
   if (!since) return;
   const moment = (await testerStopSince(contractId, since)) ?? (await testerPauseSince(contractId, since));
-  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { moments: moment ? [moment] : [] });
+  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { moments: [...(moment ? [moment] : []), ...(await testerLiftSince(contractId, since))] }); // (§207) the team's lift too
 }
 /** (Batch 17 §§12, 14) The developer's Rate keeps its narrow list: this tester's dispute decided or the work stopping. */
 async function devRateGate(testId: string, contractId: string, body: Record<string, unknown>, devId = "") {

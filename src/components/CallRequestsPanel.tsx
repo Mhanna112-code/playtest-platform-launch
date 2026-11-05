@@ -32,6 +32,16 @@ export const yourRequestsAnchor = (contractId: string) => `your-requests-person-
 export const matchesName = (name: string, query: string) => name.toLowerCase().includes(query.trim().toLowerCase());
 /** (§185) What the box says when nobody matches: "No one matches “ana”". */
 export const noMatchLine = (query: string) => `No one matches “${query.trim()}”`;
+/** (Owner, Nov 5, §207) The request a press key is about ("a-<id>@<time>", "d-<id>", "w-<id>…"), or "". */
+export const requestOfPress = (at: string) => (/^[adw]-/.test(at) ? at.slice(2).split("@")[0] : "");
+/**
+ * (§207) A press on a request the redraw then took off the list (refused because the other side withdrew it, or it closed): its refusal can't stay in the row,
+ * so the panel shows it above its people until the next press ("Your Accept didn't go through: Ana Silva withdrew this request.").
+ */
+export const lostRefusal = (at: string, error: string, requests: { id: string }[]) => {
+  const id = requestOfPress(at);
+  return !!id && !!error && !requests.some((r) => r.id === id);
+};
 export const requestPressName = (at: string) => (at.startsWith("w-") ? "Withdraw" : at.startsWith("d-") ? "Decline" : "Accept");
 /** (Owner, Nov 4, §187) A press on one time's row: "a-<request id>@<time>" (Accept / Decline / Withdraw on that time). */
 export const timePressKey = (k: "a" | "d" | "w", requestId: string, time: string) => `${k}-${requestId}@${time}`;
@@ -172,9 +182,12 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
   const held = (p: { reqs: PanelReq[] }) => p.reqs.some(pressed) && (busy || changes != null || !!error);
   const shown = (p: { name: string; reqs: PanelReq[] }) => !search || matchesName(p.name, query) || held(p);
   const none = !!search && query.trim() !== "" && people.length > 0 && !people.some(shown);
+  // (Owner, Nov 5, §207; Nov 4 recording R8c) Its row is gone (the refused press's redraw took the withdrawn request away): the named refusal stays here instead.
+  const lost = lostRefusal(at, error, requests);
   return (
     <section className="space-y-1.5" aria-label={title} data-call-requests="" id={sectionId}>
       {!byPerson && <h3 className="text-sm font-semibold text-white">{title}{showCount && <span className="font-normal text-slate-400"> ({sorted.length})</span>}</h3>}
+      {lost && <div data-request-refusal=""><ChangesBox side={side} changes={null} error={error} press={requestPressName(at)} /></div>}
       {sorted.length === 0 ? (
         <p className="note">No call requests waiting.</p>
       ) : (

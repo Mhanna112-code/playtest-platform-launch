@@ -1,5 +1,5 @@
 import { dateZone } from "./dateZone";
-import { devPauseSince, devStopSince, loadedOf } from "./stopMoment";
+import { devLiftSince, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
@@ -686,6 +686,8 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
   if (press.stopCheck !== undefined) {
     const stop = (await devStopSince(testId, press.stopCheck || null, loadedOf(body))) ?? (await devPauseSince(testId, loadedOf(body)));
     if (stop) moments.push(stop);
+    // (Owner, Nov 5, §207) The team lifting its pause is named like the pause: "The team lifted its pause on this test at 3:10 AM.".
+    moments.push(...(await devLiftSince(testId, loadedOf(body))));
   }
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25's "goes through on the first press") On a stopped, closed or paused test (any cause), and while the
   // developer is held or suspended, every press still allowed follows the SAME stop-once rules as on a running test. The stop, close or pause itself is a change like any
@@ -695,6 +697,7 @@ export async function devGate(tx: Tx, testId: string, body: Record<string, unkno
     if (stop) moments.push(stop);
     const pause = await devPauseSince(testId, loadedOf(body));
     if (pause) moments.push(pause);
+    moments.push(...(await devLiftSince(testId, loadedOf(body)))); // (§207) and its lift, named the same way
   }
   if (body.confirmed === true) extraChanges = extraChanges.filter((c) => c.createdAt > seenAt);
   const t = await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true } });

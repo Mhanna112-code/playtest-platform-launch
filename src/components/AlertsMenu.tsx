@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { BellOff } from "lucide-react";
 import { ALERT_TYPES } from "@/lib/alerts";
 
@@ -8,6 +8,23 @@ export const ALERTS_INTRO_REST = "stop your buttons. A payment hold or pause, a 
 import { api } from "@/lib/client";
 import { refusalLine } from "@/lib/pressLabels";
 import { startIgnoredAlertsSave, useIgnoredAlerts } from "@/lib/testerAlerts";
+
+/** (Owner, Nov 5, §207) The gap the open menu keeps from the screen's edges (px). */
+export const MENU_EDGE = 8;
+/** (§207) Below this width (Tailwind's `sm`) the menu opens in the page under the button (static, full width): nothing to place. */
+export const MENU_STATIC_BELOW = 640;
+/**
+ * (Owner, Nov 5, §207) Where the open menu goes, as its left edge relative to the button (px), so all of it is on the screen wherever the button sits:
+ * right edges together (it opens leftward) when there's room on the left; else left edges together (it opens rightward); and, when neither fits, slid
+ * in from whichever edge it would cross. `button`: the button's left and right on the screen; `width`: the menu's; `viewport`: the screen's width.
+ */
+export function menuLeft(button: { left: number; right: number }, width: number, viewport: number, edge = MENU_EDGE) {
+  let x = button.right - width;
+  if (x < edge) x = button.left;
+  x = Math.min(x, viewport - edge - width);
+  x = Math.max(x, edge);
+  return Math.round(x - button.left);
+}
 
 /** (§169) "All" is ticked exactly while every type that can be changed here (`open`) is ticked: unticking one unticks it, ticking that one again ticks it. */
 export const allAlertsOn = (open: string[], ignored: string[]) => open.length > 0 && open.every((k) => ignored.includes(k));
@@ -48,11 +65,27 @@ export function AlertsMenu({ testId, ignored: start, v: startV, keys }: { testId
     const ks = open.map((a) => a.key);
     return save(ks, on, { keys: ks, off: on });
   };
+  // (Owner, Nov 5, §207) The open menu is placed from where its button is NOW (menuLeft), so it is never past either edge of the screen: it hung off the left
+  // edge on the test page at a desktop width (the button sat near the left once the header's buttons wrapped), and its ticks couldn't be reached. Placed
+  // again when the window changes size while it is open. Phones keep the menu in the page under the button (static, full width).
+  const box = useRef<HTMLDetailsElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const [left, setLeft] = useState<number | null>(null);
+  const place = useCallback(() => {
+    const d = box.current, m = menu.current;
+    if (!d?.open || !m || window.innerWidth < MENU_STATIC_BELOW) return setLeft(null);
+    const r = d.getBoundingClientRect();
+    setLeft(menuLeft(r, m.offsetWidth, document.documentElement.clientWidth || window.innerWidth));
+  }, []);
+  useEffect(() => {
+    window.addEventListener("resize", place);
+    return () => window.removeEventListener("resize", place);
+  }, [place]);
   return (
-    <details className="relative" data-alerts-menu="">
+    <details ref={box} className="relative" data-alerts-menu="" onToggle={place}>
       <summary className="btn-secondary cursor-pointer list-none px-3 py-1.5 text-sm"><BellOff className="h-4 w-4" /> Alerts{ignored.length ? ` (${ignored.length} off)` : ""}</summary>
       {/* On phones the button can sit at the left edge: the menu opens in the page under it instead of hanging off-screen. */}
-      <div className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] max-sm:static max-sm:w-full max-sm:max-w-none space-y-1.5 rounded-2xl border border-white/15 bg-slate-900 p-3 text-sm shadow-2xl">
+      <div ref={menu} style={left == null ? undefined : { left, right: "auto" }} data-alerts-panel="" className="absolute right-0 z-30 mt-2 w-72 max-w-[calc(100vw-2rem)] max-sm:static max-sm:w-full max-sm:max-w-none space-y-1.5 rounded-2xl border border-white/15 bg-slate-900 p-3 text-sm shadow-2xl">
         <p className="text-xs text-slate-400" data-alerts-intro="">Tick what should <b>not</b> {ALERTS_INTRO_REST}</p>
         {/* (Batch 15 section 39; owner, Oct 31, batch 35 §63) Every type is listed, so "(N off)" matches the ticks shown; a type that can't happen on a paused or
             stopped test is greyed and can't be changed there (its tick is kept). */}

@@ -134,12 +134,15 @@ async function claimOwed(devId: string, rows: { id: string; amountCents: number;
   }
 }
 
-/** The one payment was cancelled, declined or ran out of time: what it covered is owed (and payable) again. */
-export async function releaseOwed(id: string) {
+/**
+ * The one payment was cancelled, declined or ran out of time: what it covered is owed (and payable) again. `failure`: why it was cancelled (§171 B6), written
+ * with the cancel itself (owner, Nov 5, §207: a peek in between read it cancelled with no reason, "ended elsewhere").
+ */
+export async function releaseOwed(id: string, failure?: string) {
   // (Owner, Nov 3, §147) Confirm all's one payment: each charge it covered goes back to its own "Confirm with your bank" with its original deadline.
   const row = await db.payment.findUnique({ where: { id }, select: { kind: true, note: true } });
   if (row && isAll(row)) return (await import("./confirmAll")).releaseAll(id, "back");
-  const ended = await db.payment.updateMany({ where: { id, kind: OWED_KIND, status: { in: OWED_ACTIVE } }, data: { status: "cancelled", actionPi: null, actionBy: null } });
+  const ended = await db.payment.updateMany({ where: { id, kind: OWED_KIND, status: { in: OWED_ACTIVE } }, data: { status: "cancelled", actionPi: null, actionBy: null, ...(failure ? { failure } : {}) } });
   if (ended.count !== 1) return null;
   // (§122) Charges made while away that it covered wait again ("deferred"); the caller decides when they count as declined.
   const charges = await db.payment.findMany({ where: { coveredById: id, status: "deferred", settledAt: null } });
@@ -471,7 +474,7 @@ export async function cancelOpenOwed(devId: string, why: string, ids?: string[])
         out.push({ id: p.id, end: "paid" });
         continue;
       }
-      if (await releaseOwed(p.id)) await db.payment.update({ where: { id: p.id }, data: { failure: why } });
+      await releaseOwed(p.id, why);
       out.push({ id: p.id, end: "cancelled" });
     } catch (e) {
       console.error("[owed] cancel open check:", (e as Error).message); // Stripe's answer unclear: it stays tracked (its clock or Cancel ends it)

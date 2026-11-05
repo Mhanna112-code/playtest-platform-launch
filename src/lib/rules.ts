@@ -1765,6 +1765,15 @@ export function pauseMomentLine(side: "tester" | "developer", cause: "team" | "h
   return cause === "team" ? `The team paused this test at ${t}.` : cause === "hold" ? `Your tests were paused at ${t}.` : `Your developer account was suspended at ${t}.`;
 }
 
+/**
+ * (Owner, Nov 5, §207) The team lifting its pause, as the one change a page opened before it reads, named like the pause: the developer "The team lifted its pause
+ * on this test at 3:10 AM."; testers (who read only "paused", never why) "This test resumed at 3:10 AM.".
+ */
+export function liftMomentLine(side: "tester" | "developer", at: Date, fmtTime: (d: Date) => string, fmtDateTime: (d: Date) => string, now = new Date()) {
+  const t = stopAt(at, now, fmtTime, fmtDateTime);
+  return side === "tester" ? `This test resumed at ${t}.` : `The team lifted its pause on this test at ${t}.`;
+}
+
 // ---------- Rate's stop-once lines (owner, Oct 27-28) ----------
 
 /** The stop-once kinds that still apply to Rate after the test closed (stopped or closed): pay, reject, charge, let go, a dispute filed or decided. */

@@ -60,6 +60,12 @@ export const CANCEL_THIS_CHECK = "Cancel this check";
  * keeps waiting with its own date. Stripe said it had gone through: paid, with the amount.
  */
 export const CANCELLED_NOTHING_CHARGED = "Cancelled: nothing was charged.";
+/**
+ * (Owner, Nov 5, §207) Verify a card's own Cancel under the bank's window (the check not finished): a cancel the developer chose reads as a cancel, as Pay's
+ * "Cancelled: nothing was charged." does, never "Your Verify this card didn't go through: The card wasn't verified…". The bank refusing the card still reads as a
+ * failure.
+ */
+export const CARD_CHECK_CANCELLED = "Cancelled: your card wasn't changed.";
 export const cancelledStillWaitsLine = (by: string) => `${CANCELLED_NOTHING_CHARGED} It still waits for your bank until ${by}.`;
 export const alreadyConfirmedLine = (amount: string) => `Your bank already confirmed it: paid ${amount}.`;
 /** The cancel's finish answered "nothing was charged" (`not_confirmed`): its success line; `by` is the date a charge made while away still waits until. */

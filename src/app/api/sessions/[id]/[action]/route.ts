@@ -10,7 +10,7 @@ import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
 import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
-import { loadedOf, stopBox, testerPauseSince, testerStopSince } from "@/lib/server/stopMoment";
+import { loadedOf, stopBox, testerLiftSince, testerPauseSince, testerStopSince } from "@/lib/server/stopMoment";
 import { requireUser } from "@/lib/server/session";
 import { testerGate } from "@/lib/server/testerGate";
 import { addWritten, leaveTest, sendWritten } from "@/lib/server/tests";
@@ -81,7 +81,9 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
   if (!MOMENT_ACTIONS.has(action)) return;
   const loaded = loadedOf(body);
   const stop = (await testerStopSince(contractId, loaded)) ?? (await testerPauseSince(contractId, loaded));
-  if (!stop) return;
+  // (Owner, Nov 5, §207) The team lifting its pause is named like the pause: "This test resumed at 3:10 AM.".
+  const found = [...(stop ? [stop] : []), ...(await testerLiftSince(contractId, loaded))];
+  if (!found.length) return;
   // (Batch 30, Oct 29 addition) ONE box: the stop with every other change the page hadn't shown (the press's own reasons), oldest first; the second press goes ahead.
   const c = await db.contract.findUnique({ where: { id: contractId }, select: { testerId: true, testId: true } });
   let more: { text: string; at: Date | string }[] = [];
@@ -96,8 +98,8 @@ async function stateMoment(contractId: string, action: string, body: Record<stri
       } else throw e;
     }
   }
-  if (!more.length) stopBox([stop]);
-  const lines = [{ text: stop.text, at: stop.createdAt, kind: "stop", forced: true }, ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  if (!more.length) stopBox(found);
+  const lines = [...found.map((m) => ({ text: m.text, at: m.createdAt, kind: "stop", forced: true })), ...more].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
   throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines, tail: "Press again to go ahead.", ...extra });
 }
 

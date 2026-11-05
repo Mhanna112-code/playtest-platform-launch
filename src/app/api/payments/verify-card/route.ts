@@ -5,6 +5,7 @@ import { cardAttempt } from "@/lib/server/cardLimits";
 import { clientIp } from "@/lib/server/passwords";
 import { HttpError } from "@/lib/server/http";
 import { PAYMENTS_OFF, getStripe, paymentsOff, stripeOn } from "@/lib/server/stripe";
+import { CARD_CHECK_CANCELLED } from "@/lib/bankNotice";
 
 // (Owner, Oct 26) Chargeback hold, step (a): start the 3D Secure card check (a Stripe SetupIntent). With no Stripe in dev it is simulated and succeeds at once.
 // (Batch 17 §11) The page's "Verify a card" shows the bank's check inline, under the button: `check` starts it (with the fake Stripe: the stand-in, verified only on its
@@ -24,6 +25,9 @@ export async function POST(req: Request) {
           const si = await getStripe().setupIntents.retrieve(setupIntent).catch(() => null);
           if (si?.metadata?.userId === u.id && !["succeeded", "canceled"].includes(si.status)) await getStripe().setupIntents.cancel(setupIntent).catch(() => null);
         }
+        // (Owner, Nov 5, §207) The developer's own Cancel under the window (`pressedCancel`), not verified: a cancel they chose, answered as one ("Cancelled: your card
+        // wasn't changed."), never as a refusal. The bank's own answer (the return page, the peek) and leaving the page still read as before.
+        if (body.pressedCancel === true && e instanceof HttpError && e.code === "not_verified") return ok({ verified: false, cancelled: true, line: CARD_CHECK_CANCELLED });
         throw e;
       }
     }
