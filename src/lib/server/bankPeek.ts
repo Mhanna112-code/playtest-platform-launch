@@ -1,7 +1,7 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, money, pronouns } from "@/lib/format";
-import { PRESS_ACTION_MS, awayFromTest, onTestLine } from "@/lib/rules";
+import { PRESS_ACTION_MS, awayFromTest, onTestLine, paymentWords } from "@/lib/rules";
 import { CANCELLED_WHY, cancelledLine, stillPaysLine } from "@/lib/bankNotice";
 import { HttpError } from "./http";
 import { fakeOn, getStripe, isMissing, stripeOn } from "./stripe";
@@ -123,8 +123,15 @@ async function owedChanges(devId: string, since: Date, covered: Set<string>, res
   for (const e of await db.accountEvent.findMany({ where: { userId: devId, kind: "chargeback-amount", createdAt: { gt: since } }, orderBy: { createdAt: "asc" }, take: 20 })) {
     // (Owner, Nov 4, §192) A change followed after the repayment is settled on its own (refunded or charged): it isn't about this open check.
     if (e.note.includes(": followed after repayment:")) continue;
-    const m = / of the (\$[\d,.]+) payment \([^)]*\) from (\$[\d,.]+) to (\$[\d,.]+)/.exec(e.note);
-    if (m) out.push({ text: `Your bank changed the disputed amount of your ${m[1]} payment from ${m[2]} to ${m[3]}${reservation ? ": this reservation stays as pressed; the difference is settled when the team approves lifting your hold" : ": this payment stays as pressed"}`, at: e.createdAt });
+    // (Owner, Nov 4, §193b) The team's line names the payment's part (or a one payment's items) and its PaymentIntent: this notice names it the same way, from the
+    // payment itself, in the developer's own zone: "… of your $35.00 Pay what you owe payment on … (Ana Silva's written answers on “Harbor Run”, …) from …".
+    const m = / of the (\$[\d,.]+) .*?\((pi_[^)\s]+|no payment id)\) from (\$[\d,.]+) to (\$[\d,.]+)/.exec(e.note);
+    if (!m) continue;
+    const paid = m[2].startsWith("pi_") ? await db.payment.findFirst({ where: { developerId: devId, stripePaymentIntentId: m[2], chargeback: { not: "" } }, orderBy: { createdAt: "asc" } }) : null;
+    const holds = await import("./holds");
+    const named = paid ? await holds.reversedNaming(paid, false, await holds.pageCallDay(devId)) : null;
+    const which = paid && named ? paymentWords(paid.amountCents, named.piece, named.one) : `your ${m[1]} payment`;
+    out.push({ text: `Your bank changed the disputed amount of ${which} from ${m[3]} to ${m[4]}${reservation ? ": this reservation stays as pressed; the difference is settled when the team approves lifting your hold" : ": this payment stays as pressed"}`, at: e.createdAt });
   }
   return after(out, since);
 }

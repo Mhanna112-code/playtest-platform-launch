@@ -109,8 +109,8 @@ describe("§133 a full dispute is unchanged", () => {
       expect((await chargebackEvents(w.testId)).map((e) => e.text)).toEqual(["Your bank reversed your $10.00 payment for Ana Silva's written answers on “Harbor Run”"]);
       const [mail] = await mails(p.stripePaymentIntentId!);
       expect(mail.subject).toBe("Playtest: new chargeback of $10.00");
-      expect(mail.text).toContain(`A developer's bank reversed a $10.00 payment (${p.stripePaymentIntentId}).`);
-      expect((await adminRow(w.dev.user.id))!.chargebacks).toEqual([`Chargeback open: $10.00 · ${p.stripePaymentIntentId}`]);
+      expect(mail.text).toContain(`A developer's bank reversed a $10.00 payment for Ana Silva's written answers on “Harbor Run” (${p.stripePaymentIntentId}).`); // (§193b) the part too
+      expect((await adminRow(w.dev.user.id))!.chargebacks).toEqual([`Chargeback open: $10.00 for Ana Silva's written answers on “Harbor Run” · ${p.stripePaymentIntentId}`]);
       expect((await adminCases()).map((c) => c.text)).toContain("Open chargeback: $10.00");
       expect((await chargebackSteps(w.dev.user.id))!.owedCents).toBe(2500);
       // Repaid: the same repayment row as before, and the reversed payment counts once (as its repayment).
@@ -135,13 +135,16 @@ describe("§133 a full dispute is unchanged", () => {
     const one = await db.payment.findFirstOrThrow({ where: { developerId: w.dev.user.id, kind: "owed" } });
     expect((await send("evt_" + randomUUID(), "charge.dispute.created", dispute(one.stripePaymentIntentId!, 1100))).status).toBe(200);
     const [line] = await owedLines(w.dev.user.id);
-    expect([line.id, line.amountCents, line.text]).toEqual([one.id, 1100 + R.CHARGEBACK_FEE_CENTS, "Your bank reversed a $11 payment: $11 + $15 chargeback fee"]);
+    // (Owner, Nov 4, §193b) The line names the one payment: its kind, when it was made and every item it paid.
+    expect([line.id, line.amountCents]).toEqual([one.id, 1100 + R.CHARGEBACK_FEE_CENTS]);
+    expect(line.text).toMatch(/^Your bank reversed your \$11 Pay what you owe payment on \w{3}, \w{3} \d+, \d+:\d\d [AP]M \(Ana Silva's written answers on “Harbor Run”, Ben Okafor's written answers on “Harbor Run”\): \$11 \+ \$15 chargeback fee$/);
     const covers = (line as { covers?: { text: string }[] }).covers ?? [];
     expect(covers.map((c) => c.text)).toHaveLength(2);
     expect(covers.map((c) => c.text).join(" | ")).toMatch(/\$8\.00.*\$3\.00|\$3\.00.*\$8\.00/);
     await clear(w);
     const repay = await db.payment.findFirstOrThrow({ where: { repaysId: one.id } });
-    expect((await paidRows([repay], "developer")).get(repay.id)).toBeUndefined(); // the page's own label: "A reversed payment, paid again"
+    // (§193b; was the page's own label "A reversed payment, paid again") The repayment names the one payment and its items.
+    expect((await paidRows([repay], "developer")).get(repay.id)!.what).toMatch(/^Repaid the reversed \$11\.00 Pay what you owe payment on .+ \(Ana Silva's written answers on “Harbor Run”, Ben Okafor's written answers on “Harbor Run”\) \(\$11\.00 \+ \$15\.00 chargeback fee\)$/);
   });
 });
 
@@ -162,11 +165,11 @@ describe("§133 part of a single payment", () => {
     expect((await chargebackEvents(w.testId)).map((e) => e.text)).toEqual(["Your bank reversed $96.00 of your $444.67 payment for Ana Silva's written answers on “Harbor Run”"]);
     const [mail] = await mails(pi);
     expect(mail.subject).toBe("Playtest: new chargeback of $96.00");
-    expect(mail.text).toContain(`A developer's bank reversed $96.00 of a $444.67 payment (${pi}).`);
-    expect((await adminRow(w.dev.user.id))!.chargebacks).toEqual([`Chargeback open: $96.00 of a $444.67 payment · ${pi}`]);
+    expect(mail.text).toContain(`A developer's bank reversed $96.00 of a $444.67 payment for Ana Silva's written answers on “Harbor Run” (${pi}).`);
+    expect((await adminRow(w.dev.user.id))!.chargebacks).toEqual([`Chargeback open: $96.00 of a $444.67 payment for Ana Silva's written answers on “Harbor Run” · ${pi}`]);
     expect((await adminCases()).map((c) => c.text)).toContain("Open chargeback: $96.00 of a $444.67 payment");
     const person = (await adminPage("u-chargebacks", await admin(), null, w.dev.user.id)) as { rows: { text: string }[] };
-    expect(person.rows.filter((r) => r.text.includes("Chargeback $96.00 of a $444.67 payment (open)"))).toHaveLength(1);
+    expect(person.rows.filter((r) => r.text.includes("Chargeback $96.00 of a $444.67 payment for Ana Silva's written answers on “Harbor Run” (open)"))).toHaveLength(1);
     expect((await chargebackSteps(w.dev.user.id))!.owedCents).toBe(11100);
     // The reservation and the team's Approve take exactly $96 + $15; the repayment row names the payment and the part.
     const { reserved, approved } = await clear(w);
@@ -198,20 +201,26 @@ describe("§133 part of Pay what you owe's one combined payment", () => {
     expect((await db.payment.findUniqueOrThrow({ where: { id: one.id } })).reversedCents).toBe(9600);
     expect((await owed(w.dev.user.id)).map((x) => [x.id, x.amountCents])).toEqual([[one.id, 11100]]);
     const [line] = await owedLines(w.dev.user.id);
-    expect(line.text).toBe("Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee");
+    // (Owner, Nov 4, §193b) The line names the one payment: its kind, when it was made and every item it paid.
+    const ITEMS = "(Ana Silva's written answers on “Harbor Run”, Ben Okafor's written answers on “Harbor Run”, Cid Moreau's written answers on “Harbor Run”)";
+    expect(line.text.startsWith("Your bank reversed $96 of your $444.67 Pay what you owe payment on ")).toBe(true);
+    expect(line.text.endsWith(` ${ITEMS}: $96 + $15 chargeback fee`)).toBe(true);
     expect((line as { covers?: { text: string }[] }).covers!.map((c) => c.text)).toEqual([
       "Ana Silva's written answers on “Harbor Run” $120.00", "Ben Okafor's written answers on “Harbor Run” $204.67", "Cid Moreau's written answers on “Harbor Run” $120.00",
     ]);
     // The items it paid for stay paid; each tester's share is untouched.
     for (const d of debts) expect(await db.payment.findUniqueOrThrow({ where: { id: d.id } })).toMatchObject({ status: "charged", chargeback: "", coveredById: one.id });
-    expect((await adminRow(w.dev.user.id))!.chargebacks).toEqual([`Chargeback open: $96.00 of a $444.67 payment · ${one.stripePaymentIntentId}`]);
+    const [adminLine] = (await adminRow(w.dev.user.id))!.chargebacks;
+    expect(adminLine.startsWith("Chargeback open: $96.00 of a $444.67 payment on the Pay what you owe payment on ")).toBe(true);
+    expect(adminLine.endsWith(` ${ITEMS} · ${one.stripePaymentIntentId}`)).toBe(true);
     const { reserved, approved } = await clear(w);
     expect([reserved, approved.takenCents, st.captured]).toEqual([11100, 11100, [11100]]);
     const repay = await db.payment.findFirstOrThrow({ where: { repaysId: one.id } });
     expect(repay.amountCents).toBe(11100);
     const listed = [...(await db.payment.findMany({ where: { id: { in: debts.map((d) => d.id) } } })), repay];
     const rows = await paidRows(listed, "developer");
-    expect(rows.get(repay.id)).toMatchObject({ what: "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)", testId: null });
+    expect(rows.get(repay.id)).toMatchObject({ testId: null });
+    expect(rows.get(repay.id)!.what).toMatch(/^Repaid \$96 reversed from your \$444\.67 Pay what you owe payment on .+ \(Ana Silva's written answers on “Harbor Run”, Ben Okafor's written answers on “Harbor Run”, Cid Moreau's written answers on “Harbor Run”\) \(\$96 \+ \$15 chargeback fee\)$/);
     expect(paidOutTotal(listed, [await db.payment.findUniqueOrThrow({ where: { id: one.id } })])).toBe(44467 - 9600 + 11100);
   });
 });
@@ -229,7 +238,8 @@ describe("§133 repayment and a won chargeback", () => {
     expect((await db.payment.findUniqueOrThrow({ where: { id: repay.id } })).status).toBe("refunded");
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).chargeback).toBe("won");
     const texts = (await db.notification.findMany({ where: { userId: w.dev.user.id }, orderBy: { createdAt: "asc" } })).map((n) => n.text);
-    expect(texts).toEqual(expect.arrayContaining(["Refund: your bank's chargeback of $96.00 was reversed", "Your bank's chargeback of $96.00 was reversed in your favour."]));
+    // (§193b) Each names the payment the chargeback was on.
+    expect(texts).toEqual(expect.arrayContaining(["Refund: your bank's chargeback of $96.00 on your $444.67 payment for Ana Silva's written answers on “Harbor Run” was reversed", "Your bank's chargeback of $96.00 on your $444.67 payment for Ana Silva's written answers on “Harbor Run” was reversed in your favour."]));
     expect(await db.testEvent.count({ where: { testId: w.testId, text: "Your bank's chargeback of $96.00 for Ana Silva's written answers on “Harbor Run” was reversed: $111.00 refunded to your card." } })).toBe(1);
     // What you've paid: the whole payment counts again; the refunded repayment doesn't.
     expect(paidOutTotal([await db.payment.findUniqueOrThrow({ where: { id: p.id } }), await db.payment.findUniqueOrThrow({ where: { id: repay.id } })])).toBe(44467);
@@ -300,7 +310,7 @@ describe("§133 Stripe changes the disputed amount (charge.dispute.updated)", ()
     expect((await owedLines(w.dev.user.id))[0].text).toBe(`Your bank reversed $120 of the $444.67 you paid for Ana Silva's written answers on “Harbor Run” (${day(p.createdAt)}): $120 + $15 chargeback fee`);
     expect((await chargebackSteps(w.dev.user.id))!.owedCents).toBe(13500);
     const ev = await db.accountEvent.findMany({ where: { userId: w.dev.user.id, kind: "chargeback-amount" } });
-    expect(ev.map((e) => e.note)).toEqual([`Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $120.00: followed (the developer now owes $120.00 + $15.00 chargeback fee).`]);
+    expect(ev.map((e) => e.note)).toEqual([`Stripe changed the disputed amount of the $444.67 payment for Ana Silva's written answers on “Harbor Run” (${pi}) from $96.00 to $120.00: followed (the developer now owes $120.00 + $15.00 chargeback fee).`]);
     const person = (await adminPage("u-chargebacks", await admin(), null, w.dev.user.id)) as { rows: { text: string }[] };
     expect(person.rows.some((r) => r.text.endsWith(ev[0].note))).toBe(true);
     expect(await mails(pi)).toHaveLength(1); // only the chargeback's own email
@@ -344,10 +354,10 @@ describe("§133 Stripe changes the disputed amount (charge.dispute.updated)", ()
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(5000);
     const notes = (await db.accountEvent.findMany({ where: { userId: w.dev.user.id, kind: "chargeback-amount" }, orderBy: { createdAt: "asc" } })).map((e) => e.note);
     expect(notes).toEqual([
-      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $120.00: not followed, because the dispute is already decided (lost). Check it in Stripe.`,
-      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $50.00: waiting, because it's reserved on the developer's card; followed once that ends.`,
-      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $50.00: followed after repayment: refunded $46.00.`,
-      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $50.00 to $40.00: not followed, because the chargeback was already won. Check it in Stripe.`,
+      `Stripe changed the disputed amount of the $444.67 payment for Ana Silva's written answers on “Harbor Run” (${pi}) from $96.00 to $120.00: not followed, because the dispute is already decided (lost). Check it in Stripe.`,
+      `Stripe changed the disputed amount of the $444.67 payment for Ana Silva's written answers on “Harbor Run” (${pi}) from $96.00 to $50.00: waiting, because it's reserved on the developer's card; followed once that ends.`,
+      `Stripe changed the disputed amount of the $444.67 payment for Ana Silva's written answers on “Harbor Run” (${pi}) from $96.00 to $50.00: followed after repayment: refunded $46.00.`,
+      `Stripe changed the disputed amount of the $444.67 payment for Ana Silva's written answers on “Harbor Run” (${pi}) from $50.00 to $40.00: not followed, because the chargeback was already won. Check it in Stripe.`,
     ]);
     // Emails only for what isn't followed (a refund that worked emails nobody).
     const changed = (await mails(pi)).filter((m) => m.subject.startsWith("Playtest: a chargeback"));

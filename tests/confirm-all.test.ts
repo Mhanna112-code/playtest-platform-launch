@@ -333,7 +333,8 @@ describe("§147 Confirm all: one payment, one bank check", () => {
     for (const p of await rowsOf(w.items.map((x) => x.id))) expect(p).toMatchObject({ status: "charged", chargeback: "" });
     const lines = await owedLines(w.devId);
     expect(lines).toHaveLength(1);
-    expect(lines[0].text).toBe("Your bank reversed a $42 payment: $42 + $15 chargeback fee");
+    // (Owner, Nov 4, §193b) The line names the Confirm all payment, when it was made and every item it paid.
+    expect(lines[0].text).toMatch(/^Your bank reversed your \$42 Confirm all payment on \w{3}, \w{3} \d+, \d+:\d\d [AP]M \(Ana Silva's written answers on “Harbor Run”, Ben Okafor's written answers on “Sky Lab”, Ana Silva's written answers on “Sky Lab”\): \$42 \+ \$15 chargeback fee$/);
     expect("covers" in lines[0] ? lines[0].covers?.map((c: { text: string }) => c.text) : null).toEqual(NAMES);
   });
   it("over $200: a single Confirm with your bank needs the tick “I confirm this payment is over $200.”; $200 or less doesn't", async () => {

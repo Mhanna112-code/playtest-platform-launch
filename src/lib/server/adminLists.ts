@@ -14,6 +14,15 @@ import { HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, adminReservedLine, disputeRangeL
 
 /** (Owner, Nov 3, §133) A chargeback's amount for the admin: "$96.00 of a $444.67 payment" when the bank reversed part of it, else "$444.67". */
 const cbAmount = (p: { amountCents: number; reversedCents?: number | null }) => (reversedPart(p) ? `${money(reversedOf(p))} of a ${money(p.amountCents)} payment` : money(p.amountCents));
+/**
+ * (Owner, Nov 4, §193b) Which payment a chargeback is on, for the team's lines (full names, with the PaymentIntent kept beside it): " for Ana Silva's written answers
+ * on “Harbor Run”", " for the team's dispute decision on …", or a one payment's kind, time and items: " on the Pay what you owe payment on Wed, Nov 4, 12:30 PM
+ * (Ana Silva's written answers on “Harbor Run”, …)"; "" when nothing names it.
+ */
+async function cbWhich(p: Parameters<typeof import("./holds").reversedNaming>[0]) {
+  const { piece, one } = await (await import("./holds")).reversedNaming(p, true, (d) => fmtDateTime(d));
+  return one ? ` on the ${one}` : piece ? ` for ${piece}` : "";
+}
 import { callMinutesOf } from "@/lib/callMeasure";
 import { LISTING_VALUES } from "@/lib/listingInfo";
 import { LISTING_SAVED } from "@/lib/listingPanel";
@@ -522,7 +531,9 @@ async function paused(cursor: string | null): Promise<Page<PausedVM & { date: Da
 }
 
 async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & { date: Date }>> {
-  const all = (await chargebackHolds()).map(({ dev, steps, chargebacks: cbs }) => ({
+  const all = await Promise.all((await chargebackHolds()).map(async ({ dev, steps, chargebacks: cbs }) => {
+    const which = await Promise.all(cbs.map(cbWhich)); // (§193b) each chargeback names its payment's part (or a one payment's items)
+    return {
     id: dev.id,
     date: dev.holdStartedAt!,
     at: dev.holdStartedAt!.toISOString(),
@@ -531,8 +542,8 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     who: person(dev),
     since: fmtDateTime(dev.holdStartedAt!),
     // (§133) What the bank reversed: "Chargeback open: $96.00 of a $444.67 payment" when it was part of the payment.
-    chargebacks: cbs.map((p) => `Chargeback open: ${cbAmount(p)} · ${p.stripePaymentIntentId}`),
-    chargebackParts: cbs.map((p): Rich => [`Chargeback open: ${cbAmount(p)}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })]),
+    chargebacks: cbs.map((p, i) => `Chargeback open: ${cbAmount(p)}${which[i]} · ${p.stripePaymentIntentId}`),
+    chargebackParts: cbs.map((p, i): Rich => [`Chargeback open: ${cbAmount(p)}${which[i]}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })]),
     cardVerified: steps.cardVerified,
     owedPaid: steps.owedPaid,
     reviewFirst: steps.reviewFirst,
@@ -543,6 +554,7 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     owedLine: steps.owedPaid ? (steps.reservedCents ? ` (${adminReservedLine(steps.reservedCents, steps.addedCents)})` : "") : ` (${money(steps.owedCents)} owed, ${money(steps.reservedCents)} reserved)`,
     reservedCents: steps.reservedCents,
     expired: steps.expired,
+    };
   }));
   return slice(all, (r) => r.date, cursor);
 }
@@ -725,7 +737,7 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
       rows.push(mk("dispute", d.id, d.createdAt, [testLink(c ? { id: c.testId, title: c.title } : null), ...(other ? [" with ", ...person(other)] : []), ` · ${d.status === "open" ? "open" : `decided ${money(d.decidedCents)} by ${await name(d.decidedById)}`}:`, quoted(d.reason)])); // (batch 35 §43)
     }
   } else if (kind === "u-chargebacks") {
-    for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${cbAmount(p)} (${p.chargeback})`, ...stripeIds(p)]));
+    for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${cbAmount(p)}${await cbWhich(p)} (${p.chargeback})`, ...stripeIds(p)])); // (§193b) which payment
     // (Owner, Nov 3, §133) Stripe changing a dispute's amount: followed, or logged here (and emailed) when it couldn't be (resolved, won, decided). (Owner, Nov 4,
     // §192) After the repayment it's followed too: "…: followed after repayment: refunded $8.00" / "…: charged $8.00 more" (emailed only when that fails).
     for (const e of await db.accountEvent.findMany({ where: { userId, kind: "chargeback-amount" }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("cbamount", e.id, e.createdAt, e.note));

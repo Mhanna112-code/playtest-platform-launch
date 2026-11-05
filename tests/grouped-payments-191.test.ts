@@ -197,7 +197,7 @@ describe("§191 What you've paid groups the items one charge paid", () => {
     // A chargeback won after it was repaid: the repayment inside its group, refunded (not counted: the total test).
     expect(item(i.g3a.id)).toBe("Repaid: your $5.00 Pay for Ana Silva's written answers on “Harbor Run” that your bank reversed · $5.00 + $15.00 chargeback fee · refunded (your bank's chargeback was reversed)");
     // The repayment of a Pay what you owe payment the bank reversed names that payment and when it was made.
-    expect(item(i.g3b.id)).toBe(`Repaid: your $7.00 Pay what you owe payment on ${fmtDateTimeIn(w.g.g4.createdAt, "America/New_York")} that your bank reversed · $7.00 + $15.00 chargeback fee`);
+    expect(item(i.g3b.id)).toBe(`Repaid: your $7.00 Pay what you owe payment on ${fmtDateTimeIn(w.g.g4.createdAt, "America/New_York")} (Pay more for Ana Silva's written answers on “Harbor Run”, Dee Park's written answers on “Second Run”) that your bank reversed · $7.00 + $15.00 chargeback fee`);
     // Each kind of reversed payment, named as what it was.
     expect(item(i.g5a.id)).toBe("Repaid: the $12.00 Cid Moreau charged for his written answers on “Harbor Run” that your bank reversed · $12.00 + $15.00 chargeback fee");
     expect(item(i.g5b.id)).toBe("Repaid: the team's $5.00 dispute decision on Ben Okafor's live call on “Harbor Run” (Tue, Oct 27, 3:25 PM) that your bank reversed · $5.00 + $15.00 chargeback fee");

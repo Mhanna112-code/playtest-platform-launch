@@ -338,11 +338,11 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
     expect(await db.payment.findUniqueOrThrow({ where: { id: p.id } })).toMatchObject({ chargeback: "won" });
     expect(await owed(dev.user.id)).toEqual([]);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your bank's chargeback of $10.00 was reversed in your favour." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your bank's chargeback of $10.00 on your $10.00 payment for ", endsWith: " was reversed in your favour." } } } /* (§193b) which payment */)).toBe(1);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your tests are running again" } })).toBe(1);
     // The same webhook again changes nothing.
     await webhook("charge.dispute.closed", { payment_intent: p.stripePaymentIntentId, status: "won" });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your bank's chargeback of $10.00 was reversed in your favour." } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your bank's chargeback of $10.00 on your $10.00 payment for ", endsWith: " was reversed in your favour." } } } /* (§193b) which payment */)).toBe(1);
   });
 
   it("already paid: that amount is refunded to their card with a receipt line", async () => {
@@ -355,7 +355,7 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
     await webhook("charge.dispute.closed", { payment_intent: p.stripePaymentIntentId, status: "won" });
     expect(refunds).toEqual([repay.stripePaymentIntentId]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: repay.id } })).toMatchObject({ status: "refunded" });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: "Refund: your bank's chargeback of $10.00 was reversed" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Refund: your bank's chargeback of $10.00 on your $10.00 payment for ", endsWith: " was reversed" } } } /* (§193b) which payment */)).toBe(1);
     // The hold lifted on the Approve; the refund doesn't bring it back.
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
     expect(src("components/PaymentLists.tsx")).toContain("refunded (your bank's chargeback was reversed)"); // (§190) Payments' paid list, shared with the admin box

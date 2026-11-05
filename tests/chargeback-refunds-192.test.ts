@@ -144,7 +144,7 @@ describe("§192 the bank lowers what it took back after the repayment", () => {
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(1200);
     expect(await db.paymentRefund.findFirstOrThrow({ where: { paymentId: repay.id } })).toMatchObject({ reason: "lowered", amountCents: 800, fromCents: 2000, toCents: 1200, status: "refunded", reversalId: p.id });
     expect(await bells(w.devId)).toContain(`Your bank lowered what it took back from your $20.00 payment for ${PIECE}: $8.00 refunded to your card.`);
-    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment (${pi}) from $20.00 to $12.00: followed after repayment: refunded $8.00.`);
+    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment for ${PIECE} (${pi}) from $20.00 to $12.00: followed after repayment: refunded $8.00.`);
     expect(await adminMails(pi)).toHaveLength(0);
     const { paid, refunds, text } = await paidList(w.devId);
     // The repayment still names what it repaid ($20 + the fee); the reversed payment shows what the bank took back now.
@@ -206,7 +206,7 @@ describe("§192 the bank raises what it took back after the repayment", () => {
     expect(st.made.at(-1)!.description).toContain(`Your bank raised what it took back from your $20.00 Pay for ${PIECE}: $12.00 → $20.00 $8.00`);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(2000);
     expect(await bells(w.devId)).toContain(`Your bank raised what it took back from your $20.00 payment for ${PIECE}: $8.00 more is charged.`);
-    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment (${pi}) from $12.00 to $20.00: followed after repayment: charged $8.00 more.`);
+    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment for ${PIECE} (${pi}) from $12.00 to $20.00: followed after repayment: charged $8.00 more.`);
     expect(await adminMails(pi)).toHaveLength(0);
     const { paid, text } = await paidList(w.devId);
     expect(paid.rows.get(raise.id)!.group?.what ?? paid.rows.get(raise.id)!.what).toBe(`Your bank raised what it took back from your $20.00 Pay for ${PIECE}: $12.00 → $20.00`);
@@ -264,9 +264,9 @@ describe("§192 several changes, then won or lost", () => {
     // Still repaid for it: $35 - $8 - $6 + $4 = $25 ($10 + the fee); the total is always the payment + the fee.
     expect(paid.totalCents).toBe(3500);
     expect((await notes(w.devId)).slice(-3)).toEqual([
-      `Stripe changed the disputed amount of the $20.00 payment (${p.stripePaymentIntentId}) from $20.00 to $12.00: followed after repayment: refunded $8.00.`,
-      `Stripe changed the disputed amount of the $20.00 payment (${p.stripePaymentIntentId}) from $12.00 to $16.00: followed after repayment: charged $4.00 more.`,
-      `Stripe changed the disputed amount of the $20.00 payment (${p.stripePaymentIntentId}) from $16.00 to $10.00: followed after repayment: refunded $6.00.`,
+      `Stripe changed the disputed amount of the $20.00 payment for ${PIECE} (${p.stripePaymentIntentId}) from $20.00 to $12.00: followed after repayment: refunded $8.00.`,
+      `Stripe changed the disputed amount of the $20.00 payment for ${PIECE} (${p.stripePaymentIntentId}) from $12.00 to $16.00: followed after repayment: charged $4.00 more.`,
+      `Stripe changed the disputed amount of the $20.00 payment for ${PIECE} (${p.stripePaymentIntentId}) from $16.00 to $10.00: followed after repayment: refunded $6.00.`,
     ]);
   });
 
@@ -282,7 +282,7 @@ describe("§192 several changes, then won or lost", () => {
     const ones = await db.payment.findMany({ where: { developerId: w.devId, kind: "owed", chargebackAt: { not: null } } });
     expect(paid.totalCents).toBe(paidOutTotal(paid.list, ones));
     // The bell names the whole refund once.
-    expect(await bells(w.devId)).toContain("Refund: your bank's chargeback of $10.00 was reversed");
+    expect(await bells(w.devId)).toContain(`Refund: your bank's chargeback of $10.00 on your $20.00 payment for ${PIECE} was reversed`); // (§193b) which payment
     // A later change after the win isn't followed.
     expect(await disputeAmountChanged(p.stripePaymentIntentId!, 500, "won")).toBe("logged");
     expect(st.refunds).toHaveLength(4);
@@ -326,7 +326,7 @@ describe("§192 never twice, and a repayment in progress", () => {
     expect(await payOwed(w.dev.user, {})).toMatchObject({ reservedCents: 2700 });
     expect((await update(pi, 2000)).status).toBe(200);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(1200);
-    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment (${pi}) from $12.00 to $20.00: waiting, because it's reserved on the developer's card; followed once that ends.`);
+    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment for ${PIECE} (${pi}) from $12.00 to $20.00: waiting, because it's reserved on the developer's card; followed once that ends.`);
     expect(await adminMails(pi)).toHaveLength(0);
     const n = st.made.length;
     expect((await approveChargebackHold(w.devId)).takenCents).toBe(2700);
@@ -335,7 +335,7 @@ describe("§192 never twice, and a repayment in progress", () => {
     expect(raise).toMatchObject({ amountCents: 800, status: "charged" });
     expect(st.made.slice(n).map((m) => m.amount)).toEqual([800]);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(2000);
-    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment (${pi}) from $12.00 to $20.00: followed after repayment: charged $8.00 more.`);
+    expect((await notes(w.devId)).at(-1)).toBe(`Stripe changed the disputed amount of the $20.00 payment for ${PIECE} (${pi}) from $12.00 to $20.00: followed after repayment: charged $8.00 more.`);
     expect((await paidList(w.devId)).paid.totalCents).toBe(3500);
   });
 

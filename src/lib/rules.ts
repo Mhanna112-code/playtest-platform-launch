@@ -1007,8 +1007,9 @@ export const devDeletedLine = (dev: string, pronoun?: string | null) => `${dev} 
 export const deletedNoPayoutsLine = (name: string, pronoun?: string | null) => `${name} deleted ${pronouns(pronoun).poss} account before setting up payouts, so this can't be paid.`;
 /** (Owner, Oct 29, batch 10) A hold lifted (paid, or a chargeback hold cleared) while an admin suspension is still on: bell and email, sent even with email Off. */
 /** (Owner, Oct 29, batch 10) The platform won a chargeback: the developer's bell and email, and (when they had already paid it back) the receipt line for the refund. */
-export const chargebackWonLine = (cents: number) => `Your bank's chargeback of ${money(cents)} was reversed in your favour.`;
-export const chargebackRefundLine = (cents: number) => `Refund: your bank's chargeback of ${money(cents)} was reversed`;
+/** (Owner, Nov 4, §193b) `on`: which payment (" on your $10.00 payment for …", " on your $35.00 Pay what you owe payment on … (…)": paymentWords). */
+export const chargebackWonLine = (cents: number, on = "") => `Your bank's chargeback of ${money(cents)}${on} was reversed in your favour.`;
+export const chargebackRefundLine = (cents: number, on = "") => `Refund: your bank's chargeback of ${money(cents)}${on} was reversed`;
 /** (Owner, Oct 29, batch 11) Each chargeback adds this fee to what the developer owes, on top of the reversed amount. */
 export const CHARGEBACK_FEE_CENTS = 1500;
 const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");
@@ -1083,9 +1084,12 @@ export const disputedCentsOf = (amount: unknown) => (typeof amount === "number" 
  * says so: "Your bank reversed $96 of your $444.67 payment: $96 + $15 chargeback fee", or with its piece "Your bank reversed $96 of the $444.67 you paid for Ana
  * Silva's written answers on “Harbor Run” (Nov 2): $96 + $15 chargeback fee". The whole payment reads as before.
  */
-export const chargebackOwedLine = (cents: number, paidFor?: { name: string; part: string; test: string; date: string }, full = false, paidCents: number | null = null) => {
+export const chargebackOwedLine = (cents: number, paidFor?: { name: string; part: string; test: string; date: string }, full = false, paidCents: number | null = null, /** (§193b) a one payment's name (onePaymentName) */ one: string | null = null) => {
   const piece = paidFor ? pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test, when: paidFor.date, full }) : "";
   const fee = `${wholeMoney(cents)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee`;
+  // (Owner, Nov 4, §193b) A one payment (Pay what you owe's, Confirm all's) names itself and every item it paid: "Your bank reversed your $35 Pay what you owe payment
+  // on Wed, Nov 4, 12:30 PM (Ana Silva's written answers on “Harbor Run”, …): $35 + $15 chargeback fee" (part of it: "$20 of your $35 …").
+  if (one) return `Your bank reversed ${paidCents != null && paidCents > cents ? `${wholeMoney(cents)} of your ${wholeMoney(paidCents)}` : `your ${wholeMoney(paidCents ?? cents)}`} ${one}: ${fee}`;
   if (paidCents != null && paidCents > cents) return `Your bank reversed ${wholeMoney(cents)} of ${paidFor ? `the ${wholeMoney(paidCents)} you paid for ${piece}` : `your ${wholeMoney(paidCents)} payment`}: ${fee}`;
   return `Your bank reversed ${paidFor ? `${wholeMoney(cents)} you paid for ${piece}` : `a ${wholeMoney(cents)} payment`}: ${fee}`;
 };
@@ -1093,16 +1097,25 @@ export const chargebackOwedLine = (cents: number, paidFor?: { name: string; part
  * (§133) "your $10.00 payment" for a whole reversal, "$96.00 of your $444.67 payment" for part of one: the developer's chargeback event, bell and the team's resolve
  * line. `whose`: "your" (the developer's lines) or "a" (the admins').
  */
-export const reversedWords = (p: { amountCents: number; reversedCents?: number | null }, whose: "your" | "a" = "your") =>
-  reversedPart(p) ? `${money(reversedOf(p))} of ${whose} ${money(p.amountCents)} payment` : `${whose} ${money(p.amountCents)} payment`;
+export const reversedWords = (p: { amountCents: number; reversedCents?: number | null }, whose: "your" | "a" = "your", /** (§193b) a one payment's name */ one: string | null = null) =>
+  reversedPart(p) ? `${money(reversedOf(p))} of ${whose} ${money(p.amountCents)} ${one ?? "payment"}` : `${whose} ${money(p.amountCents)} ${one ?? "payment"}`;
+/**
+ * (Owner, Nov 4, §193b) Which payment a dispute, decision or bank-change line is about: "your $10.00 payment for Ana Silva's written answers on “Harbor Run”"; a one
+ * payment (`one`, holds.onePaymentName) by its kind, time and every item it paid: "your $35.00 Pay what you owe payment on Wed, Nov 4, 12:30 PM (Ana Silva's written
+ * answers on “Harbor Run”, Ben Okafor's live call on “Harbor Run” (Tue, Oct 27, 3:25 PM))"; "your $10.00 payment" when neither is known.
+ */
+export const paymentWords = (paidCents: number, piece: string | null, one: string | null = null, whose = "your") =>
+  `${whose} ${money(paidCents)} ${one ?? `payment${piece ? ` for ${piece}` : ""}`}`;
 /**
  * The repayment of a reversed payment in Payments' "What you've paid" (and its Stripe description). The whole payment (as before): "Repaid the reversed $39.00 Pay
  * more for … ($39.00 + $15.00 chargeback fee)". (§133) Part of it: "Repaid $96 reversed from your $444.67 payment ($96 + $15 chargeback fee)", naming its piece when
  * the payment paid for one ("… from your $444.67 payment for Ana Silva's written answers on “Harbor Run” (…)"). `what`: " payment", " Pay more", " dispute decision".
  * Null for a whole reversal with no piece (the page keeps its plain label).
  */
-export const repaidReversedLine = (o: { amountCents: number; reversedCents?: number | null }, what: string, piece: string | null) => {
+export const repaidReversedLine = (o: { amountCents: number; reversedCents?: number | null }, what: string, piece: string | null, /** (§193b) a one payment's name */ one: string | null = null) => {
   const rev = reversedOf(o);
+  // (Owner, Nov 4, §193b) A one payment names itself and its items: "Repaid $20 reversed from your $35 Pay what you owe payment on … (…) ($20 + $15 chargeback fee)".
+  if (one) return rev < o.amountCents ? `Repaid ${wholeMoney(rev)} reversed from your ${wholeMoney(o.amountCents)} ${one} (${wholeMoney(rev)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee)` : `Repaid the reversed ${money(o.amountCents)} ${one} (${money(o.amountCents)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee)`;
   if (rev < o.amountCents) return `Repaid ${wholeMoney(rev)} reversed from your ${wholeMoney(o.amountCents)}${what}${piece ? ` for ${piece}` : ""} (${wholeMoney(rev)} + ${wholeMoney(CHARGEBACK_FEE_CENTS)} chargeback fee)`;
   return piece ? `Repaid the reversed ${money(o.amountCents)}${what} for ${piece} (${money(o.amountCents)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee)` : null;
 };
@@ -1130,18 +1143,18 @@ export const CHARGEBACKS_REVIEW_FROM = 2;
 export const reviewFirstLine = (n: number) => `Your account has had ${n} chargebacks: the team reviews it before you can pay. You'll get an email when you can.`;
 /** The developer's bell and email when the team allows paying. */
 export const REVIEWED_LINE = "The team reviewed your account: you can pay what you owe now";
-export const bankChangedLine = (paidCents: number, piece: string | null, wasCents: number, nowCents: number) =>
-  `Your bank changed the amount it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(wasCents)} → ${money(nowCents)} (now ${money(nowCents)} + ${money(CHARGEBACK_FEE_CENTS)} fee = ${money(nowCents + CHARGEBACK_FEE_CENTS)})`;
+export const bankChangedLine = (paidCents: number, piece: string | null, wasCents: number, nowCents: number, /** (§193b) a one payment's name */ one: string | null = null) =>
+  `Your bank changed the amount it took back from ${paymentWords(paidCents, piece, one)}: ${money(wasCents)} → ${money(nowCents)} (now ${money(nowCents)} + ${money(CHARGEBACK_FEE_CENTS)} fee = ${money(nowCents + CHARGEBACK_FEE_CENTS)})`;
 /**
  * (Owner, Nov 4, batch 35 §192) The bank changed what it took back AFTER the reversed payment was repaid: the difference is settled at once (a lower amount refunded to
  * the card, a higher one charged like a charge made while away). The developer's bell and email: "Your bank lowered what it took back from your $20.00 payment for
  * Ana Silva's written answers on “Harbor Run”: $8.00 refunded to your card." / "Your bank raised what it took back from your $20.00 payment for …: $8.00 more is
  * charged." (`piece` null: a payment for several items, named by its amount alone.)
  */
-export const bankLoweredLine = (paidCents: number, piece: string | null, refundCents: number) =>
-  `Your bank lowered what it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(refundCents)} refunded to your card.`;
-export const bankRaisedLine = (paidCents: number, piece: string | null, moreCents: number) =>
-  `Your bank raised what it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(moreCents)} more is charged.`;
+export const bankLoweredLine = (paidCents: number, piece: string | null, refundCents: number, /** (§193b) a one payment's name */ one: string | null = null) =>
+  `Your bank lowered what it took back from ${paymentWords(paidCents, piece, one)}: ${money(refundCents)} refunded to your card.`;
+export const bankRaisedLine = (paidCents: number, piece: string | null, moreCents: number, one: string | null = null) =>
+  `Your bank raised what it took back from ${paymentWords(paidCents, piece, one)}: ${money(moreCents)} more is charged.`;
 /** (§192) The charge of what the bank raised after the repayment: a Payment of kind "chargeback" (repaysId: the reversed payment) with this note, "raise:<from>:<to>". */
 export const RAISE_NOTE = "raise:";
 export const raiseNote = (fromCents: number, toCents: number) => `${RAISE_NOTE}${fromCents}:${toCents}`;
@@ -1152,8 +1165,8 @@ export const raiseOf = (p: { kind: string; note?: string | null }) => {
   return Number.isFinite(from) && Number.isFinite(to) ? { from, to } : null;
 };
 /** (§192) The name of a raise charge in a receipt, a bank check's items or a decline: "the rise in what your bank took back from your $20.00 payment for … ($12.00 → $20.00)". */
-export const raiseName = (paidCents: number, piece: string | null, fromCents: number, toCents: number) =>
-  `the rise in what your bank took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""} (${money(fromCents)} → ${money(toCents)})`;
+export const raiseName = (paidCents: number, piece: string | null, fromCents: number, toCents: number, /** (§193b) a one payment's name */ one: string | null = null) =>
+  `the rise in what your bank took back from ${paymentWords(paidCents, piece, one)} (${money(fromCents)} → ${money(toCents)})`;
 export const pressAgainLine = (cents: number, chargeback: null | { cardVerified: boolean } = null, tick = false) => {
   const line = !chargeback ? `Press again to pay ${money(cents)}.`
     : chargeback.cardVerified ? `Press again to reserve ${money(cents)} on your card: it's taken when the team approves lifting your hold.`

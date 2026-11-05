@@ -3589,3 +3589,32 @@ Updated: `partial-dispute` (a change while reserved now waits and is refunded af
   which presses a charge is about; Confirm while away: her Charge on another part forces, its own charge's line and Ben's don't; the auto charge waits for the
   developer's Pay at the bank, skipped once it completes, charged after it is cancelled; the Terms). Updated: `batch35-stop-rules-v2` (a decision charge on her
   written answers now also stops Pay on her recording, forced; Ben's part still follows the tick).
+
+## §193b Bank-change and reversal lines name a one payment's items (owner wording rule, Nov 4)
+- **The rule.** Every line about a dispute, a team decision or the bank changing or reversing a charge names exactly which charge and which part. The gap left by
+  §192: a reversed Pay what you owe / Confirm all one payment (it paid several items) read "your $35.00 payment" with no "for …". It now reads "your $35.00 Pay
+  what you owe payment on Wed, Nov 4, 12:30 PM (Ana Silva's written answers on “Harbor Run”, Ben Okafor's live call on “Harbor Run” (Tue, Oct 27, 3:25 PM))"
+  ("Confirm all payment on …"; a reservation "payment reserved on your card on …"). Full names in bells, emails and the team's lines; page lines keep their cut
+  names (with the full line as the hover where the page has one).
+- **Helpers.** `rules.paymentWords(paid, piece, one, whose)` ("your $X payment for <part>" / "your $X <one>"); `holds.onePaymentName` (the kind, when, and
+  every item by `owedItemName`) and `holds.reversedNaming` (the part, a team decision named as one, or `one`). `paymentRows.oneName` builds the same words for
+  What you've paid from the page's own context (§191's item lines).
+
+| Line | Before (a one payment) | After |
+| --- | --- | --- |
+| Owed box (`chargebackOwedLine`) | "Your bank reversed a $11 payment: …" / "$96 of your $444.67 payment: …" | "Your bank reversed your $11 Pay what you owe payment on … (…): …" / "$96 of your $444.67 Pay what you owe payment on … (…): …" (the covered items stay listed under it) |
+| Pay what you owe's stop (`bankChangedLine`) | "… took back from your $40.00 payment: …" | "… took back from your $40.00 Pay what you owe payment on … (…): …" |
+| Bells / emails: lowered, raised (§192), a new chargeback, won, refund | "… your $35.00 payment …"; "Your bank's chargeback of $10.00 was reversed in your favour." | The one payment with its items; the win and refund lines now name the payment for EVERY chargeback: "Your bank's chargeback of $10.00 on your $10.00 payment for Ana Silva's written answers on “Harbor Run” was reversed in your favour." |
+| A raise's name (receipts, bank check items, waiting lines) | "the rise in what your bank took back from your $35.00 payment (…)" | "… from your $35.00 Pay what you owe payment on … (…) (…)" |
+| What you've paid: a repayment of a one payment | "Repaid $96 reversed from your $444.67 payment (…)"; a whole one kept the plain label "A reversed payment, paid again" | "Repaid $96 reversed from your $444.67 Pay what you owe payment on … (…) (…)"; "Repaid the reversed $11.00 Pay what you owe payment on … (…) (…)"; §191's group line "Repaid: your $7.00 Pay what you owe payment on … (…) that your bank reversed" |
+| Bank window notice (`bankPeek.owedChanges`) | "Your bank changed the disputed amount of your $X payment from …" | Names the payment (part, or one payment and items) from the payment itself, in the developer's zone |
+| The team: new-chargeback email, Chargebacks box, the person's Chargebacks rows, "Stripe changed the disputed amount …" notes | "a $10.00 payment (pi_…)"; "Chargeback open: $10.00 · pi_…" | The part or the one payment too, PaymentIntent kept: "a $10.00 payment for Ana Silva's written answers on “Harbor Run” (pi_…)", "Chargeback open: $10.00 for … · pi_…", "Chargeback open: $96.00 of a $444.67 payment on the Pay what you owe payment on … (…) · pi_…", "… of the $22.00 Pay what you owe payment on … (…) (pi_…) …" |
+
+- Test-page change lines ("Your bank reversed …", "The team resolved …", "You repaid …") exist only for a payment with a contract (one part), so they already named it.
+- **Code.** `rules.ts`, `holds.ts` (`onePaymentName`, `reversedNaming`, `raiseWhat`, `owedLines`' `cb.one`, `chargebackOpened`, `chargebackWon`,
+  `disputeAmountChanged`), `chargeback.ts` (the reservation's stop), `paymentRows.ts` (`oneName`, the context's covered items), `bankPeek.ts`, `adminLists.ts`.
+  No migration.
+- **Tests:** new `tests/one-payment-names-193b.test.ts` (every helper with a one payment; `onePaymentName` / `reversedNaming` for Pay what you owe and Confirm
+  all; the team's note on a one payment's changed amount). Updated: `partial-dispute` (the admin email and rows name the part; a one payment's owed line, its
+  repayment lines and admin row name its items; the won and refund bells; the notes), `confirm-all` (the Confirm all one's owed line), `chargeback-refunds-192`
+  (the notes; the refund bell), `grouped-payments-191` (the repayment's group line), `batch10` (the won and refund bells).

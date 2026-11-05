@@ -18,7 +18,7 @@ import { testerTermsGate } from "./terms";
 import { recordEvent } from "./tests";
 import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
-import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
+import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, paymentWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
 import { closedOut, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
@@ -315,6 +315,28 @@ export async function reversalFor(p: { kind: string; contractId: string | null; 
 }
 
 /**
+ * (Owner, Nov 4, §193b) A one payment (Pay what you owe's, Confirm all's, a reservation's: kind "owed") named by its kind, when it was made and every item it paid
+ * (§191's item names): "Pay what you owe payment on Wed, Nov 4, 12:30 PM (Ana Silva's written answers on “Harbor Run”, Ben Okafor's live call on “Harbor Run” (Tue,
+ * Oct 27, 3:25 PM))". Null for any other payment. `full`: the names uncut (bells, emails, the team's lines); `day`: how a date and time is written (a time token, in
+ * the reader's zone, by default).
+ */
+export async function onePaymentName(p: { id: string; kind: string; note?: string | null; createdAt: Date }, full = false, day: (d: Date) => string = (d) => T(d)): Promise<string | null> {
+  if (p.kind !== "owed") return null;
+  const kind = p.note === "press:all" ? "Confirm all payment" : p.note === "reserve" ? "payment reserved on your card" : "Pay what you owe payment";
+  const items = await db.payment.findMany({ where: { coveredById: p.id }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  const names: string[] = await Promise.all(items.map((x): Promise<string> => owedItemName(x, full, day)));
+  return `${kind} on ${day(p.createdAt)}${names.length ? ` (${names.join(", ")})` : ""}`;
+}
+
+/** (§193b) Which payment a reversal or bank-change line is about: its part (a team decision named as one), or a one payment with its items (`one`). */
+export async function reversedNaming(p: { id: string; kind: string; note?: string | null; createdAt: Date; contractId: string | null; submissionId: string | null; callId: string | null }, full = false, day: (d: Date) => string = (d) => T(d)): Promise<{ piece: string | null; one: string | null }> {
+  const one = await onePaymentName(p, full, day);
+  if (one) return { piece: null, one };
+  const found = p.contractId ? await paymentPiece(p, day, full) : null;
+  return { piece: found && p.kind === "dispute" ? disputeDecisionName(found) : found, one: null };
+}
+
+/**
  * What a payment charged after a pause was for, in its receipt: a team decision, (batch 28 §8) a tester's Charge ("Ana Silva's written answers (charged by them after
  * 7 days)", like any Charge's receipt), or work the developer paid for during the pause. (§131) Each names its piece: "the team's dispute decision on Ana Silva's
  * recording on “Harbor Run” (charged after the pause)", "Ana Silva's live call on “Harbor Run” (Oct 30, charged automatically after 7 days)".
@@ -535,7 +557,7 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     const cbLines = lines.filter((l) => l.retry && l.source === "chargeback" && seenIds.includes(l.id));
     let moved = cbLines.flatMap((l) => { const was = seenAmounts?.[l.id]; return typeof was === "number" && was !== l.amountCents ? [{ l, was }] : []; });
     if (!seenAmounts && !goneIds.length && !fresh.length && cbLines.length === 1 && total !== seen && cbLines[0].amountCents - (total - seen) > CHARGEBACK_FEE_CENTS) moved = [{ l: cbLines[0], was: cbLines[0].amountCents - (total - seen) }];
-    const movedText = moved.map(({ l, was }) => ("cb" in l && l.cb ? bankChangedLine(l.cb.paidCents, l.cb.piece, was - CHARGEBACK_FEE_CENTS, l.cb.reversedCents) : "")).filter(Boolean).join("; ");
+    const movedText = moved.map(({ l, was }) => ("cb" in l && l.cb ? bankChangedLine(l.cb.paidCents, l.cb.piece, was - CHARGEBACK_FEE_CENTS, l.cb.reversedCents, l.cb.one) : "")).filter(Boolean).join("; ");
     // (Owner, Nov 4, §171 B6c) EVERY change since the page drew, each with its amount, in one stop (they no longer replace each other): what was added, a chargeback
     // won (taken off), an amount the bank raised or lowered; then the new total and the press-again line with it.
     const parts = [
@@ -626,12 +648,13 @@ export async function settledOwed(paymentId: string, wasOwed = false) {
  * (Owner, Nov 4, §192) A charge of what the bank raised after the repayment, named in a receipt, a bank check's items, a decline or a waiting line: "the rise in what
  * your bank took back from your $20.00 payment for Ana Silva's written answers on “Harbor Run” ($12.00 → $20.00)". Null for any other payment.
  */
-export async function raiseWhat(p: { kind: string; note?: string | null; repaysId?: string | null }, full = false, day?: (d: Date) => string) {
+export async function raiseWhat(p: { kind: string; note?: string | null; repaysId?: string | null }, full = false, day?: (d: Date) => string): Promise<string | null> {
   const r = raiseOf(p);
   if (!r) return null;
   const orig = p.repaysId ? await db.payment.findUnique({ where: { id: p.repaysId } }) : null;
-  const found = orig?.contractId ? await paymentPiece(orig, day, full) : null;
-  return raiseName(orig?.amountCents ?? 0, found && orig?.kind === "dispute" ? disputeDecisionName(found) : found, r.from, r.to);
+  // (Owner, Nov 4, §193b) A one payment names itself and its items.
+  const named = orig ? await reversedNaming(orig, full, day) : { piece: null, one: null };
+  return raiseName(orig?.amountCents ?? 0, named.piece, r.from, r.to, named.one);
 }
 
 /**
@@ -729,11 +752,13 @@ export async function owedLines(devId: string) {
     // (§147) Confirm all's one payment lists what it covered whether the bank reversed part of it or all of it. (Owner, Nov 3) So does every one payment now:
     // a full chargeback on Pay what you owe's (or a new card's combined) payment lists the charges it covered too.
     const covers = p.chargeback === "open" && p.kind === "owed" ? await coveredItems(p.id) : undefined;
+    // (Owner, Nov 4, §193b) The line itself names the one payment and its items too: "Your bank reversed your $35 Pay what you owe payment on … (…)".
+    const one = p.chargeback === "open" && p.kind === "owed" ? [await onePaymentName(p, false, (d) => callAtFor(d, u)), await onePaymentName(p, true, (d) => callAtFor(d, u))] : [null, null];
     // `source` (batch 10): what put it on the list, for the stop-once wording.
     // (Owner, Nov 3) `cb`: what a press's stop needs to name a change of the reversed amount (the payment, the piece, what the bank took back now).
-    const cb = { paidCents: p.paidCents, reversedCents: p.reversedCents, piece: paidFor ? pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test, when }) : null }; // (§178) a call with its date and time
+    const cb = { paidCents: p.paidCents, reversedCents: p.reversedCents, piece: paidFor ? pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test, when }) : null, one: one[0] }; // (§178) a call with its date and time
     out.push(p.chargeback === "open"
-      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, paidFor, false, p.paidCents), full: chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents), cb, ...(covers ? { covers } : {}) }
+      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, paidFor, false, p.paidCents, one[0]), full: chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents, one[1]), cb, ...(covers ? { covers } : {}) }
       : tail !== null
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet. (§125) A charge waiting for the lift ("deferred") is paid with
         // what you owe, as one payment, and reads the same.
@@ -822,11 +847,16 @@ export async function chargebackOpened(paymentIntentId: string, disputedCents: u
   // (Owner, Oct 26) A chargeback email goes to every admin at once, whatever their email setting. (§133) It says what the bank reversed: "Playtest: new chargeback of
   // $96.00", "A developer's bank reversed $96.00 of a $444.67 payment (pi_…)".
   const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
-  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(rev)}`, text: [`A developer's bank reversed ${reversedWords(cb, "a")} (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback:", e.message));
+  // (Owner, Nov 4, §193b) Which payment, by its part or (a one payment) its kind, time and items, full names: "… reversed $20.00 of a $35.00 Pay what you owe payment
+  // on Wed, Nov 4, 12:30 PM (Ana Silva's written answers on “Harbor Run”, …) (pi_…)".
+  const named = await reversedNaming(p, true, (d) => fmtDateTime(d));
+  for (const a of to) await sendEmail({ to: a, subject: `Playtest: new chargeback of ${money(rev)}`, text: [`A developer's bank reversed ${reversedWords(cb, "a", named.one)}${named.piece ? ` for ${named.piece}` : ""} (${p.stripePaymentIntentId ?? "no payment id"}). The developer's account is on a chargeback hold.`, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback:", e.message));
   if (!started) {
     const piece = c ? await paymentPiece(p) : null;
+    // (Owner, Nov 4, §193b) A one payment names itself and every item it paid (full names: the email has no hover).
+    const one = await onePaymentName(p, true);
     // (§133) Part of a payment: "Your bank reversed $96.00 of your $444.67 payment for …: it was added to what you owe".
-    const line = `Your bank reversed ${reversedPart(cb) ? reversedWords(cb) : `a ${money(p.amountCents)} payment`}${piece ? ` for ${p.kind === "dispute" ? disputeDecisionName(piece) : piece}` : ""}: ${before.holdStartedAt && before.holdReason !== "chargeback" ? "your payment hold is now a chargeback hold" : "it was added to what you owe"}`;
+    const line = `Your bank reversed ${one ? reversedWords(cb, "your", one) : reversedPart(cb) ? reversedWords(cb) : `a ${money(p.amountCents)} payment`}${piece ? ` for ${p.kind === "dispute" ? disputeDecisionName(piece) : piece}` : ""}: ${before.holdStartedAt && before.holdReason !== "chargeback" ? "your payment hold is now a chargeback hold" : "it was added to what you owe"}`;
     // A payment hold that becomes a chargeback hold is a chargeback hold starting (its email ignores Off); a further chargeback just adds to what is owed.
     if (before.holdStartedAt && before.holdReason !== "chargeback") await notify(before.email, line, [line + ".", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval."], "/app/payments#chargeback-steps", { side: "developer", always: true, payment: true, group: "payhold" });
     else await bell(p.developerId, line, "/app/payments#chargeback-steps", undefined, { side: "developer", payment: true, group: "payhold" });
@@ -893,8 +923,11 @@ export async function chargebackWon(paymentIntentId: string) {
     refunded += rec?.amountCents ?? 0;
     if (rec && !r.stripePaymentIntentId) noStripe = true;
   }
+  // (Owner, Nov 4, §193b) Which payment the chargeback was on: " on your $10.00 payment for …", " on your $35.00 Pay what you owe payment on … (…)" (full names).
+  const wonNamed = await reversedNaming(p, true);
+  const on = ` on ${paymentWords(p.amountCents, wonNamed.piece, wonNamed.one)}`;
   if (refunded > 0) {
-    const line = chargebackRefundLine(rev);
+    const line = chargebackRefundLine(rev, on);
     await notify(dev.email, line, [`${line}: ${money(refunded)} refunded.`, noStripe ? "Payments aren't set up yet, so this was recorded and nothing was refunded." : "Refunded to your saved card."], "/app/payments", { side: "developer", payment: true });
   }
   const claimed = await db.payment.updateMany({ where: { id: p.id, chargeback: p.chargeback }, data: { chargeback: "won" } });
@@ -908,7 +941,7 @@ export async function chargebackWon(paymentIntentId: string) {
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
   // (Batch 11) A payments-kind stop-once line on the developer's test page and Edit (Alerts can ignore it).
   if (c) await (await import("./live")).logEvent(c.testId, "payment", chargebackReversedLine(rev, refunded || rev + CHARGEBACK_FEE_CENTS, refunded > 0, await reversalFor(p)), c.id);
-  await notify(dev.email, chargebackWonLine(rev), [chargebackWonLine(rev)], "/app/payments", { side: "developer", payment: true, group: "payhold" });
+  await notify(dev.email, chargebackWonLine(rev, on), [chargebackWonLine(rev, on)], "/app/payments", { side: "developer", payment: true, group: "payhold" });
   // No chargeback left open: the hold is a payment hold again (it lifts once nothing is owed; the 4th hold on still needs the admin's Approve).
   if (dev.holdStartedAt && dev.holdReason === "chargeback" && !(await db.payment.count({ where: { developerId: dev.id, chargeback: "open" } }))) {
     await db.user.update({ where: { id: dev.id }, data: { holdReason: "unpaid", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
@@ -1023,7 +1056,10 @@ async function followAmount(reversalId: string, cents: number, status: string, e
   });
   if (r.out === "same") return "same" as const;
   const p = r.p;
-  const of = `of the ${money(p.amountCents)} payment (${p.stripePaymentIntentId ?? "no payment id"})`;
+  // (Owner, Nov 4, §193b) The team's lines name the part (or a one payment's kind, time and items) as well as the PaymentIntent: "… of the $20.00 payment for Ana
+  // Silva's written answers on “Harbor Run” (pi_…) …", "… of the $35.00 Pay what you owe payment on … (…) (pi_…) …".
+  const adminNamed = await reversedNaming(p, true, (d) => fmtDateTime(d));
+  const of = `of ${paymentWords(p.amountCents, adminNamed.piece, adminNamed.one, "the")} (${p.stripePaymentIntentId ?? "no payment id"})`;
   const head = `Stripe changed the disputed amount ${of} from ${money(r.was)} to ${money(r.next)}`;
   const note = (line: string) => {
     console.info(`[stripe] ${line}`);
@@ -1045,8 +1081,8 @@ async function followAmount(reversalId: string, cents: number, status: string, e
     return "followed" as const;
   }
   const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
-  const found = p.contractId ? await paymentPiece(p) : null;
-  const piece = found && p.kind === "dispute" ? disputeDecisionName(found) : found;
+  // (§193b) The developer's bell and email: the part, or a one payment with its items (full names).
+  const { piece, one } = await reversedNaming(p, true);
   if (r.out === "refund") {
     const sent = await sendRefunds(r.refunds.map((x) => x.id));
     const ok = sent.filter((x) => x.status !== "failed").reduce((a, x) => a + x.amountCents, 0);
@@ -1055,14 +1091,14 @@ async function followAmount(reversalId: string, cents: number, status: string, e
     await note(`${head}: followed after repayment: ${r.cents === 0 ? "nothing left to refund (only the chargeback fee is still repaid)" : `refunded ${money(r.cents)}`}${failedCents ? ` (refunding ${money(failedCents)} failed: check it in Stripe)` : ""}.`);
     if (failedCents) await tellAdmins(`Playtest: a chargeback refund failed (${money(failedCents)})`, `Refunding ${money(failedCents)} to the developer failed (${failed.map((x) => x.why).filter(Boolean).join("; ") || "no answer from Stripe"}): Stripe changed the disputed amount ${of} from ${money(r.was)} to ${money(r.next)} after it was repaid. Refund it in Stripe.`);
     if (ok > 0) {
-      const line = bankLoweredLine(p.amountCents, piece, ok);
+      const line = bankLoweredLine(p.amountCents, piece, ok, one);
       const recorded = sent.every((x) => x.status !== "refunded");
       await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", payment: true });
     }
     return "followed" as const;
   }
   await note(`${head}: followed after repayment: charged ${money(r.cents)} more.`);
-  const line = bankRaisedLine(p.amountCents, piece, r.cents);
+  const line = bankRaisedLine(p.amountCents, piece, r.cents, one);
   await notify(dev.email, line, [line], "/app/payments", { side: "developer", payment: true });
   // Charged now like any charge made while away (during a hold, a suspension or the team's pause of its test it waits, as they do).
   await chargeDeferred(p.developerId);
