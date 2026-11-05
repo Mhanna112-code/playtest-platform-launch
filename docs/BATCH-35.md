@@ -4608,3 +4608,6 @@ page load or what the live top box showed (§90).
     what THIS Save holds with what's saved: they are the Save's consequences, not updates, and always show.
   - Lines without an identity never count: Pay what you owe keeps its own seenIds / seenAmounts (holds.ts), and the bank window's notice (§171 A3, a peek, not a
     press) lists everything as before.
+
+## §251 All line cuts at 50 characters (owner, Nov 5)
+Every bell, payment, confirm and owed line shows its first 50 characters (was 30, §202/§246); everything else as before.

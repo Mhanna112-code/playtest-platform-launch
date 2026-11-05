@@ -15,7 +15,7 @@ import { joined, sact, setup } from "./fixtures";
 
 // (Owner, Nov 2, §131) Every developer-facing payment line names WHICH tester, WHICH part and WHICH test, with one helper (pieceName): the tester's and the test's names
 // cut at 12 characters with "…" (owner, Nov 5, §203: 20). On a page, the line carries its uncut version (`full`) as its hover (`title`); emails and bells use the
-// full names (§202: the bell line itself is cut at 30 characters and opens whole).
+// full names (§202, §251: the bell line itself is cut at 50 characters and opens whole).
 (globalThis as unknown as { React: typeof React }).React = React;
 vi.mock("next/navigation", () => ({ usePathname: () => "/app", useRouter: () => ({ refresh() {}, push() {}, replace() {} }), useSearchParams: () => new URLSearchParams() }));
 
@@ -68,7 +68,7 @@ describe("§131 the bank-confirm items", () => {
     expect(item.full).toMatch(/^The team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe” \$320\.00 · confirm by /);
     // (§230) The cut line opens with the arrow (and each "…" its name), never a hover.
     const listHtml = renderToStaticMarkup(createElement(ConfirmList, { items: [item] }));
-    // (§246) The row's "what" (the names whole) cut at 30; the hover shows the whole "what", the amount and "confirm by" stay outside it.
+    // (§246) The row's "what" (the names whole) cut at 50 (§251); the hover shows the whole "what", the amount and "confirm by" stay outside it.
     expect(listHtml).toContain(`title="${html(item.what!)}"`); // (§244) a hover shows the whole line too
     expect(item.what).toBe("The team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe”");
     expect(listHtml).toContain('data-whole-toggle=""');
@@ -112,7 +112,7 @@ describe("§131 the owed box", () => {
       "The team's dispute decision on Alexandria Montgomery's recording on “chargechargeback run deluxe” $96.00 · decided while your tests were paused",
     ]);
     const box = renderToStaticMarkup(createElement(OwedBox, { onHold: true, owed: lines }));
-    // (§246) Each line's "what" cut at 30 (its hover the whole "what"); its amount and status always shown after it.
+    // (§246) Each line's "what" cut at 50 (§251; its hover the whole "what"); its amount and status always shown after it.
     for (const l of lines) expect(box).toContain(`title="${html(l.what)}"`); // (§244) a hover shows the whole line too
     for (const l of lines) expect(box).toContain(html(l.rest));
     expect(box.match(/data-whole-toggle=""/g)?.length).toBe(lines.filter((l) => l.what.length > 30).length);

@@ -62,7 +62,7 @@ export async function legacyAwayOwed(devId: string) {
 }
 
 /**
- * (Owner, Nov 5, batch 35 §246) Rendered markup with every cut "what" (WhatLine, closed: its first 30 characters, "…" and the arrow) put back whole, as its hover
+ * (Owner, Nov 5, batch 35 §246) Rendered markup with every cut "what" (WhatLine, closed: its first 50 characters (§251), "…" and the arrow) put back whole, as its hover
  * (title) holds it, the way the arrow opens it: for tests that read a payment or confirm row's whole words.
  */
 export const openWhats = (html: string) => html.replace(/<span title="([^"]*)" data-what-cut="">[\s\S]*?<button[^>]*data-whole-toggle=""[^>]*>[\s\S]*?<\/button>/g, "$1");

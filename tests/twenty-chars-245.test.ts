@@ -22,7 +22,7 @@ import { POST as signupPOST } from "@/app/api/auth/signup/route";
 import { email, json, makeUser, req, uniq } from "./helpers";
 
 // (Owner, Nov 5, batch 35 §245) Person names and test titles are at most 20 characters, so nothing is ever cut ("…") or needs expanding; test names show green.
-// (§246) Every payment row, confirm row and bell line: the "what" cut at 30 and opened in place as plain text (the box only over 200).
+// (§246) Every payment row, confirm row and bell line: the "what" cut at 50 (§251, was 30) and opened in place as plain text (the box only over 200).
 (globalThis as unknown as { React: typeof React }).React = React;
 const src = (f: string) => readFileSync(path.resolve(__dirname, "..", f), "utf8");
 const unescape = (s: string) => s.replace(/&#x27;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
@@ -202,19 +202,21 @@ describe("§245 test names show green", () => {
   });
 });
 
-describe("§246 a row's 'what': cut at 30, opened in place", () => {
-  const LONG = "Ana Silva's written answers on “Harbor Run”";
-  it("closed: the first 30 characters (never inside a word or an amount), '…' and the arrow; the hover the whole 'what'; `after` outside the cut", () => {
-    expect(BELL_LINE_SHOWN).toBe(30);
+describe("§246 a row's 'what': cut at 50 (§251), opened in place", () => {
+  const LONG = "Ana Silva's written answers and live call on “Underwater Harbor”"; // 64 characters: the 50th falls inside "“Underwater"
+  it("closed: the first 50 characters (never inside a word or an amount), '…' and the arrow; the hover the whole 'what'; `after` outside the cut", () => {
+    expect(BELL_LINE_SHOWN).toBe(50);
     const html = unescape(render(h(WhatLine, { text: LONG, after: h("span", { "data-amount": "" }, " · $10.00") })));
-    expect(html).toContain(`<span title="${LONG}" data-what-cut=""><span data-what-text="">Ana Silva's written answers on…</span></span>`);
+    expect(html).toContain(`<span title="${LONG}" data-what-cut=""><span data-what-text="">Ana Silva's written answers and live call on…</span></span>`);
+    expect(html).not.toContain(">Underwater Harbor”");
     expect(html).toContain('data-whole-toggle=""');
     expect(html).toMatch(/<\/button><span data-amount=""> · \$10\.00<\/span>$/);
     expect(html).not.toContain("data-name-toggle");
   });
-  it("30 characters or fewer: whole, no arrow", () => {
-    const html = render(h(WhatLine, { text: "x".repeat(30), after: " · $5.00" }));
-    expect(html).toBe(`<span data-what-text="">${"x".repeat(30)}</span> · $5.00`);
+  it("50 characters or fewer: whole, no arrow", () => {
+    const html = render(h(WhatLine, { text: "x".repeat(50), after: " · $5.00" }));
+    expect(html).toBe(`<span data-what-text="">${"x".repeat(50)}</span> · $5.00`);
+    expect(render(h(WhatLine, { text: "x".repeat(51), after: " · $5.00" }))).toContain('data-whole-toggle=""');
   });
   it("opened: inline and wrapped, no box; only a 'what' over 200 characters opens in the draggable box", () => {
     expect(LINE_BOX_OVER).toBe(200);
@@ -247,14 +249,14 @@ describe("§246 a row's 'what': cut at 30, opened in place", () => {
     expect(owedSplit("Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run”: $10 + $15 chargeback fee")).toEqual({ what: "Your bank reversed $10 you paid for Ana Silva's written answers on “Harbor Run”", rest: ": $10 + $15 chargeback fee" });
     const line = { id: "o1", retry: false, amountCents: 1000, until: null, text: `${LONG} $10.00 · charged by the tester while your tests were paused`, full: `${LONG} $10.00 · charged by the tester while your tests were paused`, what: LONG, rest: " $10.00 · charged by the tester while your tests were paused" };
     const html = unescape(render(h(OwedReadOnly, { owed: { lines: [line] as never, totalCents: 1000 } })));
-    expect(html).toContain("Ana Silva's written answers on…</span></span><button");
+    expect(html).toContain("Ana Silva's written answers and live call on…</span></span><button");
     expect(html).toContain('<span data-owed-rest=""> $10.00 · charged by the tester while your tests were paused</span>');
   });
 
   it("a confirm row: the 'what' cut, its amount and 'confirm by' outside; Confirm with your bank outside", () => {
-    const item = { id: "p1", what: "A payment for Ana Silva's written answers on “Harbor Run”", amount: "$10.00", by: "confirm by Nov 7, 3:00 PM", text: "x", href: "/app/tests/t1#bank-p1", tests: [{ name: "“Harbor Run”", href: "/app/tests/t1" }] };
+    const item = { id: "p1", what: "A payment for Ana Silva's written answers on “Underwater Harbor”", amount: "$10.00", by: "confirm by Nov 7, 3:00 PM", text: "x", href: "/app/tests/t1#bank-p1", tests: [{ name: "“Underwater Harbor”", href: "/app/tests/t1" }] };
     const html = unescape(render(h(ConfirmList, { items: [item] })));
-    expect(html).toContain("A payment for Ana Silva's…</span></span><button");
+    expect(html).toContain("A payment for Ana Silva's written answers on…</span></span><button");
     expect(html).toContain('data-confirm-amount="">$10.00</span> · confirm by Nov 7, 3:00 PM');
     expect(html).toContain("Confirm with your bank →</a>");
   });

@@ -14,20 +14,21 @@ vi.stubGlobal("React", React);
 afterAll(() => { vi.stubGlobal("React", oldReact); });
 const src = (f: string) => fs.readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 
-// (Owner, Nov 5, §202) A bell line shows its first 30 characters then "…", never inside a word or an amount; its arrow opens the whole line (names uncut).
+// (Owner, Nov 5, §202; §251: 50, was 30) A bell line shows its first 50 characters then "…", never inside a word or an amount; its arrow opens the whole line (names uncut).
 // (Owner, Nov 5, §203) Listed names are cut at 20 characters (was 12).
-describe("§202 bell lines: 30 characters, then the whole line on the arrow", () => {
+describe("§202 bell lines: 50 characters (§251), then the whole line on the arrow", () => {
   it("short lines stay whole; long ones cut at a word boundary, never inside an amount", () => {
-    expect(BELL_LINE_SHOWN).toBe(30);
+    expect(BELL_LINE_SHOWN).toBe(50);
     expect(bellShort("Your tests are running again")).toBeNull();
-    expect(bellShort("x".repeat(30))).toBeNull();
-    // The 30th character falls inside "$1,000.00": the cut goes back to the space before it.
-    expect(bellShort("Charged by the tester: $1,000.00 for Ana Silva's written answers")).toBe("Charged by the tester…"); // (a trailing ":" goes with the cut)
-    expect(bellShort("You paid $10.00 for Ana Silva's written answers on “Harbor Run”")).toBe("You paid $10.00 for Ana…"); // ("Silva's" would end at 31)
+    expect(bellShort("x".repeat(50))).toBeNull();
+    expect(bellShort("x".repeat(51))).toBe(`${"x".repeat(50)}…`);
+    // The 50th character falls inside "$1,000.00": the cut goes back to the space before it.
+    expect(bellShort("Charged by the tester for Ana Silva's call: $1,000.00 for her written answers")).toBe("Charged by the tester for Ana Silva's call…"); // (a trailing ":" goes with the cut)
+    expect(bellShort("You paid $10.00 for Ana Silva's written answers and live call on “Harbor Run”")).toBe("You paid $10.00 for Ana Silva's written answers…"); // ("and" would end at 51)
     // Exactly at a space: kept as is.
-    expect(bellShort("The team approved lifting your hold: your tests are running again.")).toBe("The team approved lifting your…");
-    // One word longer than 30: cut as is (by character: an emoji never split).
-    expect(bellShort("🎮".repeat(40))).toBe(`${"🎮".repeat(30)}…`);
+    expect(bellShort("The team approved lifting the hold on your account so your tests are running again.")).toBe("The team approved lifting the hold on your account…");
+    // One word longer than 50: cut as is (by character: an emoji never split).
+    expect(bellShort("🎮".repeat(60))).toBe(`${"🎮".repeat(50)}…`);
   });
 
   it("the list: the cut words follow the link, the arrow (aria-expanded) opens the whole line; a short line has no arrow; stack headings unchanged", () => {
@@ -40,13 +41,13 @@ describe("§202 bell lines: 30 characters, then the whole line on the arrow", ()
       ] }),
     );
     expect(html).toContain(">You paid <span");
-    expect(html).toContain(" for Cara…</a>");
+    expect(html).toContain(" for Cara Diaz&#x27;s live call on…</a>");
     expect(html).not.toContain(">Underwater Harbor Run Deluxe Edition"); // closed: the cut words shown; (§244) the whole line only in the hover title // closed: only the cut words
     expect(html.match(/data-bell-toggle="1"/g)).toHaveLength(1);
     expect(html).toContain('aria-expanded="false" aria-label="Show the whole line" data-bell-toggle="1"');
     expect(html).not.toContain('data-bell-toggle="2"');
     expect(html).toContain(">Your tests are running again</a>");
-    // The heading is unchanged ("Paid · 2 payments today"); its preview of the newest line is cut at 30 the same way.
+    // The heading is unchanged ("Paid · 2 payments today"); its preview of the newest line is cut at 50 the same way.
     expect(html).toContain("Paid · 2 payments today");
     // The whole line: opened by the arrow, read like a click, in place (§246: inline; the small scroll box only over 200 characters).
     const list = src("app/app/notifications/BellList.tsx");

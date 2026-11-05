@@ -105,7 +105,7 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     expect(team).not.toBe("");
     expect(asOwn(team)).toBe(own);
     // The set: each way of paying reads as the developer reads it.
-    // (Owner, Nov 5, §246) A row's "what" is cut at 30 with its arrow; the whole of it is the row's hover (title), so the set is read from the markup too.
+    // (Owner, Nov 5, §246) A row's "what" is cut at 50 (§251) with its arrow; the whole of it is the row's hover (title), so the set is read from the markup too.
     const raw = own.replace(/&#x27;/g, "'"), text = raw.replace(/<[^>]+>/g, "");
     for (const s of [
       "Ana Silva's written answers on “Harbor Run”", "Pay more for Ana Silva's written answers", "Confirm all", "confirmed with your bank",
@@ -157,6 +157,8 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
   it("What you owe during a hold: the developer's lines, read-only", async () => {
     const w = await world();
     const a = await admin();
+    // (§251) A 20-character name, so the owed line's "what" (54 characters) is longer than the 50 shown and is cut.
+    await db.user.update({ where: { id: w.t[1].tester.user.id }, data: { name: "Benedikt Okafor-Diaz" } });
     await db.payment.create({ data: { kind: "review", contractId: w.t[1].sessionId, submissionId: w.t[1].sub.id, developerId: w.devId, testerId: w.t[1].tester.user.id, amountCents: 800, feeCents: 0, testerCents: 0, status: "failed", owedUntil: new Date(), stripePaymentIntentId: "pi_failed123" } });
     await startHold(w.devId, "unpaid");
     // The lines as owedForBox writes them, dates in the admin's zone (as the box reads them).
@@ -164,9 +166,10 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     expect(lines.length).toBeGreaterThan(0);
     const html = (await adminView(w.devId, a.id)).replace(/&#x27;/g, "'");
     const box = html.match(/<section[^>]*data-owed-readonly=""[\s\S]*?<\/section>/)?.[0] ?? "";
-    // (§246) Each line's "what" (cut at 30, whole in its hover) and its amount and status outside the cut.
+    // (§246) Each line's "what" (cut at 50, §251; whole in its hover) and its amount and status outside the cut.
+    expect(lines.some((l) => Array.from(l.what).length > 50)).toBe(true);
     for (const l of lines) {
-      expect(box).toContain(l.what.length > 30 ? `title="${l.what.replace(/&/g, "&amp;")}"` : l.what.replace(/&/g, "&amp;"));
+      expect(box).toContain(Array.from(l.what).length > 50 ? `title="${l.what.replace(/&/g, "&amp;")}"` : l.what.replace(/&/g, "&amp;"));
       expect(box).toContain(l.rest.replace(/&/g, "&amp;"));
     }
     expect(box).toContain("https://dashboard.stripe.com/test/payments/pi_failed123");

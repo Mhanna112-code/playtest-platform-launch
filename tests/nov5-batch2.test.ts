@@ -27,7 +27,7 @@ describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
     expect(EMAIL_STACKED).toContain(DMS_GROUP);
   });
 
-  it("§216 (§246): payment rows open their whole text with the arrow (WhatLine: the 'what' cut at 30), never only a hover", () => {
+  it("§216 (§246): payment rows open their whole text with the arrow (WhatLine: the 'what' cut at 50, §251), never only a hover", () => {
     for (const f of ["src/components/PaymentLists.tsx", "src/components/PartPayments.tsx", "src/components/OwedBox.tsx", "src/app/app/payments/page.tsx"]) {
       const s = read(f);
       expect(s).toContain("<WhatLine text=");

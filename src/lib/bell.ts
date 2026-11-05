@@ -81,11 +81,11 @@ export function bellKeyIn(n: { id: string; testId: string | null; own: boolean; 
 export const bellKey = (n: Parameters<typeof bellKeyIn>[0]) => bellKeyIn(n);
 
 /**
- * (Owner, Nov 5, §202) A bell line shows its first BELL_LINE_SHOWN (30) characters, then "…", when it is longer; the whole line opens under it. The cut never
+ * (Owner, Nov 5, §202) A bell line shows its first BELL_LINE_SHOWN (50; §251, was 30) characters, then "…", when it is longer; the whole line opens under it. The cut never
  * splits a word or an amount ("$1,000.00" has no space): inside one, it falls back to the last space before it (a single word longer than that is cut as is).
  * Counted by character, so an emoji is never split. null: the line is short enough to show whole.
  */
-export const BELL_LINE_SHOWN = 30;
+export const BELL_LINE_SHOWN = 50; // (Owner, Nov 5, §251; was 30) every bell, payment, confirm and owed line shows its first 50 characters
 /**
  * (Owner, Nov 5, batch 35 §246) An opened line (a bell line, a payment row's or a confirm row's "what") shows whole IN PLACE, wrapped, with no box; only a line
  * longer than this (typed notes: the team's hold note, dispute or pause reasons) opens in the draggable box (ResizeBox in OwnPanel). The one place it is set.

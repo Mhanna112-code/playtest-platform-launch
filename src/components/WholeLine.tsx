@@ -72,7 +72,7 @@ export function NameLine({ shown, full, name, href }: { shown: string; full: str
 /**
  * (Owner, Nov 5, batch 35 §246) A payment row's, a confirm row's (and, the same way, a bell line's) "what": closed, its first 30 characters (bellShort: never inside a
  * word or an amount) with "…" and the arrow beside it; the arrow opens the whole "what" IN PLACE as plain text, wrapped, no box (only a line over LINE_BOX_OVER,
- * 200 characters, opens in the draggable box). A "what" of 30 characters or fewer shows whole, with no arrow. Nothing else is cut (names and test titles are at most
+ * 200 characters, opens in the draggable box). A "what" of BELL_LINE_SHOWN (50, §251) characters or fewer shows whole, with no arrow. Nothing else is cut (names and test titles are at most
  * 20 characters), so there are no per-name "…" toggles. The amount, dates, the marks and every button sit OUTSIDE it (`after`, or the row around it), always shown.
  * A mouse hover shows the whole "what" (§244). `href` links the words; `render` draws a piece of the text (the confirm rows' green test-name links, §245).
  */

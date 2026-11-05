@@ -37,10 +37,10 @@ const later = () => new Promise((r) => setTimeout(r, 30));
 
 // ---------- section 1 ----------
 
-/** A developer with Ana Silva in "Harbor Run" and her written answers sent. */
-async function withWork() {
+/** A developer with Ana Silva (or `name`) in "Harbor Run" and her written answers sent. */
+async function withWork(name?: string) {
   const { dev, testId } = await setup();
-  const { tester, sessionId } = await joined(testId);
+  const { tester, sessionId } = await joined(testId, name);
   await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
   const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
   return { dev, testId, tester, sessionId, sub };
@@ -59,20 +59,21 @@ const markup = (rows: Awaited<ReturnType<typeof bankToConfirm>>) => renderToStat
 
 describe("batch 24 section 1: Your bank wants you to confirm, at the top of the developer dashboard", () => {
   it("a waiting charge shows with its deadline and its link to the piece's Confirm with your bank on the test page", async () => {
-    const x = await withWork();
+    // (§251) A 20-character name, so the "what" (54 characters) is longer than the 50 shown.
+    const x = await withWork("Anabela Silva Okafor");
     const by = new Date(Date.now() + 2 * DAY);
     const p = await waiting(x.dev.user.id, x.tester.user.id, { submissionId: x.sub.id, contractId: x.sessionId, by });
     const rows = await bankToConfirm(x.dev.user.id);
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ id: p.id, lead: "$12.50 · Ana Silva's written answers on “Harbor Run”", full: "$12.50 · Ana Silva's written answers on “Harbor Run”", soon: false, href: bankHref(x.testId, p.id) });
+    expect(rows[0]).toMatchObject({ id: p.id, lead: "$12.50 · Anabela Silva Okafor's written answers on “Harbor Run”", full: "$12.50 · Anabela Silva Okafor's written answers on “Harbor Run”", soon: false, href: bankHref(x.testId, p.id) });
     expect(rows[0].href).toBe(`/app/tests/${x.testId}#bank-${p.id}`);
     expect(rows[0].by).toBe(confirmByText(by, new Date()).text);
     expect(rows[0].by).toMatch(/^confirm by [A-Z][a-z]{2} \d{1,2}, \d{1,2}:\d{2} (AM|PM)$/);
     const html = markup(rows);
     expect(html).toContain("Your bank wants you to confirm");
     expect(html).toContain('class="text-sm font-normal text-slate-400">1</span>');
-    // (Owner, Nov 5, §246) The amount and "confirm by" always show; the "what" between them is cut at 30 with its arrow (the whole "what" its hover).
-    expect(html).toContain(`data-bank-top-amount="">$12.50</span> · <span title="Ana Silva&#x27;s written answers on “Harbor Run”" data-what-cut=""><span data-what-text="">Ana Silva&#x27;s written answers on…</span></span><button`);
+    // (Owner, Nov 5, §246) The amount and "confirm by" always show; the "what" between them is cut at 50 (§251) with its arrow (the whole "what" its hover).
+    expect(html).toContain(`data-bank-top-amount="">$12.50</span> · <span title="Anabela Silva Okafor&#x27;s written answers on “Harbor Run”" data-what-cut=""><span data-what-text="">Anabela Silva Okafor&#x27;s written answers on “Harbor…</span></span><button`);
     expect(html).toMatch(/data-whole-toggle=""[^>]*>[\s\S]*?<\/button> · <span class="text-slate-300" data-confirm-by="">confirm by /);
     expect(html).toContain(`data-bank-waiting="${p.id}"`);
     expect(html).toContain("Confirm with your bank</button>");
