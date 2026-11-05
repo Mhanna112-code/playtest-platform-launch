@@ -484,8 +484,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           </p>
           {/* (Batch 17 §19) The last 7 days before close-out. */}
           {paySoon(x.id) && <p className="note" data-pay-closes="">{payClosesLine(paySoon(x.id))}</p>}
-          {/* (Owner, Nov 3, batch 35 §152) Any payment already made on it (e.g. one declined or waiting for your bank). */}
-          <PartPayments id={x.id} lines={partPays.get(x.id)} />
+          {/* (Owner, Nov 5, §225; was §152's payments list here too) A part's individual payments are listed only in the Testers list, never in Needs you. */}
           {x.kind === "sub" ? (
             <>
               {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Inside the part's drop-down: the answers or recordings in a small panel (about 12rem)
@@ -527,8 +526,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-part-${x.id}` }} summary={x.kind === "written" ? "Written answers" : "Recording"}>
         <p className="text-xs text-slate-400" data-part-when="">Updated {fmtDateTime(x.paidUpdateAt!)}</p>
         {/* (Owner, Nov 5, §224) No "<name> added to this after you paid ($X paid · up to $Y more)" line here: the part's payments and Pay more say it. */}
-        {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
-        <PartPayments id={x.id} lines={partPays.get(x.id)} />
+        {/* (Owner, Nov 5, §225) Its payments are listed only in the Testers list, never in Needs you. */}
         <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
           <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} />
         </ResizeBox>

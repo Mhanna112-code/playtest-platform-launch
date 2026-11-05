@@ -4242,3 +4242,8 @@ together. Now one block per question number: "Question 1", its Before, its After
 ## §224 No "added to this after you paid" line on the part (owner, Nov 5)
 The developer's update row (a part a tester added to after it was paid) no longer shows "bb added to this after you paid ($19.00 paid · up to $981.00 more)" under
 "Updated …": the part's payments and its Pay more say it. The bell and the email that tell the developer of the addition keep the line.
+
+## §225 A part's individual payments only in the Testers list (owner, Nov 5)
+Replaces §152's payments list under a part in Needs you: a part's (or a call's) individual payments ("Payments for this part": each Pay, Pay more, charge and
+decision, with its date, amount and marks) are listed only in the Testers list's drop-downs, never in Needs you's part rows or its "added after you paid" rows. Each
+line keeps §220's pattern (names cut at 20, "…" opens one name, the arrow opens the whole line in place).
