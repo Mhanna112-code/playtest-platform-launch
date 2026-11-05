@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { paidOutTotal, paidRows, type PaidRow } from "@/lib/server/paymentRows";
+import { paidLinesTotal, paidRows, refundLines, type PaidRow, type RefundLine } from "@/lib/server/paymentRows";
 import { owedForBox } from "@/lib/server/holds";
 import { isAdmin } from "@/lib/server/session";
 import { stripeDashboardUrl } from "@/lib/server/adminLinks";
@@ -21,16 +21,22 @@ export type PaidEntry = { pay: Pay } | { group: PaidGroup };
  * One of Payments' paid lists: its payments (newest first, at most 500), each one's line (paidRows), and the total shown beside its heading. `entries` (the
  * developer's list, §191): the lines as drawn, each covered item inside its one payment's group (without it: one line per payment, the tester's list).
  */
-export type PaidList = { list: Pay[]; rows: Map<string, PaidRow>; totalCents: number; entries?: PaidEntry[] };
+export type PaidList = { list: Pay[]; rows: Map<string, PaidRow>; totalCents: number; entries?: PaidEntry[]; /** (§192) each refund's own negative line, by the payment it refunds */ refunds?: Map<string, RefundLine[]> };
 
-/** The developer's "What you've paid": every payment that went through (a refunded repayment stays listed, out of the total), its line, and the total. */
+/**
+ * The developer's "What you've paid": every payment that went through (a refunded repayment stays listed), its line, each refund's own negative line (§192), and the
+ * total.
+ */
 export async function developerPaid(devId: string): Promise<PaidList> {
   // (Batch 10) A repaid chargeback refunded after the platform won it stays in the list, marked refunded (not in the total).
   const list = await db.payment.findMany({ where: { developerId: devId, OR: [{ status: { in: ["charged", "not_set_up"] } }, { status: "refunded", kind: "chargeback" }] }, orderBy: { createdAt: "desc" }, take: 500 });
   // (Owner, Nov 3, §133) Pay what you owe's one payments the bank reversed (not listed themselves: the items they paid for are): what was reversed leaves the total.
   const reversedOnes = await db.payment.findMany({ where: { developerId: devId, kind: "owed", chargebackAt: { not: null } }, select: { amountCents: true, reversedCents: true, chargebackAt: true, chargeback: true, status: true } });
   // (Owner, Nov 4, §191) The lines are grouped by the charge that paid them; the total is the same sum of the same rows (never counted twice).
-  return { list, rows: await paidRows(list, "developer"), totalCents: paidOutTotal(list, reversedOnes), entries: await paidEntries(list) };
+  // (Owner, Nov 4, §192) Every refund the developer received is its own negative line, right under the payment it refunds (inside its group when that payment is
+  // in one): the total is the plain signed sum of the lines (a refunded repayment counts, its refund line takes it off), the same figure as before for the same history.
+  const refunds = await refundLines(list);
+  return { list, rows: await paidRows(list, "developer"), totalCents: paidLinesTotal(list, reversedOnes, [...refunds.values()].flat()), entries: await paidEntries(list), refunds };
 }
 
 /**

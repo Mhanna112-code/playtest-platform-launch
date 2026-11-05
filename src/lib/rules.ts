@@ -1132,6 +1132,28 @@ export const reviewFirstLine = (n: number) => `Your account has had ${n} chargeb
 export const REVIEWED_LINE = "The team reviewed your account: you can pay what you owe now";
 export const bankChangedLine = (paidCents: number, piece: string | null, wasCents: number, nowCents: number) =>
   `Your bank changed the amount it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(wasCents)} → ${money(nowCents)} (now ${money(nowCents)} + ${money(CHARGEBACK_FEE_CENTS)} fee = ${money(nowCents + CHARGEBACK_FEE_CENTS)})`;
+/**
+ * (Owner, Nov 4, batch 35 §192) The bank changed what it took back AFTER the reversed payment was repaid: the difference is settled at once (a lower amount refunded to
+ * the card, a higher one charged like a charge made while away). The developer's bell and email: "Your bank lowered what it took back from your $20.00 payment for
+ * Ana Silva's written answers on “Harbor Run”: $8.00 refunded to your card." / "Your bank raised what it took back from your $20.00 payment for …: $8.00 more is
+ * charged." (`piece` null: a payment for several items, named by its amount alone.)
+ */
+export const bankLoweredLine = (paidCents: number, piece: string | null, refundCents: number) =>
+  `Your bank lowered what it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(refundCents)} refunded to your card.`;
+export const bankRaisedLine = (paidCents: number, piece: string | null, moreCents: number) =>
+  `Your bank raised what it took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""}: ${money(moreCents)} more is charged.`;
+/** (§192) The charge of what the bank raised after the repayment: a Payment of kind "chargeback" (repaysId: the reversed payment) with this note, "raise:<from>:<to>". */
+export const RAISE_NOTE = "raise:";
+export const raiseNote = (fromCents: number, toCents: number) => `${RAISE_NOTE}${fromCents}:${toCents}`;
+/** (§192) A raise charge's amounts (what the bank took back before and after), or null for any other payment (a repayment included). */
+export const raiseOf = (p: { kind: string; note?: string | null }) => {
+  if (p.kind !== "chargeback" || !p.note?.startsWith(RAISE_NOTE)) return null;
+  const [from, to] = p.note.slice(RAISE_NOTE.length).split(":").map(Number);
+  return Number.isFinite(from) && Number.isFinite(to) ? { from, to } : null;
+};
+/** (§192) The name of a raise charge in a receipt, a bank check's items or a decline: "the rise in what your bank took back from your $20.00 payment for … ($12.00 → $20.00)". */
+export const raiseName = (paidCents: number, piece: string | null, fromCents: number, toCents: number) =>
+  `the rise in what your bank took back from your ${money(paidCents)} payment${piece ? ` for ${piece}` : ""} (${money(fromCents)} → ${money(toCents)})`;
 export const pressAgainLine = (cents: number, chargeback: null | { cardVerified: boolean } = null, tick = false) => {
   const line = !chargeback ? `Press again to pay ${money(cents)}.`
     : chargeback.cardVerified ? `Press again to reserve ${money(cents)} on your card: it's taken when the team approves lifting your hold.`

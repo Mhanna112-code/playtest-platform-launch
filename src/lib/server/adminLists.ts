@@ -726,7 +726,8 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
     }
   } else if (kind === "u-chargebacks") {
     for (const p of await db.payment.findMany({ where: { developerId: userId, chargebackAt: { not: null } }, orderBy: { chargebackAt: "desc" }, take: 2000 })) rows.push(mk("cb", p.id, p.chargebackAt!, [`Chargeback ${cbAmount(p)} (${p.chargeback})`, ...stripeIds(p)]));
-    // (Owner, Nov 3, §133) Stripe changing a dispute's amount: followed, or logged here (and emailed) when it couldn't be (already repaid, resolved, won, decided).
+    // (Owner, Nov 3, §133) Stripe changing a dispute's amount: followed, or logged here (and emailed) when it couldn't be (resolved, won, decided). (Owner, Nov 4,
+    // §192) After the repayment it's followed too: "…: followed after repayment: refunded $8.00" / "…: charged $8.00 more" (emailed only when that fails).
     for (const e of await db.accountEvent.findMany({ where: { userId, kind: "chargeback-amount" }, orderBy: { createdAt: "desc" }, take: 2000 })) rows.push(mk("cbamount", e.id, e.createdAt, e.note));
   } else if (kind === "u-holds") {
     const labels: Record<string, string> = { hold: "Payment hold started", "hold-lifted": "Payment hold lifted", "hold-approved": "Hold lift approved", suspended: "Suspended", reinstated: "Reinstated", "team-closed": "Team closure" }; // (batch 30 §5)

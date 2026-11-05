@@ -3450,3 +3450,103 @@ New `tests/admin-payments-190.test.ts`: a developer with a Pay, a Pay more, Conf
 
 ### Tests
 New `tests/grouped-payments-191.test.ts`: a seeded developer with a Pay and a single Confirm with the bank (own lines), Pay what you owe covering 3 items (written answers, an automatic call charge with the call's date and time, a Pay more's repayment + fee), Confirm all covering 2 testers on 2 tests (a tester's Charge, the team's decision), a chargeback won after it was repaid (refunded inside its group, not counted), a reversed Pay what you owe payment (its group marked; its repayment inside a later group), repayments of a tester's Charge, a team decision, an automatic call charge and part of a Pay. Each listed payment drawn exactly once; the total equal to `paidOutTotal` for the same rows and to the sum of the drawn lines; every item's exact wording; groups closed; the team's copy the same markup but for the Stripe links, one per group to its PaymentIntent; a tester's earnings unchanged. Updated: `admin-payments-190` (the covered items' "how" words now read on their group's line).
+
+## §192 Refunds as their own lines; the bank's amount followed after the repayment (owner, Nov 4)
+
+Two decisions. (1) Every refund the developer received is its own negative line in "What you've paid" (and the team's copy, §190), right under the payment it refunds. (2) When the bank changes what it took back (Stripe's `charge.dispute.updated`) AFTER the reversed payment was repaid, the difference is settled at once: refunded when lowered, charged when raised. Partial reversals (§133) work the same way throughout, since every amount is read with `reversedOf`.
+
+| Before | After |
+| --- | --- |
+| A chargeback won after it was repaid: the repayment line read "· refunded (your bank's chargeback was reversed)" and was left out of the total. No line showed the refund itself. | The repayment line stays positive and keeps that mark. Right under it, a line of its own: "Refunded: your bank's chargeback on your $10.00 Pay more for Ana Silva's written answers on “Harbor Run” was reversed in your favour · −$25.00 · Thu, Nov 5, 9:00 AM". The team's copy adds " · Stripe" to the PaymentIntent the money was refunded from. Inside a Pay what you owe / Confirm all group, it's a row of that group, under the repayment. |
+| "What you've paid"'s total = the payments that went through, minus refunded repayments, minus each reversal that wasn't won (`paidOutTotal`). | The total is the plain signed sum of the lines: every payment that went through (a refunded repayment too), minus every refund line, minus each reversal that wasn't won (as in §133) (`paidLinesTotal`). For the same history it's the same figure, and the tests assert that equality. |
+| The bank changed the amount after the repayment: nothing changed for the developer. Every admin got an email ("Playtest: a chargeback's amount changed ($20.00 to $12.00)"), and the Chargebacks box read "…: not followed, because it was already repaid. Check it in Stripe." | **Followed at once**, relative to the last FOLLOWED amount (lowered: refunded; raised: charged). See the rules below. Admins are emailed only when a refund or a charge fails. |
+| The bank changed the amount while the repayment was being charged, waiting for the bank, or reserved on the card: "…: not followed, because it's being repaid right now / it's reserved on the developer's card. Check it in Stripe." (plus an email). | **It waits** and is settled right after that ends: after the repayment if it went through, in what is owed if it didn't (§133's rule). No email. |
+
+### The rules
+- **Lowered** (e.g. $20 → $12): the $8 difference is refunded to the developer's card at once. It's a Stripe partial refund of the PaymentIntent that paid the repayment, for exactly that amount. When the repayment was part of a Pay what you owe / Confirm all one payment (or a captured reservation), that one PaymentIntent is refunded for exactly that amount, and the refund is recorded against the repayment row. The refund never exceeds what is still repaid for that reversal minus the $15 fee: the fee stays unless the chargeback is won. The money comes from the repayment first, then from each charge of an earlier raise (oldest first). Each refund is its own line.
+- **Raised** (e.g. $12 → $20): the $8 difference is a payment of its own (kind "chargeback", `repaysId` = the reversed payment, note `raise:<from>:<to>`). It's charged like a charge made while away: off-session on the saved card through the waiting-charges path (`chargeDeferred`), so it sits in its "Pay what you owe" group like other charges made while away.
+  - If the bank asks: it waits for "Confirm with your bank" (the usual 3 days).
+  - Declined: the usual decline handling (it's owed, and a payment hold starts). The reversal itself stays repaid; the chargeback isn't reopened.
+  - During a hold, a suspension or the team's pause of its test: it waits for the lift, like every charge made while away.
+- **Several changes** each settle relative to the last followed amount (`Payment.reversedCents` is now the last followed amount). For example, $20 → $12 → $16 → $10 on a $20 payment:
+  - $20 → $12: $8 refunded.
+  - $12 → $16: $4 charged.
+  - $16 → $10: $6 refunded.
+  - Result: $35 − $8 − $6 + $4 = $25 still repaid, which is $10 + the fee.
+- **Won later:** everything still repaid for that reversal is refunded (the repayment less its partial refunds, plus each raise that was charged), fee included. Each payment is refunded on its own PaymentIntent, and each is its own minus line. In the example above: $21 from the repayment and $4 from the raise. The developer gets ONE notice for the total, as before. A raise still owed (declined) is cancelled, and a change still waiting is dropped.
+- **Lost later:** nothing more. Everything is already settled at the last followed amount. A `charge.dispute.updated` that says the dispute is decided is still not followed (it's logged, with the email).
+- **Before the repayment** (owed, not paid yet): unchanged. §133 follows the change in what is owed, and the press stops once on Pay what you owe.
+- **Once per change:**
+  - It runs under the developer's row lock, as `disputeAmountChanged` did.
+  - The amount is followed in the same transaction that records the refund or creates the raise. A retried delivery (or the same event forgotten after a failure and sent again) finds the amount already followed ("same").
+  - Each refund has a unique key (`lowered:<event id>:<payment id>`, `won:<payment id>`). Stripe gets an idempotency key per refund.
+  - A refund left "pending" by a run that stopped before Stripe answered is sent again by the 5-minute sweep and the daily job, with the same key.
+- **A change waiting for a repayment in progress** is kept per reversed payment: the newest one, in AppState `cb-amount-pending:<payment id>`. It's settled when:
+  - the repayment is recorded (`settleOwedRow`);
+  - Pay what you owe's one payment holding it is released (`releaseOwed`), or its repayment is declined (`chargesDeclined`);
+  - otherwise (a reservation that lapsed or was cancelled), by the 5-minute sweep and the daily job.
+- The open bank window's blue notice (§160) no longer lists a change that was followed after the repayment. That change isn't about the check that's open.
+
+### Every message
+- **Developer, bell + email:**
+  - Lowered: "Your bank lowered what it took back from your $20.00 payment for Ana Silva's written answers on “Harbor Run”: $8.00 refunded to your card." When payments aren't set up, the email adds "Payments aren't set up yet, so this was recorded and nothing was refunded."
+  - Raised: "Your bank raised what it took back from your $20.00 payment for Ana Silva's written answers on “Harbor Run”: $8.00 more is charged."
+  - A payment for several items (a reversed one payment) has no "for …": "…from your $35.00 payment: …".
+  - Won (unchanged words, one notice): "Refund: your bank's chargeback of $10.00 was reversed". The email reads "Refund: your bank's chargeback of $10.00 was reversed: $25.00 refunded." and "Refunded to your saved card.". The amount is now everything still repaid.
+- **What you've paid** (developer and the team's copy). The payment is named as §191 names it in a group: "your $20.00 Pay for …", "your $1.00 Pay more for …", "the team's $5.00 dispute decision on …", "the $12.00 Cid Moreau charged for his …", "the automatic $15.50 charge for … (Tue, Oct 27, 3:25 PM)", "your $35.00 Pay what you owe payment on Wed, Nov 4, 12:30 PM", "your $35.00 Confirm all payment on …", "your $35.00 payment reserved on your card on …".
+  - Lowered: "Refunded: your bank lowered what it took back from your $20.00 Pay for Ana Silva's written answers on “Harbor Run”: $20.00 → $12.00 · −$8.00 · <date and time>".
+  - Won: "Refunded: your bank's chargeback on your $10.00 Pay more for Ana Silva's written answers on “Harbor Run” was reversed in your favour · −$25.00 · <date and time>". When the bank reversed only part of it: "Refunded: your bank's chargeback on $50.00 of your $444.67 Pay for … was reversed in your favour · −$65.00 · …". A refund made before §192 (recorded only by its refunded repayment) has the same line with no date, since its date isn't known.
+  - Raised: "Your bank raised what it took back from your $20.00 Pay for Ana Silva's written answers on “Harbor Run”: $12.00 → $20.00 · $8.00" (positive).
+  - The repayment line still names what it repaid ("Repaid the reversed $20.00 payment for … ($20.00 + $15.00 chargeback fee)"), whatever was followed since. The reversed payment's own mark shows what the bank holds now ("· your bank reversed $12.00 of this (chargeback)").
+  - The team's copy: " · Stripe" on each refund line (the PaymentIntent refunded) and on the raise (its charge, on its group's line).
+- **The raise's name** in its receipt, the "Confirm with your bank" item, a decline, the waiting box during a hold, and the owed box: "the rise in what your bank took back from your $20.00 payment for Ana Silva's written answers on “Harbor Run” ($12.00 → $20.00)".
+  - The owed box line after a decline: "The rise in what your bank took back from your $20.00 payment for … ($12.00 → $20.00) $8.00 · card declined Nov 5".
+  - Its Stripe description: "Playtest: Charges made while you were away (Your bank raised what it took back from your $20.00 Pay for …: $12.00 → $20.00 $8.00)".
+- **Admins, the developer's Chargebacks box** (admin console):
+  - "Stripe changed the disputed amount of the $20.00 payment (pi_…) from $20.00 to $12.00: followed after repayment: refunded $8.00."
+  - "… from $12.00 to $20.00: followed after repayment: charged $8.00 more."
+  - "…: followed after repayment: nothing left to refund (only the chargeback fee is still repaid)."
+  - "…: followed after repayment: refunded $8.00 (refunding $8.00 failed: check it in Stripe)."
+  - "… from $96.00 to $50.00: waiting, because it's reserved on the developer's card; followed once that ends." (or "… because it's being repaid right now; …"), then the followed line when it ends.
+  - Unchanged: "…: followed (the developer now owes $12.00 + $15.00 chargeback fee).", and "…: not followed, because the dispute is already decided (lost). Check it in Stripe." (also "the chargeback was already won", "the team already resolved it"), each still with the email "Playtest: a chargeback's amount changed ($20.00 to $12.00)".
+  - Gone: "…not followed, because it was already repaid / it's being repaid right now / it's reserved on the developer's card…" and their emails.
+- **Admins, emails only on failure:**
+  - "Playtest: a chargeback refund failed ($8.00)": "Refunding $8.00 to the developer failed (<Stripe's message>): Stripe changed the disputed amount of the $20.00 payment (pi_…) from $20.00 to $12.00 after it was repaid. Refund it in Stripe.". A retry by the sweep that fails: "Refunding $8.00 to the developer failed (<Stripe's message>). Refund it in Stripe."
+  - "Playtest: a chargeback's raised amount couldn't be charged ($8.00)": "Charging the developer $8.00 more failed (card declined): the bank raised what it took back from the $20.00 payment (pi_…) from $12.00 to $20.00 after it was repaid. It's owed now (a payment hold)."
+- **Terms** (edited in place, no version bump), Payments and holds: "If the bank changes the amount it reversed after the developer repaid it, the difference is settled at once: a lower amount is refunded to their card, a higher one is charged to it like a charge made while they aren't there." Taxes and refunds: "Payments aren't refunded, except when the platform wins a chargeback the developer already paid (the amount and the fee go back to their card), or when the bank lowers the amount it reversed after the developer repaid it (the difference goes back to their card)."
+
+### Schema
+New table `PaymentRefund` (migration `20261117090000_payment_refunds`, additive only). Each row is one refund to the developer for a reversed payment they had repaid:
+- `paymentId`: the repayment, or a raise charge, whose PaymentIntent was refunded;
+- `reversalId`: the reversed payment;
+- `developerId`, `amountCents`;
+- `reason`: "lowered" | "won";
+- `fromCents` / `toCents`: a lowered change's amounts;
+- `status`: "pending" | "refunded" | "recorded" (no PaymentIntent: payments not set up) | "failed" (not a line; the admins were emailed);
+- `stripeRefundId`;
+- a unique `key`.
+
+Refunds made before §192 aren't copied: their refunded repayment is read as one refund line. Raise charges are ordinary `Payment` rows (above).
+
+### Code
+- `holds.ts`: `disputeAmountChanged` (now with the event id) → `followAmount` (lowered / raised / waiting / followed / logged), `repaidFor`, `sendRefunds`, `followPendingAmount` / `followPendingSafely`, `settleDisputeAmounts` (the sweep and the daily job), `chargebackWon`'s refunds (what is still repaid, recorded per payment), `raiseWhat` (the raise's name in `owedItemName`, `deferredWhat`, `declinedWhat`, `owedLines`).
+- `owedOnce.ts`: a declined raise is a debt, and the admins are told; waiting changes are settled on release.
+- `chargeback.ts` `settleOwedRow`: a waiting change is settled once the repayment is recorded.
+- `paymentRows.ts`: `paidLinesTotal`, `refundLines`, `paidPhrase`, the raise's line, and a repayment named by what it repaid.
+- `paymentLists.ts` / `PaymentLists.tsx`: `refunds`, `RefundItem` (`data-paid-refund`, `data-refund-of`, `data-paid-refund-what`, `data-paid-refund-amount`).
+- `pageFreshness.ts` `paymentsV`: refunds redraw Payments.
+- `bankPeek.ts`: skips changes that were followed after the repayment.
+- `rules.ts`: `bankLoweredLine`, `bankRaisedLine`, `raiseNote` / `raiseOf`, `raiseName`.
+- The webhook passes the event id.
+
+### Tests
+New `tests/chargeback-refunds-192.test.ts`:
+- refund lines: won after repaid (a minus line under the repayment; the total equal to `paidOutTotal` for the same history), and a refund made before §192;
+- lowered after repaid: $20 → $12 (the fake Stripe refund of $8 on the repayment's PaymentIntent, the line, the bell, the Chargebacks line, no email), part of a payment ($96 of $444.67 → $50, then won: $46 and $65), and a repayment inside a Pay what you owe payment (a partial refund of that one PaymentIntent, its line inside the group);
+- raised after repaid: $12 → $20 (one $8 off-session charge, its line and description, the bell), during a hold (it waits, is named in the waiting box, and is charged on the lift), and declined (owed, a payment hold, the admins' email, the reversal still repaid);
+- 20 → 12 → 16 → 10 (refund $8, charge $4, refund $6; final state), then won (the $21 and $4 still repaid refunded, the total equal to the old figure, a later change logged), or lost (nothing more);
+- a retried webhook (a duplicate, a forgotten event retried, two at once) never refunds twice;
+- a raise during a reservation, settled right after the team's Approve; a reservation that lapses (the change is followed in what is owed);
+- the team's copy is the same markup but for the Stripe links, with one on each refund line.
+
+Updated: `partial-dispute` (a change while reserved now waits and is refunded after the Approve; emails only for what isn't followed), `paid-list`, `admin-payments-190` and `grouped-payments-191` (the refund line, and its Stripe link in the team's copy).

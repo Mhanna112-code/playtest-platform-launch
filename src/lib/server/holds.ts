@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { Prisma } from "@prisma/client";
+import { Prisma, type Payment } from "@prisma/client";
 import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine,
+  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
@@ -319,7 +319,9 @@ export async function reversalFor(p: { kind: string; contractId: string | null; 
  * 7 days)", like any Charge's receipt), or work the developer paid for during the pause. (§131) Each names its piece: "the team's dispute decision on Ana Silva's
  * recording on “Harbor Run” (charged after the pause)", "Ana Silva's live call on “Harbor Run” (Oct 30, charged automatically after 7 days)".
  */
-export async function deferredWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }, full = false, /** (§178) how a call's date and time is written */ day: (d: Date) => string = (d) => T(d)) {
+export async function deferredWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null; note?: string | null; repaysId?: string | null }, full = false, /** (§178) how a call's date and time is written */ day: (d: Date) => string = (d) => T(d)) {
+  const raised = await raiseWhat(p, full, day); // (§192)
+  if (raised) return raised;
   const piece = await paymentPiece(p, false, full);
   if (p.kind === "dispute") return piece ? `${disputeDecisionName(piece)} (charged after the pause)` : "a team decision (charged after the pause)";
   const review = p.submissionId ? await db.review.findUnique({ where: { submissionId: p.submissionId } }) : p.callId ? await db.review.findUnique({ where: { callId: p.callId } }) : null;
@@ -340,7 +342,9 @@ export async function deferredWhat(p: { kind: string; submissionId: string | nul
  * (Batch 29 §37) What a deferred payment declined after a lift was: the team's decision, or the piece. (§131) Named by pieceName: "Ana Silva's written answers on
  * “Harbor Run”", "Ana Silva's live call on “Harbor Run” (Nov 5)", "the team's dispute decision on Ana Silva's recording on “Harbor Run”".
  */
-export async function declinedWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null }) {
+export async function declinedWhat(p: { kind: string; submissionId: string | null; callId: string | null; contractId: string | null; note?: string | null; repaysId?: string | null }) {
+  const raised = await raiseWhat(p); // (§192)
+  if (raised) return raised;
   const piece = await paymentPiece(p);
   if (p.kind === "dispute") return piece ? disputeDecisionName(piece) : "a team decision";
   return piece ?? "work you paid for during the pause";
@@ -619,11 +623,25 @@ export async function settledOwed(paymentId: string, wasOwed = false) {
 }
 
 /**
+ * (Owner, Nov 4, §192) A charge of what the bank raised after the repayment, named in a receipt, a bank check's items, a decline or a waiting line: "the rise in what
+ * your bank took back from your $20.00 payment for Ana Silva's written answers on “Harbor Run” ($12.00 → $20.00)". Null for any other payment.
+ */
+export async function raiseWhat(p: { kind: string; note?: string | null; repaysId?: string | null }, full = false, day?: (d: Date) => string) {
+  const r = raiseOf(p);
+  if (!r) return null;
+  const orig = p.repaysId ? await db.payment.findUnique({ where: { id: p.repaysId } }) : null;
+  const found = orig?.contractId ? await paymentPiece(orig, day, full) : null;
+  return raiseName(orig?.amountCents ?? 0, found && orig?.kind === "dispute" ? disputeDecisionName(found) : found, r.from, r.to);
+}
+
+/**
  * (Owner, Oct 29, batch 25 section 5) What one payment was for, named like the dashboard's rows (§131: paymentPiece): "Ana Silva's live call on “Harbor Run” (Oct 30)"
  * (a time token: the reader's own zone), "Ben Okafor's written answers on “Harbor Run”", "the team's dispute decision on Ana Silva's recording on “Harbor Run”"; a
  * reversed payment owed again (an open chargeback, or its repay row): "a payment your bank had reversed (Ana Silva's written answers on “Harbor Run”)".
  */
-export async function owedItemName(p: { amountCents: number; kind: string; contractId: string | null; submissionId: string | null; callId: string | null; chargeback?: string | null; repaysId?: string | null }, full = false, /** (§178) a page's call date and time (pageCallDay); a token by default */ day?: (d: Date) => string) {
+export async function owedItemName(p: { amountCents: number; kind: string; contractId: string | null; submissionId: string | null; callId: string | null; chargeback?: string | null; repaysId?: string | null; note?: string | null }, full = false, /** (§178) a page's call date and time (pageCallDay); a token by default */ day?: (d: Date) => string) {
+  const raised = await raiseWhat(p, full, day);
+  if (raised) return raised;
   const orig = p.kind === "chargeback" && p.repaysId ? await db.payment.findUnique({ where: { id: p.repaysId } }) : null;
   const base = orig ?? p;
   const found = await paymentPiece(base, day, full);
@@ -693,7 +711,10 @@ export async function owedLines(devId: string) {
       const piece = c ? pieceName({ tester: displayName(c.tester), part, test: c.test.title, when, full }) : part;
       return p.kind === "dispute" ? disputeDecisionName(piece).replace(/^the/, "The") : piece;
     };
-    const what = name(false), whole = name(true);
+    // (Owner, Nov 4, §192) A charge of what the bank raised after the repayment names that: "The rise in what your bank took back from your $20.00 payment for …".
+    const raised = raiseOf(p) ? [await raiseWhat(p, false, (d) => callAtFor(d, u)), await raiseWhat(p, true, (d) => callAtFor(d, u))] : null;
+    const up1 = (x: string) => x.charAt(0).toUpperCase() + x.slice(1);
+    const what = raised ? up1(raised[0]!) : name(false), whole = raised ? up1(raised[1]!) : name(true);
     // (§131) `full`: the same line with the names uncut, the line's hover on the page.
     // (Owner, Nov 4, §178) A reversed call payment names the call (its date and time), not the day it was paid: "Your bank reversed $15.50 you paid for bb's live
     // call on “excerptexcer…” (Tue, Oct 27, 7:15 AM)" (it read "(Nov 4)", the payment's day, for two different calls).
@@ -852,20 +873,38 @@ export async function chargebackWon(paymentIntentId: string) {
   }
   // Already paid back with "Pay what you owe": refund that charge (the amount and, since batch 11, the fee) to their card. Refunds come first (idempotent at Stripe), so
   // a webhook retried after a failed refund still refunds.
-  let refunded = 0;
-  for (const r of await db.payment.findMany({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up"] } } })) {
+  // (Owner, Nov 4, §192) What is STILL repaid for this reversal at this point: the repayment less what was refunded of it when the bank lowered its amount, and each
+  // charge of what the bank raised (less what was refunded of it), each refunded on its own PaymentIntent and recorded as its own negative line ("won").
+  let refunded = 0, noStripe = false;
+  const paid = await repaidFor(db, p.id);
+  for (const r of paid.sources) {
+    const key = `won:${r.id}`;
+    // A retry finds its refund (one per payment, ever) with the amount it had.
+    const rec = (await db.paymentRefund.findUnique({ where: { key } }))
+      ?? (paid.left(r.id) > 0 ? await db.paymentRefund.create({ data: { paymentId: r.id, reversalId: p.id, developerId: p.developerId, amountCents: paid.left(r.id), reason: "won", key } }).catch(() => db.paymentRefund.findUnique({ where: { key } })) : null);
     // (Batch 23 section 6) The amount too: a repay taken from a reservation shares its PaymentIntent with the other payments it covered.
-    if (r.stripePaymentIntentId) await getStripe().refunds.create({ payment_intent: r.stripePaymentIntentId, amount: r.amountCents }, { idempotencyKey: serverKey("cbwon", r.id) });
+    if (rec && rec.status === "pending") {
+      if (r.stripePaymentIntentId) {
+        const re = await getStripe().refunds.create({ payment_intent: r.stripePaymentIntentId, amount: rec.amountCents }, { idempotencyKey: serverKey("cbwon", r.id) });
+        await db.paymentRefund.updateMany({ where: { id: rec.id, status: "pending" }, data: { status: "refunded", stripeRefundId: re.id } });
+      } else await db.paymentRefund.updateMany({ where: { id: rec.id, status: "pending" }, data: { status: "recorded" } });
+    }
     if ((await db.payment.updateMany({ where: { id: r.id, status: r.status }, data: { status: "refunded" } })).count !== 1) continue;
-    refunded += r.amountCents;
+    refunded += rec?.amountCents ?? 0;
+    if (rec && !r.stripePaymentIntentId) noStripe = true;
+  }
+  if (refunded > 0) {
     const line = chargebackRefundLine(rev);
-    await notify(dev.email, line, [`${line}: ${money(r.amountCents)} refunded.`, r.stripePaymentIntentId ? "Refunded to your saved card." : "Payments aren't set up yet, so this was recorded and nothing was refunded."], "/app/payments", { side: "developer", payment: true });
+    await notify(dev.email, line, [`${line}: ${money(refunded)} refunded.`, noStripe ? "Payments aren't set up yet, so this was recorded and nothing was refunded." : "Refunded to your saved card."], "/app/payments", { side: "developer", payment: true });
   }
   const claimed = await db.payment.updateMany({ where: { id: p.id, chargeback: p.chargeback }, data: { chargeback: "won" } });
   if (claimed.count !== 1) return false;
   // (§133, a gap found while building it) A repayment still waiting for the lift (made after a reservation, kind "chargeback", "deferred": e.g. a suspension still
   // on) is no longer owed: it goes, so nothing is charged for it after the lift.
   await db.payment.deleteMany({ where: { repaysId: p.id, kind: "chargeback", status: "deferred" } });
+  // (§192) A charge of what the bank raised that was declined (owed) is no longer owed either; a change still waiting for a repayment is dropped.
+  await db.payment.updateMany({ where: { repaysId: p.id, kind: "chargeback", note: { startsWith: RAISE_NOTE }, settledAt: null, coveredById: null, status: { in: ["failed", "owed"] } }, data: { status: "cancelled", owedUntil: null } });
+  await db.appState.deleteMany({ where: { key: PENDING_AMOUNT + p.id } });
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
   // (Batch 11) A payments-kind stop-once line on the developer's test page and Edit (Alerts can ignore it).
   if (c) await (await import("./live")).logEvent(c.testId, "payment", chargebackReversedLine(rev, refunded || rev + CHARGEBACK_FEE_CENTS, refunded > 0, await reversalFor(p)), c.id);
@@ -884,47 +923,211 @@ export async function chargebackWon(paymentIntentId: string) {
 const DECIDED = ["won", "lost", "warning_closed", "charge_refunded", "prevented"];
 
 /**
- * (Owner, Nov 3, batch 35 §133) Stripe's `charge.dispute.updated`: a bank can change the disputed amount before the dispute is decided. It is FOLLOWED (what is owed
- * and every total built on it follow at once: the owed box redraws, a press from an older page stops once on the new total, the chargeback steps and the admin's row
- * show it) only while the chargeback is open, nothing of it is repaid or being repaid (no repayment, no Pay what you owe payment or reservation holding it) and the
- * dispute isn't decided. Otherwise nothing changes and it's LOGGED for the admins: an email to every admin and a line in that developer's Chargebacks box (admin
- * console), where a followed change is listed too. Returns "same" (nothing to change), "followed", "logged", or "unknown" (no chargeback on that payment yet: the
- * webhook leaves it for Stripe's retry).
+ * (Owner, Nov 3, batch 35 §133) Stripe's `charge.dispute.updated`: a bank can change the disputed amount before the dispute is decided. Before the reversed payment is
+ * repaid it is FOLLOWED in what is owed (the owed box redraws, a press from an older page stops once on the new total, the chargeback steps and the admin's row show it).
+ * (Owner, Nov 4, §192) AFTER it was repaid it is followed too, settled at once relative to the last followed amount: lowered, the difference is refunded to the
+ * developer's card (a partial refund of the PaymentIntent that paid the repayment, never more than is still repaid for that reversal: the fee stays); raised, the
+ * difference is charged like a charge made while away (waiting for the lift during a hold). While the repayment is in progress (being charged, waiting for the bank,
+ * reserved on the card) the change waits and is settled right after it ends. Not followed (logged for the admins, with an email): the dispute already decided, the
+ * chargeback won, or resolved with nothing repaid. Every change is listed in the developer's Chargebacks box (admin console). Returns "same" (nothing to change),
+ * "followed", "logged" (not followed, or waiting for the repayment in progress), or "unknown" (no chargeback on that payment yet: the webhook leaves it for Stripe's
+ * retry). `eventId`: the Stripe event's id, so a retried webhook never refunds twice (with the developer's row lock, as Pay what you owe's claim takes it).
  */
-export async function disputeAmountChanged(paymentIntentId: string, amount: unknown, status: unknown = "") {
+export async function disputeAmountChanged(paymentIntentId: string, amount: unknown, status: unknown = "", eventId: string | null = null) {
   const cents = disputedCentsOf(amount);
   if (cents == null) return "same" as const;
   const p = await db.payment.findFirst({ where: { stripePaymentIntentId: paymentIntentId, chargeback: { in: ["open", "resolved", "won"] } }, orderBy: { createdAt: "asc" } });
   if (!p) return "unknown" as const;
-  const was = reversedOf(p), next = Math.min(cents, p.amountCents);
-  if (next === was) return "same" as const;
-  const decided = typeof status === "string" && DECIDED.includes(status);
-  // Under the developer's row lock (as Pay what you owe's claim and the reservation take it), so a press starting now can't pay the old amount.
-  const why = await db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${p.developerId} FOR UPDATE`;
-    const now = await tx.payment.findUniqueOrThrow({ where: { id: p.id } });
-    if (now.chargeback === "won") return "the chargeback was already won";
-    if (now.chargeback !== "open") return "the team already resolved it";
-    if (decided) return `the dispute is already decided (${status})`;
-    if (reversedOf(now) !== was) return "it changed meanwhile";
-    if (await tx.payment.count({ where: { repaysId: p.id, status: { in: ["charged", "not_set_up"] } } })) return "it was already repaid";
-    if (await tx.payment.count({ where: { repaysId: p.id, status: { in: ["paying", "needs_action", "needs_confirmation", "deferred"] } } })) return "it's being repaid right now";
-    if (now.coveredById && (await tx.payment.count({ where: { id: now.coveredById, status: { in: ["paying", "needs_action", "needs_confirmation"] } } }))) return "it's being repaid right now";
-    if (await tx.reservation.count({ where: { developerId: p.developerId, status: { in: ["pending", "needs_action", "reserved"] }, covers: { has: p.id } } })) return "it's reserved on the developer's card";
+  return followAmount(p.id, cents, typeof status === "string" ? status : "", eventId);
+}
+
+/** (§192) A change waiting for the repayment in progress: the newest one per reversed payment (AppState), settled once that repayment ends. */
+const PENDING_AMOUNT = "cb-amount-pending:";
+type Pending = { cents: number; status: string; event: string | null };
+
+/**
+ * (Owner, Nov 4, §192) What paid for a reversal: its repayment and each charge of what the bank raised after it (kind "chargeback", repaysId: the reversed payment)
+ * that went through, and what of each is still repaid (its amount less what was refunded of it). `repayment`: the repayment itself (null: not repaid yet).
+ */
+export async function repaidFor(tx: Prisma.TransactionClient | typeof db, reversalId: string) {
+  const sources = await tx.payment.findMany({ where: { repaysId: reversalId, kind: "chargeback", status: { in: ["charged", "not_set_up"] } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  const refunds = sources.length ? await tx.paymentRefund.findMany({ where: { paymentId: { in: sources.map((x) => x.id) }, status: { not: "failed" } } }) : [];
+  const left = (id: string) => (sources.find((x) => x.id === id)?.amountCents ?? 0) - refunds.filter((r) => r.paymentId === id).reduce((a, r) => a + r.amountCents, 0);
+  return { sources, refunds, left, net: sources.reduce((a, x) => a + left(x.id), 0), repayment: sources.find((x) => !raiseOf(x)) ?? null };
+}
+
+type Followed =
+  | { out: "same" }
+  | { out: "why"; why: string; was: number; next: number }
+  | { out: "pending"; why: string; was: number; next: number }
+  | { out: "followed"; was: number; next: number }
+  | { out: "refund"; was: number; next: number; cents: number; refunds: { id: string }[] }
+  | { out: "charge"; was: number; next: number; cents: number; raiseId: string };
+
+/** (§192) Follow (or log) the bank's new amount for one reversed payment, under the developer's row lock. */
+async function followAmount(reversalId: string, cents: number, status: string, eventId: string | null) {
+  const decided = DECIDED.includes(status);
+  const key = PENDING_AMOUNT + reversalId;
+  const r = await db.$transaction(async (tx): Promise<Followed & { p: Payment }> => {
+    const p0 = await tx.payment.findUniqueOrThrow({ where: { id: reversalId }, select: { developerId: true } });
+    // Under the developer's row lock (as Pay what you owe's claim and the reservation take it), so a press starting now can't pay the old amount, and two
+    // deliveries of the same change settle it once.
+    await tx.$queryRaw`SELECT id FROM "User" WHERE id = ${p0.developerId} FOR UPDATE`;
+    const p = await tx.payment.findUniqueOrThrow({ where: { id: reversalId } });
+    // (§192) The last FOLLOWED amount: every change settles relative to it.
+    const was = reversedOf(p), next = Math.min(cents, p.amountCents);
+    const done = () => tx.appState.deleteMany({ where: { key } });
+    if (next === was) { await done(); return { out: "same", p }; }
+    if (p.chargeback === "won") { await done(); return { out: "why", why: "the chargeback was already won", was, next, p }; }
+    if (decided) { await done(); return { out: "why", why: `the dispute is already decided (${status})`, was, next, p }; }
+    const paid = await repaidFor(tx, p.id);
+    if (paid.repayment) {
+      await done();
+      // (§192) Lowered after the repayment: the difference goes back to the card, at most what is still repaid for this reversal less the fee (the fee stays unless
+      // the chargeback is won). Refunded from the repayment first, then from each later charge of a raise (oldest first), each refund its own line.
+      if (next < was) {
+        const back = Math.min(was - next, Math.max(0, paid.net - CHARGEBACK_FEE_CENTS));
+        const refunds: { id: string }[] = [];
+        const tag = eventId ?? randomUUID();
+        let rest = back;
+        for (const x of paid.sources) {
+          if (rest <= 0) break;
+          const take = Math.min(rest, paid.left(x.id));
+          if (take <= 0) continue;
+          refunds.push(await tx.paymentRefund.create({ data: { paymentId: x.id, reversalId: p.id, developerId: p.developerId, amountCents: take, reason: "lowered", fromCents: was, toCents: next, key: `lowered:${tag}:${x.id}` }, select: { id: true } }));
+          rest -= take;
+        }
+        await tx.payment.update({ where: { id: p.id }, data: { reversedCents: next } });
+        return { out: "refund", was, next, cents: back, refunds, p };
+      }
+      // (§192) Raised after the repayment: the difference is charged like a charge made while away (its own payment, waiting for the lift during a hold).
+      const raise = await tx.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: p.developerId, testerId: p.testerId, amountCents: next - was, feeCents: next - was, testerCents: 0, transferStatus: "none", status: "deferred", note: raiseNote(was, next) }, select: { id: true } });
+      await tx.payment.update({ where: { id: p.id }, data: { reversedCents: next } });
+      return { out: "charge", was, next, cents: next - was, raiseId: raise.id, p };
+    }
+    // (§192) Being repaid right now (a repayment being charged or waiting for the bank, Pay what you owe's payment holding it, a reservation covering it): the
+    // change waits (the newest one) and is settled once that ends: after the repayment when it goes through, in what is owed when it doesn't.
+    const repaying = (await tx.payment.count({ where: { repaysId: p.id, kind: "chargeback", NOT: { note: { startsWith: RAISE_NOTE } }, status: { in: ["paying", "needs_action", "needs_confirmation", "deferred"] } } }))
+      || (p.coveredById && (await tx.payment.count({ where: { id: p.coveredById, status: { in: ["paying", "needs_action", "needs_confirmation"] } } })));
+    const inFlight = repaying ? "it's being repaid right now"
+      : (await tx.reservation.count({ where: { developerId: p.developerId, status: { in: ["pending", "needs_action", "reserved"] }, covers: { has: p.id } } })) ? "it's reserved on the developer's card" : "";
+    if (inFlight) {
+      const value = JSON.stringify({ cents, status, event: eventId } satisfies Pending);
+      await tx.appState.upsert({ where: { key }, create: { key, value }, update: { value } });
+      return { out: "pending", why: inFlight, was, next, p };
+    }
+    await done();
+    if (p.chargeback !== "open") return { out: "why", why: "the team already resolved it", was, next, p };
     await tx.payment.update({ where: { id: p.id }, data: { reversedCents: next } });
-    return "";
+    return { out: "followed", was, next, p };
   });
-  const of = `of the ${money(p.amountCents)} payment (${paymentIntentId})`;
-  const line = why
-    ? `Stripe changed the disputed amount ${of} from ${money(was)} to ${money(next)}: not followed, because ${why}. Check it in Stripe.`
-    : `Stripe changed the disputed amount ${of} from ${money(was)} to ${money(next)}: followed (the developer now owes ${money(next)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee).`;
-  console.info(`[stripe] ${line}`);
-  await db.accountEvent.create({ data: { userId: p.developerId, kind: "chargeback-amount", note: line, side: "developer", createdAt: new Date() } }).catch(() => null);
-  if (why) {
-    const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
-    for (const a of to) await sendEmail({ to: a, subject: `Playtest: a chargeback's amount changed (${money(was)} to ${money(next)})`, text: [line, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback amount:", e.message));
+  if (r.out === "same") return "same" as const;
+  const p = r.p;
+  const of = `of the ${money(p.amountCents)} payment (${p.stripePaymentIntentId ?? "no payment id"})`;
+  const head = `Stripe changed the disputed amount ${of} from ${money(r.was)} to ${money(r.next)}`;
+  const note = (line: string) => {
+    console.info(`[stripe] ${line}`);
+    return db.accountEvent.create({ data: { userId: p.developerId, kind: "chargeback-amount", note: line, side: "developer", createdAt: new Date() } }).catch(() => null);
+  };
+  if (r.out === "why") {
+    const line = `${head}: not followed, because ${r.why}. Check it in Stripe.`;
+    await note(line);
+    await tellAdmins(`Playtest: a chargeback's amount changed (${money(r.was)} to ${money(r.next)})`, line);
+    return "logged" as const;
   }
-  return why ? ("logged" as const) : ("followed" as const);
+  if (r.out === "pending") {
+    // (§192) No email: it settles by itself once the repayment in progress ends.
+    await note(`${head}: waiting, because ${r.why}; followed once that ends.`);
+    return "logged" as const;
+  }
+  if (r.out === "followed") {
+    await note(`${head}: followed (the developer now owes ${money(r.next)} + ${money(CHARGEBACK_FEE_CENTS)} chargeback fee).`);
+    return "followed" as const;
+  }
+  const dev = await db.user.findUniqueOrThrow({ where: { id: p.developerId } });
+  const found = p.contractId ? await paymentPiece(p) : null;
+  const piece = found && p.kind === "dispute" ? disputeDecisionName(found) : found;
+  if (r.out === "refund") {
+    const sent = await sendRefunds(r.refunds.map((x) => x.id));
+    const ok = sent.filter((x) => x.status !== "failed").reduce((a, x) => a + x.amountCents, 0);
+    const failed = sent.filter((x) => x.status === "failed");
+    const failedCents = failed.reduce((a, x) => a + x.amountCents, 0);
+    await note(`${head}: followed after repayment: ${r.cents === 0 ? "nothing left to refund (only the chargeback fee is still repaid)" : `refunded ${money(r.cents)}`}${failedCents ? ` (refunding ${money(failedCents)} failed: check it in Stripe)` : ""}.`);
+    if (failedCents) await tellAdmins(`Playtest: a chargeback refund failed (${money(failedCents)})`, `Refunding ${money(failedCents)} to the developer failed (${failed.map((x) => x.why).filter(Boolean).join("; ") || "no answer from Stripe"}): Stripe changed the disputed amount ${of} from ${money(r.was)} to ${money(r.next)} after it was repaid. Refund it in Stripe.`);
+    if (ok > 0) {
+      const line = bankLoweredLine(p.amountCents, piece, ok);
+      const recorded = sent.every((x) => x.status !== "refunded");
+      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", payment: true });
+    }
+    return "followed" as const;
+  }
+  await note(`${head}: followed after repayment: charged ${money(r.cents)} more.`);
+  const line = bankRaisedLine(p.amountCents, piece, r.cents);
+  await notify(dev.email, line, [line], "/app/payments", { side: "developer", payment: true });
+  // Charged now like any charge made while away (during a hold, a suspension or the team's pause of its test it waits, as they do).
+  await chargeDeferred(p.developerId);
+  return "followed" as const;
+}
+
+/** (§192) An email to every admin, whatever their email setting (as the chargeback's own). */
+export async function tellAdmins(subject: string, line: string) {
+  const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
+  for (const a of to) await sendEmail({ to: a, subject, text: [line, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback amount:", e.message));
+}
+
+/**
+ * (§192) Make the refunds recorded as "pending" at Stripe: a partial refund of the PaymentIntent that paid each one's payment, for exactly its amount (one key per
+ * refund: asked again, Stripe answers with the first one). No PaymentIntent (payments not set up): "recorded". Stripe refusing: "failed" (the caller emails the admins).
+ */
+export async function sendRefunds(ids: string[]) {
+  const out: { id: string; amountCents: number; status: string; why: string }[] = [];
+  for (const id of ids) {
+    const r = await db.paymentRefund.findUnique({ where: { id } });
+    if (!r) continue;
+    if (r.status !== "pending") { out.push({ id, amountCents: r.amountCents, status: r.status, why: "" }); continue; }
+    const src = await db.payment.findUnique({ where: { id: r.paymentId }, select: { stripePaymentIntentId: true } });
+    let status = "recorded", why = "", refundId: string | null = null;
+    if (src?.stripePaymentIntentId) {
+      try {
+        if (!stripeOn()) throw new Error("Payments aren't set up.");
+        refundId = (await getStripe().refunds.create({ payment_intent: src.stripePaymentIntentId, amount: r.amountCents, metadata: { purpose: `chargeback-${r.reason}`, refundId: r.id } }, { idempotencyKey: serverKey("cbamt", r.id) })).id;
+        status = "refunded";
+      } catch (e) {
+        status = "failed";
+        why = (e as Error).message;
+        console.error("[stripe] chargeback refund:", why);
+      }
+    }
+    await db.paymentRefund.updateMany({ where: { id, status: "pending" }, data: { status, stripeRefundId: refundId } });
+    out.push({ id, amountCents: r.amountCents, status, why });
+  }
+  return out;
+}
+
+/**
+ * (Owner, Nov 4, §192) A change that waited for a repayment in progress is settled now that it ended (called when a repayment is recorded, when Pay what you owe's
+ * payment holding the reversed payment ends, and by the daily job): after the repayment when it went through, in what is owed when it didn't.
+ */
+export async function followPendingAmount(reversalId: string) {
+  const row = await db.appState.findUnique({ where: { key: PENDING_AMOUNT + reversalId } });
+  if (!row) return null;
+  let v: Pending | null = null;
+  try { v = JSON.parse(row.value) as Pending; } catch { v = null; }
+  if (!v || typeof v.cents !== "number") {
+    await db.appState.deleteMany({ where: { key: row.key, value: row.value } });
+    return null;
+  }
+  return followAmount(reversalId, v.cents, v.status ?? "", v.event ?? null);
+}
+/** (§192) The same, never failing its caller (a repayment being recorded): a problem is logged and the daily job tries it again. */
+export const followPendingSafely = (reversalId: string | null | undefined) =>
+  reversalId ? followPendingAmount(reversalId).catch((e) => { console.error("[stripe] pending dispute amount:", (e as Error).message); return null; }) : Promise.resolve(null);
+
+/** (§192) The daily job: changes still waiting (a reservation that lapsed, a check cancelled), and refunds left "pending" by a run that stopped before Stripe answered. */
+async function settleDisputeAmounts(now: Date) {
+  for (const s of await db.appState.findMany({ where: { key: { startsWith: PENDING_AMOUNT } }, take: 200 })) await followPendingSafely(s.key.slice(PENDING_AMOUNT.length));
+  const stale = await db.paymentRefund.findMany({ where: { status: "pending", reason: "lowered", createdAt: { lt: new Date(now.getTime() - 10 * 60_000) } }, select: { id: true }, take: 200 });
+  for (const r of await sendRefunds(stale.map((x) => x.id))) if (r.status === "failed") await tellAdmins(`Playtest: a chargeback refund failed (${money(r.amountCents)})`, `Refunding ${money(r.amountCents)} to the developer failed (${r.why || "no answer from Stripe"}). Refund it in Stripe.`);
 }
 
 /** (Batch 16 section 41) Pay what you owe during a chargeback hold before the card is verified. */
@@ -949,6 +1152,8 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   await (await import("./calls")).sweepNobodyJoined(now);
   if (stripeOn()) await (await import("./stripe")).cardExpiryReminders(now).catch((e) => console.error("[card expiry]", (e as Error).message));
   await chargeReadyDeferred();
+  // (Owner, Nov 4, §192) A bank's amount change that waited for a repayment in progress (a reservation that lapsed, a check cancelled), and a refund left half-made.
+  await settleDisputeAmounts(now).catch((e) => console.error("[stripe] dispute amounts:", (e as Error).message));
   const choices = (await openCharges(now, co)) + (await autoChargeCalls(now));
   // (Batch 29 §22, §31) The one-a-day money lines across tests: the tester's "Charge or let go", the developer's "Pay now".
   await testerChargeLines(now, co);
@@ -979,6 +1184,7 @@ async function runDailyLocked(now: Date) {
   // developer presses Pay what you owe (never daily, never on a new card).
   await (await import("./confirm")).expireActions(now);
   await chargeReadyDeferred();
+  await settleDisputeAmounts(now).catch((e) => console.error("[stripe] dispute amounts:", (e as Error).message)); // (§192)
   // 1. Sent work past its review window: Charge / Let it go opens (batch 19 section 4: also every 5 minutes, runSweep).
   out.choices += await openCharges(now, co);
   // 1b. (Owner, Oct 29, batch 28 §21) A LISTED call not paid 7 days after it is charged automatically (rate × measured minutes, within the $1,000 for calls).

@@ -226,8 +226,10 @@ describe("§191 What you've paid groups the items one charge paid", () => {
     expect(asOwn(team)).toBe(own);
     for (const g of Object.values(w.g)) {
       const box = groupOf(team, g.id);
-      // One Stripe link in the group, on its line (the summary), to the charge's PaymentIntent; none on the items inside.
-      expect(box.match(/data-stripe-link=""/g)).toHaveLength(1);
+      // One Stripe link in the group, on its line (the summary), to the charge's PaymentIntent; none on the items inside. (Owner, Nov 4, §192) A refund line inside it
+      // links the PaymentIntent it was refunded from (that same charge).
+      const refundRows = box.match(/data-paid-refund="/g)?.length ?? 0;
+      expect(box.match(/data-stripe-link=""/g)).toHaveLength(1 + refundRows);
       expect(box.match(/<summary[\s\S]*?<\/summary>/)![0]).toContain(`href="https://dashboard.stripe.com/test/payments/${g.stripePaymentIntentId}"`);
     }
   });

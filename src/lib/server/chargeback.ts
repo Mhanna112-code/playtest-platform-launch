@@ -6,7 +6,7 @@ import { logEvent } from "./live";
 import { bell, notify } from "./notify";
 import { PAYMENTS_PROBLEM, authorize, bankReturnUrl, checkUrlOf, ensureCustomer, fakeOn, forgetCard, getStripe, isMissing, stripeOn, transferShare } from "./stripe";
 import { cardLabel, logAccountChange } from "./accountChanges";
-import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACKS_REVIEW_FROM, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, REVIEWED_LINE, RESERVE_DAYS, RESERVE_EXPIRED, bankChangedLine, pressAgainLine, reversedOf, reversedWords, splitFee } from "@/lib/rules";
+import { BANK_NOT_CONFIRMED, CARD_NOT_VERIFIED, CHARGEBACKS_REVIEW_FROM, CHARGEBACK_FEE_CENTS, PRESS_ACTION_MS, REVIEWED_LINE, RESERVE_DAYS, RESERVE_EXPIRED, bankChangedLine, pressAgainLine, raiseOf, reversedOf, reversedWords, splitFee } from "@/lib/rules";
 import { liftHoldIfClear, owed, payable, reversalFor, tellArrived } from "./holds";
 import { receipt } from "./payments";
 
@@ -372,11 +372,15 @@ export async function settleOwedRow(dev: { id: string; name: string; email: stri
     if (!busy) await db.payment.create({ data: { kind: "chargeback", repaysId: p.id, contractId: p.contractId, developerId: dev.id, testerId: p.testerId, amountCents: p.amountCents, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", status, stripePaymentIntentId: pi, settledAt: new Date(), coveredById } });
     // (§117) The repay row keeps the link; the reversed payment is free again (should its chargeback ever reopen).
     if (coveredById) await db.payment.updateMany({ where: { id: p.id, coveredById }, data: { coveredById: null } });
+    // (Owner, Nov 4, §192) A change of the bank's amount that waited for this repayment is settled now (refunded or charged).
+    await (await import("./holds")).followPendingSafely(p.id);
     return;
   }
   // (Owner, Nov 3) A reversed payment's repayment that waited for the lift, paid by the one payment: the money stays with the platform (no tester share).
+  // (§192) A charge of what the bank raised after the repayment the same.
   if (p.kind === "chargeback" && p.repaysId) {
-    await db.payment.updateMany({ where: { id: p.id, settledAt: null, status: p.status, coveredById }, data: { status, settledAt: new Date(), stripePaymentIntentId: pi, feeCents: p.amountCents, testerCents: 0, transferStatus: "none" } });
+    await db.payment.updateMany({ where: { id: p.id, settledAt: null, status: p.status, coveredById }, data: { status, settledAt: new Date(), stripePaymentIntentId: pi, feeCents: p.amountCents, testerCents: 0, transferStatus: "none", ...(p.owedUntil ? {} : { failure: "" }), actionPi: null, actionBy: null, warnedAt: null } });
+    if (!raiseOf(p)) await (await import("./holds")).followPendingSafely(p.repaysId);
     return;
   }
   if (p.actionPi) await cancelPi(p.actionPi);

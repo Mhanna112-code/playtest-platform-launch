@@ -842,6 +842,34 @@ model StripeEvent {
 }
 
 /// Small app-wide values (e.g. when the last admin digest went out).
+/// (Owner, Nov 4, batch 35 §192) Money refunded to a developer for a reversed payment they had already repaid: the bank lowered what it took back after the
+/// repayment ("lowered"), or the platform won the chargeback ("won"). Each is its own negative line in "What you've paid", right under the payment it refunds
+/// (`paymentId`: the repayment, kind "chargeback", or a charge of what the bank raised; its PaymentIntent is the one refunded).
+model PaymentRefund {
+  id            String   @id @default(cuid())
+  /// The payment refunded: a repayment of a reversed payment, or the charge of what the bank raised after it (both kind "chargeback", `repaysId` = `reversalId`)
+  paymentId     String
+  /// The reversed payment (the one carrying the chargeback)
+  reversalId    String
+  developerId   String
+  amountCents   Int
+  /// "lowered" | "won"
+  reason        String
+  /// "lowered": the amount the bank took back before and after the change
+  fromCents     Int?
+  toCents       Int?
+  /// "pending" (being refunded) | "refunded" | "recorded" (payments not set up: nothing to refund at Stripe) | "failed" (the admins were emailed)
+  status        String   @default("pending")
+  stripeRefundId String?
+  /// One refund per Stripe event and payment (a retried webhook never refunds twice)
+  key           String   @unique
+  createdAt     DateTime @default(now())
+
+  @@index([developerId])
+  @@index([reversalId])
+  @@index([paymentId])
+}
+
 model AppState {
   key   String @id
   value String

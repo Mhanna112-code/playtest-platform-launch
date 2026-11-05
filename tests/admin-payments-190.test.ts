@@ -112,7 +112,9 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     expect(text).toContain(`Total $${((1000 + 500 + 1200 + 800 + 900 + 1000 + 700) / 100).toFixed(2)}`);
     // Stripe: each payment with a PaymentIntent, test mode; none for the one without.
     for (const p of Object.values(w.pays)) if (p.stripePaymentIntentId) expect(team).toContain(`href="https://dashboard.stripe.com/test/payments/${p.stripePaymentIntentId}"`);
-    expect(team.match(/data-stripe-link=""/g)).toHaveLength(Object.values(w.pays).filter((p) => p.stripePaymentIntentId).length);
+    // (Owner, Nov 4, §192) And the refunded repayment's own negative refund line, linking the PaymentIntent it was refunded from.
+    expect(team.match(/data-stripe-link=""/g)).toHaveLength(Object.values(w.pays).filter((p) => p.stripePaymentIntentId).length + 1);
+    expect(text).toContain("Refunded: your bank's chargeback on your $10.00 Pay for Ben Okafor's written answers on “Harbor Run” was reversed in your favour · −$25.00");
     expect(team).not.toContain("<button");
     expect(team).not.toMatch(/>(Pay|Confirm|Cancel)[^<]*<\/button>/);
     // The test opens its team page.

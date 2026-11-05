@@ -45,7 +45,9 @@ export async function messagesV(u: User) {
 export async function paymentsV(u: User) {
   const rows = await db.payment.findMany({ where: sideFor(u) === "tester" ? { testerId: u.id } : { developerId: u.id }, orderBy: { id: "asc" }, select: { id: true, status: true, amountCents: true, testerCents: true, feeCents: true, contractId: true, transferStatus: true, settledAt: true, actionBy: true, actionPi: true, chargeback: true, owedUntil: true, failure: true, reversedCents: true } }); // (§133) what a dispute reversed
   const names = await db.contract.findMany({ where: { id: { in: rows.flatMap((r) => r.contractId ? [r.contractId] : []) } }, orderBy: { id: "asc" }, select: { id: true, title: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { developer: { select: { name: true, email: true, deletedAt: true } } } } } });
-  return stateV([rows, names]);
+  // (Owner, Nov 4, §192) A refund line (the bank lowered what it took back after the repayment) redraws the developer's list too.
+  const refunds = sideFor(u) === "tester" ? [] : await db.paymentRefund.findMany({ where: { developerId: u.id }, orderBy: { id: "asc" }, select: { id: true, status: true, amountCents: true } });
+  return stateV([rows, names, ...(refunds.length ? [refunds] : [])]);
 }
 
 export async function notificationsV(u: User) {

@@ -1,15 +1,15 @@
 import { db } from "@/lib/db";
 import { displayName, fmtDateTimeIn, money, pronouns } from "@/lib/format";
-import { CHARGEBACK_FEE_CENTS, CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, cut10, disputeDecisionName, pieceName, repaidReversedLine, reversedOf, reversedPart } from "@/lib/rules";
+import { CHARGEBACK_FEE_CENTS, CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, cut10, disputeDecisionName, pieceName, raiseOf, repaidReversedLine, reversedOf, reversedPart } from "@/lib/rules";
 import { callAtFor } from "./dateFormat";
 import { dateZone } from "./dateZone";
 
-type Row = { id: string; kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null; reversedCents?: number | null; /** (§191) the one charge that paid it */ coveredById?: string | null };
+type Row = { id: string; kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null; reversedCents?: number | null; /** (§191) the one charge that paid it */ coveredById?: string | null; /** (§192) a raise charge's "raise:<from>:<to>" */ note?: string };
 /**
  * What a payment's line is built from: a Payment row, or one about to be made (a team decision is charged before its row exists). `paidCents`: an owed reversed
  * payment's own amount (holds.owed puts what the bank reversed + the fee in `amountCents`).
  */
-export type PayingRow = { kind: string; amountCents: number; contractId: string | null; submissionId?: string | null; callId?: string | null; repaysId?: string | null; settledAt?: Date | null; owedUntil?: Date | null; chargeback?: string | null; reversedCents?: number | null; paidCents?: number };
+export type PayingRow = { kind: string; amountCents: number; contractId: string | null; submissionId?: string | null; callId?: string | null; repaysId?: string | null; settledAt?: Date | null; owedUntil?: Date | null; chargeback?: string | null; reversedCents?: number | null; paidCents?: number; /** (§192) a raise charge's note */ note?: string | null; createdAt?: Date };
 /**
  * `full` (§131): `what` with the names uncut, the row's hover on Payments. `testId` null: a row with no test to link (§133: the repayment of part of Pay what you owe's
  * one payment). `reversedCents` (§133): what the bank reversed of this payment when it was only part of it.
@@ -31,6 +31,15 @@ export const paidOutTotal = (listed: Counted[], ones: Counted[] = []) =>
   listed.filter((p) => p.status !== "refunded").reduce((a, p) => a + p.amountCents, 0)
   - [...listed, ...ones].filter((p) => p.chargebackAt && p.chargeback !== "won" && p.status !== "refunded").reduce((a, p) => a + reversedOf(p), 0);
 
+/**
+ * (Owner, Nov 4, §192) "What you've paid"'s total once every refund is its own negative line: the plain signed sum of the lines (each payment that went through, a
+ * refunded repayment included, less each refund line), each reversal (not won) taking off what it reversed as before (§133). For the same history it equals
+ * paidOutTotal (a refunded repayment and its refund cancel out).
+ */
+export const paidLinesTotal = (listed: Counted[], ones: Counted[] = [], refunds: { amountCents: number }[] = []) =>
+  listed.reduce((a, p) => a + p.amountCents, 0) - refunds.reduce((a, r) => a + r.amountCents, 0)
+  - [...listed, ...ones].filter((p) => p.chargebackAt && p.chargeback !== "won" && p.status !== "refunded").reduce((a, p) => a + reversedOf(p), 0);
+
 /** The plain label of a paid row with no test to name ("What you've paid" shows it, and so does its Stripe description). */
 export const plainLabel = (kind: string) =>
   kind === "call" ? "Live call" : kind === "dispute" ? "Dispute decision" : kind === "extra" ? "Extra pay" : kind === "chargeback" ? "A reversed payment, paid again" : kind === "subscription" ? "Subscription" : "Sent work";
@@ -40,7 +49,18 @@ const repaidWord = (kind: string) => (kind === "extra" ? " Pay more" : kind === 
 /** What the lines of these payments name, loaded once: the payment a repayment repaid, each test and tester, each part, and how it was paid (its review). */
 async function lineContext(ps: PayingRow[]) {
   const repaid = new Map((await db.payment.findMany({ where: { id: { in: ps.map((p) => p.repaysId).filter((x): x is string => !!x) } } })).map((p) => [p.id, p]));
-  const src = (p: PayingRow): PayingRow => (p.kind === "chargeback" && p.repaysId ? repaid.get(p.repaysId) ?? p : p);
+  // (Owner, Nov 4, §192) A reversal whose amount the bank changed after it was repaid (a raise charged, or a refund of a lowered amount): its repayment still names
+  // what the bank had reversed when it was repaid (the repayment less the fee), not the amount followed since.
+  const ids = [...repaid.keys()];
+  const changed = new Set(ids.length ? [
+    ...(await db.payment.findMany({ where: { repaysId: { in: ids }, kind: "chargeback", note: { startsWith: "raise:" } }, select: { repaysId: true } })).map((x) => x.repaysId!),
+    ...(await db.paymentRefund.findMany({ where: { reversalId: { in: ids }, reason: "lowered" }, select: { reversalId: true } })).map((x) => x.reversalId),
+  ] : []);
+  const src = (p: PayingRow): PayingRow => {
+    const o = p.kind === "chargeback" && p.repaysId ? repaid.get(p.repaysId) : undefined;
+    if (!o) return p;
+    return changed.has(o.id) && !raiseOf({ kind: p.kind, note: p.note }) && p.amountCents > CHARGEBACK_FEE_CENTS ? { ...o, reversedCents: p.amountCents - CHARGEBACK_FEE_CENTS } : o;
+  };
   const all = ps.map(src);
   const contracts = new Map((await db.contract.findMany({ where: { id: { in: all.map((p) => p.contractId).filter((x): x is string => !!x) } }, include: { tester: true, test: { include: { developer: true } } } })).map((c) => [c.id, c]));
   const subs = new Map((await db.submission.findMany({ where: { id: { in: all.map((p) => p.submissionId).filter((x): x is string => !!x) } }, select: { id: true, kind: true } })).map((s) => [s.id, s.kind]));
@@ -59,6 +79,12 @@ type Ctx = Awaited<ReturnType<typeof lineContext>>;
  * plain label).
  */
 function devLine(ctx: Ctx, p: PayingRow, full: boolean, viaKnown?: Via) {
+  // (Owner, Nov 4, §192) A charge of what the bank raised after the repayment: "Your bank raised what it took back from your $20.00 Pay for …: $12.00 → $20.00".
+  const raised = raiseLine(ctx, p, full);
+  if (raised) {
+    const o = p.repaysId ? ctx.repaid.get(p.repaysId) : undefined;
+    return { what: raised, how: "", testId: (o?.contractId ? ctx.contracts.get(o.contractId)?.testId : null) ?? null };
+  }
   // A caller that doesn't know what paid it (the Stripe description of a debt Pay what you owe repays) keeps the earlier reading: settled or owed is Pay what you owe.
   const via: Via = viaKnown ?? (p.settledAt || p.owedUntil ? "owed" : "");
   const o = ctx.src(p);
@@ -116,31 +142,49 @@ const up = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
  * $15.50 charge for …", "your $10.00 Pay for …", "your $35.00 Pay what you owe payment on Wed, Nov 4, 12:30 PM" (a Confirm all one the same); part of one: "$96.00
  * of your …". A call is named by its date AND time in the reader's zone (§177/§178).
  */
-function groupLine(ctx: Ctx, p: PayingRow, full: boolean): { what: string; how: string; amount: string | null } {
+/**
+ * (§191) The payment the bank reversed, named for a line about it: "your $10.00 Pay for …", "your $1.00 Pay more for …", "the team's $5.00 dispute decision on …",
+ * "the $12.00 Cid Moreau charged for his …", "the automatic $15.50 charge for …", "your $35.00 Pay what you owe payment on Wed, Nov 4, 12:30 PM" (a Confirm all one
+ * the same). (§192) The refund lines and a raise's line name it the same way.
+ */
+function paidPhrase(ctx: Ctx, o: PayingRow, full: boolean) {
   const cut = full ? (x: string) => x : cut10;
   const when = (d: Date) => fmtDateTimeIn(d, dateZone());
+  const a = money(o.amountCents);
+  const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
+  const piece = groupPiece(ctx, o, full);
+  const at = o.createdAt ?? new Date();
+  // A one payment (Pay what you owe's, Confirm all's, a reservation's): its kind and when it was made.
+  if (o.kind === "owed") return `your ${a} ${o.note === "press:all" ? "Confirm all payment" : o.note === "reserve" ? "payment reserved on your card" : "Pay what you owe payment"} on ${when(at)}`;
+  if (!c || !piece) return `your ${a} payment on ${when(at)}`;
+  const how = chargedHow(ctx, o);
+  return how === "more" ? `your ${a} Pay more for ${piece}`
+    : how === "dispute" ? `the team's ${a} dispute decision on ${piece}`
+    : how === "tester" ? `the ${a} ${cut(displayName(c.tester))} charged for ${groupPiece(ctx, o, full, pronouns(c.tester.pronoun).poss)}`
+    : how === "auto" ? `the automatic ${a} charge for ${piece}`
+    : `your ${a} Pay for ${piece}`;
+}
+
+/** (Owner, Nov 4, §192) A raise charge's line: "Your bank raised what it took back from your $20.00 Pay for …: $12.00 → $20.00" (null for any other payment). */
+function raiseLine(ctx: Ctx, p: PayingRow, full: boolean) {
+  const r = raiseOf({ kind: p.kind, note: p.note });
+  if (!r) return null;
+  const o = p.repaysId ? ctx.repaid.get(p.repaysId) : undefined;
+  return `Your bank raised what it took back from ${o ? paidPhrase(ctx, o, full) : "your payment"}: ${money(r.from)} → ${money(r.to)}`;
+}
+
+function groupLine(ctx: Ctx, p: PayingRow, full: boolean): { what: string; how: string; amount: string | null } {
+  const cut = full ? (x: string) => x : cut10;
+  const raised = raiseLine(ctx, p, full);
+  if (raised) return { what: raised, how: "", amount: null };
   if (p.kind === "chargeback" && p.repaysId) {
-    const o = ctx.repaid.get(p.repaysId);
+    // (§192) What the bank had reversed when it was repaid (ctx.src), whatever was followed since.
+    const o = ctx.repaid.has(p.repaysId) ? ctx.src(p) : undefined;
     const rev = o ? reversedOf(o) : p.amountCents - CHARGEBACK_FEE_CENTS;
     const fee = p.amountCents - rev;
     const amount = rev > 0 && fee > 0 ? `${money(rev)} + ${money(fee)} chargeback fee` : null;
     if (!o) return { what: "Repaid: a payment your bank reversed", how: "", amount };
-    const a = money(o.amountCents);
-    const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
-    const piece = groupPiece(ctx, o, full);
-    let paid: string;
-    // A one payment (Pay what you owe's, Confirm all's, a reservation's): its kind and when it was made.
-    if (o.kind === "owed") paid = `your ${a} ${o.note === "press:all" ? "Confirm all payment" : o.note === "reserve" ? "payment reserved on your card" : "Pay what you owe payment"} on ${when(o.createdAt)}`;
-    else if (!c || !piece) paid = `your ${a} payment on ${when(o.createdAt)}`;
-    else {
-      const how = chargedHow(ctx, o);
-      paid = how === "more" ? `your ${a} Pay more for ${piece}`
-        : how === "dispute" ? `the team's ${a} dispute decision on ${piece}`
-        : how === "tester" ? `the ${a} ${cut(displayName(c.tester))} charged for ${groupPiece(ctx, o, full, pronouns(c.tester.pronoun).poss)}`
-        : how === "auto" ? `the automatic ${a} charge for ${piece}`
-        : `your ${a} Pay for ${piece}`;
-    }
-    return { what: `Repaid: ${reversedPart(o) ? `${money(rev)} of ` : ""}${paid} that your bank reversed`, how: "", amount };
+    return { what: `Repaid: ${reversedPart(o) ? `${money(rev)} of ` : ""}${paidPhrase(ctx, o, full)} that your bank reversed`, how: "", amount };
   }
   const c = p.contractId ? ctx.contracts.get(p.contractId) : undefined;
   const piece = groupPiece(ctx, p, full);
@@ -200,6 +244,37 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     const how = p.kind === "chargeback" ? "" : via.get(p.id) === "owed" ? "paid through Pay what you owe" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
     const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
     out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false });
+  }
+  return out;
+}
+
+/**
+ * (Owner, Nov 4, §192) A refund the developer received for a reversed payment they had repaid, as its own negative line under the payment it refunds (`paymentId`):
+ * "Refunded: your bank's chargeback on your $10.00 Pay more for Ana Silva's written answers on “Harbor Run” was reversed in your favour" (won), "Refunded: your bank
+ * lowered what it took back from your $20.00 Pay for …: $20.00 → $12.00" (lowered after the repayment). `amountCents` is positive (the page writes it "−$25.00").
+ * `createdAt` null: a refund made before §192 (only its refunded repayment records it; its date isn't known). `stripePaymentIntentId`: the PaymentIntent refunded.
+ */
+export type RefundLine = { id: string; paymentId: string; amountCents: number; createdAt: Date | null; what: string; full: string; stripePaymentIntentId: string | null };
+
+/** (§192) The refund lines of these payments (repayments and raise charges), by the payment each refunds. Failed refunds aren't lines (nothing reached the card). */
+export async function refundLines(ps: (Row & { status: string; stripePaymentIntentId?: string | null; createdAt?: Date })[]): Promise<Map<string, RefundLine[]>> {
+  const out = new Map<string, RefundLine[]>();
+  const srcs = ps.filter((p) => p.kind === "chargeback" && p.repaysId);
+  if (!srcs.length) return out;
+  const recs = await db.paymentRefund.findMany({ where: { paymentId: { in: srcs.map((p) => p.id) }, status: { not: "failed" } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
+  const ctx = await lineContext(srcs);
+  const line = (src: Row, rec: { reason: string; fromCents: number | null; toCents: number | null }, full: boolean) => {
+    const o = src.repaysId ? ctx.repaid.get(src.repaysId) : undefined;
+    const phrase = o ? paidPhrase(ctx, o, full) : "a payment your bank reversed";
+    if (rec.reason === "lowered") return `Refunded: your bank lowered what it took back from ${phrase}: ${money(rec.fromCents ?? 0)} → ${money(rec.toCents ?? 0)}`;
+    return `Refunded: your bank's chargeback on ${o && reversedPart(o) ? `${money(reversedOf(o))} of ` : ""}${phrase} was reversed in your favour`;
+  };
+  for (const p of srcs) {
+    const mine = recs.filter((r) => r.paymentId === p.id);
+    const list: RefundLine[] = mine.map((r) => ({ id: r.id, paymentId: p.id, amountCents: r.amountCents, createdAt: r.createdAt, what: line(p, r, false), full: line(p, r, true), stripePaymentIntentId: p.stripePaymentIntentId ?? null }));
+    // A repayment refunded before §192 (won after it was repaid): its whole amount, as its own line too.
+    if (!mine.length && p.status === "refunded") list.push({ id: `refunded-${p.id}`, paymentId: p.id, amountCents: p.amountCents, createdAt: null, what: line(p, { reason: "won", fromCents: null, toCents: null }, false), full: line(p, { reason: "won", fromCents: null, toCents: null }, true), stripePaymentIntentId: p.stripePaymentIntentId ?? null });
+    if (list.length) out.set(p.id, list);
   }
   return out;
 }

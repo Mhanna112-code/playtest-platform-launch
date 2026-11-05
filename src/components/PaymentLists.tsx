@@ -3,7 +3,7 @@ import { money } from "@/lib/format";
 import { OWED_BANK_WAITING } from "@/lib/rules";
 import { plainLabel } from "@/lib/server/paymentRows";
 import type { OwedList, PaidGroup, PaidList } from "@/lib/server/paymentLists";
-import type { PaidRow } from "@/lib/server/paymentRows";
+import type { PaidRow, RefundLine } from "@/lib/server/paymentRows";
 
 // (Owner, Nov 4, §190) Payments' paid lists, drawn by ONE component for the account holder (Payments) and for the team (a person's admin box), so the two can't
 // drift: the same lines, the same "how" words, the same total. The team's copy adds a "Stripe" link on each line with a PaymentIntent, and links each test to its
@@ -32,13 +32,32 @@ function What({ p, line, testId, testHref }: { p: Pay; line: { what: string; ful
   return <>{testId ? <a className="hover:underline" href={testHref(testId)} title={line.full}>{line.what}</a> : <span title={line.full}>{line.what}</span>}{line.how ? <span className="text-slate-400">, {line.how}</span> : null}</>;
 }
 
+/** (Owner, Nov 4, §192) A refund's amount: "−$25.00" (a true minus sign). */
+const minus = (cents: number) => `−${money(cents)}`;
+/**
+ * (Owner, Nov 4, §192) A refund the developer received, as its own negative line right under the payment it refunds: "Refunded: your bank's chargeback on your $10.00
+ * Pay more for … was reversed in your favour · −$25.00 · <date>". Inside a group it is a row of the group; under a payment on its own it is a row inside that payment's
+ * line (so the long-list rule still counts payments). The team's copy links the PaymentIntent it was refunded from in Stripe.
+ */
+function RefundItem({ r, fmtDateTime, stripeUrl, inGroup }: { r: RefundLine; fmtDateTime: (d: Date) => string; stripeUrl?: Common["stripeUrl"]; inGroup: boolean }) {
+  const body = (
+    <>
+      <span className="text-slate-200" data-paid-refund-what="" title={r.full}>{r.what}</span>
+      <span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-refund-amount="">{minus(r.amountCents)}</span>{r.createdAt ? <> · {fmtDateTime(r.createdAt)}</> : null}{stripeUrl && <StripeLink href={stripeUrl(r.stripePaymentIntentId)} />}</span>
+    </>
+  );
+  return inGroup
+    ? <li data-paid-refund={r.id} data-refund-of={r.paymentId}>{body}</li>
+    : <span className="mt-1.5 block" data-paid-refund={r.id} data-refund-of={r.paymentId}>{body}</span>;
+}
+
 /**
  * (Owner, Nov 4, §191) ONE charge that paid several items (Pay what you owe, Confirm all): one line, closed, with the charge's amount, date and (the team's copy) its
  * Stripe link; open, each item it paid, named exactly (paymentRows' group line: the tester, the part, a call by its date and time, the test, what kind of payment;
  * a repayment names the payment the bank reversed), never "paid through Pay what you owe" / "confirmed with Confirm all" (the group says it). Covered items are
  * only here. A closed group still opens on the browser's find-in-page (a <details>).
  */
-function PaidGroupLine({ g, rows, fmtDateTime, stripeUrl, testHref }: { g: PaidGroup; rows: PaidList["rows"]; fmtDateTime: (d: Date) => string; stripeUrl?: Common["stripeUrl"]; testHref: (testId: string) => string }) {
+function PaidGroupLine({ g, rows, refunds, fmtDateTime, stripeUrl, testHref }: { g: PaidGroup; rows: PaidList["rows"]; refunds?: PaidList["refunds"]; fmtDateTime: (d: Date) => string; stripeUrl?: Common["stripeUrl"]; testHref: (testId: string) => string }) {
   return (
     <li className="py-2" data-paid-group={g.id}>
       <details className="group/paid">
@@ -50,13 +69,15 @@ function PaidGroupLine({ g, rows, fmtDateTime, stripeUrl, testHref }: { g: PaidG
           </span>
         </summary>
         <ul className="ml-1.5 mt-1.5 space-y-1.5 border-l border-white/10 pl-3">
-          {g.items.map((p) => (
+          {g.items.flatMap((p) => [
             <li key={p.id} className="text-slate-200" data-paid-group-item={p.id}>
               <span data-paid-what=""><What p={p} line={rows.get(p.id)?.group} testId={rows.get(p.id)?.testId} testHref={testHref} /></span>
               {/* A repayment: "$1.00 + $15.00 chargeback fee" (what the bank reversed, and the fee); anything else its amount. */}
               <span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-group-item-amount="">{rows.get(p.id)?.group?.amount ?? money(p.amountCents)}</span>{marks(p, rows.get(p.id))}</span>
-            </li>
-          ))}
+            </li>,
+            // (§192) Its refunds, each its own negative line right under it.
+            ...(refunds?.get(p.id) ?? []).map((r) => <RefundItem key={r.id} r={r} fmtDateTime={fmtDateTime} stripeUrl={stripeUrl} inGroup />),
+          ])}
         </ul>
       </details>
     </li>
@@ -74,6 +95,8 @@ export function DevPaidList({ paid, fmtDateTime, stripeUrl, heading = "What you'
       <span className="block text-slate-200" data-paid-what=""><What p={p} line={rows.get(p.id)} testId={rows.get(p.id)?.testId} testHref={testHref} /></span>
       {/* (§133) Part of a payment reversed: "your bank reversed $96.00 of this (chargeback)". */}
       <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · <span className="whitespace-nowrap">{money(p.amountCents)}</span>{marks(p, rows.get(p.id))}{stripeUrl && <StripeLink href={stripeUrl(p.stripePaymentIntentId)} />}</span>
+      {/* (Owner, Nov 4, §192) Each refund of it: its own negative line right under it. */}
+      {(paid.refunds?.get(p.id) ?? []).map((r) => <RefundItem key={r.id} r={r} fmtDateTime={fmtDateTime} stripeUrl={stripeUrl} inGroup={false} />)}
     </li>
   );
   return (
@@ -81,11 +104,11 @@ export function DevPaidList({ paid, fmtDateTime, stripeUrl, heading = "What you'
       {/* (Owner, Nov 3, long text) The total is never split: it moves under the heading when there is no room beside it. */}
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <h2 className="font-semibold text-white">{heading}</h2>
-        <span className="whitespace-nowrap text-sm text-slate-400" data-paid-total="">Total {money(paid.totalCents)}{/* (Owner, Nov 2) a payment your bank reversed counts once, as its repayment; (§133) part of one: the rest of it counts (paidOutTotal); (§191) the same total, grouped or not */}</span>
+        <span className="whitespace-nowrap text-sm text-slate-400" data-paid-total="">Total {money(paid.totalCents)}{/* (Owner, Nov 2) a payment your bank reversed counts once, as its repayment; (§133) part of one: the rest of it counts; (§191) the same total, grouped or not; (§192) each refund line taken off (paidLinesTotal) */}</span>
       </div>
       {/* Newest first: 8 rows, then "Show N more" opening a scroll box (the long-list rule). */}
       <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
-        {entries.map((e) => ("group" in e ? <PaidGroupLine key={e.group.id} g={e.group} rows={rows} fmtDateTime={fmtDateTime} stripeUrl={stripeUrl} testHref={testHref} /> : ownLine(e.pay)))}
+        {entries.map((e) => ("group" in e ? <PaidGroupLine key={e.group.id} g={e.group} rows={rows} refunds={paid.refunds} fmtDateTime={fmtDateTime} stripeUrl={stripeUrl} testHref={testHref} /> : ownLine(e.pay)))}
         {paidOut.length === 0 && <li className="py-2 text-slate-500">Nothing yet.</li>}
       </LongList>
     </section>

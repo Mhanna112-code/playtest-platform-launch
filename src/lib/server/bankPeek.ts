@@ -121,6 +121,8 @@ async function owedChanges(devId: string, since: Date, covered: Set<string>, res
     out.push({ text: `${what}: ${owedTail(reservation, false)}`, at });
   }
   for (const e of await db.accountEvent.findMany({ where: { userId: devId, kind: "chargeback-amount", createdAt: { gt: since } }, orderBy: { createdAt: "asc" }, take: 20 })) {
+    // (Owner, Nov 4, §192) A change followed after the repayment is settled on its own (refunded or charged): it isn't about this open check.
+    if (e.note.includes(": followed after repayment:")) continue;
     const m = / of the (\$[\d,.]+) payment \([^)]*\) from (\$[\d,.]+) to (\$[\d,.]+)/.exec(e.note);
     if (m) out.push({ text: `Your bank changed the disputed amount of your ${m[1]} payment from ${m[2]} to ${m[3]}${reservation ? ": this reservation stays as pressed; the difference is settled when the team approves lifting your hold" : ": this payment stays as pressed"}`, at: e.createdAt });
   }

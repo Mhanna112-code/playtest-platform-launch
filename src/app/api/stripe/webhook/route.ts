@@ -62,12 +62,13 @@ async function handle(event: Event, later: (why: string) => Promise<Response>): 
       await chargebackOpened(pi, event.data.object.amount);
     }
   }
-  // (§133) The bank changed the disputed amount before the dispute was decided: followed while nothing of it is repaid, otherwise logged for the admins.
+  // (§133) The bank changed the disputed amount before the dispute was decided: followed in what is owed. (Owner, Nov 4, §192) After the repayment too: the
+  // difference is refunded or charged at once (the event's id: a retried delivery never refunds twice).
   if (event.type === "charge.dispute.updated") {
     const pi = event.data.object.payment_intent;
     if (typeof pi === "string") {
       if (!(await known(pi))) return later("That payment isn't recorded yet");
-      if ((await disputeAmountChanged(pi, event.data.object.amount, event.data.object.status)) === "unknown") return later("That dispute isn't recorded yet");
+      if ((await disputeAmountChanged(pi, event.data.object.amount, event.data.object.status, typeof event.id === "string" && event.id ? event.id : null)) === "unknown") return later("That dispute isn't recorded yet");
     }
   }
   // (Owner, Oct 29, batch 10) A chargeback the platform won: its amount leaves what the developer owes (refunded if they already paid it).

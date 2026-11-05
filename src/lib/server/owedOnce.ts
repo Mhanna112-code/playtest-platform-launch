@@ -1,7 +1,7 @@
 import type { Payment } from "@prisma/client";
 import { db } from "@/lib/db";
 import { money, zoneOpt } from "@/lib/format";
-import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_CANCELLED, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat, reversedOf } from "@/lib/rules";
+import { CHARGEBACK_FEE_CENTS, CHECK_ALREADY_CANCELLED, CHECK_ALREADY_PAID, CHECK_CANCELLED, NO_CHECK_WAITING, namesList, owedReceiptWhat, raiseOf, reversedOf } from "@/lib/rules";
 import { HttpError } from "./http";
 import { PAYMENTS_PROBLEM, chargePlatform, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
 import { serverKey } from "./pressKeys";
@@ -143,7 +143,11 @@ export async function releaseOwed(id: string) {
   if (ended.count !== 1) return null;
   // (§122) Charges made while away that it covered wait again ("deferred"); the caller decides when they count as declined.
   const charges = await db.payment.findMany({ where: { coveredById: id, status: "deferred", settledAt: null } });
+  const reversed = await db.payment.findMany({ where: { coveredById: id, chargeback: "open" }, select: { id: true } });
   await db.payment.updateMany({ where: { coveredById: id, OR: [{ settledAt: null }, { chargeback: "open" }] }, data: { coveredById: null } });
+  // (Owner, Nov 4, §192) A change of the bank's amount that waited for this payment is followed now, in what is owed (nothing was repaid).
+  const holds = await import("./holds");
+  for (const r of reversed) await holds.followPendingSafely(r.id);
   return { charges };
 }
 
@@ -157,12 +161,19 @@ export const forCharges = (one: { note: string }) => one.note.endsWith(":charges
 export async function chargesDeclined(devId: string, charges: Payment[]) {
   const holds = await import("./holds");
   // (Owner, Nov 3) A reversed payment's repayment in the one payment: the reversal is owed again (its chargeback reopens), a chargeback hold.
-  for (const p of charges.filter((x) => x.kind === "chargeback")) {
+  for (const p of charges.filter((x) => x.kind === "chargeback" && !raiseOf(x))) {
     await db.payment.deleteMany({ where: { id: p.id, settledAt: null } });
     if (p.repaysId) await db.payment.update({ where: { id: p.repaysId }, data: { chargeback: "open" } });
     await holds.startHold(devId, "chargeback");
+    await holds.followPendingSafely(p.repaysId); // (§192) a change that waited for it is followed in what is owed
   }
-  for (const p of charges.filter((x) => x.kind !== "chargeback")) await holds.declinedPayment(devId, p.id, p.amountCents, await holds.declinedWhat(p));
+  // (Owner, Nov 4, §192) A charge of what the bank raised after the repayment is declined like any charge made while away (a debt, a payment hold); the admins are told.
+  for (const p of charges.filter((x) => x.kind !== "chargeback" || raiseOf(x))) await holds.declinedPayment(devId, p.id, p.amountCents, await holds.declinedWhat(p));
+  for (const p of charges.filter((x) => raiseOf(x))) {
+    const orig = p.repaysId ? await db.payment.findUnique({ where: { id: p.repaysId }, select: { amountCents: true, stripePaymentIntentId: true } }) : null;
+    const r = raiseOf(p)!;
+    await holds.tellAdmins(`Playtest: a chargeback's raised amount couldn't be charged (${money(p.amountCents)})`, `Charging the developer ${money(p.amountCents)} more failed (card declined): the bank raised what it took back from the ${money(orig?.amountCents ?? 0)} payment (${orig?.stripePaymentIntentId ?? "no payment id"}) from ${money(r.from)} to ${money(r.to)} after it was repaid. It's owed now (a payment hold).`);
+  }
 }
 
 /**

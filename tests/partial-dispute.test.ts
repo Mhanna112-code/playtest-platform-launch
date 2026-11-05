@@ -316,34 +316,42 @@ describe("§133 Stripe changes the disputed amount (charge.dispute.updated)", ()
     expect((await owed(w.dev.user.id)).map((x) => x.amountCents)).toEqual([6500]);
   });
 
-  it("reserved, resolved, won or decided: nothing changes, it's logged for the admins (their email and the developer's Chargebacks box)", async () => {
+  // (Owner, Nov 4, §192) Reserved: the change waits for the reservation and is followed once the team's Approve takes it (the difference refunded); after a win or a
+  // decision it isn't followed (logged with the admins' email). See tests/chargeback-refunds-192.test.ts for every case after the repayment.
+  it("decided, reserved (then followed once repaid), won: decided and won are logged for the admins; the reserved one waits and is refunded after the Approve", async () => {
     const w = await world();
-    bank();
+    const st = bank();
     const p = await paidPiece(w, 0, 44467);
     const pi = p.stripePaymentIntentId!;
     await chargebackOpened(pi, 9600);
     // Decided at Stripe (lost) while still open here.
     expect(await disputeAmountChanged(pi, 12000, "lost")).toBe("logged");
-    // Reserved on the card by Pay what you owe.
+    // Reserved on the card by Pay what you owe: the change waits.
     await db.user.update({ where: { id: w.dev.user.id }, data: { chargebackCardVerifiedAt: new Date() } });
     expect(await payOwed(w.dev.user, {})).toMatchObject({ reservedCents: 11100 });
     expect((await send("evt_" + randomUUID(), "charge.dispute.updated", dispute(pi, 5000))).status).toBe(200);
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(9600);
-    // The team's Approve took $96 + $15: resolved, so a later change isn't followed either.
+    // The team's Approve took $96 + $15: the waiting change is followed right after, $46 refunded from that repayment.
     expect((await approveChargebackHold(w.dev.user.id)).takenCents).toBe(11100);
-    expect(await disputeAmountChanged(pi, 5000)).toBe("logged");
+    const repay = await db.payment.findFirstOrThrow({ where: { repaysId: p.id } });
+    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(5000);
+    expect(st.refunds).toEqual([expect.objectContaining({ payment_intent: repay.stripePaymentIntentId, amount: 4600 })]);
+    expect(await disputeAmountChanged(pi, 5000)).toBe("same");
+    // Won: what is still repaid ($111 - $46 = $65: the $50 + the fee) is refunded.
     await chargebackWon(pi);
+    expect(st.refunds.map((r) => r.amount)).toEqual([4600, 6500]);
     expect(await disputeAmountChanged(pi, 4000, "won")).toBe("logged");
-    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(9600);
+    expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).reversedCents).toBe(5000);
     const notes = (await db.accountEvent.findMany({ where: { userId: w.dev.user.id, kind: "chargeback-amount" }, orderBy: { createdAt: "asc" } })).map((e) => e.note);
     expect(notes).toEqual([
       `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $120.00: not followed, because the dispute is already decided (lost). Check it in Stripe.`,
-      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $50.00: not followed, because it's reserved on the developer's card. Check it in Stripe.`,
-      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $50.00: not followed, because the team already resolved it. Check it in Stripe.`,
-      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $40.00: not followed, because the chargeback was already won. Check it in Stripe.`,
+      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $50.00: waiting, because it's reserved on the developer's card; followed once that ends.`,
+      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $96.00 to $50.00: followed after repayment: refunded $46.00.`,
+      `Stripe changed the disputed amount of the $444.67 payment (${pi}) from $50.00 to $40.00: not followed, because the chargeback was already won. Check it in Stripe.`,
     ]);
-    const changed = (await mails(pi)).filter((m) => m.subject.startsWith("Playtest: a chargeback's amount changed"));
-    expect(changed.map((m) => m.subject)).toEqual(["Playtest: a chargeback's amount changed ($96.00 to $120.00)", "Playtest: a chargeback's amount changed ($96.00 to $50.00)", "Playtest: a chargeback's amount changed ($96.00 to $50.00)", "Playtest: a chargeback's amount changed ($96.00 to $40.00)"]);
+    // Emails only for what isn't followed (a refund that worked emails nobody).
+    const changed = (await mails(pi)).filter((m) => m.subject.startsWith("Playtest: a chargeback"));
+    expect(changed.map((m) => m.subject)).toEqual(["Playtest: a chargeback's amount changed ($96.00 to $120.00)", "Playtest: a chargeback's amount changed ($50.00 to $40.00)"]);
   });
 
   it("an update for a dispute not recorded yet is left for Stripe's retry", async () => {
