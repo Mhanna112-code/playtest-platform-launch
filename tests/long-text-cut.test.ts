@@ -76,7 +76,7 @@ describe("<Cut>", () => {
     const cut = src("components/Cut.tsx");
     expect(cut).toContain("if (!opensPopup(fit ? overflows(e.currentTarget) && Array.from(full).length > n : cut, touchOnly())) return;"); // (§244) 20 characters or fewer never opens it // (§187) a fitted name: when it is cut right now
     expect(cut).toContain("max-w-[78vw]");
-    expect(cut).toContain("max-h-36 overflow-y-auto"); // the full text: a scroll box about 6 lines tall
+    expect(cut).toContain('<ResizeBox id={`cut-${kind}-${full.slice(0, 40)}`}') // (§244) the whole name in the draggable box; // the full text: a scroll box about 6 lines tall
     expect(cut).toContain("[overflow-wrap:anywhere]");
   });
 
