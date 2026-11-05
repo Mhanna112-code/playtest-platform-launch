@@ -578,10 +578,14 @@ export async function payOwed(dev: { id: string }, body: Record<string, unknown>
     // won (taken off), an amount the bank raised or lowered; then the new total and the press-again line with it.
     // (Owner, Nov 5, §206) Each change is its own bullet (one per item added, failed, won or changed), as in every other stop box; the new total and the press-again
     // line are the last bullet, keyed so a later stop replaces it (mergeChanges) instead of adding a second total (the one-line "What you owe changed" too).
+    // (Owner, Nov 5, §247) A chargeback won names which payment it was on, as everywhere else: "… of $10.00 on your $10.00 payment for Ana Silva's written answers
+    // on “Harbor Run” was reversed in your favour …" (the page's own zone for a call's date and time).
+    const day = await pageCallDay(dev.id);
+    const wonTexts = await Promise.all(won.map(async (w) => { const n = await reversedNaming(w, false, day); return { w, on: ` on ${paymentWords(w.amountCents, n.piece, n.one)}` }; }));
     const parts = [
       ...freshLines.map((l, i) => `${l.source === "failed" ? "Another payment failed meanwhile" : "Added to what you owe meanwhile"}: ${fresh[i]}`),
       // (§133) what it reversed; what leaves the total: what the page showed for it, else what the bank reversed + the fee.
-      ...won.map((w) => { const was = seenAmounts?.[w.id]; return `Your bank's chargeback of ${money(reversedOf(w))} was reversed in your favour: ${money(typeof was === "number" ? was : reversedOf(w) + CHARGEBACK_FEE_CENTS)} taken off`; }),
+      ...wonTexts.map(({ w, on }) => { const was = seenAmounts?.[w.id]; return `Your bank's chargeback of ${money(reversedOf(w))}${on} was reversed in your favour: ${money(typeof was === "number" ? was : reversedOf(w) + CHARGEBACK_FEE_CENTS)} taken off`; }),
       ...movedTexts,
     ];
     const at = new Date();

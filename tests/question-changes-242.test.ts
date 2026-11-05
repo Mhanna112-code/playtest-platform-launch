@@ -27,3 +27,16 @@ describe("(Owner, Nov 5) §243 only Open until, categories, languages and device
     for (const n of ["spots", "title", "What to do", "build link", "Spots", undefined]) expect(plainField(n as string | undefined), String(n)).toBe(false);
   });
 });
+
+describe("(Owner, Nov 5) §248 Google sign-in is off unless GOOGLE_SIGNIN=on", () => {
+  it("keys alone don't turn it on", async () => {
+    const { vi } = await import("vitest");
+    const { googleConfigured } = await import("@/lib/server/google");
+    vi.stubEnv("GOOGLE_CLIENT_ID", "cid"); vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
+    vi.stubEnv("GOOGLE_SIGNIN", "");
+    expect(googleConfigured()).toBe(false);
+    vi.stubEnv("GOOGLE_SIGNIN", "on");
+    expect(googleConfigured()).toBe(true);
+    vi.unstubAllEnvs();
+  });
+});

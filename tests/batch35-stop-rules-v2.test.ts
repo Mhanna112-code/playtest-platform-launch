@@ -512,7 +512,7 @@ describe("§171 B6: Pay what you owe while chargebacks change underneath it", ()
     const changes = e!.data!.changes as { text: string; key?: string }[];
     expect(changes.map((c) => c.text)).toEqual([
       expect.stringMatching(/^Another payment failed meanwhile: Ana Silva's written answers on “Harbor Run” \$9\.00/),
-      "Your bank's chargeback of $10.00 was reversed in your favour: $25.00 taken off",
+      expect.stringMatching(/^Your bank's chargeback of \$10\.00 on your \$10\.00 payment for .+ was reversed in your favour: \$25\.00 taken off$/), // (§247) names the payment
       expect.stringMatching(/^Your bank changed the amount it took back from your \$20\.00 payment for Ben Okafor's written answers on “Harbor Run”: \$12\.00 → \$20\.00 \(now \$20\.00 \+ \$15\.00 fee = \$35\.00\)/),
       "New total $44.00. Press again to pay $44.00.",
     ]);

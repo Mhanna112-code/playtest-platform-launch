@@ -86,7 +86,7 @@ describe("H1: admin by a confirmed email only; a suspended admin has no access",
 
 describe("H2: Google into an unconfirmed account ends the pre-hijack", () => {
   it("clears the password, every session and any payout account, then confirms the email", async () => {
-    vi.stubEnv("GOOGLE_CLIENT_ID", "cid");
+    vi.stubEnv("GOOGLE_CLIENT_ID", "cid"); vi.stubEnv("GOOGLE_SIGNIN", "on");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
     const squat = await makeUser({ unconfirmed: true, tester: true });
     await db.user.update({ where: { id: squat.user.id }, data: { passwordHash: "x", stripeAccountId: "acct_" + randomUUID(), payoutsReady: true } });

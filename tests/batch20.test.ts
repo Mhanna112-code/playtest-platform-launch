@@ -260,7 +260,7 @@ describe("batch 20 section 5: 18 or older", () => {
   });
 
   it("Google: a new account gets one short step; nothing is created until both ticks; then signed in", async () => {
-    vi.stubEnv("GOOGLE_CLIENT_ID", "cid");
+    vi.stubEnv("GOOGLE_CLIENT_ID", "cid"); vi.stubEnv("GOOGLE_SIGNIN", "on");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
     const email = mail();
     const claims = { iss: "https://accounts.google.com", aud: "cid", exp: Math.floor(Date.now() / 1000) + 600, email, email_verified: true };

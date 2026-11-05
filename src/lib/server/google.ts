@@ -16,7 +16,11 @@ export const GOOGLE_COOKIE = "pt_google";
 const AUTH_URL = "https://accounts.google.com/o/oauth2/v2/auth";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 
-export const googleConfigured = () => !!(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim());
+/**
+ * (Owner, Nov 5, §248) Google sign-in is OFF for now: no "Continue with Google" on Log in or Sign up, and its routes answer as switched off, even when the
+ * Google keys are set. It comes back only with GOOGLE_SIGNIN=on (the owner's call); email and password is the one way to sign in.
+ */
+export const googleConfigured = () => process.env.GOOGLE_SIGNIN === "on" && !!(process.env.GOOGLE_CLIENT_ID?.trim() && process.env.GOOGLE_CLIENT_SECRET?.trim());
 export const googleRedirectUri = (req?: Request) => `${appUrl(req)}/api/auth/google/callback`;
 
 const b64url = (b: Buffer) => b.toString("base64url");

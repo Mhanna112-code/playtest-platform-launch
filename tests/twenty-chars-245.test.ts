@@ -93,7 +93,7 @@ describe("§245 a person's name: refused over 20, never cut silently", () => {
     expect(fitName("Ana Maria Silva     Costa")).toBe("Ana Maria Silva"); // spaces at the end trimmed
     expect(fitName("  Ana Silva  ")).toBe("Ana Silva");
     expect(fitName("😀".repeat(15)).length).toBeLessThanOrEqual(20); // never splits an emoji
-    vi.stubEnv("GOOGLE_CLIENT_ID", "cid");
+    vi.stubEnv("GOOGLE_CLIENT_ID", "cid"); vi.stubEnv("GOOGLE_SIGNIN", "on");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
     const mail = email("g");
     const claims = { iss: "https://accounts.google.com", aud: "cid", exp: Math.floor(Date.now() / 1000) + 600, email: mail, email_verified: true, name: "Maximiliana Alexandrina Lopez" };

@@ -4569,3 +4569,11 @@ Every payment row, confirm row and bell line shows its "what" text cut at 30 cha
 - **Tests:** in `tests/twenty-chars-245.test.ts` (the 30 cut, amounts and buttons outside, an owed line, a confirm row, the lead split, inline open, the box over
   200, no arrow at 30 or fewer); `openWhats` (tests/helpers.ts) reads whole rows from the markup. Updated: `admin-payments-190`, `batch17-bank-check`, `batch24`,
   `bell-lines-202`, `chargeback-refunds-192`, `grouped-payments-191`, `nov5-batch2` (§216, §220), `payment-piece-names`.
+
+## §247 A chargeback won names its payment in Pay what you owe's stop (owner, Nov 5)
+The stop's bullet "Your bank's chargeback of $10.00 was reversed in your favour: $25.00 taken off" now names which payment it was on, as the bell and the refund line
+do: "Your bank's chargeback of $10.00 on your $10.00 payment for Ana Silva's written answers on “Harbor Run” was reversed in your favour: $25.00 taken off".
+
+## §248 Google sign-in is off (owner, Nov 5)
+The owner wants email and password as the only sign-in for now: "Continue with Google" is gone from Log in and Sign up, and the Google routes answer as switched off,
+even when the Google keys are set. `googleConfigured()` needs GOOGLE_SIGNIN=on as well as the keys (not set anywhere), so it can come back later by the owner's call.

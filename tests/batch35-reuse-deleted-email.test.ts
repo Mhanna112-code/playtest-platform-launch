@@ -206,7 +206,7 @@ describe("§114 a deleted account that isn't clean: \"This account was closed.\"
 
 describe("§114 Google follows the same rules", () => {
   const google = async (addr: string) => {
-    vi.stubEnv("GOOGLE_CLIENT_ID", "cid");
+    vi.stubEnv("GOOGLE_CLIENT_ID", "cid"); vi.stubEnv("GOOGLE_SIGNIN", "on");
     vi.stubEnv("GOOGLE_CLIENT_SECRET", "secret");
     const claims = { iss: "https://accounts.google.com", aud: "cid", exp: Math.floor(Date.now() / 1000) + 600, email: addr, email_verified: true };
     const idToken = `e30.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.sig`;
