@@ -212,7 +212,14 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
       {/* (Owner, Oct 28, batch 16 section 41) The chargeback steps in order: the card first. */}
       {reviewFirst && <p className="text-xs" data-review-first="">{reviewFirst}</p>}
       {verifyFirst && !reviewFirst && <p className="text-xs" data-verify-first="">Verify your card first (step 1): then you can pay what you owe.</p>}
-      <ChangesBox changes={changes} tail={over && !over200 ? `Tick “${OVER_PAY_TICK_LINE}” and press again to go ahead.` : undefined} />
+      {/* (Owner, Nov 5, §206) The stop's "New total $X. Press again to pay $X." is its closing line, never a bullet hidden behind "Show N more" (the box shows
+          3 bullets); with the over-$200 tick still to give, the tick's line closes it and the total stays the last bullet. */}
+      {(() => {
+        const totalLine = changes?.find((c) => c.key === "owed-total");
+        const tick = over && !over200;
+        const pulled = !!totalLine && !tick && changes!.length > 1;
+        return <ChangesBox changes={pulled ? changes!.filter((c) => c !== totalLine) : changes} tail={tick ? `Tick “${OVER_PAY_TICK_LINE}” and press again to go ahead.` : pulled ? totalLine!.text : undefined} />;
+      })()}
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {bankNote && <p className="info" data-bank-not-confirmed="">{refusalLine("Pay what you owe", bankNote)}</p>}
       {done && <p className="ok">{done}</p>}

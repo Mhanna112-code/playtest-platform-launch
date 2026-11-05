@@ -317,7 +317,8 @@ describe("§133 Stripe changes the disputed amount (charge.dispute.updated)", ()
     // A page that showed $111.00 stops once on the new total (nothing reserved).
     const r = await press(w.dev.cookie, { seenTotalCents: 11100, seenIds: [p.id] });
     expect([r.status, r.body.error.code]).toEqual([409, "stop_once"]);
-    expect(r.body.error.changes[0].text).toBe(`${R.bankChangedLine(44467, `Ana Silva's written answers on “Harbor Run”`, 9600, 12000)}. ${R.pressAgainLine(13500, { cardVerified: false })}`);
+    // (Owner, Nov 5, §206) The bank's change is its own bullet; the new total with the press-again line is the last one.
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual([R.bankChangedLine(44467, `Ana Silva's written answers on “Harbor Run”`, 9600, 12000), `New total $135.00. ${R.pressAgainLine(13500, { cardVerified: false })}`]);
     expect(r.body.error.lines.map((l: { amountCents: number }) => l.amountCents)).toEqual([13500]);
     expect(await disputeAmountChanged(pi, 12000)).toBe("same");
     expect(await db.accountEvent.count({ where: { userId: w.dev.user.id, kind: "chargeback-amount" } })).toBe(1);

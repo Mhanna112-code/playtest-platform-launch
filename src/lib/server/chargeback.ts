@@ -137,8 +137,11 @@ export async function reserveOwed(u: { id: string; email: string; stripeCustomer
     // (Owner, Nov 3) The stop names the bank's change ("Your bank changed the amount it took back from your $40.00 payment for …: $12.00 → $20.00 (now …)"), and
     // carries the lines so the box's bullets redraw with the new total.
     const named = r.moved.map((m) => { const l = lines.find((x) => x.id === m.id); const cb = l && "cb" in l && l.cb ? l.cb : null; return bankChangedLine(m.paid, cb?.piece ?? null, m.was, m.now, cb?.one ?? null); }); // (§193b) a one payment names its items
-    const head = named.length ? named.join("; ") : `What you owe changed: now ${money(r.changed)}`;
-    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: [{ text: `${head}. ${pressAgainLine(r.changed, { cardVerified: true })}`, at: new Date() }], totalCents: r.changed, ids, lines });
+    // (Owner, Nov 5, §206) As payOwed's stop: one bullet per change the bank made, then "New total $X. <press again>" last, keyed so a later stop replaces it.
+    const at = new Date();
+    const again = pressAgainLine(r.changed, { cardVerified: true });
+    const changes = named.length ? [...named.map((text) => ({ text, at })), { text: `New total ${money(r.changed)}. ${again}`, at, key: "owed-total" }] : [{ text: `What you owe changed: now ${money(r.changed)}. ${again}`, at, key: "owed-total" }];
+    throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes, totalCents: r.changed, ids, lines });
   }
   const reserved = (pi: string | null) => db.reservation.update({ where: { id: r.id }, data: { status: "reserved", stripePaymentIntentId: pi, actionBy: null, expiresAt: new Date(Date.now() + RESERVE_DAYS * 86_400_000) } });
   if (!stripeOn()) {

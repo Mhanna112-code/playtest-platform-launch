@@ -238,6 +238,10 @@ describe("§193: an automatic call charge and the team's decision charge do the 
     expect(alwaysStops(charges[1], away)).toBe(false);
     expect(alwaysStops(charges[0], { ...away, confirms: ["k1", "rec"] })).toBe(false);
     expect(alwaysStops({ ...charges[0], contractId: "c-ben" }, away)).toBe(false);
+    // (Owner, Nov 5) A dispute by that tester forces it too (it followed the Disputes tick before); another tester's dispute doesn't.
+    const dispute = { kind: "dispute", text: "Ana Silva disputed the pay for her written answers", createdAt: at, contractId: "c-ana" };
+    expect(alwaysStops(dispute, away)).toBe(true);
+    expect(alwaysStops({ ...dispute, contractId: "c-ben" }, away)).toBe(false);
   });
 });
 

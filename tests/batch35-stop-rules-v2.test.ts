@@ -287,13 +287,18 @@ const startConfirm = (cookie: string, paymentId: string) => confirmPOST(req("/ap
 const confirmAll = (cookie: string, items: { id: string; amountCents: number }[]) => allPOST(req("/api/payments/confirm-all", { cookie, headers: { "x-tab": TAB }, body: { seenTotalCents: items.reduce((a, p) => a + p.amountCents, 0), seenIds: items.map((p) => p.id) } })).then(json);
 
 describe("§171 item 7: Confirm with your bank on a charge made while away keeps its press-time gate (the owner is deciding)", () => {
-  it("a payment line on its part with Payments ticked off doesn't stop it (A1 isn't applied there); the window's notice still lists it (A3)", async () => {
+  it("a payment line on its part with Payments ticked off doesn't stop it (A1 isn't applied there); (§205) her dispute stops it once, forced; the window's notice still lists both (A3)", async () => {
     const w = await waitingWorld(["payments", "disputes", "admin", "work", "calls"]);
     const loaded = seen();
     await settle();
     await db.testEvent.create({ data: { testId: w.testId, kind: "paid", text: "Ana Silva charged $10.00 for her recording", contractId: w.ana.sessionId, link: `part-${w.anaRec.id}` } });
     await logEvent(w.testId, "dispute", "Ana Silva disputed the pay for her written answers", w.ana.sessionId);
-    const r = await confirmPOST(req("/api/payments/confirm", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { paymentId: w.items[0].id, start: true, seenAt: loaded } })).then(json);
+    const start = (extra: Record<string, unknown> = {}) => confirmPOST(req("/api/payments/confirm", { cookie: w.dev.cookie, headers: { "x-tab": TAB }, body: { paymentId: w.items[0].id, start: true, seenAt: loaded, ...extra } })).then(json) as Promise<Res>;
+    // (Owner, Nov 5, §205) A dispute by that tester now forces the stop (it followed the Disputes tick before); the payment line on its part still doesn't.
+    const first = await start();
+    expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
+    expect(lines(first).map((c) => [c.text, !!c.forced])).toEqual([["Ana Silva disputed the pay for her written answers", true]]);
+    const r = await start({ confirmed: true, boxAt: first.body.error!.now });
     expect(r.status, JSON.stringify(r.body)).toBe(200);
     const p = await peek(w.dev.cookie, { paymentId: w.items[0].id, pi: w.items[0].actionPi, since: loaded });
     expect(p.body.changes).toEqual(["Ana Silva charged $10.00 for her recording", "Ana Silva disputed the pay for her written answers"]);
@@ -502,11 +507,15 @@ describe("§171 B6: Pay what you owe while chargebacks change underneath it", ()
     await declinedPayment(w.dev.user.id, failed.id, 900, "Ana Silva's written answers");
     const e = await refused(payOwed(w.dev.user, page));
     expect(e?.code).toBe("stop_once");
-    const text = (e!.data!.changes as { text: string }[])[0].text;
-    expect(text).toContain("Another payment failed meanwhile: Ana Silva's written answers on “Harbor Run” $9.00");
-    expect(text).toContain("Your bank's chargeback of $10.00 was reversed in your favour: $25.00 taken off");
-    expect(text).toContain("Your bank changed the amount it took back from your $20.00 payment for Ben Okafor's written answers on “Harbor Run”: $12.00 → $20.00 (now $20.00 + $15.00 fee = $35.00)");
-    expect(text).toMatch(/New total \$44\.00\. Press again to pay \$44\.00\.$/);
+    // (Owner, Nov 5, §206) Each change its own bullet, in order (added or failed, won, the bank's change), then the new total with the press-again line, keyed.
+    const changes = e!.data!.changes as { text: string; key?: string }[];
+    expect(changes.map((c) => c.text)).toEqual([
+      expect.stringMatching(/^Another payment failed meanwhile: Ana Silva's written answers on “Harbor Run” \$9\.00/),
+      "Your bank's chargeback of $10.00 was reversed in your favour: $25.00 taken off",
+      expect.stringMatching(/^Your bank changed the amount it took back from your \$20\.00 payment for Ben Okafor's written answers on “Harbor Run”: \$12\.00 → \$20\.00 \(now \$20\.00 \+ \$15\.00 fee = \$35\.00\)/),
+      "New total $44.00. Press again to pay $44.00.",
+    ]);
+    expect(changes.map((c) => c.key ?? null)).toEqual([null, null, null, "owed-total"]);
     expect(e!.data!.totalCents).toBe(4400);
     const bullets = (e!.data!.lines as { retry: boolean; amountCents: number }[]).filter((l) => l.retry);
     expect(bullets.reduce((a, l) => a + l.amountCents, 0)).toBe(4400);

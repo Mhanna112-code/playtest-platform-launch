@@ -276,14 +276,18 @@ describe("Pay what you owe stops once when the total changed", () => {
     const press = (body: Record<string, unknown>) => owedPOST(req("/api/payments/owed", { cookie: dev.cookie, body })).then(json);
     const first = await press({ seenTotalCents: 800, seenIds: [seenOne.id] });
     expect(first.status).toBe(409);
-    expect(first.body.error.changes[0].text).toBe("Another payment failed meanwhile: Ana Silva's written answers on “Harbor Run” $5.00. New total $13.00. Press again to pay $13.00.");
+    // (Owner, Nov 5, §206) One bullet per change, then the new total with the press-again line as the last bullet.
+    expect(first.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Another payment failed meanwhile: Ana Silva's written answers on “Harbor Run” $5.00", "New total $13.00. Press again to pay $13.00."]);
     setStripeForTests({ paymentIntents: { create: async (p: { amount: number }) => { if (p.amount === 1600) throw Object.assign(new Error("Your card has insufficient funds."), { type: "StripeCardError" }); return { id: "pi_" + randomUUID(), status: "succeeded" }; } } } as unknown as Stripe);
     // (NEXT-UI 12b) The second press names the total the box showed; something newer than the box stops it again.
     const third = await mk(300);
     const again = await press({ seenTotalCents: first.body.error.totalCents, seenIds: first.body.error.ids, confirmed: true });
     expect(again.status).toBe(409);
-    expect(again.body.error.changes[0].text).toContain("$3.00");
-    expect(again.body.error.changes[0].text).not.toContain("$5.00");
+    const againTexts = again.body.error.changes.map((c: { text: string }) => c.text) as string[];
+    expect(againTexts).toHaveLength(2);
+    expect(againTexts[0]).toContain("$3.00");
+    expect(againTexts.join(" ")).not.toContain("$5.00");
+    expect(againTexts[1]).toBe("New total $16.00. Press again to pay $16.00.");
     expect(third.id).toBeTruthy();
     const second = await press({ seenTotalCents: again.body.error.totalCents, seenIds: again.body.error.ids, confirmed: true });
     // (Batch 35 §117) One payment for the $16.00: declined, nothing is paid and all three stay owed.

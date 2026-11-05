@@ -329,12 +329,19 @@ describe("§159 rule 5: Pay what you owe stops once for chargeback changes", () 
     const first = await press({ seenTotalCents: 0, seenIds: [] });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
     expect(texts(first)[0]).toMatch(/^Added to what you owe meanwhile: Your bank reversed \$6 /);
+    // (Owner, Nov 5, §206) Each change its own bullet; the new total with the press-again line is the last one, keyed so the next stop replaces it.
+    expect(texts(first)).toHaveLength(2);
+    expect(texts(first)[1]).toMatch(/^New total \$21\.00\. Press again to reserve \$21\.00 /);
+    expect(first.body.error.changes.at(-1).key).toBe("owed-total");
     expect(first.body.error.totalCents).toBe(2100);
     // The bank changes the disputed amount before the second press: it stops once more on the new total.
     expect(await disputeAmountChanged(pi, 800)).toBe("followed");
     const second = await press({ seenTotalCents: first.body.error.totalCents, seenIds: first.body.error.ids, confirmed: true });
     expect(second.body.error?.code, JSON.stringify(second.body)).toBe("stop_once");
     expect(texts(second)[0]).toMatch(/^Your bank changed the amount it took back .*= \$23\.00\)/); // (A3) the stop names the bank's change
+    // (§206) An amount change alone ends with the new total too (it read only the press-again line before).
+    expect(texts(second)).toHaveLength(2);
+    expect(texts(second)[1]).toMatch(/^New total \$23\.00\. Press again to reserve \$23\.00 /);
     const third = await press({ seenTotalCents: second.body.error.totalCents, seenIds: second.body.error.ids, confirmed: true });
     expect(third.body, JSON.stringify(third.body)).toMatchObject({ reservedCents: 2300 });
     expect((await owed(s.dev.user.id)).map((x) => x.id)).toEqual([p.id]);
