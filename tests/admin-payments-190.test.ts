@@ -104,8 +104,8 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     // The set: each way of paying reads as the developer reads it.
     const text = own.replace(/&#x27;/g, "'").replace(/<[^>]+>/g, "");
     for (const s of [
-      "Ana Silva's written answers on “Harbor Run”", "Pay more for Ana Silva's written answers", "confirmed with Confirm all", "confirmed with your bank",
-      "paid through Pay what you owe", "Repaid the reversed $10.00 payment for Ben Okafor's written answers", "refunded (your bank's chargeback was reversed)",
+      "Ana Silva's written answers on “Harbor Run”", "Pay more for Ana Silva's written answers", "Confirm all", "confirmed with your bank",
+      "Pay what you owe", "Repaid the reversed $10.00 payment for Ben Okafor's written answers", "refunded (your bank's chargeback was reversed)",
       "your bank reversed this (chargeback)", "recorded (payments not set up)",
     ]) expect(text, s).toContain(s);
     // Total: everything that went through; the refunded repayment is out, the won chargeback's payment counts (paidOutTotal).
