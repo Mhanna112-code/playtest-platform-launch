@@ -3,6 +3,7 @@ import { displayName, pronouns } from "@/lib/format";
 import { plainText } from "@/lib/markdown";
 import { itemsOf } from "@/lib/answerSets";
 import { markerPattern, withoutAttachmentMarkers } from "@/lib/answerAttachments";
+import { fromAnswer, squash } from "@/lib/excerptTrim";
 import { HttpError } from "./http";
 import { bell } from "./notify";
 
@@ -56,9 +57,6 @@ export function excerptSource(x: { hideProduct: boolean; test: { productName: st
   return cat ? `${/^[aeiou]/i.test(cat) ? "an" : "a"} ${cat} test` : "a test";
 }
 
-/** Whitespace tidied, for comparing a trimmed quote with the answer it came from. */
-const squash = (s: string) => s.replace(/\s+/g, " ").trim();
-
 /**
  * (Owner, Nov 2, batch 35 §126) Excerpts leave files out completely: no file markers and no "[file]" placeholder, in the trim box or the stored text. Each marker
  * goes with the spaces before it ("great [📎 map.png #k3f9] but" reads "great but", "great [📎 …]." reads "great."). Excerpts stored earlier stay as they are.
@@ -93,7 +91,9 @@ export async function requestExcerpt(tester: { id: string; name: string; email: 
   if (!pick) throw new HttpError(400, "bad_pick", "Pick one of your answers.");
   const text = squash(excerptPlain(typeof body.text === "string" ? body.text : "")); // (batch 35 §126) any file marker left out
   if (text.length < EXCERPT_MIN || text.length > EXCERPT_MAX) throw new HttpError(400, "bad_length", excerptLength);
-  if (!squash(pick.text).includes(text)) throw new HttpError(400, "not_from_answer", "Trim the excerpt from your answer: it can only leave words out, not add any.");
+  // (Owner, Nov 4, §196) Trimmed in a delete-only box: a part left out of the middle reads " … ". Each "…"-separated piece must be in the answer, in order; the
+  // 10 to 500 above counts the stored text, ellipses included. Anything added is refused with the same line.
+  if (!fromAnswer(pick.text, text)) throw new HttpError(400, "not_from_answer", "Trim the excerpt from your answer: it can only leave words out, not add any.");
   const hideProduct = false; // (batch 18 section 7) always "From <test>"
   const x = await db.$transaction(async (tx) => {
     // One tester's requests one at a time: the count and the one-per-part rule hold under two quick presses.
