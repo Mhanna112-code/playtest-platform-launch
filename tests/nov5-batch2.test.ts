@@ -35,7 +35,7 @@ describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
     }
     const w = read("src/components/WholeLine.tsx");
     expect(w).toContain("const cut = !!full && full !== shown;");
-    expect(w).toContain("max-h-32 overflow-y-auto");
+    expect(w).toContain("<ResizeBox"); // (§220) opened in place, in the draggable panel
   });
 
   it("the join popup is at most a screen tall and its changes show 3, then scroll", () => {
@@ -60,5 +60,26 @@ describe("(Owner, Nov 5) §217-§219, from the Nov 5 recordings", () => {
 
   it("§219: Confirm all's window names a new charge once", () => {
     expect(read("src/lib/server/bankPeek.ts")).toContain("!lines.includes(t) && !named.some((n) => t.includes(n))");
+  });
+});
+
+describe("(Owner, Nov 5) §220 a cut row opens in place", () => {
+  it("each '…' stands for what it hides in the whole line", async () => {
+    const { cutPieces } = await import("@/components/WholeLine");
+    const full = "Alexandria Montgomery-Smith's written answers on “Harbor Run: The Long Expedition Deluxe” (Nov 5): $10 + $15 chargeback fee";
+    const shown = "Alexandria Montgomer…'s written answers on “Harbor Run: The Long…” (Nov 5): $10 + $15 chargeback fee";
+    expect(cutPieces(shown, full)).toEqual([
+      { text: "Alexandria Montgomer" }, { text: "", hidden: "y-Smith" }, { text: "'s written answers on “Harbor Run: The Long" }, { text: "", hidden: " Expedition Deluxe" }, { text: "” (Nov 5): $10 + $15 chargeback fee" },
+    ]);
+    expect(cutPieces("Ana Silva's answers", "Ana Silva's answers")).toBeNull();
+    expect(cutPieces("Something else…", "Not the same line at all")).toBeNull();
+  });
+  it("opened, the row (and a bell line) shows whole in place in the draggable panel; no copy under it", () => {
+    const w = read("src/components/WholeLine.tsx");
+    expect(w).toContain('<ResizeBox id={`whole-${id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>');
+    expect(w).toContain('aria-label="Show the whole name" data-name-toggle=""');
+    const b = read("src/app/app/notifications/BellList.tsx");
+    expect(b).toContain('<ResizeBox id={`bell-${l.id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>');
+    expect(b).not.toContain("ml-5 mt-1 max-h-32 overflow-y-auto");
   });
 });

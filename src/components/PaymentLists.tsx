@@ -31,7 +31,7 @@ const marks = (p: Pay, row: PaidRow | undefined) =>
 /** A line's "what": its test linked, then how it was paid. (Owner, Nov 5, §216) Cut names open the whole line with the arrow (WholeLine), not a hover. */
 function What({ p, line, testId, testHref }: { p: Pay; line: { what: string; full: string; how: string } | undefined; testId: string | null | undefined; testHref: (testId: string) => string }) {
   if (!line) return <>{plainLabel(p.kind)}</>;
-  return <WholeLine shown={line.what} full={line.full}>{testId ? <a className="hover:underline" href={testHref(testId)}>{line.what}</a> : <span>{line.what}</span>}{line.how ? <span className="text-slate-400">, {line.how}</span> : null}</WholeLine>;
+  return <WholeLine shown={line.what} full={line.full} href={testId ? testHref(testId) : undefined} after={line.how ? <span className="text-slate-400">, {line.how}</span> : null} />;
 }
 
 /** (Owner, Nov 4, §192) A refund's amount: "−$25.00" (a true minus sign). */
@@ -44,8 +44,7 @@ const minus = (cents: number) => `−${money(cents)}`;
 function RefundItem({ r, fmtDateTime, stripeUrl, inGroup }: { r: RefundLine; fmtDateTime: (d: Date) => string; stripeUrl?: Common["stripeUrl"]; inGroup: boolean }) {
   const body = (
     <>
-      <WholeLine shown={r.what} full={r.full}><span className="text-slate-200" data-paid-refund-what="">{r.what}</span>
-      <span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-refund-amount="">{minus(r.amountCents)}</span>{r.createdAt ? <> · {fmtDateTime(r.createdAt)}</> : null}{stripeUrl && <StripeLink href={stripeUrl(r.stripePaymentIntentId)} />}</span></WholeLine>
+      <span data-paid-refund-what=""><WholeLine shown={r.what} full={r.full} className="text-slate-200" after={<><span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-refund-amount="">{minus(r.amountCents)}</span>{r.createdAt ? <> · {fmtDateTime(r.createdAt)}</> : null}{stripeUrl && <StripeLink href={stripeUrl(r.stripePaymentIntentId)} />}</span></>} /></span>
     </>
   );
   return inGroup
@@ -153,14 +152,14 @@ export function OwedReadOnly({ owed, stripeUrl, heading = "What you owe" }: { ow
       <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
         {owed.lines.map((o) => ({ o, covers: "covers" in o ? o.covers : undefined })).map(({ o, covers }) => (
           <li key={o.id} className="py-2 text-slate-200" data-owed-line={o.id}>
-            <WholeLine shown={o.text} full={o.full}>{o.text}</WholeLine>
+            <WholeLine shown={o.text} full={o.full} />
             {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
             {o.after && <> · <b>{o.after}</b></>}
             {stripeUrl && <StripeLink href={stripeUrl(o.id)} />}
             {covers && covers.length > 0 && (
               <div className="mt-1 text-xs text-slate-400">
                 That payment covered:
-                <ul className="list-[circle] pl-5">{covers.map((x, j) => <li key={j}><WholeLine shown={x.text} full={x.full}>{x.text}</WholeLine></li>)}</ul>
+                <ul className="list-[circle] pl-5">{covers.map((x, j) => <li key={j}><WholeLine shown={x.text} full={x.full} /></li>)}</ul>
               </div>
             )}
           </li>

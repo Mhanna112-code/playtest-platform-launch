@@ -4227,3 +4227,9 @@ reversed this, then decided in your favour (chargeback won)"; a one payment's gr
 ## §219 Confirm all's window names a new charge once (owner, Nov 5; recording F)
 The window's notice listed a charge made meanwhile twice: as "Dee Park charged $9.00 … meanwhile: it isn't in this payment …" and again from its test's updates ("On
 “Harbor Run”: Dee Park charged $9.00 for their written answers."). The test's line is skipped when the charge is already named. Test: `tests/nov5-batch2.test.ts`.
+
+## §220 Cut rows open in place, and each name on its own (owner, Nov 5; replaces §216's copy under the row)
+A payment row (Payments, Pay what you owe's box, a part's payments, the charges waiting) or a bell line whose names are cut now opens IN PLACE: the arrow turns the
+row itself into the whole line, every name whole, in the draggable panel (ResizeBox: it starts small and the grip drags it taller, to half the screen; inside another
+panel it keeps its own scroll, OwnPanel); the arrow again closes it. No copy under the row. Closed, each "…" in the row is a button that opens just that name in
+place (`cutPieces` lines the cut text up with the whole line). A row with nothing cut is plain, with no arrow. Test: `tests/nov5-batch2.test.ts`.

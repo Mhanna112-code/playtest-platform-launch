@@ -51,7 +51,7 @@ describe("§202 bell lines: 30 characters, then the whole line on the arrow", ()
     // The whole line: opened by the arrow, read like a click, in a small scroll box.
     const list = src("app/app/notifications/BellList.tsx");
     expect(list).toContain("if (!wide) markRead([l]);");
-    expect(list).toContain('max-h-32 overflow-y-auto');
+    expect(list).toContain('<ResizeBox id={`bell-${l.id}`}');
     expect(list).toContain("{keepAmounts(l.text)}");
   });
 });

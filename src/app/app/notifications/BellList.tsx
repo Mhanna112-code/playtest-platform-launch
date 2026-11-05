@@ -1,4 +1,5 @@
 "use client";
+import { OwnPanel, ResizeBox } from "@/components/Panel";
 import Link from "next/link";
 import { useState } from "react";
 import { ChevronDown } from "lucide-react";
@@ -41,13 +42,14 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
   const line = (l: BellLine) => {
     const short = bellShort(l.text);
     const wide = !!short && !!whole[l.id];
-    const words = keepAmounts(short ?? l.text);
+    // (Owner, Nov 5, §220) Opened, the line itself shows whole, in place, in the draggable panel (it starts small; the grip drags it taller); no copy under it.
+    const words = wide ? <OwnPanel><ResizeBox id={`bell-${l.id}`} label="The whole line" defaultMax="6rem" tallest={0.5}><span className="block whitespace-pre-wrap break-words" data-bell-full={l.id}>{keepAmounts(l.text)}</span></ResizeBox></OwnPanel> : keepAmounts(short ?? l.text);
     const look = `flex-1 min-w-0 ${isRead(l) ? "text-slate-400" : "font-semibold text-slate-100"}`;
     return (
       <div>
         <div className="flex items-start gap-3">
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${isRead(l) ? "bg-transparent" : "bg-indigo-400"}`} />
-          {l.href ? <Link href={l.href} onClick={() => markRead([l])} data-bell-line={l.id} className={`${look} no-underline hover:underline`}>{words}</Link> : <button type="button" onClick={() => markRead([l])} data-bell-line={l.id} className={`${look} text-left`}>{words}</button>}
+          {wide ? <div className={look} data-bell-line={l.id}>{words}</div> : l.href ? <Link href={l.href} onClick={() => markRead([l])} data-bell-line={l.id} className={`${look} no-underline hover:underline`}>{words}</Link> : <button type="button" onClick={() => markRead([l])} data-bell-line={l.id} className={`${look} text-left`}>{words}</button>}
           {short && (
             <button type="button" className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-white/10 hover:text-slate-100" aria-expanded={wide} aria-label={wide ? "Hide the whole line" : "Show the whole line"} data-bell-toggle={l.id}
               onClick={() => { setWhole((w) => ({ ...w, [l.id]: !wide })); if (!wide) markRead([l]); }}>
@@ -56,7 +58,6 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
           )}
           <span className="shrink-0 text-xs text-slate-500">{l.ago}</span>
         </div>
-        {wide && <p className="ml-5 mt-1 max-h-32 overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-white/[0.04] px-2 py-1.5 text-sm text-slate-200" data-bell-full={l.id}>{keepAmounts(l.text)}</p>}
       </div>
     );
   };
