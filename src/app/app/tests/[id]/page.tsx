@@ -382,11 +382,13 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const mine = disputesWaiting.filter((d) => d.contractId === c.id);
     return { who: whoOf(c), kind: "disputes", label: "Disputes", ats: mine.map((d) => d.at), data: extra, node: mine.map((d) => (
       <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-2 rounded-lg border border-white/10 p-2 text-sm sm:p-3">
+        {/* (Owner, Nov 5, §252) The whole dispute is one drop-down (its line the summary); inside, the reason sits right under the line, in its box (no drop-down of its
+            own), then "Add your side". */}
         <Fold id={`needs-dispute-${d.id}`} summary={<span className="text-slate-300"><b className="text-white"><NameLink fit text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} · waiting for the team</span>}>
         {/* (Owner, Nov 5, §237) The reason in one box (it was a fixed scroll box inside a panel): the draggable reason box itself. */}
         <ReasonQuote id={`dispute-${d.id}`} label={`${d.Poss} reason`} text={d.reason} />
-        </Fold>
         <DisputeSide seenAt={seenAt} testId={t.id} disputeId={d.id} />
+        </Fold>
       </div>
     )) };
   };

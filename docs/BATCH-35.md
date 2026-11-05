@@ -4611,3 +4611,10 @@ page load or what the live top box showed (§90).
 
 ## §251 All line cuts at 50 characters (owner, Nov 5)
 Every bell, payment, confirm and owed line shows its first 50 characters (was 30, §202/§246); everything else as before.
+## §252 A dispute in Needs you is one drop-down (owner, Nov 5)
+The dispute's line ("Nina Park disputed what you paid for the call on … · waiting for the team") is the summary of ONE drop-down for the whole dispute; inside, the
+tester's reason sits right under the line in its box (no drop-down of its own), then "Add your side". Open at first, as before.
+
+## §253 Disputes: add your side, one drop-down per person (owner, Nov 5)
+On the dashboard, "Disputes: add your side" has one drop-down per tester (their name, "· N disputes"); inside, each dispute is its own drop-down as in §252: its line
+("Disputed what you paid for … on “<test>”") the summary, the reason right under it in its box, then "Add your side". All open at first.

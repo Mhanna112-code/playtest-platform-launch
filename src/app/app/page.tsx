@@ -43,7 +43,7 @@ import { DisputeSide } from "./tests/[id]/DisputeSide";
 import { disputesForSide } from "@/lib/server/disputes";
 import { DismissRemoved } from "./DismissRemoved";
 import { LIST_PANEL, ScrollList } from "@/components/ScrollList";
-import { ResizeBox } from "@/components/Panel";
+import { Fold, ResizeBox } from "@/components/Panel";
 import { DevSearch, DevSearchHit, DevSearchList } from "./DevSearch";
 import { YourTestsSearch } from "./YourTestsSearch";
 import { TestsVisited } from "./TestsVisited";
@@ -141,11 +141,24 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
       {side === "developer" && u.isDeveloper && <BankToConfirm userId={u.id} now={now} />}
       {disputeBox.length > 0 && (
         <DashboardActionBox id="dispute-sides" title="Disputes: add your side" count={disputeBox.length} kind="disputes">
-            {disputeBox.map((d) => (
-              <li key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
-                <p className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} on “<NameLink text={d.testTitle} kind="test" href={`/app/tests/${d.testId}`} />”:</p>
-                <ReasonQuote id={`dispute-reason-${d.id}`} label="Their reason" text={d.reason} />
-                <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
+            {/* (Owner, Nov 5, §253) One drop-down per person (their name, how many disputes); inside, one drop-down per dispute, as on the test page (§252): its line
+                the summary, the reason right under it in its box (no drop-down of its own), then "Add your side". */}
+            {[...disputeBox.reduce((m, d) => m.set(d.testerHref ?? `name:${d.name}`, [...(m.get(d.testerHref ?? `name:${d.name}`) ?? []), d]), new Map<string, typeof disputeBox>()).values()].map((ds) => (
+              <li key={ds[0].id} id={`dispute-person-${ds[0].id}`} className="rounded-lg border border-white/10 p-3 text-sm" data-dispute-person="">
+                <Fold id={`dispute-person-${ds[0].testerHref ?? ds[0].name}`} summary={<span><b className="text-white"><NameLink fit text={ds[0].name} href={ds[0].testerHref} /></b> · {ds.length === 1 ? "1 dispute" : `${ds.length} disputes`}</span>}>
+                  <div className="space-y-2">
+                    {ds.map((d) => (
+                      <div key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-2 sm:p-3" data-dispute-item="">
+                        <Fold id={`dashboard-dispute-${d.id}`} summary={<span className="text-slate-300">Disputed what you paid for {d.what} on “<TestName text={d.testTitle} href={`/app/tests/${d.testId}`} />”</span>}>
+                          <div className="space-y-1.5">
+                            <ReasonQuote id={`dispute-reason-${d.id}`} label="Their reason" text={d.reason} />
+                            <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
+                          </div>
+                        </Fold>
+                      </div>
+                    ))}
+                  </div>
+                </Fold>
               </li>
             ))}
         </DashboardActionBox>

@@ -32,7 +32,9 @@ describe("the sentences that name someone link them", () => {
   it("the developer's Excerpt requests row: the tester to their profile and the test to the test", () => {
     const dash = src("app/app/page.tsx");
     expect(dash).toContain('<NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on {x.testerPoss} profile');
-    expect(dash).toContain('<NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} on “<NameLink text={d.testTitle} kind="test" href={`/app/tests/${d.testId}`} />”');
+    // (Owner, Nov 5, §253) Disputes grouped by person: the name links in the person's drop-down; each dispute's line links its test (green, TestName).
+    expect(dash).toContain('<NameLink fit text={ds[0].name} href={ds[0].testerHref} /></b>');
+    expect(dash).toContain('Disputed what you paid for {d.what} on “<TestName text={d.testTitle} href={`/app/tests/${d.testId}`} />”');
     const page = src("app/app/tests/[id]/page.tsx");
     // (Owner, Nov 4, §187) In Needs you the name is whole, cut only when the line is full (`fit`).
     expect(page).toContain("<NameLink fit text={x.tester} href={x.testerHref} /> would like to show this on {x.testerPoss} profile");
