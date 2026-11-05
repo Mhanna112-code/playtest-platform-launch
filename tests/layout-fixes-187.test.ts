@@ -99,28 +99,26 @@ describe("§187 item 5: the held view's booked calls inside a person's drop-down
   });
 });
 
-describe("§187 item 6: a question's Show more sits right after the question text", () => {
-  it("in the question fold's title (the summary), not alone on a line between the title and the answer", () => {
+// (Owner, Nov 5, §223) Item 6's title Show more is gone where a question is shown with its answer (SentWork, By question, the previous sets): the title is cut at
+// 2 lines by CSS and the whole question is the first box inside (components/QA.tsx). QuestionTitle and the answer form's inline Show more stay.
+describe("§187 item 6, after §223: the question title is cut at 2 lines; the whole question is its own box inside", () => {
+  it("in the question fold's title (the summary): no Show more; inside, the question's box comes before the answer", () => {
     const html = render(h(SentWork, { kind: "written", answers: [LONG], questions: [LONG_Q], notes: "", additions: [], files: [] }));
     const summary = html.slice(html.indexOf("<summary"), html.indexOf("</summary>"));
-    expect(summary).toContain("data-question-title");
-    expect(summary).toMatch(/data-question-more=""[^>]*>Show more<\/button>/);
-    // Nothing between the title and the answer any more.
-    expect(html).not.toContain("data-set-question");
-    expect(html).not.toContain('data-fold-cut="bare"');
+    expect(summary).toContain('class="line-clamp-2 min-w-0 flex-1 basis-40 text-slate-200 [overflow-wrap:anywhere]" data-question-title=""');
+    expect(summary).not.toContain("data-question-more");
     const body = html.slice(html.indexOf("data-question-body"));
-    expect(body.indexOf('data-set-answer=""')).toBeLessThan(body.indexOf("Show more") === -1 ? Infinity : body.indexOf("Show more") + 1);
-    // The button shows only while the question's fold is open.
-    expect(src("app/globals.css")).toContain("details:not([open]) > summary [data-question-more] { display: none; }");
+    expect(body.indexOf("data-set-question")).toBeLessThan(body.indexOf('data-set-answer=""'));
+    expect(body).not.toContain("Show more");
   });
-  it("a short question has no button; the By question list uses the same title", () => {
+  it("a short question has no button (QuestionTitle, still exported); By question cuts its title the same way", () => {
     expect(render(h(QuestionTitle, { text: "Short?" }))).not.toContain("<button");
-    expect(src("app/app/tests/[id]/ByQuestion.tsx")).toContain("<QuestionTitle text={b.title} />");
+    expect(src("app/app/tests/[id]/ByQuestion.tsx")).toContain('data-question-title="">{b.title}</span>');
   });
-  it("a question shown above its answer (earlier sets, the answer form): Show more beside its last line", () => {
+  it("a question shown above its answer (earlier sets): its own box; the answer form keeps Show more beside its last line", () => {
     const html = render(h(SetView, { items: [{ question: LONG_Q, answer: "an answer", required: false }] } as never));
-    expect(html).toMatch(/data-fold-inline=""><div class="flex items-end gap-1"><div class="line-clamp-2[^"]*" data-fold-cut="">/);
-    expect(html).toMatch(/<span class="shrink-0"><button type="button" class="btn-ghost !px-2 !py-0.5 text-xs ml-1 align-baseline" aria-expanded="false" data-fold-toggle="">Show more<\/button><\/span>/);
+    expect(html).toContain('data-qa="question"');
+    expect(html).not.toContain("data-fold-toggle");
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("<LongText inline text={qText(q)}");
   });
 });

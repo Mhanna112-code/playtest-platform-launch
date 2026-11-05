@@ -109,6 +109,9 @@ describe("§156: the presses that named nothing now name their button", () => {
       ["/api/sessions/s1/terms", { choice: "keep" }, "Keep my current terms"],
       ["/api/sessions/s1/choose", { choice: "letgo" }, "Let it go"],
       ["/api/sessions/s1/choose", { choice: "charge" }, "Charge"],
+      // (Owner, Nov 5, §222) A written question's first answer (it had none) is Answer this question; any other addition is Add.
+      ["/api/sessions/s1/written-add", { question: "q1", first: true }, "Answer this question"],
+      ["/api/sessions/s1/written-add", { question: "q1" }, "Add"],
       ["/api/payments/confirm", { paymentId: "p", start: true }, "Confirm with your bank"],
       ["/api/payments/card", {}, "Add a card"],
       ["/api/payments/card", { press: "Change card" }, "Change card"],

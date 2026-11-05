@@ -4238,3 +4238,43 @@ place (`cutPieces` lines the cut text up with the whole line). A row with nothin
 The new-terms box's "The questions changed: before and after" listed all the Before questions, then all the After ones, then "Your answers so far: a / b / c" run
 together. Now one block per question number: "Question 1", its Before, its After and your answer so far, each in its own box that scrolls and drags taller
 (ResizeBox); a question only one side has reads "(new)" or "(removed)", and an unanswered one "(no answer yet)". Test: `tests/nov5-batch2.test.ts`.
+
+## §222 Additions: 5 per question, replacing the part's 10 (owner, Nov 5)
+Replaces §167's "at most 10 additions per written part" and §186's one grey note under the answers panel.
+- **The cap:** each current question takes at most **5 additions**, and "Anything else" its own 5 (`ADDITIONS_MAX = 5`, `addsCounted` in `src/lib/additions.ts`).
+  Only what Add to this answer made counts (`addsTo`): the answers to changed questions and their send's notes never count (that Send is never refused for
+  it). Additions made before §167 (no question) are Anything else's, so they count toward its 5.
+- **The rows** (below "Your written answers", `WrittenAddForm`): each row counts its own question: "3 of 5 additions left" once it has one (the part-wide line
+  is gone). At 5 only that row closes: no button, the question's name and under it the grey note "You've added to this answer 5 times, the most it takes."
+  (Anything else: "You've added to Anything else 5 times, the most it takes."). The other rows stay open. A kept draft still shows read-only.
+- **A question with no answer yet** (`noAnswerYet`: its latest answer is blank and nothing was added to it; typically a "new question" the tester left empty)
+  gets an **"Answer this question"** row in place of Add to this answer (the box's note: "This is your answer to this question."; done: "Your answer was sent.").
+  That first answer is stored with `first: true` and is not one of its 5; it is offered after any cap. Once answered, the question follows the normal 5.
+  Anything else is never "unanswered". The developer reads it like any addition (its "(no answer)" line goes once something was added).
+- **The press** is named "Answer this question" in its refusals (`FormMistakes named`, the paused line) and in the failed-press lines (`pressLabelOf`: the form
+  sends `first: true`). The server decides what is free from the stored part, never from that flag.
+- **Server** (`addRefusal` / `addWritten` in `src/lib/server/tests.ts`): the same per-question count, before the stop-once and again under the test's lock (two
+  adds at a question's 4 give exactly one 5th), 409 `add_full` with the lines above; the free first answer is never refused for the cap.
+- No migration: `first` is a field of the JSON additions.
+- **Tests:** new `tests/batch35-added-per-question-222.test.ts` (the counts and lines; old untied ones on Anything else; the 6th refused per question and on
+  Anything else while other rows stay open; the race at the 4th; the free first answer after every other cap, then its 5; `first` from a page never makes an
+  answered question free; the press name; the rows; the session page). Updated: `batch35-added-per-question` (its 10-cap block moved here),
+  `anything-else-cancel-188` (its own 5), `limits-call-history` (one row closed), `batch35-parts-fold`, `press-names`.
+
+## §223 Questions and answers in draggable scroll boxes, in one look everywhere (owner, Nov 5)
+Replaces §182 / §187's long-text fold (3 lines, Show more) and the question title's own Show more wherever a question is shown with its answer.
+- **One shared component** (`src/components/QA.tsx`): `QuestionText`: a small label "Question N" (a "Required" tag beside it), the question's whole text in a
+  quieter tone (italic, medium, slate) on a faint background; `AnswerText`: a label "Answer" (or "Added · <date>" for an addition), the text in the normal bright
+  tone with a volt left accent border; "(no answer)" in grey for an empty one. Each text is its own box that scrolls and drags taller (ResizeBox, 6rem at first,
+  the grip to 60% of the screen) inside `OwnPanel` (they always sit inside another panel, where a nested ResizeBox is flat otherwise, §187). One scroll per text:
+  no Show more inside a box. Long words wrap anywhere, so a 375 px phone never scrolls sideways.
+- **Where:** the tester's "Your written answers" and the developer's Needs you, update rows and Testers list drop-downs and the team's "See the work" (all
+  `SentWork`: inside each question's fold, the question box, the answer box, then each addition's box; Anything else's notes and additions too); the previous
+  sets on both sides (`SetView` / `PrevSetFolds`, with their own ids; the 24rem scroll around a set is gone, so no two scrolls are stacked); "By question"
+  (the question box above its answers panel, each answer in its own box; the tester's name above the answer on a phone, beside it from `sm`); the new terms'
+  "The questions changed" blocks (§221: Before and After as questions, "Your answer so far" as an answer).
+- A question fold's title is the question cut at 2 lines by CSS (no Show more: its box inside holds it whole). The answer form's question labels keep their
+  inline Show more (they are not shown answers). A recording's notes keep the long-text fold.
+- **Tests:** `tests/batch35-added-per-question-222.test.ts` (each text its own box, not flat, 6rem, the grips; no Show more inside; the look's classes; the
+  previous sets, By question, the new terms and every SentWork view use it; the phone layout of By question). Updated: `batch35-parts-fold`,
+  `layout-fixes-187`, `batch26`, `anything-else-cancel-188`, `nov5-batch2`, `batch35-added-per-question`.

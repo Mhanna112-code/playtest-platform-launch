@@ -79,30 +79,34 @@ describe("every place a tester's question, answer or addition shows uses it", ()
   const Q1 = "What did you like?";
   const at = "2026-11-03T23:29:00.000Z";
 
-  it("SentWork (Needs you's parts, the update row, the tester rows, the team's See the work, the tester's own page): answer, addition and notes fold at 3", () => {
+  it("SentWork (Needs you's parts, the update row, the tester rows, the team's See the work, the tester's own page): (Owner, Nov 5, §223) the answer, the addition and the notes each in their own box", () => {
     const h = html(createElement(SentWork, { id: "row-s1", timeZone: "UTC", kind: "written", answers: [item(Q1, LONG)], notes: LONG, additions: [{ at, text: LONG, files: [], questionKey: questionKey(Q1) }], files: [] }));
     const body = h.slice(h.indexOf(`data-question-body="${questionKey(Q1)}"`));
-    expect(body.match(/data-fold-text="closed" data-fold-lines="3"/g)?.length).toBe(3); // the answer, the addition, the notes
-    expect(body).toContain('data-set-answer=""><div class="min-w-0" data-fold-text="closed"');
-    expect(body.indexOf(">Added · Nov 3, 2026, 11:29 PM</p>")).toBeLessThan(body.lastIndexOf("data-fold-text"));
+    expect(body.match(/data-qa="answer"/g)?.length).toBe(3); // the answer, the addition, the notes
+    expect(body).not.toContain("data-fold-text");
+    expect(body).toContain('data-set-answer=""><div class="min-w-0 space-y-1" data-qa="answer">');
+    expect(body.indexOf(">Added · Nov 3, 2026, 11:29 PM</p>")).toBeLessThan(body.lastIndexOf('data-qa="answer"'));
   });
 
   it("a long question: the title shows its first 2 lines; inside, Show more opens the whole question (the first lines aren't shown twice)", () => {
     const q = "Tell us everything about the harbour level, from the dock to the lighthouse, and what you would change first before release?";
     const h = html(createElement(SentWork, { id: "row-s1", timeZone: "UTC", kind: "written", answers: [item(q, "fine")], notes: "", additions: [], files: [] }));
-    // (Owner, Nov 4, §187) The title (QuestionTitle) cuts it at 2 lines and its own Show more sits right after it there; nothing between the title and the answer.
-    expect(h).toMatch(/class="flex min-w-0 flex-1 basis-40 text-slate-200" data-fold-text="[a-z]+" data-fold-lines="2"><span class="min-w-0 flex-1 \[overflow-wrap:anywhere\]" data-question-title="" data-question-clamp="">/);
-    expect(h).not.toContain("data-set-question");
+    // (Owner, Nov 5, §223; was §187's title with its own Show more) The title is cut at 2 lines (CSS, no button); the whole question is the first box inside.
+    expect(h).toContain(`class="line-clamp-2 min-w-0 flex-1 basis-40 text-slate-200 [overflow-wrap:anywhere]" data-question-title="">${q}</span>`);
+    expect(h).not.toContain("data-question-more");
+    expect(h).toContain('data-set-question=""><div class="min-w-0 space-y-1" data-qa="question">');
     expect(src("components/SentWork.tsx")).not.toContain("<ScrollText");
   });
 
   it("the previous sets (SetView), By question and the tester's answer form", () => {
+    // (Owner, Nov 5, §223) The previous sets and By question: the one look (each question and answer in its own box), no Show more.
     const set = html(createElement(SetView, { items: [item(Q1, LONG)] }));
-    expect(set).toContain('data-fold-lines="2"');
-    expect(set).toMatch(/data-set-answer=""><div class="min-w-0" data-fold-text="closed" data-fold-lines="3"/);
+    expect(set).toContain('data-qa="question"');
+    expect(set).toContain('data-set-answer=""><div class="min-w-0 space-y-1" data-qa="answer">');
     const bq = html(createElement(ByQuestion, { testId: "t1", blocks: [{ title: Q1, required: false, answers: [{ contractId: "c1", tester: "Ana Silva", text: LONG, sentAt: new Date(at), status: "waiting" as const, paidCents: 0 }] }] }));
-    expect(bq).toContain('data-fold-text="closed" data-fold-lines="3"');
-    expect(bq).toContain(`data-question-title="" data-question-clamp="">${Q1.replace("?", "?")}</span>`);
+    expect(bq).toContain('data-qa="answer"');
+    expect(bq).toContain(`data-question-title="">${Q1}</span>`);
+    expect(bq).toContain('data-qa-label="">Question 1</p>');
     expect(bqKey(Q1)).toBe(bqKey(Q1));
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("<LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />"); // (§187) Show more beside the question
   });
@@ -129,7 +133,7 @@ describe("the tester's session page (§182)", () => {
     expect(LIST_PANEL.ownAnswers).toBe("min(28rem, 60vh)");
   });
 
-  it("pressed, the box is drawn in its slot (the question's fold opened, brought into view); the box folds and scrolls inside; drafts, the 10 and refusals unchanged", () => {
+  it("pressed, the box is drawn in its slot (the question's fold opened, brought into view); the box folds and scrolls inside; drafts, the question's 5 (§222) and refusals unchanged", () => {
     const f = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(f).toContain("return slotEl ? createPortal(boxNode, slotEl) : boxNode;");
     expect(f).toContain("document.querySelector<HTMLElement>(`[data-add-slot=\"${CSS.escape(slot)}\"]`)");
@@ -137,13 +141,13 @@ describe("the tester's session page (§182)", () => {
     expect(f).toContain('<details open className="group/fold" data-add-fold="">');
     expect(f).toContain('data-add-scroll=""');
     expect(f).toContain("useKept(`add:${sessionId}:${questionKey}`");
-    expect(f).toContain("<FormMistakes text={err} press={ADD_PRESS} named={PRESS_VERBS[\"written-add\"]} />");
+    expect(f).toContain("<FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS[\"written-add\"]} />"); // (§222) Add, or Answer this question
     // Below the panel the button names its question (its first line).
     const closed = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", questionKey: "qabc", question: "Where did you get stuck?", made: 2, slot: "s1:qabc" }));
     expect(closed).toContain(`data-add-more="written">${ADD_OPEN}</button>`);
     expect(closed).toContain('data-add-question="">Where did you get stuck?</span>');
-    const full = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", questionKey: "qabc", question: "Q", made: 10, slot: "s1:qabc" }));
-    expect(full).not.toContain("data-additions-full"); // (§186) said once under the panel, by the page
+    const full = html(createElement(WrittenAddForm, { sessionId: "s1", seenAt: "2026-11-04T00:00:00.000Z", questionKey: "qabc", question: "Q", made: 5, slot: "s1:qabc" }));
+    expect(full).toContain("data-additions-full"); // (Owner, Nov 5, §222) its own row's note, under the question's name
     expect(full).not.toContain("data-add-more");
   });
 

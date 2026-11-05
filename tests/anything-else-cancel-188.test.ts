@@ -69,8 +69,8 @@ describe("§188 A: Anything else, the developer's side", () => {
     expect(body).not.toContain("about Q2");
     // The question's addition stays under its question; Anything else comes after every question.
     expect(h.indexOf("about Q2")).toBeLessThan(h.indexOf(`data-fold="needs-s1-q-${ANYTHING_ELSE_KEY}"`));
-    // Each text folds with the shared long-text fold (LongText), as a question's answer does.
-    expect(src("components/SentWork.tsx")).toContain("answerFold(notes, `${id}-notes`, ANYTHING_ELSE_TITLE)");
+    // (Owner, Nov 5, §223; was the shared long-text fold) Each text is an answer in its own box, as a question's answer is.
+    expect(src("components/SentWork.tsx")).toContain("answerBox(notes, `${id}-notes`, \"Notes\", ANYTHING_ELSE_TITLE)");
   });
 
   it("on every written part, even with nothing in it", () => {
@@ -119,8 +119,8 @@ describe("§188 A: Anything else, the tester's side", () => {
     expect(row).toContain('data-add-more="written">Add to this answer</button>');
     expect(row).toContain(`data-add-question="">${ANYTHING_ELSE_TITLE}</span>`);
     expect(row).toContain(`data-add-for="${ANYTHING_ELSE_KEY}"`);
-    // At 10: no button (the page's one note under the panel says so).
-    expect(renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE, made: 10 }))).not.toContain("data-add-more");
+    // (Owner, Nov 5, §222) At its own 5: no button, its own note.
+    expect(renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE, made: 5 }))).not.toContain("data-add-more");
   });
 
   it("adding there stores the else key; the lines name Anything else; old untied additions show with it; its draft is kept under add:<session>:else", async () => {
@@ -153,19 +153,24 @@ describe("§188 A: Anything else, the tester's side", () => {
     expect(back.body.data).toMatchObject({ text: "half typed" });
   });
 
-  it("counts toward the part's 10: the 10th under Anything else goes, the 11th (there or under a question) is refused", async () => {
+  it("(Owner, Nov 5, §222; was the part's 10) its own 5: the 5th under Anything else goes, the 6th is refused; a question stays open", async () => {
     const { testId } = await setup();
     const j = await joined(testId);
     await send(j.sessionId, j.tester.cookie);
     const sub = await written(j.sessionId);
-    await db.submission.update({ where: { id: sub.id }, data: { additions: Array.from({ length: 9 }, (_, i) => ({ at: new Date(Date.now() - 60_000 + i).toISOString(), text: `added ${i}`, files: [], ...(i % 2 ? { questionKey: questionKey(Q1) } : {}) })) } });
-    expect((await addElse(j.sessionId, j.tester.cookie, "the tenth")).status).toBe(200);
-    const eleventh = await addElse(j.sessionId, j.tester.cookie, "the eleventh");
-    expect(eleventh.status).toBe(409);
-    expect(eleventh.body.error.message).toBe(ADDITIONS_FULL);
-    const underQ = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "under a question", question: questionKey(Q1), seenAt: seen(), confirmed: true });
-    expect(underQ.body.error.message).toBe(ADDITIONS_FULL);
-    expect(additionsOf((await written(j.sessionId)).additions)).toHaveLength(10);
+    // 4 for Anything else (2 old ones with no question, 2 with its key) and 5 under Q1.
+    await db.submission.update({ where: { id: sub.id }, data: { additions: [
+      ...Array.from({ length: 4 }, (_, i) => ({ at: new Date(Date.now() - 60_000 + i).toISOString(), text: `else ${i}`, files: [], ...(i % 2 ? { questionKey: ANYTHING_ELSE_KEY } : {}) })),
+      ...Array.from({ length: 5 }, (_, i) => ({ at: new Date(Date.now() - 50_000 + i).toISOString(), text: `q1 ${i}`, files: [], questionKey: questionKey(Q1) })),
+    ] } });
+    expect((await addElse(j.sessionId, j.tester.cookie, "the fifth")).status).toBe(200);
+    const sixth = await addElse(j.sessionId, j.tester.cookie, "the sixth");
+    expect(sixth.status).toBe(409);
+    expect(sixth.body.error.message).toBe("You've added to Anything else 5 times, the most it takes.");
+    const underQ1 = await sact(j.sessionId, "written-add", j.tester.cookie, { text: "under a full question", question: questionKey(Q1), seenAt: seen(), confirmed: true });
+    expect(underQ1.body.error.message).toBe(ADDITIONS_FULL);
+    expect((await sact(j.sessionId, "written-add", j.tester.cookie, { text: "under Q2", question: questionKey(Q2), seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(additionsOf((await written(j.sessionId)).additions)).toHaveLength(11);
   });
 
   it("20,000 characters per addition: 20,001 refused on the first press, 20,000 goes", async () => {

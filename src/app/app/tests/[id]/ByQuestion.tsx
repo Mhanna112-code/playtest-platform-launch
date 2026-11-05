@@ -3,7 +3,7 @@ import { HelpCircle, MessageSquareText } from "lucide-react";
 import { fmtDateTimeIn, money } from "@/lib/format";
 import type { QuestionBlock } from "@/lib/byQuestion";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
-import { ANSWER_LINES, LongText, QuestionTitle } from "@/components/LongText";
+import { AnswerText, QuestionText } from "@/components/QA";
 import { Fold, ResizeBox } from "@/components/Panel";
 import { ANYTHING_ELSE_TITLE } from "@/lib/additions";
 import { QuestionSearch } from "./QuestionSearch";
@@ -28,7 +28,7 @@ export function ByQuestion({ testId, blocks, timeZone }: { testId: string; timeZ
       <summary className="fold-chevron cursor-pointer font-medium text-white">By question</summary>
       <div className="mt-3 space-y-4">
         {blocks.length === 0 && <p className="card py-10 text-center text-slate-400">No answers yet.</p>}
-        {blocks.length > 0 && <QuestionSearch testId={testId} items={blocks.map((b) => {
+        {blocks.length > 0 && <QuestionSearch testId={testId} items={blocks.map((b, n) => {
           const Icon = b.title === ANYTHING_ELSE_TITLE ? MessageSquareText : HelpCircle;
           const key = questionKey(b.title);
           return {
@@ -37,24 +37,26 @@ export function ByQuestion({ testId, blocks, timeZone }: { testId: string; timeZ
                 <Fold id={`bq-${testId}-${key}`} defaultOpen={false} summaryClassName="!text-base" summary={
                   <span className="inline-flex min-w-0 max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 align-middle font-semibold text-white">
                     <Icon className={`h-5 w-5 shrink-0 ${b.title === ANYTHING_ELSE_TITLE ? "text-slate-300" : "text-indigo-300"}`} /> {/* (Owner, Nov 4, §182) The question's first 2 lines in the title; a longer one gets Show more inside, opening the whole question (the shared fold). */}
-                    {/* (Owner, Nov 4, §187) Show more right after the question in the title (no longer alone under it). */}
-                    <QuestionTitle text={b.title} />
+                    {/* (Owner, Nov 5, §223; was §187's title with its own Show more) The question cut at 2 lines; its whole text is the first box inside. */}
+                    <span className="line-clamp-2 min-w-0 flex-1 basis-40 [overflow-wrap:anywhere]" data-question-title="">{b.title}</span>
                     {/* (Batch 26 section 14) Not required is the default: only a Required question is marked. */}
                     {b.required && <span data-required="" className="badge border-white/15 text-xs font-normal text-slate-400">required</span>}
                     <span className="text-sm font-normal text-slate-500">{b.answers.length} answer{b.answers.length === 1 ? "" : "s"}</span>
                   </span>
                 }>
+                  {/* (§223) The question whole, in the one look for questions (components/QA.tsx); Anything else isn't a question. */}
+                  {b.title !== ANYTHING_ELSE_TITLE && <div className="mb-2" data-set-question=""><QuestionText id={`bq-${testId}-${key}-question`} label={`Question ${n + 1}`} required={b.required}>{b.title}</QuestionText></div>}
                   <ResizeBox id={`by-question-${testId}-${key}`} label={`Answers to “${b.title.slice(0, 60)}”`}>
                     <ul className="divide-y divide-white/5">
                       {b.answers.map((a) => (
-                        <li key={a.contractId} className="flex gap-3 py-2.5 text-sm">
-                          <span className="w-32 shrink-0 space-y-1">
+                        <li key={a.contractId} className="flex flex-col gap-1.5 py-2.5 text-sm sm:flex-row sm:gap-3">
+                          <span className="space-y-1 sm:w-32 sm:shrink-0">
                             <a href={`#tester-${a.contractId}`} className="block text-slate-400 no-underline hover:text-white"><Cut text={a.tester} /></a>
                             <span className="block text-xs text-slate-500">{fmtDateTimeIn(a.sentAt, timeZone)}</span>
                             <span className={`badge text-xs ${STATUS[a.status]}`}>{a.status === "paid" ? `Paid ${money(a.paidCents)}` : a.status === "rejected" ? "Rejected" : "Not reviewed yet"}</span>
                           </span>
-                          {/* (§182) Each answer: its first 3 lines, then Show more. */}
-                          <LongText className="flex-1" text={a.text} lines={ANSWER_LINES} id={`bq-${testId}-${key}-${a.contractId}`} label={`${a.tester}'s answer`}><AnswerWithAttachments text={a.text} attachments={a.attachments ?? []} /></LongText>
+                          {/* (§223; was §182's Show more) Each answer in its own box with the accent border (the tester's name above it on a phone, beside it wider). */}
+                          <div className="min-w-0 flex-1" data-set-answer=""><AnswerText id={`bq-${testId}-${key}-${a.contractId}`} name={`${a.tester}'s answer`}><AnswerWithAttachments text={a.text} attachments={a.attachments ?? []} /></AnswerText></div>
                         </li>
                       ))}
                     </ul>

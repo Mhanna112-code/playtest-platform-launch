@@ -7,6 +7,7 @@ import { CANCELLED_NOTHING_CHARGED } from "./bankNotice";
 /** The server's line for a bank check cancelled underneath it (confirm.ts CONFIRM_CANCELLED: a team pause, a new card, a chargeback won). */
 export const CHECK_CANCELLED_UNDERNEATH = "This payment was cancelled: nothing was charged.";
 import { SUBSCRIPTION_PRICE } from "./subscription";
+import { ANSWER_PRESS } from "./additions";
 
 export const PRESS_VERBS: Record<string, string> = {
   edit: "Save", stop: "Stop the test", "end-early": "End early", "next-round": "Next round", invite: "Invite", "cancel-invite": "Cancel invite", "request-time": "Request a time", "answer-request": "Answer",
@@ -131,6 +132,8 @@ export function pressLabelOf(path: string, body?: unknown): string {
   }
   // (Owner, Nov 3, races) The recording part's Add (it sends `add: true`) and the removed-from cards' Dismiss all.
   if (p[1] === "sessions" && p[3] === "recording-send" && b.add === true) return "Add";
+  // (Owner, Nov 5, §222) A written question's first answer (it had none) is the press Answer this question (its form sends `first: true`), not Add.
+  if (p[1] === "sessions" && p[3] === "written-add" && b.first === true) return ANSWER_PRESS;
   if (p[1] === "sessions" && p[3] === "dismiss-removed" && b.all === true) return "Dismiss all";
   // (§156) Switch / Keep and Charge / Let it go name the button pressed; the broken-key Dismiss its count ("Dismiss 2").
   if (p[1] === "sessions" && p[3] === "terms" && (b.choice === "keep" || b.choice === "switch")) return b.choice === "keep" ? "Keep my current terms" : "Switch to the new terms";

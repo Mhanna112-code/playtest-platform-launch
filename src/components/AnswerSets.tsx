@@ -1,5 +1,5 @@
 import { Formatted } from "@/components/Formatted";
-import { ANSWER_LINES, LongText, QUESTION_LINES } from "@/components/LongText";
+import { AnswerText, QuestionText } from "@/components/QA";
 import { fileSize, fmtDateIn } from "@/lib/format";
 import { RecordingVideo } from "@/components/RecordingVideo";
 import { versionsOf, type PrevSet, type SetItem } from "@/lib/answerSets";
@@ -10,15 +10,18 @@ import React, { type ReactNode } from "react";
  * (Owner, Oct 29, batch 13 section 8) One set of written answers, each under the question it answered (in full). (Batch 26 section 15) The question is a small grey
  * label above its answer (a Required one marked), the answer in normal text indented under it, "(no answer)" in grey for an empty one; long ones keep their scroll
  * boxes. The same everywhere a set shows: the piece view, the tester's page, "Previous questions and answers" and the team's "See the work".
+ * (Owner, Nov 5, §223; replaces §182's long-text folds here) The one look for questions and answers (components/QA.tsx): "Question N" and its text in a quiet
+ * box ("Required" a small tag), then "Answer" and the answer in its own box with the accent border, each scrolling and dragging taller. `id`: unique on the page.
  */
-export function SetView({ items, attachments = [] }: { items: SetItem[]; attachments?: AnswerAttachment[] }) {
+export function SetView({ id = "set", items, attachments = [] }: { id?: string; items: SetItem[]; attachments?: AnswerAttachment[] }) {
   return (
     <>
       {items.map((it, i) => (
-        <div key={i} className="space-y-0.5 text-sm" data-set-item="">
-          {/* (Owner, Nov 4, §182) The shared long-text fold: the question's first 2 lines, the answer's first 3, each with Show more when there's more. */}
-          <div className="flex items-start gap-0.5 text-xs text-slate-400" data-set-question=""><LongText inline className="flex-1" text={it.question} lines={QUESTION_LINES} label="Question" />{it.required && <span className="shrink-0" aria-label="required"> *</span>}</div>
-          <div className="border-l border-white/10 pl-3" data-set-answer="">{it.answer.trim() ? <LongText text={it.answer} lines={ANSWER_LINES} label="Answer"><AnswerWithAttachments text={it.answer} attachments={attachments} /></LongText> : <p className="text-slate-500" data-no-answer="">(no answer)</p>}</div>
+        <div key={i} className="space-y-1.5 text-sm" data-set-item="">
+          <div data-set-question=""><QuestionText id={`${id}-${i}-question`} label={`Question ${i + 1}`} required={it.required}>{it.question}</QuestionText></div>
+          <div data-set-answer="">
+            <AnswerText id={`${id}-${i}-answer`} empty={!it.answer.trim()}><AnswerWithAttachments text={it.answer} attachments={attachments} /></AnswerText>
+          </div>
         </div>
       ))}
     </>
@@ -47,7 +50,7 @@ export function AnswerWithAttachments({ text, attachments, onRemove }: { text: s
 /** "Previous questions and answers (until <date>)": a read-only fold per earlier set, newest first. */
 // (Owner, Oct 30, batch 15 section 14) The tester's sets say whether each version was sent or a draft: "Sent <date>" first, then "Draft (not sent)", each a read-only
 // fold. The developer's sets (`developer`) only ever hold what was sent.
-export function PrevSetFolds({ sets: all, sentPart = true, developer = false, attachments = [], timeZone, draftsOnly = false }: { timeZone?: string | null; sets: PrevSet[]; sentPart?: boolean; developer?: boolean; attachments?: AnswerAttachment[]; /** (batch 35 §136) only unsent drafts: what was sent shows once, in the part's own list */ draftsOnly?: boolean }) {
+export function PrevSetFolds({ id = "prev", sets: all, sentPart = true, developer = false, attachments = [], timeZone, draftsOnly = false }: { /** (§223) unique on the page: its boxes' ids */ id?: string; timeZone?: string | null; sets: PrevSet[]; sentPart?: boolean; developer?: boolean; attachments?: AnswerAttachment[]; /** (batch 35 §136) only unsent drafts: what was sent shows once, in the part's own list */ draftsOnly?: boolean }) {
   const sets = draftsOnly ? all.flatMap((s) => { const v = versionsOf(s, sentPart).filter((x) => x.kind === "draft"); return v.length ? [{ ...s, versions: v }] : []; }) : all;
   if (!sets.length) return null;
   return (
@@ -61,7 +64,8 @@ export function PrevSetFolds({ sets: all, sentPart = true, developer = false, at
               {versions.map((v, j) => (
                 <details key={j} open={versions.length === 1} className="rounded-md border border-white/[0.06] p-2" data-prev-version={v.kind}>
                   <summary className="cursor-pointer text-xs font-medium text-slate-300">{v.kind === "sent" ? `Sent${v.at ? ` ${fmtDateIn(v.at, timeZone)}` : ""}` : "Draft (not sent)"}</summary>
-                  <div className="mt-2 max-h-[24rem] space-y-2 overflow-y-auto pr-1"><SetView items={v.items} attachments={attachments} /></div>
+                  {/* (§223) Each question and answer scrolls in its own box: no second scroll around them. */}
+                  <div className="mt-2 space-y-2"><SetView id={`${id}-${i}-${j}`} items={v.items} attachments={attachments} /></div>
                 </details>
               ))}
             </div>

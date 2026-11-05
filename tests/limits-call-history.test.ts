@@ -61,29 +61,31 @@ describe("§186 text limits: 20,000 (was 50,000)", () => {
     expect(f).toContain("readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly");
     expect(f).not.toContain("used: number");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("used={writtenLength(");
-    const html = render(h(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: "qabc", question: Q1, made: 10 }));
-    expect(html).not.toContain("data-additions-full");
+    // (Owner, Nov 5, §222) At the question's 5: its own row's note, no button.
+    const html = render(h(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: "qabc", question: Q1, made: 5 }));
+    expect(html).toContain("data-additions-full");
     expect(html).not.toContain("data-add-more");
   });
 
-  it("at 10 additions the grey note shows ONCE, directly under the answers panel, with no Add to this answer rows (2 questions)", async () => {
+  it("(Owner, Nov 5, §222; replaces §186's one note for the part's 10) a question at its 5: only its row closes, with its note; the other rows stay open", async () => {
     const { testId } = await setup({ questions: [Q1, Q2] });
     const j = await joined(testId);
     expect((await sact(j.sessionId, "written", j.tester.cookie, { answers: ["first", "second"], seenAt: seen(), confirmed: true })).status).toBe(200);
     const [k1, k2] = questionKeys([{ question: Q1 }, { question: Q2 }]);
     const sub = await db.submission.findUniqueOrThrow({ where: { contractId_kind: { contractId: j.sessionId, kind: "written" } } });
-    const adds = Array.from({ length: 10 }, (_, i) => ({ at: new Date(Date.now() - 60_000 + i).toISOString(), text: `more ${i}`, files: [], questionKey: i % 2 ? k2 : k1 }));
+    const adds = Array.from({ length: 6 }, (_, i) => ({ at: new Date(Date.now() - 60_000 + i).toISOString(), text: `more ${i}`, files: [], questionKey: i < 5 ? k1 : k2 }));
     await db.submission.update({ where: { id: sub.id }, data: { additions: adds } });
     auth.user = await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } });
     const { default: SessionPage } = await import("@/app/app/sessions/[id]/page");
     const page = unescape(render(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
     expect(page.match(/data-additions-full=""/g)).toHaveLength(1);
     expect(page).toContain(`data-additions-full="">${ADDITIONS_FULL}</p>`);
-    expect(page).not.toContain("data-add-more");
-    // Directly under the answers panel, before the (now empty) rows.
-    const at = page.indexOf("data-additions-full");
-    expect(page.lastIndexOf(`data-panel="own-answers-list-${sub.id}"`)).toBeLessThan(at);
-    expect(at).toBeLessThan(page.indexOf("data-add-buttons"));
+    const rows = page.slice(page.indexOf("data-add-buttons"));
+    expect(rows.indexOf(`data-add-for="${k1}"`)).toBeLessThan(rows.indexOf("data-additions-full"));
+    expect(rows.indexOf("data-additions-full")).toBeLessThan(rows.indexOf(`data-add-for="${k2}"`));
+    // Q2 and Anything else keep their button; Q2 says how many are left.
+    expect(rows.match(/data-add-more="written"/g)).toHaveLength(2);
+    expect(rows).toContain("4 of 5 additions left");
     // The developer's side never shows the note.
     expect(src("app/app/tests/[id]/page.tsx")).not.toContain("ADDITIONS_FULL");
   });

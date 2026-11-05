@@ -11,7 +11,7 @@ import { GET as keptGET, POST as keptPOST } from "@/app/api/kept/route";
 import { SentWork } from "@/components/SentWork";
 import { ADD_OPEN, ADD_PRESS, WrittenAddForm } from "@/app/app/sessions/[id]/SessionActions";
 import {
-  ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, ADDITIONS_FULL, ADDITIONS_MAX, ADD_UNDER_QUESTION, NEW_QUESTION_TAG, QUESTION_GONE, additionsLeftLine, additionsOf, answersByQuestion, questionKey, questionKeys,
+  ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, ADD_UNDER_QUESTION, NEW_QUESTION_TAG, QUESTION_GONE, additionsOf, answersByQuestion, questionKey, questionKeys,
   quoteQuestion, writtenThreads,
 } from "@/lib/additions";
 import { fmtStampIn } from "@/lib/format";
@@ -20,7 +20,8 @@ import { joined, sact, seen, settle, setup } from "./fixtures";
 import { json, req } from "./helpers";
 
 // (Owner, Nov 3, batch 35 §167) What's added to sent written answers is added to ONE question: the developer reads each question as its own fold (closed at first,
-// "· 2 added" on its title) holding the answer and each dated addition; the tester adds with each question's own "Add to this answer". At most 10 additions per part.
+// "· 2 added" on its title) holding the answer and each dated addition; the tester adds with each question's own "Add to this answer". (Owner, Nov 5, §222) The
+// part's 10 became 5 per question: tests/batch35-added-per-question-222.test.ts.
 (globalThis as unknown as { React: typeof React }).React = React;
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 const Q1 = "What did you like?", Q2 = "Where did you get stuck?";
@@ -45,7 +46,8 @@ describe("the developer's view: a fold per question", () => {
     expect(h.match(/<details /g)).toHaveLength(3);
     expect(h).not.toMatch(/<details[^>]* open/);
     expect(h).toContain(`data-fold="needs-s1-q-${questionKey(Q1)}"`);
-    expect(h).toMatch(new RegExp(`data-question-title="" data-question-clamp="">${Q1.replace("?", "\\?")}</span>`));
+    // (Owner, Nov 5, §223) The title is the question cut at 2 lines (no Show more: its whole text is the first box inside).
+    expect(h).toMatch(new RegExp(`data-question-title="">${Q1.replace("?", "\\?")}</span>`));
     expect(h).toContain('data-added-count="2">· 2 added</span>');
     // The question with nothing added shows no count.
     expect(h.match(/data-added-count/g)).toHaveLength(1);
@@ -186,7 +188,7 @@ describe("the tester adds under one question", () => {
     expect(h).toContain(`data-add-more="written">${ADD_OPEN}</button>`);
     expect(ADD_PRESS).toBe("Add to my answer");
     const actions = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(actions).toContain("api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt })");
+    expect(actions).toContain("api(`/api/sessions/${sessionId}/written-add`, { text, question: questionKey, seenAt, confirmed: !!boxAt, boxAt, ...(first ? { first: true } : {}) })");
     // The same box as before: the editor with Bold, Italic, Code block and 📎, the 20,000 count (§186: the addition's own), the paused draft line.
     const form = actions.slice(actions.indexOf("export function WrittenAddForm"), actions.indexOf("export function LeaveButton"));
     // (Owner, Nov 4, §189) The count is the editor's own (AnswerBox `alone` carries data-written-count); the form draws no second one.
@@ -196,54 +198,5 @@ describe("the tester adds under one question", () => {
   });
 });
 
-describe("at most 10 additions per part", () => {
-  const seed = async (sessionId: string, n: number, general = 0) => {
-    const sub = await written(sessionId);
-    const adds = [
-      ...Array.from({ length: general }, (_, i) => ({ at: new Date(Date.now() - 60_000 + i).toISOString(), text: `old ${i}`, files: [] })),
-      ...Array.from({ length: n - general }, (_, i) => ({ at: new Date(Date.now() - 30_000 + i).toISOString(), text: `added ${i}`, files: [], questionKey: questionKey(Q1) })),
-    ];
-    await db.submission.update({ where: { id: sub.id }, data: { additions: adds } });
-  };
-
-  it("reaches 10 (old additions with no question count), then the 11th is refused with the line", async () => {
-    const { testId } = await setup();
-    const j = await joined(testId);
-    await send(j.sessionId, j.tester.cookie, ["a", "b"]);
-    await seed(j.sessionId, 9, 3);
-    const tenth = await add(j.sessionId, j.tester.cookie, "the tenth", questionKey(Q2));
-    expect(tenth.status).toBe(200);
-    expect(additionsOf((await written(j.sessionId)).additions)).toHaveLength(ADDITIONS_MAX);
-    const eleventh = await add(j.sessionId, j.tester.cookie, "the eleventh, from an older page", questionKey(Q1));
-    expect(eleventh.status).toBe(409);
-    expect(eleventh.body.error.message).toBe(ADDITIONS_FULL);
-    expect(ADDITIONS_FULL).toBe("You've added to this part 10 times, the most it takes.");
-    expect(additionsOf((await written(j.sessionId)).additions)).toHaveLength(10);
-  });
-
-  it("two adds at the same moment at 9 give exactly one 10th; the other gets the same line", async () => {
-    const { testId } = await setup();
-    const j = await joined(testId);
-    await send(j.sessionId, j.tester.cookie, ["a", "b"]);
-    await seed(j.sessionId, 9);
-    const both = await Promise.all([add(j.sessionId, j.tester.cookie, "first press", questionKey(Q1)), add(j.sessionId, j.tester.cookie, "second press", questionKey(Q2))]);
-    expect(both.map((r) => r.status).sort()).toEqual([200, 409]);
-    expect(both.find((r) => r.status === 409)!.body.error.message).toBe(ADDITIONS_FULL);
-    expect(additionsOf((await written(j.sessionId)).additions)).toHaveLength(10);
-  });
-
-  it("the remaining count once there is one; at 10 the grey note once under the panel (§186) instead of every box's button, and a draft stays read-only", () => {
-    expect(additionsLeftLine(7)).toBe("3 of 10 additions left");
-    const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain("{canAdd && addsMade > 0 && addsMade < ADDITIONS_MAX && <p className=\"note\" data-additions-left=\"\">{additionsLeftLine(addsMade)}</p>}");
-    const full = renderToStaticMarkup(createElement(WrittenAddForm, { sessionId: "s1", seenAt: seen(), questionKey: "qabc", question: Q1, made: 10 }));
-    // (Owner, Nov 4, §186) Not once per question any more: the page shows it once under the panel (tests/limits-call-history.test.ts renders it).
-    expect(full).not.toContain("data-additions-full");
-    expect(full).toContain('hidden=""');
-    expect(page).toContain("{canAdd && addsMade >= ADDITIONS_MAX && <p className=\"note\" data-additions-full=\"\">{ADDITIONS_FULL}</p>}");
-    expect(full).not.toContain("data-add-more");
-    expect(full).not.toContain("data-add-send");
-    const form = src("app/app/sessions/[id]/SessionActions.tsx");
-    expect(form).toContain('<textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly="" />');
-  });
-});
+// (Owner, Nov 5, §222) "At most 10 additions per part" (its 11th refused, the race at the 10th, the part's remaining count and the one note under the panel) was
+// replaced by 5 per question: tests/batch35-added-per-question-222.test.ts.

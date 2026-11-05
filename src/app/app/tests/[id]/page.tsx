@@ -848,7 +848,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Oct 31, batch 35 §33) Only the terms line: the contract changes (renames, a Stop's note…) are still recorded for the tester's own page, never
                     listed under the developer's row. */}
                 {/* (Batch 13 section 8) Earlier SENT sets this tester replaced after switching to changed questions. */}
-                <PrevSetFolds timeZone={u.timeZone} developer attachments={c.submissions.flatMap((s) => s.recordings).filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
+                <PrevSetFolds id={`prev-${c.id}`} timeZone={u.timeZone} developer attachments={c.submissions.flatMap((s) => s.recordings).filter((r) => r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} sets={prevSetsOf(c.submissions.find((s) => s.kind === "written")?.prevSets)} />
                 {/* (Owner, Nov 3, §166) No "On <name>'s profile: “…”" lines here any more: the excerpts stay on the tester's profile (and the requests in Needs you). */}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
                 {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun)}</p>}
