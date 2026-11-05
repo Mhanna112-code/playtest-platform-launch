@@ -4495,3 +4495,19 @@ No Show more inside a box; long words wrap anywhere, so a 375px phone never scro
 ## §241 Every other-tab change note in its box (owner, Nov 5)
 Edit's "Changed in another tab or device at …" notes (FieldNote) put every change in the shared draggable box, not only long text: the access keys' lines ("Added:
 …", "Removed: …"), short changes ("Categories: a → b", devices, languages, spots and the other selections), the replaced long text and "What you typed (not saved)".
+
+## §242 The questions changed: only the changed ones, each a drop-down (owner, Nov 5)
+The new-terms box's "The questions changed" lists only questions that actually changed, matched by their words (and Required), so removing one never makes the ones
+after it look changed: an edited question (Before and After), a new one ("Before: (new)") and a removed one ("After: (removed: after Switch it moves to Past
+questions)"). Unchanged questions aren't listed. Each is its own drop-down, closed: "Question N · Changed / New / Removed" and the start of its words; inside, Before,
+After and your answer so far in their boxes (the list keeps §233's panel). `questionChanges` in TesterTop.tsx. Test: `tests/question-changes-242.test.ts`.
+
+## §243 Other-tab notes: only Open until, categories, languages and devices stay plain (owner, Nov 5)
+Refines §241: in Edit's notes ("Changed in another tab or device at …", "Saved in another tab or device at … · Use theirs", "Changed in another tab at …: was …"
+and the keys' "Updated at …" lines), Open until, categories, languages and the tech requirements (devices) stay plain lines; every other field's value, and the
+keys' lines, is in the draggable box however short (`plainField` in FieldNote.tsx).
+
+## §244 Every cut name or email opens on a click, in its box; hovers kept (owner, Nov 5)
+A name or email cut at 20 (Cut / NameLink, admin side included) now opens on a click on every device (was a touch screen only): the pop-up holds the whole name or
+email in the draggable box (it scrolls, the grip drags it taller), with its link and Copy. A name of 20 characters or fewer never opens it, even when a tight row
+cuts it by width. A mouse hover still shows the whole name or email everywhere (Cut's title, the cut payment rows' and confirm rows' title, a cut bell line's title).

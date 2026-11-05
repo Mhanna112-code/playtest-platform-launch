@@ -41,7 +41,7 @@ describe("§202 bell lines: 30 characters, then the whole line on the arrow", ()
     );
     expect(html).toContain(">You paid <span");
     expect(html).toContain(" for Cara…</a>");
-    expect(html).not.toContain("Underwater Harbor Run Deluxe Edition"); // closed: only the cut words
+    expect(html).not.toContain(">Underwater Harbor Run Deluxe Edition"); // closed: the cut words shown; (§244) the whole line only in the hover title // closed: only the cut words
     expect(html.match(/data-bell-toggle="1"/g)).toHaveLength(1);
     expect(html).toContain('aria-expanded="false" aria-label="Show the whole line" data-bell-toggle="1"');
     expect(html).not.toContain('data-bell-toggle="2"');

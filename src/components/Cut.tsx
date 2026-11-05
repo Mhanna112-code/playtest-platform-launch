@@ -1,6 +1,7 @@
 "use client";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
+import { OwnPanel, ResizeBox } from "@/components/Panel";
 import { NAME_CUT, cutEmail, cutTo } from "@/lib/rules";
 
 /** What a listed name is: a person, a test, a product, or an email. A linked one's pop-up offers "Open profile →" or "Open test →". */
@@ -12,8 +13,11 @@ export const cutText = (text: string, kind: CutKind = "person", n = NAME_CUT) =>
 /** A screen with no hover (a phone or a tablet): there a cut name opens a small pop-up instead of a tooltip. */
 export const touchOnly = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none)").matches;
 
-/** Whether a tap on a name opens the pop-up: only a cut name, and only on a touch screen. Anywhere else a click does what it always did. */
-export const opensPopup = (cut: boolean, touch: boolean) => cut && touch;
+/**
+ * Whether a tap on a name opens the pop-up: a cut name. (Owner, Nov 5, §244; was touch screens only, with a mouse hover elsewhere) On every device, so the whole
+ * name or email is always one press away (no hover); the pop-up holds it in the draggable box, with the name's link and Copy.
+ */
+export const opensPopup = (cut: boolean, _touch?: boolean) => cut;
 
 /** The pop-up's link, when the name is a link: a person's profile, or a test. */
 export const openLabel = (kind: CutKind) => (kind === "test" || kind === "product" ? "Open test →" : "Open profile →");
@@ -62,7 +66,8 @@ export function Cut({ text, kind = "person", n = NAME_CUT, className = "", fit =
   const cut = shown !== full;
   const [at, setAt] = useState<At | null>(null);
   const onClick = useCallback((e: ReactMouseEvent<HTMLSpanElement>) => {
-    if (!opensPopup(fit ? overflows(e.currentTarget) : cut, touchOnly())) return;
+    // (Owner, Nov 5, §244) A name of 20 characters or fewer never opens it (nothing to expand), even when a tight row cuts it by width.
+    if (!opensPopup(fit ? overflows(e.currentTarget) && Array.from(full).length > n : cut, touchOnly())) return;
     // The tap opens the pop-up instead of following the link the name sits in (the pop-up offers that link).
     e.preventDefault();
     e.stopPropagation();
@@ -86,7 +91,7 @@ export function Cut({ text, kind = "person", n = NAME_CUT, className = "", fit =
   // Not cut: exactly the text, as before (no wrapper, no underline, no title).
   if (!cut) return className ? <span className={className}>{full}</span> : <>{full}</>;
   return (
-    <span className={className || undefined} title={full} aria-label={full} onClick={onClick} data-cut={kind}>
+    <span className={`cursor-pointer ${className}`.trim()} title={full} aria-label={full} onClick={onClick} data-cut={kind}>
       <span aria-hidden="true" className="select-none underline decoration-dotted decoration-1 underline-offset-2" data-cut-shown="">{shown}</span>
       <span className="sr-only" data-cut-full="">{full}</span>
       {at && <CutPopup full={full} kind={kind} at={at} onClose={close} />}
@@ -127,7 +132,10 @@ function CutPopup({ full, kind, at, onClose }: { full: string; kind: CutKind; at
       style={{ left, ...(at.below ? { top: at.y } : { bottom: window.innerHeight - at.y }) }}
       // A press inside the pop-up stays in it (it doesn't reach the row's own link behind the name).
       onClick={(e) => e.stopPropagation()}>
-      <div className="max-h-36 overflow-y-auto whitespace-pre-wrap pr-1 leading-6 [overflow-wrap:anywhere]" tabIndex={0} data-cut-popup-text="">{full}</div>
+      {/* (Owner, Nov 5, §244) The whole name or email in the draggable box (it scrolls, the grip drags it taller). */}
+      <OwnPanel><ResizeBox id={`cut-${kind}-${full.slice(0, 40)}`} label={full} defaultMax="9rem" tallest={0.5}>
+        <div className="whitespace-pre-wrap pr-1 leading-6 [overflow-wrap:anywhere]" data-cut-popup-text="">{full}</div>
+      </ResizeBox></OwnPanel>
       <div className="flex flex-wrap items-center gap-2">
         {at.href && <a href={at.href} className="btn-secondary px-3 py-1 text-xs no-underline hover:no-underline" data-cut-open="">{openLabel(kind)}</a>}
         <button type="button" className="btn-secondary px-3 py-1 text-xs" data-cut-copy="" onClick={async () => setCopied((await copyText(full)) ? "yes" : "no")}>Copy</button>

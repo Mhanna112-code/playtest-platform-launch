@@ -108,24 +108,28 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
               your answer so far, each in its own box that scrolls and drags taller (ResizeBox). A question only one side has says "(new)" or "(removed)". */}
           {/* (Owner, Nov 5, §233) The whole list of question blocks in its own draggable scroll panel: many questions never stretch the box (each part keeps its own box). */}
           <div className="mt-2"><ResizeBox id={`offer-${offer.id}-questions`} label="The questions changed" defaultMax="min(26rem, 55vh)" tallest={0.8}>
-          <ol className="space-y-3" data-question-changes="">
-            {Array.from({ length: Math.max(offer.fromQuestions.length, offer.questions.length) }, (_, i) => {
-              const before = offer.fromQuestions![i], after = offer.questions![i], answer = offer.answers?.[i] ?? "";
-              // (Owner, Nov 5, §223) The one look for questions and answers (components/QA.tsx): Before and After as questions (quiet box, "Required" a tag),
-              // your answer as an answer (bright, accent border).
-              const box = (label: string, key: string, q: OfferQuestion | undefined, text?: string) => (
-                <div data-question-change-part={key}>
-                  {key === "answer" ? <AnswerText id={`offer-${offer.id}-${i}-${key}`} label={label} name={`Question ${i + 1}: ${label}`} empty={!text} emptyText="(no answer yet)">{text}</AnswerText>
-                    : q ? <QuestionText id={`offer-${offer.id}-${i}-${key}`} label={label} required={q.required}>{q.text}</QuestionText>
-                    : <><FieldLabel>{label}</FieldLabel><p className="text-xs text-sky-200/70">{key === "before" ? "(new)" : "(removed)"}</p></>}
-                </div>
-              );
+          {/* (Owner, Nov 5, §242) Only the questions that actually changed, matched by their words (a removal never makes the ones after it look changed): an
+              edited question (its Before and After), a new one, a removed one (after Switch it moves to Past questions). Unchanged questions aren't listed. Each is
+              its own drop-down, closed: "Question N · Changed / New / Removed" and the start of its words. */}
+          <ol className="space-y-2" data-question-changes="">
+            {questionChanges(offer.fromQuestions, offer.questions).map((x) => {
+              const answer = x.from != null ? offer.answers?.[x.from] ?? "" : "";
+              const key = `${x.from ?? "n"}-${x.to ?? "r"}`;
+              const head = (x.after ?? x.before)!.text;
               return (
-                <li key={i} className="space-y-2 rounded-lg border border-white/10 p-2" data-question-change={i + 1}>
-                  <p className="font-medium">Question {i + 1}</p>
-                  {box("Before", "before", before)}
-                  {box("After", "after", after)}
-                  {box("Your answer so far", "answer", undefined, answer)}
+                <li key={key} data-question-change={x.kind}>
+                  <details className="rounded-lg border border-white/10 p-2">
+                    <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 font-medium" data-question-change-summary="">
+                      <span>{x.to != null ? `Question ${x.to + 1}` : `Question ${x.from! + 1} (before)`}</span>
+                      <span className="badge text-xs">{x.kind === "changed" ? "Changed" : x.kind === "new" ? "New" : "Removed"}</span>
+                      <span className="min-w-0 flex-1 truncate font-normal text-slate-300">{head}</span>
+                    </summary>
+                    <div className="mt-2 space-y-2">
+                      {x.before ? <QuestionText id={`offer-${offer.id}-${key}-before`} label="Before" required={x.before.required}>{x.before.text}</QuestionText> : <><FieldLabel>Before</FieldLabel><p className="text-xs text-sky-200/70">(new)</p></>}
+                      {x.after ? <QuestionText id={`offer-${offer.id}-${key}-after`} label="After" required={x.after.required}>{x.after.text}</QuestionText> : <><FieldLabel>After</FieldLabel><p className="text-xs text-sky-200/70">(removed: after Switch it moves to Past questions)</p></>}
+                      {x.before && <AnswerText id={`offer-${offer.id}-${key}-answer`} label="Your answer so far" name={`Your answer so far`} empty={!answer} emptyText="(no answer yet)">{answer}</AnswerText>}
+                    </div>
+                  </details>
                 </li>
               );
             })}
@@ -144,3 +148,25 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
     </div>
   );
 }
+
+/**
+ * (Owner, Nov 5, §242) The questions that changed between the tester's set and the offered one, matched by their words: a question in both (same words and Required)
+ * is unchanged and left out; an offered question at the place of a removed one is "changed" (its Before and After); other offered ones are "new"; other old ones
+ * "removed". `from` / `to`: the question's place in the old / offered set.
+ */
+export function questionChanges(before: OfferQuestion[], after: OfferQuestion[]) {
+  const same = (a: OfferQuestion, b: OfferQuestion) => a.text === b.text && !!a.required === !!b.required;
+  const keptB = new Set<number>(), keptA = new Set<number>();
+  after.forEach((a, j) => { const i = before.findIndex((b, k) => !keptB.has(k) && same(b, a)); if (i >= 0) { keptB.add(i); keptA.add(j); } });
+  const out: { kind: "changed" | "new" | "removed"; from: number | null; to: number | null; before?: OfferQuestion; after?: OfferQuestion }[] = [];
+  const usedB = new Set(keptB);
+  after.forEach((a, j) => {
+    if (keptA.has(j)) return;
+    const atPlace = j < before.length && !usedB.has(j) ? j : -1;
+    if (atPlace >= 0) { usedB.add(atPlace); out.push({ kind: "changed", from: atPlace, to: j, before: before[atPlace], after: a }); }
+    else out.push({ kind: "new", from: null, to: j, after: a });
+  });
+  before.forEach((b, i) => { if (!usedB.has(i)) out.push({ kind: "removed", from: i, to: null, before: b }); });
+  return out.sort((x, y) => (x.to ?? x.from! + 0.5) - (y.to ?? y.from! + 0.5));
+}
+

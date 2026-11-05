@@ -436,9 +436,10 @@ describe("batch 23 section 5: Edit keeps what you typed; it shows what the other
   });
 
   it("the note: \"Saved in another tab or device at 3:54 PM:\" and their value (short inline, long folded) with Use theirs; key notes say who changed them", () => {
-    const short = renderToStaticMarkup(createElement(TheirsNote, { heading: "Saved in another tab or device at 3:54 PM", items: [{ field: "spots", name: "Spots", value: "5", onUse: () => {} }] }));
-    expect(short).toContain("Saved in another tab or device at 3:54 PM: Spots: 5");
-    expect(short).toContain('data-use-theirs="spots"');
+    // (§243) A plain field (here Open until) stays inline; other fields' values go in their box.
+    const short = renderToStaticMarkup(createElement(TheirsNote, { heading: "Saved in another tab or device at 3:54 PM", items: [{ field: "openUntil", name: "Open until", value: "Nov 12", onUse: () => {} }] }));
+    expect(short).toContain("Saved in another tab or device at 3:54 PM: Open until: Nov 12");
+    expect(short).toContain('data-use-theirs="openUntil"');
     expect(short).toContain(">Use theirs</button>");
     const long = "Sail to the reef and back. ".repeat(40);
     const html = renderToStaticMarkup(createElement(TheirsNote, { heading: "Saved in another tab or device at 3:54 PM", items: [{ field: "description", name: "Instructions", value: long, onUse: () => {} }] }));

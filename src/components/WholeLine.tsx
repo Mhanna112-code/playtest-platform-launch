@@ -45,7 +45,8 @@ export function WholeLine({ shown, full, href, after, className = "", render, ch
       <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
     </button>
   );
-  if (!open) return <>{words(closed)}{after}{arrow}</>;
+  // (Owner, Nov 5, §244) A mouse hover shows the whole line too (the arrow and "…" still open it in place).
+  if (!open) return <><span title={full!}>{words(closed)}</span>{after}{arrow}</>;
   return (
     <span className="block" data-whole-line="">
       <OwnPanel>

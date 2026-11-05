@@ -49,7 +49,7 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
       <div>
         <div className="flex items-start gap-3">
           <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${isRead(l) ? "bg-transparent" : "bg-indigo-400"}`} />
-          {wide ? <div className={look} data-bell-line={l.id}>{words}</div> : l.href ? <Link href={l.href} onClick={() => markRead([l])} data-bell-line={l.id} className={`${look} no-underline hover:underline`}>{words}</Link> : <button type="button" onClick={() => markRead([l])} data-bell-line={l.id} className={`${look} text-left`}>{words}</button>}
+          {wide ? <div className={look} data-bell-line={l.id}>{words}</div> : l.href ? <Link href={l.href} onClick={() => markRead([l])} data-bell-line={l.id} title={short ? l.text : undefined} className={`${look} no-underline hover:underline`}>{words}</Link> : <button type="button" onClick={() => markRead([l])} data-bell-line={l.id} className={`${look} text-left`}>{words}</button>}
           {short && (
             <button type="button" className="shrink-0 rounded p-0.5 text-slate-400 hover:bg-white/10 hover:text-slate-100" aria-expanded={wide} aria-label={wide ? "Hide the whole line" : "Show the whole line"} data-bell-toggle={l.id}
               onClick={() => { setWhole((w) => ({ ...w, [l.id]: !wide })); if (!wide) markRead([l]); }}>

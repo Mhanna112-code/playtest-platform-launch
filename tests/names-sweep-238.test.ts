@@ -73,11 +73,11 @@ describe("§238 the tester dashboard", () => {
     expect(row).toContain('data-name-link="test"');
     const line = block(row, 'data-todo-answer-line=""', "div");
     expect(line).toContain(`<span>${cutTo(DEV).slice(0, -1)}</span><button`);
-    expect(line).not.toContain(DEV);
-    expect(line).not.toContain(DIFF);
+    expect(line).toContain(`title="${DEV}`); // (§244) the hover shows the whole line
+    expect(line).not.toContain(`>${DIFF}`);
     expect(line.match(/data-name-toggle=""/g)).toHaveLength(2);
     expect(line).toContain('data-whole-toggle=""');
-    expect(line).not.toContain("title=");
+    expect(line).toContain("title="); // (§244) the hover shows the whole line too
     expect(src("app/app/page.tsx")).toContain("...cutNamesIn(`${displayName(c.test.developer)} asked for a live call`, [displayName(c.test.developer)])");
   });
 
@@ -124,7 +124,7 @@ describe("§238 the admin's Reports list", () => {
     const row: ReportVM = { id: "r1", at: new Date().toISOString(), reporter: `${DEV} (Reported more than 3 times)`, reporterName: DEV, reporterHref: "/app/developers/d1", reporterEmail: EMAIL, reported: "Ana Silva", reportedName: "Ana Silva", reportedHref: "/app/testers/t1", reportedEmail: "ana@playtest.test", when: "Nov 5", note: "Rude" };
     const html = unescape(renderToStaticMarkup(h(PagedList, { kind: "reports", initial: { rows: [row], next: null, total: 1 } as never, fixed: true })));
     const p = block(html, 'data-report-row="r1"', "div");
-    expect(p).toContain(`<a href="/app/developers/d1" data-report-name=""><span title="${DEV}"`);
+    expect(p).toContain(`<a href="/app/developers/d1" data-report-name=""><span class="cursor-pointer" title="${DEV}"`); // (§244) opens on a click
     expect(p).toContain(`>${cutTo(DEV)}</span>`);
     expect(p).toContain(`>${cutEmail(EMAIL)}</span>`);
     expect(p).toContain("</span>) (Reported more than 3 times) reported ");

@@ -17,7 +17,7 @@ const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "u
 describe("<NameLink>", () => {
   it("a person's name: a link to their profile around the cut name (title, hidden full copy)", () => {
     const h = renderToStaticMarkup(createElement(NameLink, { text: "Alexandria Montgomery-Wellington", href: "/app/testers/t1" }));
-    expect(h).toMatch(/^<a href="\/app\/testers\/t1" class="relative z-10 " data-name-link="person"><span title="Alexandria Montgomery-Wellington"/);
+    expect(h).toMatch(/^<a href="\/app\/testers\/t1" class="relative z-10 " data-name-link="person"><span class="cursor-pointer" title="Alexandria Montgomery-Wellington"/); // (§244) opens on a click
     expect(h).toContain('data-cut-full="">Alexandria Montgomery-Wellington</span>');
     // The tap pop-up offers the link the name sits in (Cut reads the closest a[href]).
     expect(src("components/Cut.tsx")).toContain('const link = e.currentTarget.closest("a[href]") as HTMLAnchorElement | null;');

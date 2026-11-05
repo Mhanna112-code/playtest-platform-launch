@@ -168,8 +168,10 @@ describe("the notes under Edit's fields and in Save's stop box (sections 17-19)"
     expect(shortLine({ name: "Spots", before: "4", after: "5" })).toBe("Spots: 4 → 5");
     expect(shortLine({ name: "Price for written answers", before: "$8.00", after: "$10.00" })).toBe("Price for written answers: $8.00 → $10.00");
     expect(shortLine({ name: "Devices", before: "Windows PC", after: "Windows PC, iPad" })).toBe("Devices: Windows PC → Windows PC, iPad");
-    const html = renderToStaticMarkup(createElement(FieldNote, { label: "Changed in another tab or device at 7:16 AM", items: [{ name: "Spots", before: "4", after: "5" }] }));
-    expect(html).toContain("Changed in another tab or device at 7:16 AM: Spots: 4 → 5");
+    // (§243) Open until stays on one line; Spots (any other field) goes in its box.
+    const html = renderToStaticMarkup(createElement(FieldNote, { label: "Changed in another tab or device at 7:16 AM", items: [{ name: "Open until", before: "Nov 10", after: "Nov 12" }] }));
+    expect(html).toContain("Changed in another tab or device at 7:16 AM: Open until: Nov 10 → Nov 12");
+    expect(renderToStaticMarkup(createElement(FieldNote, { label: "Changed in another tab or device at 7:16 AM", items: [{ name: "Spots", before: "4", after: "5" }] }))).toContain("Spots: 4 → 5</span>");
     expect(html).not.toMatch(/now:|Before:/);
   });
 
