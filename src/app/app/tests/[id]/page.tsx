@@ -640,8 +640,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           </div>
         </NeedsYou>
       )}
-      {/* (Owner, Nov 4, §181) Call requests: right under Needs you. (§185) Two boxes: "Requests to you" (Needs you's "2 call requests ↓" lines jump here) and "Your requests". */}
-      {callRequests.length > 0 && <CallRequestsBox testId={t.id} seenAt={seenAt} requests={callRequests} leadMinutes={CALL_MIN_AHEAD_MINUTES} />}
 
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
       <TestersJoined timeZone={u.timeZone}
@@ -889,6 +887,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         testers={restricted ? devTesters.map((x) => ({ ...x, requests: [] })) : devTesters}
         elsewhere={otherCalls}
       />
+      {/* (Owner, Nov 5, §229; was right under Needs you, §181) Call requests sit right under the Live session panel. (§185) Two boxes: "Requests to you" (Needs
+          you's "2 call requests ↓" lines jump here) and "Your requests". */}
+      {callRequests.length > 0 && <CallRequestsBox testId={t.id} seenAt={seenAt} requests={callRequests} leadMinutes={CALL_MIN_AHEAD_MINUTES} />}
       {!t.workEndedAt && t.status !== "stopped" && !restricted && (
         <InvitePanel
           testId={t.id}

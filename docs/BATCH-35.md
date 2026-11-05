@@ -4247,3 +4247,12 @@ The developer's update row (a part a tester added to after it was paid) no longe
 Replaces §152's payments list under a part in Needs you: a part's (or a call's) individual payments ("Payments for this part": each Pay, Pay more, charge and
 decision, with its date, amount and marks) are listed only in the Testers list's drop-downs, never in Needs you's part rows or its "added after you paid" rows. Each
 line keeps §220's pattern (names cut at 20, "…" opens one name, the arrow opens the whole line in place).
+
+## §228 A request that's no longer waiting leaves the list (owner, Nov 5)
+Building on batch 26 §10 (a closed request says so in its row at once, its buttons gone): the row says what happened ("Booked", "Another tester took this time at
+12:47 PM", "… withdrew this request") for 6 seconds (GONE_SHOWN_MS), then leaves the list on its own, without waiting for a reload. A press refused on it keeps its
+named refusal at the top of the box (lostRefusal, §207).
+
+## §229 Call requests under the Live session panel (owner, Nov 5)
+Replaces §181's place ("right under Needs you"): the Call requests box ("Requests to you" and "Your requests") sits right under the Live session panel on the
+developer's test page. Needs you's "2 call requests ↓" lines still jump to it.

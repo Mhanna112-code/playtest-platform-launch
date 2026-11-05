@@ -55,6 +55,8 @@ export function timeRows(rows: RowJson[]) {
   return [...rows].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt)).map((x) => ({ row: x, text: describeRows([x]), accept: acceptChoices([x])[0].label }));
 }
 /** (§187) What a row says once its request is no longer waiting (the pulse): "Booked" on the booked time, OTHER_TIME_BOOKED_LINE on its other times. */
+/** (Owner, Nov 5, §228) How long a request that closed stays in the list, saying what happened, before it leaves. */
+export const GONE_SHOWN_MS = 6_000;
 export const goneLineFor = (gone: { line: string; bookedAt?: string } | undefined, time: string) =>
   !gone ? "" : gone.bookedAt && Date.parse(gone.bookedAt) !== Date.parse(time) ? OTHER_TIME_BOOKED_LINE : gone.line;
 
@@ -133,7 +135,23 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
     if (await press(`${path(r)}/answer-request`, { requestId: r.id, contractId: r.contractId, ...body }, key)) finish(); // (batch 35 §40, §41) the page redraws in place; the buttons stay greyed until it has
   };
   const first = (r: PanelReq) => Math.min(...r.rows.map((x) => new Date(x.startsAt).getTime()));
-  const sorted = [...requests].sort((a, b) => first(a) - first(b));
+  // (Owner, Nov 5, §228) A request that's no longer waiting (booked, taken, withdrawn, closed) says what happened in its row for a few seconds, then leaves the
+  // list on its own; a press refused on it keeps its named refusal at the top of the box (lostRefusal).
+  const [goneAt, setGoneAt] = useState<Record<string, number>>({});
+  useEffect(() => {
+    const fresh = Object.keys(gone).filter((id) => !(id in goneAt));
+    if (!fresh.length) return;
+    const t0 = Date.now();
+    setGoneAt((g) => ({ ...g, ...Object.fromEntries(fresh.map((id) => [id, t0])) }));
+  }, [gone, goneAt]);
+  const [, setTick] = useState(0);
+  useEffect(() => {
+    if (!Object.keys(goneAt).length) return;
+    const t = setTimeout(() => setTick((n) => n + 1), GONE_SHOWN_MS + 100);
+    return () => clearTimeout(t);
+  }, [goneAt]);
+  const live = requests.filter((r) => !(goneAt[r.id] && Date.now() - goneAt[r.id] > GONE_SHOWN_MS));
+  const sorted = [...live].sort((a, b) => first(a) - first(b));
   // (Owner, Nov 4, §187) Pressed: any of the request's rows (its drop-down stays open over it).
   const pressed = (r: PanelReq) => ["a", "d", "w"].some((k) => at === `${k}-${r.id}` || at.startsWith(`${k}-${r.id}@`));
   // (Owner, Nov 4, §187, option A) One row per time: "Thu, Nov 12, 4:22 PM · 30 min · Contract $31/h [Accept] [Decline]" (yours: [Withdraw]). Accept books that
@@ -172,7 +190,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
   const sent = (r: PanelReq) => (r.at ? Date.parse(r.at) : first(r));
   const people: { id: string; name: string; href?: string | null; paidCents?: number; reqs: PanelReq[] }[] = [];
   if (byPerson) {
-    for (const r of [...requests].sort((a, b) => sent(a) - sent(b))) {
+    for (const r of [...live].sort((a, b) => sent(a) - sent(b))) {
       const p = people.find((x) => x.id === r.contractId);
       if (p) p.reqs.push(r);
       else people.push({ id: r.contractId, name: r.tester, href: r.testerHref, paidCents: r.paidCents, reqs: [r] });
@@ -183,7 +201,7 @@ export function CallRequestsPanel({ side, seenAt, requests, path, leadMinutes = 
   const shown = (p: { name: string; reqs: PanelReq[] }) => !search || matchesName(p.name, query) || held(p);
   const none = !!search && query.trim() !== "" && people.length > 0 && !people.some(shown);
   // (Owner, Nov 5, §207; Nov 4 recording R8c) Its row is gone (the refused press's redraw took the withdrawn request away): the named refusal stays here instead.
-  const lost = lostRefusal(at, error, requests);
+  const lost = lostRefusal(at, error, live);
   return (
     <section className="space-y-1.5" aria-label={title} data-call-requests="" id={sectionId}>
       {!byPerson && <h3 className="text-sm font-semibold text-white">{title}{showCount && <span className="font-normal text-slate-400"> ({sorted.length})</span>}</h3>}
