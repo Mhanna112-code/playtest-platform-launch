@@ -194,7 +194,12 @@ describe("§114 a deleted account that isn't clean: \"This account was closed.\"
     expect(fc).toContain("if (message === ACCOUNT_CLOSED) {");
     expect(fc).toContain('a.textContent = "Contact us";');
     expect(fc).toContain("lineOf.get(note) ?? note.textContent");
-    expect(src("app/signup/page.tsx")).toContain('data-match="email"');
+    // The Email box takes the line (its data-match pattern fits it), so it's red there, not a line under the button only.
+    const match = /id="email"[^>]*data-match="([^"]+)"/.exec(src("app/signup/page.tsx"))![1];
+    expect(new RegExp(match, "i").test(ACCOUNT_CLOSED)).toBe(true);
+    expect(new RegExp(match, "i").test(EMAIL_TAKEN)).toBe(true);
+    expect(new RegExp(match, "i").test("Enter a valid email")).toBe(true);
+    expect(new RegExp(match, "i").test("Password must be at least 8 characters")).toBe(false);
     expect(src("components/Err.tsx")).toContain('if (!red && text === ACCOUNT_CLOSED) return <p ref={ref} className="err" data-account-closed="">{text} <Link href={CONTACT_US_HREF} className="underline" data-contact-us="">Contact us</Link></p>;');
   });
 });

@@ -34,9 +34,10 @@ export default async function SignupPage() {
             <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
           </div>
         </RoleChoice>
+        {/* (Owner, Nov 1, §114) "This account was closed." (a deleted account's email that can't sign up again) is red here too, with Contact us after it. */}
         <div>
           <label className="label req" htmlFor="email">Email</label>
-          <CountedInput maxLength={EMAIL_MAX} className="input" id="email" name="email" type="email" autoComplete="email" required data-required="" data-required-msg="Enter a valid email" data-match="email" />
+          <CountedInput maxLength={EMAIL_MAX} className="input" id="email" name="email" type="email" autoComplete="email" required data-required="" data-required-msg="Enter a valid email" data-match="email|account was closed" />
         </div>
         <div>
           <label className="label req" htmlFor="password">Password</label>

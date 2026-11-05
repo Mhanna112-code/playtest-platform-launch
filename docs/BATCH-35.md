@@ -3805,11 +3805,15 @@ open question is decided: an admin's deletion is not clean. Google sign-in follo
   - Invites: by account id, never by email (nothing to change). Stripe: customers and Connect accounts are found by their stored ids, never by email; the new
     account makes its own customer when it saves a card (the old one keeps its own ids, unique, untouched). Sign-in and sign-up attempt limits stay per typed email.
 - **Not changed.** Deleting an account (batch 12 §1, §119, §151), what a deleted account shows to others ("Deleted account"), "This account no longer exists".
-- **Hooks.** `data-account-closed` on the blue line (login page, Google's step); `data-contact-us` on its link and on the link after the red line at Email.
+- **Hooks.** `data-account-closed` on the blue line (login page, Google's step); `data-contact-us` on its link and on the link after the red line at Email. The
+  sign-up page's Email box matches the line (`data-match="email|account was closed"`), so it is red there and not only listed under the button.
+- **Screenshots.** `playtest-lite-evidence/reuse-email-nov5` (captions.json), desktop 1280x900 and phone 375x812 (own server on 3498, a throwaway schema): the
+  refusal at Email with Contact us; the list under Sign up (one bullet, the line alone); the Google refusal on Log in. Contact us, pressed while signed out,
+  goes to Log in (`/login?next=/app/help`): Contact us needs an account (see the owner's choices).
 - **Code.** `src/lib/server/reuseEmail.ts` (new: `notCleanWhy`, `isClean`, `freeDeletedEmail`, `tombstoneOf`, `isTombstone`, `originalEmail`),
   `src/lib/accountClosed.ts` (new: `ACCOUNT_CLOSED`, `CONTACT_US_HREF`), `passwords.ts` (`signUp`, `confirmEmail`), `google.ts` (`finishGoogle`,
   `finishGoogleSignup`, `google_closed`), `email.ts` (`sendEmail`), `accountState.ts`, `adminLists.ts` (the event's label), `FieldChecks.tsx` (the link after the
-  red line; the bullet keeps the line), `Err.tsx`, `src/app/login/page.tsx`. No migration.
+  red line; the bullet keeps the line), `Err.tsx`, `src/app/login/page.tsx`, `src/app/signup/page.tsx` (the Email box's match). No migration.
 
 ### Tests
 New `tests/batch35-reuse-deleted-email.test.ts`: a clean deleted developer's email signs up again (a separate account with nothing of the old one's; the old one keeps
