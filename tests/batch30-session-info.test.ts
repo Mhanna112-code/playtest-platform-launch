@@ -65,7 +65,7 @@ describe("batch 30 §15: the listing information lines", () => {
   });
 
   it("the Updated tag shows its time, and before → now once tapped (closed at first)", () => {
-    const html = renderToStaticMarkup(createElement(UpdatedTag, { when: "Thu, Oct 29, 7:21 PM", before: "Sail", now: "Sail to the island" }));
+    const html = renderToStaticMarkup(createElement(UpdatedTag, { id: "t", when: "Thu, Oct 29, 7:21 PM", before: "Sail", now: "Sail to the island" }));
     expect(html).toContain("Updated Thu, Oct 29, 7:21 PM");
     expect(html).toContain('aria-expanded="false"');
     expect(html).not.toContain("data-info-before-now");
@@ -111,7 +111,7 @@ describe("batch 30 §15: an Edit save and the tester's session", () => {
     expect(p).not.toContain("Your contract&apos;s terms stay as they are.");
     expect(p).toContain('<h1 className="text-2xl font-bold tracking-tight text-white">{title}</h1>');
     expect(p).toContain("const title = c.test.title;");
-    expect(p).toContain("<ScrollText text={c.test.description}");
+    expect(p).toContain("<ValueText id={`head-what-${c.id}`} label=\"What to do\">{c.test.description}</ValueText>"); // (§231) the shared box
     expect(p).toContain("<a href={c.test.buildUrl}");
     expect(p).toContain("<CategoryBadges categories={c.test.categories} />");
     expect(p).toContain("<PartBadges written={c.test.writtenCents != null}");

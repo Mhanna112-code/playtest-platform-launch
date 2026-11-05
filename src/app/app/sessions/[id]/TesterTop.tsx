@@ -93,10 +93,10 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       {offer.ndaText != null && offer.ndaText !== (offer.fromNdaText ?? "") && (
         <details className="text-sm" open>
           <summary className="cursor-pointer font-medium">{offer.ndaText ? "The NDA" : "The NDA is removed"}{offer.fromNdaText ? " (changed)" : ""}: switching means you accept it</summary>
-          {/* (Batch 13 section 9) "Before" and "Offered" as two scroll boxes, never in full. */}
+          {/* (Batch 13 section 9) "Before" and "Offered" as two scroll boxes, never in full. (§231) The shared box for contract texts, like the questions below. */}
           <div className="mt-1 space-y-2">
-            {offer.fromNdaText && <NdaBox label="Before" text={offer.fromNdaText} />}
-            {offer.ndaText && <NdaBox label="Offered" text={offer.ndaText} />}
+            {offer.fromNdaText && <NdaBox id={`offer-${offer.id}-nda-before`} label="Before" text={offer.fromNdaText} />}
+            {offer.ndaText && <NdaBox id={`offer-${offer.id}-nda-offered`} label="Offered" text={offer.ndaText} />}
           </div>
         </details>
       )}

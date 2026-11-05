@@ -80,8 +80,9 @@ describe("batch 34 §14: the Listing panel", () => {
     expect(panel).toBeGreaterThan(top);
     expect(panel).toBeLessThan(needs);
     expect(src("lib/server/adminLists.ts")).toContain("kind: { notIn: [LISTING_VALUES, LISTING_SAVED, \"listing_save\"] }");
-    // UpdatedTag's Before / Now: each a scroll box about 8 lines tall.
-    expect(src("components/ListingInfo.tsx")).toContain('max-h-32 overflow-y-auto whitespace-pre-wrap');
+    // UpdatedTag's Before / Now: (Owner, Nov 5, §231) each in the shared box for listing texts (drags taller).
+    expect(src("components/ListingInfo.tsx")).toContain('<ValueText id={`${id}-before`} label="Before">{before}</ValueText>');
+    expect(src("components/ListingInfo.tsx")).toContain('<ValueText id={`${id}-now`} label="Now">{now}</ValueText>');
   });
 });
 

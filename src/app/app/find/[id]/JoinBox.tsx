@@ -226,7 +226,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       {p.nda && (
         <div className="space-y-2" id="nda">
           <p className="label !mb-0">The developer&apos;s NDA</p>
-          <NdaBox text={p.nda} />
+          <NdaBox id="join-nda" text={p.nda} />
           <label className="flex items-center gap-2 text-sm text-white">
             <input id="nda-accept" type="checkbox" data-red-msg={ndaErr || undefined} checked={nda} onChange={(e) => { setNda(e.target.checked); if (e.target.checked) setNdaErr(""); }} onBlur={() => !nda && setNdaErr("Accept the NDA to " + (applying ? "apply." : "join."))} /> I accept this NDA
           </label>

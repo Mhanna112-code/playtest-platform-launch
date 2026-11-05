@@ -3,6 +3,7 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { holdBringInView } from "@/lib/markJump";
 import { cancelPlaceRestore } from "@/lib/keepPlace";
+import { ValueText } from "@/components/QA";
 
 /** (Batch 30 §15) The "See it" of a listing line in the top box: the event LiveTop sends (with the line's time) so the page can mark what that save changed. */
 export const SEE_IT_EVENT = "see-it";
@@ -42,7 +43,7 @@ export function seeItClick(e: React.MouseEvent<HTMLElement>, target: string, at?
 /**
  * (Batch 30 §15) A small "Updated <date/time>" tag on a listing-information line changed since the tester joined: tapping it shows before → now in place.
  */
-export function UpdatedTag({ when, before, now }: { when: string; before: string; now: string }) {
+export function UpdatedTag({ id, when, before, now }: { /** (§231) unique on the page: its two boxes' ids */ id: string; when: string; before: string; now: string }) {
   const [open, setOpen] = useState(false);
   return (
     <>
@@ -51,10 +52,11 @@ export function UpdatedTag({ when, before, now }: { when: string; before: string
         {when ? `Updated ${when}` : "Updated"}
       </button>
       {open && (
-        <span className="mt-1 block space-y-1 rounded-lg bg-white/[0.03] p-2 text-xs" data-info-before-now="">
-          <span className="block"><b className="text-slate-400">Before:</b> <span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words" tabIndex={0} data-diff-scroll="">{before}</span></span>
-          <span className="block"><b className="text-slate-400">Now:</b> <span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-slate-200" tabIndex={0} data-diff-scroll="">{now}</span></span>
-        </span>
+        // (Owner, Nov 5, §231) Before and Now each in the shared box for listing texts (ValueText: drags taller, its own scroll).
+        <div className="mt-1 space-y-1.5 rounded-lg bg-white/[0.03] p-2 text-xs" data-info-before-now="">
+          <div className="space-y-0.5" data-diff-scroll=""><b className="text-slate-400">Before:</b><ValueText id={`${id}-before`} label="Before">{before}</ValueText></div>
+          <div className="space-y-0.5" data-diff-scroll=""><b className="text-slate-400">Now:</b><ValueText id={`${id}-now`} label="Now">{now}</ValueText></div>
+        </div>
       )}
     </>
   );
