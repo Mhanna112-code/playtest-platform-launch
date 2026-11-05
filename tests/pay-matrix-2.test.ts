@@ -291,9 +291,11 @@ describe("§159 R10: a new card saved while a Pay's bank page completes", () => 
     st.pis.set(p.actionPi!, "succeeded"); // Complete at the bank
     await newCardChecks(w.dev.user.id);
     expect(await db.payment.count({ where: { submissionId: w.anaSub.id, status: "charged" } })).toBe(1);
-    // The page's own finish: it went through (§157's line for a check finished elsewhere), never "cancelled".
-    const fin = await confirm(w.dev.cookie, { paymentId: p.id });
-    expect(fin.body.error?.message).toBe("You already confirmed this payment.");
+    // The page's own finish: it went through, never "cancelled". (Owner, Nov 5, §210) The window sends its own check (`pi`): this press paid, so it reads as
+    // paid (it read §157's "You already confirmed this payment."). A finish without the window's check (a leave beacon) keeps the plain line.
+    const fin = await confirm(w.dev.cookie, { paymentId: p.id, pi: p.actionPi });
+    expect(fin.body).toMatchObject({ done: true, paid: true, status: "charged", amountCents: 1000 });
+    expect((await confirm(w.dev.cookie, { paymentId: p.id })).body.error?.message).toBe("You already confirmed this payment.");
     expect(await db.payment.count({ where: { submissionId: w.anaSub.id, status: "charged" } })).toBe(1);
     expect(st.made).toHaveLength(1);
   });

@@ -174,7 +174,8 @@ export function useBankCheck() {
     return () => countBankCheck(-1);
   }, [open]);
   const check = useCallback(<T,>(a: BankAction, finish?: (s?: Simulate, cancel?: boolean) => Promise<T>, peek?: Peek, leave?: () => void): Promise<T> => {
-    const fin = finish ?? ((s?: Simulate) => finishPayment<T>(a.paymentId, s));
+    // (Owner, Nov 5, §210) The finish names this window's own check too: paid by it but recorded first by something else reads as paid.
+    const fin = finish ?? ((s?: Simulate) => finishPayment<T>(a.paymentId, s, checkPiOf(a.clientSecret) || undefined));
     // (Owner, Nov 4, §171 B4) The peek names this window's own check (its PaymentIntent, from the client secret): the server says when it is no longer the live one.
     const look: Peek | undefined = peek ?? (!finish && a.paymentId ? (since: string) => peekBank({ paymentId: a.paymentId, ...(checkPiOf(a.clientSecret) ? { pi: checkPiOf(a.clientSecret) } : {}) }, since) : undefined);
     if (a.needs === "none") return fin();

@@ -34,14 +34,24 @@ export const needsBank = (r: unknown): r is BankAction => !!r && typeof r === "o
 /** How the inline check ended, told to the server: the stand-in's answer, or nothing (the server asks Stripe). */
 export type Simulate = "succeeded" | "failed" | undefined;
 
-/** (Batch 17 §11) A payment's check ended: the payment goes through, or "Your bank didn't confirm the payment, so nothing was charged." (thrown as a plain sentence). */
-export async function finishPayment<T = Record<string, unknown>>(paymentId: string, simulate?: Simulate): Promise<T> {
+/**
+ * (Batch 17 §11) A payment's check ended: the payment goes through, or "Your bank didn't confirm the payment, so nothing was charged." (thrown as a plain sentence).
+ * (Owner, Nov 5, §210) `pi`: the window's own PaymentIntent (checkPiOf), so a payment its own check paid that something else recorded first (a chargeback won as
+ * the bank approved it, …) reads as paid, never "You already confirmed this payment.".
+ */
+export async function finishPayment<T = Record<string, unknown>>(paymentId: string, simulate?: Simulate, pi?: string): Promise<T> {
   try {
-    return await api<T>("/api/payments/confirm", { paymentId, ...(simulate ? { simulate } : {}) });
+    return await api<T>("/api/payments/confirm", { paymentId, ...(simulate ? { simulate } : {}), ...(pi ? { pi } : {}) });
   } catch (e) {
     throw new Error((e as Error).message);
   }
 }
+
+/**
+ * (Owner, Nov 5, §210) The line a finish adds under the press's success line when a chargeback it repaid was won as the bank approved it and refunded at once:
+ * "Your bank's chargeback on your $10.00 Pay for Ana Silva's written answers on “Harbor Run” was reversed: $25.00 refunded."; "" otherwise.
+ */
+export const refundLineOf = (r: unknown) => { const l = (r as { refundLine?: unknown } | null)?.refundLine; return typeof l === "string" ? l : ""; };
 
 /** (§158) What the open bank check asks about: a payment's (or a chargeback hold's reservation's) check, or Verify a card's SetupIntent. */
 export type PeekTarget = { paymentId: string; /** (§171 B4) the window's own PaymentIntent */ pi?: string } | { setupIntent: string };
