@@ -92,7 +92,8 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
           <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
         </div>
       )}
-      <CharacterCount value={value} count={withoutAttachmentMarkers(value).length} minCount={chars} min={min ? ANSWER_MIN_CHARS : 0} max={WRITTEN_MAX_CHARS} required={required || short} data-answer-count={chars} />
+      {/* (Owner, Nov 4, §189) An addition's box (`alone`): this is its one counter ("N / 20,000", the addition's own text); the add form draws no second one. */}
+      <CharacterCount value={value} count={withoutAttachmentMarkers(value).length} minCount={chars} min={min ? ANSWER_MIN_CHARS : 0} max={WRITTEN_MAX_CHARS} required={required || short} data-answer-count={chars} {...(alone ? { "data-written-count": "" } : {})} />
     </div>
   );
 }
@@ -359,7 +360,6 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
               </>
             )}
             {keep.restored && text !== "" && !full && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setText("")} />}
-            {!full && <p className={`text-xs ${length > WRITTEN_MAX_CHARS ? "text-rose-300" : "text-slate-500"}`} data-written-count="">{length.toLocaleString("en-US")} / {WRITTEN_MAX_CHARS.toLocaleString("en-US")}</p>}
             {canSend && !full && lines.map((l) => <p key={l} className="note" data-above-send="">{l}</p>)}
           </div>
         </details>

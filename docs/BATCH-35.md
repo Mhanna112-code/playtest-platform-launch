@@ -3392,3 +3392,21 @@ QuestionTitle structure; `el` not `clone`), `batch35-added-per-question` (`pl-2 
 
 ### Tests
 New `tests/anything-else-cancel-188.test.ts`. A: the fold drawn last with the notes as its original, the old untied and the new additions dated and in order, on an empty part too; the threads and keys; By question's last entry dated; the tester's row and slot, at 10 no button; adding there (stored key, live line, bell, own line, drawing, its kept draft); counts toward 10 (the 11th refused there and under a question); 20,001 refused on the first press, 20,000 goes; the stop-once for the developer's Pay more on the part (forced, Alerts Off), then goes. B: the waiting row names the own press and the box shows Cancel this check next to the line; the cancel (Stripe first, cancelled, §170's line, the box un-greyed, nothing waiting); one that already went through is paid once; a charge made while away shows Confirm with your bank and no Cancel; the own check is in none of the Confirm lists. Updated: `batch35-added-per-question` (Anything else instead of the general fold; By question dated; the "Work sent" body), `batch35-parts-fold` (the slot), `by-question`, `batch35-bank-box-call` (`kind`, the greying), `batch35-small-ui` and `batch24` (the shared cancel; the anchor prop).
+
+## §189 One counter in the add box; the Pay more Note fits a phone; the page never wider than the screen (owner, Nov 4)
+
+- **"Add to this answer" counted twice.** Before: the open box (a question's, and Anything else's: the same form) showed "0 / 20,000" twice: the editor's own
+  counter and a second line of the form's. After: once, the editor's own (right under the box; red over the limit as before). It counts the addition alone
+  (§186) and carries the `data-written-count` hook; the answers form keeps its own total counter. (`SessionActions.tsx`: AnswerBox `alone`, WrittenAddForm)
+- **The Note in a Pay more box ran past the box on a phone.** Before: the Note's block had a 14rem minimum, wider than a Pay more box nested in a tester's row
+  at 375px (6px past the box's edge). After: it fills the box and never more (`w-full min-w-0 max-w-full`, `data-pay-note`); a long name in "Note to <name>"
+  wraps. Checked at 375px: the textarea inside the box, no sideways scroll. (`PayBox.tsx`)
+- **A long name made the whole page scroll sideways (a §187 regression).** §187's fitted names (whole, cut only when the row is full) are one unbroken line,
+  and the app's `<main>` (a flex column item, `mx-auto`) took the width of its widest unbreakable content: with a long tester name, the test page at 375px was
+  714px wide (Needs you and Requests to you are open at first). After: main is capped at the screen (`max-w-[min(72rem,100%)]`, `data-app-main`; 72rem as
+  before on wide screens), so the rows get the screen's width and the names are cut there ("Maximilianaalexandrab… · 2 things"). Checked at 375px with every
+  drop-down open: nothing past the screen. long-text-layout's old rule ("long names wrap") follows §187 #3 now (cut when full), with this cap.
+- **Merge check (no behaviour change):** four tests read source that §187 changed: `batch17-find` (the request's anchor is on its first time row, §187 #10;
+  the bell's `#req-<id>` still lands in Requests to you, inside the tester's drop-down: now rendered and checked), `batch20` §28 (`LongText inline`, §187 #6),
+  `batch35-answering-press` (`NameLink fit`, §187 #3), `long-text-layout` (above).
+- Tests: new `tests/ui-fixes-189.test.ts`; updated the four above, `batch35-added-per-question` and `batch20` §1 (the counter's hook).

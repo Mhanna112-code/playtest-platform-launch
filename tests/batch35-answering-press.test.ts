@@ -77,8 +77,9 @@ describe("batch 35 §79 (extra): the developer's call rows don't repeat the test
   it("the name heading shows only when a row doesn't start with the name", async () => {
     const fs = await import("node:fs");
     const src = fs.readFileSync(require("node:path").resolve(__dirname, "../src/app/app/tests/[id]/DevCallPanel.tsx"), "utf8");
-    expect(src).toContain("{!rowsNamed(t) && <h3><NameLink text={t.name} href={t.testerHref} /></h3>}"); // (Nov 3) the name is cut (Cut); (§166) the green profile link
-    expect(src).toContain("<NameLink text={t.name} href={t.testerHref} /> · {s.label}");
+    // (Nov 3) the name is cut (Cut); (§166) the green profile link; (§187 item 3) the whole name, cut only when the row is full (`fit`, the heading `min-w-0`)
+    expect(src).toContain("{!rowsNamed(t) && <h3 className=\"min-w-0\"><NameLink fit text={t.name} href={t.testerHref} /></h3>}");
+    expect(src).toContain("<NameLink fit text={t.name} href={t.testerHref} /> · {s.label}");
     expect(src).toContain("const rowsNamed = (t: DevTester) => t.calls.length > 0 || t.sets.length > 0;"); // (§181) the waiting requests left this panel
   });
 });

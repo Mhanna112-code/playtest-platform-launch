@@ -204,8 +204,9 @@ export function PayBox(p: {
         {roomText && <span className="pb-2 text-sm text-slate-400" data-pay-room="">{roomText}</span>}
       </div>
       {overText && <p className="err-field" data-over-cap="">{overText}</p>}
-      <div className="min-w-[14rem]">
-        <label className={`label ${needsReason ? "req" : ""}`} htmlFor={`why-${p.id}`}>Note to {p.name}{needsReason ? "" : " (optional)"}</label>
+      {/* (Owner, Nov 4, §189) The note fills the box's width and never more: its old 14rem minimum ran past a Pay more box's right edge on a phone. */}
+      <div className="w-full min-w-0 max-w-full" data-pay-note="">
+        <label className={`label [overflow-wrap:anywhere] ${needsReason ? "req" : ""}`} htmlFor={`why-${p.id}`}>Note to {p.name}{needsReason ? "" : " (optional)"}</label>
         <textarea id={`why-${p.id}`} className="input min-h-[2.75rem]" rows={2} maxLength={LIMITS.reason} data-match="why you're paying" data-red-msg={reasonMissing ? (cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`) : undefined} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={listed ? "What it's missing, or a thank-you" : "A thank-you, or what the pay is for"} />
         <CharacterCount value={reason} min={needsReason ? 5 : 0} max={LIMITS.reason} required={needsReason} data-note-count="" />
         {reasonMissing && <p className="err-field" data-reason-needed="">{cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`}</p>}

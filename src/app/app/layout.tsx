@@ -118,7 +118,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         </p>
       )}
       {/* (Batch 34 §5) A page of the other side renders only its switch notice itself (components/OtherSideNotice): the layout stays put while moving between pages. */}
-      <main className="mx-auto max-w-6xl space-y-6 px-4 py-8">{children}</main>
+      {/* (Owner, Nov 4, §189) Never wider than the screen: the body is a flex column, so main is as wide as its widest unbreakable content; a whole name cut
+          only when its row is full (§187, NameLink fit) is one unbroken line, and it made main (and the page) scroll sideways on a phone. Capped at the screen,
+          the rows get the screen's width and the names are cut there. */}
+      <main className="mx-auto max-w-[min(72rem,100%)] space-y-6 px-4 py-8" data-app-main="">{children}</main>
       <SessionWatch userId={u.id} name={name} side={side} restriction={restrictionKey(u, side)} />
       <TimeZoneSync stored={u.timeZone} />
       <HashJump />

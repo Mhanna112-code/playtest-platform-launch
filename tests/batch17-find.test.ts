@@ -1,6 +1,8 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import React, { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { fmtDate } from "@/lib/format";
 import { startHold } from "@/lib/server/holds";
@@ -13,11 +15,16 @@ import { pressLabelOf } from "@/lib/pressLabels";
 import { POST as invitePOST } from "@/app/api/invites/[id]/route";
 import { POST as testsPOST } from "@/app/api/tests/route";
 import { GET as pulseGET } from "@/app/api/pulse/route";
+import { CallRequestsBox } from "@/app/app/tests/[id]/CallRequestsBox";
 import { json, makeUser, req, uniq } from "./helpers";
 import { act, atHours, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
 
+// The request boxes' presses (usePress) use the router.
+vi.mock("next/navigation", () => ({ usePathname: () => "/app/tests/test", useRouter: () => ({ refresh() {}, push() {}, replace() {} }), useSearchParams: () => new URLSearchParams() }));
+
 // Batch 17 sections 4, 8, 9 and 13.
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
+(globalThis as unknown as { React: typeof React }).React = React;
 const later = () => new Promise((r) => setTimeout(r, 30));
 const noThanks = (id: string, cookie: string, body: Record<string, unknown> = {}) => invitePOST(req(`/api/invites/${id}`, { cookie, body }), { params: Promise.resolve({ id }) }).then(json);
 const texts = (r: { body: { error?: { code?: string; changes?: { text: string }[] } } }) => (r.body.error?.code === "stop_once" ? r.body.error.changes!.map((c) => c.text) : []);
@@ -94,7 +101,8 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
     expect((await noThanks(x.inv.id, x.ana.cookie)).body.error).toMatchObject({ code: "invite_closed", message: "This invite is no longer open." });
   });
 
-  it("the bell line \"<tester> asked for a call\" opens the Live session's Call requests panel at that request", async () => {
+  // (Owner, Nov 4, §185) The requests left the Live session for the page's own boxes: a tester's request is in "Requests to you", inside her drop-down.
+  it("the bell line \"<tester> asked for a call\" opens Requests to you at that request, inside the tester's drop-down", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     expect((await sact(sessionId, "request-time", tester.cookie, { startsAt: atHours(50), seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -102,9 +110,25 @@ describe("No thanks on an invite follows batch 16 section 32 (section 4)", () =>
     const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, groupKey: "callrequests" } });
     expect(n.text).toMatch(/^Ana Silva asked for a call: /);
     expect(n.link).toBe(`/app/tests/${testId}#req-${r.id}`);
-    // The same highlight as the Needs you row: the panel's row id, opened by the page's hash jump.
-    expect(src("components/CallRequestsPanel.tsx")).toContain("id={`req-${r.id}`}");
+    // The same highlight as the Needs you row: the panel's row id, opened by the page's hash jump. (§187 item 10) One row per time: the anchor is on the first.
+    expect(src("components/CallRequestsPanel.tsx")).toContain("id={i === 0 ? `req-${r.id}` : undefined}");
     expect(src("app/app/layout.tsx")).toContain("<HashJump />");
+    // The target sits in "Requests to you" (never "Your requests"), inside her drop-down (call-requests-person-<session>), so the jump opens the box and her
+    // drop-down (jumpTo and HoldFold open every fold around it) and lands on the row.
+    const html = renderToStaticMarkup(createElement(CallRequestsBox, { testId, seenAt: seen(), leadMinutes: 0, requests: [
+      { id: r.id, contractId: sessionId, tester: "Ana Silva", asker: "Ana Silva", rows: [{ startsAt: atHours(50), repeat: "once", count: 1 }], minutes: 30, mine: false, rate: "Contract $31/h" },
+      { id: "mine-1", contractId: sessionId, tester: "Ana Silva", asker: "you", rows: [{ startsAt: atHours(60), repeat: "once", count: 1 }], minutes: 30, mine: true, rate: "Contract $31/h" },
+    ] }));
+    const toYou = html.indexOf("data-requests-to-you"), yours = html.indexOf("data-your-requests");
+    expect(toYou).toBeGreaterThan(-1);
+    expect(yours).toBeGreaterThan(toYou);
+    const target = html.indexOf(`id="req-${r.id}"`), person = html.indexOf(`id="call-requests-person-${sessionId}"`);
+    expect(html.split(`id="req-${r.id}"`)).toHaveLength(2);
+    expect(person).toBeGreaterThan(toYou);
+    expect(target).toBeGreaterThan(person);
+    expect(target).toBeLessThan(yours);
+    expect(html.slice(person, target)).not.toContain("</details>");
+    expect(src("lib/markJump.ts")).toContain("if (p instanceof HTMLDetailsElement && !p.open) p.open = true;");
   });
 });
 

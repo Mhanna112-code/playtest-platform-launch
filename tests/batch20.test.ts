@@ -91,7 +91,7 @@ describe("batch 20 section 1: more than 3 questions sit in a scroll box", () => 
     const box = form.indexOf('<QuestionBox count={questions.length} size="form"');
     expect(box).toBeGreaterThan(0);
     expect(form.indexOf("</QuestionBox>")).toBeLessThan(form.indexOf('htmlFor="notes"'));
-    expect(form.indexOf("</QuestionBox>")).toBeLessThan(form.indexOf("data-written-count"));
+    expect(form.indexOf("</QuestionBox>")).toBeLessThan(form.indexOf('data-written-count=""')); // the form's total (§189: an addition's box carries the hook on its editor's counter, above)
     expect(form).toContain('<div key={i} data-question="">');
     expect(src("components/FieldChecks.tsx")).toContain("if (!scrollQuestionBoxTo(el)) el.scrollIntoView?.(");
     // Post and Edit are unchanged.
@@ -1037,7 +1037,8 @@ describe("batch 20 section 28: Send isn't refused when the required question is 
     const form = src("app/app/sessions/[id]/SessionActions.tsx");
     expect(form).toContain('const answers = questions.map((_, i) => answers0[i] ?? "");');
     expect(form).toContain("(missingAt != null ? document.getElementById(`a${missingAt}`) : null)");
-    // (Batch 26 sections 11 and 14) The "*" right after the question's words, only on a Required question. (Owner, Nov 4, §182) The question folds the shared way (LongText, 2 lines).
-    expect(form).toContain('<label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>');
+    // (Batch 26 sections 11 and 14) The "*" right after the question's words, only on a Required question. (Owner, Nov 4, §182) The question folds the shared way (LongText, 2 lines);
+    // (§187 item 6) `inline`: Show more beside its last line, Show less after its last word.
+    expect(form).toContain('<label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>');
   });
 });

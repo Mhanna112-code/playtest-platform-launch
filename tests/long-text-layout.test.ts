@@ -65,11 +65,18 @@ describe("buttons drop below instead of squeezing; nothing reaches past the scre
     }
   });
 
-  it("cards and rows may shrink below their longest title, and long names wrap inside them", () => {
+  it("cards and rows may shrink below their longest title, and long names wrap (or, in §187's rows, are cut to fit) inside them", () => {
     expect(src("app/app/find/page.tsx")).toContain('<li key={t.id} className="min-w-0">');
     expect(src("app/app/page.tsx")).toContain('<li key={t.id} className="min-w-0">');
     expect(src("app/app/messages/page.tsx")).toContain('<p className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-medium text-white">');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain('<span className="min-w-0 [overflow-wrap:anywhere]">');
+    // (Owner, Nov 4, §187 item 3) Needs you's person row no longer wraps the name: the whole name, cut with "…" only when the row is full. Every box from the
+    // row down to the name may shrink (min-w-0) and the name never grows past it (max-w-full, truncate), so it still never reaches past the screen.
+    expect(src("app/app/tests/[id]/page.tsx")).toContain('summary={<span className="flex min-w-0 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span>');
+    expect(src("components/Cut.tsx")).toContain('<span className={`inline-block min-w-0 max-w-full truncate align-bottom ${className}`} data-cut-fit={kind}');
+    expect(src("components/Cut.tsx")).toContain('className={`relative z-10 ${fit ? "inline-block min-w-0 max-w-full align-bottom " : ""}${className}`}');
+    expect(src("components/HoldFold.tsx")).toContain('className = "min-w-0 rounded-xl border border-white/10 p-2"');
+    // (§189) An unbroken line (a fitted name) no longer widens the page: the app's main is never wider than the screen.
+    expect(src("app/app/layout.tsx")).toContain('<main className="mx-auto max-w-[min(72rem,100%)] space-y-6 px-4 py-8" data-app-main="">');
     expect(src("components/Formatted.tsx")).toContain('className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]"');
     // The avatars' hover cards open from the row's left edge on a phone (under the avatar from sm up).
     expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain('<span className="group inline-block sm:relative">');
