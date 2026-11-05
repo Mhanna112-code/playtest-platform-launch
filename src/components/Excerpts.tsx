@@ -15,7 +15,7 @@ import { allKept, deletedRange, deleteFrom, excerptOf, GAP, keptChars, runsOf, s
 
 const MIN = 10, MAX = 500;
 
-/** (§196) The trim box: about 5 lines, scrolling inside; (owner, Nov 5) no "Open the box taller" button: its corner drags it taller, up to 60% of the screen. */
+/** (§196) The trim box: about 5 lines, scrolling inside; (owner, Nov 5) no "Open the box taller" button: its corner drags it taller, up to the text boxes' height cap. */
 export const TRIM_BOX_SHUT = "calc(5lh + 1rem)";
 
 /**
@@ -104,7 +104,7 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
           </div>
           {/* (§196) Its own limiter (data-typing-limit): it never takes more than the answer, so the paste note "Cut to the N-character limit." never shows here. */}
           <label className="label req" htmlFor={`excerpt-text-${submissionId}`}>The excerpt (delete what you don&apos;t want)</label>
-          <textarea id={`excerpt-text-${submissionId}`} ref={box} className="input block min-w-0 max-w-full resize-y overflow-y-auto" style={{ height: TRIM_BOX_SHUT, maxHeight: "60vh" }}
+          <textarea id={`excerpt-text-${submissionId}`} ref={box} className="input block min-w-0 max-w-full resize-y overflow-y-auto" style={{ height: TRIM_BOX_SHUT }}
             data-typing-limit="" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} data-excerpt-box="" data-match="an excerpt is|trim the excerpt"
             value={shown} onChange={change} onDrop={(e) => e.preventDefault()} />
           <div className="flex flex-wrap items-center gap-2">

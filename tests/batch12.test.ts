@@ -119,8 +119,8 @@ describe("batch 12 item 1: a developer can always delete their account", () => {
 describe("batch 12 item 3: Pay more on every paid piece", () => {
   it("written answers, recordings and calls, listed or not", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain('<PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="submission"');
-    expect(page).toContain('<PayBox more={{ testId: t.id, contractId: c.id }} owes={owesNow} kind="call"');
+    expect(page).toContain('<PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="submission"');
+    expect(page).toContain('<PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call"');
   });
 });
 
