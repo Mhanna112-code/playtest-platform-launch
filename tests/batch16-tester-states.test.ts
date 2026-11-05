@@ -180,7 +180,8 @@ describe("a suspended tester's limited view of tests they were removed from (sec
     expect(page).toContain('const limited = !!u.testerSuspendedAt && c.status !== "working" && c.endKind === "suspended";');
     expect(page).toContain('if (u.testerSuspendedAt && !limited) redirect("/app");');
     expect(page).toContain('{limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}');
-    expect(page).toContain("{!limited && (c.calls.length > 0 || canRequestCall || pendingReqs.length > 0) && (");
+    // (Owner, Nov 5, §209) The limited view keeps the Live session for its past calls only (Had / Cancelled: the Call history card is gone).
+    expect(page).toContain("{((!limited && (c.calls.length > 0 || canRequestCall || pendingReqs.length > 0)) || overCalls.length > 0) && (");
     expect(page).toContain('{(rateState.kind === "open" || rateState.kind === "disabled") && !meOff && ('); // (batch 17 section 2) no Rate there
     expect(page).toContain("const canChoose = !meOff;"); // (batch 17 section 10) no Charge / Let it go there
     expect(page).toContain("off={meOff && !limited}");
