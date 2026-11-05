@@ -4039,3 +4039,42 @@ changed: each fix makes the app do what its section already says.
   never let go of, a Pay cancelled by a hold starting.
 - **Screenshots.** `playtest-lite-evidence/rec-fixes-nov5` (captions.json; own server on 3499, a throwaway schema): the Alerts menu open on the test page at
   1280 and 375; the refusal line kept in "Requests to you" after Accept on Ana Silva's withdrawn request from an older page.
+
+## §210 Your own bank check reads as paid even when something else recorded it first (owner, Nov 5)
+
+- **Before (recording R10c, Nov 4).** The bank approved Pay what you owe's $52.00 just before a chargeback in it was won. The win's handler (§171 B6 b) recorded
+  the payment and refunded the won part ($25.00) before the window's own finish reached the app; that finish then got `409 confirmed` and the page read "Your Pay
+  what you owe didn't go through: You already confirmed this payment." although THIS press had paid. The same wrong line came whenever something else recorded the
+  payment a moment before the window's finish: a chargeback won or a new one opened (§171 B6), a hold starting (B5), the team's pause (§172), a new card (§148),
+  the clocks or the heartbeat (§160). (This app has no `payment_intent.succeeded` webhook and the peek is read-only, so those two never record a payment; the rule
+  covers whatever records it.)
+- **Now.** Every finish of an inline bank check sends the window's own PaymentIntent (`pi`, read from its client secret with `checkPiOf`, as the peek does since
+  §171 B4; `finishPayment(paymentId, simulate, pi)`, passed by `useBankCheck`). When the payment is already recorded as paid (`charged`, `not_set_up`, `bundled`)
+  and the PaymentIntent that paid it is that `pi`, the finish answers as a success (`{ done, paid, status, amountCents, ownCheck }`), and the page shows its normal
+  success line: "Paid $52.00, thank you" (Pay what you owe), "Paid $10.00 to Ana Silva." / "Paid $1.00 more to Ana Silva." (Pay, Pay more), "Your bank confirmed
+  it: the payment went through." (Confirm with your bank), Confirm all's confirmed line.
+  - When a chargeback the payment repaid was won and refunded straight away, the answer carries one more line, shown under the success line
+    (`refundLine`, `[data-own-check-refund]`): "Your bank's chargeback on your $10.00 Pay for Ana Silva's written answers on “Harbor Run” was reversed: $25.00
+    refunded." The part is named exactly as What you've paid's refund line names it (§192, `paymentRows.wonRefundSaid`; "$50.00 of your $444.67 Pay for …" for a
+    partial reversal). Only refunds that reached the card (`refunded`) are said.
+  - A finish landing while the recorder is half way (the check let go of, the payment not recorded yet) waits for it (up to `SETTLE_MS`, as the peek does since
+    §207) and answers from it: paid, or cancelled.
+- **The refusal stays** (unchanged lines) when:
+  - the check was finished in ANOTHER tab: "You already confirmed this payment in another tab at 3:20 PM." (§163). The finish that records a payment keeps which tab
+    it came from (AppState `check-finished:<payment id>`, `{ tab, at }`, first one wins: the finish route's own claim, its Cancel finding it had gone through, or
+    the first window answered paid by this rule). Any finish from another tab reads that line, with or without the same `pi`;
+  - the payment was paid by a DIFFERENT PaymentIntent (e.g. an item's own old window after Confirm all paid it), or the finish sends no `pi` (a leave beacon, an
+    old page): "You already confirmed this payment." (§157 item 7);
+  - the check was cancelled before it went through: "This payment was cancelled: nothing was charged." (CONFIRM_CANCELLED).
+  - A subscription's first payment is left as it was.
+- **Nothing twice.** The success answer records and charges nothing (the payment was already recorded once by whatever recorded it) and is marked `repeated`, so
+  the finish route writes no other-tab line for it. A second finish from the same window answers the same.
+- **Code.** `confirm.ts` (`own`: the window's `pi`, `midEnd` wait, `PAID_STATES`, `finishedBy` / `markFinished`, `otherTabLine`, `wonRefundLines`; `confirmFinish`
+  records the finishing tab), `paymentRows.ts` (`wonRefundSaid`), `bankConfirm.ts` (`finishPayment`'s `pi`, `refundLineOf`), `BankCheck.tsx` (sends `pi`),
+  `OwedBox.tsx`, `ConfirmAll.tsx`, `BankWaiting.tsx` (the refund line). No migration.
+- **Tests.** New `tests/own-check-paid-210.test.ts`: (a) Pay what you owe recorded first (a recorder's claim and finish; a new chargeback; the recorder half way)
+  → paid, recorded and charged once, no line written; (b) R10c: won after the bank approved it → paid with the refund line, the part named as the refund line's;
+  won before → still cancelled; (c) after the window answered paid, another tab's finish (no `pi`, the same `pi`, another `pi`) → "… in another tab at …"; nobody's
+  window finished it → the plain line without this check's `pi`; the normal path then another tab → "… in another tab …"; (d) Pay (a hold starting), Pay more and
+  Confirm with your bank (a new card), Confirm all (a new card) → paid; an item's own old window after Confirm all paid it → the plain line; the page sends `pi`.
+  Updated `tests/pay-matrix-2.test.ts` §159 R10 (a): the page's own finish with its `pi` reads as paid (without it, the plain line).

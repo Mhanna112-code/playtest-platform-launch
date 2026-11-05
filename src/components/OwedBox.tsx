@@ -6,7 +6,7 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError, errOf } from "@/lib/client";
 import { mergeChanges } from "@/lib/live";
 import { money } from "@/lib/format";
-import { type BankAction } from "@/lib/bankConfirm";
+import { refundLineOf, type BankAction } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, OWED_BANK_WAITING, OWED_HOW, PAY_TICK_CENTS, RESERVE_EXPIRED, reservedAddedLine, reservedLine } from "@/lib/rules";
 import { refusalLine } from "@/lib/pressLabels";
@@ -70,6 +70,8 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
   const fin = useFinished(() => setBusy(false));
   const done = fin.line;
   const [bankNote, setBankNote] = useState("");
+  // (Owner, Nov 5, §210) Its own check paid, and a chargeback it repaid was won meanwhile and refunded: one more line under "Paid $52.00, thank you".
+  const [refundNote, setRefundNote] = useState("");
   // (Batch 17 §11) The bank's check opens inline, under Pay what you owe (one after another when several need it).
   const bank = useBankCheck();
   const [allLines, setAllLines] = useState(false);
@@ -173,9 +175,12 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
             // (Batch 11) Payments the bank wants confirmed: one check each, inline under the button; any it refused stay owed (nothing was charged for them).
             let refused = "";
             setBankNote("");
+            setRefundNote("");
+            const refunds: string[] = [];
             for (const a of r.confirm ?? []) {
-              try { await bank.check(a); } catch (e) { refused = (e as Error).message; }
+              try { refunds.push(refundLineOf(await bank.check(a))); } catch (e) { refused = (e as Error).message; }
             }
+            setRefundNote(refunds.filter(Boolean).join(" "));
             if (refused) {
               setBankNote(refused);
               setBusy(false);
@@ -223,6 +228,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {bankNote && <p className="info" data-bank-not-confirmed="">{refusalLine("Pay what you owe", bankNote)}</p>}
       {done && <p className="ok">{done}</p>}
+      {done && refundNote && <p className="ok" data-own-check-refund="">{refundNote}</p>}
       {failing.length > 0 && (
         <p className="err">
           Still declined: {failing.join("; ")}. Your tests stay paused until everything is paid. <a href="/app/payments#card">Update your card</a> and try again.

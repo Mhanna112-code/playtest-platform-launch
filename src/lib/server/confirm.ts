@@ -288,16 +288,82 @@ async function startable(devId: string, paymentId: string, tab = "") {
   return p;
 }
 
-async function own(devId: string, paymentId: string, tab = "") {
-  const p = await db.payment.findUnique({ where: { id: paymentId } });
+/**
+ * (Owner, Nov 5, batch 35 §210) Which tab's finish recorded a bank check's payment (the finish route's own claim, or its Cancel finding it had gone through), kept
+ * once per payment: `{ tab, at }`. A later finish from ANOTHER tab reads "You already confirmed this payment in another tab at 3:20 PM."; the window whose own
+ * check paid it (its `pi`) reads as paid. The first claim wins (the key is unique); a finish with no tab (a leave beacon) is kept as "".
+ */
+const FINISHED_KEY = "check-finished:";
+async function markFinished(paymentId: string, tab: string) {
+  await db.appState.create({ data: { key: FINISHED_KEY + paymentId, value: JSON.stringify({ tab, at: new Date().toISOString() }) } }).catch(() => null);
+}
+async function finishedBy(paymentId: string): Promise<{ tab: string; at: Date } | null> {
+  const row = await db.appState.findUnique({ where: { key: FINISHED_KEY + paymentId } });
+  if (!row) return null;
+  try {
+    const v = JSON.parse(row.value) as { tab?: unknown; at?: unknown };
+    const at = typeof v.at === "string" ? new Date(v.at) : null;
+    return at && !Number.isNaN(at.getTime()) ? { tab: typeof v.tab === "string" ? v.tab : "", at } : null;
+  } catch {
+    return null;
+  }
+}
+const otherTabLine = async (devId: string, at: Date) =>
+  `You already confirmed this payment in another tab at ${fmtTimeIn(at, (await db.user.findUnique({ where: { id: devId }, select: { timeZone: true } }))?.timeZone ?? null)}.`;
+
+const PAID_STATES = ["charged", "not_set_up", "bundled"];
+/** (§210) Let go of (actionPi cleared) but not recorded yet: whatever let go of it (a win's handler, a hold starting, a new card…) is finishing or cancelling it. */
+const midEnd = (p: { actionPi: string | null; status: string }) => !p.actionPi && ["needs_action", "needs_confirmation", "paying"].includes(p.status);
+
+/**
+ * (§210) The won chargebacks refunded out of this payment right away (a chargeback it repaid won as the bank approved it, §171 B6 b): "Your bank's chargeback on
+ * your $10.00 Pay for Ana Silva's written answers on “Harbor Run” was reversed: $25.00 refunded." (one sentence each), or "".
+ */
+async function wonRefundLines(p: { id: string }) {
+  const rows = await db.payment.findMany({ where: { OR: [{ id: p.id }, { coveredById: p.id }], kind: "chargeback", repaysId: { not: null } } });
+  if (!rows.length) return "";
+  const done = new Set((await db.paymentRefund.findMany({ where: { paymentId: { in: rows.map((r) => r.id) }, reason: "won", status: "refunded" }, select: { id: true } })).map((r) => r.id));
+  if (!done.size) return "";
+  const { refundLines, wonRefundSaid } = await import("./paymentRows");
+  return [...(await refundLines(rows)).values()].flat().filter((l) => done.has(l.id)).map(wonRefundSaid).filter(Boolean).join(" ");
+}
+
+async function own(devId: string, paymentId: string, tab = "", body: Record<string, unknown> = {}) {
+  let p = await db.payment.findUnique({ where: { id: paymentId } });
+  // (Owner, Nov 5, §210) The window's own check: its PaymentIntent, read from its client secret (bankConfirm.checkPiOf), sent with its finish.
+  const pi = typeof body.pi === "string" ? body.pi : "";
+  const mine = (x: { stripePaymentIntentId: string | null; kind: string }) => !!pi && x.stripePaymentIntentId === pi && x.kind !== "subscription";
+  // (§210) Its own check let go of a moment ago by whatever is recording (or cancelling) it: wait for that to end (as the peek does, §207), then answer from it.
+  if (p && p.developerId === devId && mine(p) && midEnd(p)) {
+    const until = Date.now() + (await import("./bankPeek")).SETTLE_MS;
+    while (p && midEnd(p) && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, 100));
+      p = await db.payment.findUnique({ where: { id: paymentId } });
+    }
+  }
   if (p && p.developerId === devId && !p.actionPi) await refusePaused(p);
   if (p && p.developerId === devId && !p.actionPi) await refuseInAll(p);
   // (§148) A press's check a new card cancelled (an old tab finishing the bank's page): said plainly, nothing was charged.
   if (p && p.developerId === devId && !p.actionPi && p.status === "cancelled") throw new HttpError(409, "cancelled", CONFIRM_CANCELLED);
   // (Owner, Nov 3, §157) Finished in another tab first (the bank's page done in both): said plainly, nothing is charged again.
-  if (p && p.developerId === devId && !p.actionPi && (p.status === "charged" || p.status === "not_set_up" || p.status === "bundled")) throw new HttpError(409, "confirmed", await alreadyConfirmedLine(devId, p.id, tab));
+  if (p && p.developerId === devId && !p.actionPi && PAID_STATES.includes(p.status)) {
+    // (Owner, Nov 5, §210) Unless it is THIS window's own check that paid it, recorded a moment before its finish by something else (a chargeback won as the bank
+    // approved it, a new chargeback, a hold starting, the team's pause, a new card, the clocks): this press paid, so it reads as paid ("Paid $52.00, thank you", with
+    // any refund the win made). The refusal stays for a check finished in another tab (§163's line), a payment paid by another check, and a check cancelled before
+    // it went through (above).
+    const by = await finishedBy(p.id);
+    if (by && by.tab && by.tab !== tab) throw new HttpError(409, "confirmed", await otherTabLine(devId, by.at));
+    const line = await alreadyConfirmedLine(devId, p.id, tab);
+    if (line === ALREADY_CONFIRMED && mine(p)) {
+      if (!by) await markFinished(p.id, tab);
+      const refunded = await wonRefundLines(p);
+      // `repeated`: nothing new is recorded here, so the route logs no other-tab line for it (nothing is ever recorded or charged twice).
+      return { paid: { done: true as const, paid: true, repeated: true, ownCheck: true, status: p.status === "bundled" ? "charged" : p.status, amountCents: p.amountCents, ...(refunded ? { refundLine: refunded } : {}) } };
+    }
+    throw new HttpError(409, "confirmed", line);
+  }
   if (!p || p.developerId !== devId || !p.actionPi) throw new HttpError(404, "not_found", "There's nothing to confirm here.");
-  return p;
+  return { p };
 }
 
 /**
@@ -415,7 +481,10 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
     const status = reservation.stripePaymentIntentId ? await piStatus(reservation.stripePaymentIntentId, body.simulate) : body.simulate === "succeeded" ? "requires_capture" : "canceled";
     return cb.reservationChecked(dev.id, paymentId, status === "requires_capture" || status === "succeeded");
   }
-  const p = await own(dev.id, paymentId, typeof body.tab === "string" ? body.tab : "");
+  const tab = typeof body.tab === "string" ? body.tab : "";
+  const mine = await own(dev.id, paymentId, tab, body);
+  if (mine.paid) return mine.paid;
+  const p = mine.p!;
   let status = await piStatus(p.actionPi!, body.simulate);
   // (Owner, Nov 3, §159 R4) Right after Complete Stripe can still be "processing": its final answer is waited for (a few seconds), never read as "nothing was charged".
   for (let i = 0; status === "processing" && i < 10; i++) {
@@ -431,7 +500,10 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
     if (p.status === "needs_action" || p.status === "paying") {
       await release(p.id);
       const now = await db.payment.findUnique({ where: { id: p.id }, select: { status: true, amountCents: true } });
-      if (now && ["charged", "not_set_up", "bundled"].includes(now.status)) return { done: true, status: now.status === "bundled" ? "charged" : now.status, amountCents: now.amountCents, paidAtCancel: true };
+      if (now && PAID_STATES.includes(now.status)) {
+        await markFinished(p.id, tab); // (§210) recorded by this tab's finish
+        return { done: true, status: now.status === "bundled" ? "charged" : now.status, amountCents: now.amountCents, paidAtCancel: true };
+      }
     }
     // (§160) A charge made while the developer was away (a tester's Charge, a decision, a retry): Cancel (or leaving the page) never cancels it (that would count as
     // declined and start a hold): it keeps waiting for the bank with its own date.
@@ -448,6 +520,7 @@ export async function confirmFinish(dev: { id: string; email: string }, paymentI
   // (Batch 15 section 41, L3) A doubled Confirm finishes it once: the first press claims it.
   const claimed = await db.payment.updateMany({ where: { id: p.id, actionPi: p.actionPi }, data: { actionPi: null } });
   if (claimed.count !== 1) return { done: true, repeated: true };
+  await markFinished(p.id, tab); // (§210) which tab's finish recorded it
   return finish(p.id);
 }
 

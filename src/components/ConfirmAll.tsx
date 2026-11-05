@@ -6,7 +6,7 @@ import { useBankCheck } from "@/components/BankCheck";
 import { api, ApiError, errOf } from "@/lib/client";
 import { mergeChanges } from "@/lib/live";
 import { useFinished } from "@/lib/usePress";
-import { type BankAction } from "@/lib/bankConfirm";
+import { refundLineOf, type BankAction } from "@/lib/bankConfirm";
 import { CANCEL_CHECK, OVER_PAY_TICK_LINE, PAY_TICK_CENTS } from "@/lib/rules";
 import { ALL_BACK, CONFIRM_ALL, allConfirmedLine, allWaitingLine, confirmAllLabel } from "@/lib/confirmAllText";
 import { refusalLine } from "@/lib/pressLabels";
@@ -28,6 +28,8 @@ export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt: rendered = 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [note, setNote] = useState("");
+  // (Owner, Nov 5, §210) Its own check paid, and a chargeback it repaid was won meanwhile and refunded: one more line under the confirmed line.
+  const [refundNote, setRefundNote] = useState("");
   const [changes, setChanges] = useState<Change[] | null>(null);
   // (§159) When the stop box last updated: the second press goes ahead only if nothing new happened on any item since.
   const [boxAt, setBoxAt] = useState("");
@@ -56,8 +58,9 @@ export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt: rendered = 
       const r = await api<{ confirm?: BankAction; n?: number; cents?: number; already?: string; line?: string }>("/api/payments/confirm-all", { seenTotalCents: shown.totalCents, seenIds: shown.ids, confirmed: changes != null, ...(seenAt ? { seenAt } : {}), ...(changes != null && boxAt ? { boxAt } : {}), ...(over ? { over200 } : {}) });
       setChanges(null);
       if (!r.confirm) return fin.finish(r.line ?? "");
+      setRefundNote("");
       try {
-        await bank.check({ ...r.confirm, cancel: "all" }); // (§160) Cancel: nothing charged, each payment keeps waiting for the bank
+        setRefundNote(refundLineOf(await bank.check({ ...r.confirm, cancel: "all" }))); // (§160) Cancel: nothing charged, each payment keeps waiting for the bank
       } catch (e) {
         // Nothing was charged: each payment is back to its own Confirm with your bank (the page redraws with them).
         setNote((e as Error).message.includes(ALL_BACK) ? (e as Error).message : `${(e as Error).message} ${ALL_BACK}`);
@@ -90,6 +93,7 @@ export function ConfirmAll({ ids, totalCents, leftOut, open, seenAt: rendered = 
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {note && <p className="info" data-bank-not-confirmed="">{refusalLine(CONFIRM_ALL, note)}</p>}
       {fin.line && <p className="ok" data-confirm-all-done="">{fin.line}</p>}
+      {fin.line && refundNote && <p className="ok" data-own-check-refund="">{refundNote}</p>}
       <Err text={err} press={CONFIRM_ALL} />
     </div>
   );

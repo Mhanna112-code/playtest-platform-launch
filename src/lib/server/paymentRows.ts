@@ -307,6 +307,17 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
  */
 export type RefundLine = { id: string; paymentId: string; amountCents: number; createdAt: Date | null; what: string; full: string; stripePaymentIntentId: string | null };
 
+const WON_HEAD = "Refunded: your bank's chargeback on ", WON_TAIL = " was reversed in your favour";
+/**
+ * (Owner, Nov 5, §210) A won chargeback's refund said under the press whose bank check paid it (a chargeback won just as the bank approved it): "Your bank's
+ * chargeback on your $10.00 Pay for Ana Silva's written answers on “Harbor Run” was reversed: $25.00 refunded." (the part named as its refund line names it);
+ * null for any other refund line.
+ */
+export function wonRefundSaid(l: Pick<RefundLine, "full" | "amountCents">) {
+  if (!l.full.startsWith(WON_HEAD) || !l.full.endsWith(WON_TAIL)) return null;
+  return `Your bank's chargeback on ${l.full.slice(WON_HEAD.length, -WON_TAIL.length)} was reversed: ${money(l.amountCents)} refunded.`;
+}
+
 /** (§192) The refund lines of these payments (repayments and raise charges), by the payment each refunds. Failed refunds aren't lines (nothing reached the card). */
 export async function refundLines(ps: (Row & { status: string; stripePaymentIntentId?: string | null; createdAt?: Date })[]): Promise<Map<string, RefundLine[]>> {
   const out = new Map<string, RefundLine[]>();
@@ -318,7 +329,7 @@ export async function refundLines(ps: (Row & { status: string; stripePaymentInte
     const o = src.repaysId ? ctx.repaid.get(src.repaysId) : undefined;
     const phrase = o ? paidPhrase(ctx, o, full) : "a payment your bank reversed";
     if (rec.reason === "lowered") return `Refunded: your bank lowered what it took back from ${phrase}: ${money(rec.fromCents ?? 0)} → ${money(rec.toCents ?? 0)}`;
-    return `Refunded: your bank's chargeback on ${o && reversedPart(o) ? `${money(reversedOf(o))} of ` : ""}${phrase} was reversed in your favour`;
+    return `${WON_HEAD}${o && reversedPart(o) ? `${money(reversedOf(o))} of ` : ""}${phrase}${WON_TAIL}`;
   };
   for (const p of srcs) {
     const mine = recs.filter((r) => r.paymentId === p.id);

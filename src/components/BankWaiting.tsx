@@ -3,7 +3,7 @@ import { useState, type ReactNode } from "react";
 import { useBankCheck } from "@/components/BankCheck";
 import { useBankGroupHold } from "@/components/HoldFold";
 import { ChangesBox } from "@/components/ChangesBox";
-import { type BankAction } from "@/lib/bankConfirm";
+import { refundLineOf, type BankAction } from "@/lib/bankConfirm";
 import { money } from "@/lib/format";
 import { MARKABLE } from "@/lib/markJump";
 import { usePress } from "@/lib/usePress";
@@ -46,6 +46,8 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
   const over = (cents ?? 0) > PAY_TICK_CENTS;
   const [over200, setOver200] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  // (Owner, Nov 5, §210) Its own check paid (a retried chargeback), and that chargeback was won meanwhile and refunded: one more line under the confirmed line.
+  const [refundNote, setRefundNote] = useState("");
   // (Owner, Nov 4, §180) On the test page its tester's drop-down stays open while its bank box, a stop box or a refusal is showing.
   useBankGroupHold(paymentId, bank.open || busy || changes != null || !!error || !!err);
   async function cancelCheck() {
@@ -66,7 +68,7 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
     if (!start) return; // stopped once, or refused: the box under the button says so
     try {
       // (§160) A charge made while away: Cancel (or leaving the page) never cancels it; it keeps waiting for the bank.
-      await bank.check({ ...start, requiresAction: true, needs: start.needs ?? "confirm", cancel: own ? "press" : "waits" });
+      setRefundNote(refundLineOf(await bank.check({ ...start, requiresAction: true, needs: start.needs ?? "confirm", cancel: own ? "press" : "waits" })));
       finish(BANK_CONFIRMED);
     } catch (e) {
       setErr((e as Error).message);
@@ -89,6 +91,7 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {err && <p className="info" data-bank-not-confirmed="">{err.startsWith(STILL_WAITS) ? err /* (§160) Cancel: it keeps waiting, said plainly */ : refusalLine(CONFIRM_WITH_BANK, err)}</p>}
       {doneLine && <p className="ok" data-bank-confirmed="">{doneLine}</p>}
+      {doneLine && refundNote && <p className="ok" data-own-check-refund="">{refundNote}</p>}
     </div>
   );
 }
