@@ -9,7 +9,7 @@ import { json, req } from "./helpers";
 import { act, seen, setup } from "./fixtures";
 
 // Batch 35 §17 (seen once on video, Oct 31): a rename saved in another tab showed twice on the developer's test page, in "You saved the listing in another tab:
-// title (now “Harbor Run: night harbors”), …" AND as "You renamed the test to Harbor Run: night harbors". The Save's own line goes to the action log only after
+// title (now “Harbor Run: nights”), …" AND as "You renamed the test to Harbor Run: nights". The Save's own line goes to the action log only after
 // the Save's transaction (and its response); a live poll in that moment (the other tab's redraw asks at once) found the rename alone, and the live box keeps
 // every line it got, so the next poll's Save line made two. The rename is now dropped from the Save's own record, which exists at once.
 
@@ -41,11 +41,11 @@ describe("batch 35 §17: one save, one line (a rename saved with other fields in
     await later();
     const pageLoaded = seen();
     await later();
-    expect((await edit(testId, dev.cookie, { title: "Harbor Run: night harbors", description: "Sail at night" }, { tab: "tab-a" })).status).toBe(200);
+    expect((await edit(testId, dev.cookie, { title: "Harbor Run: nights", description: "Sail at night" }, { tab: "tab-a" })).status).toBe(200);
     let early: { text: string; at: string }[] = [];
     await withoutSaveLine(testId, "tab-a", async () => {
       early = await live(dev.cookie, testId, pageLoaded, "tab-b");
-      expect(early.map((c) => c.text)).not.toContain("You renamed the test to Harbor Run: night harbors");
+      expect(early.map((c) => c.text)).not.toContain("You renamed the test to Harbor Run: nights");
     });
     const after = await live(dev.cookie, testId, pageLoaded, "tab-b");
     // (Batch 35 §34) One line for the Save (the rename in it).
@@ -54,7 +54,7 @@ describe("batch 35 §17: one save, one line (a rename saved with other fields in
     // A press in that moment: one stop line too.
     await withoutSaveLine(testId, "tab-a", async () => {
       const r = await act(testId, "stop", dev.cookie, { reason: "We have what we need.", seenAt: pageLoaded, tab: "tab-b" }); // (batch 35 §168)
-      expect((r.body.error?.changes ?? []).map((c: { text: string }) => c.text)).not.toContain("You renamed the test to Harbor Run: night harbors");
+      expect((r.body.error?.changes ?? []).map((c: { text: string }) => c.text)).not.toContain("You renamed the test to Harbor Run: nights");
     });
   });
 

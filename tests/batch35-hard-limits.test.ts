@@ -173,7 +173,7 @@ describe("§140 every limited box stops at its limit", () => {
     expect(src("src/components/WhyBox.tsx")).toContain("maxLength={max}");
     expect(src("src/components/Chat.tsx")).toContain("maxLength={4000}");
     expect(src("src/components/ReportButton.tsx")).toContain("maxLength={2000}");
-    expect(src("src/app/app/profile/ProfileForm.tsx")).toContain('<input id="name" className="input" maxLength={80}');
+    expect(src("src/app/app/profile/ProfileForm.tsx")).toContain('<input id="name" className="input" maxLength={LIMITS.personName}'); // (§245) 20, was 80
     expect(src("src/app/app/find/[id]/JoinBox.tsx")).toContain("maxLength={LIMITS.joinNote}");
     expect(src("src/lib/server/joining.ts")).toContain("slice(0, LIMITS.joinNote)");
     expect(src("src/components/PasswordInput.tsx")).toContain("maxLength={limited ? props.maxLength ?? 200 : props.maxLength}");

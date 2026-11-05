@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { LIMITS } from "@/lib/limits";
+import { LIMITS, NAME_TOO_LONG } from "@/lib/limits";
 import { CATEGORIES, DEVICES, DEVICES_MISSING, LANGUAGES, LANGUAGES_MISSING, pickFrom as pick } from "@/lib/options";
 import { sideFor, type Side } from "@/lib/sides";
 import { HttpError } from "./http";
@@ -109,9 +109,11 @@ const PROFILE_FIELD_SIDE: Record<string, Side> = { devices: "tester", languages:
  * picked.
  */
 export async function saveProfile(userId: string, body: Record<string, unknown>) {
-  const name = str(body.name, 80);
-  // (Owner, Oct 27) A name is at least 1 character, with no other rules.
+  // (Owner, Nov 5, batch 35 §245; was cut at 80) At most 20 characters: over it is refused at Name ("Keep your name to 20 characters."), never cut silently.
+  const name = typeof body.name === "string" ? body.name.trim() : "";
+  // (Owner, Oct 27) A name is at least 1 character.
   if (name.length < 1) throw new HttpError(400, "bad_name", "Enter your name (others see it).");
+  if (name.length > LIMITS.personName) throw new HttpError(400, "bad_name", NAME_TOO_LONG);
   const pronoun = ["she", "he", "they"].includes(body.pronoun as string) ? (body.pronoun as string) : "";
   const isDeveloper = body.isDeveloper === true;
   const isTester = body.isTester === true;

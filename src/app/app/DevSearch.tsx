@@ -1,5 +1,5 @@
 "use client";
-import { Cut } from "@/components/Cut";
+import { TestName } from "@/components/Cut";
 import Link from "next/link";
 import { createContext, useContext, useState } from "react";
 import { Search } from "lucide-react";
@@ -39,7 +39,7 @@ export function DevSearch({ rows, todo, children }: { rows: DevSearchRow[]; /** 
               const inner = (
                 <>
                   <span className="min-w-[12rem] flex-1">
-                    <span className="block truncate font-medium text-white" title={r.title}><Cut text={r.title} kind="test" /></span>
+                    <span className="block font-medium"><TestName text={r.title} /></span>
                     <span className="block text-sm text-slate-400">{r.developer} · joined {fmtDate(new Date(r.joinedAt))}</span>
                   </span>
                   <span className="badge">{r.status}</span>

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
 import { DEVICES, DEVICES_MISSING, LANGUAGES, LANGUAGES_MISSING, pickFrom } from "@/lib/options";
 import { safeZone } from "@/lib/tz";
-import { LIMITS } from "@/lib/limits";
+import { LIMITS, NAME_TOO_LONG } from "@/lib/limits";
 import { sendEmail } from "./email";
 import { HttpError } from "./http";
 import { createSession, hashToken, newToken, readCookie, SESSION_COOKIE } from "./session";
@@ -144,7 +144,8 @@ export function sidesOf(role: SignupRole, picks: { devices: string[]; languages:
  */
 export function readNewAccount(body: Record<string, unknown>, credentialMistakes: string[] = []): { role: SignupRole; name: string; pronoun: string; bio: string; devices: string[]; languages: string[] } {
   const role = readRole(body.role);
-  const name = typeof body.name === "string" ? body.name.trim().slice(0, 80) : "";
+  // (Owner, Nov 5, batch 35 §245; was cut at 80) At most 20 characters: over it is a mistake at Name, never cut silently.
+  const name = typeof body.name === "string" ? body.name.trim() : "";
   const tester = role === "tester";
   const devices = tester ? pickFrom(body.devices, DEVICES) : [], languages = tester ? pickFrom(body.languages, LANGUAGES) : [];
   const pronoun = body.pronoun == null || body.pronoun === "" ? "" : PRONOUN_VALUES.includes(body.pronoun as string) ? (body.pronoun as string) : null;
@@ -153,7 +154,7 @@ export function readNewAccount(body: Record<string, unknown>, credentialMistakes
     ...(!role ? [ROLE_MISSING] : []),
     ...(tester && devices.length === 0 ? [DEVICES_MISSING] : []),
     ...(tester && languages.length === 0 ? [LANGUAGES_MISSING] : []),
-    ...(name.length < 1 ? [NAME_MISSING] : []),
+    ...(name.length < 1 ? [NAME_MISSING] : name.length > LIMITS.personName ? [NAME_TOO_LONG] : []),
     ...(pronoun === null ? [PRONOUN_BAD] : []),
     ...(bio.length > LIMITS.bio ? [BIO_TOO_LONG] : []),
     // (Owner, Nov 4, batch 35 §170) The email form's email and password lines sit here, in the form's order (Google's step has neither).

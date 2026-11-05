@@ -109,7 +109,7 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
     const html = unescape(render(await TestPage({ params: Promise.resolve({ id: s.testId }), searchParams: Promise.resolve({}) })));
     const href = `/app/testers/${j.tester.user.id}`;
     // The fold's heading: the green name link, inside the fold's toggle.
-    expect(html).toMatch(new RegExp(`<summary[^>]*><h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="${href}" class="relative z-10 inline-block min-w-0 max-w-full align-bottom " data-name-link="person"><span class="inline-block min-w-0 max-w-full truncate align-bottom[^"]*"[^>]*>Bea Brook</span></a></h3>`));
+    expect(html).toMatch(new RegExp(`<summary[^>]*><h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="${href}" class="relative z-10 " data-name-link="person"><span class="\\[overflow-wrap:anywhere\\]" data-name-wraps="person">Bea Brook</span></a></h3>`)); // (§245) whole, wrapping (never cut by width)
     // The summary under it: Chat, and no separate profile link.
     const row = html.slice(html.indexOf(`id="tester-${j.sessionId}"`));
     const summary = row.slice(row.indexOf('data-tester-summary=""'), row.indexOf('data-tester-summary=""') + 1500);

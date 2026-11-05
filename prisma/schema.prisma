@@ -13,6 +13,7 @@ datasource db {
 model User {
   id          String    @id @default(cuid())
   email       String    @unique
+  /// (Owner, Nov 5, batch 35 §245) At most 20 characters (LIMITS.personName)
   name        String    @default("")
   /// "she" | "he" | "they" | "" (blank: wording uses "they")
   pronoun     String    @default("")
@@ -192,7 +193,7 @@ model Test {
   /// (Owner, Nov 4, §169) Goes up by one with every save of ignoredAlerts (in the same locked write): a tab never puts an older list over a newer one (a poll or
   /// a redraw asked before a save but answered after it)
   alertsV       Int      @default(0)
-  /// (Design doc 4) The game, website, app or other product (60 characters); the title above is this test's own name (60)
+  /// (Design doc 4) The game, website, app or other product (20 characters); the title above is this test's own name (20) (owner, Nov 5, batch 35 §245: both were 60)
   productName String   @default("")
   /// (Design doc 4) Mature (18+): the developer says why the content is mature (required when ticked)
   mature      Boolean  @default(false)

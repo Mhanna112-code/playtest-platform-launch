@@ -7,8 +7,13 @@ import { NAME_CUT, cutEmail, cutTo } from "@/lib/rules";
 /** What a listed name is: a person, a test, a product, or an email. A linked one's pop-up offers "Open profile →" or "Open test →". */
 export type CutKind = "person" | "test" | "product" | "email";
 
-/** (Owner, Nov 3) How a listed name is drawn: cut at NAME_CUT (20; owner, Nov 5, §203: was 12) characters with "…" (cutTo); an email in the middle (cutEmail). */
-export const cutText = (text: string, kind: CutKind = "person", n = NAME_CUT) => (kind === "email" ? cutEmail(text) : cutTo(text, n));
+/**
+ * (Owner, Nov 5, batch 35 §245) A person's name, a test's title and a product's name are at most 20 characters (LIMITS.personName, testName, productName; older
+ * longer ones were shortened by a migration), so they are never cut and never need expanding: drawn whole, wrapping anywhere in a tight row. Only an email is cut.
+ */
+export const neverCut = (kind: CutKind) => kind !== "email";
+/** (Owner, Nov 3) How a listed name is drawn: an email cut in the middle (cutEmail); (§245) a person's, a test's or a product's name whole. */
+export const cutText = (text: string, kind: CutKind = "person", n = NAME_CUT) => (kind === "email" ? cutEmail(text) : neverCut(kind) ? text : cutTo(text, n));
 
 /** A screen with no hover (a phone or a tablet): there a cut name opens a small pop-up instead of a tooltip. */
 export const touchOnly = () => typeof window !== "undefined" && typeof window.matchMedia === "function" && window.matchMedia("(hover: none)").matches;
@@ -78,6 +83,8 @@ export function Cut({ text, kind = "person", n = NAME_CUT, className = "", fit =
     setAt({ x: r.left, y: below ? r.bottom + 6 : r.top - 6, below, href: link?.getAttribute("href") ?? null });
   }, [cut, fit]);
   const close = useCallback(() => setAt(null), []);
+  // (Owner, Nov 5, §245) A person's, a test's or a product's name in a tight row: whole, wrapping anywhere (never cut by width with "…", never a pop-up).
+  if (fit && neverCut(kind)) return <span className={`[overflow-wrap:anywhere] ${className}`.trim()} data-name-wraps={kind}>{full}</span>;
   // (Owner, Nov 4, §187) Fitted: the whole name, cut by the width it has; the tooltip (with a mouse) and the tap pop-up only when it is cut now.
   if (fit) {
     return (
@@ -162,5 +169,16 @@ export function NameLink({ text, href, kind = "person", className = "", whole = 
   fit?: boolean }) {
   const words = whole ? <span className="[overflow-wrap:anywhere]">{text}</span> : <Cut text={text} kind={kind} fit={fit} />;
   if (!href) return whole ? <span className={className || undefined}>{words}</span> : <Cut text={text} kind={kind} className={className} fit={fit} />;
-  return <a href={href} className={`relative z-10 ${fit ? "inline-block min-w-0 max-w-full align-bottom " : ""}${className}`} data-name-link={kind} {...(newTab ? { target: "_blank", rel: "noopener" } : {})}>{words}</a>;
+  // (§245) A name wraps in a tight row (an inline link); only an email still cuts by the width (inline-block).
+  return <a href={href} className={`relative z-10 ${fit && !neverCut(kind) ? "inline-block min-w-0 max-w-full align-bottom " : ""}${className}`} data-name-link={kind} {...(newTab ? { target: "_blank", rel: "noopener" } : {})}>{words}</a>;
+}
+
+/**
+ * (Owner, Nov 5, batch 35 §245) "Test names show green": a test's name in running text or a row, drawn like a person's green name (NameLink), whole (a title is at
+ * most 20 characters, never cut). With `href` it links to the test (the developer's test page, a tester's session or join page, the admin's test page); without one
+ * (inside a row or card that is itself one link, or a toggle, where a link would steal the press) it is the same green words. Headings (a test page's own h1) stay.
+ */
+export function TestName({ text, href, className = "", newTab = false }: { text: string; href?: string | null; className?: string; newTab?: boolean }) {
+  if (href) return <NameLink text={text} href={href} kind="test" className={className} newTab={newTab} />;
+  return <span className={`text-volt-300 [overflow-wrap:anywhere] ${className}`.trim()} data-test-name="">{text}</span>;
 }

@@ -1,16 +1,22 @@
 "use client";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
 import Link from "next/link";
-import { useState } from "react";
+import { Fragment, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { api } from "@/lib/client";
 import { LongList } from "@/components/LongList";
 import { refreshBell } from "@/components/BellLink";
 import { keepAmounts } from "@/components/Amounts";
-import { Cut } from "@/components/Cut";
-import { bellShort } from "@/lib/bell";
+import { TestName } from "@/components/Cut";
+import { bellShort, opensInBox } from "@/lib/bell";
 
-export type BellLine = { id: string; text: string; href: string; read: boolean; ago: string };
+export type BellLine = { id: string; text: string; href: string; read: boolean; ago: string; /** (§245) the test it is about: its name in the line is green */ test?: string };
+
+/** (Owner, Nov 5, batch 35 §245) A bell line's words, its test's name green (like a person's green name) wherever it appears whole; amounts kept whole. */
+export function bellWords(text: string, test?: string): ReactNode {
+  if (!test || !text.includes(test)) return keepAmounts(text);
+  return text.split(test).map((part, i) => <Fragment key={i}>{i > 0 && <span className="text-volt-300" data-test-name="">{test}</span>}{keepAmounts(part)}</Fragment>);
+}
 export type BellEntry = { key: string; title?: string; day?: string; lines: BellLine[]; /** (batch 14) the title already counts: no "N updates" */ counted?: boolean; /** (Owner, Nov 3) the title is a test's name (cut at NAME_CUT, 20 characters; owner, Nov 5, §203: was 12), not a kind of update */ test?: boolean };
 
 /**
@@ -18,7 +24,8 @@ export type BellEntry = { key: string; title?: string; day?: string; lines: Bell
  * the newest line shown, an unread count); opening it shows every line of that day, each linking to its place, and marks them read.
  * (Owner, Oct 29, batch 29 §28) Read only when opened: a single line when it's clicked; a stack when it's expanded (all its lines) or one of its lines is clicked.
  * Unread entries keep the dot and bold until then; the header's bell number follows at once.
- * (Owner, Nov 5, §202) Each line, alone or inside a stack, shows its first 30 characters then "…" (bellShort); its arrow opens the whole line under it.
+ * (Owner, Nov 5, §202) Each line, alone or inside a stack, shows its first 30 characters then "…" (bellShort); its arrow opens the whole line in place (§246:
+ * inline, wrapped; the draggable box only over LINE_BOX_OVER, 200 characters).
  * Stack headings are unchanged.
  */
 export function BellList({ entries }: { entries: BellEntry[] }) {
@@ -42,8 +49,10 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
   const line = (l: BellLine) => {
     const short = bellShort(l.text);
     const wide = !!short && !!whole[l.id];
-    // (Owner, Nov 5, §220) Opened, the line itself shows whole, in place, in the draggable panel (it starts small; the grip drags it taller); no copy under it.
-    const words = wide ? <OwnPanel><ResizeBox id={`bell-${l.id}`} label="The whole line" defaultMax="6rem" tallest={0.5}><span className="block whitespace-pre-wrap break-words" data-bell-full={l.id}>{keepAmounts(l.text)}</span></ResizeBox></OwnPanel> : keepAmounts(short ?? l.text);
+    // (Owner, Nov 5, §246; was §220's draggable panel) Opened, the line itself shows whole, in place, wrapped, with no box; only a line over LINE_BOX_OVER (200
+    // characters: a typed note) opens in the draggable panel (it starts small; the grip drags it taller). No copy under it.
+    const all = <span className="block whitespace-pre-wrap break-words" data-bell-full={l.id}>{bellWords(l.text, l.test)}</span>;
+    const words = wide ? (opensInBox(l.text) ? <OwnPanel><ResizeBox id={`bell-${l.id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>{all}</ResizeBox></OwnPanel> : all) : bellWords(short ?? l.text, l.test);
     const look = `flex-1 min-w-0 ${isRead(l) ? "text-slate-400" : "font-semibold text-slate-100"}`;
     return (
       <div>
@@ -71,7 +80,7 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
             <button type="button" className="flex w-full items-start gap-3 text-left" aria-expanded={!!open[e.key]} onClick={() => toggle(e)}>
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${e.lines.some((l) => !isRead(l)) ? "bg-indigo-400" : "bg-transparent"}`} />
               <span className="min-w-0 flex-1">
-                <span className={`block text-slate-100 ${e.lines.some((l) => !isRead(l)) ? "font-semibold" : "font-medium"}`}>{e.test && e.title ? <><Cut text={e.title} kind="test" /> · {e.lines.length} updates {e.day}</> : e.counted ? `${e.title} ${e.day}` : `${e.title} · ${e.lines.length} updates ${e.day}`}</span>
+                <span className={`block text-slate-100 ${e.lines.some((l) => !isRead(l)) ? "font-semibold" : "font-medium"}`}>{e.test && e.title ? <><TestName text={e.title} /> · {e.lines.length} updates {e.day}</> : e.counted ? `${e.title} ${e.day}` : `${e.title} · ${e.lines.length} updates ${e.day}`}</span>
                 <span className="block truncate text-sm text-slate-400">{keepAmounts(bellShort(e.lines[0].text) ?? e.lines[0].text)}</span>
               </span>
               {e.lines.some((l) => !isRead(l)) && <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-xs text-white">{e.lines.filter((l) => !isRead(l)).length}</span>}

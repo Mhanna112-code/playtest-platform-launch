@@ -71,9 +71,9 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const html = markup(rows);
     expect(html).toContain("Your bank wants you to confirm");
     expect(html).toContain('class="text-sm font-normal text-slate-400">1</span>');
-    // (Owner, Nov 2) The test's name opens it in a new tab.
-    expect(html).toContain(`$12.50 · Ana Silva&#x27;s written answers on <a href="/app/tests/`);
-    expect(html).toContain(`“Harbor Run”</a> · <span`);
+    // (Owner, Nov 5, §246) The amount and "confirm by" always show; the "what" between them is cut at 30 with its arrow (the whole "what" its hover).
+    expect(html).toContain(`data-bank-top-amount="">$12.50</span> · <span title="Ana Silva&#x27;s written answers on “Harbor Run”" data-what-cut=""><span data-what-text="">Ana Silva&#x27;s written answers on…</span></span><button`);
+    expect(html).toMatch(/data-whole-toggle=""[^>]*>[\s\S]*?<\/button> · <span class="text-slate-300" data-confirm-by="">confirm by /);
     expect(html).toContain(`data-bank-waiting="${p.id}"`);
     expect(html).toContain("Confirm with your bank</button>");
     // The same plain scroll box as Needs you, everything in it (no "Show N more").
@@ -106,11 +106,11 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     const p = await waiting(dev.user.id, dev.user.id, { kind: "subscription", amountCents: 900 });
     const [row] = await bankToConfirm(dev.user.id);
     expect(row).toMatchObject({ id: p.id, lead: "$9.00 for your plan", href: `/app/payments#bank-${p.id}` });
-    expect(markup([row])).toContain(`$9.00 for your plan · <span`);
+    expect(markup([row])).toContain(`data-bank-top-amount="">$9.00</span> <span data-what-text="">for your plan</span> · <span`);
     // Payments' row for a renewal is the inline box carrying that anchor (marked by HashJump).
     // (Owner, Nov 4, §188 B) Every list's row keeps it (`anchor` true by default; only the Pay more box's second copy leaves it out).
     expect(src("components/BankWaiting.tsx")).toContain("id={anchor ? bankAnchor(paymentId) : undefined}");
-    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} text={i.text}");
+    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} text={i.what ?? i.text}");
   });
 
   it("under 24 hours left the confirm-by part is red and names the day", async () => {

@@ -181,7 +181,7 @@ describe("§199 Needs you: each kind a drop-down, Rate plain, one Applications d
     const html = await page(f.testId);
     const row = html.slice(html.indexOf(`id="tester-${j.sessionId}"`));
     const heading = row.slice(row.indexOf("<summary"), row.indexOf("</summary>"));
-    expect(heading).toMatch(new RegExp(`<h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="/app/testers/${j.tester.user.id}" class="relative z-10 inline-block min-w-0 max-w-full align-bottom " data-name-link="person"><span class="inline-block min-w-0 max-w-full truncate align-bottom[^"]*" data-cut-fit="person">${LONG}</span></a></h3>`));
+    expect(heading).toMatch(new RegExp(`<h3 class="mr-auto min-w-0 max-w-\\[calc\\(100%-1\\.25rem\\)\\] font-semibold text-white" data-tester-fold-name=""><a href="/app/testers/${j.tester.user.id}" class="relative z-10 " data-name-link="person"><span class="\\[overflow-wrap:anywhere\\]" data-name-wraps="person">${LONG}</span></a></h3>`));
     expect(heading).not.toContain("Maximiliana…");
     expect(heading).not.toContain("data-cut-shown");
     expect(heading).toMatch(/<span class="badge shrink-0 whitespace-nowrap">Working · due /);

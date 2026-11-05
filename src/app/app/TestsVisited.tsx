@@ -1,4 +1,4 @@
-import { Cut } from "@/components/Cut";
+import { Cut, TestName } from "@/components/Cut";
 import Link from "next/link";
 import { Eye } from "lucide-react";
 import { AutoRefresh } from "@/components/AutoRefresh";
@@ -40,9 +40,9 @@ export async function TestsVisited({ testerId }: { testerId: string }) {
               <VisitedCard key={r.testId} testId={r.testId} title={r.title}>
                 <CategoryTile category={mainCategory(r.categories)} size="h-10 w-10" />
                 <div className="min-w-[12rem] flex-1">
-                  {r.productName && <p className="kicker truncate" title={r.productName}><Cut text={r.productName} kind="product" /></p>}
-                  <p className="truncate font-semibold text-white" title={r.title}><Link href={r.href} className={`text-white no-underline hover:no-underline ${CARD_LINK}`} data-visited-open={r.testId}><Cut text={r.title} kind="test" /></Link></p>
-                  <p className="truncate text-sm text-slate-400" title={`by ${r.developer}`}>by <Cut text={r.developer} /></p>
+                  {r.productName && <p className="kicker [overflow-wrap:anywhere]"><Cut text={r.productName} kind="product" /></p>}
+                  <p className="font-semibold [overflow-wrap:anywhere]"><Link href={r.href} className={`no-underline hover:no-underline ${CARD_LINK}`} data-visited-open={r.testId}><TestName text={r.title} /></Link></p>
+                  <p className="text-sm text-slate-400 [overflow-wrap:anywhere]">by <Cut text={r.developer} /></p>
                 </div>
                 <span className={`badge ${TONE[r.state]}`} data-visited-state={r.state}>{r.label}</span>
               </VisitedCard>

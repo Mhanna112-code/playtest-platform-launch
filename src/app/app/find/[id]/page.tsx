@@ -1,5 +1,5 @@
 import { withDateZone } from "@/lib/server/dateZone";
-import { NameLink } from "@/components/Cut";
+import { NameLink, TestName } from "@/components/Cut";
 import { NameLine } from "@/components/WholeLine";
 import { cutNamesIn } from "@/lib/cutNames";
 import { notFound, redirect } from "next/navigation";
@@ -280,7 +280,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
       ) : blocked ? (
         <p className="card note">This test isn&apos;t taking new testers right now.</p>
       ) : closed && invite && t.status === "open" && testersIn >= t.spots ? (
-        <p className="info">{t.title} is full right now. Your invite stays open; we&apos;ll tell you when a spot opens.</p>
+        <p className="info"><TestName text={t.title} /> is full right now. Your invite stays open; we&apos;ll tell you when a spot opens.</p>
       ) : paused ? (
         <p className="info" data-paused="">This test is paused right now.</p>
       ) : closed ? (

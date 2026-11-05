@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import type { User } from "@prisma/client";
 import { db } from "@/lib/db";
 import { isEmail, normEmail } from "@/lib/format";
+import { fitName } from "@/lib/limits";
 import { appUrl } from "./auth";
 import { createSession, readCookie, sessionCookie } from "./session";
 import { HttpError } from "./http";
@@ -108,6 +109,9 @@ export async function finishGoogle(req: Request): Promise<{ pending: string } | 
   const email = typeof claims.email === "string" ? normEmail(claims.email) : "";
   if (claims.email_verified !== true && claims.email_verified !== "true") throw new GoogleError("unverified");
   if (!isEmail(email)) throw new GoogleError("unverified");
+  // (Owner, Nov 5, batch 35 §245) The name Google gives (only when it sends one: the sign-in asks for "openid email"), cut to its first 20 characters (trimmed) for
+  // the step's Name box; the person can change it there and on their profile later.
+  const googleName = typeof claims.name === "string" ? fitName(claims.name) : "";
 
   // (Batch 15 section 41, H2) Google proves the address. An existing account that never confirmed it may have been made by someone else first (a pre-hijack): before
   // Google signs into it, its password is cleared, every session ends, and any payout account is dropped; then the email counts as confirmed.
@@ -116,12 +120,12 @@ export async function finishGoogle(req: Request): Promise<{ pending: string } | 
   // email is freed only when the step makes the account); not clean: "This account was closed." on the login page.
   if (existing?.deletedAt) {
     if (!(await isClean(existing))) throw new GoogleError("closed");
-    return { pending: await startGoogleSignup(email) };
+    return { pending: await startGoogleSignup(email, new Date(), googleName) };
   }
   if (existing) await claimUnconfirmed(existing);
   // (Owner, Oct 28, batch 20 section 5) A NEW account isn't made here: the browser goes to one short step (batch 35 §134: who you are and your name, then the
   // "I'm 18 or older." tick and the Terms agreement, then Continue), and the account is created only once all of them are given.
-  if (!existing) return { pending: await startGoogleSignup(email) };
+  if (!existing) return { pending: await startGoogleSignup(email, new Date(), googleName) };
   const user = await db.user.findUniqueOrThrow({ where: { id: existing.id } });
   const session = await createSession(user.id);
   return { user, cookie: sessionCookie(session.token, session.expiresAt) };
@@ -146,10 +150,13 @@ export const googleSignupCookie = (token: string) => `${GOOGLE_SIGNUP_COOKIE}=${
 export const clearGoogleSignupCookie = () => `${GOOGLE_SIGNUP_COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`;
 export const GOOGLE_STEP_EXPIRED = "This Google sign-up expired. Continue with Google again.";
 
-/** Google proved this (new) email: kept for the step (only a hash of the browser's token is stored). */
-export async function startGoogleSignup(email: string, now = new Date()) {
+/**
+ * Google proved this (new) email: kept for the step (only a hash of the browser's token is stored). (Owner, Nov 5, batch 35 §245) With Google's name, cut to 20
+ * characters (`fitName`), which fills the step's Name box.
+ */
+export async function startGoogleSignup(email: string, now = new Date(), name = "") {
   const token = b64url(randomBytes(24));
-  await db.appState.create({ data: { key: stepKey(token), value: JSON.stringify({ email, exp: now.getTime() + SIGNUP_STEP_MS }) } });
+  await db.appState.create({ data: { key: stepKey(token), value: JSON.stringify({ email, exp: now.getTime() + SIGNUP_STEP_MS, ...(name ? { name: fitName(name) } : {}) }) } });
   return token;
 }
 /** The email waiting for the step, or null (none, or expired: then it's removed). */
@@ -157,12 +164,12 @@ export async function pendingGoogleSignup(token: string | null | undefined, now 
   if (!token) return null;
   const row = await db.appState.findUnique({ where: { key: stepKey(token) } });
   if (!row) return null;
-  const v = JSON.parse(row.value) as { email: string; exp: number };
+  const v = JSON.parse(row.value) as { email: string; exp: number; name?: string };
   if (v.exp < now.getTime()) {
     await db.appState.deleteMany({ where: { key: row.key } });
     return null;
   }
-  return { email: v.email };
+  return { email: v.email, name: typeof v.name === "string" ? fitName(v.name) : "" };
 }
 /**
  * Continue on the step: who you are (developer or tester: batch 35 §162 dropped "both"), a name and both ticks are required (batch 35 §153: and, for a tester,

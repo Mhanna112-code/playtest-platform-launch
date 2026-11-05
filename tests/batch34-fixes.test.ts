@@ -46,23 +46,23 @@ describe("batch 34 §9: Edit after its own Save", () => {
   it("owner's repro: the same tab's Save, then (Back, stale page) another Save from that tab goes straight through; never \"another tab\"", async () => {
     const { dev, testId } = await setup();
     const page = await editPage(testId);
-    const first = await save(testId, dev.cookie, page, "tab-A", { productName: "Harbor Run Deluxe", title: "Harbor Run, levels 1-3", description: "Sail through all three reefs." });
+    const first = await save(testId, dev.cookie, page, "tab-A", { productName: "Harbor Run Deluxe", title: "Harbor Run, lvls 1-3", description: "Sail through all three reefs." });
     expect(first.status).toBe(200);
     // The save is kept with its tab.
     expect((await db.testEvent.findFirstOrThrow({ where: { testId, kind: "edited" }, orderBy: { createdAt: "desc" } })).tab).toBe("tab-A");
     await settle();
     // Back to the Edit page as it was before the Save (its version and base are older), the fields typed again: before the fix this stopped with
     // "Product / Name of this test / Instructions: your version will replace the one saved in another tab at 11:15 AM.".
-    const again = await save(testId, dev.cookie, page, "tab-A", { productName: "Harbor Run Gold", title: "Harbor Run, levels 1-4", description: "Sail through all four reefs." });
+    const again = await save(testId, dev.cookie, page, "tab-A", { productName: "Harbor Run Gold", title: "Harbor Run, lvls 1-4", description: "Sail through all four reefs." });
     expect(again.status).toBe(200);
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
-    expect([t.productName, t.title, t.description]).toEqual(["Harbor Run Gold", "Harbor Run, levels 1-4", "Sail through all four reefs."]);
+    expect([t.productName, t.title, t.description]).toEqual(["Harbor Run Gold", "Harbor Run, lvls 1-4", "Sail through all four reefs."]);
   });
 
   it("a save from another tab still stops once, one line per typed field (the fix is only for this tab's own saves)", async () => {
     const { dev, testId } = await setup();
     const page = await editPage(testId);
-    expect((await save(testId, dev.cookie, page, "tab-A", { title: "Harbor Run, levels 1-3" })).status).toBe(200);
+    expect((await save(testId, dev.cookie, page, "tab-A", { title: "Harbor Run, lvls 1-3" })).status).toBe(200);
     await settle();
     const other = await editPage(testId);
     expect((await save(testId, dev.cookie, other, "tab-B", { description: "Sail through all three reefs." })).status).toBe(200);

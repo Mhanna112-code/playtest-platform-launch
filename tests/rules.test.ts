@@ -140,8 +140,10 @@ describe("listing checks", () => {
   it("(design doc 4) product, title, instructions and the Mature note", () => {
     const now = new Date();
     expect(checkListing(listing({ productName: "" }), 0, now)).toContain("Enter the product name.");
-    expect(checkListing(listing({ productName: "x".repeat(61) }), 0, now)).toContain("Keep the product name to 60 characters.");
-    expect(checkListing(listing({ title: "x".repeat(61) }), 0, now)).toContain("Keep the title to 60 characters.");
+    expect(checkListing(listing({ productName: "x".repeat(21) }), 0, now)).toContain("Keep the product name to 20 characters."); // (§245) was 60
+    // (Owner, Nov 5, batch 35 §245) A test's title and its product name: at most 20 characters each (were 60).
+    expect(checkListing(listing({ title: "x".repeat(21) }), 0, now)).toContain("Keep the title to 20 characters.");
+    expect(checkListing(listing({ title: "x".repeat(20) }), 0, now)).not.toContain("Keep the title to 20 characters.");
     expect(checkListing(listing({ description: "" }), 0, now)).toContain("Say what testers should do (What to do).");
     expect(checkListing(listing({ description: "x".repeat(20_001) }), 0, now)).toContain("Keep What to do to 20,000 characters."); // (batch 15 section 17)
     expect(checkListing(listing({ mature: true, matureWhy: "" }), 0, now)).toContain("Say why this test is mature (18+): it's required for mature content.");

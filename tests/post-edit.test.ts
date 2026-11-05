@@ -17,10 +17,10 @@ const post = async (cookie: string, over: Record<string, unknown>) => json(await
 describe("Post a test (design doc 4)", () => {
   it("needs the product name, a title and What to do, within their limits; the errors name the field", async () => {
     const dev = await makeUser({ dev: true });
-    const r = await post(dev.cookie, { productName: "", title: "x".repeat(61), description: "" });
+    const r = await post(dev.cookie, { productName: "", title: "x".repeat(21), description: "" });
     expect(r.status).toBe(400);
-    expect(r.body.error.errors).toEqual(expect.arrayContaining(["Enter the product name.", "Keep the title to 60 characters.", "Say what testers should do (What to do)."]));
-    expect((await post(dev.cookie, { productName: "x".repeat(61) })).body.error.message).toBe("Keep the product name to 60 characters.");
+    expect(r.body.error.errors).toEqual(expect.arrayContaining(["Enter the product name.", "Keep the title to 20 characters.", "Say what testers should do (What to do)."]));
+    expect((await post(dev.cookie, { productName: "x".repeat(21) })).body.error.message).toBe("Keep the product name to 20 characters."); // (§245) was 60
     expect((await post(dev.cookie, { description: "x".repeat(20_001) })).body.error.message).toBe("Keep What to do to 20,000 characters."); // (batch 15 section 17)
   });
 

@@ -488,7 +488,7 @@ export function checkListing(l: Listing, testersIn = 0, now = new Date(), ctx: L
     else if (!(ctx.edit && ctx.openedAt) && openUntilDay(d, ctx.tz) > day(LIMITS.openUntilMaxDays)) errs.push(OPEN_UNTIL_MAX_LINE);
     else if (!ctx.edit && openUntilDay(d, ctx.tz) < day(LIMITS.openUntilMinDays)) errs.push(OPEN_UNTIL_RANGE);
   }
-  // (4) Product name and the test's own name: 60 characters each; the instructions 1,000, required.
+  // (4) Product name and the test's own name: 20 characters each (owner, Nov 5, batch 35 §245; were 60); the instructions 1,000, required.
   if (!l.productName?.trim()) { if (isNew("productName")) errs.push("Enter the product name."); }
   else if (l.productName.length > LIMITS.productName && isNew("productName")) errs.push(`Keep the product name to ${LIMITS.productName} characters.`);
   if (!l.title.trim()) errs.push("Give the test a title.");

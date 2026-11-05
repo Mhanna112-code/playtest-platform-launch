@@ -27,8 +27,10 @@ describe("amounts stay whole", () => {
     const bell = src("app/app/notifications/BellList.tsx");
     expect(bell).toContain('<span className="block truncate text-sm text-slate-400">{keepAmounts(bellShort(e.lines[0].text) ?? e.lines[0].text)}</span>');
     // (§202) A line shows its 30-character cut (keepAmounts(short ?? l.text)) and its arrow opens the whole line (keepAmounts(l.text)).
-    expect(bell).toContain("keepAmounts(short ?? l.text)");
-    expect(bell.match(/\{keepAmounts\(l\.text\)\}/g)?.length).toBe(1);
+    // (§245) Through bellWords, which keeps amounts whole (keepAmounts) and draws the line's test name green.
+    expect(bell).toContain("bellWords(short ?? l.text, l.test)");
+    expect(bell).toContain("return keepAmounts(text);");
+    expect(bell.match(/\{bellWords\(l\.text, l\.test\)\}/g)?.length).toBe(1);
     expect(src("app/app/find/page.tsx")).toContain("{keepAmounts(termsLine(asListing(t), true))}");
     expect(src("app/app/page.tsx")).toContain("{keepAmounts(pays(asListing(t)))}");
   });
@@ -62,7 +64,7 @@ describe("buttons drop below instead of squeezing; nothing reaches past the scre
     expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain('<span className="flex max-w-full flex-wrap items-center gap-2" data-call-buttons="">');
     for (const f of ["app/app/CallsBox.tsx", "app/app/page.tsx"]) {
       const s = src(f);
-      expect(s, f).toContain('<span className="min-w-0 max-w-full truncate"><b className="text-white">');
+      expect(s, f).toContain('<span className="min-w-0 max-w-full [overflow-wrap:anywhere]"><b className="text-white">'); // (§245) the names wrap, never cut
       expect(s, f).toMatch(/<span className="whitespace-nowrap">· \{fmt(DateTime)?\((c\.when|x\.startsAt)\)\} · \{(c|x)\.minutes\} min/);
     }
   });
@@ -75,7 +77,9 @@ describe("buttons drop below instead of squeezing; nothing reaches past the scre
     // row down to the name may shrink (min-w-0) and the name never grows past it (max-w-full, truncate), so it still never reaches past the screen.
     expect(src("app/app/tests/[id]/page.tsx")).toContain('summary={<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span>');
     expect(src("components/Cut.tsx")).toContain('<span className={`inline-block min-w-0 max-w-full truncate align-bottom ${className}`} data-cut-fit={kind}');
-    expect(src("components/Cut.tsx")).toContain('className={`relative z-10 ${fit ? "inline-block min-w-0 max-w-full align-bottom " : ""}${className}`}');
+    expect(src("components/Cut.tsx")).toContain('className={`relative z-10 ${fit && !neverCut(kind) ? "inline-block min-w-0 max-w-full align-bottom " : ""}${className}`}');
+    // (§245) A person's or a test's name in such a row wraps instead (never cut by the width).
+    expect(src("components/Cut.tsx")).toContain('if (fit && neverCut(kind)) return <span className={`[overflow-wrap:anywhere] ${className}`.trim()} data-name-wraps={kind}>{full}</span>;');
     expect(src("components/HoldFold.tsx")).toContain('className = "min-w-0 rounded-xl border border-white/10 p-2"');
     // (§189) An unbroken line (a fitted name) no longer widens the page: the app's main is never wider than the screen.
     expect(src("app/app/layout.tsx")).toContain('<main className="mx-auto max-w-[min(72rem,100%)] space-y-6 px-4 py-8" data-app-main="">');

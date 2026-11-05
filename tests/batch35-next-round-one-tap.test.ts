@@ -131,7 +131,7 @@ describe("§168 an empty draft name never shows blank", () => {
   });
 
   it("where drafts are listed or named: the dashboard card, Post a test's note, the team's lists and find page, a refused press's line", async () => {
-    expect(src("app/app/page.tsx")).toContain("<Cut text={testTitleOf(t)} kind=\"test\" />");
+    expect(src("app/app/page.tsx")).toContain("<TestName text={testTitleOf(t)} />");
     expect(src("app/app/tests/new/page.tsx")).toContain("A draft: {testTitleOf(draft)}.");
     expect(src("app/app/find/[id]/page.tsx")).toContain("{testTitleOf(t)}</h1>");
     expect(src("lib/server/adminLinks.ts")).toContain("`“${testTitleOf(t)}”`");

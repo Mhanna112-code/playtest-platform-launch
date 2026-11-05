@@ -257,11 +257,15 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // Payments: no Confirm of its own, a link to the same button.
     const items = await confirmItems(dev.user.id);
     // (§131) It names the piece: which tester, which part, which test (cut at 10 characters; `full` uncut, the hover).
-    expect(items).toEqual([{ tests: expect.any(Array), id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href, cents: 1000 }]); // (§147) its amount: over $200 its Confirm needs the tick
+    expect(items).toEqual([{ tests: expect.any(Array), id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href, cents: 1000,
+      // (Owner, Nov 5, §246) The row's "what" apart from its amount and "confirm by" (outside the cut).
+      what: "A payment for Ana Silva's written answers on “Harbor Run”", amount: "$10.00", by: expect.stringMatching(/^confirm by /) }]); // (§147) its amount: over $200 its Confirm needs the tick
     const list = renderToStaticMarkup(createElement(ConfirmList, { items }));
     expect(list).toContain(`href="${href}"`);
     expect(list).toContain("Confirm with your bank →");
-    expect(list).not.toContain("<button");
+    // (§246) The only button: the cut "what"'s arrow; the amount and "confirm by" outside it.
+    expect(list.replace(/<button[^>]*data-whole-toggle=""[^>]*>[\s\S]*?<\/button>/g, "")).not.toContain("<button");
+    expect(list).toContain('data-confirm-amount="">$10.00</span> · confirm by ');
     // The test page: under the piece (the tester's written answers), the box the link marks. (Owner, Nov 4, §175) Listed under the tester's name, the line names the
     // piece by her pronoun ("she").
     const rows = await bankWaitingOnTest(dev.user.id, testId);

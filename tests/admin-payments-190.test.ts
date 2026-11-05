@@ -92,6 +92,9 @@ async function world() {
   return { ...s, devId, t, pays: { normal, more, confirmAll, bank, bundle, reversed, repay, delayed } };
 }
 
+/** (§246) The markup without the rows' arrows (the only buttons in a read-only list). */
+const noArrows = (html: string) => html.replace(/<button[^>]*data-whole-toggle=""[^>]*>[\s\S]*?<\/button>/g, "");
+
 describe("§190 the team sees a person's Payments lists as they do", () => {
   it("a developer: the same rows, labels and total as their own Payments; a Stripe link (test mode) on each payment with a PaymentIntent; no button", async () => {
     const w = await world();
@@ -102,20 +105,23 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     expect(team).not.toBe("");
     expect(asOwn(team)).toBe(own);
     // The set: each way of paying reads as the developer reads it.
-    const text = own.replace(/&#x27;/g, "'").replace(/<[^>]+>/g, "");
+    // (Owner, Nov 5, §246) A row's "what" is cut at 30 with its arrow; the whole of it is the row's hover (title), so the set is read from the markup too.
+    const raw = own.replace(/&#x27;/g, "'"), text = raw.replace(/<[^>]+>/g, "");
     for (const s of [
       "Ana Silva's written answers on “Harbor Run”", "Pay more for Ana Silva's written answers", "Confirm all", "confirmed with your bank",
       "Pay what you owe", "Repaid the reversed $10.00 payment for Ben Okafor's written answers", "refunded (your bank's chargeback was reversed)",
       "your bank reversed this, then decided in your favour (chargeback won)", "recorded (payments not set up)",
-    ]) expect(text, s).toContain(s);
+    ]) expect(raw, s).toContain(s);
     // Total: everything that went through; the refunded repayment is out, the won chargeback's payment counts (paidOutTotal).
     expect(text).toContain(`Total $${((1000 + 500 + 1200 + 800 + 900 + 1000 + 700) / 100).toFixed(2)}`);
     // Stripe: each payment with a PaymentIntent, test mode; none for the one without.
     for (const p of Object.values(w.pays)) if (p.stripePaymentIntentId) expect(team).toContain(`href="https://dashboard.stripe.com/test/payments/${p.stripePaymentIntentId}"`);
     // (Owner, Nov 4, §192) And the refunded repayment's own negative refund line, linking the PaymentIntent it was refunded from.
     expect(team.match(/data-stripe-link=""/g)).toHaveLength(Object.values(w.pays).filter((p) => p.stripePaymentIntentId).length + 1);
-    expect(text).toContain("Refunded: your bank's chargeback on your $10.00 Pay for Ben Okafor's written answers on “Harbor Run” was reversed in your favour · −$25.00");
-    expect(team).not.toContain("<button");
+    expect(raw).toContain("title=\"Refunded: your bank's chargeback on your $10.00 Pay for Ben Okafor's written answers on “Harbor Run” was reversed in your favour\"");
+    expect(text).toContain("· −$25.00");
+    // (§246) The only buttons: each cut row's arrow.
+    expect(noArrows(team)).not.toContain("<button");
     expect(team).not.toMatch(/>(Pay|Confirm|Cancel)[^<]*<\/button>/);
     // The test opens its team page.
     expect(team).toContain(`href="/app/find/${w.testId}"`);
@@ -145,7 +151,7 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     expect(own).toContain("delayed until your payout account is ready");
     expect(own.replace(/<[^>]+>/g, "")).toContain(`Total $${((900 + 450 + 630) / 100).toFixed(2)}`);
     expect(team).toContain(`https://dashboard.stripe.com/test/payments/${w.pays.normal.stripePaymentIntentId}`);
-    expect(team).not.toContain("<button");
+    expect(noArrows(team)).not.toContain("<button");
   });
 
   it("What you owe during a hold: the developer's lines, read-only", async () => {
@@ -158,9 +164,13 @@ describe("§190 the team sees a person's Payments lists as they do", () => {
     expect(lines.length).toBeGreaterThan(0);
     const html = (await adminView(w.devId, a.id)).replace(/&#x27;/g, "'");
     const box = html.match(/<section[^>]*data-owed-readonly=""[\s\S]*?<\/section>/)?.[0] ?? "";
-    for (const l of lines) expect(box).toContain(l.text.replace(/&/g, "&amp;"));
+    // (§246) Each line's "what" (cut at 30, whole in its hover) and its amount and status outside the cut.
+    for (const l of lines) {
+      expect(box).toContain(l.what.length > 30 ? `title="${l.what.replace(/&/g, "&amp;")}"` : l.what.replace(/&/g, "&amp;"));
+      expect(box).toContain(l.rest.replace(/&/g, "&amp;"));
+    }
     expect(box).toContain("https://dashboard.stripe.com/test/payments/pi_failed123");
-    expect(box).not.toContain("<button");
+    expect(noArrows(box)).not.toContain("<button");
   });
 
   it("only admins: anyone else gets nothing", async () => {

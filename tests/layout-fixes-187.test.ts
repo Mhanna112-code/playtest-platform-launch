@@ -68,12 +68,13 @@ describe("§187 items 1 and 2: only the outermost panel scrolls", () => {
 
 describe("§187 item 3: names are cut only when the row is full", () => {
   const NAME = "Maximiliana Alexandrovna Konstantinopoulou-Featherstonehaugh";
-  it("a fitted name is drawn whole, cut by CSS on the width it has (no 12-character cut)", () => {
+  it("a fitted name is drawn whole and wraps (§245: a person's or a test's name is never cut, not even by the width)", () => {
     const html = render(h(NameLink, { fit: true, text: NAME, href: "/app/testers/t1" }));
-    expect(html).toBe(`<a href="/app/testers/t1" class="relative z-10 inline-block min-w-0 max-w-full align-bottom " data-name-link="person"><span class="inline-block min-w-0 max-w-full truncate align-bottom " data-cut-fit="person">${NAME}</span></a>`);
+    expect(html).toBe(`<a href="/app/testers/t1" class="relative z-10 " data-name-link="person"><span class="[overflow-wrap:anywhere]" data-name-wraps="person">${NAME}</span></a>`);
     expect(html).not.toContain("…");
-    // Not fitted: the old 12-character cut stays wherever it isn't asked for.
-    expect(render(h(NameLink, { text: NAME, href: "/app/testers/t1" }))).toContain("…");
+    expect(html).not.toContain("truncate");
+    // Not fitted: whole too (§245).
+    expect(render(h(NameLink, { text: NAME, href: "/app/testers/t1" }))).not.toContain("…");
   });
   it("Needs you's people, the call request boxes and the testers' calls cards use it, in rows that may shrink", () => {
     expect(src("app/app/tests/[id]/page.tsx")).toContain('<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span>');

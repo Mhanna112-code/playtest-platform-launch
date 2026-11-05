@@ -12,7 +12,7 @@ import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { CHARGED_BY_TESTER } from "@/lib/rules";
 import { POST as testsPOST } from "@/app/api/tests/route";
-import { json, makeUser, req } from "./helpers";
+import { json, makeUser, openWhats, req } from "./helpers";
 import { joined, listingBody, sact, settle, setup } from "./fixtures";
 
 // (Owner, Nov 4, §191) "What you've paid": the items ONE charge paid together (Pay what you owe's one payment, Confirm all's) are one expandable group line (the
@@ -36,7 +36,7 @@ function find(node: ReactNode, is: (e: ReactElement<Record<string, unknown>>) =>
   return is(e) ? e : find(e.props.children as ReactNode, is);
 }
 const sectionOf = (html: string, side: "developer" | "tester") => html.match(new RegExp(`<section[^>]*data-paid-list="${side}"[\\s\\S]*?</section>`))?.[0] ?? "";
-const text = (html: string) => html.replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/<[^>]+>/g, "");
+const text = (html: string) => openWhats(html).replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/<[^>]+>/g, "");
 /** One group's markup (its <li data-paid-group>). */
 const groupOf = (html: string, id: string) => html.match(new RegExp(`<li[^>]*data-paid-group="${id}"[\\s\\S]*?</details></li>`))?.[0] ?? "";
 

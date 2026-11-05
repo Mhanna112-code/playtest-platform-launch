@@ -15,10 +15,9 @@ import { disputesForSide } from "@/lib/server/disputes";
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 
 describe("<NameLink>", () => {
-  it("a person's name: a link to their profile around the cut name (title, hidden full copy)", () => {
+  it("a person's name: a link to their profile around the whole name (§245: never cut, no title or hidden copy)", () => {
     const h = renderToStaticMarkup(createElement(NameLink, { text: "Alexandria Montgomery-Wellington", href: "/app/testers/t1" }));
-    expect(h).toMatch(/^<a href="\/app\/testers\/t1" class="relative z-10 " data-name-link="person"><span class="cursor-pointer" title="Alexandria Montgomery-Wellington"/); // (§244) opens on a click
-    expect(h).toContain('data-cut-full="">Alexandria Montgomery-Wellington</span>');
+    expect(h).toBe('<a href="/app/testers/t1" class="relative z-10 " data-name-link="person">Alexandria Montgomery-Wellington</a>');
     // The tap pop-up offers the link the name sits in (Cut reads the closest a[href]).
     expect(src("components/Cut.tsx")).toContain('const link = e.currentTarget.closest("a[href]") as HTMLAnchorElement | null;');
   });

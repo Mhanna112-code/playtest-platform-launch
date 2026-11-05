@@ -1,4 +1,4 @@
-import { Cut, NameLink } from "@/components/Cut";
+import { Cut, NameLink, TestName } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { owed } from "@/lib/server/holds";
@@ -289,7 +289,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
             {reviewRows.map((r) => (
               <li key={`review-${r.id}`} id="needs-review" data-needs-review={r.id}>
                 <Link href={`/app/tests/${r.id}#needs-you`} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">
-                  <p className="min-w-0 flex-1 truncate text-slate-300" title={`${r.title} · ${plural(r.n, "part")} to pay`}><b className="text-white"><Cut text={r.title} kind="test" /></b> · {plural(r.n, "part")} to pay{r.closes && <span className="text-slate-400" data-pay-closes=""> · {r.closes}</span>}</p>
+                  <p className="min-w-0 flex-1 text-slate-300 [overflow-wrap:anywhere]"><b><TestName text={r.title} /></b> · {plural(r.n, "part")} to pay{r.closes && <span className="text-slate-400" data-pay-closes=""> · {r.closes}</span>}</p>
                   <span className="flex shrink-0 items-center gap-1 text-sm text-indigo-300">Review <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
@@ -342,7 +342,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               const why = pauseReasons(user, t);
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
               // (Owner, Nov 3, batch 35 §168) A Next round's draft not named yet: "Untitled draft (round 2)".
-              const title = <span className="text-lg font-semibold text-white" {...(t.title.trim() ? {} : { "data-untitled-draft": "" })}><Cut text={testTitleOf(t)} kind="test" /></span>;
+              const title = <span className="text-lg font-semibold" {...(t.title.trim() ? {} : { "data-untitled-draft": "" })}><TestName text={testTitleOf(t)} /></span>;
               return {
                 key: t.id, title: testTitleOf(t), product: t.productName, node: (
                 <>
@@ -499,7 +499,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
         <div className="min-w-[12rem] flex-1">
           {/* (Batch 16 section 28) The row opens the session page: while suspended, its limited view (parts, what was paid, Dispute, Charge, Let it go, Rate). */}
-          <p className="truncate font-semibold text-white" title={c.title}><Link href={`/app/sessions/${c.id}`} className="text-white" data-removed-open={c.id}><Cut text={c.title} kind="test" /></Link> {pausedTest(c.test) && <PausedTag />}</p>
+          <p className="font-semibold text-white [overflow-wrap:anywhere]"><Link href={`/app/sessions/${c.id}`} data-removed-open={c.id}><TestName text={c.title} /></Link> {pausedTest(c.test) && <PausedTag />}</p>
         </div>
         {may && (
           <Link href={`/app/find/${c.testId}`} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-rejoin={c.id}><RotateCcw className="h-4 w-4" /> Ask to rejoin</Link>
@@ -513,7 +513,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       <Link href={`/app/find/${c.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-rejoin={c.id}>
         <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
         <div className="min-w-[12rem] flex-1">
-          <p className="truncate font-semibold text-white" title={c.title}><Cut text={c.title} kind="test" /> {pausedTest(c.test) && <PausedTag />}</p>
+          <p className="font-semibold text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> {pausedTest(c.test) && <PausedTag />}</p>
           <p className="text-sm text-slate-400">{c.status === "left" ? `You left this test (${fmtDate(c.endedAt ?? c.joinedAt)}).` : `Your work ended (${fmtDate(c.endedAt ?? c.joinedAt)}).`} Your deadline is {fmtDate(c.dueAt)}.</p>
         </div>
         {!pausedTest(c.test) && <span className="btn-secondary px-3 py-1.5 text-sm"><RotateCcw className="h-4 w-4" /> Ask to rejoin</span>}
@@ -552,7 +552,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <Link href={a.href} aria-label={`${a.cta.replace(/ →$/, "")}: ${a.full ?? a.shown}`} className="absolute inset-0 rounded-2xl no-underline hover:no-underline" />
                 <CategoryTile category={mainCategory(a.c.test.categories)} size="h-10 w-10" />
                 <div className="min-w-[12rem] flex-1">
-                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><NameLink text={a.c.title} kind="test" href={a.href} className="text-white no-underline hover:underline" /></span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><TestName text={a.c.title} href={a.href} /></span> {pausedTest(a.c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                   <div className="text-sm text-slate-400 [overflow-wrap:anywhere] [&_[data-whole-line]]:relative [&_[data-whole-line]]:z-10 [&_button]:relative [&_button]:z-10" data-todo-answer-line=""><WholeLine shown={a.shown} full={a.full} /></div>
                 </div>
                 <span className="btn px-3 py-1.5 text-sm">{a.cta} <ArrowRight className="h-4 w-4" /></span>
@@ -567,7 +567,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <li className="card flex flex-wrap items-center gap-3 p-4" data-todo-part={`${c.id}:${p.key}`}>
                   <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
                   <div className="min-w-[12rem] flex-1">
-                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]" title={`${c.title} · ${p.name}`}><Cut text={c.title} kind="test" /> · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                    <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><TestName text={c.title} href={`/app/sessions/${c.id}`} /> · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                     <div className="mt-1 flex flex-wrap gap-2">
                       <span className="badge"><CalendarClock className="h-3.5 w-3.5" /> Due {fmtDate(c.dueAt)}{due ? ` · ${due}` : ""}</span>
                       {messages > 0 && <span className="badge border-fuchsia-300/40 text-fuchsia-200"><MessagesSquare className="h-3.5 w-3.5" /> {plural(messages, "unread message")}</span>}
@@ -584,7 +584,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               <li className="card flex flex-wrap items-center gap-3 p-4" data-todo-sent={c.id}>
                 <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
                 <div className="min-w-[12rem] flex-1">
-                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={c.title}><Cut text={c.title} kind="test" /></span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
+                  <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="min-w-0 [overflow-wrap:anywhere]"><TestName text={c.title} href={`/app/sessions/${c.id}`} /></span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
                   <p className="text-sm text-slate-400">Every part sent</p>
                 </div>
                 <Link href={`/app/sessions/${c.id}#parts`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
@@ -607,7 +607,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {waitingApps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
-                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-app-waiting-title=""><Cut text={appTests.get(a.testId)?.title ?? "A test"} kind="test" /> {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-app-waiting-title=""><TestName text={appTests.get(a.testId)?.title ?? "A test"} /> {appTests.get(a.testId) && pausedTest(appTests.get(a.testId)!) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {a.kind === "rejoin" ? "Ask to rejoin waiting" : "Application waiting"}</span>
                 </Link>
               </li>
@@ -615,7 +615,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {inviteOnlyApps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-invite-only="">
-                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-invite-only-title=""><Cut text={appTests.get(a.testId)?.title ?? "A test"} kind="test" /></p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]" data-invite-only-title=""><TestName text={appTests.get(a.testId)?.title ?? "A test"} /></p>
                   <span className="badge border-slate-400/40 text-slate-300">Closed to new testers (invite only)</span>
                 </Link>
               </li>
@@ -627,7 +627,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               const opens = listed && !s.late ? chargeOpensAt(s, c.test, c, now) : null;
               const inner = (
                 <>
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}><Cut text={c.title} kind="test" /> {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300"><Clock className="h-3.5 w-3.5" /> {s.kind === "recording" ? "Screen recording" : "Written answers"} sent: waiting for review</span>
                   {opens && opens > now && <p className="basis-full text-xs text-slate-400" data-charge-opens="">{chargeOpensNote(displayName(c.test.developer), pieceDay(opens, user.timeZone))}</p>}
                   {listed && s.late && <p className="basis-full text-xs text-slate-400" data-sent-late="">{lateSentLine(fmtDate(c.dueAt), displayName(c.test.developer))}</p>}
@@ -645,7 +645,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {waitingCalls.map(({ c, x, minutes, cents }) => {
               const inner = (
                 <>
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={c.title}><Cut text={c.title} kind="test" /> {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="badge text-amber-300" data-waiting-call-line=""><Clock className="h-3.5 w-3.5" /> Live call on {pieceDay(x.startsAt, user.timeZone)} · {minutes} min: waiting for review</span>
                   {cents != null && <span className="text-sm text-slate-300" data-waiting-call-amount="">{money(cents)}</span>}
                 </>
@@ -679,7 +679,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>
                 <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
-                  <p className="min-w-[12rem] flex-1 truncate font-medium text-white" title={`${c.title} · ${plural(parts.length, "part")}`}><Cut text={c.title} kind="test" /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
+                  <p className="min-w-[12rem] flex-1 font-medium text-white [overflow-wrap:anywhere]"><TestName text={c.title} /> · {plural(parts.length, "part")} {pausedTest(c.test) && <PausedTag />}</p>
                   <span className="btn px-3 py-1.5 text-sm">Charge or let it go <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
@@ -699,7 +699,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 <li key={x.id} className="flex flex-wrap items-center gap-2 py-2 text-sm">
                   {/* (Owner, Nov 3, long text) Only the names are cut with "…": the call's day, time and length always show (a line of their own when the names are long).
                       (Owner, Nov 5, §209; was §186's Call history "Booked (N)") It opens that call's own row in the session's Live session, with its Join call. */}
-                  <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline" title={`${displayName(c.test.developer)} · ${c.title}`}><span className="min-w-0 max-w-full truncate"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <Cut text={c.title} kind="test" /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
+                  <Link href={`/app/sessions/${c.id}#call-${x.id}`} className="mr-auto flex min-w-0 max-w-full flex-wrap items-baseline gap-x-1 text-slate-200 no-underline hover:underline"><span className="min-w-0 max-w-full [overflow-wrap:anywhere]"><b className="text-white"><Cut text={displayName(c.test.developer)} /></b> · <TestName text={c.title} /></span> <span className="whitespace-nowrap">· {fmtDateTime(x.startsAt)} · {x.minutes} min <ArrowRight className="inline h-4 w-4 text-indigo-300" /></span></Link>
                   {/* (Batch 15 sections 35 and 38) Join wherever a call is listed, from 10 minutes before to 30 minutes after its booked end. */}
                   {callJoinable(x, now) && !testPaused(c.test.developer, c.test) && <JoinCall callId={x.id} />}
                   {/* (Batch 18 section 13; batch 21) The camera and microphone check, once per upcoming call. */}
@@ -765,8 +765,8 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   <Link href={`/app/find/${t.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
                     <CategoryTile category={mainCategory(t.categories)} size="h-10 w-10" />
                     <div className="min-w-[12rem] flex-1">
-                      {t.productName && <p className="kicker truncate" title={t.productName}><Cut text={t.productName} kind="product" /></p>}
-                      <p className="truncate font-semibold text-white" title={t.title}><Cut text={t.title} kind="test" /></p>
+                      {t.productName && <p className="kicker [overflow-wrap:anywhere]"><Cut text={t.productName} kind="product" /></p>}
+                      <p className="font-semibold text-white [overflow-wrap:anywhere]"><TestName text={t.title} /></p>
                       <div className="mt-1 flex flex-wrap gap-2"><PartBadges written={t.writtenCents != null} recording={t.recordingCents != null} live={t.liveRateCents != null} /><CategoryBadges categories={t.categories} /></div>
                     </div>
                     <div className="ml-auto max-w-full text-right">
@@ -791,7 +791,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
                 <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>
                   <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
-                    <span className="block truncate" title={c.title}><Cut text={c.title} kind="test" /></span>
+                    <span className="block [overflow-wrap:anywhere]"><TestName text={c.title} /></span>
                     <span className="block text-sm font-normal text-slate-400">by <Cut text={displayName(c.test.developer)} /> · joined {fmtDate(c.joinedAt)}</span>
                   </span>
                   <span className="badge border-emerald-400/40 text-emerald-200">In progress</span>
@@ -805,7 +805,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
               const inner = (
                 <>
                   <span className="min-w-[min(100%,12rem)] flex-1 font-medium text-white">
-                    <span className="block truncate" title={c.title}><Cut text={c.title} kind="test" /></span>
+                    <span className="block [overflow-wrap:anywhere]"><TestName text={c.title} /></span>
                     <span className="block text-sm font-normal text-slate-400">by <Cut text={displayName(c.test.developer)} /> · {tag === "You left" ? "left" : "ended"} {fmtDate(c.endedAt ?? c.joinedAt)}</span>
                   </span>
                   <span className="badge border-white/20 text-slate-300" data-history-tag="">{tag}</span>

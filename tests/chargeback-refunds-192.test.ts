@@ -12,7 +12,7 @@ import { paidOutTotal } from "@/lib/server/paymentRows";
 import { accountPaymentsForAdmin, developerPaid, stripeUrl } from "@/lib/server/paymentLists";
 import { DevPaidList } from "@/components/PaymentLists";
 import { setStripeForTests } from "@/lib/server/stripe";
-import { makeUser } from "./helpers";
+import { makeUser, openWhats } from "./helpers";
 import { joined, sact, settle, setup } from "./fixtures";
 
 // (Owner, Nov 4, batch 35 §192) Refunds are their own negative lines in "What you've paid" (under the payment they refund; the total is the signed sum of the lines and
@@ -74,7 +74,7 @@ const notes = async (devId: string) => (await db.accountEvent.findMany({ where: 
 const adminMails = (pi: string) => db.outboxEmail.findMany({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest: a chargeback" }, text: { contains: pi } } });
 const PIECE = "Ana Silva's written answers on “Harbor Run”";
 const fmt = (d: Date) => fmtDateTimeIn(d, "UTC");
-const textOf = (html: string) => html.replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/<[^>]+>/g, "");
+const textOf = (html: string) => openWhats(html).replace(/&#x27;/g, "'").replace(/&amp;/g, "&").replace(/<[^>]+>/g, "");
 
 /** A reversed $X payment (the bank took back `disputed`), repaid the way a 1st chargeback is: card verified, Pay what you owe reserves, the team approves. */
 async function repaid(paidCents: number, disputed: number) {

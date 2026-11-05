@@ -1,4 +1,4 @@
-import { Cut } from "@/components/Cut";
+import { Cut, TestName } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateIn } from "@/lib/format";
 import { discoveryV } from "@/lib/server/pageFreshness";
@@ -149,8 +149,8 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
                     <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
                       <div className="min-w-[min(100%,10rem)] flex-1">
                         {t.productName && <p className="kicker"><Cut text={t.productName} kind="product" /></p>}
-                        <p className="truncate font-semibold text-white" title={t.title}><Cut text={t.title} kind="test" /></p>
-                        <p className="truncate text-sm text-slate-400">by <Cut text={displayName(t.developer)} />{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
+                        <p className="font-semibold"><TestName text={t.title} /></p>
+                        <p className="text-sm text-slate-400 [overflow-wrap:anywhere]">by <Cut text={displayName(t.developer)} />{devRatings.get(t.developerId) && ` · ${devRatings.get(t.developerId)}`}</p>
                       </div>
                       <div className="ml-auto max-w-full shrink-0 text-right sm:max-w-[50%]">
                         <p className="whitespace-nowrap text-lg font-bold text-emerald-300">{fromText(t)}</p>

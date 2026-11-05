@@ -48,11 +48,11 @@ describe("§202 bell lines: 30 characters, then the whole line on the arrow", ()
     expect(html).toContain(">Your tests are running again</a>");
     // The heading is unchanged ("Paid · 2 payments today"); its preview of the newest line is cut at 30 the same way.
     expect(html).toContain("Paid · 2 payments today");
-    // The whole line: opened by the arrow, read like a click, in a small scroll box.
+    // The whole line: opened by the arrow, read like a click, in place (§246: inline; the small scroll box only over 200 characters).
     const list = src("app/app/notifications/BellList.tsx");
     expect(list).toContain("if (!wide) markRead([l]);");
-    expect(list).toContain('<ResizeBox id={`bell-${l.id}`}');
-    expect(list).toContain("{keepAmounts(l.text)}");
+    expect(list).toContain('opensInBox(l.text) ? <OwnPanel><ResizeBox id={`bell-${l.id}`}');
+    expect(list).toContain("{bellWords(l.text, l.test)}");
   });
 });
 

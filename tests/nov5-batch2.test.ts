@@ -27,15 +27,16 @@ describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
     expect(EMAIL_STACKED).toContain(DMS_GROUP);
   });
 
-  it("§216: payment rows open their whole text with the arrow, never a hover", () => {
+  it("§216 (§246): payment rows open their whole text with the arrow (WhatLine: the 'what' cut at 30), never only a hover", () => {
     for (const f of ["src/components/PaymentLists.tsx", "src/components/PartPayments.tsx", "src/components/OwedBox.tsx", "src/app/app/payments/page.tsx"]) {
       const s = read(f);
-      expect(s).toContain("<WholeLine shown=");
+      expect(s).toContain("<WhatLine text=");
+      expect(s).not.toContain("<WholeLine");
       expect(s).not.toMatch(/title=\{(o|line|r|l|x|p)\.full\}/);
     }
     const w = read("src/components/WholeLine.tsx");
-    expect(w).toContain("const cut = !!full && full !== shown;");
-    expect(w).toContain("<ResizeBox"); // (§220) opened in place, in the draggable panel
+    expect(w).toContain("const short = bellShort(text);");
+    expect(w).toContain("if (opensInBox(text)) return ("); // (§246) the draggable panel only over 200 characters
   });
 
   it("the join popup is at most a screen tall and its changes show 3, then scroll", () => {
@@ -79,7 +80,8 @@ describe("(Owner, Nov 5) §220 a cut row opens in place", () => {
     expect(w).toContain('<ResizeBox id={`whole-${id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>');
     expect(w).toContain('aria-label="Show the whole name" data-name-toggle=""');
     const b = read("src/app/app/notifications/BellList.tsx");
-    expect(b).toContain('<ResizeBox id={`bell-${l.id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>');
+    // (§246) A bell line opens inline; the draggable panel only over LINE_BOX_OVER (200).
+    expect(b).toContain('opensInBox(l.text) ? <OwnPanel><ResizeBox id={`bell-${l.id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>');
     expect(b).not.toContain("ml-5 mt-1 max-h-32 overflow-y-auto");
   });
 });

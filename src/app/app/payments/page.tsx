@@ -1,5 +1,5 @@
-import { Cut } from "@/components/Cut";
-import { WholeLine } from "@/components/WholeLine";
+import { Cut, TestName } from "@/components/Cut";
+import { WhatLine } from "@/components/WholeLine";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateTimeIn } from "@/lib/format";
 import { deferredForBox } from "@/lib/server/holds";
@@ -140,7 +140,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       }))}
       {dev && waitingCharges.length > 0 && <section className="card space-y-3" id="waiting-charges" data-waiting-charges="">
         <h2>Charged once your tests resume</h2>
-        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><WholeLine shown={p.what} full={p.full} href={p.href} after={<> · {money(p.amountCents)}</>} /></li>)}</LongList>
+        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><WhatLine text={p.full || p.what} href={p.href} after={<> · {money(p.amountCents)}</>} /></li>)}</LongList>
       </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {/* (Owner, Nov 3, §147) Confirm all above the list (its state first: a Confirm all check that ran out lets go before the list is read). */}
@@ -185,7 +185,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
             <LongList as="div" shown={5} tall="max-h-[28rem]" className="space-y-3">
             {sent.filter((c) => c.submissions.length + c.calls.filter((x) => x.review).length > 0).map((c) => (
               <div key={c.id} className="space-y-1">
-                <p className="text-sm font-medium text-slate-200"><Cut text={c.title} kind="test" /> <span className="font-normal text-slate-500">· <Cut text={c.test.developer.name || c.test.developer.email} kind={c.test.developer.name ? "person" : "email"} /></span></p>
+                <p className="text-sm font-medium text-slate-200"><TestName text={c.title} href={`/app/sessions/${c.id}`} /> <span className="font-normal text-slate-500">· <Cut text={c.test.developer.name || c.test.developer.email} kind={c.test.developer.name ? "person" : "email"} /></span></p>
                 <ul className="divide-y divide-white/5 text-sm">
                   {[
                     ...c.submissions.map((x) => ({ id: x.id, at: x.sentAt, what: x.kind === "recording" ? "Screen recording" : "Written answers", review: x.review, dispute: x.dispute })),

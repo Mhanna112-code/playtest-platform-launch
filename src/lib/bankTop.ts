@@ -48,6 +48,15 @@ export const pieceWords = {
 export const bankTopLead = (cents: number, test: string | null, what: string | null) =>
   what == null ? `${money(cents)} for your plan` : `${money(cents)}${test ? ` on “${test}”` : ""} · ${what}`;
 
+/**
+ * (Owner, Nov 5, batch 35 §246) A lead split for the row: its amount (always shown, outside the cut), the separator after it, and the "what" (cut at 30 with the
+ * arrow). A lead that doesn't start with an amount is all "what".
+ */
+export function splitLead(lead: string): { amount: string; sep: string; what: string } {
+  const m = /^(\$[\d,]+\.\d{2})( · | )([\s\S]*)$/.exec(lead);
+  return m ? { amount: m[1], sep: m[2], what: m[3] } : { amount: "", sep: "", what: lead };
+}
+
 /** `full`: the lead with the names uncut, the row's hover (§131). */
 export type BankTopRow = { id: string; lead: string; full: string; by: string; soon: boolean; href: string; at: number; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: { name: string; href: string }[]; /** (§147) an open Confirm all check (drawn by Confirm all, not as a row) */ all?: boolean; /** (§147) its amount: over $200 its Confirm needs the tick */ cents?: number };
 

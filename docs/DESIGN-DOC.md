@@ -715,8 +715,8 @@ From Every page: red field checks, kept drafts ("Not posted yet"), ranges shown 
 
 **What are testers trying?**
 
-1. **Product** (up to 60 characters): the game, website, app or other product.
-2. **Name of this test** (required, 10–60 characters).
+1. **Product** (up to 20 characters; owner, Nov 5, BATCH-35 §245, was 60): the game, website, app or other product.
+2. **Name of this test** (required, 10–20 characters; BATCH-35 §245, was 60).
 3. **What should testers do** (required, 10–20,000, with the counter "N / 20,000"). Counters show on all three; under 10 characters the name's and the steps' read "6 / 10 minimum", and the red line, the same at the field and from the server, is "Name of this test: at least 10 characters (6 so far)." / "What should testers do: at least 10 characters (6 so far)." (trimmed). Edit checks the minimum only on a field that changed, so an older test's short name or steps never block saving another field.
 
    [image: Counters on Product, Name of this test and What should testers do.]
@@ -1894,7 +1894,7 @@ One row per change. A test is paused while its developer has any hold or suspens
 | Close-out | 14 days after the last tester's deadline (moved by pauses and outages); each piece keeps Charge, Let it go and Pay at least 14 days after its Charge opened (plus any time the tester side was suspended) |
 | Pay more | until the piece's cap, and at most until the test's last Pay / Charge closes; a grey "Pay more closes on <date>." in its last 7 days |
 | Closing-soon reminders | developer: 1 month (if it was more than a month away when Charge opened), 1 week, 3 days and 1 day before a piece closes, one line a day across tests; tester: one "Charge or let go" line a day while anything is open; both emailed whatever the setting |
-| Product, test name | 60 characters each; the test name at least 10 |
+| Product, test name | 20 characters each (BATCH-35 §245; were 60); the test name at least 10; never cut ("…") anywhere |
 | What should testers do | 10–20,000 characters |
 | NDA | 1,000 characters (an Edit Save that changes a longer old NDA must fit) |
 | Written part | 20,000 characters for all its answers together, and 20,000 for each addition on its own; at most 5 additions per question and 5 to "Anything else" (a question's first answer, when it had none, is free: batch 35 §222); each answer to a question at least 50 ("Anything else" has no minimum); up to 5 attachments, 500 MB each (images, PDF, plain text, zip), plus recordings |
@@ -1918,7 +1918,8 @@ One row per change. A test is paused while its developer has any hold or suspens
 | Tests per tester | 10 at once |
 | Recordings | 500 MB each; up to 5 on the Recording part, sent together; a written part's attachments count separately |
 | Uploads per account | 3 GB a day ("You've uploaded a lot today. Try again tomorrow."); an upload not finished within 3 hours is removed |
-| Names | at least 1 character |
+| Names | 1–20 characters (BATCH-35 §245): over 20 is refused at sign-up and on the profile ("Keep your name to 20 characters."), never cut silently; Google's name is cut to its first 20; never cut ("…") anywhere |
+| A payment, confirm or bell row's "what" | first 30 characters, then "…" and the arrow; opens in place, a draggable box only over 200 characters (BATCH-35 §246) |
 | Age | 18 or older, confirmed at sign-up (email or Google) |
 | Reasons and notes | 1,000 characters (the team's reasons and decision notes, Pay notes, the reason for paying $0 or less than the listing) |
 | End early's and Stop's reasons | required, 5–10,000 characters |

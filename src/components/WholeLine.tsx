@@ -3,6 +3,7 @@ import { useId, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
 import { keepAmounts } from "@/components/Amounts";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
+import { bellShort, opensInBox } from "@/lib/bell";
 
 /** (Owner, Nov 5, §220) The shown line split at each "…": the cut text, and what each "…" stands for in the whole line (null: they don't line up). */
 export function cutPieces(shown: string, full: string): { text: string; hidden?: string }[] | null {
@@ -66,4 +67,39 @@ export function WholeLine({ shown, full, href, after, className = "", render, ch
 export function NameLine({ shown, full, name, href }: { shown: string; full: string | null; name?: string; href?: string | null }) {
   const linked = (t: string): ReactNode => (name && href && t.includes(name) ? t.split(name).flatMap((part, i) => (i ? [<a key={i} href={href} data-name-link="person">{name}</a>, part] : [part])) : t);
   return <WholeLine shown={shown} full={full} render={linked} />;
+}
+
+/**
+ * (Owner, Nov 5, batch 35 §246) A payment row's, a confirm row's (and, the same way, a bell line's) "what": closed, its first 30 characters (bellShort: never inside a
+ * word or an amount) with "…" and the arrow beside it; the arrow opens the whole "what" IN PLACE as plain text, wrapped, no box (only a line over LINE_BOX_OVER,
+ * 200 characters, opens in the draggable box). A "what" of 30 characters or fewer shows whole, with no arrow. Nothing else is cut (names and test titles are at most
+ * 20 characters), so there are no per-name "…" toggles. The amount, dates, the marks and every button sit OUTSIDE it (`after`, or the row around it), always shown.
+ * A mouse hover shows the whole "what" (§244). `href` links the words; `render` draws a piece of the text (the confirm rows' green test-name links, §245).
+ */
+export function WhatLine({ text, href, after, className = "", render, startOpen = false }: { text: string; href?: string; after?: ReactNode; className?: string; render?: (t: string) => ReactNode;
+  /** drawn opened at first (the arrow still closes it) */ startOpen?: boolean }) {
+  const [open, setOpen] = useState(startOpen);
+  const id = useId();
+  const draw = render ?? keepAmounts;
+  const short = bellShort(text);
+  const words = (t: ReactNode) => (href ? <a className="hover:underline" href={href} data-what-text="">{t}</a> : <span className={className || undefined} data-what-text="">{t}</span>);
+  if (!short) return <>{words(draw(text))}{after}</>;
+  const arrow = (
+    <button type="button" className="ml-1 inline-flex rounded p-0.5 align-middle text-slate-400 hover:bg-white/10 hover:text-slate-100" aria-expanded={open}
+      aria-label={open ? "Hide the whole line" : "Show the whole line"} data-whole-toggle="" onClick={() => setOpen(!open)}>
+      <ChevronDown className={`h-4 w-4 transition ${open ? "rotate-180" : ""}`} />
+    </button>
+  );
+  if (!open) return <><span title={text} data-what-cut="">{words(draw(short))}</span>{arrow}{after}</>;
+  if (opensInBox(text)) return (
+    <span className="block" data-whole-line="" data-what-box="">
+      <OwnPanel>
+        <ResizeBox id={`what-${id}`} label="The whole line" defaultMax="6rem" tallest={0.5}>
+          <span className="block whitespace-pre-wrap break-words font-normal">{words(draw(text))}</span>
+        </ResizeBox>
+      </OwnPanel>
+      {arrow}{after}
+    </span>
+  );
+  return <><span className="whitespace-pre-wrap [overflow-wrap:anywhere]" data-what-open="">{words(draw(text))}</span>{arrow}{after}</>;
 }

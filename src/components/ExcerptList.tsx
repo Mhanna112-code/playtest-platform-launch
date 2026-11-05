@@ -1,4 +1,4 @@
-import { Cut } from "@/components/Cut";
+import { Cut, TestName } from "@/components/Cut";
 import { QuestionText, ValueText } from "@/components/QA";
 import { ExcerptRemove } from "@/components/Excerpts";
 import { qText } from "@/lib/questions";
@@ -52,7 +52,7 @@ export function MyExcerpts({ items, canRemove = true }: { items: Mine[]; canRemo
               <div className="min-w-0 flex-1 space-y-1">
                 <ExcerptQuestion id={x.id} question={x.question} />
                 <ExcerptQuote id={`excerpt-text-${x.id}`} text={x.text} />
-                <span className="block text-xs text-slate-400">From <Cut text={x.testTitle} kind="test" /> (shown as <Cut text={x.source} kind="product" />) · {x.state}</span>
+                <span className="block text-xs text-slate-400">From <TestName text={x.testTitle} /> (shown as <Cut text={x.source} kind="product" />) · {x.state}</span>
               </div>
               {canRemove && <ExcerptRemove excerptId={x.id} />}
             </li>

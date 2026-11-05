@@ -1,4 +1,5 @@
 import { CountedInput } from "@/components/CountedInput";
+import { LIMITS } from "@/lib/limits";
 import { EMAIL_MAX } from "@/lib/format";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -31,7 +32,7 @@ export default async function SignupPage() {
         <RoleChoice>
           <div>
             <label className="label req" htmlFor="name">Name</label>
-            <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
+            <CountedInput minLength={1} maxLength={LIMITS.personName} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
           </div>
         </RoleChoice>
         {/* (Owner, Nov 1, §114) "This account was closed." (a deleted account's email that can't sign up again) is red here too, with Contact us after it. */}

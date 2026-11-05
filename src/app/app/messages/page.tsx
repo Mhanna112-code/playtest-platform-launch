@@ -1,4 +1,4 @@
-import { Cut } from "@/components/Cut";
+import { Cut, TestName } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { messagesV } from "@/lib/server/pageFreshness";
@@ -57,7 +57,7 @@ export default async function MessagesPage() {
               {/* (Owner, Nov 3, long text) A long name wraps inside the card (never past it); the test's name then goes under it, cut with "…". */}
               <p className="flex min-w-0 flex-wrap items-baseline gap-x-1 font-medium text-white">
                 {r.hover ? <span className="relative z-10 min-w-0 max-w-full" data-person-hover=""><PersonHover {...r.hover} /></span> : <span className="min-w-0 max-w-full"><Cut text={r.other} /></span>}
-                <span className="min-w-0 max-w-full truncate text-sm font-normal text-slate-400" title={`${r.other} · ${r.title}`}>· {r.id.startsWith("direct:") ? r.title : <Cut text={r.title} kind="test" />}</span>
+                <span className="min-w-0 max-w-full text-sm font-normal text-slate-400 [overflow-wrap:anywhere]">· {r.id.startsWith("direct:") ? r.title : <TestName text={r.title} />}</span>
               </p>
               <p className="truncate text-sm text-slate-400">{r.lastBody ? <>{r.mine ? "You" : <Cut text={r.other} />}: {r.lastBody}</> : "No messages yet."}</p>
             </div>

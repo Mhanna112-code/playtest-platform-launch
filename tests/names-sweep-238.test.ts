@@ -81,10 +81,10 @@ describe("§238 the tester dashboard", () => {
     expect(src("app/app/page.tsx")).toContain("...cutNamesIn(`${displayName(c.test.developer)} asked for a live call`, [displayName(c.test.developer)])");
   });
 
-  it("Waiting for the developer: the application and invite-only cards cut the test's name (Cut, kind test), with no truncate or title hover", () => {
+  it("Waiting for the developer: the application and invite-only cards show the test's name whole and green (§245, TestName), with no truncate or title hover", () => {
     const page = src("app/app/page.tsx");
-    expect(page).toContain('data-app-waiting-title=""><Cut text={appTests.get(a.testId)?.title ?? "A test"} kind="test" />');
-    expect(page).toContain('data-invite-only-title=""><Cut text={appTests.get(a.testId)?.title ?? "A test"} kind="test" /></p>');
+    expect(page).toContain('data-app-waiting-title=""><TestName text={appTests.get(a.testId)?.title ?? "A test"} />');
+    expect(page).toContain('data-invite-only-title=""><TestName text={appTests.get(a.testId)?.title ?? "A test"} /></p>');
     expect(page).not.toContain('truncate font-medium text-white" title={appTests.get(a.testId)');
     expect(page).not.toContain('<span className="truncate" title={a.c.title}>');
   });
@@ -119,13 +119,13 @@ describe("§238 the join page", () => {
 });
 
 describe("§238 the admin's Reports list", () => {
-  it("each name is cut (its profile link kept), each email cut in the middle, the label after the email", () => {
+  it("each name whole (§245: never cut; its profile link kept), each email cut in the middle, the label after the email", () => {
     const EMAIL = "maximiliana.alexandrina.lopez@playtest.test";
     const row: ReportVM = { id: "r1", at: new Date().toISOString(), reporter: `${DEV} (Reported more than 3 times)`, reporterName: DEV, reporterHref: "/app/developers/d1", reporterEmail: EMAIL, reported: "Ana Silva", reportedName: "Ana Silva", reportedHref: "/app/testers/t1", reportedEmail: "ana@playtest.test", when: "Nov 5", note: "Rude" };
     const html = unescape(renderToStaticMarkup(h(PagedList, { kind: "reports", initial: { rows: [row], next: null, total: 1 } as never, fixed: true })));
     const p = block(html, 'data-report-row="r1"', "div");
-    expect(p).toContain(`<a href="/app/developers/d1" data-report-name=""><span class="cursor-pointer" title="${DEV}"`); // (§244) opens on a click
-    expect(p).toContain(`>${cutTo(DEV)}</span>`);
+    expect(p).toContain(`<a href="/app/developers/d1" data-report-name="">${DEV}</a>`);
+    expect(p).not.toContain(`>${cutTo(DEV)}</span>`);
     expect(p).toContain(`>${cutEmail(EMAIL)}</span>`);
     expect(p).toContain("</span>) (Reported more than 3 times) reported ");
     expect(p).toContain('<a href="/app/testers/t1" data-report-name="">Ana Silva</a> (ana@playtest.test) · Nov 5');

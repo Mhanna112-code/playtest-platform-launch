@@ -45,20 +45,19 @@ describe("<Cut>", () => {
     expect(html("ana@playtest.test", "email")).toBe("ana@playtest.test");
   });
 
-  it("a long name: the cut text with a dotted underline, the full text kept in the page and in title / aria-label", () => {
-    const h = html("Alexandria Montgomery-Wellington");
-    expect(h).toContain('title="Alexandria Montgomery-Wellington"');
-    expect(h).toContain('aria-label="Alexandria Montgomery-Wellington"');
-    expect(h).toMatch(/<span aria-hidden="true" class="select-none underline decoration-dotted[^"]*" data-cut-shown="">Alexandria Montgomer…<\/span>/);
-    // The full name, visually hidden, right after the cut one: selecting and copying the row gives the full name.
-    expect(h).toContain('<span class="sr-only" data-cut-full="">Alexandria Montgomery-Wellington</span>');
-    expect(h).toContain('data-cut="person"');
+  it("(§245) a person's, a test's and a product's name are never cut (at most 20 characters); an email still is, with the full text kept", () => {
+    expect(html("Alexandria Montgomery-Wellington")).toBe("Alexandria Montgomery-Wellington");
+    expect(html("Underwater Harbor Run Deluxe", "test")).toBe("Underwater Harbor Run Deluxe");
+    expect(html("Underwater Harbor Run Deluxe Edition", "product")).toBe("Underwater Harbor Run Deluxe Edition");
     const e = html("maximiliana.alexandrina@playtest.test", "email");
+    expect(e).toContain('title="maximiliana.alexandrina@playtest.test"');
+    // The full email, visually hidden, right after the cut one: selecting and copying the row gives the full email.
+    expect(e).toContain('data-cut="email"');
     expect(e).toContain(">maximiliana.alexandr…@playtest.test</span>");
     expect(e).toContain('data-cut-full="">maximiliana.alexandrina@playtest.test</span>');
   });
 
-  it("the pop-up opens only for a cut name on a touch screen (no hover); with a mouse a click does what it did", () => {
+  it("the pop-up opens only for a cut name or email (§244: every device; §245: only an email is still cut)", () => {
     expect(opensPopup(true, true)).toBe(true);
     expect(opensPopup(true, false)).toBe(true); // (§244) every device
     expect(opensPopup(false, true)).toBe(false);
@@ -95,16 +94,16 @@ describe("names listed on pages use <Cut>", () => {
   it("the dashboards, the test page, Find, Messages, the bell, the call header and the admin lines", () => {
     const page = src("app/app/page.tsx");
     expect(page).toContain('<span className="font-medium text-white"><NameLink text={r.who} href={r.whoHref} /></span>'); // (batch 35 §137) a link to their profile
-    expect(page).toContain('<b className="text-white"><Cut text={r.title} kind="test" /></b>');
+    expect(page).toContain('<b><TestName text={r.title} /></b>'); // (§245) whole and green
     expect(page).toContain('<p className="kicker"><Cut text={t.productName} kind="product" /></p>');
     const test = src("app/app/tests/[id]/page.tsx");
     expect(test).toContain('<h3 className="mr-auto min-w-0 max-w-[calc(100%-1.25rem)] font-semibold text-white" data-tester-fold-name=""><NameLink fit text={name} href={personHref} /></h3>'); // (batch 35 §140) the name folds the row; (§166) it is the green profile link
     expect(src("app/app/find/page.tsx")).toContain("by <Cut text={displayName(t.developer)} />");
-    expect(src("app/app/messages/page.tsx")).toContain('<Cut text={r.title} kind="test" />');
+    expect(src("app/app/messages/page.tsx")).toContain('<TestName text={r.title} />');
     expect(src("components/PersonHover.tsx")).toContain("<NameLink text={p.name} href={p.href}"); // (§166) NameLink cuts it too
-    expect(src("app/app/CallsBox.tsx")).toContain('<b className="text-white"><Cut text={c.who} /></b> · <Cut text={c.test} kind="test" />');
+    expect(src("app/app/CallsBox.tsx")).toContain('<b className="text-white"><Cut text={c.who} /></b> · <TestName text={c.test} />');
     expect(src("app/app/calls/[id]/page.tsx")).toContain('“<Cut text={call.contract.title} kind="test" />”');
-    expect(src("app/admin/AdminRich.tsx")).toContain("<Cut");
+    expect(src("app/admin/AdminRich.tsx")).toContain('<Cut key={m.index} text={m[0]} kind="email" />'); // (§245) only emails are cut there
     // Left alone: a page's own heading, the bell's and emails' words, and the payment sentences (already cut by pieceName).
     expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain('<h1 className="text-3xl font-bold tracking-tight text-white">{p.title}</h1>');
     expect(src("app/app/calls/[id]/page.tsx")).toContain("Call with {otherName}</h1>");

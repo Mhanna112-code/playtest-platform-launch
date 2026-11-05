@@ -705,6 +705,14 @@ export async function tellArrived(p: { contractId: string | null; submissionId: 
 }
 
 /** (Owner, Nov 5, §240) Pay what you owe's line for a charge made before the hold whose bank check is still open. */
+/**
+ * (Owner, Nov 5, batch 35 §246) A Pay what you owe line split for the page: `what` (the payment named, cut at 30 with its arrow) and `rest` (its amount, the chargeback
+ * fee, its status and date), always shown outside the cut. A chargeback line "Your bank reversed $10 you paid for …: $10 + $15 chargeback fee" splits at its last ": ".
+ */
+export function owedSplit(line: string): { what: string; rest: string } {
+  const at = line.lastIndexOf(": ");
+  return at > 0 ? { what: line.slice(0, at), rest: line.slice(at) } : { what: line, rest: "" };
+}
 export const OWED_BANK_WAIT_TAIL = "waiting for your bank (Confirm with your bank)";
 
 /**
@@ -795,12 +803,12 @@ export async function owedLines(devId: string) {
     // (Owner, Nov 3) `cb`: what a press's stop needs to name a change of the reversed amount (the payment, the piece, what the bank took back now).
     const cb = { paidCents: p.paidCents, reversedCents: p.reversedCents, piece: paidFor ? pieceName({ tester: paidFor.name, part: paidFor.part, test: paidFor.test, when }) : null, one: one[0] }; // (§178) a call with its date and time
     out.push(p.chargeback === "open"
-      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, paidFor, false, p.paidCents, one[0]), full: chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents, one[1]), cb, ...(covers ? { covers } : {}) }
+      ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "chargeback" as const, text: chargebackOwedLine(p.reversedCents, paidFor, false, p.paidCents, one[0]), full: chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents, one[1]), ...owedSplit(chargebackOwedLine(p.reversedCents, paidFor, true, p.paidCents, one[1])), cb, ...(covers ? { covers } : {}) }
       : tail !== null
         // (Owner, Oct 28 afternoon) Added while the tests were paused: never tried on the card yet. (§125) A charge waiting for the lift ("deferred") is paid with
         // what you owe, as one payment, and reads the same.
-        ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what}${tail}`, full: `${whole}${tail}` }
-        : { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")), full: failedLine(whole, p.amountCents, p.createdAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")) });
+        ? { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "owed" as const, text: `${what}${tail}`, full: `${whole}${tail}`, what: whole, rest: tail }
+        : { id: p.id, ...lock, amountCents: p.amountCents, until: null as string | null, source: "failed" as const, text: failedLine(what, p.amountCents, p.createdAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")), full: failedLine(whole, p.amountCents, p.createdAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")), what: whole, rest: failedLine(whole, p.amountCents, p.createdAt, (d) => fmtDate(d).replace(/, \d{4}$/, "")).slice(whole.length) });
   }
   return out;
 }

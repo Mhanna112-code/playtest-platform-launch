@@ -5,8 +5,12 @@ export const LIMITS = {
   deadlineBufferDays: 3,
   openUntilMaxDays: 30, // (Owner, Oct 29, batch 12) required, 3 to 30 days after today on Post; Edit moves it only later, within 30 days of today
   openUntilMinDays: 3,
-  productName: 60,
-  testName: 60,
+  /** (Owner, Nov 5, batch 35 §245; was 60) The product's name: at most 20 characters like a test's title, never cut. Older longer ones were shortened by a migration. */
+  productName: 20,
+  /** (Owner, Nov 5, batch 35 §245; was 60) A test's own name: at most 20 characters, so it is never cut ("…") or expanded anywhere. Older longer titles were shortened by a migration. */
+  testName: 20,
+  /** (Owner, Nov 5, batch 35 §245; sign-up and the profile cut at 80 before) A person's name (User.name): at most 20 characters, refused over it (never cut silently), except Google's name, which is cut to 20 (editable later). */
+  personName: 20,
   buildUrl: 2048, // (Owner, Nov 3) the product or build link: the common web limit for links (long signed download links fit); over it is refused, never cut
   whatToDo: 20_000, // (Owner, Oct 30, batch 15 section 17; was 1,000)
   matureWhy: 500,
@@ -44,6 +48,18 @@ export const LIMITS = {
   criticalChanges: 3, // (Owner, Oct 28 afternoon) per field: saves that change the steps (What to do), questions, required languages or required devices, each counted from the first join
   contactPerDay: 5, // (Owner, Oct 27) Contact us messages per account per day
 } as const;
+
+/** (Owner, Nov 5, batch 35 §245) A name over 20 characters, at the Name field of sign-up (email and Google's step) and the profile. */
+export const NAME_TOO_LONG = `Keep your name to ${LIMITS.personName} characters.`;
+/**
+ * (Owner, Nov 5, batch 35 §245) A name cut to fit the limit (Google's name for a new account; the person can edit it later): its first `n` characters (never
+ * splitting an emoji), with spaces at the end trimmed. Unchanged when it fits.
+ */
+export function fitName(name: string, n: number = LIMITS.personName) {
+  const chars = Array.from(name.trim());
+  while (chars.join("").length > n) chars.pop();
+  return chars.join("").trimEnd();
+}
 
 /**
  * (Owner, Oct 28) The limited test fields: once anyone is affected (owner, Oct 29, batch 14: the first tester joins, the first application arrives or the first invite

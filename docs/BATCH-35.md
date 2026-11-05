@@ -4511,3 +4511,61 @@ keys' lines, is in the draggable box however short (`plainField` in FieldNote.ts
 A name or email cut at 20 (Cut / NameLink, admin side included) now opens on a click on every device (was a touch screen only): the pop-up holds the whole name or
 email in the draggable box (it scrolls, the grip drags it taller), with its link and Copy. A name of 20 characters or fewer never opens it, even when a tight row
 cuts it by width. A mouse hover still shows the whole name or email everywhere (Cut's title, the cut payment rows' and confirm rows' title, a cut bell line's title).
+
+## §245 Names, test titles and product names at most 20 characters; nothing cut; test names green (owner, Nov 5)
+The owner: person names and test titles are limited to 20 characters, so nothing is ever cut ("…") or needs expanding; test names show green. Then: product names
+20 too (were 60), treated like test titles (no green link: a product isn't a page).
+- **Limits** (`src/lib/limits.ts`): `personName: 20` (new), `testName: 20` (was 60), `productName: 20` (was 60). `NAME_TOO_LONG` = "Keep your name to 20
+  characters."; `fitName` cuts a name to its first 20 characters (never splitting an emoji), right-trimmed.
+- **Person names:** sign-up (email form and Google's step, `readNewAccount`, which cut at 80 before) and the profile's Save (`saveProfile`, cut at 80 before) refuse
+  over 20 with that line, red at Name (its data-match "your name"); never cut silently. The Name boxes (sign-up, Google's step, the profile) count to 20 (their
+  counters were there; maxLength 20). **Google:** when Google sends a name (the sign-in asks "openid email", so today it doesn't), it is cut with `fitName` and
+  fills the step's Name box, editable there and on the profile later. Admin-made and test-fixture accounts are written straight to the database (no limit there),
+  so they stay valid.
+- **Test titles and product names:** Post, Edit and Next round (all through `checkListing`) refuse over 20 with the existing "Keep the title to 20 characters." /
+  "Keep the product name to 20 characters." and the existing counters. Edit checks a field only when it changes, as before.
+- **Existing data:** migration `20261119090000_names_twenty` shortens `User.name`, `Test.title` and `Test.productName` longer than 20 to their first 20
+  characters, right-trimmed, and the copies shown as names: `Contract.title`, the `title` / `productName` in `Application.listing` (so a pending application doesn't
+  read as "changed since you applied" only because of this) and in `TestChange.before` / `after` (the listing's before and now). Left as they were (historic free
+  text, written once): notification, event and contract-note texts, emails, chat, Stripe descriptions and kept drafts. Not run on the owner's databases yet.
+- **Never cut:** `Cut` / `cutText` / `NameLink` draw a person's, a test's or a product's name whole (`neverCut`); only an email is still cut (in the middle). `fit`
+  (§187: cut by the width with CSS `truncate`) now wraps these names instead (`[overflow-wrap:anywhere]`, no pop-up). Rows that drew a name or a title with
+  `truncate` (+ `title`) wrap now: the tester dashboard's cards, Needs you's pay rows, the History, Find's cards and "by <developer>", Tests visited, Messages,
+  the calls boxes, the developer's profile, Search, the Invite box's names, the Joined list, the product kickers. Server lines (pieceName, cutNamesIn, offerLine)
+  keep their 20-character cut, which finds nothing to cut once the data is 20 or less.
+- **Removed (dead after this):** AdminRich's `linkWords` (it only ran Cut on a name or a quoted title).
+- **Kept:** emails (cut in the middle, the click-to-open box), long free text, the bell's 30-character line (and §246's rows), a new-terms diff (DIFF_CUT), and
+  cutNamesIn's cut of any quoted “…” longer than 20 (historic contract notes may still quote an old long name, or a question). The Listing panel keeps §231's
+  boxes for the title and the product (nothing cuts them there).
+- **Test names green:** `TestName` (`src/components/Cut.tsx`): with a link, `NameLink` kind "test" (a green link, as people's names, §166); where a link would
+  steal the press (a card or row that is itself one link, a toggle, a deleted test), the same green words (`text-volt-300`). Used on: Needs you's pay rows and its
+  sentences (already NameLink), the developer's test cards, the tester dashboard (To do → the session page, Every part sent, the waiting and invite-only cards,
+  Charge or cancel, Upcoming calls, removed / left cards, New tests, History), Find, Messages, the calls box, Search, Tests visited, the developer's profile, the
+  tester's tests on a profile, Payments' sent-work headings (→ the session), excerpts ("From …"), the join page's "is full right now" line, the bell (a stack's test
+  heading and the test's name inside each line, `bellWords`), and the admin's lines (their test links were green already; MineLine's unlinked title too). Payment
+  rows link their whole "what" to the test, and confirm rows link their quoted test names (green links). Headings stay: the test page's and the join page's h1.
+- **Tests:** new `tests/twenty-chars-245.test.ts` (the limits; the sign-up, profile and Google rules; the counters; the migration's statements and a run on its own
+  rows; nothing cut, `fit` wraps; TestName and the green spots; bellWords). Updated for the new limits or the uncut names: `rules`, `post-edit`, `batch10`,
+  `batch34-fixes` and `batch35-one-rename-line` (their titles were over 20), `batch35-hard-limits`, `batch35-green-names`, `batch35-name-links`,
+  `batch35-next-round-one-tap`, `layout-fixes-187`, `long-text-cut`, `long-text-layout`, `names-sweep-238`, `needs-kind-folds-199`, `terms-history-236`.
+
+## §246 Payment, confirm and bell rows: the "what" cut at 30, opened in place (owner, Nov 5)
+Every payment row, confirm row and bell line shows its "what" text cut at 30 characters and opens IN PLACE as plain text.
+- **`WhatLine`** (`src/components/WholeLine.tsx`): closed, the first 30 characters (`bellShort`: never inside a word or an amount), "…" and the arrow; the hover
+  (title) the whole "what" (§244). The arrow shows the whole "what" inline, wrapped, with no box; only a line over `LINE_BOX_OVER` (200 characters,
+  `src/lib/bell.ts`, the one place it is set: typed notes such as the team's hold note, dispute or pause reasons) opens in the draggable box (ResizeBox in
+  OwnPanel). 30 characters or fewer: whole, no arrow. No per-name "…" toggles (names and titles are 20 or less).
+- **Outside the cut, always shown:** the amount, the dates ("confirm by …", the payment's date), the marks ("your bank reversed this…", "refunded…") and every
+  button (Confirm with your bank, Cancel this check, Pay, the Stripe links). Where: What you've paid (each payment and each group item, its "how" after it),
+  refunds, Your earnings ("You get $X" before it), Pay what you owe's lines (the server now splits each into `what` and `rest`: the amount, status and date, or the
+  chargeback's ": $10 + $15 chargeback fee", `owedSplit`), "That payment covered", a part's payments, the charges waiting, ConfirmList (`confirmItems` also gives
+  `what`, `amount`, `by`), BankToConfirm (its lead split at its amount, `splitLead`) and BankWaiting (`before` holds the amount). Group headers ("Pay what you
+  owe · $X", "Confirm all · $X") aren't cut.
+- **Call:** BankWaiting's sentence on a test page ("Your bank wants you to confirm a $10.00 payment for her written answers, … Confirm it by …") carries its amount
+  and date inside it, so it shows whole rather than hide them.
+- **Bell:** BELL_LINE_SHOWN stays 30; an opened line follows the same rule (inline; the box only over 200).
+- WholeLine itself stays for rows that aren't payment, confirm or bell rows (the Terms history's NameLine, the tester's offer row with its DIFF_CUT diff, Ratings to
+  give, "asked for a live call").
+- **Tests:** in `tests/twenty-chars-245.test.ts` (the 30 cut, amounts and buttons outside, an owed line, a confirm row, the lead split, inline open, the box over
+  200, no arrow at 30 or fewer); `openWhats` (tests/helpers.ts) reads whole rows from the markup. Updated: `admin-payments-190`, `batch17-bank-check`, `batch24`,
+  `bell-lines-202`, `chargeback-refunds-192`, `grouped-payments-191`, `nov5-batch2` (§216, §220), `payment-piece-names`.

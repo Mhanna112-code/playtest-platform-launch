@@ -68,12 +68,15 @@ describe("§131 the bank-confirm items", () => {
     expect(item.full).toMatch(/^The team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe” \$320\.00 · confirm by /);
     // (§230) The cut line opens with the arrow (and each "…" its name), never a hover.
     const listHtml = renderToStaticMarkup(createElement(ConfirmList, { items: [item] }));
-    expect(listHtml).toContain(`title="${html(item.full)}"`); // (§244) a hover shows the whole line too
+    // (§246) The row's "what" (the names whole) cut at 30; the hover shows the whole "what", the amount and "confirm by" stay outside it.
+    expect(listHtml).toContain(`title="${html(item.what!)}"`); // (§244) a hover shows the whole line too
+    expect(item.what).toBe("The team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe”");
     expect(listHtml).toContain('data-whole-toggle=""');
     const [row] = await bankToConfirm(w.dev.user.id);
     expect(row).toMatchObject({ id: p.id, lead: "$320.00 · the team's dispute decision on Alexandria Montgomer…'s written answers on “chargechargeback run…”", full: "$320.00 · the team's dispute decision on Alexandria Montgomery's written answers on “chargechargeback run deluxe”" });
     const boxHtml = renderToStaticMarkup(createElement(BankToConfirmBox, { rows: [row] }));
-    expect(boxHtml).toContain(`title="${html(row.full)}"`); // (§244) a hover shows the whole line too
+    // (§246) The amount outside the cut; the hover shows the whole "what" after it.
+    expect(boxHtml).toContain(`data-bank-top-amount="">$320.00</span> · <span title="${html(row.full.replace("$320.00 · ", ""))}"`); // (§244) a hover shows the whole line too
     expect(boxHtml).toContain('data-whole-toggle=""');
     const [onTest] = await bankWaitingOnTest(w.dev.user.id, w.testId);
     expect(onTest.line).toMatch(/^Your bank wants you to confirm a \$320\.00 payment for the team's dispute decision on her written answers, made while you were away\./); // (Owner, Nov 4, §175) under the tester's name; (§180) no test name on its own page
@@ -109,8 +112,10 @@ describe("§131 the owed box", () => {
       "The team's dispute decision on Alexandria Montgomery's recording on “chargechargeback run deluxe” $96.00 · decided while your tests were paused",
     ]);
     const box = renderToStaticMarkup(createElement(OwedBox, { onHold: true, owed: lines }));
-    for (const l of lines.filter((x) => x.full !== x.text)) expect(box).toContain(`title="${html(l.full)}"`); // (§244) a hover shows the whole line too
-    expect(box.match(/data-whole-toggle=""/g)?.length).toBe(lines.filter((l) => l.full !== l.text).length);
+    // (§246) Each line's "what" cut at 30 (its hover the whole "what"); its amount and status always shown after it.
+    for (const l of lines) expect(box).toContain(`title="${html(l.what)}"`); // (§244) a hover shows the whole line too
+    for (const l of lines) expect(box).toContain(html(l.rest));
+    expect(box.match(/data-whole-toggle=""/g)?.length).toBe(lines.filter((l) => l.what.length > 30).length);
     // (§202) The bell for a later decline names them in full (the bell cuts the line itself at 30 characters, and opens it whole).
     const failed = await db.payment.create({ data: { ...w.base, kind: "review", submissionId: w.recording.id, amountCents: 500, status: "pending" } });
     await (await import("@/lib/server/holds")).declinedPayment(w.dev.user.id, failed.id, 500, pieceName({ tester: LONG_NAME, part: "recording", test: LONG_TEST, full: true }));

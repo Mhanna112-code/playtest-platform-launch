@@ -39,7 +39,7 @@ describe("§236 cutNamesIn", () => {
     const cut = renderToStaticMarkup(h(NameLine, { shown: x.shown, full: x.full, name: DEV, href: "/app/developers/d1" }));
     expect(cut).toContain('data-name-toggle=""');
     expect(cut).toContain('data-whole-toggle=""');
-    expect(cut).not.toContain(DEV);
+    expect(cut.replace(/ title="[^"]*"/g, "")).not.toContain(DEV); // (§244) only the hover holds the whole line
     const plain = renderToStaticMarkup(h(NameLine, { shown: "Nov 5: Nora Lane offered new terms", full: null, name: "Nora Lane", href: "/app/developers/d1" }));
     expect(plain).toContain('<a href="/app/developers/d1" data-name-link="person">Nora Lane</a>');
     expect(plain).not.toContain("data-whole-toggle");
@@ -62,6 +62,6 @@ describe("§236 the tester's Terms history on the session page", () => {
     const note = history.slice(history.lastIndexOf("<li", at), history.indexOf("</li>", at));
     expect(note).toContain('data-whole-toggle=""');
     expect(note.match(/data-name-toggle=""/g)).toHaveLength(2);
-    expect(note).not.toContain(TEST);
+    expect(note.replace(/ title="[^"]*"/g, "")).not.toContain(TEST); // (§244) only the hover holds the whole line
   });
 });

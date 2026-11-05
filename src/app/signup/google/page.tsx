@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AuthForm } from "@/components/AuthForm";
 import { AuthShell } from "@/components/AuthShell";
 import { CountedInput } from "@/components/CountedInput";
+import { LIMITS } from "@/lib/limits";
 import { RoleChoice } from "@/components/RoleChoice";
 import { GOOGLE_SIGNUP_COOKIE, GOOGLE_STEP_EXPIRED, pendingGoogleSignup } from "@/lib/server/google";
 import { getPageUser } from "@/lib/server/page-auth";
@@ -33,11 +34,11 @@ export default async function GoogleSignupStep() {
     <AuthShell title="Finish signing up">
       <AuthForm allAtOnce path="/api/auth/google/finish" next="/app" announce="in" submit="Continue" busy="Creating…">
         <p className="text-sm text-slate-300" data-google-step="">Signing up with Google as <b className="text-white">{step.email}</b>.</p>
-        {/* (Batch 35 §162) As the email form: Name, then the optional Pronoun and the chosen side's bio. */}
+        {/* (Batch 35 §162) As the email form: Name, then the optional Pronoun and the chosen side's bio. (§245) Name starts as Google's name, cut to 20. */}
         <RoleChoice>
           <div>
             <label className="label req" htmlFor="name">Name</label>
-            <CountedInput minLength={1} maxLength={80} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
+            <CountedInput minLength={1} maxLength={LIMITS.personName} defaultValue={step.name} className="input" id="name" name="name" autoComplete="name" required data-required="" data-required-msg="Enter your name" data-match="your name" />
           </div>
         </RoleChoice>
         {/* (Batch 26 section 11) The red line under the whole tick row; every missing tick is red. */}

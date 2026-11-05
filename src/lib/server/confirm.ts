@@ -167,16 +167,19 @@ export async function confirmItems(devId: string) {
   return waiting.map((p) => {
     const n = named(p);
     // (§131) `full`: the same line with the names uncut (the item's hover).
-    const line = (piece: string | null, cov: Map<string, string[]>) => {
+    const parts = (piece: string | null, cov: Map<string, string[]>) => {
       // (§122) One payment for charges made while away names them so.
       const what = p.kind === "owed" ? (p.note.endsWith(":charges") ? "Charges made while you were away" : "What you owe") : p.kind === "subscription" ? "Your subscription"
         : p.kind === "dispute" ? (piece ? pieceWords.dispute(piece).replace(/^the/, "The") : "A team decision")
         : p.kind === "chargeback" ? (piece ? `A payment your bank had reversed (${piece})` : "A payment your bank had reversed")
         : piece ? `A payment for ${piece}` : "A payment";
       const list = p.kind === "owed" && cov.get(p.id)?.length ? ` (${cov.get(p.id)!.join(", ")})` : "";
-      return `${what} ${money(p.amountCents)}${list}${n.c && !piece ? ` on “${n.c.title}”` : ""} · confirm by ${fmtDateTimeIn(p.actionBy!, tz)}`;
+      return { what, amount: money(p.amountCents), list, on: n.c && !piece ? ` on “${n.c.title}”` : "", by: `confirm by ${fmtDateTimeIn(p.actionBy!, tz)}` };
     };
-    return { id: p.id, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [], cents: p.amountCents };
+    const line = (piece: string | null, cov: Map<string, string[]>) => { const x = parts(piece, cov); return `${x.what} ${x.amount}${x.list}${x.on} · ${x.by}`; };
+    // (Owner, Nov 5, batch 35 §246) For the row: the "what" (cut at 30 with its arrow), then its amount and "confirm by", always shown outside the cut.
+    const whole = parts(n.full, coversFull);
+    return { id: p.id, what: `${whole.what}${whole.list}${whole.on}`, amount: whole.amount, by: whole.by, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [], cents: p.amountCents };
   });
 }
 

@@ -45,7 +45,7 @@ export default async function Notifications() {
     counted: !!(g[0].groupKey && GROUP_COUNT_TITLES[groupBase(g[0].groupKey)]), // (§185) "reqclosed:<test>" counts as "reqclosed"
     test: !g[0].groupKey && !!g[0].testId,
     day: dayKey(g[0].createdAt, u.timeZone) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
-    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone) })),
+    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone), ...(n.testId && titles.get(n.testId) ? { test: titles.get(n.testId) } : {}) })),
   }));
   return (
     <div className="mx-auto max-w-2xl space-y-6">

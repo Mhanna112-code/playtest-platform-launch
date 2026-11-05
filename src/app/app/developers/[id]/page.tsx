@@ -1,4 +1,4 @@
-import { Cut } from "@/components/Cut";
+import { TestName } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateIn, pronouns } from "@/lib/format";
 import { publicProfileV } from "@/lib/server/pageFreshness";
@@ -92,9 +92,9 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
           <ScrollList className="space-y-2" label="Open tests">
             {open.map((t) => (
               <li key={t.id}>
-                {(devOff || (!mine && viewer.testerSuspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : isAdmin(viewer) ? `/app/find/${t.id}` : t.sessionId ? `/app/sessions/${t.sessionId}` : `/app/find/${t.id}?from=profile`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
+                {(devOff || (!mine && viewer.testerSuspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block font-medium"><TestName text={t.title} /></span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : isAdmin(viewer) ? `/app/find/${t.id}` : t.sessionId ? `/app/sessions/${t.sessionId}` : `/app/find/${t.id}?from=profile`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">
                   <span className="min-w-0 flex-1">
-                    <span className="block truncate font-medium text-white"><Cut text={t.title} kind="test" /></span>
+                    <span className="block font-medium"><TestName text={t.title} /></span>
                     <span className="flex items-start gap-1.5 text-xs text-slate-400">
                       <CalendarClock className="mt-0.5 h-3.5 w-3.5 shrink-0" /> <span>{termsLine(t, !mine)} · {Math.max(0, t.spots - t.contracts.length)} of {t.spots} spots left</span>
                     </span>

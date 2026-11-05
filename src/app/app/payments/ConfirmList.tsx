@@ -1,5 +1,5 @@
 "use client";
-import { WholeLine } from "@/components/WholeLine";
+import { WhatLine } from "@/components/WholeLine";
 import { BankWaiting } from "@/components/BankWaiting";
 import { CONFIRM_WITH_BANK } from "@/lib/rules";
 import { withTestLinks, type TestLink } from "@/components/TestLinks";
@@ -11,7 +11,7 @@ import { ConfirmAll, type ConfirmAllProps } from "@/components/ConfirmAll";
  * (Batch 17 §11) A charge on a test is confirmed on that test page, under the piece: the row links straight to its "Confirm with your bank" (the piece marked). Only a
  * charge that belongs to no test (a renewal) is confirmed here, with the same inline check.
  */
-export function ConfirmList({ items, all, seenAt = "" }: { items: { id: string; text: string; /** (§131) the names uncut: the hover */ full?: string; href: string | null; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: TestLink[]; /** its amount (over $200: the tick) */ cents?: number }[]; /** (Owner, Nov 3, §147) Confirm all, above the list */ all?: ConfirmAllProps; /** (§159) the page's render time (Confirm all's item stops count from it) */ seenAt?: string }) {
+export function ConfirmList({ items, all, seenAt = "" }: { items: { id: string; /** (§246) the "what", its amount and "confirm by", apart */ what?: string; amount?: string; by?: string; text: string; /** (§131) the names uncut: the hover */ full?: string; href: string | null; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: TestLink[]; /** its amount (over $200: the tick) */ cents?: number }[]; /** (Owner, Nov 3, §147) Confirm all, above the list */ all?: ConfirmAllProps; /** (§159) the page's render time (Confirm all's item stops count from it) */ seenAt?: string }) {
   if (!items.length && !all?.open) return null;
   return (
     <section id="confirm" className="card scroll-mt-24 space-y-3 border-sky-300/30" data-confirm-list="">
@@ -22,11 +22,11 @@ export function ConfirmList({ items, all, seenAt = "" }: { items: { id: string; 
           <li key={i.id} className="flex flex-wrap items-center gap-2" data-confirm-item={i.id}>
             {i.href ? (
               <>
-                <span className="mr-auto text-slate-200"><WholeLine shown={i.text} full={i.full} render={(t) => withTestLinks(t, i.tests)} /></span>
+                <span className="mr-auto text-slate-200">{i.what != null ? <WhatLine text={i.what} render={(t) => withTestLinks(t, i.tests)} after={<> · <span className="whitespace-nowrap" data-confirm-amount="">{i.amount}</span> · {i.by}</>} /> : <WhatLine text={i.full || i.text} render={(t) => withTestLinks(t, i.tests)} />}</span>
                 <a href={i.href} className="btn-secondary px-3 py-1.5 text-sm no-underline hover:no-underline" data-bank-link="">{CONFIRM_WITH_BANK} →</a>
               </>
             ) : (
-              <BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} text={i.text} render={(t) => withTestLinks(t, i.tests)} full={i.full} />
+              <BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} text={i.what ?? i.text} render={(t) => withTestLinks(t, i.tests)} full={i.what ?? i.full} after={i.what != null ? <> · <span className="whitespace-nowrap" data-confirm-amount="">{i.amount}</span> · {i.by}</> : undefined} />
             )}
           </li>
         ))}

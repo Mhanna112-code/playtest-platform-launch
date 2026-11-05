@@ -337,7 +337,7 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
   const row = (t: Tester, key: string) => (
     <li key={key + t.id} data-invite-row={t.id} className={`flex flex-wrap items-center gap-2 ${t.grey ? "text-slate-500" : "text-slate-300"}`}>
       <input type="checkbox" id={`${key}-${t.id}`} aria-label={t.name} disabled={!!t.grey} checked={!t.grey && ticked.includes(t.id)} onChange={(e) => { setNone(false); setDropped([]); setTicked(e.target.checked ? [...ticked, t.id] : ticked.filter((x) => x !== t.id)); }} />
-      <span className="min-w-[8rem] flex-1 truncate" title={t.name}><NameLink text={t.name} href={`/app/testers/${t.id}`} newTab /></span>
+      <span className="min-w-[8rem] flex-1 [overflow-wrap:anywhere]"><NameLink text={t.name} href={`/app/testers/${t.id}`} newTab /></span>
       {t.was && !t.grey && <span className="badge max-w-[14rem] shrink truncate whitespace-nowrap" title={t.was}>{t.was}</span>}
       {/* (Batch 15 section 35) 3 items, then "+N more" which opens the rest in place. */}
       {t.tag && <span className="badge border-amber-300/40 text-amber-200">{t.tag}</span>}

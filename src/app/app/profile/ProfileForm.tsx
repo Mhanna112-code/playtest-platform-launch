@@ -7,6 +7,7 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { api, ApiError, errOf } from "@/lib/client";
 import { mergeChanges } from "@/lib/live";
 import { DEVICES, LANGUAGES } from "@/lib/options";
+import { LIMITS } from "@/lib/limits";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { PROFILE_DRAFT_FIELDS, type ProfileDraftField } from "@/lib/keptText";
 import { BioBox, DEV_BIO_PLACEHOLDER, TESTER_BIO_PLACEHOLDER } from "@/components/BioBox";
@@ -101,8 +102,8 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
     <form className="card space-y-5" onSubmit={save}>
       <div>
         <label className="label req" htmlFor="name">Name</label>
-        <input id="name" className="input" maxLength={80} data-required="" data-required-msg="Enter your name (others see it)." data-match="your name" value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ana Silva" />
-        <CharacterCount value={v.name} min={1} max={80} required />
+        <input id="name" className="input" maxLength={LIMITS.personName} data-required="" data-required-msg="Enter your name (others see it)." data-match="your name" value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ana Silva" />
+        <CharacterCount value={v.name} min={1} max={LIMITS.personName} required />
       </div>
       <div>
         <label className="label" htmlFor="pronoun">Pronoun</label>

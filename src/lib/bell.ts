@@ -86,6 +86,13 @@ export const bellKey = (n: Parameters<typeof bellKeyIn>[0]) => bellKeyIn(n);
  * Counted by character, so an emoji is never split. null: the line is short enough to show whole.
  */
 export const BELL_LINE_SHOWN = 30;
+/**
+ * (Owner, Nov 5, batch 35 §246) An opened line (a bell line, a payment row's or a confirm row's "what") shows whole IN PLACE, wrapped, with no box; only a line
+ * longer than this (typed notes: the team's hold note, dispute or pause reasons) opens in the draggable box (ResizeBox in OwnPanel). The one place it is set.
+ */
+export const LINE_BOX_OVER = 200;
+/** (§246) Whether an opened line goes in the draggable box: longer than LINE_BOX_OVER characters (counted by character). */
+export const opensInBox = (text: string) => Array.from(text).length > LINE_BOX_OVER;
 export function bellShort(text: string, n = BELL_LINE_SHOWN): string | null {
   const chars = Array.from(text);
   if (chars.length <= n) return null;
