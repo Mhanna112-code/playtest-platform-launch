@@ -11,6 +11,8 @@ export function ResendConfirm({ label = "Resend" }: { label?: string }) {
     <span className="inline-flex flex-wrap items-center gap-2">
       <button className="btn-ghost px-3 py-1 text-xs" disabled={busy} onClick={async () => {
         setBusy(true);
+        // (Owner, Nov 5) Each press clears the last answer first, so "Sent" disappears and comes back: you can see this press was sent too.
+        setMsg("");
         try {
           await api("/api/auth/resend", {});
           setMsg("Sent: check your inbox (and spam).");
