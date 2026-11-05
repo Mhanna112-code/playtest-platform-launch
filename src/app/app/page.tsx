@@ -43,7 +43,8 @@ import { disputesForSide } from "@/lib/server/disputes";
 import { DismissRemoved } from "./DismissRemoved";
 import { LIST_PANEL, ScrollList } from "@/components/ScrollList";
 import { ResizeBox } from "@/components/Panel";
-import { DevSearch } from "./DevSearch";
+import { DevSearch, DevSearchHit, DevSearchList } from "./DevSearch";
+import { YourTestsSearch } from "./YourTestsSearch";
 import { TestsVisited } from "./TestsVisited";
 import { devSearchRows } from "@/lib/server/testerSearch";
 import { answerable, rejoinAskLine } from "@/lib/server/joining";
@@ -329,8 +330,8 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
           </div>
         ) : (
           // (Batch 16 section 14) Every test card, in a scroll box about 2 card rows tall (one column of about 3 on phones); the chips stay above it.
-          <ScrollList size="cards" className="grid gap-4 md:grid-cols-2">
-            {tests.map((t) => {
+          // (Owner, Nov 5, §204) A search box above the cards: test name or product name, any part, any case, over every card (YourTestsSearch draws the box).
+          <YourTestsSearch items={tests.map((t) => {
               const inIt = t.contracts.filter((c) => c.status === "working");
               const accepted = t.contracts.filter((c) => c.submissions.some((s) => s.review && !s.review.rejected)).length;
               const waiting = t.contracts.filter((c) => c.submissions.some((s) => !s.review) && !c.submissions.some((s) => s.review && !s.review.rejected)).length;
@@ -341,8 +342,9 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
               const nInvited = invitesBy.get(t.id) ?? 0, nApps = appsBy.get(t.id) ?? 0;
               // (Owner, Nov 3, batch 35 §168) A Next round's draft not named yet: "Untitled draft (round 2)".
               const title = <span className="text-lg font-semibold text-white" {...(t.title.trim() ? {} : { "data-untitled-draft": "" })}><Cut text={testTitleOf(t)} kind="test" /></span>;
-              return (
-                <li key={t.id}>
+              return {
+                key: t.id, title: testTitleOf(t), product: t.productName, node: (
+                <>
                   {/* The whole card opens the test (its title's link stretches over it); a suspended developer's cards don't open. */}
                   <div className="card card-hover relative block h-full space-y-4" data-test-card={t.status === "stopped" ? "stopped" : paused ? "paused" : t.status}>
                     <div className="flex items-start gap-3">
@@ -390,10 +392,9 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
                       </div>
                     </div>
                   </div>
-                </li>
-              );
-            })}
-          </ScrollList>
+                </>
+              ) };
+            })} />
         )}
       </section>
     </>
@@ -531,16 +532,19 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       </section>
 
       {/* (Owner, Oct 28, batch 16 section 13) "Search by developer" over every test this tester has been in; typing replaces the sections below with the results. */}
-      <DevSearch rows={devSearchRows(contracts, !suspended)}>
-      {/* (Owner, Nov 4) The tester dashboard's order: To do first, then Ratings to give, then Waiting for the developer; the rest below as before. */}
+      {/* (Owner, Nov 5, §204) The box searches the developer's name or the test's name; To do (its `todo`) stays while it's typed in, only its matching tests' rows. */}
+      <DevSearch rows={devSearchRows(contracts, !suspended)} todo={
+      // (Owner, Nov 4) The tester dashboard's order: To do first, then Ratings to give, then Waiting for the developer; the rest below as before.
       <section className="space-y-3" id="to-do">
         {sectionTitle(<ListTodo className="h-5 w-5 text-indigo-300" />, "To do (all open tests)")}
         {todoParts.length === 0 && answers.length === 0 && allSent.length === 0 ? (
           <p className="card text-sm text-slate-400">{suspended ? "Nothing to do while your account is suspended." : "Nothing to finish. Pick up a new test below."}</p>
         ) : (
+          <DevSearchList rows={[...answers.map((a) => a.c), ...todoParts.map((x) => x.c), ...allSent].map((c) => ({ title: c.title, developer: displayName(c.test.developer) }))}>
           <ScrollList className="space-y-2">
             {answers.map((a) => (
-              <li key={a.key}>
+              <DevSearchHit key={a.key} title={a.c.title} developer={displayName(a.c.test.developer)}>
+              <li>
                 <Link href={a.href} className="card card-hover flex flex-wrap items-center gap-3 border-sky-300/40 p-4 no-underline hover:no-underline">
                   <CategoryTile category={mainCategory(a.c.test.categories)} size="h-10 w-10" />
                   <div className="min-w-[12rem] flex-1">
@@ -550,12 +554,14 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   <span className="btn px-3 py-1.5 text-sm">{a.cta} <ArrowRight className="h-4 w-4" /></span>
                 </Link>
               </li>
+              </DevSearchHit>
             ))}
             {todoParts.map(({ c, p }) => {
               const due = daysLeft(c.dueAt);
               const messages = unread.get(c.id) ?? 0;
               return (
-                <li key={`${c.id}-${p.key}`} className="card flex flex-wrap items-center gap-3 p-4" data-todo-part={`${c.id}:${p.key}`}>
+                <DevSearchHit key={`${c.id}-${p.key}`} title={c.title} developer={displayName(c.test.developer)}>
+                <li className="card flex flex-wrap items-center gap-3 p-4" data-todo-part={`${c.id}:${p.key}`}>
                   <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
                   <div className="min-w-[12rem] flex-1">
                     <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={`${c.title} · ${p.name}`}><Cut text={c.title} kind="test" /> · {p.name}</span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
@@ -567,10 +573,12 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                   <span className="whitespace-nowrap text-sm font-semibold text-emerald-300">{p.cents === 0 ? "free" : money(testerShare(p.cents))}</span>
                   <Link href={`/app/sessions/${c.id}#part-${p.key}`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
                 </li>
+                </DevSearchHit>
               );
             })}
             {allSent.map((c) => (
-              <li key={`${c.id}-sent`} className="card flex flex-wrap items-center gap-3 p-4" data-todo-sent={c.id}>
+              <DevSearchHit key={`${c.id}-sent`} title={c.title} developer={displayName(c.test.developer)}>
+              <li className="card flex flex-wrap items-center gap-3 p-4" data-todo-sent={c.id}>
                 <CategoryTile category={mainCategory(c.test.categories)} size="h-10 w-10" />
                 <div className="min-w-[12rem] flex-1">
                   <p className="flex min-w-0 items-center gap-1 font-semibold text-white"><span className="truncate" title={c.title}><Cut text={c.title} kind="test" /></span> {pausedTest(c.test) && <span className="shrink-0"><PausedTag /></span>}</p>
@@ -578,10 +586,13 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
                 </div>
                 <Link href={`/app/sessions/${c.id}#parts`} className="btn px-3 py-1.5 text-sm no-underline hover:no-underline">Send work <ArrowRight className="h-4 w-4" /></Link>
               </li>
+              </DevSearchHit>
             ))}
           </ScrollList>
+          </DevSearchList>
         )}
       </section>
+      }>
 
       {/* (Batch 17 section 17) Every rating the tester can give now (hidden while their tester side is suspended). */}
       {!suspended && <RatingsToGive user={user} side="tester" />}
