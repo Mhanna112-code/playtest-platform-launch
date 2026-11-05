@@ -19,3 +19,11 @@ describe("(Owner, Nov 5) §242 the questions changed: only those that changed, m
     expect(questionChanges([q("A"), q("B")], [q("A"), q("B")])).toEqual([]);
   });
 });
+
+describe("(Owner, Nov 5) §243 only Open until, categories, languages and devices stay plain in other-tab notes", () => {
+  it("plainField", async () => {
+    const { plainField } = await import("@/components/FieldNote");
+    for (const n of ["Open until", "openUntil", "categories", "Categories", "languages", "devices", "Tech requirements"]) expect(plainField(n), n).toBe(true);
+    for (const n of ["spots", "title", "What to do", "build link", "Spots", undefined]) expect(plainField(n as string | undefined), String(n)).toBe(false);
+  });
+});

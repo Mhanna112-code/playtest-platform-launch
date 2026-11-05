@@ -112,8 +112,10 @@ describe("batch 35 §26: notes under untouched Edit fields", () => {
     expect(wasLine("11:43 PM", "Harbor Run")).toBe("Changed in another tab at 11:43 PM: was “Harbor Run”");
     expect(wasLine("11:43 PM", null)).toBe("Changed in another tab at 11:43 PM: was empty");
     expect(wasLine("11:43 PM", "$15.00", "Price for a recording")).toBe("Changed in another tab at 11:43 PM: Price for a recording was “$15.00”");
-    const html = renderToStaticMarkup(createElement(WasNote, { items: [{ field: "title", time: "11:43 PM", was: "Harbor Run" }] }));
-    expect(html).toContain("Changed in another tab at 11:43 PM: was “Harbor Run”");
+    // (§243) A plain field (Open until, categories, languages, devices) keeps its one line; any other field's value goes in its box, however short.
+    const html = renderToStaticMarkup(createElement(WasNote, { items: [{ field: "categories", time: "11:43 PM", was: "Puzzle" }] }));
+    expect(html).toContain("Changed in another tab at 11:43 PM: was “Puzzle”");
+    expect(renderToStaticMarkup(createElement(WasNote, { items: [{ field: "title", time: "11:43 PM", was: "Harbor Run" }] }))).toContain('data-qa-text="value"');
     expect(html).toContain('class="info mt-1.5 space-y-1 !p-2 text-xs"'); // the existing blue note style
     expect(html).toContain("data-field-note");
     expect(html).not.toContain("Use theirs");

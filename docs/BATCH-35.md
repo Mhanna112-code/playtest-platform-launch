@@ -4501,3 +4501,8 @@ The new-terms box's "The questions changed" lists only questions that actually c
 after it look changed: an edited question (Before and After), a new one ("Before: (new)") and a removed one ("After: (removed: after Switch it moves to Past
 questions)"). Unchanged questions aren't listed. Each is its own drop-down, closed: "Question N · Changed / New / Removed" and the start of its words; inside, Before,
 After and your answer so far in their boxes (the list keeps §233's panel). `questionChanges` in TesterTop.tsx. Test: `tests/question-changes-242.test.ts`.
+
+## §243 Other-tab notes: only Open until, categories, languages and devices stay plain (owner, Nov 5)
+Refines §241: in Edit's notes ("Changed in another tab or device at …", "Saved in another tab or device at … · Use theirs", "Changed in another tab at …: was …"
+and the keys' "Updated at …" lines), Open until, categories, languages and the tech requirements (devices) stay plain lines; every other field's value, and the
+keys' lines, is in the draggable box however short (`plainField` in FieldNote.tsx).

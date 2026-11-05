@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { Copy, Check } from "lucide-react";
-import { LongList } from "@/components/LongList";
 import { wasLine } from "@/lib/editMerge";
 import { QuestionTexts, textId, ValueText } from "@/components/QA";
 import { qRequired, qText } from "@/lib/questions";
@@ -15,6 +14,12 @@ export type NoteItem = { name?: string; before?: string | string[]; after?: stri
 
 /** Short values stay on one line ("Spots: 4 → 5"); long text is in its box (FoldText). */
 const NL = String.fromCharCode(10);
+/**
+ * (Owner, Nov 5, §243) The fields whose changes stay plain lines in these notes: Open until, categories, languages and the tech requirements (devices). Every other
+ * field's value (and the keys' lines) is in the draggable box, however short.
+ */
+const PLAIN = /^(open ?until|categor|language|device|tech)/i;
+export const plainField = (nameOrField?: string) => !!nameOrField && PLAIN.test(nameOrField.trim());
 const isShort = (s: string) => s.length <= 80 && !s.includes("\n");
 
 /**
@@ -70,7 +75,7 @@ export function NoteItems({ items, inlineFirst = false }: { items: NoteItem[]; i
             {/* (Owner, Nov 5, §241) Every other-tab change in its draggable box too: the keys' lines ("Added: …"), and short changes ("Categories: a → b",
                 selections, spots), not only long text. */}
             {it.lines && <ValueText id={textId("note-lines", it.lines.join("|"))} label={it.name ?? "Changes"}><span data-note-lines="">{it.lines.join(NL)}</span></ValueText>}
-            {line && <ValueText id={textId("note-short", line)} label={it.name ?? "Change"}><span data-note-short="">{line}</span></ValueText>}
+            {line && (plainField(it.name) ? <p data-note-short="">{line}</p> : <ValueText id={textId("note-short", line)} label={it.name ?? "Change"}><span data-note-short="">{line}</span></ValueText>)}
             {/* Long text (steps, questions, NDA): "<Field>:" then the text it replaced (the new one is in the box). */}
             {!line && it.before !== undefined && <Value label={`${it.name ?? "Before"}:`} value={it.before} />}
             {it.typed !== undefined && <Value label="What you typed (not saved):" value={it.typed} copy />}
@@ -87,7 +92,7 @@ export function NoteItems({ items, inlineFirst = false }: { items: NoteItem[]; i
  */
 export function FieldNote({ label, items }: { label: string; items: NoteItem[] }) {
   const first = items[0];
-  const inline = items.length === 1 && first && !first.lines && first.typed === undefined ? shortLine(first) : null;
+  const inline = items.length === 1 && first && !first.lines && first.typed === undefined && plainField(first.name) ? shortLine(first) : null; // (§243)
   return (
     <div className="info mt-1.5 space-y-1 !p-2 text-xs" role="status" data-field-note="">
       <p className="font-medium">{inline ? `${label}: ${inline}` : `${label}:`}</p>
@@ -109,7 +114,7 @@ export type TheirsItem = { field: string; name: string; value: string | string[]
  */
 export function TheirsNote({ heading, items }: { heading: string; items: TheirsItem[] }) {
   const first = items[0];
-  const short = (it: TheirsItem) => !Array.isArray(it.value) && isShort(it.value);
+  const short = (it: TheirsItem) => !Array.isArray(it.value) && isShort(it.value) && (plainField(it.field) || plainField(it.name)); // (§243) otherwise in its box
   const inline = items.length === 1 && first && short(first) ? `${first.name}: ${(first.value as string) || "empty"}` : null;
   return (
     <div className="info mt-1.5 space-y-1 !p-2 text-xs" role="status" data-field-note="" data-theirs-note="">
@@ -139,7 +144,8 @@ export function GroupNote({ groups }: { groups: { heading: string; lines: string
       {shown.map((g) => (
         <div key={g.heading} className="space-y-0.5" data-note-group={g.heading}>
           <p className="font-medium">{g.heading}:</p>
-          <LongList as="div" className="space-y-0.5">{g.lines.map((l) => <p key={l}>{l}</p>)}</LongList>
+          {/* (§243) The keys' lines in their box too. */}
+          <ValueText id={textId("note-group", `${g.heading}|${g.lines.join("|")}`)} label={g.heading}><span data-note-group-lines="">{g.lines.join(NL)}</span></ValueText>
         </div>
       ))}
     </div>
@@ -158,7 +164,7 @@ export function WasNote({ items }: { items: WasItem[] }) {
     <div className="info mt-1.5 space-y-1 !p-2 text-xs" role="status" data-field-note="" data-was-note="">
       {items.map((it) => {
         const line = wasLine(it.time, it.was, it.name);
-        return it.was == null || isShort(it.was) ? (
+        return it.was == null || (isShort(it.was) && (plainField(it.field) || plainField(it.name))) ? (
           <p key={it.field} className="font-medium" data-was-field={it.field}>{line}</p>
         ) : (
           <div key={it.field} data-was-field={it.field}>
