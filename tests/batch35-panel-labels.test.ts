@@ -34,26 +34,34 @@ describe("batch 35 §15: the Listing panel's labels read apart from its values",
       expect(h.match(/data-panel-value=""/g)?.length).toBe(PANEL_ROWS.length);
       const product = line(h, "productName");
       expect(product).toMatch(/<span class="text-\[11px\] font-medium uppercase tracking-wide text-slate-400" data-panel-label="">Product<\/span>/);
-      expect(product).toMatch(/<div class="mt-0\.5 text-slate-100" data-panel-value=""><span[^>]*>PENIQQQ<\/span>/);
-      expect(h).not.toContain("Product:");
-      expect(h).not.toContain("Name:");
-      expect(h).not.toContain("What to do:");
+      // (Owner, Nov 5, §231) A value that can be long (the product, the name) in the shared box for listing texts, under its label.
+      expect(product).toMatch(/<div class="mt-0\.5 text-slate-100" data-panel-value=""><div class="relative [^"]*" data-panel="listing-[a-z]+-productName">/);
+      expect(product).toContain('data-qa-text="value">PENIQQQ</div>');
+      // A short value stays a plain line.
+      expect(line(h, "devices")).toMatch(/data-panel-value=""><span[^>]*>Mac<\/span>/);
+      // (§231) Read in what shows (a box's grip says "Resize Product: drag…" to screen readers only).
+      const shown = h.replace(/aria-label="[^"]*"/g, "");
+      expect(shown).not.toContain("Product:");
+      expect(shown).not.toContain("Name:");
+      expect(shown).not.toContain("What to do:");
       // The "Updated <time>" tag stays next to its label, before the value.
       const name = line(h, "title");
       expect(name.indexOf("Updated Sat, Oct 31, 10:00 AM")).toBeGreaterThan(name.indexOf(">Name</span>"));
       expect(name.indexOf("Updated Sat, Oct 31, 10:00 AM")).toBeLessThan(name.indexOf("data-panel-value"));
     });
 
-    it(`${side}: the questions are a numbered list, "Required" a small tag outside the quotes; What to do and the NDA keep their scroll boxes`, () => {
+    it(`${side}: (Owner, Nov 5, §231) the questions each in a question box ("Question N", "Required" a tag); What to do and the NDA in the shared draggable box`, () => {
       const h = html(side);
       const q = line(h, "questions");
       expect(q).toContain("<ol");
-      expect(q.match(/<li class="flex gap-2" data-question="">/g)?.length).toBe(2);
-      expect(q).toMatch(/>1\.<\/span>.*“What did you like\?”.*data-question-required="">Required<\/span>.*>2\.<\/span>.*“Where did you get stuck\?”/s);
-      expect(q.match(/data-question-required/g)?.length).toBe(1);
+      expect(q.match(/<li data-question="">/g)?.length).toBe(2);
+      expect(q).toMatch(/data-qa-label="">Question 1<span[^>]*data-required-tag="">Required<\/span>.*data-qa-text="question">What did you like\?<\/div>.*data-qa-label="">Question 2<\/p>.*>Where did you get stuck\?<\/div>/s);
+      expect(q.match(/data-required-tag/g)?.length).toBe(1);
       expect(q).not.toContain("(required)");
-      expect(line(h, "description")).toMatch(/data-scroll-text=""[^>]*>Open the build\.\nPlay the first level\.<\/div>/);
-      expect(line(h, "ndaText")).toContain('aria-label="NDA"');
+      expect(line(h, "description")).toContain('data-qa-text="value">Open the build.\nPlay the first level.</div>');
+      expect(line(h, "description")).toContain("data-panel-grip");
+      expect(line(h, "ndaText")).toContain('aria-label="NDA (scroll for more)"');
+      expect(line(h, "ndaText")).toContain("max-height:12rem");
     });
   }
 });

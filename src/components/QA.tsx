@@ -53,3 +53,32 @@ export function AnswerText({ id, label = "Answer", name, empty = false, emptyTex
     </div>
   );
 }
+
+/**
+ * (Owner, Nov 5, batch 35 §231) The same box for every long text from the contract or the listing: the test's title and product name, what testers should do, the
+ * build link (still a link, clickable), the Mature reason, the NDA, and each "Updated" Before / Now. Its label is shown above it by the caller (FieldLabel); the
+ * text bright on a faint background, scrolling and dragging taller like the question and answer boxes (ResizeBox in OwnPanel). `defaultMax`: the NDA starts taller.
+ * Short values (a price, Required, the days) stay plain lines.
+ */
+export function ValueText({ id, label, defaultMax = QA_BOX_MAX, children }: { id: string; label: string; defaultMax?: string; children?: ReactNode }) {
+  return (
+    <OwnPanel>
+      <ResizeBox id={id} label={label} defaultMax={defaultMax} tallest={QA_BOX_TALLEST} className="!bg-white/[0.03]">
+        <div className="whitespace-pre-wrap break-words text-sm text-slate-100 [overflow-wrap:anywhere]" data-qa-text="value">{children}</div>
+      </ResizeBox>
+    </OwnPanel>
+  );
+}
+
+/** (§231) A contract's or a listing's questions: each its own question box ("Question N", "Required" a tag), in order. `id`: unique on the page. */
+export function QuestionTexts({ id, items, empty = "none" }: { id: string; items: { text: string; required?: boolean }[]; empty?: string }) {
+  if (!items.length) return <span>{empty}</span>;
+  return (
+    <ol className="space-y-2" data-question-texts="">
+      {items.map((q, i) => <li key={i} data-question=""><QuestionText id={`${id}-${i}`} label={`Question ${i + 1}`} required={q.required}>{q.text}</QuestionText></li>)}
+    </ol>
+  );
+}
+
+/** (§231) The NDA box's first height (it is read before agreeing, so it starts taller than the other boxes). */
+export const NDA_BOX_MAX = "12rem";

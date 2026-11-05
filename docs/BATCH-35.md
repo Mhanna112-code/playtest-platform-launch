@@ -4334,3 +4334,31 @@ The developer's test page (`src/app/app/tests/[id]/page.tsx`).
   place of the box: "A payment didn't go through, so you owe it. Pay what you owe on Payments".
 - **Tests:** `tests/paid-cut-226-227.test.ts` (no OwedBox on the page; the banner, the boxes' line and the refusals link to Payments; the anchor exists there;
   the one line when owing before a pause). The tests that read OwedBox itself are unchanged.
+
+## §231 Contract and listing texts in the same draggable scroll boxes (owner, Nov 5)
+Every text from the contract or the listing that can be long now sits in the same box as §223's questions and answers: ResizeBox inside OwnPanel (6rem at first,
+the grip drags it to 60% of the screen, its own scroll inside any outer scroll), one look (`src/components/QA.tsx`).
+- **New in QA.tsx:** `ValueText` (a listing or contract value: bright text on a faint background, wraps anywhere; a link inside stays a clickable link),
+  `QuestionTexts` (a contract's or listing's questions, each its own question box: "Question N", "Required" a small tag) and `NDA_BOX_MAX` (12rem: the NDA starts
+  taller). `NdaBox` is now that box (it takes an `id`), wherever an NDA shows (the agreed scope, the terms history, the new-terms box, the join page, the Listing panel).
+- **The tester's "Your agreed scope"** (session page): the contract's questions (QuestionTexts) and its NDA; the listing information's title, product, what to do,
+  build link (a link in its box) and Mature reason in ValueText; devices and languages (short) stay plain lines. Each "Updated" tag's Before and Now (`UpdatedTag`,
+  which takes an `id`) are two ValueText boxes. The terms history's questions then and now, NDA then and now, and listing before / after use the same boxes. The
+  fold's 32rem scroll stays the one outer scroll; the boxes inside keep their own (OwnPanel), each short at first. The header's "What to do" too.
+- **The new-terms box** (TesterTop): the NDA's Before and Offered in the same box; the question blocks were §223's. The changes line ("written $10 → $12, questions
+  changed, NDA changed") holds only short values (prices, days, Required, a word for the questions or the NDA), so it stays a line.
+- **The developer's Listing panel** (`ListingPanel`, also drawn on the tester's join page): Name, Product, What to do, the build link, the Mature reason and the NDA in
+  ValueText / NdaBox, the questions in QuestionTexts; prices, the call rate, days, dates, who can join, spots, devices, languages and categories stay plain lines.
+  The developer has no separate terms history; the panel's Updated Before / Now is it, in the same boxes.
+- Phones at 375 px: every box wraps anywhere and a link breaks anywhere, so nothing scrolls sideways.
+- **Which questions the tester reads where (checked in the code):** the contract part of "Your agreed scope" shows the CONTRACT's questions (`writtenQuestions(c)`,
+  `Contract.questions`: the ones they joined with, or switched to). "The listing information" has no questions line at all (`INFO_LINES`: title, product, what to
+  do, build link, devices, languages, Mature). A newer question set on the listing reaches the tester only as a new-terms offer: the open offer's "The questions
+  changed" blocks (TesterTop) and, once offered, the terms history's "Questions then and now"; switching makes it the contract's. (Before joining, the join page's
+  Listing panel shows the listing's current questions.)
+- **Tests:** new `tests/contract-listing-boxes-231.test.ts`. Updated: `batch13`, `batch15-stops` (§223's PrevSetFolds id), `batch20`, `batch30-session-info`,
+  `batch34-listing-panel`, `batch35-numbers-notes`, `batch35-panel-labels`.
+
+## §233 The questions changed: the whole list in a scroll panel (owner, Nov 5)
+In the new-terms box, "The questions changed" puts all its question blocks (Question N: Before, After, your answer so far) in one draggable scroll panel (about
+26rem, or 55% of the screen; the grip drags it taller), so many questions never stretch the box. Each Before / After / answer keeps its own box inside.

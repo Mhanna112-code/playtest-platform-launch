@@ -49,7 +49,7 @@ import { PersonHover } from "@/components/PersonHover";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { LiveTop } from "@/components/LiveTop";
 import { qRequired, qText } from "@/lib/questions";
-import { FIELD_BOX, FieldLabel, FieldValue } from "@/components/FieldLines";
+import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
@@ -58,8 +58,9 @@ import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { PageLoaded } from "@/components/PageLoaded";
 import { NdaBox } from "@/components/NdaBox";
-import { QuestionList } from "@/components/QuestionList";
-import { ScrollText } from "@/components/ScrollText";
+import { QuestionTexts, ValueText } from "@/components/QA";
+/** (Owner, Nov 5, §231) The listing information lines whose value can be long: each in the shared box (the others are short lines). */
+const LONG_INFO: string[] = ["title", "productName", "mature"];
 import { PrevSetFolds } from "@/components/AnswerSets";
 import { carryOver, itemsFor, prevSetsOf, sameQuestions } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
@@ -367,7 +368,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         </div>
         {/* (Batch 15 section 17) The steps in a scroll box about 6 lines tall. */}
         {/* (Batch 30 §15) The current steps and build link. */}
-        {c.test.description && <ScrollText text={c.test.description} className="text-slate-300" label="What to do" />}
+        {/* (Owner, Nov 5, §231) In the shared box for listing texts (drags taller). */}
+        {c.test.description && <ValueText id={`head-what-${c.id}`} label="What to do">{c.test.description}</ValueText>}
         <p className="text-sm text-slate-400">Due {fmtDate(c.dueAt)}{c.status === "working" && c.dueAt > now && c.dueAt.getTime() - now.getTime() < 24 * 3_600_000 ? ` · ${leftText(c.dueAt.getTime() - now.getTime())} left` : ""}{isLate(c.dueAt, now) && !refusal ? ": your deadline has passed. You can still send work; the developer decides what to pay." : ""}</p>
         {c.test.buildUrl && (
           <a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="btn w-fit no-underline hover:no-underline">
@@ -421,12 +423,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               </FieldValue>
             </li>
           ))}
-          {/* (Batch 20 section 1) More than 3 questions: all of them in a scroll box about 3 questions tall. */}
-          {writtenQuestions(c).length > 0 && <li data-scope-questions=""><FieldLabel>Questions</FieldLabel><FieldValue><QuestionList numbered items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></li>}
+          {/* (Owner, Nov 5, §231; was batch 20's one scroll box for all the questions) The contract's questions, each in its own question box ("Question N",
+              "Required" a tag), the same look as the answers' (components/QA.tsx). */}
+          {writtenQuestions(c).length > 0 && <li data-scope-questions=""><FieldLabel>Questions</FieldLabel><FieldValue><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></li>}
           {c.ndaText && c.ndaAcceptedAt ? (
             <li data-nda="">
               <FieldLabel>NDA</FieldLabel>
-              <FieldValue><details><summary className="cursor-pointer">Accepted {fmtDate(c.ndaAcceptedAt)}</summary><div className="mt-1"><NdaBox text={c.ndaText} /></div></details></FieldValue>
+              <FieldValue><details><summary className="cursor-pointer">Accepted {fmtDate(c.ndaAcceptedAt)}</summary><div className="mt-1"><NdaBox id={`scope-nda-${c.id}`} text={c.ndaText} /></div></details></FieldValue>
             </li>
           ) : <li><FieldLabel>NDA</FieldLabel><FieldValue>None</FieldValue></li>}
           <li data-scope-due=""><FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue></li>
@@ -437,12 +440,16 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <ul className="mt-1 space-y-2.5 text-sm" data-scope-info="">
           {info.filter((l) => l.key !== "productName" || l.now !== "(none)" || l.before != null).filter((l) => l.key !== "mature" || c.test.mature || l.before != null).map((l) => (
             <li key={l.key} className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line={l.key} {...(l.before != null ? { "data-updated-at": l.updatedAt?.toISOString() ?? "" } : {})}>
-              <FieldLabel tag={l.before != null ? <UpdatedTag when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>
+              <FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>
               <FieldValue>
+                {/* (Owner, Nov 5, §231) A text that can be long (the title, the product name, what to do, the build link, the Mature reason) in the shared box
+                    (ValueText: drags taller, its own scroll inside this fold's scroll); the link stays a link. Short lists (devices, languages) stay plain. */}
                 {l.key === "description" && l.now !== "(none)" ? (
-                  <ScrollText text={c.test.description} className={FIELD_BOX} label="What to do" />
+                  <ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>
                 ) : l.key === "buildUrl" && c.test.buildUrl ? (
-                  <a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="break-all">{c.test.buildUrl}</a>
+                  <ValueText id={`scope-info-${c.id}-buildUrl`} label="Build link"><a href={c.test.buildUrl} target="_blank" rel="noreferrer" className="break-all">{c.test.buildUrl}</a></ValueText>
+                ) : LONG_INFO.includes(l.key) && l.now !== "(none)" && l.now !== "No" ? (
+                  <ValueText id={`scope-info-${c.id}-${l.key}`} label={l.label}>{l.now}</ValueText>
                 ) : (
                   <span className="whitespace-pre-wrap break-words">{l.now}</span>
                 )}
@@ -463,12 +470,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
                     {/* (Batch 35 §29) Labels apart from the questions, numbered with their Required tags. */}
-                    <div className="mt-1"><FieldLabel>Then</FieldLabel><FieldValue><QuestionList numbered items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div>
-                    <div className="mt-1"><FieldLabel>Offered</FieldLabel><FieldValue><QuestionList numbered items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
+                    {/* (Owner, Nov 5, §231) Each question in its own question box (components/QA.tsx). */}
+                    <div className="mt-1"><FieldLabel>Then</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-then`} items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div>
+                    <div className="mt-1"><FieldLabel>Offered</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-offered`} items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
                 )}
                 {o.fromNdaText !== o.ndaText && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">NDA then and now</summary>
-                    <div className="mt-1 space-y-2"><NdaBox label="Before" text={o.fromNdaText} /><NdaBox label="Offered" text={o.ndaText} /></div></details>
+                    <div className="mt-1 space-y-2"><NdaBox id={`history-${o.id}-nda-before`} label="Before" text={o.fromNdaText} /><NdaBox id={`history-${o.id}-nda-offered`} label="Offered" text={o.ndaText} /></div></details>
                 )}
               </li>) })),
               ...contractNotes.map((n) => ({ at: n.createdAt, key: n.id, node: n.kind === STOP_NOTE_KIND
@@ -480,7 +488,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 return rows ? [{ at: ch.createdAt, key: ch.id, node: (<li key={ch.id} data-history-line="" data-history-info="">
                   {`${fmtDateTimeIn(ch.createdAt, u.timeZone)}: ${dev} updated the listing information (${rows.map((r) => r.name).join(", ")})`}
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Before and after</summary>
-                    <ul className="mt-1 space-y-1">{rows.map((r) => <li key={r.name}><b>{r.name}:</b> {/* (Batch 32 §14) each side in its own scroll box, about 8 lines */}<span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words" tabIndex={0} data-diff-scroll="">{r.before}</span> → <span className="block max-h-32 overflow-y-auto whitespace-pre-wrap break-words text-slate-300" tabIndex={0} data-diff-scroll="">{r.after}</span></li>)}</ul>
+                    {/* (Batch 32 §14) each side in its own scroll box; (Owner, Nov 5, §231) the shared box for listing texts (ValueText). */}
+                    <ul className="mt-1 space-y-1.5">{rows.map((r) => <li key={r.name} className="space-y-0.5"><b>{r.name}:</b><div data-diff-scroll=""><ValueText id={`history-${ch.id}-${r.name}-before`} label={`${r.name}: before`}>{r.before}</ValueText></div><span aria-hidden="true">↓</span><div data-diff-scroll=""><ValueText id={`history-${ch.id}-${r.name}-after`} label={`${r.name}: after`}>{r.after}</ValueText></div></li>)}</ul>
                   </details>
                 </li>) }] : [];
               }),

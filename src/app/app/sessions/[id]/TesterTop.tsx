@@ -8,6 +8,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { NdaBox } from "@/components/NdaBox";
 import { AnswerText, QuestionText } from "@/components/QA";
 import { FieldLabel } from "@/components/FieldLines";
+import { ResizeBox } from "@/components/Panel";
 import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
@@ -93,10 +94,10 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
       {offer.ndaText != null && offer.ndaText !== (offer.fromNdaText ?? "") && (
         <details className="text-sm" open>
           <summary className="cursor-pointer font-medium">{offer.ndaText ? "The NDA" : "The NDA is removed"}{offer.fromNdaText ? " (changed)" : ""}: switching means you accept it</summary>
-          {/* (Batch 13 section 9) "Before" and "Offered" as two scroll boxes, never in full. */}
+          {/* (Batch 13 section 9) "Before" and "Offered" as two scroll boxes, never in full. (§231) The shared box for contract texts, like the questions below. */}
           <div className="mt-1 space-y-2">
-            {offer.fromNdaText && <NdaBox label="Before" text={offer.fromNdaText} />}
-            {offer.ndaText && <NdaBox label="Offered" text={offer.ndaText} />}
+            {offer.fromNdaText && <NdaBox id={`offer-${offer.id}-nda-before`} label="Before" text={offer.fromNdaText} />}
+            {offer.ndaText && <NdaBox id={`offer-${offer.id}-nda-offered`} label="Offered" text={offer.ndaText} />}
           </div>
         </details>
       )}
@@ -105,7 +106,9 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
           <summary className="cursor-pointer font-medium">The questions changed: before and after</summary>
           {/* (Owner, Nov 5, §221; was two numbered lists, Before then After, and the answers run together) One block per question number: its Before, its After and
               your answer so far, each in its own box that scrolls and drags taller (ResizeBox). A question only one side has says "(new)" or "(removed)". */}
-          <ol className="mt-2 space-y-3" data-question-changes="">
+          {/* (Owner, Nov 5, §233) The whole list of question blocks in its own draggable scroll panel: many questions never stretch the box (each part keeps its own box). */}
+          <div className="mt-2"><ResizeBox id={`offer-${offer.id}-questions`} label="The questions changed" defaultMax="min(26rem, 55vh)" tallest={0.8}>
+          <ol className="space-y-3" data-question-changes="">
             {Array.from({ length: Math.max(offer.fromQuestions.length, offer.questions.length) }, (_, i) => {
               const before = offer.fromQuestions![i], after = offer.questions![i], answer = offer.answers?.[i] ?? "";
               // (Owner, Nov 5, §223) The one look for questions and answers (components/QA.tsx): Before and After as questions (quiet box, "Required" a tag),
@@ -127,6 +130,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
               );
             })}
           </ol>
+          </ResizeBox></div>
           {offer.switchNote && <p className="mt-1" data-switch-questions="">{offer.switchNote}</p>}
         </details>
       )}

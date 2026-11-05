@@ -188,7 +188,7 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
     expect(renderToStaticMarkup(createElement(FieldLabel, { tag: createElement("b", null, "Updated 3:00 PM") }, "Product"))).toBe('<div class="leading-5"><span class="text-[11px] font-medium uppercase tracking-wide text-slate-400" data-panel-label="">Product</span><b>Updated 3:00 PM</b></div>');
     expect(renderToStaticMarkup(createElement(FieldValue, null, "PENIQQQ"))).toBe('<div class="mt-0.5 text-slate-100" data-panel-value="">PENIQQQ</div>');
     const panel = src("app/app/tests/[id]/ListingPanel.tsx");
-    expect(panel).toContain('import { FIELD_BOX, FieldLabel, FieldValue } from "@/components/FieldLines";');
+    expect(panel).toContain('import { FieldLabel, FieldValue } from "@/components/FieldLines";'); // (§231) long values in the shared box (ValueText), not FIELD_BOX
     expect(panel).toContain("<FieldLabel tag={tag(l)}>{l.label}</FieldLabel>");
     expect(panel).not.toContain("text-[11px] font-medium uppercase"); // reused, not a copy
   });
@@ -197,11 +197,11 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
     const s = src("app/app/sessions/[id]/page.tsx");
     const scope = s.slice(s.indexOf('<details className="card scroll-mt-24" id="scope"'), s.indexOf("{/* (Design doc 9) The terms history"));
     expect(scope).toContain("<FieldLabel>{x.name}</FieldLabel>");
-    expect(scope).toContain("<FieldLabel>Questions</FieldLabel><FieldValue><QuestionList numbered items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />");
+    expect(scope).toContain("<FieldLabel>Questions</FieldLabel><FieldValue><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />"); // (§231)
     expect(scope).toContain("<FieldLabel>NDA</FieldLabel>");
     expect(scope).toContain("<FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue>");
-    expect(scope).toContain('<FieldLabel tag={l.before != null ? <UpdatedTag when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>');
-    expect(scope).toContain('<ScrollText text={c.test.description} className={FIELD_BOX} label="What to do" />');
+    expect(scope).toContain('<FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>');
+    expect(scope).toContain('<ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>'); // (§231)
     // No "Label: value" run together any more.
     expect(scope).not.toMatch(/\{l\.label\}:|\{x\.name\}:|>Questions: <|NDA: none|NDA: accepted|<li>Due \{/);
   });
@@ -209,12 +209,12 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
   it("the new-terms offer (Switch / Keep) and the terms history's questions then and now", () => {
     const top = src("app/app/sessions/[id]/TesterTop.tsx");
     // (§221) Labels still apart from values: one block per question, each part under its own label.
-    expect(top).toContain("<FieldLabel>{label}");
+    expect(top).toContain("<FieldLabel>{label}</FieldLabel>"); // a side only one has ("(new)" / "(removed)"); (§223, §231) the others in the QA boxes, labelled
     expect(top).toContain('{box("Before", "before", before)}');
     expect(top).not.toMatch(/>Before: <QuestionList|>After: <QuestionList/);
     const s = src("app/app/sessions/[id]/page.tsx");
     expect(s).toContain("fromQuestions: ((c.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) })),");
-    expect(s).toContain("<FieldLabel>Offered</FieldLabel><FieldValue><QuestionList numbered");
+    expect(s).toContain("<FieldLabel>Offered</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-offered`}"); // (§231)
     expect(s).not.toMatch(/>Then: <QuestionList|>Offered: <QuestionList/);
   });
 });

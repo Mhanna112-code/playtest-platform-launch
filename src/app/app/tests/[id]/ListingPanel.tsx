@@ -1,8 +1,8 @@
 import { ClipboardList } from "lucide-react";
 import { UpdatedTag } from "@/components/ListingInfo";
-import { FIELD_BOX, FieldLabel, FieldValue } from "@/components/FieldLines";
-import { ScrollText } from "@/components/ScrollText";
-import { QuestionList } from "@/components/QuestionList";
+import { FieldLabel, FieldValue } from "@/components/FieldLines";
+import { NdaBox } from "@/components/NdaBox";
+import { QuestionTexts, ValueText } from "@/components/QA";
 import { qRequired, qText } from "@/lib/questions";
 import type { PanelKey, PanelRow, PanelSide } from "@/lib/listingPanel";
 import type { Listing } from "@/lib/rules";
@@ -17,11 +17,14 @@ import type { Listing } from "@/lib/rules";
  * with "Required" as a small tag.
  */
 /** (Owner, Oct 31, batch 35 §15) Labels apart from values: a small muted uppercase label on its own line, the value below it in bright text (§29: the shared
- * FieldLabel / FieldValue, src/components/FieldLines.tsx, used wherever listing or contract fields are listed). */
-const BOX = FIELD_BOX;
+ * FieldLabel / FieldValue, src/components/FieldLines.tsx, used wherever listing or contract fields are listed).
+ * (Owner, Nov 5, §231) A value that can be long (the title, the product name, what to do, the build link, the Mature reason) in the shared box for contract and
+ * listing texts (ValueText: drags taller, its own scroll inside this panel's scroll); the questions each in their question box; the NDA in its box (NdaBox). Short
+ * values (prices, Required, days, devices) stay plain lines. */
+const LONG: string[] = ["title", "productName", "mature"];
 
 export function ListingPanel({ rows, listing, when, savedAt, side = "developer", intro, head, foot, after }: { rows: PanelRow[]; listing: Listing; when: (d: Date) => string; /** (Batch 35 §3) the Save this panel shows (its record's time; "" for none): See it waits for the line's Save */ savedAt?: string; side?: PanelSide; intro?: string; head?: React.ReactNode; foot?: React.ReactNode; after?: Partial<Record<PanelKey, React.ReactNode>> }) {
-  const tag = (l: PanelRow) => (l.before != null ? <UpdatedTag when={l.updatedAt ? when(l.updatedAt) : ""} before={l.before} now={l.now} /> : null);
+  const tag = (l: PanelRow) => (l.before != null ? <UpdatedTag id={`listing-${side}-${l.key}`} when={l.updatedAt ? when(l.updatedAt) : ""} before={l.before} now={l.now} /> : null);
   const link = side === "developer" && listing.buildUrl; // (batch 35 §14) a tester gets the build link when they join
   return (
     <section className={`card scroll-mt-24${head ? " space-y-4" : ""}`} data-listing-panel={side === "tester" ? "tester" : ""}>
@@ -37,13 +40,15 @@ export function ListingPanel({ rows, listing, when, savedAt, side = "developer",
               <FieldLabel tag={tag(l)}>{l.label}</FieldLabel>
               <FieldValue>
                 {l.key === "description" && listing.description ? (
-                  <ScrollText text={listing.description} className={BOX} label="What to do" />
+                  <ValueText id={`listing-${side}-description`} label="What to do">{listing.description}</ValueText>
                 ) : l.key === "buildUrl" && link ? (
-                  <a href={listing.buildUrl} target="_blank" rel="noreferrer" className="break-all">{listing.buildUrl}</a>
+                  <ValueText id={`listing-${side}-buildUrl`} label="Build link"><a href={listing.buildUrl} target="_blank" rel="noreferrer" className="break-all">{listing.buildUrl}</a></ValueText>
                 ) : l.key === "questions" && listing.questions.length ? (
-                  <QuestionList numbered items={listing.questions.map((q) => ({ text: qText(q), required: qRequired(q) }))} />
+                  <QuestionTexts id={`listing-${side}-q`} items={listing.questions.map((q) => ({ text: qText(q), required: qRequired(q) }))} />
                 ) : l.key === "ndaText" && listing.ndaText ? (
-                  <ScrollText text={listing.ndaText} lines={4} className={BOX} label="NDA" />
+                  <NdaBox id={`listing-${side}-nda`} text={listing.ndaText} />
+                ) : LONG.includes(l.key) && l.now !== "(none)" && l.now !== "No" ? (
+                  <><ValueText id={`listing-${side}-${l.key}`} label={l.label}>{l.now}</ValueText>{after?.[l.key]}</>
                 ) : (
                   <><span className="whitespace-pre-wrap break-words">{l.now}</span>{after?.[l.key]}</>
                 )}

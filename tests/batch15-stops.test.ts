@@ -115,6 +115,6 @@ describe("previous sets: sent or draft (section 14)", () => {
     expect(versionsOf(sets[1], true).map((v) => v.kind)).toEqual(["sent"]);
     expect(versionsOf(sets[1], false).map((v) => v.kind)).toEqual(["draft"]);
     expect(src("components/AnswerSets.tsx")).toContain('"Draft (not sent)"');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PrevSetFolds timeZone={u.timeZone} developer");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PrevSetFolds id={`prev-${c.id}`} timeZone={u.timeZone} developer"); // (§223) its boxes' ids
   });
 });
