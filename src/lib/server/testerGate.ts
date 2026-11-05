@@ -171,7 +171,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // other parts follows their Alerts as before.
   const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e) || (!!piece && e.piece === piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece))) : r.changes;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
-  const list = withRenamed((await unanswered(testerId, testId, [...terms, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt)])).filter((e) => !answersIt(e, opts.answers)), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  const list = withRenamed((await unanswered(testerId, testId, [...terms, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt && !(e.kind === "terms" && terms.length))])).filter((e) => !answersIt(e, opts.answers)), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, a key marked working, their own other-tab
   // actions, a stop or pause, and the piece rules (Dispute's payment on that piece; Charge / Let it go's payment on that part and any team decision) always stop.
@@ -194,3 +194,17 @@ function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks:
   const x = rows[0];
   return x.repeat === "once" ? `a call for ${when}` : `${x.repeat === "daily" ? "daily" : "weekly"} calls from ${when}${x.count ? "" : " (until testers' work ends)"}`;
 }
+
+/**
+ * (Owner, Nov 5, §232) Rate and Leave end the tester's part, which closes an open new-terms offer unanswered. So their FIRST press always stops once for an
+ * open offer, even when the page already shows its box (§90's "shown counts as seen" doesn't apply here): "<dev> offered you new terms: Switch or Keep in the box
+ * above, or <rating / leaving> closes them unanswered." The second press goes ahead (the line is dated now, so it never stops the confirmed press).
+ */
+export async function openOfferMoment(contractId: string, body: Record<string, unknown>, press: "rating" | "leaving"): Promise<TestEventLike[]> {
+  if (body.confirmed === true) return [];
+  const offer = await db.termsOffer.findFirst({ where: { contractId, status: "open" }, select: { id: true } });
+  if (!offer) return [];
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { test: { select: { developer: true } } } });
+  return [{ kind: "terms", text: `${c ? displayName(c.test.developer) : "The developer"} offered you new terms: Switch or Keep in the box above, or ${press} closes them unanswered`, createdAt: new Date() }];
+}
+

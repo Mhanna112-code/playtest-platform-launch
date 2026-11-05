@@ -99,6 +99,13 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     }
     await settle();
     const r = await rate(x, loaded, { seenAt: seen(), boxSeenAt: loaded });
+    // (Owner, Nov 5, §232) An OPEN terms offer stops Rate once even when shown (rating would close it unanswered); the second press rates.
+    if (kind === "terms") {
+      expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
+      expect(texts(r)).toEqual(["Nora Lane offered you new terms: Switch or Keep in the box above, or rating closes them unanswered"]);
+      expect((await rate(x, loaded, { confirmed: true, boxAt: r.body.error.now })).status).toBe(200);
+      return;
+    }
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 

@@ -4362,3 +4362,8 @@ the grip drags it to 60% of the screen, its own scroll inside any outer scroll),
 ## §233 The questions changed: the whole list in a scroll panel (owner, Nov 5)
 In the new-terms box, "The questions changed" puts all its question blocks (Question N: Before, After, your answer so far) in one draggable scroll panel (about
 26rem, or 55% of the screen; the grip drags it taller), so many questions never stretch the box. Each Before / After / answer keeps its own box inside.
+## §232 Rate and Leave stop once for open new terms, even when shown (owner, Nov 5)
+Narrows §90 for these two presses: rating and leaving end the tester's part, which closes an open new-terms offer unanswered. So while an offer is open, the first
+Rate or Leave press always stops once (a forced line, whatever the Alerts): "Nora Lane offered you new terms: Switch or Keep in the box above, or rating (leaving)
+closes them unanswered", even when the page already shows the offer's box. The second press goes ahead. An unseen offer keeps its usual line instead (never both).
+Test: `tests/rate-leave-open-terms-232.test.ts`; `tests/batch35-rate-all-stops.test.ts` (§90's shown-terms case now stops once).

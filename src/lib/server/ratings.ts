@@ -7,7 +7,7 @@ import { bell, notify } from "./notify";
 import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, chargeIsOpen, chargeOpensAt, ratePendingLine, rateOpensOnLine, rateOpensReviewLine, rateTheirDisputeLine, type TestEventLike } from "@/lib/rules";
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
-import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
+import { FINISHED_PART_REASON, openOfferMoment, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
 import { devStopSince, loadedOf, stopBox, testerLiftSince, testerStopSince, testerPauseSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { closeOffersOfEnded } from "./offerClose";
@@ -209,7 +209,7 @@ async function testerRateGate(testerId: string, contractId: string, testId: stri
   const since = body.confirmed === true ? seenOf(body.boxAt) : seenOf(body.seenAt) ?? seenOf(body.pageSeenAt);
   if (!since) return;
   const moment = (await testerStopSince(contractId, since)) ?? (await testerPauseSince(contractId, since));
-  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { moments: [...(moment ? [moment] : []), ...(await testerLiftSince(contractId, since))] }); // (§207) the team's lift too
+  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { moments: [...(await openOfferMoment(contractId, body, "rating")), ...(moment ? [moment] : []), ...(await testerLiftSince(contractId, since))] }); // (§207) the team's lift too
 }
 /** (Batch 17 §§12, 14) The developer's Rate keeps its narrow list: this tester's dispute decided or the work stopping. */
 async function devRateGate(testId: string, contractId: string, body: Record<string, unknown>, devId = "") {
