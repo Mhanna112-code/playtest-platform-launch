@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { ResizeBox } from "@/components/Panel";
+import { InsidePanel, ResizeBox } from "@/components/Panel";
 
 /** About 4 rows of the dashboard's row cards; about 2 rows of the developer's test cards (one column of about 3 on phones). */
 const HEIGHT = { rows: "max-h-[22rem]", lines: "max-h-56", cards: "max-h-[54rem] md:max-h-[38rem]", /** (batch 24 section 1) about 3 short rows (stacked on phones) */ three: "max-h-[21rem] sm:max-h-[13rem]" } as const;
@@ -14,7 +14,8 @@ export const LIST_PANEL = {
   /** Call requests (was max-h-80) */ requests: "min(20rem, 60vh)",
   /** The developer's booked calls with one tester (was max-h-40, about 3 calls) */ booked: "min(10rem, 60vh)",
   /** The developer's whole list of testers' calls (was max-h-[200vh], about 2 screens; (owner, Nov 4, §181) it showed too many testers: now about 3–4 tester
-   * cards at first, the rest scroll inside; the grip still drags it up to 2 screens) */ testersCalls: "min(28rem, 70vh)",
+   * cards at first, the rest scroll inside; the grip still drags it up to 2 screens). (Owner, Nov 4, §187) 28rem showed about 2.5 cards (a card with 2 booked
+   * calls is about 154px on a desktop): 37rem fits about 3.5; on a phone the 80% of the screen is the limit (its cards are taller) */ testersCalls: "min(37rem, 80vh)",
   /** The paused / restricted view's booked calls (was max-h-72) */ restricted: "min(18rem, 60vh)",
   /** The dashboards' calls (was ScrollList "lines", max-h-56) */ dashCalls: "min(14rem, 60vh)",
   /** The tester's booked calls on their session page (no box before: about 4 calls) */ testerBooked: "min(20rem, 60vh)",
@@ -56,7 +57,8 @@ export function PayLinesBox({ id, count, children }: { /** the part (sent work o
 export function ScrollList({ children, className = "space-y-2", size = "rows", as: Tag = "ul", label }: { children: ReactNode; className?: string; size?: keyof typeof HEIGHT; as?: "ul" | "div"; label?: string }) {
   return (
     <Tag className={`${className} ${HEIGHT[size]} overflow-y-auto pr-1`} data-scroll-list={size} aria-label={label}>
-      {children}
+      {/* (Owner, Nov 4, §187) It scrolls: a panel inside it is plain (only the outermost scrolls). */}
+      <InsidePanel>{children}</InsidePanel>
     </Tag>
   );
 }

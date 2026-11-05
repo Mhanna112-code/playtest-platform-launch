@@ -317,7 +317,9 @@ describe("§185 two request boxes on the developer's page, each with a name sear
     expect(b).toContain('data-request-search="yours"');
     expect([...a.matchAll(/data-call-requests-person="([^"]+)"/g)].map((m) => m[1])).toEqual([ben.sessionId, ana.sessionId]);
     expect(a).toContain(`id="call-requests-person-${ana.sessionId}"`);
-    expect(a).toMatch(/Ana Silva<\/a> <span class="whitespace-nowrap font-normal text-slate-400">· 2 requests<\/span>/);
+    // (Owner, Nov 4, §187) The whole name (cut only when the row is full), then "· N requests"; her "one of" request (2 times) is one row per time: 3 rows for 2 requests.
+    expect(a).toMatch(/Ana Silva<\/span><\/a><\/span><span class="shrink-0 whitespace-nowrap font-normal text-slate-400">· 2 requests<\/span>/);
+    expect([...a.matchAll(/data-request-id="([^"]+)"/g)].length).toBe(4);
     expect([...b.matchAll(/data-call-requests-person="([^"]+)"/g)].map((m) => m[1])).toEqual([ana.sessionId]);
     expect(b).toContain(`id="your-requests-person-${ana.sessionId}"`);
     expect(a).toContain("Decline</button>");

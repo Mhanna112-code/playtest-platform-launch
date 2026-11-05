@@ -19,6 +19,7 @@ import { SessionWatch } from "@/components/SessionWatch";
 import { TimeZoneSync } from "@/components/TimeZoneSync";
 import { HashJump } from "@/components/HashJump";
 import { BellLink } from "@/components/BellLink";
+import { NavMenu } from "@/components/NavMenu";
 import { unreadEntryCount } from "@/lib/server/notify";
 
 // The full Playtest Platform's header (NEWEST+8): logo, the side's links with their icons, the bell, the account pill
@@ -54,10 +55,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   );
   return (
     <>
-      <header data-app-shell className="sticky top-0 z-20 border-b border-white/[0.07] bg-ink-950/75 backdrop-blur-xl">
+      {/* (Owner, Nov 4, §187) z-30: above the test page's top panel (z-20), which painted over the header (and its phone Menu drop-down) when scrolled under it. */}
+      <header data-app-shell className="sticky top-0 z-30 border-b border-white/[0.07] bg-ink-950/75 backdrop-blur-xl">
         <nav className="mx-auto flex max-w-6xl flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3">
           <Brand />
-          <div className="ml-4 flex flex-wrap items-center gap-1">
+          {/* (Owner, Nov 4, §187) On a phone (below 640px) the links fold into one "Menu" button (a dot on it while Messages has unread); from 640px up as before. */}
+          <NavMenu messages={off ? 0 : unreadChats}>
             {admin && <AdminNav />}
             {/* Each side has its own links: developer: Dashboard, Post a test, Profile, Payments, Messages; tester: Dashboard, Find tests, Profile, Payments, Messages. */}
             {!admin && <Link className="nav-link" href="/app"><LayoutDashboard className="h-4 w-4" /> Dashboard</Link>}
@@ -66,7 +69,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             {!off && !admin && <Link className="nav-link" href="/app/profile"><UserRound className="h-4 w-4" /> Profile</Link>}
             {!admin && <Link className="nav-link" href="/app/payments"><CreditCard className="h-4 w-4" /> Payments</Link>}
             {!admin && messagesLink}
-          </div>
+          </NavMenu>
           <div className="ml-auto flex items-center gap-2">
             <BellLink unread={unread} />
             <Link href="/app/account" title="Your account" className="flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] py-1 pl-1 pr-1 text-sm text-ink-300 no-underline transition hover:border-white/25 hover:text-white hover:no-underline sm:pr-3">

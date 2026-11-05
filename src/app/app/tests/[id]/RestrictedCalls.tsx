@@ -26,7 +26,8 @@ export function RestrictedCalls({ testId, seenAt, calls, embedded = false, perso
       <ul className="space-y-2 text-sm" data-restricted-list="">
         {calls.map((c) => (
           <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
-            <span className="mr-auto text-slate-200">{fmt(c.when)} · <NameLink text={c.who} href={c.whoHref} /> · {c.minutes} min</span>
+            {/* (Owner, Nov 4, §187) Inside the person's own Needs you drop-down their name is on the drop-down, once: not on every row. */}
+            <span className="mr-auto min-w-0 text-slate-200">{fmt(c.when)} · {!person && <><NameLink fit text={c.who} href={c.whoHref} /> · </>}{c.minutes} min</span>
             <CancelMenu needsReason={c.needsReason} busy={busy} other={c.who} onCancel={async (why) => { if (await press(`/api/tests/${testId}/cancel-call`, { callId: c.id, reason: why }, c.id)) finish(); }} />
             {at === c.id && <div className="basis-full"><ChangesBox changes={changes} error={error} press="Cancel call" /></div>}
           </li>

@@ -217,7 +217,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <div key={i} data-question="">
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. (Owner, Nov 4, §182) Now the shared fold: its first 2 lines, then Show more. */}
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
-          <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
+          <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
           <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} total={length} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
           {boxDraft(i)}
         </div>

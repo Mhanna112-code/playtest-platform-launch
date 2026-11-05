@@ -44,7 +44,7 @@ describe("the developer's view: a fold per question", () => {
     expect(h.match(/<details /g)).toHaveLength(2);
     expect(h).not.toMatch(/<details[^>]* open/);
     expect(h).toContain(`data-fold="needs-s1-q-${questionKey(Q1)}"`);
-    expect(h).toMatch(new RegExp(`data-question-title="">${Q1.replace("?", "\\?")}</span>`));
+    expect(h).toMatch(new RegExp(`data-question-title="" data-question-clamp="">${Q1.replace("?", "\\?")}</span>`));
     expect(h).toContain('data-added-count="2">· 2 added</span>');
     // The question with nothing added shows no count.
     expect(h.match(/data-added-count/g)).toHaveLength(1);
@@ -55,7 +55,7 @@ describe("the developer's view: a fold per question", () => {
   it("inside, indented one step: the answer, then each addition oldest first, dated in the viewer's zone", () => {
     const h = html();
     const body = h.slice(h.indexOf(`data-question-body="${questionKey(Q1)}"`));
-    expect(h).toContain('class="space-y-2 border-l border-white/10 pl-3" data-question-body');
+    expect(h).toContain('class="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body'); // (§187) 8px on a phone
     expect(body.indexOf("the boats")).toBeLessThan(body.indexOf("first addition"));
     expect(body.indexOf("first addition")).toBeLessThan(body.indexOf("second addition"));
     expect(h).toContain(">Added · Nov 3, 2026, 11:29 PM</p>");

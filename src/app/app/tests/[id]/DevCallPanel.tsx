@@ -114,7 +114,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const rowsNamed = (t: DevTester) => t.calls.length > 0 || t.sets.length > 0;
   const callRow = (t: DevTester, c: DevCall) => (
     <li key={c.id} id={`call-${c.id}`} className="flex flex-wrap items-center gap-2">
-      <span className="mr-auto"><NameLink text={t.name} href={t.testerHref} /> · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
+      {/* (Owner, Nov 4, §187) The whole name, cut only when the row is full (min-w-0: the row may shrink below the name's width). */}
+      <span className="mr-auto min-w-0"><NameLink fit text={t.name} href={t.testerHref} /> · {fmt(c.when)} · {c.minutes} min · {c.rate}{c.late && <span className="ml-2 badge">{c.late}</span>}{c.measuring && <span className="ml-2 badge border-sky-300/40 text-sky-200" data-measuring="">{c.measuring}</span>}</span>
       {/* (Owner, Nov 3, long text) The call's buttons stay together: beside the line when there is room, all on a line of their own when it is long
           (never Add to calendar on one line and Cancel on the next). */}
       <span className="flex max-w-full flex-wrap items-center gap-2" data-call-buttons="">
@@ -141,11 +142,11 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       {!canRequest && noRequestReason && <p className="note" data-no-request="">{noRequestReason}</p>}
       {canRequest && testers.length === 0 && <p className="note">Nobody is working on this test right now, so there is nobody to request a call with.</p>}
       {canRequest && testers.length > 0 && (
-        <fieldset className="max-h-48 space-y-1 overflow-y-auto pr-1 text-sm">
+        <fieldset className="max-h-48 min-w-0 space-y-1 overflow-y-auto pr-1 text-sm">
           <label className="block font-medium"><input type="checkbox" checked={all} onChange={() => setTicked(all ? [] : testers.map((t) => t.contractId))} /> Select all ({testers.length})</label>
           {testers.map((t) => (
             <label key={t.contractId} className="block">
-              <input type="checkbox" checked={ticked.includes(t.contractId)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.contractId] : ticked.filter((x) => x !== t.contractId))} /> <b><Cut text={t.name} /></b> · {t.terms} · {t.booked + (t.pending ?? 0)} of 3 booked or requested
+              <input type="checkbox" checked={ticked.includes(t.contractId)} onChange={(e) => setTicked(e.target.checked ? [...ticked, t.contractId] : ticked.filter((x) => x !== t.contractId))} /> <b><Cut fit text={t.name} /></b> · {t.terms} · {t.booked + (t.pending ?? 0)} of 3 booked or requested
               {t.warning && <span className="block pl-5 text-xs text-amber-200" data-calls-warning="">{t.warning}</span>}
             </label>
           ))}
@@ -189,7 +190,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       {shown.map((t) => (
         <div key={t.contractId} className="space-y-1 rounded-lg border border-white/10 p-3 text-sm">
           {/* (Batch 35 §79, owner Oct 31) No name heading when every row already starts with it ("fbbb · Daily · Sat 9:46 PM (4 left) · …", "fbbb requested …"). */}
-          {!rowsNamed(t) && <h3><NameLink text={t.name} href={t.testerHref} /></h3>}
+          {!rowsNamed(t) && <h3 className="min-w-0"><NameLink fit text={t.name} href={t.testerHref} /></h3>}
           {!t.calls.length && !t.sets.length && <p className="note">No calls</p>}
           {t.warning && <p className="text-xs text-amber-200" data-calls-warning="">{t.warning}</p>}
           {(t.calls.length > 0 || t.sets.length > 0) && <p className="font-medium">Booked</p>}
@@ -201,7 +202,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
             {t.sets.map((s) => (
               <li key={s.id} className="space-y-1" data-call-set="">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="mr-auto"><NameLink text={t.name} href={t.testerHref} /> · {s.label} · {s.minutes} min · {s.rate}</span>
+                  <span className="mr-auto min-w-0"><NameLink fit text={t.name} href={t.testerHref} /> · {s.label} · {s.minutes} min · {s.rate}</span>
                   <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [s.id]: !(open[s.id] ?? s.calls.some((c) => c.joinable)) })}>{(open[s.id] ?? s.calls.some((c) => c.joinable)) ? "Hide calls" : "Show calls"}</button>
                   <CancelMenu needsReason={s.needsReason} busy={busy} other={t.name} label="Cancel the remaining calls"
                     rule={`Cancels every call still ahead and ${t.name} is told.${s.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
