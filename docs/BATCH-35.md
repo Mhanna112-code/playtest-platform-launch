@@ -4407,3 +4407,18 @@ that refilled every question after a switch.
   server: only the open questions, the answered ones kept, the first answer free, a Send with nothing open refused; after a switch, the carry-over Send). Updated:
   `anything-else-cancel-188`, `batch10`, `batch27`, `batch35-added-per-question` (the rows), `batch35-parts-fold`, `batch35-small-ui`, `limits-call-history` (one
   question's 5 in its fold), `batch35-added-per-question-222` (its page test moved).
+
+## §236 The tester's Terms history: one draggable panel, names cut with their expansions (owner, Nov 5)
+- **The whole history list** (session page, "Your agreed scope" → Terms history, `data-terms-history`) sits in its own draggable scroll panel (ResizeBox
+  `terms-history-<contract>`); the boxes inside (the questions then and now, the NDA then and now, the listing's before / after, an opened line) keep their own
+  scroll (QA / OwnPanel).
+- **Names cut at 20, everywhere in it** (§220's pattern): each line with a name is a `NameLine` (WholeLine): names cut at NAME_CUT (20) with "…", each "…" opens
+  that name in place, and the arrow opens the whole line in place (its own small box). `cutNamesIn` (`src/lib/cutNames.ts`) builds the cut and the whole version
+  of a line whose names are baked into its text: the developer's name, the tester's own, the test's titles (as joined and now) wherever they appear, and any
+  quoted “…” longer than 20 (a test or product name, a renamed test's old and new names). It covers the offer lines ("<developer> offered new terms (…) · …"),
+  the contract notes (server text, after `renderTimes`), and "<developer> updated the listing information (…)". The developer's whole name still links to their
+  profile (where it shows whole). Long before → after values stay in their §231 boxes. A line with nothing long is plain, with no arrow.
+- The earlier-sets line now points to “Past questions” (§234).
+- **Tests:** new `tests/terms-history-236.test.ts` (the cut and whole versions line up; NameLine's … and arrow, the link when nothing is cut; the page: the panel,
+  a contract note with a long developer name and a long quoted test name cut with two … and the arrow). Also fixed here: `batch15-stops` and `restrictions` (the
+  press "Send Answers", §235) and `batch32-fixes` (§231's boxes).

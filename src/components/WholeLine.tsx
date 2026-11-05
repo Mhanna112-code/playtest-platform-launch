@@ -57,3 +57,12 @@ export function WholeLine({ shown, full, href, after, className = "", render, ch
     </span>
   );
 }
+
+/**
+ * (Owner, Nov 5, §236) WholeLine for a server page (a function can't be handed from a server page to this client component): a line whose names are cut, with one
+ * person's whole name (`name`) linked to `href` wherever it appears whole (the Terms history's developer).
+ */
+export function NameLine({ shown, full, name, href }: { shown: string; full: string | null; name?: string; href?: string | null }) {
+  const linked = (t: string): ReactNode => (name && href && t.includes(name) ? t.split(name).flatMap((part, i) => (i ? [<a key={i} href={href} data-name-link="person">{name}</a>, part] : [part])) : t);
+  return <WholeLine shown={shown} full={full} render={linked} />;
+}

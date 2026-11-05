@@ -123,7 +123,7 @@ describe("a suspended tester (design doc 2 and 11.4)", () => {
     const lines = (await db.testEvent.findMany({ where: { testId: open.testId, kind: "left" } })).map((e) => e.text);
     expect(lines).toEqual(["Ana Silva left the test"]); // never why
     expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["x", "y"] })).body.error.code).toBe("suspended");
-    expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["x", "y"] })).body.error.failed).toBe("Your Send on Harbor Run didn't go through");
+    expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["x", "y"] })).body.error.failed).toBe("Your Send Answers on Harbor Run didn't go through"); // (§235)
 
     // The developer can still pay their work, and (batch 22 section 2) the tester is paid normally: no held share, nothing said about it.
     const r = await pay(open.dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000, confirmed: true });

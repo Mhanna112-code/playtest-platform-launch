@@ -63,6 +63,8 @@ import { QuestionTexts, ValueText } from "@/components/QA";
 const LONG_INFO: string[] = ["title", "productName", "mature"];
 import { PrevSetFolds } from "@/components/AnswerSets";
 import { PastQuestions, pastCount } from "@/components/PastQuestions";
+import { NameLine } from "@/components/WholeLine";
+import { cutNamesIn } from "@/lib/cutNames";
 import { carryOver, itemsFor, prevSetsOf, sameQuestions, versionsOf } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
@@ -133,6 +135,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (§167) Adding, per question of the current set: its keys, and how many of the part's 10 additions were made.
   const currentKeys = questionKeys(sentItems);
   const prevSets = prevSetsOf(c.prevSets);
+  // (Owner, Nov 5, §236) A Terms history line: its names (the developer's, yours, the test's titles, any long quoted name) cut at 20, each "…" opening its name in
+  // place and the arrow the whole line (WholeLine, §220); the developer's whole name links to their profile.
+  const histLine = (text: string) => {
+    const x = cutNamesIn(text, [dev, displayName(u), c.title, c.test.title]);
+    return <NameLine shown={x.shown} full={x.full} name={dev} href={devHref} />;
+  };
   // (Owner, Nov 5, §234) Everything past in one box: the questions no longer in the contract (with what was sent and added to them) and the earlier sets' folds
   // (only their unsent drafts here: what was sent shows once, as a past question). N counts each past question once, by its words.
   const draftSets = prevSets.filter((s) => versionsOf(s, !!written).some((v) => v.kind === "draft"));
@@ -483,11 +491,14 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {/* (Batch 35 §91) Folded shut by default: the Updated tags above already show what changed; this keeps the full record. */}
         <details className="mt-3 space-y-2 text-sm" data-terms-history="">
           <summary className="fold-chevron cursor-pointer font-medium text-white">Terms history</summary>
-          <ul className="space-y-1.5 text-slate-300">
+          {/* (Owner, Nov 5, §236) The whole history in its own draggable scroll panel; the boxes inside (questions, NDA, before / after, an opened line) keep their
+              own scroll (OwnPanel). Every name in a line is cut at 20 (NAME_CUT): each "…" opens that name in place, the arrow the whole line (WholeLine, §220). */}
+          <ResizeBox id={`terms-history-${c.id}`} label="Terms history">
+          <ul className="space-y-1.5 text-slate-300" data-terms-history-list="">
             <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
             {[
               ...offers.map((o) => ({ at: o.createdAt, key: o.id, node: (<li key={o.id}>
-                {fmtDate(o.createdAt)}: <NameLink text={dev} href={devHref} /> offered new terms ({o.diff}) · {o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}
+                {histLine(`${fmtDate(o.createdAt)}: ${dev} offered new terms (${o.diff}) · ${o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}`)}
                 {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
@@ -503,22 +514,23 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               </li>) })),
               ...contractNotes.map((n) => ({ at: n.createdAt, key: n.id, node: n.kind === STOP_NOTE_KIND
                 ? <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} /></li> // (Batch 17 §15) the reason in its scroll box
-                : <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: ${renderTimes(n.text, u.timeZone)}`}</li> })),
+                : <li key={n.id} data-history-line="">{histLine(`${fmtDateTime(n.createdAt)}: ${renderTimes(n.text, u.timeZone)}`)}</li> })),
               // (Batch 30 §15) Older versions of the listing information: each save's changes, before → after (renames have their own "Renamed" line).
               ...infoChanges.flatMap((ch) => {
                 const rows = historyRows(ch);
                 return rows ? [{ at: ch.createdAt, key: ch.id, node: (<li key={ch.id} data-history-line="" data-history-info="">
-                  {`${fmtDateTimeIn(ch.createdAt, u.timeZone)}: ${dev} updated the listing information (${rows.map((r) => r.name).join(", ")})`}
+                  {histLine(`${fmtDateTimeIn(ch.createdAt, u.timeZone)}: ${dev} updated the listing information (${rows.map((r) => r.name).join(", ")})`)}
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Before and after</summary>
                     {/* (Batch 32 §14) each side in its own scroll box; (Owner, Nov 5, §231) the shared box for listing texts (ValueText). */}
                     <ul className="mt-1 space-y-1.5">{rows.map((r) => <li key={r.name} className="space-y-0.5"><b>{r.name}:</b><div data-diff-scroll=""><ValueText id={`history-${ch.id}-${r.name}-before`} label={`${r.name}: before`}>{r.before}</ValueText></div><span aria-hidden="true">↓</span><div data-diff-scroll=""><ValueText id={`history-${ch.id}-${r.name}-after`} label={`${r.name}: after`}>{r.after}</ValueText></div></li>)}</ul>
                   </details>
                 </li>) }] : [];
               }),
-              ...prevSetsOf(c.prevSets).map((p) => ({ at: new Date(p.until), key: `set-${p.until}`, node: <li key={`set-${p.until}`} data-history-line="">{`${fmtDate(new Date(p.until))}: your questions changed; your earlier answers are kept under “Previous questions and answers”`}</li> })),
+              ...prevSetsOf(c.prevSets).map((p) => ({ at: new Date(p.until), key: `set-${p.until}`, node: <li key={`set-${p.until}`} data-history-line="">{`${fmtDate(new Date(p.until))}: your questions changed; your earlier answers are kept under “Past questions”`}</li> })),
               ...historyPays.map((p) => ({ at: p.createdAt, key: p.id, node: <li key={p.id} data-history-line="">{`${fmtDate(p.createdAt)}: ${p.kind === "extra" ? "paid more" : p.kind === "dispute" ? "the team raised the pay by" : "paid"} ${money(p.amountCents)} for your ${p.callId ? "live call" : subKinds.get(p.submissionId ?? "") ?? "work"} (you get ${money(testerShare(p.amountCents))})`}</li> })),
             ].sort((a, b) => a.at.getTime() - b.at.getTime()).map((x) => x.node)}
           </ul>
+          </ResizeBox>
         </details>
         </div>
       </details>

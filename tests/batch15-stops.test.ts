@@ -20,7 +20,7 @@ describe("every stop names the press (section 36)", () => {
   it("the press label comes from the API path; a refusal starts by naming it", () => {
     expect(pressLabelOf("/api/tests/abc/edit")).toBe("Save");
     expect(pressLabelOf("/api/review")).toBe("Pay");
-    expect(pressLabelOf("/api/sessions/abc/written")).toBe("Send");
+    expect(pressLabelOf("/api/sessions/abc/written")).toBe("Send Answers"); // (Owner, Nov 5, §235) the written part's one button
     expect(pressLabelOf("/api/tests/abc/stop")).toBe("Stop the test");
     expect(pressLabelOf("/api/calls/abc/join")).toBe("Join call");
     expect(refusalLine("Pay", "This call was cancelled.")).toBe("Your Pay didn't go through: This call was cancelled.");
