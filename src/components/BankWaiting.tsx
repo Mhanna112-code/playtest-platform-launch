@@ -14,13 +14,30 @@ import { CANCEL_THIS_CHECK, STILL_WAITS, alreadyConfirmedLine, cancelledCheckLin
 import { ApiError, api } from "@/lib/client";
 
 /**
+ * (Owner, Nov 3, §160; shared since Nov 4, §188 B) Cancel this check on the developer's own press whose bank window is open in another tab (or was left): Stripe
+ * first, so one that already went through is recorded as paid once ("Your bank already confirmed it: paid $2.00."), else it is cancelled. The other tab's open
+ * window then shows its cancelled line through its peek. (Owner, Nov 4, batch 35 §170) "Nothing was charged" is what it is for: a plain success line
+ * ("Cancelled: nothing was charged."), never "Your Confirm with your bank didn't go through: …". A charge made while away keeps waiting (§160): said with its date.
+ * `paid`: it had gone through (the part is paid).
+ */
+export async function cancelOwnCheck(paymentId: string): Promise<{ ok: true; line: string; paid: boolean } | { ok: false; error: string }> {
+  try {
+    const r = await api<{ amountCents?: number }>("/api/payments/confirm", { paymentId });
+    return { ok: true, paid: true, line: typeof r?.amountCents === "number" ? alreadyConfirmedLine(money(r.amountCents)) : BANK_CONFIRMED };
+  } catch (e) {
+    if (e instanceof ApiError && e.code === "not_confirmed") return { ok: true, paid: false, line: cancelledCheckLine(e.message, e.data.by) };
+    return { ok: false, error: (e as Error).message };
+  }
+}
+
+/**
  * (Batch 17 §11) A charge made while the developer was away (a tester's Charge, a dispute decision, an automatic retry) that their bank wants confirmed: on the test page,
  * under the affected piece, "Confirm with your bank" opens the same inline check as a press. Payments and the bell line link here (`#bank-<id>`, the box marked). A renewal
  * (no test) gets the same box on Payments.
  * (Owner, Oct 29, batch 23 section 9) On a test page the press runs the developer's stop-once check first, exactly like Pay on that piece: anything the page hasn't shown
  * stops it once in the blue box under the button; the second press opens the bank's check. Refusals (already confirmed, expired, cancelled) are plain.
  */
-export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, cents, own = false }: { paymentId: string; /** (§160) the developer's own press (a Pay or Pay more whose bank window is open in another tab, or was left): Cancel this check is offered */ own?: boolean; line: ReactNode; /** (§131) the line with the names uncut: its hover */ full?: string; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string; /** (Owner, Nov 3) its amount: over $200 the tick "I confirm this payment is over $200." is needed (as Pay's) */ cents?: number }) {
+export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, cents, own = false, anchor = true }: { paymentId: string; /** (Owner, Nov 4, §188 B) false: a second copy (in a Pay more box) without the `bank-<id>` anchor, which stays on the list's row */ anchor?: boolean; /** (§160) the developer's own press (a Pay or Pay more whose bank window is open in another tab, or was left): Cancel this check is offered */ own?: boolean; line: ReactNode; /** (§131) the line with the names uncut: its hover */ full?: string; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string; /** (Owner, Nov 3) its amount: over $200 the tick "I confirm this payment is over $200." is needed (as Pay's) */ cents?: number }) {
   const bank = useBankCheck();
   // (Batch 35 §40, §41) Confirmed: the page redraws in place; until it has, the button stays greyed with the confirmed line.
   // (§176) On the dashboard: from its first load, never a redraw's render time (elsewhere: the page's own marker, unchanged).
@@ -34,20 +51,13 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
   async function cancelCheck() {
     setErr("");
     setCancelling(true);
-    try {
-      const r = await api<{ amountCents?: number }>("/api/payments/confirm", { paymentId });
-      finish(typeof r?.amountCents === "number" ? alreadyConfirmedLine(money(r.amountCents)) : BANK_CONFIRMED);
-    } catch (e) {
-      // (Owner, Nov 4, batch 35 §170) "Nothing was charged" is what Cancel this check is for: a plain success line here, never "Your Confirm with your bank didn't
-      // go through: Your bank didn't confirm the payment, …". A charge made while away keeps waiting (§160): said with its date.
-      if (e instanceof ApiError && e.code === "not_confirmed") finish(cancelledCheckLine(e.message, e.data.by));
-      else {
-        setErr((e as Error).message);
-        finish("");
-      }
-    } finally {
-      setCancelling(false);
+    const r = await cancelOwnCheck(paymentId);
+    if (r.ok) finish(r.line);
+    else {
+      setErr(r.error);
+      finish("");
     }
+    setCancelling(false);
   }
   async function go() {
     setErr("");
@@ -63,7 +73,7 @@ export function BankWaiting({ paymentId, line, full, seenAt = "", wide = false, 
     }
   }
   return (
-    <div id={bankAnchor(paymentId)} className={`min-w-0 max-w-full basis-full space-y-2 border border-sky-300/40 bg-sky-500/10 p-3 text-sm text-sky-100 ${MARKABLE}`} data-bank-waiting={paymentId}>
+    <div id={anchor ? bankAnchor(paymentId) : undefined} className={`min-w-0 max-w-full basis-full space-y-2 border border-sky-300/40 bg-sky-500/10 p-3 text-sm text-sky-100 ${MARKABLE}`} data-bank-waiting={paymentId}>
       {/* (Owner, Nov 4, §180) The line wraps inside the panel at every width (a long name or test name never runs past its edge). */}
       <p title={full} className="[overflow-wrap:anywhere]">{line}</p>
       {over && !doneLine && (

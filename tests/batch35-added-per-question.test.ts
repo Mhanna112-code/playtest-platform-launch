@@ -11,7 +11,7 @@ import { GET as keptGET, POST as keptPOST } from "@/app/api/kept/route";
 import { SentWork } from "@/components/SentWork";
 import { ADD_OPEN, ADD_PRESS, WrittenAddForm } from "@/app/app/sessions/[id]/SessionActions";
 import {
-  ADDED_GENERAL, ADDITIONS_FULL, ADDITIONS_MAX, ADD_UNDER_QUESTION, NEW_QUESTION_TAG, QUESTION_GONE, additionsLeftLine, additionsOf, answersByQuestion, questionKey, questionKeys,
+  ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, ADDITIONS_FULL, ADDITIONS_MAX, ADD_UNDER_QUESTION, NEW_QUESTION_TAG, QUESTION_GONE, additionsLeftLine, additionsOf, answersByQuestion, questionKey, questionKeys,
   quoteQuestion, writtenThreads,
 } from "@/lib/additions";
 import { fmtStampIn } from "@/lib/format";
@@ -41,7 +41,8 @@ describe("the developer's view: a fold per question", () => {
 
   it("each question is a fold, closed at first, titled with the question and its count of additions", () => {
     const h = html();
-    expect(h.match(/<details /g)).toHaveLength(2);
+    // (Owner, Nov 4, §188) Two questions, then the fixed "Anything else" fold.
+    expect(h.match(/<details /g)).toHaveLength(3);
     expect(h).not.toMatch(/<details[^>]* open/);
     expect(h).toContain(`data-fold="needs-s1-q-${questionKey(Q1)}"`);
     expect(h).toMatch(new RegExp(`data-question-title="" data-question-clamp="">${Q1.replace("?", "\\?")}</span>`));
@@ -66,20 +67,22 @@ describe("the developer's view: a fold per question", () => {
     expect(fmtStampIn(at1, "UTC")).toBe("Nov 3, 2026, 11:29 PM");
   });
 
-  it("additions made before §167 (no question) go under one more fold at the end, with their dates", () => {
+  it("(§188, was §167's last fold) additions made before §167 (no question) go under Anything else, with their dates, after the notes", () => {
     const h = renderToStaticMarkup(createElement(SentWork, {
       id: "x", timeZone: "UTC", kind: "written", answers: [item(Q1, "a"), item(Q2, "b")], notes: "my notes",
       additions: [{ at: at1, text: "old general addition", files: [] }, { at: at2, text: "about Q2", files: [], questionKey: questionKey(Q2) }], files: [],
     }));
     expect(h.match(/<details /g)).toHaveLength(3);
-    expect(h.lastIndexOf("<details")).toBe(h.indexOf('<details class="group/fold rounded-lg border border-white/10 px-2 py-1.5" data-fold="x-q-general"'));
-    expect(h).toContain(`data-general-title="">${ADDED_GENERAL}</span>`);
-    const general = h.slice(h.indexOf('data-question-body="general"'));
+    expect(h.lastIndexOf("<details")).toBe(h.indexOf(`<details class="group/fold rounded-lg border border-white/10 px-2 py-1.5" data-fold="x-q-${ANYTHING_ELSE_KEY}"`));
+    expect(h).toContain(`data-else-title="">${ANYTHING_ELSE_TITLE}</span>`);
+    expect(h).not.toContain("not about one question");
+    const general = h.slice(h.indexOf(`data-question-body="${ANYTHING_ELSE_KEY}"`));
     expect(general).toContain(">Added · Nov 3, 2026, 11:29 PM</p>");
     expect(general).toContain("old general addition");
     expect(general).not.toContain("about Q2");
-    // The notes stay after the questions.
+    // The notes are Anything else's original: after the questions, before its additions.
     expect(h.indexOf("my notes")).toBeGreaterThan(h.indexOf("about Q2"));
+    expect(general.indexOf("my notes")).toBeLessThan(general.indexOf("old general addition"));
   });
 
   it("changed questions: a new question gets its own fold with a \"new question\" tag; an unchanged one whose answer changed gets it as an addition", () => {
@@ -116,7 +119,8 @@ describe("the developer's view: a fold per question", () => {
     expect(src("lib/server/adminLists.ts")).toContain("timeZone: dateZone(), subId: s.id");
     const b = answersByQuestion({ answers: [item(Q1, "a"), item(Q2, "b")], notes: "n", additions: [{ at: at1, text: "more on Q2", files: [], questionKey: questionKey(Q2) }, { at: at2, text: "general", files: [] }] }, [], (at) => fmtStampIn(at, "UTC"));
     expect(b.answers).toEqual(["a", "b\n\n*Added · Nov 3, 2026, 11:29 PM*\nmore on Q2"]);
-    expect(b.notes).toBe("n\n\ngeneral");
+    // (Owner, Nov 4, §188) Anything else is By question's last entry; what was added there is dated like a question's.
+    expect(b.notes).toBe("n\n\n*Added · Nov 4, 2026, 8:05 AM*\ngeneral");
   });
 });
 
@@ -135,7 +139,7 @@ describe("the tester adds under one question", () => {
     const bell = await db.notification.findFirst({ where: { userId: dev.user.id }, orderBy: { createdAt: "desc" } });
     expect(bell?.text).toContain(`Ana Silva added to her answer to “${Q2}” for “Harbor Run”`);
     // The tester's "Work sent" alert names it too (its body: "What you added to your answer to “…” was sent to Nora Lane.").
-    expect(src("lib/server/tests.ts")).toContain("[added ? `What you added to your ${question ? `answer to ${quoteQuestion(question)}` : part} was sent to ${dev}.`");
+    expect(src("lib/server/tests.ts")).toContain("[added ? `What you added ${part === \"recording\" ? `to your ${part}` : addedToWhat(\"your\", question)} was sent to ${dev}.`");
     const log = await db.actionLog.findFirst({ where: { userId: j.tester.user.id }, orderBy: { createdAt: "desc" } });
     expect(log?.text).toContain(`added to your answer to “${Q2}”`);
     // After a Pay, the update row's live line names it too.

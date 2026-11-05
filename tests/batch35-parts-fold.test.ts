@@ -124,7 +124,8 @@ describe("the tester's session page (§182)", () => {
     expect(buttons).toBeGreaterThan(panelEnd); // below the panel, not inside it
     expect(p.indexOf("</Fold>", buttons)).toBeGreaterThan(buttons);
     // Each current question's fold ends with the place its box opens: under the question's latest part.
-    expect(p).toContain("addTo={canAdd ? ({ key }) => (currentKeys.includes(key) ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined}");
+    // (Owner, Nov 4, §188) Anything else has its slot too.
+    expect(p).toContain("addTo={canAdd ? ({ key }) => (currentKeys.includes(key) || key === ANYTHING_ELSE_KEY ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined}");
     expect(LIST_PANEL.ownAnswers).toBe("min(28rem, 60vh)");
   });
 

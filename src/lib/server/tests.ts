@@ -5,7 +5,7 @@ import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { NOT_REQUIRED, answerMin, answersMissing } from "@/lib/questions";
 import { itemsFor, sameQuestions } from "@/lib/answerSets";
-import { ADDITIONS_FULL, ADDITIONS_MAX, ADD_UNDER_QUESTION, QUESTION_GONE, additionsOf, latestItems, questionKeys, quoteQuestion } from "@/lib/additions";
+import { ADDITIONS_FULL, ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsOf, latestItems, questionKeys } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -1124,7 +1124,8 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
   const qs = writtenQuestions(c);
   const latest = latestItems(existing, qs);
   if (existing.setUntil || !sameQuestions(latest, itemsFor(qs))) return new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
-  if (questionKeys(latest).indexOf(key) < 0) return new HttpError(409, "question_gone", QUESTION_GONE);
+  // (Owner, Nov 4, §188) Anything else is always there (the fixed last spot of every written part), under the same rules as a question.
+  if (key !== ANYTHING_ELSE_KEY && questionKeys(latest).indexOf(key) < 0) return new HttpError(409, "question_gone", QUESTION_GONE);
   // (§167) The 10 additions.
   const made = additionsOf(existing.additions);
   if (made.length >= ADDITIONS_MAX) return new HttpError(409, "add_full", ADDITIONS_FULL);
@@ -1143,6 +1144,8 @@ function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: s
  * questions), and the developer is told which ("Ana added to her answer to “…”"). An older page's general Add more (no question) is refused (ADD_UNDER_QUESTION).
  * Only the files placed in this text go with it (another question's box may hold the others). At most 10 additions per part (ADDITIONS_MAX: every addition
  * counts, old ones with no question and the answers to changed questions too), checked under the test's lock, so two adds at the 10th give exactly one.
+ * (Owner, Nov 4, §188) Or to Anything else (`question: "else"`, ANYTHING_ELSE_KEY), the fixed last spot after the questions: the same rules (the 10, the 20,000,
+ * the stop-once, the single refusals), named "added to “Anything else” in her written answers".
  */
 export async function addWritten(tester: U, contractId: string, body: Record<string, unknown>) {
   const c0 = await ownContract(tester.id, contractId);
@@ -1194,7 +1197,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
       ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
     } });
     await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
-    const question = latest[at].question;
+    const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : latest[at].question;
     const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: true, paid, question });
     return { sub, afterPaid, question };
   });
@@ -1218,7 +1221,7 @@ export async function tellSentByBell(
 ) {
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss, dev = displayName(c0.test.developer);
   const anchor = part === "recording" ? "part-recording" : "part-written";
-  await notify(tester.email, `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added to your ${question ? `answer to ${quoteQuestion(question)}` : part} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
+  await notify(tester.email, `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
   if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n, question);
   const title = added ? `${name} ${addedWhat(poss, part, n, question)} for “${c0.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.title}”`;
   const what = added ? addedWhat(poss, part, n, question) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;

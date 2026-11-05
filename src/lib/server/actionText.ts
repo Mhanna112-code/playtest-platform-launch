@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { displayName, fmtDateTime as fmtAt, money, pronouns } from "@/lib/server/dateFormat";
 import { andList } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
-import { questionKeys, quoteQuestion } from "@/lib/additions";
+import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, addedToWhat, questionKeys, quoteQuestion } from "@/lib/additions";
 import { itemsFor } from "@/lib/answerSets";
 import { qText } from "@/lib/questions";
 import { logAction, type Answers, type OwnAbout } from "./live";
@@ -64,7 +64,8 @@ export async function logTesterAction(userId: string, contractId: string, action
     case "written-add": {
       const qs = Array.isArray(c.questions) && c.questions.length ? (c.questions as string[]) : ["Your feedback"];
       const q = qs[questionKeys(itemsFor(qs)).indexOf(s(body.question))];
-      text = q ? `added to your answer to ${quoteQuestion(qText(q))}` : "added to your written answers";
+      // (Owner, Nov 4, §188) "You added to “Anything else” in your written answers in another tab".
+      text = s(body.question) === ANYTHING_ELSE_KEY ? `added ${addedToWhat("your", ANYTHING_ELSE_TITLE)}` : q ? `added to your answer to ${quoteQuestion(qText(q))}` : "added to your written answers";
       break;
     }
     case "recording-send": {

@@ -18,7 +18,7 @@ import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChar
 import { ChangesBox } from "@/components/ChangesBox";
 import { LongText, QUESTION_LINES } from "@/components/LongText";
 import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
-import { ADDITIONS_MAX } from "@/lib/additions";
+import { ADDITIONS_MAX, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE } from "@/lib/additions";
 import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, additionTooLongLine, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
@@ -354,7 +354,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
               <textarea id={`add-${sessionId}-${questionKey}`} className="input" rows={3} readOnly value={text} maxLength={WRITTEN_MAX_CHARS} data-add-readonly="" />
             ) : (
               <>
-                <p className="note">What you sent stays as it is. This is added under this answer.</p>
+                <p className="note">{questionKey === ANYTHING_ELSE_KEY ? `What you sent stays as it is. This is added under ${ANYTHING_ELSE_TITLE}.` /* (Owner, Nov 4, §188) */ : "What you sent stays as it is. This is added under this answer."}</p>
                 <AnswerBox id={`add-${sessionId}-${questionKey}`} rows={3} sessionId={sessionId} attachments={attachments} onAttach={(a) => setAttachments((old) => [...old.filter((x) => x.id !== a.id), a])} onRemove={remove} total={length} alone value={text} onChange={setText} />
               </>
             )}

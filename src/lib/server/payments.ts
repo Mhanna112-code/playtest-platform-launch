@@ -227,8 +227,12 @@ export async function bankWaitsOf(tx: Prisma.TransactionClient | typeof db, at: 
   const w = await tx.payment.findFirst({ where: { ...where, OR: [{ kind: { in: ["review", "call", "extra", "dispute"] }, status: { in: ["needs_confirmation", "needs_action"] } }, { kind: { in: ["review", "call", "dispute"] }, status: "pending" }], settledAt: null }, orderBy: { createdAt: "desc" }, select: { id: true, status: true, amountCents: true } });
   if (!w) return null;
   // A charge on this part still on its way to the bank (a Charge pressed this very moment): it can't be paid more until it lands either way.
-  if (w.status === "pending") return { id: w.id, line: "A payment for this part is being confirmed. Wait for it to finish before paying again." };
-  return { id: w.id, line: w.status === "needs_confirmation" ? `Confirm ${testerName}'s ${money(w.amountCents)} charge with your bank first.` : `Your ${money(w.amountCents)} payment for this part is waiting for your bank: finish or cancel it first.` };
+  // (Owner, Nov 4, §188 B) `kind` tells the Pay more box what it offers next to the line: the developer's own press ("own", needs_action) has Cancel this check;
+  // a charge made while away or a team decision's ("away", needs_confirmation) has Confirm with your bank (it can't be cancelled); "pending" nothing.
+  if (w.status === "pending") return { id: w.id, kind: "pending" as const, cents: w.amountCents, line: "A payment for this part is being confirmed. Wait for it to finish before paying again." };
+  return w.status === "needs_confirmation"
+    ? { id: w.id, kind: "away" as const, cents: w.amountCents, line: `Confirm ${testerName}'s ${money(w.amountCents)} charge with your bank first.` }
+    : { id: w.id, kind: "own" as const, cents: w.amountCents, line: `Your ${money(w.amountCents)} payment for this part is waiting for your bank: finish or cancel it first.` };
 }
 
 /** (Owner, Nov 3, §159) "Your account is suspended: Pay waits until it is lifted." (Pay more: "extra pay"; Confirm with your bank, Confirm all: their names). */

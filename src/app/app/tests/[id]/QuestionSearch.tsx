@@ -10,7 +10,7 @@ export const questionMatches = (title: string, query: string) => !query.trim() |
 export const noQuestionsLine = (query: string) => `No questions match “${query.trim()}”.`;
 
 /**
- * (Owner, Nov 3, batch 35 §152) "By question"'s list: a "Search questions" box above it (filters as you type, "Other notes" included), Open all / Close all, and the
+ * (Owner, Nov 3, batch 35 §152) "By question"'s list: a "Search questions" box above it (filters as you type, "Anything else" included; §188, was "Other notes"), Open all / Close all, and the
  * questions in the draggable panel (`by-question-<testId>`), each its own fold (rendered on the server and passed in as `node`).
  */
 export function QuestionSearch({ testId, items }: { testId: string; items: { key: string; title: string; node: ReactNode }[] }) {

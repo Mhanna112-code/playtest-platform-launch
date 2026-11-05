@@ -242,7 +242,9 @@ describe("§170 (4) Cancel this check in another tab says plainly that it worked
     expect(cancelledCheckLine(ALL_NOT_CONFIRMED)).toBe(`Cancelled: nothing was charged. ${ALL_BACK}`);
     expect(cancelledCheckLine(`${STILL_WAITS} Confirm with your bank by Fri, Nov 6, 4:26 PM.`)).toBe(CANCELLED_NOTHING_CHARGED); // no date given: still plain
     const box = src("components/BankWaiting.tsx");
-    expect(box).toContain('if (e instanceof ApiError && e.code === "not_confirmed") finish(cancelledCheckLine(e.message, e.data.by));');
+    // (Owner, Nov 4, §188 B) The cancel is one shared function (cancelOwnCheck), used by BankWaiting and the Pay more box.
+    expect(box).toContain('if (e instanceof ApiError && e.code === "not_confirmed") return { ok: true, paid: false, line: cancelledCheckLine(e.message, e.data.by) };');
+    expect(box).toContain("if (r.ok) finish(r.line);");
     expect(box).toContain("alreadyConfirmedLine(money(r.amountCents))");
   });
 });

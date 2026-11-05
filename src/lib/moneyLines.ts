@@ -1,6 +1,6 @@
 import { money } from "@/lib/format";
 import { fmtIn } from "@/lib/tz";
-import { quoteQuestion } from "@/lib/additions";
+import { addedToWhat } from "@/lib/additions";
 
 // ---------- (Batch 30 §3) Late work: no Charge ----------
 
@@ -20,7 +20,7 @@ export const lateSentLine = (date: string, dev: string) => `Sent after the ${dat
  * many recordings were added.
  */
 // (Owner, Nov 3, batch 35 §167) An addition to one question names it: "added to her answer to “What did you think of level 2?”".
-export const addedWhat = (poss: string, part: "written answers" | "recording", n = 1, question?: string) => (part === "recording" ? (n === 1 ? "added a recording" : `added ${n} recordings`) : question ? `added to ${poss} answer to ${quoteQuestion(question)}` : `added to ${poss} written answers`);
+export const addedWhat = (poss: string, part: "written answers" | "recording", n = 1, question?: string) => (part === "recording" ? (n === 1 ? "added a recording" : `added ${n} recordings`) : `added ${addedToWhat(poss, question)}`); // (Owner, Nov 4, §188) Anything else: "added to “Anything else” in her written answers"
 /** The tester, above Add on a paid part: below its cap, at its cap, or after Pay more closed (close-out). */
 export function updateAboveSendLine(dev: string, paidCents: number, allCents: number, closedOn: string | null) {
   if (allCents <= paidCents) return `This part is already paid the most it can be (${money(paidCents)}): ${dev} can't pay more for what you add.`;

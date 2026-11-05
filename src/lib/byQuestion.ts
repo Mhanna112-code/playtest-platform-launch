@@ -1,9 +1,11 @@
 import { qRequired, qText } from "@/lib/questions";
 import type { AnswerAttachment } from "@/lib/answerAttachments";
+import { ANYTHING_ELSE_TITLE } from "@/lib/additions";
 
 // (Owner-approved) The full app's "By question" view (views.tsx QuestionView there), on lean data: every written question,
 // each tester's answer under it (testers can be on different versions of the questions: each answer goes under its own
-// question), the question marked "not required" where someone could leave it blank, then "Other notes".
+// question), the question marked "not required" where someone could leave it blank, then (Owner, Nov 4, §188; was "Other notes") "Anything else": the
+// notes and what was added there, each dated (answersByQuestion).
 
 export type Sheet = {
   contractId: string; tester: string; questions: string[]; answers: string[]; notes: string; sentAt: Date;
@@ -26,6 +28,6 @@ export function byQuestion(testQuestions: string[], sheets: Sheet[]): QuestionBl
       .map((s) => row(s, (s.answers[s.questions.map(qText).indexOf(title)] ?? "").trim()))
       .filter((a) => a.text),
   }));
-  blocks.push({ title: "Other notes", required: false, answers: sheets.map((s) => row(s, s.notes.trim())).filter((a) => a.text) });
+  blocks.push({ title: ANYTHING_ELSE_TITLE, required: false, answers: sheets.map((s) => row(s, s.notes.trim())).filter((a) => a.text) });
   return blocks.filter((b) => b.answers.length > 0);
 }

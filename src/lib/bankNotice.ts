@@ -79,7 +79,9 @@ export const owedElsewhereLine = (amount: string) => `Pay what you owe (${amount
  * under it (a redraw drawn meanwhile reads its own row as waiting), and not for the row of the check it just ended (a redraw drawn before the end). Another
  * payment's wait (a charge made while away, another tab's Pay) still greys it.
  */
-export function payMoreWaits(line: string | undefined, waitingId: string | undefined, own: { open: boolean; checkId: string }) {
+export function payMoreWaits(line: string | undefined, waitingId: string | undefined, own: { open: boolean; checkId: string; /** (Owner, Nov 4, §188 B) the check this box's Cancel this check just ended */ cancelled?: string }) {
   if (!line || own.open) return undefined;
+  // (§188 B) Cancelled from this box: it un-greys at once, and a redraw drawn before the cancel that still names it doesn't grey it again.
+  if (waitingId && own.cancelled && waitingId === own.cancelled) return undefined;
   return waitingId && own.checkId && waitingId === own.checkId ? undefined : line;
 }

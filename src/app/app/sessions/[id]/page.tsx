@@ -35,7 +35,7 @@ import { LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/componen
 import { Fold, ResizeBox } from "@/components/Panel";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
-import { ADDITIONS_FULL, ADDITIONS_MAX, additionsLeftLine, additionsOf, latestItems, questionKeys } from "@/lib/additions";
+import { ADDITIONS_FULL, ADDITIONS_MAX, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, additionsLeftLine, additionsOf, latestItems, questionKeys } from "@/lib/additions";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
@@ -692,14 +692,15 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <div className="space-y-2">
                 <ResizeBox id={`own-answers-list-${written.id}`} label="Your written answers" defaultMax={LIST_PANEL.ownAnswers}>
                   <SentWork id={`own-${written.id}`} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)}
-                    addTo={canAdd ? ({ key }) => (currentKeys.includes(key) ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined} />
+                    addTo={canAdd ? ({ key }) => (currentKeys.includes(key) || key === ANYTHING_ELSE_KEY ? <div data-add-slot={`${c.id}:${key}`} /> : null) : undefined} />
                 </ResizeBox>
                 {/* (Owner, Nov 4, §186) At 10 additions: the grey note once, directly under the panel, in place of the Add to this answer rows (was once per question). */}
                 {canAdd && addsMade >= ADDITIONS_MAX && <p className="note" data-additions-full="">{ADDITIONS_FULL}</p>}
                 {canAdd && (
                   <div className="space-y-2" data-add-buttons="">
-                    {currentKeys.map((key, at) => (
-                      <WrittenAddForm key={key} slot={`${c.id}:${key}`} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={sentItems[at].question} made={addsMade}
+                    {/* (Owner, Nov 4, §188) One row per current question, then Anything else's (its box opens under Anything else's latest part). */}
+                    {[...currentKeys.map((key, at) => ({ key, question: sentItems[at].question })), { key: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE }].map(({ key, question }) => (
+                      <WrittenAddForm key={key} slot={`${c.id}:${key}`} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={question} made={addsMade}
                         known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
                     ))}
                   </div>

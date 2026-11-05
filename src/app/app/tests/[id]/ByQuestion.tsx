@@ -5,6 +5,7 @@ import type { QuestionBlock } from "@/lib/byQuestion";
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { ANSWER_LINES, LongText, QuestionTitle } from "@/components/LongText";
 import { Fold, ResizeBox } from "@/components/Panel";
+import { ANYTHING_ELSE_TITLE } from "@/lib/additions";
 import { QuestionSearch } from "./QuestionSearch";
 
 const STATUS = { paid: "border-emerald-400/40 text-emerald-200", rejected: "border-rose-400/40 text-rose-200", waiting: "border-amber-300/40 text-amber-200" } as const;
@@ -28,14 +29,14 @@ export function ByQuestion({ testId, blocks, timeZone }: { testId: string; timeZ
       <div className="mt-3 space-y-4">
         {blocks.length === 0 && <p className="card py-10 text-center text-slate-400">No answers yet.</p>}
         {blocks.length > 0 && <QuestionSearch testId={testId} items={blocks.map((b) => {
-          const Icon = b.title === "Other notes" ? MessageSquareText : HelpCircle;
+          const Icon = b.title === ANYTHING_ELSE_TITLE ? MessageSquareText : HelpCircle;
           const key = questionKey(b.title);
           return {
             key, title: b.title, node: (
               <section className="rounded-lg border border-white/10 p-2" data-question-block={key}>
                 <Fold id={`bq-${testId}-${key}`} defaultOpen={false} summaryClassName="!text-base" summary={
                   <span className="inline-flex min-w-0 max-w-[calc(100%-1.5rem)] flex-wrap items-center gap-2 align-middle font-semibold text-white">
-                    <Icon className={`h-5 w-5 shrink-0 ${b.title === "Other notes" ? "text-slate-300" : "text-indigo-300"}`} /> {/* (Owner, Nov 4, §182) The question's first 2 lines in the title; a longer one gets Show more inside, opening the whole question (the shared fold). */}
+                    <Icon className={`h-5 w-5 shrink-0 ${b.title === ANYTHING_ELSE_TITLE ? "text-slate-300" : "text-indigo-300"}`} /> {/* (Owner, Nov 4, §182) The question's first 2 lines in the title; a longer one gets Show more inside, opening the whole question (the shared fold). */}
                     {/* (Owner, Nov 4, §187) Show more right after the question in the title (no longer alone under it). */}
                     <QuestionTitle text={b.title} />
                     {/* (Batch 26 section 14) Not required is the default: only a Required question is marked. */}

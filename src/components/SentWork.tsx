@@ -3,7 +3,7 @@ import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
 import { ANSWER_LINES, LongText, QuestionTitle } from "@/components/LongText";
-import { ADDED_GENERAL, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, writtenThreads, type QuestionThread } from "@/lib/additions";
+import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, writtenThreads, type QuestionThread } from "@/lib/additions";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
 
@@ -21,8 +21,10 @@ export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | n
  * tester's own page. Never an old and a new version side by side.
  * - Written answers (§167; replaces §136's one list): each question is its own fold, closed at first, titled with the question ("· 2 added" when it has additions;
  *   a "new question" tag on one that came with changed questions). Inside, indented one step: the answer, then each addition to it, oldest first, under
- *   "Added · <date>". Then the notes, the files not placed in an answer, and a last fold "Added (not about one question)" for additions made before §167.
- *   `addTo`: the tester's own page puts its "Add to this answer" box at the end of a question's fold (none for a question no longer asked).
+ *   "Added · <date>". (Owner, Nov 4, §188; replaces §167's notes block and last fold "Added (not about one question)") Then ONE fixed last fold, "Anything
+ *   else", on every written part: the notes sent with the answers and the files sent first not placed in an answer (its original), then, oldest first, each
+ *   addition made there (and the old ones with no question) and each changed-questions send's own notes and loose files, under "Added · <date>".
+ *   `addTo`: the tester's own page puts its "Add to this answer" box at the end of a question's fold (none for a question no longer asked), and of Anything else.
  * - A recording: the recordings sent first, then each addition under "Added · <date>".
  * `id`: the place's prefix for the folds' ids (kept open or closed in this tab); `timeZone`: the viewer's, for the dates.
  */
@@ -60,7 +62,7 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
       </div>
     );
   }
-  const { threads, general, extras } = writtenThreads(answers, questions, additions);
+  const { threads, other } = writtenThreads(answers, questions, additions);
   const writtenFiles = first.filter((f) => f.part !== "recording");
   const fold = (t: QuestionThread) => (
     <Fold key={t.key} id={`${id}-q-${t.key}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
@@ -81,26 +83,30 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
       </div>
     </Fold>
   );
+  const elseCount = other.length;
   return (
     <div className="space-y-2" data-sent-work="written">
       {threads.map(fold)}
-      {notes && notesBlock(notes)}
-      {extras.map((x, i) => (
-        <div key={i} className="space-y-1" data-set-extra={i}>
-          <AddedLabel at={x.at} timeZone={timeZone} />
-          {x.notes && notesBlock(x.notes, `${id}-extra-${i}-notes`)}
-          <AttachmentList items={byId(x.files)} inlineText={[...x.texts, x.notes]} />
+      {/* (Owner, Nov 4, §188) The fixed last spot: Anything else, a fold like a question's, after the last question. */}
+      <Fold id={`${id}-q-${ANYTHING_ELSE_KEY}`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="flex items-start gap-1 !text-sm"
+        summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">
+          <span className="min-w-0 basis-40 text-slate-200" data-question-title="" data-else-title="">{ANYTHING_ELSE_TITLE}</span>
+          {elseCount > 0 && <span className="shrink-0 whitespace-nowrap text-emerald-300" data-added-count={elseCount}>{addedCount(elseCount)}</span>}
+        </span>}>
+        <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body={ANYTHING_ELSE_KEY} data-anything-else="">
+          {notes.trim() ? <div className="text-sm" data-set-answer="" data-else-original="">{answerFold(notes, `${id}-notes`, ANYTHING_ELSE_TITLE)}</div>
+            : !writtenFiles.length && <p className="text-sm text-slate-500" data-no-answer="">(nothing)</p>}
+          <AttachmentList items={writtenFiles} inlineText={threads.filter((t) => !t.fresh).map((t) => t.answer)} inlineIds={[...markerIds(notes, uploaded)]} />
+          {other.map((o, i) => o.kind === "add" ? addedText(o.add, i, `${id}-else-${i}`) : (
+            <div key={i} className="space-y-1" data-set-extra={i}>
+              <AddedLabel at={o.set.at} timeZone={timeZone} />
+              {o.set.notes && <div className="text-sm [overflow-wrap:anywhere]">{answerFold(o.set.notes, `${id}-extra-${i}-notes`, ANYTHING_ELSE_TITLE)}</div>}
+              <AttachmentList items={byId(o.set.files)} inlineText={[...o.set.texts, o.set.notes]} />
+            </div>
+          ))}
+          {addTo?.({ key: ANYTHING_ELSE_KEY, question: ANYTHING_ELSE_TITLE })}
         </div>
-      ))}
-      <AttachmentList items={writtenFiles} inlineText={threads.filter((t) => !t.fresh).map((t) => t.answer)} inlineIds={[...markerIds(notes, uploaded)]} />
-      {general.length > 0 && (
-        <Fold id={`${id}-q-general`} defaultOpen={false} jumpOpen={false} className="rounded-lg border border-white/10 px-2 py-1.5" summaryClassName="!text-sm"
-          summary={<span className="text-slate-200" data-question-title="" data-general-title="">{ADDED_GENERAL}</span>}>
-          <div className="space-y-2 border-l border-white/10 pl-2 sm:pl-3" data-question-body="general">
-            {general.map((a, i) => addedText({ at: a.at, text: a.text ?? "", files: a.files }, i, `${id}-general-${i}`))}
-          </div>
-        </Fold>
-      )}
+      </Fold>
     </div>
   );
 }

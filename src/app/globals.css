@@ -124,3 +124,5 @@ details:not([open]) > summary [data-question-more] { display: none; }
    button (floated right, below it) down to the last line, and the words wrap around it. The title is a stretched flex item, so 100% is its own clamped height. */
 [data-question-clamp] { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; }
 [data-question-clamp]::before { content: ""; float: right; height: calc(100% - 1lh); }
+/* (Owner, Nov 4, §188 B) A Pay more box waiting for the bank is greyed except its waiting row (it holds Cancel this check or Confirm with your bank). */
+[data-pay-greyed] > :not([data-pay-more-waits]) { opacity: 0.6; }

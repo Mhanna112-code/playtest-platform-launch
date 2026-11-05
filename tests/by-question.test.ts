@@ -7,7 +7,7 @@ const at = new Date("2026-10-20T10:00:00Z");
 const sheet = (over: Partial<Sheet>): Sheet => ({ contractId: "c1", tester: "Ana Silva", questions: [], answers: [], notes: "", sentAt: at, status: "waiting", paidCents: 0, ...over });
 
 describe("by question", () => {
-  it("every question with each tester's answer, name, time and status; 'not required' marked; blanks left out; Other notes last", () => {
+  it("every question with each tester's answer, name, time and status; 'not required' marked; blanks left out; Anything else last (§188, was Other notes)", () => {
     // (Batch 26 section 14) Required only when ticked: the block says which.
     const qs = [REQUIRED + "What did you like?", "Anything else?"];
     const blocks = byQuestion(qs, [
@@ -18,7 +18,7 @@ describe("by question", () => {
     expect(blocks.map((b) => [b.title, b.required, b.answers.length])).toEqual([
       ["What did you like?", true, 3],
       ["Anything else?", false, 1],
-      ["Other notes", false, 1],
+      ["Anything else", false, 1],
     ]);
     expect(blocks[0].answers.map((a) => [a.tester, a.text, a.status, a.paidCents])).toEqual([
       ["Ana Silva", "The boat", "paid", 1000],

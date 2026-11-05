@@ -101,7 +101,7 @@ describe("§174 a Pay more on a CALL open at the bank", () => {
   it("the waiting line names its payment: the box's own open check is that payment, another charge on the part is not", async () => {
     const o = await payMoreOpen();
     const w = await bankWaitsOf(db, { callId: o.call.id }, "Ana Silva");
-    expect(w).toEqual({ id: o.paymentId, line: "Your $2.00 payment for this part is waiting for your bank: finish or cancel it first." });
+    expect(w).toEqual({ id: o.paymentId, kind: "own", cents: 200, line: "Your $2.00 payment for this part is waiting for your bank: finish or cancel it first." });
     expect(await bankWaitsLine(db, { callId: o.call.id }, "Ana Silva")).toBe(w!.line);
     // Its Cancel: nothing waits any more.
     await finish(o.dev.cookie, { paymentId: o.paymentId });
@@ -126,15 +126,18 @@ describe("§174 the Pay more box never greys itself for its own bank check", () 
 
   it("the box reads the line through it (greying, the line, the disabled button), notes its own check before opening it, and the page passes the id to every Pay more", () => {
     const box = src("app/app/tests/[id]/PayBox.tsx");
-    expect(box).toContain("const bankWaits = payMoreWaits(p.bankWaits, p.bankWaitsId, { open: bank.open, checkId: ownCheck });");
+    // (Owner, Nov 4, §188 B) Through payMoreWaits, with the check this box cancelled itself (un-greyed at once).
+    expect(box).toContain("const bankWaits = payMoreWaits(p.bankWaits, p.bankWaitsId, { open: bank.open, checkId: ownCheck, cancelled: cancelled?.id });");
     expect(box).toMatch(/setOwnCheck\(r\.paymentId\);\s+try \{ res = await bank\.check/);
-    expect(box).toContain('${bankWaits ? " opacity-60" : ""}');
-    expect(box).toContain('{bankWaits && <p className="info" data-pay-more-waits="">{bankWaits}</p>}');
+    // Greyed except the waiting row, which holds Cancel this check (own press) or Confirm with your bank (a charge made while away).
+    expect(box).toContain('data-pay-greyed={bankWaits ? "" : undefined}');
+    expect(src("app/globals.css")).toContain("[data-pay-greyed] > :not([data-pay-more-waits]) { opacity: 0.6; }");
+    expect(box).toContain('data-pay-more-waits="" data-waits-kind={waitKind ?? ""}>');
     expect(box).toContain("!!bankWaits ||");
     expect(box).not.toMatch(/p\.bankWaits \?|p\.bankWaits &&|!!p\.bankWaits/);
     const page = src("app/app/tests/[id]/page.tsx");
     const boxes = page.match(/<PayBox more=[^\n]*/g) ?? [];
     expect(boxes.length).toBe(3);
-    for (const b of boxes) expect(b).toMatch(/bankWaits=\{waitsOf\(([^)]+)\)\} bankWaitsId=\{waitsIdOf\(\1\)\}/);
+    for (const b of boxes) expect(b).toMatch(/bankWaits=\{waitsOf\(([^)]+)\)\} bankWaitsId=\{waitsIdOf\(\1\)\} bankWaitsKind=\{waitsKindOf\(\1\)\}/);
   });
 });

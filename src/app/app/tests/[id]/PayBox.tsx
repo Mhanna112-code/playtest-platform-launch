@@ -1,6 +1,6 @@
 "use client";
 import { CharacterCount } from "@/components/CharacterCount";
-import { BankWaiting } from "@/components/BankWaiting";
+import { BankWaiting, cancelOwnCheck } from "@/components/BankWaiting";
 import { useState } from "react";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -11,7 +11,7 @@ import { usePress } from "@/lib/usePress";
 import { needsBank } from "@/lib/bankConfirm";
 import { useBankCheck } from "@/components/BankCheck";
 import { useHoldOpen } from "@/components/HoldFold";
-import { payMoreWaits } from "@/lib/bankNotice";
+import { CANCEL_THIS_CHECK, payMoreWaits } from "@/lib/bankNotice";
 import { MIN_CHARGE_CENTS, NOT_LISTED, NO_LISTING_CALL_RATE_CAP_CENTS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PAY_TICK_LINE, PAY_WAITS, REASON_WHEN_UNDER_LISTING, STRIPE_MAX_LINE, ZERO_PAY_REASON, overCallsLine, overMaxLine, payUnderLine } from "@/lib/rules";
 import { amountFromRate, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { DraftTag, useKept } from "@/lib/useKept";
@@ -47,6 +47,9 @@ export function PayBox(p: {
   bankWaits?: string;
   /** (Owner bug, Nov 4, §174) The waiting payment `bankWaits` is about: the box's own bank check never greys it. */
   bankWaitsId?: string;
+  /** (Owner, Nov 4, §188 B) What the waiting payment is: the developer's own press ("own": Cancel this check next to the line), a charge made while away or a
+   * team decision's ("away": Confirm with your bank, it can't be cancelled), or one on its way ("pending": the line only). `cents`: its amount (the over-$200 tick). */
+  bankWaitsKind?: { kind: "own" | "away" | "pending"; cents: number };
 }) {
   const listed = p.listingCents != null;
   const more = p.more;
@@ -68,7 +71,23 @@ export function PayBox(p: {
   useHoldOpen(bank.open || !!bankErr);
   // (Owner bug, Nov 4, §174) This box's own bank check (its payment): a redraw saying that very payment waits for the bank doesn't grey the box above its own check.
   const [ownCheck, setOwnCheck] = useState("");
-  const bankWaits = payMoreWaits(p.bankWaits, p.bankWaitsId, { open: bank.open, checkId: ownCheck });
+  // (Owner, Nov 4, §188 B) The own press this box just cancelled (Cancel this check next to the line): the box un-greys at once, without waiting for a redraw,
+  // with the plain success line (§170's "Cancelled: nothing was charged."); a redraw drawn before the cancel that still names it doesn't grey it again.
+  const [cancelled, setCancelled] = useState<{ id: string; line: string } | null>(null);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelErr, setCancelErr] = useState("");
+  const bankWaits = payMoreWaits(p.bankWaits, p.bankWaitsId, { open: bank.open, checkId: ownCheck, cancelled: cancelled?.id });
+  const waitKind = bankWaits ? p.bankWaitsKind?.kind : undefined;
+  async function cancelWaiting() {
+    const id = p.bankWaitsId;
+    if (!id) return;
+    setCancelErr("");
+    setCancelling(true);
+    const r = await cancelOwnCheck(id);
+    setCancelling(false);
+    if (r.ok) setCancelled({ id, line: r.line });
+    else setCancelErr(r.error);
+  }
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Draft"; batch 35 §8: after signing in, with "Use saved").
   // (Owner, Oct 30) The amount (and a call's rate) is kept with its note, so a note never comes back next to another amount. A kept amount needs the tick again.
   const startAmount = start == null ? "" : (start / 100).toFixed(2);
@@ -146,8 +165,22 @@ export function PayBox(p: {
   // (§160) A redraw while this box's own bank check is open keeps the box (and the bank's page): only another tab's or a later visit's shows "Confirming with your bank".
   if (p.confirming && !bank.open) return <BankWaiting own paymentId={p.confirming} line="Confirming with your bank" seenAt={p.seenAt} />;
   return (
-    <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}${bankWaits ? " opacity-60" : ""}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-mistakes-root="">
-      {bankWaits && <p className="info" data-pay-more-waits="">{bankWaits}</p>}
+    // (Owner, Nov 4, §188 B) Greyed (data-pay-greyed, globals.css): everything but the waiting row, which holds the press that ends the wait.
+    <div className={`space-y-3 ${more ? "w-full rounded-lg border border-white/10 p-3" : "border-t border-white/10 pt-4"}`} data-pay-box={listed ? "listed" : "unlisted"} data-pay-more={more ? p.id : undefined} data-pay-greyed={bankWaits ? "" : undefined} data-mistakes-root="">
+      {/* (Owner, Nov 4, §188 B) The developer's own press open elsewhere: Cancel this check right next to the line. A charge made while away or a team
+          decision's: Confirm with your bank for it (it can't be cancelled, only confirmed; no bank-<id> anchor here, that stays on Needs you's row). */}
+      {bankWaits && waitKind === "away" && p.bankWaitsId ? (
+        <div data-pay-more-waits="" data-waits-kind="away"><BankWaiting anchor={false} paymentId={p.bankWaitsId} cents={p.bankWaitsKind?.cents} line={bankWaits} seenAt={p.seenAt} /></div>
+      ) : bankWaits && (
+        <div className="space-y-1" data-pay-more-waits="" data-waits-kind={waitKind ?? ""}>
+          <p className="info">
+            {bankWaits}
+            {waitKind === "own" && <> <button type="button" className="btn-ghost ml-1 px-2 py-0.5 text-sm" disabled={cancelling} onClick={cancelWaiting} data-cancel-own-check="">{cancelling ? "Cancelling…" : CANCEL_THIS_CHECK}</button></>}
+          </p>
+          {cancelErr && <p className="info" data-cancel-error="">{refusalLine(CANCEL_THIS_CHECK, cancelErr)}</p>}
+        </div>
+      )}
+      {!bankWaits && cancelled && !done && <p className="ok" data-check-cancelled="">{cancelled.line}</p>}
       <p className="text-sm">
         {more && <b className="text-white">Pay more · </b>}
         <b>{listed ? `Listing: ${p.listingText}` : NOT_LISTED}</b>

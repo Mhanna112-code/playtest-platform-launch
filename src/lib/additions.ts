@@ -15,8 +15,20 @@ export type Addition = { at: string; text?: string; items?: SetItem[]; notes?: s
 export const ADDED_LABEL = "Added";
 /** (Owner, Nov 3, §167) "Added · Nov 3, 2026, 11:29 PM": the label with when it was added, in the viewer's zone. */
 export const addedLabel = (when: string) => `${ADDED_LABEL} · ${when}`;
-/** (§167) The last fold of a written part: additions made before they were about one question. */
-export const ADDED_GENERAL = "Added (not about one question)";
+/**
+ * (Owner, Nov 4, §188; replaces §167's last fold "Added (not about one question)") Every written part ends with ONE fixed "Anything else" spot after its last
+ * question: the notes sent with the answers (its original), the additions made before §167 (no question), and what is added there now, each dated. A new
+ * addition there is stored like a question's, with this key (`questionKey: "else"`; a question's key is always "q…", so it never matches one). No migration.
+ */
+export const ANYTHING_ELSE_TITLE = "Anything else";
+export const ANYTHING_ELSE_KEY = "else";
+/** (§188) An addition to Anything else: the new ones (its key) and the old ones with no question (or a key no question has any more). */
+export const isElseKey = (key: string | undefined) => !key || key === ANYTHING_ELSE_KEY;
+/**
+ * (§188) What the lines name an addition by: a question ("to her answer to “…”") or Anything else ("to “Anything else” in her written answers"). `poss`: her / your.
+ */
+export const addedToWhat = (poss: string, question?: string) =>
+  question === ANYTHING_ELSE_TITLE ? `to “${ANYTHING_ELSE_TITLE}” in ${poss} written answers` : question ? `to ${poss} answer to ${quoteQuestion(question)}` : `to ${poss} written answers`;
 /** (§167) The tag on a question that came with changed questions. */
 export const NEW_QUESTION_TAG = "new question";
 /** (§167) A question fold's count: "· 2 added". */
@@ -77,7 +89,7 @@ export function additionsOf(stored: unknown): Addition[] {
   });
 }
 
-/** One added text under a question (or in the last fold). */
+/** One added text under a question (or under Anything else). */
 export type AddedText = { at: string; text: string; files: string[] };
 /**
  * (§167) One question of a written part as the developer reads it: its fold holds the answer, then each addition to it, oldest first. `fresh`: a question that
@@ -90,7 +102,9 @@ export type SetExtra = { at: string; notes: string; files: string[]; texts: stri
 /**
  * (Owner, Nov 3, §167; replaces §136's one list) A written part by question: a thread per question that was sent (the first questions, then each new question
  * that came with changed questions), each with the additions made to it. The answers to changed questions go under the question they answer: a new question
- * gets its own thread, an unchanged question whose answer differs gets it as an addition. Additions made before §167 (no question) go to `general`.
+ * gets its own thread, an unchanged question whose answer differs gets it as an addition. (Owner, Nov 4, §188) Additions to Anything else (its key, or made
+ * before §167 with no question) go to `general`; `other` is everything Anything else shows after its original (the notes), oldest first: those additions and
+ * each changed-questions send's own notes and loose files (`extras`).
  */
 export function writtenThreads(answers: unknown, questions: string[], stored: unknown) {
   const first = itemsOf(answers, questions);
@@ -101,6 +115,7 @@ export function writtenThreads(answers: unknown, questions: string[], stored: un
   questionKeys(first).forEach((key, i) => put({ key, question: first[i].question, required: first[i].required, answer: first[i].answer, fresh: false, adds: [] }));
   const general: Addition[] = [];
   const extras: SetExtra[] = [];
+  const other: ({ kind: "add"; add: AddedText } | { kind: "set"; set: SetExtra })[] = [];
   for (const a of additionsOf(stored)) {
     if (a.items) {
       const keys = questionKeys(a.items);
@@ -114,19 +129,27 @@ export function writtenThreads(answers: unknown, questions: string[], stored: un
         } else return;
         placed.push(it.answer);
       });
-      if (a.notes || a.files.length) extras.push({ at: a.at, notes: a.notes ?? "", files: a.files, texts: placed });
+      if (a.notes || a.files.length) {
+        const x = { at: a.at, notes: a.notes ?? "", files: a.files, texts: placed };
+        extras.push(x);
+        other.push({ kind: "set", set: x });
+      }
       continue;
     }
-    const t = a.questionKey ? byKey.get(a.questionKey) : undefined;
+    const t = a.questionKey && !isElseKey(a.questionKey) ? byKey.get(a.questionKey) : undefined;
     if (t) t.adds.push({ at: a.at, text: a.text ?? "", files: a.files });
-    else general.push(a);
+    else {
+      general.push(a);
+      other.push({ kind: "add", add: { at: a.at, text: a.text ?? "", files: a.files } });
+    }
   }
-  return { threads, general, extras };
+  return { threads, general, extras, other };
 }
 
 /**
  * (§167) A written piece for the "By question" view: the latest answers per question, each followed by what was added to that question ("*Added · <date>*" and
- * the text; `when` formats the date in the viewer's zone). The notes, then additions with no question, join "Other notes" as before (§136).
+ * the text; `when` formats the date in the viewer's zone). (Owner, Nov 4, §188) Anything else is the last entry: the notes, then what was added there (to
+ * Anything else, or before §167 with no question) and a changed-questions send's own notes, each under its "*Added · <date>*" like a question's.
  */
 export function answersByQuestion(sub: { answers: unknown; notes: string; additions?: unknown }, questions: string[], when: (at: string) => string) {
   const items = latestItems(sub, questions);
@@ -134,7 +157,11 @@ export function answersByQuestion(sub: { answers: unknown; notes: string; additi
   const adds = additionsOf(sub.additions);
   const under = (a: Addition) => (a.text != null && a.questionKey && keys.includes(a.questionKey) ? a.questionKey : null);
   const answers = items.map((it, i) => [it.answer, ...adds.filter((a) => under(a) === keys[i]).map((a) => `*${addedLabel(when(a.at))}*\n${a.text}`)].filter((x) => x.trim()).join("\n\n"));
-  const notes = [sub.notes, ...adds.filter((a) => !under(a)).flatMap((a) => [a.notes ?? "", a.text ?? ""])].filter((x) => x.trim()).join("\n\n");
+  const dated = (a: Addition) => {
+    const text = [a.notes ?? "", a.text ?? ""].filter((x) => x.trim()).join("\n\n");
+    return text ? `*${addedLabel(when(a.at))}*\n${text}` : "";
+  };
+  const notes = [sub.notes, ...adds.filter((a) => !under(a)).map(dated)].filter((x) => x.trim()).join("\n\n");
   return { items, answers, notes };
 }
 
