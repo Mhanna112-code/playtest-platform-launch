@@ -33,7 +33,7 @@ import { AccountRefresh } from "@/components/AccountRefresh";
 import { accountChangesSince } from "@/lib/server/accountChanges";
 import { TOO_MANY_CARD_ATTEMPTS } from "@/lib/server/cardLimits";
 import { AccountFormButton } from "./AccountFormButton";
-import { refusalLine } from "@/lib/pressLabels";
+import { CHANGE_PAYOUT, refusalLine } from "@/lib/pressLabels";
 
 export const metadata = { title: "Payments · Playtest" };
 export const dynamic = "force-dynamic";
@@ -47,9 +47,13 @@ const MESSAGES: Record<string, string> = {
   card_limit: TOO_MANY_CARD_ATTEMPTS, // (batch 35 §127) shown under Add a card / Change card, not up here
   payout_ready: PAYOUT_ALREADY_CONNECTED, // (Owner, Nov 3, §157) payout setup pressed from a page that didn't show it connected
   paused: PAYMENTS_OFF, // (§130) live keys while payments are switched off (STRIPE_ALLOW_LIVE not set): Add a card / payout setup
+  // (Owner, Nov 5, §200) Change payout details / Update payout details (the payout problem's).
+  dashboard: "We couldn't open Stripe. Try again.",
+  payout_none: "Your payout account isn't connected. Connect a payout account to be paid.",
+  payout_gone: "Stripe doesn't know your payout account any more, so it was removed here. Connect a payout account to be paid.", // (§130)
 };
 
-export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string }> }) {
+export default async function PaymentsPage({ searchParams }: { searchParams: Promise<{ error?: string; saved?: string; pending?: string; stop?: string; since?: string; tab?: string; press?: string }> }) {
   const u = await requirePageUser();
   return withDateZone(u.timeZone, async () => {
 
@@ -65,7 +69,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const side = sideFor(u);
   const dev = side === "developer", tester = side === "tester";
   const returnSide = q.saved === "card" || q.saved === "verified" || q.error === "card" || q.error === "card_limit" || q.error === "verify" ? "developer"
-    : q.saved === "payout" || q.pending === "payout" || q.error === "payout" || q.error === "payout_ready" || q.error === "confirm" ? "tester" : null;
+    : q.saved === "payout" || q.pending === "payout" || q.error === "payout" || q.error === "payout_ready" || q.error === "confirm"
+      || q.error === "dashboard" || q.error === "payout_none" || q.error === "payout_gone" ? "tester" : null;
   if (hasBoth(u) && returnSide && returnSide !== side) {
     const again = new URLSearchParams(Object.entries(q).filter((e): e is [string, string] => typeof e[1] === "string")).toString();
     return <OtherSidePage side={returnSide} next={`/app/payments${again ? `?${again}` : ""}`} />;
@@ -105,8 +110,11 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   // (Owner, Nov 3, §156) A refused card or payout press names its button, like every refusal: "Your Add a card didn't go through: We couldn't save the card. …".
   // The card belongs to the developer side, the payout setup to the tester side: "paused" (§130) is the press of the side shown.
   const cardPress = u.stripePaymentMethodId ? "Change card" : "Add a card";
-  const payoutPress = u.payoutProblemAt ? "Update payout details" : u.stripeAccountId ? "Continue setup" : "Connect a payout account";
-  const refusedPress = (code: string) => (code === "verify" ? "Verify this card" : code === "payout" || code === "confirm" || (code === "paused" && tester) ? payoutPress : cardPress);
+  // (Owner, Nov 5, §200) A connected account's press is "Change payout details"; a refusal from it (or the banner's Update payout details) names the one pressed.
+  const payoutPress = q.press === "update" ? "Update payout details" : q.press === "change" ? "Change payout details"
+    : u.payoutProblemAt ? "Update payout details" : u.payoutsReady ? "Change payout details" : u.stripeAccountId ? "Continue setup" : "Connect a payout account";
+  const refusedPress = (code: string) => (code === "verify" ? "Verify this card"
+    : code === "payout" || code === "confirm" || code === "dashboard" || code === "payout_none" || code === "payout_gone" || (code === "paused" && tester) ? payoutPress : cardPress);
   const refused = (code: string) => refusalLine(refusedPress(code), MESSAGES[code] ?? "");
   // The full app's billing / payouts pages: one column of cards, each with its icon heading; lists as rows.
   return (
@@ -207,6 +215,13 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
               {u.payoutsReady ? "Your payout account is connected. Each payment is sent to it." : u.stripeAccountId ? "Stripe still needs a few details before you can be paid." : "Connect a payout account to receive money for your work."}
             </p>
             {on && !u.payoutsReady && <AccountFormButton action="/api/payments/payout" seenAt={seenAt} press={u.stripeAccountId ? "Continue setup" : "Connect a payout account"} stop={stopFor("payout")}><Banknote className="h-4 w-4" /> {u.stripeAccountId ? "Continue setup" : "Connect a payout account"}</AccountFormButton>}
+            {/* (Owner, Nov 5, §200) Connected: Stripe's own Express dashboard for this account, where the tester changes the bank account (same tab, as setup). */}
+            {on && u.payoutsReady && u.stripeAccountId && (
+              <div data-change-payout="" className="space-y-1.5">
+                <AccountFormButton action="/api/payments/payout-dashboard" seenAt={seenAt} press={CHANGE_PAYOUT} stop={stopFor("payout")}><Banknote className="h-4 w-4" /> {CHANGE_PAYOUT}</AccountFormButton>
+                <p className="text-xs text-slate-400">Opens Stripe, where you change the bank account payments go to. Payments already sent stay where they went.</p>
+              </div>
+            )}
             <p className="flex items-center gap-1.5 text-xs text-slate-500"><ShieldCheck className="h-3.5 w-3.5" /> Bank details go to Stripe and never reach this site.</p>
           </section>
           {earned && <TesterEarnedList earned={earned} fmtDateTime={fmtDateTime} />}

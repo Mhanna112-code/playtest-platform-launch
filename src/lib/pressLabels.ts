@@ -52,7 +52,11 @@ export const teamCloseLabel = (scope: unknown) => (scope === "developer" ? "Clos
 
 /** (§156) Payments' form buttons (Add a card / Change card, the payout setup): the form sends which one it showed; anything else reads as the first. */
 export const CARD_PRESSES = ["Add a card", "Change card"];
-export const PAYOUT_PRESSES = ["Connect a payout account", "Continue setup", "Update payout details"];
+export const PAYOUT_PRESSES = ["Connect a payout account", "Continue setup", "Update payout details", "Change payout details"];
+/** (Owner, Nov 5, §200) A connected payout account's button: Stripe's Express dashboard, where the bank account is changed. */
+export const CHANGE_PAYOUT = "Change payout details";
+/** (§200) The presses that go to Stripe's pages for a connected account (/api/payments/payout-dashboard): the banner's, else Change payout details. */
+export const PAYOUT_CHANGE_PRESSES = [CHANGE_PAYOUT, "Update payout details"];
 
 /**
  * (Owner, Nov 3, §156) Every press outside tests / sessions, by its route (and its body where one route serves several buttons): the button's own label.
@@ -102,6 +106,7 @@ function otherPress(p: string[], b: Record<string, unknown>): string | undefined
         case "confirm": return CONFIRM_WITH_BANK;
         case "card": return pick(b.press, CARD_PRESSES);
         case "payout": return pick(b.press, PAYOUT_PRESSES);
+        case "payout-dashboard": return pick(b.press, PAYOUT_CHANGE_PRESSES); // (§200)
         case "subscription": return b.action === "cancel" ? "Cancel subscription" : b.action === "keep" ? "Keep my subscription" : `Subscribe for ${SUBSCRIPTION_PRICE}`;
         // "Verify a card" starts the check; the card form's "Verify this card" sends the card (and finishes after the bank's check).
         case "verify-card": return typeof b.paymentMethod === "string" || b.finish === true ? "Verify this card" : "Verify a card";
