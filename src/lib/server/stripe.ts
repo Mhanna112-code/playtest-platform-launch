@@ -90,6 +90,16 @@ const fakeStripe = {
       return { id: `tr_fake_${++fakeN}`, source_transaction: p.source_transaction };
     },
   },
+  // (Owner, Nov 5, §200) Change payout details: a connected account that finished onboarding, and its Express dashboard login link (a .test address: nothing real
+  // opens). "acct_fake_due…" still needs details (the onboarding link instead).
+  accounts: {
+    retrieve: async (id: string) => {
+      const due = id.startsWith("acct_fake_due");
+      return { id, details_submitted: !due, payouts_enabled: !due, capabilities: { transfers: due ? "inactive" : "active" }, requirements: { currently_due: due ? ["external_account"] : [], past_due: [] } };
+    },
+    createLoginLink: async (id: string) => ({ object: "login_link", created: Math.floor(Date.now() / 1000), url: `https://connect.stripe.test/express/${id}` }),
+  },
+  accountLinks: { create: async (p: { account: string }) => ({ object: "account_link", url: `https://connect.stripe.test/setup/${p.account}` }) },
   webhooks: { constructEvent: (raw: string, sig: string) => { if (sig !== "fake") throw new Error("bad signature"); return JSON.parse(raw); } },
 } as unknown as Stripe;
 
@@ -163,7 +173,8 @@ export async function forgetCard(userId: string) {
 }
 /** The tester's Connect account is gone at Stripe: cleared, so payouts wait for "Connect a payout account" (§130). */
 export async function forgetPayout(userId: string) {
-  await db.user.updateMany({ where: { id: userId }, data: { stripeAccountId: null, payoutsReady: false } });
+  // (Owner, Nov 5, §200) A payout problem belonged to that account: its banner and reminders stop too (Payments offers "Connect a payout account").
+  await db.user.updateMany({ where: { id: userId }, data: { stripeAccountId: null, payoutsReady: false, payoutProblemAt: null, payoutRemindedAt: null } });
   console.error("[stripe] payout account unknown to Stripe: cleared for", userId);
 }
 /** (§130) A charge on a card Stripe doesn't know: NOT a decline (its own code, "no_card", like a press with no card saved). */
@@ -572,6 +583,36 @@ export async function payoutSetupUrl(user: Party, base: string) {
     if (!isMissing(e)) throw e;
     await forgetPayout(user.id);
     return (await link(await ensurePayoutAccount(user, account))).url;
+  }
+}
+
+/**
+ * (Owner, Nov 5, §200) "Change payout details" (and the payout problem's "Update payout details"): where Stripe lets the tester change the bank account of the SAME
+ * Express account. Bank details never touch this site.
+ * - Stripe still needs details (onboarding not finished, or anything currently or past due): an `account_onboarding` link that comes back through the payout
+ *   return, as setup does. Stripe's rules: a login link works only for an Express account that finished onboarding (details submitted), and `account_update`
+ *   links are only for accounts whose platform collects the requirements (Custom), never Express.
+ * - Otherwise: a login link to Stripe's own Express dashboard (`accounts.createLoginLink`), where the bank account is changed.
+ * - (§130) The account is unknown to Stripe: cleared (`forgetPayout`) and "gone" returned, so Payments shows "Connect a payout account" again.
+ */
+export async function payoutDashboardUrl(user: { id: string; stripeAccountId: string | null; payoutsReady: boolean }, base: string): Promise<{ url: string; kind: "dashboard" | "onboarding" } | "none" | "gone"> {
+  if (!user.stripeAccountId) return "none";
+  const stripe = getStripe();
+  const account = user.stripeAccountId;
+  try {
+    const a = await stripe.accounts.retrieve(account);
+    const due = [...(a.requirements?.currently_due ?? []), ...(a.requirements?.past_due ?? [])];
+    if (!a.details_submitted || due.length) {
+      const link = await stripe.accountLinks.create({ account, type: "account_onboarding", refresh_url: `${base}/app/payments`, return_url: `${base}/api/payments/payout-return` });
+      return { url: link.url, kind: "onboarding" };
+    }
+    return { url: (await stripe.accounts.createLoginLink(account)).url, kind: "dashboard" };
+  } catch (e) {
+    if (!isMissing(e)) throw e;
+    await forgetPayout(user.id);
+    // (Batch 16 section 27) As refreshPayoutStatus: a Payments page open in another tab or device stops once for it.
+    if (user.payoutsReady) await logAccountChange(user.id, "", { scopes: ["payments"], field: "payout", label: "Payout account", before: "connected", after: "not connected" });
+    return "gone";
   }
 }
 
