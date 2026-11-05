@@ -2,7 +2,6 @@ import { T as fmtDateTime } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { displayName, fmtDateTime as fmtAt, money, pronouns } from "@/lib/server/dateFormat";
 import { andList } from "@/lib/rules";
-import { rowsOf } from "@/lib/callRows";
 import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, addedToWhat, questionKeys, quoteQuestion } from "@/lib/additions";
 import { itemsFor } from "@/lib/answerSets";
 import { qText } from "@/lib/questions";
@@ -84,12 +83,18 @@ export async function logTesterAction(userId: string, contractId: string, action
       break;
     }
     case "request-time": {
-      const r = result as { booked?: boolean; message?: string };
-      if (r?.booked && r.message) text = r.message.replace(/^Booked: you both picked /, `booked a call with ${devName} for `).replace(/\.$/, "");
+      const r = result as { booked?: boolean; message?: string; ids?: unknown };
+      // (Owner, Nov 5, §208) A press sends one request per time: "requested 3 calls with Nora Lane: Thu, Nov 5, 3:00 PM, … and …".
+      const made = Array.isArray(r?.ids) && r.ids.length ? await db.callRequest.findMany({ where: { id: { in: r.ids.map(String) } }, orderBy: { startsAt: "asc" } }) : [];
+      const asked = made.length > 1 ? `requested ${made.length} calls with ${devName}: ${andList(made.map((q) => fmtDateTime(q.startsAt)))}` : made.length ? `requested a call with ${devName} for ${fmtDateTime(made[0].startsAt)}` : "";
+      if (r?.booked && r.message) {
+        text = r.message.replace(/^Booked: you both picked /, `booked a call with ${devName} for `).replace(/\.$/, "");
+        if (asked) text += ` and ${asked.replace(` with ${devName}`, "")}`;
+      } else if (asked) text = asked;
       else {
         // (Batch 29 section 13) "You requested a call for Thu, Nov 5, 3:00 PM in another tab".
         const q = await db.callRequest.findFirst({ where: { contractId, fromSide: "tester" }, orderBy: { createdAt: "desc" } });
-        text = !q ? `sent a call request to ${devName}` : rowsOf(q).length > 1 ? `requested a call with ${devName} (pick one of ${rowsOf(q).length} times)` : `requested a call with ${devName} for ${fmtDateTime(q.startsAt)}`;
+        text = !q ? `sent a call request to ${devName}` : `requested a call with ${devName} for ${fmtDateTime(q.startsAt)}`;
       }
       break;
     }
@@ -192,17 +197,22 @@ export async function logTestAction(userId: string, testId: string, action: stri
       break;
     }
     case "request-time": {
-      const r = result as { booked?: boolean; message?: string; batchId?: string };
+      const r = result as { booked?: boolean; message?: string; batchId?: string; batchIds?: unknown };
       const ids = Array.isArray(body.contractIds) ? body.contractIds.map(s) : body.contractId ? [s(body.contractId)] : [];
+      // (Owner, Nov 5, §208) One batch per time: "requested a call with Ben Okafor for Nov 3, 3:00 PM" / "requested 2 calls with Ben Okafor: Nov 3, … and Nov 4, …".
+      const batches = Array.isArray(r?.batchIds) ? r.batchIds.map(String) : r?.batchId ? [r.batchId] : [];
+      const reqs = batches.length ? await db.callRequest.findMany({ where: { batchId: { in: batches } }, orderBy: { startsAt: "asc" } }) : [];
+      const names = await Promise.all([...new Set(reqs.map((x) => x.contractId))].map(contractName));
+      const times = [...new Set(reqs.map((x) => x.startsAt.getTime()))].map((t) => fmtDateTime(new Date(t)));
+      const asked = times.length > 1 ? `requested ${times.length} calls with ${andList(names)}: ${andList(times)}` : times.length ? `requested a call with ${andList(names)} for ${times[0]}` : "";
       if (r?.booked && r.message) {
         // (Batch 29 section 12) "You booked a call with Ana Silva for Thu, Nov 5, 3:00 PM in another tab".
-        const names = await Promise.all(ids.map(contractName));
-        text = r.message.replace(/^Booked: you both picked /, names.length ? `booked a call with ${andList(names)} for ` : "booked a call for ").replace(/\.$/, "");
+        const who = await Promise.all(ids.map(contractName));
+        text = r.message.replace(/^Booked: you both picked /, who.length ? `booked a call with ${andList(who)} for ` : "booked a call for ").replace(/\.$/, "");
+        if (asked) text += ` and ${asked}`;
       } else {
         // (Batch 16 section 21) "requested a call with Ben Okafor for Nov 3, 3:00 PM" (the live box: "You requested … in another tab").
-        const reqs = r?.batchId ? await db.callRequest.findMany({ where: { batchId: r.batchId } }) : [];
-        const names = await Promise.all((reqs.length ? reqs.map((x) => x.contractId) : ids).map(contractName));
-        text = reqs.length ? `requested a call with ${andList(names)} for ${fmtDateTime(reqs[0].startsAt)}` : "sent a call request";
+        text = asked || "sent a call request";
       }
       about = { a: "request-time", k: ids.map((id) => `c:${id}`) };
       break;

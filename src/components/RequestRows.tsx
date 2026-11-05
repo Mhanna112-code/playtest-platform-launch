@@ -6,8 +6,8 @@ import { beforeEndLine, leadLine, repeatChoices, repeatOffLine, untilEndWords, w
 import { useLocalMax } from "@/components/FieldChecks";
 
 // (NEXT-UI 7) The call request's time rows, the same on both sides: each row has its own "Once / Daily / Weekly" (Once by
-// default) and, when it repeats, a calls drop-down: 2-8 and "Forever" at the bottom. Up to 3 rows; with more than one row
-// the other side picks ONE.
+// default) and, when it repeats, a calls drop-down: 2-8 and "Forever" at the bottom. Up to 3 rows; (owner, Nov 5, §208) each row is sent as its OWN request
+// (it was one "choose one" request: the other side picked one).
 // (Owner, Nov 2, batch 35 §132) The form offers only what can be booked: the time box takes times from the server's lead ahead (24 hours on the live site) to when
 // testers' work on the test ends (the end, passed down from the server); the calls drop-down lists only the counts that fit before the end, and "Forever" reads
 // "Until testers' work ends (Dec 3)"; a repeat with fewer than 2 calls before the end isn't offered (a short line says why). The rows keep what was typed: a count or
@@ -103,12 +103,23 @@ export function alignedClash(rows: RowState[], minutes: string, side: "developer
   return { notes, limits: n.limits };
 }
 
-/** (Batch 20 section 7) What a Request a time press made: its new waiting requests and, when it matched the other side's request, the booked call. */
+/** (Owner, Nov 5, §208) The form's note under its rows once there are 2 or 3. */
+export const SEPARATE_TIMES_NOTE = "Each time is sent as its own request.";
+/** (§208) The line once a press went through: "Request sent." / "3 requests sent." (one per time). */
+export const sentLine = (r: unknown) => {
+  const n = madeBy(r).requestIds.length;
+  return n > 1 ? `${n} requests sent.` : "Request sent.";
+};
+
+/**
+ * (Batch 20 section 7) What a Request a time press made: its new waiting requests and, when it matched the other side's request, the booked call. (§208) A press
+ * can make several of each (one request per time; each auto-match a booked call).
+ */
 export type PressMade = { requestIds: string[]; callIds: string[] };
 export function madeBy(r: unknown): PressMade {
-  const o = (r ?? {}) as { ids?: unknown; id?: unknown; callId?: unknown };
+  const o = (r ?? {}) as { ids?: unknown; id?: unknown; callId?: unknown; callIds?: unknown };
   const requestIds = Array.isArray(o.ids) ? o.ids.map(String) : typeof o.id === "string" ? [o.id] : [];
-  return { requestIds, callIds: typeof o.callId === "string" ? [o.callId] : [] };
+  return { requestIds, callIds: Array.isArray(o.callIds) ? o.callIds.map(String) : typeof o.callId === "string" ? [o.callId] : [] };
 }
 
 /**
@@ -172,7 +183,7 @@ export function countLabel(n: number, r: RowState) {
   return `${n} ${unit}s${last ? ` (to ${last.toLocaleDateString("en-US", { month: "short", day: "numeric" })})` : ""}`;
 }
 
-export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end, picker = "They pick" }: { /** (batch 35 §162) who picks, agreeing: "She picks" / "They pick" */ picker?: string; rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][];
+export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][];
   /** (Batch 35 §132) The server's lead (the time box's red line) and when testers' work ends (its latest time; the calls drop-down). */
   leadMinutes?: number; end?: CallEnd }) {
   const set = (i: number, patch: Partial<RowState>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -203,7 +214,8 @@ export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end, pi
         );
       })}
       {rows.length < 3 && <button type="button" className="btn-ghost" onClick={() => setRows([...rows, newRow()])}>+ Another time</button>}
-      {rows.length > 1 && <p className="note">{picker} one of these.</p>}
+      {/* (Owner, Nov 5, §208) Each row is its own request (was "They pick one of these."). */}
+      {rows.length > 1 && <p className="note" data-separate-times="">{SEPARATE_TIMES_NOTE}</p>}
     </div>
   );
 }

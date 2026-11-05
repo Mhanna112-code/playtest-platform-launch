@@ -400,7 +400,9 @@ describe("batch 20 section 7: no false \"overlaps\" flash after Request a time",
       expect(s.indexOf("setRows([newRow()]);")).toBeLessThan(s.indexOf("finish(", s.indexOf("setMade(madeBy(r));")));
       expect(s.indexOf("finish(", s.indexOf("setMade(madeBy(r));"))).toBeGreaterThan(0);
     }
-    expect(src("lib/server/requests.ts")).toContain("return { requested: ok.length, batchId, ids: made };");
+    // (§208) One request per time: every one of them (and a booked call) is named.
+    expect(src("lib/server/requests.ts")).toContain("batchIds, ids: made.map((r) => r.id),");
+    expect(src("lib/server/requests.ts")).toContain("{ booked: true, callId: callIds[0], callIds, message:");
   });
 });
 

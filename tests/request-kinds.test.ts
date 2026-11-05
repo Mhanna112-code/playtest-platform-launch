@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
-import { act, atHours, bookCall, joined, sact, seen, setup } from "./fixtures";
+import { act, atHours, bookCall, joined, oldChooseOne, sact, seen, setup } from "./fixtures";
 
 const DAY = 24;
 const devReq = (testId: string, cookie: string, contractIds: string[], extra: Record<string, unknown>) =>
@@ -8,19 +8,19 @@ const devReq = (testId: string, cookie: string, contractIds: string[], extra: Re
 const pending = (contractId: string, fromSide: string) => db.callRequest.findFirstOrThrow({ where: { contractId, fromSide, status: "pending" }, orderBy: { createdAt: "desc" } });
 
 describe("request kinds", () => {
-  it("'Choose one': up to 3 times; the tester picks one → one call", async () => {
+  it("an older 'Choose one' request still waiting (none is made now, §208): the tester picks one → one call", async () => {
     const { dev, testId } = await setup();
-    const { tester, sessionId } = await joined(testId);
+    const { sessionId, tester } = await joined(testId);
     const t = [atHours(50), atHours(74), atHours(98)];
-    await devReq(testId, dev.cookie, [sessionId], { times: t });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane asked for a call: pick one of 3 times" } })).toBe(0); // (Owner) a call request is not a bell line
+    await oldChooseOne(sessionId, "developer", t);
     const r = await pending(sessionId, "developer");
     expect((await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" })).body.error.message).toBe("Pick one of the times.");
     await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept", time: t[1] });
     const calls = await db.call.findMany({ where: { contractId: sessionId } });
     expect(calls).toHaveLength(1);
     expect(calls[0].startsAt.toISOString()).toBe(t[1]);
-    expect((await devReq(testId, dev.cookie, [sessionId], { times: [atHours(10), atHours(11), atHours(12), atHours(13)] })).body.error.message).toBe("Offer up to 3 times to choose from.");
+    // (§208) Up to 3 times a press (each its own request).
+    expect((await devReq(testId, dev.cookie, [sessionId], { times: [atHours(110), atHours(111), atHours(112), atHours(113)] })).body.error.message).toBe("Send up to 3 times at once.");
   });
 
   it("'Weekly': accepting books every week; cancelling one week leaves the rest booked", async () => {
@@ -43,7 +43,7 @@ describe("request kinds", () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "request-time", tester.cookie, { times: [atHours(50)] });
-    await devReq(testId, dev.cookie, [sessionId], { times: [atHours(60), atHours(61)] });
+    await devReq(testId, dev.cookie, [sessionId], { times: [atHours(60)] });
     await sact(sessionId, "request-time", tester.cookie, { times: [atHours(70)], weeks: 3 });
     expect((await sact(sessionId, "request-time", tester.cookie, { times: [atHours(80)] })).body.error.message).toBe("You already have 3 calls booked or requested with Nora Lane. Wait until one is answered, over or cancelled, or withdraw a request.");
     expect((await devReq(testId, dev.cookie, [sessionId], { times: [atHours(90)] })).body.error.message).toBe("You already have 3 calls booked or requested with Ana Silva. Wait until one is answered, over or cancelled, or withdraw a request.");

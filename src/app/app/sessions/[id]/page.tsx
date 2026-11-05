@@ -564,7 +564,6 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                 seenAt={seenAt}
                 canRequest={canRequestCall}
                 targets={[{ contractId: c.id, name: dev, rate: "" }]}
-                otherPronoun={c.test.developer.pronoun}
                 requests={pendingReqs.map((r) => ({ id: r.id, minutes: r.minutes, rows: pageRows(r, callEnd), mine: r.fromSide === "tester", who: dev, contractId: c.id, rate: rateLabel(listedCall ? c.liveRateCents : null, c.liveRateCents) }))}
                 // (Batch 16 section 33) The clash checks while the form is filled: the calls between you, your other calls, and the limits.
                 clash={{

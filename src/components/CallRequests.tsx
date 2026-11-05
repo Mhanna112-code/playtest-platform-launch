@@ -1,7 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
 import { PressDone } from "@/components/PressDone";
-import { pronouns } from "@/lib/format";
 import { lengthCap } from "@/lib/callMeasure";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -10,7 +9,7 @@ import { FIELD, offerShown } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { DraftTag, useKept } from "@/lib/useKept";
 import type { RowJson } from "@/lib/callRows";
-import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
+import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, sentLine, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallRequestsPanel } from "@/components/CallRequestsPanel";
 import type { ClashTarget, Slot } from "@/lib/callClash";
 import type { CallEnd } from "@/lib/callWindow";
@@ -18,8 +17,8 @@ import type { CallEnd } from "@/lib/callWindow";
 type Req = { id: string; rows: RowJson[]; mine: boolean; who: string; contractId: string; rate: string; minutes?: number };
 
 /**
- * Calls are always requests. A request is "Choose one" (up to 3 times; the other side picks one) or "Weekly" (one time
- * repeated 2–8 weeks; accepting books every week). Developer: ticked testers (Select all). Tester: the same,
+ * Calls are always requests. A request is one time or "Daily" / "Weekly" (one time repeated; accepting books every one); (owner, Nov 5, §208) "+ Another
+ * time" sends each time as its own request (older "choose one" requests still waiting keep their rows). Developer: ticked testers (Select all). Tester: the same,
  * always at the contract rate. Pending requests: Accept / Decline / Withdraw. Boxes under the button. (Batch 16 section 10) A mistake in the request form is
  * red at its box (the server's line goes to the box whose data-match fits it) and listed under Request a time.
  */
@@ -31,8 +30,6 @@ export function CallRequests(p: {
   end?: CallEnd;
   /** (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked, what's left of the $1,000, the rate). */
   clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number; leftCents: number | null; rateCents: number | null };
-  /** (Batch 35 §162) The other person's pronoun (one person: the developer on the tester's page): "She picks one of these." */
-  otherPronoun?: string;
 }) {
   // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
   const [limitSeen, setLimitSeen] = useState("");
@@ -66,7 +63,7 @@ export function CallRequests(p: {
       setRows([newRow()]);
       setMinutes("");
       await keep.clear();
-      finish(action === "request-time" ? "Request sent." : "");
+      finish(action === "request-time" ? sentLine(r) : "");
     } else setFrozen(null);
   };
   const all = p.targets.length > 0 && p.targets.every((t) => ticked.includes(t.contractId));
@@ -129,7 +126,7 @@ export function CallRequests(p: {
               ))}
             </fieldset>
           )}
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={p.leadMinutes} end={p.end} picker={`${pronouns(p.otherPronoun).Subj} ${pronouns(p.otherPronoun).v("picks", "pick")}`} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={p.leadMinutes} end={p.end} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
           <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">

@@ -3989,3 +3989,49 @@ email and an active account unchanged; the page's sources (the link after the re
 - "New total $X." now also shows when only the bank's amount changed (it read just the press-again line before).
 - The chargeback hold's reservation stop (`reserveOwed` in `src/lib/server/chargeback.ts`: the bank changed the amount while the reservation was being made) has the same shape: one bullet per amount the bank changed, then "New total $X. <press-again line>" keyed `owed-total` (they were joined with "; " before).
 - Tests updated: `batch10`, `batch3`, `batch35-payment-proofs`, `batch35-stop-rules-v2` (§171 B6c), `owed-over200` (three cases), `pay-matrix` (§159 rule 5: the total bullet on both stops), `owed-dispute-change` (two cases), `partial-dispute` (§133 dispute.updated), `races-nov3` (race 3, the reservation's stop). Also in `batch35-stop-rules-v2`, §171 item 7 follows §205: her dispute now stops Confirm with your bank once, forced (the payment line on her part still doesn't); the press after it goes through and the window's notice still lists both.
+
+## §208 "+ Another time" sends separate requests (owner, Nov 5)
+
+**This replaces the "Choose one" part of NEXT-UI 7 and of this batch's rules** (§132's "the other side picks one", §184's "a choose one request loses only the
+overlapping times" for new requests, §185's "a 'one of' request is one request", §187 item 10's "it stays ONE request for the limits"). Those rules still describe
+the older "choose one" requests already waiting, which keep working as they are (not migrated); no new one is ever made.
+
+| | Before | After |
+| --- | --- | --- |
+| A press with 2–3 rows ("+ Another time") | ONE request; the other side accepted one time, which booked it and closed the others | **One request per row** (each keeps its own Once / Daily / Weekly; a daily / weekly row is one request as before) |
+| Limits (§185) | 1 toward the 3 in total and 1 of the 3 sends a day | Each request counts: N rows = N toward the total and N sends today (an auto-matched row: 1 send, nothing new toward the total) |
+| Over a limit | refused at 3 | The whole press refused on the first press (never a stop first), nothing made, with how many more can go: `You already have 2 calls or requests with Ana Silva: you can send 1 more.` / `You can send 1 more request to Ana Silva today.` (none left: §185's lines unchanged). Both limits short: the tighter one is named (a tie: today's). |
+| The form's note under 2–3 rows | `They pick one of these.` (§162: `She picks …`) | `Each time is sent as its own request.` (`SEPARATE_TIMES_NOTE`, `data-separate-times`) |
+| The form's red limit line (`clashNotes`) | at 3 taken | when taken + the rows that aren't an exact match pass 3, in the words above |
+| Two rows of one press overlapping | red "Overlaps time 1 in this request (…)" | the same, worded `Overlaps time 1 in this form (…)`, still refused by the server at the row |
+| Accept on one | closed the request's other times | never closes the others (only §184's drop when a booking overlaps them, unchanged) |
+| The press's done line | `Request sent.` | `Request sent.` / `3 requests sent.` (`sentLine`) |
+
+- **Server** (`src/lib/server/requests.ts`): `readKind` returns the rows and `each` (one request per row, `kindOfRow` / `kindData`); "Offer up to 3 times to choose
+  from." is now `Send up to 3 times at once.`. `devRequestTime` / `testerRequestTime` check the whole press, then book the auto-matches, then create every
+  request together (`createRequests`: one transaction under the test's lock, re-checking the limits for the whole press, so two tabs at once never pass 3 and a
+  press is never half made by the limits). `roomOf` / `roomLine` make the refusal; `callRoomLine` / `sentRoomLine` (`src/lib/callClash.ts`) the words.
+- **Auto-match per row**: a "once" row exactly at one of the other side's waiting single times (same length) books it, as before; now the press's other rows are
+  still sent as requests (before, the auto-match ended the press). A request is matched by one row at most; `sendClash` skips the requests the press books.
+- **The developer with several ticked testers**: each row is one batch (its own `batchId`) sent to every ticked tester; the first tester to accept a row's request
+  takes it and that row's other copies close as taken ("Another tester took this time at …"), as before; the other rows stay with every tester. A row that
+  auto-matches one tester's request books it and is sent to nobody else. A tester the press doesn't fit (in their own count; their auto-match passes to the next
+  ticked tester) is named in the existing "Press again to send to the others" box with the lines above (§185's short lines when nothing more can go); all of
+  them: refused. Read this way (check): a tester refused there (or blocked by a clash) gets nothing from the press, their auto-match included.
+- **Clashes** per time as before (`sendClash`: a row overlapping a call or a waiting request between the two is refused with today's line); rows of one press
+  overlapping each other refused (`ownCallClash` / `clashNotes`). The $1,000 check: each request as it would be accepted (the most calls any one row books).
+- **Lines**: one "requested" live line per request (the tester's links `req-<id>`), one developer bell per request (`<name> asked for a call: <time>`, linking to
+  its own `#req-<id>`, stacked with the day's other request bells as before). The "in another tab" line names every time: `You requested 3 calls with Nora Lane:
+  …, … and … in another tab` (`actionText.ts`; one time: unchanged).
+- **The boxes** (§185, §187): each request is its own row in "Requests to you" / "Your requests" and counts 1 in "(N)" / "· N requests". Older "one of" requests
+  keep one row per time.
+- **Wording removed**: the form's "They pick one of these." (and its `picker` / `otherPronoun` props); comments describing new requests as "choose one"
+  (`requests.ts`, `callRows.ts`, `CallRequests.tsx`, `RequestRows.tsx`). Kept for the older requests: "Pick one of the times.", "Another time of this request
+  was booked", §184's "… no longer offers …". The terms and help pages never described "choose one": no edit.
+- **Tests.** New `tests/separate-times-208.test.ts`: 3 rows → 3 requests (one line and one bell each, the developer's box counting 3), each accepted / declined on
+  its own, the developer's 3 rows to 2 testers (a batch per row, first to accept takes it), the total and the day refused as a whole press with the room lines
+  (nothing made; one row then goes), the several-testers box and its second press, rows overlapping each other (and a weekly row's 2nd call) refused, a row
+  auto-matching while the other is sent, an older "choose one" request still booking one time and closing the rest, the form's note and limit line. Updated
+  (they made "choose one" requests through the press; they now start from an older one, `oldChooseOne` in `tests/fixtures.ts`): `request-kinds`,
+  `call-sets`, `drop-overlapping-requests` (two cases), `layout-fixes-187` (item 10), `call-limit-request-boxes-185` (her "one of" request); `batch16-calls-live`
+  ("in this form"), `batch20` (the response names every request). No schema change.
