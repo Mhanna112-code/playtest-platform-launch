@@ -73,7 +73,40 @@ export function markShownInBox(lines: Change[]) {
     shownInBox.add(ck(c));
     if (c.at > boxSeenUpTo) boxSeenUpTo = c.at;
   }
+  noteListed(lines);
 }
+
+/**
+ * (Owner, Nov 5, §250) An update listed in ANY stop box on this page counts as seen for EVERY button on it: each line the server sends carries its identity (`sid`,
+ * lib/server/shownLines.ts), a box rendering it records it page-wide, and every press sends the list (`shownIds`, client.ts). Per update, not by time: only what a
+ * box ACTUALLY LISTED counts. Per page load: a reload starts fresh (module state), and moving to another page in the tab (another path) does too.
+ */
+export const SHOWN_IDS_SENT = 200;
+let listed = new Set<string>();
+let listedPath = "";
+const herePath = () => (typeof window === "undefined" ? "" : window.location.pathname);
+function listedHere() {
+  if (listedPath !== herePath()) {
+    listed = new Set();
+    listedPath = herePath();
+  }
+  return listed;
+}
+export function noteListed(lines: Change[]) {
+  const set = listedHere();
+  for (const c of lines) {
+    if (!c.sid) continue;
+    set.delete(c.sid); // newest last: the cap keeps the most recent
+    set.add(c.sid);
+  }
+}
+/** The identities this page's stop boxes listed (the newest SHOWN_IDS_SENT). */
+export const shownIdsNow = () => [...listedHere()].slice(-SHOWN_IDS_SENT);
+/** Tests: a fresh page. */
+export const clearListed = () => {
+  listed = new Set();
+  listedPath = herePath();
+};
 export const wasShownInBox = (c: Change) => shownInBox.has(ck(c));
 /** Adds newly picked-up changes to an open box, skipping any it already lists. */
 export function mergeChanges(old: Change[], added: Change[]) {

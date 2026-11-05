@@ -8,6 +8,7 @@ import { alertOf } from "@/lib/alerts";
 import { INFO_FIELDS, LISTING_SAVE, SAVED_ELSEWHERE_LINE, editedLine, ndaAgainLine, parseSave, saveLine } from "@/lib/listingSave";
 import { LISTING_SAVED, panelKeysOf, parseSaved } from "@/lib/listingPanel";
 import { callMinutesOf } from "@/lib/callMeasure";
+import { sidOf } from "./shownLines";
 
 type Tx = Prisma.TransactionClient;
 
@@ -188,7 +189,7 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   const mine = await ownChanges(devId, testId, since, tab, tx);
   const ownRenames = events.filter((e) => e.kind === "renamed" && e.text.startsWith(`${me} `));
   const saves = ownRenames.length ? await savesUpTo(testId, ownRenames[ownRenames.length - 1].createdAt, tx) : [];
-  const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e): (typeof e & { listing?: boolean; item?: string })[] => {
+  const theirs = events.filter((e) => !e.text.startsWith("You ")).flatMap((e): (typeof e & { listing?: boolean; item?: string; eventId?: string })[] => {
     if (e.kind === "info" && e.text.startsWith(`${me} `)) return [];
     if (e.kind === "renamed" && e.text.startsWith(`${me} `)) {
       // (Batch 30, Oct 29 addition) One line per save: a rename saved in another tab with other fields is already in that save's line ("title (now “X”)").
@@ -209,7 +210,8 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
     // (Owner, Nov 4, §193) A charge about a tester: their Charge on a part, or an automatic call charge on one of their calls (a "paid" line on a part that isn't the
     // developer's own "You paid …"; those never reach here). A call closed with nothing to pay charged nothing: not a charge.
     const charge = e.kind === "paid" && !!piece && !!e.contractId && !e.text.endsWith(" closed with nothing to pay");
-    return [{ ...e, ...(/^(?:req|part|item-app|item-dispute)-/.test(e.link) ? { item: e.link.replace(/^(?:req|part|item-app|item-dispute)-/, "") } : {}), ...(piece ? { piece } : {}), ...(charge ? { charge } : {}) }];
+    // (Owner, Nov 5, §250) The line is this test event: its row id is its identity once a stop box listed it.
+    return [{ ...e, eventId: e.id, ...(/^(?:req|part|item-app|item-dispute)-/.test(e.link) ? { item: e.link.replace(/^(?:req|part|item-app|item-dispute)-/, "") } : {}), ...(piece ? { piece } : {}), ...(charge ? { charge } : {}) }];
   });
   // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box;
   // (batch 35 §67) every action of theirs in another tab stops every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines). A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
@@ -528,4 +530,5 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
   return side === "join" ? withSaveAt(testId, lines, tx) : lines;
 }
 
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: renderTimes(e.text, dateZone()), at: e.createdAt, ...(e.forced ? { forced: true } : {}), ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+/** (Owner, Nov 5, §250) Each line carries its identity (`sid`): once a stop box lists it, no other press on that page stops for it (shownLines.ts). */
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: renderTimes(e.text, dateZone()), at: e.createdAt, ...sidOf(e), ...(e.forced ? { forced: true } : {}), ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));

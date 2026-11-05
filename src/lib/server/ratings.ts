@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { notListed } from "./shownLines";
 import { T } from "@/lib/tz";
 import { displayName, fmtDateIn, money, pronouns } from "@/lib/format";
 import { isUniqueClash } from "./passwords";
@@ -219,10 +220,11 @@ async function devRateGate(testId: string, contractId: string, body: Record<stri
   // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab (a Pay more, a call change…) never stop Rate: it only races with Rate itself.
   const stop = await devStopSince(testId, contractId, since);
   if (stop) lines.push(stop);
-  lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })));
+  lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })).map((e) => ({ ...e, eventId: e.id })));
   // (Owner, Oct 29, batch 30 §4) No call changes here: the developer's Rate only opens after the tester rated (which ends their part) or at close-out, so "call changes
   // between the two of them while that tester is still working" could never apply.
-  const pending = await unanswered(devId, testId, lines);
+  // (Owner, Nov 5, §250) Minus what a stop box on this page already listed.
+  const pending = notListed(await unanswered(devId, testId, lines), body);
   if (pending.length) stopBox(pending.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()));
 }
 /** (Owner, Nov 3, batch 35 §157) Two Rates at the same moment (two tabs): the rating's unique key keeps one; the other reads "You already rated <name>." (never a 500). */

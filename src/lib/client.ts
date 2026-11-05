@@ -1,4 +1,4 @@
-import { boxSeenAt, pageLoadedAt, seenNow } from "./live";
+import { boxSeenAt, pageLoadedAt, seenNow, shownIdsNow } from "./live";
 import { pressLabelOf } from "./pressLabels";
 import { keepRefusal } from "./keptRefusal";
 import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
@@ -93,6 +93,11 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
   // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
   // (Owner) New terms (reason A) are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
   if (body && typeof body === "object" && typeof (body as { seenAt?: unknown }).seenAt === "string") body = { ...body, pageSeenAt: (body as { seenAt: string }).seenAt, seenAt: seenNow((body as { seenAt: string }).seenAt), ...(pageLoadedAt() ? { loadedAt: pageLoadedAt() } : {}), ...(boxSeenAt() ? { boxSeenAt: boxSeenAt() } : {}) };
+  // (Owner, Nov 5, §250) ... and what any stop box on this page has listed (by identity): no other press here stops again for those updates.
+  if (body && typeof body === "object" && !Array.isArray(body) && ((body as { seenAt?: unknown }).seenAt !== undefined || (body as { boxAt?: unknown }).boxAt !== undefined)) {
+    const shownIds = shownIdsNow();
+    if (shownIds.length) body = { ...body, shownIds };
+  }
   let res: Response;
   try {
     res = await fetch(path, {
