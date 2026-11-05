@@ -151,10 +151,10 @@ describe("§196 requests with parts left out of the middle", () => {
 describe("§196 the tester's box", () => {
   const html = renderToStaticMarkup(createElement(ExcerptPicker, { submissionId: "sub-196", choices: [{ index: 0, question: "What did you like?", text: LONG }, { index: 1, question: "Anything broken?", text: "Nowhere really, it was smooth." }], defaultOpen: true }));
 
-  it("the answer read-only above the box, folded (Show more opens the 8-line scroll box, §182)", () => {
+  it("the answer read-only above the box, in the shared draggable box (§237: no Show more)", () => {
     expect(html).toContain('data-excerpt-original=""');
-    expect(html).toMatch(/data-excerpt-original="">[\s\S]*data-fold-text="closed"[\s\S]*data-fold-lines="3"[\s\S]*Start of the answer\./);
-    expect(html).toContain(">Show more</button>");
+    expect(html).toMatch(/data-excerpt-original="">[\s\S]*data-panel="excerpt-original-sub-196"[\s\S]*max-height:9rem[\s\S]*data-excerpt-original-text=""[\s\S]*Start of the answer\./);
+    expect(html).not.toContain("Show more");
     expect(html.indexOf("data-excerpt-original")).toBeLessThan(html.indexOf("<textarea"));
     expect(html).not.toContain("data-excerpt-left-out"); // nothing struck through yet
   });

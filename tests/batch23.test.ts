@@ -444,8 +444,9 @@ describe("batch 23 section 5: Edit keeps what you typed; it shows what the other
     const html = renderToStaticMarkup(createElement(TheirsNote, { heading: "Saved in another tab or device at 3:54 PM", items: [{ field: "description", name: "Instructions", value: long, onUse: () => {} }] }));
     expect(html).toContain("Saved in another tab or device at 3:54 PM:</span>");
     expect(html).toContain("<b>Instructions:</b>");
-    expect(html).toContain('data-fold-text="closed"');
-    expect(html).toContain(">Show more</button>");
+    // (Owner, Nov 5, §237) A long value is in the shared draggable box (QA's ValueText), whole, no Show more.
+    expect(html).toContain('data-qa-text="value"');
+    expect(html).not.toContain("Show more");
     const both = renderToStaticMarkup(createElement(GroupNote, { groups: [{ heading: "Changed in another tab or device at 3:50 PM", lines: ["Added: K8"] }, { heading: "Updated at 3:54 PM", lines: ["Ben Okafor joined and was given K-2, which you had deleted here."] }] }));
     expect(both).toContain("Changed in another tab or device at 3:50 PM:</p>");
     expect(both).toContain("Updated at 3:54 PM:</p>");

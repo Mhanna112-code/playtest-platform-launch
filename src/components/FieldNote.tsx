@@ -3,7 +3,8 @@ import { useState } from "react";
 import { Copy, Check } from "lucide-react";
 import { LongList } from "@/components/LongList";
 import { wasLine } from "@/lib/editMerge";
-import { ANSWER_LINES, LongText } from "@/components/LongText";
+import { QuestionTexts, textId, ValueText } from "@/components/QA";
+import { qRequired, qText } from "@/lib/questions";
 
 /**
  * (Owner, Oct 28, batch 16 section 19) What another tab or device changed in one field, named as on the form ("Spots: 4 → 5"; long text: "Instructions:"
@@ -12,29 +13,20 @@ import { ANSWER_LINES, LongText } from "@/components/LongText";
  */
 export type NoteItem = { name?: string; before?: string | string[]; after?: string | string[]; typed?: string | string[]; lines?: string[] };
 
-/** Short values stay on one line ("Spots: 4 → 5"); long text folds (3 lines, then Show more, opening a scroll box about 8 lines tall). */
+/** Short values stay on one line ("Spots: 4 → 5"); long text is in its box (FoldText). */
 const isShort = (s: string) => s.length <= 80 && !s.includes("\n");
 
-/** (Owner, Nov 4, §182) The shared long-text fold (LongText): 3 lines, then Show more opening a scroll box about 8 lines tall. */
-export function FoldText({ text }: { text: string }) {
-  return <LongText text={text} lines={ANSWER_LINES} />;
+/**
+ * (Owner, Nov 5, §237; was §182's LongText fold, 3 lines then Show more) A long value in the shared box for long text (QA's ValueText): drags taller, its own
+ * scroll, no Show more. `label`: what the box holds, for screen readers; the box's id is made from the label and the text (the same note keeps its height).
+ */
+export function FoldText({ text, label = "Text" }: { text: string; label?: string }) {
+  return <ValueText id={textId("note", `${label}|${text}`)} label={label}>{text}</ValueText>;
 }
 
-/** A list (the questions): 3, then "+N more". */
-function ShortList({ items }: { items: string[] }) {
-  const [all, setAll] = useState(false);
-  if (!items.length) return <span>none</span>;
-  const shown = all ? items : items.slice(0, 3);
-  return (
-    <div>
-      <ul className={`list-disc pl-5 ${all ? "max-h-48 overflow-y-auto pr-1" : ""}`}>{shown.map((q, i) => <li key={i} className="break-words">{q}</li>)}</ul>
-      {items.length > 3 && (
-        <button type="button" className="btn-ghost mt-0.5 !px-2 !py-0.5 text-xs" aria-expanded={all} onClick={() => setAll(!all)}>
-          {all ? "Show fewer" : `+${items.length - 3} more`}
-        </button>
-      )}
-    </div>
-  );
+/** (Owner, Nov 5, §237; was 3 questions, then "+N more") The questions, each in its question box (QA's QuestionTexts), in order. */
+function ShortList({ label, items }: { label: string; items: string[] }) {
+  return <QuestionTexts id={textId("note-q", `${label}|${items.join("|")}`)} items={items.map((q) => ({ text: qText(q), required: qRequired(q) }))} />;
 }
 
 function CopyButton({ text }: { text: string }) {
@@ -54,8 +46,8 @@ function Value({ label, value, copy }: { label: string; value: string | string[]
       {copy && <CopyButton text={text} />}
     </span>
   );
-  if (Array.isArray(value)) return <div data-note-value={label}>{head}<ShortList items={value} /></div>;
-  return <div data-note-value={label}>{head}<FoldText text={value || "empty"} /></div>;
+  if (Array.isArray(value)) return <div className="space-y-1" data-note-value={label}>{head}<ShortList label={label} items={value} /></div>;
+  return <div className="space-y-1" data-note-value={label}>{head}<FoldText label={label.replace(/:$/, "")} text={value || "empty"} /></div>;
 }
 
 /** "Spots: 4 → 5" when both values are short; null when the field's old value needs its own block. */
@@ -168,7 +160,7 @@ export function WasNote({ items }: { items: WasItem[] }) {
         ) : (
           <div key={it.field} data-was-field={it.field}>
             <p className="font-medium">{wasLine(it.time, null, it.name).replace(/ empty$/, "")}</p>
-            <FoldText text={`“${it.was}”`} />
+            <FoldText label="What it replaced" text={`“${it.was}”`} />
           </div>
         );
       })}

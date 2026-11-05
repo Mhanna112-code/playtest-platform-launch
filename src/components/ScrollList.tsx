@@ -1,8 +1,17 @@
 import type { ReactNode } from "react";
-import { InsidePanel, ResizeBox } from "@/components/Panel";
+import { ResizeBox } from "@/components/Panel";
 
-/** About 4 rows of the dashboard's row cards; about 2 rows of the developer's test cards (one column of about 3 on phones). */
-const HEIGHT = { rows: "max-h-[22rem]", lines: "max-h-56", cards: "max-h-[54rem] md:max-h-[38rem]", /** (batch 24 section 1) about 3 short rows (stacked on phones) */ three: "max-h-[21rem] sm:max-h-[13rem]" } as const;
+/**
+ * The lists' first heights: about 4 rows of the dashboard's row cards; about 2 rows of the developer's test cards (one column of about 3 on phones). (Owner, Nov 5,
+ * §237) Each is the draggable panel's first height (a CSS max-height; `vars` sets it per screen width through --list-max, which the box reads), and `tallest` is how
+ * tall the grip drags it (60% of the screen; the cards up to 1.2 screens, as they were already taller than a phone).
+ */
+const HEIGHT = {
+  rows: { vars: "[--list-max:22rem]", tallest: 0.6 },
+  lines: { vars: "[--list-max:14rem]", tallest: 0.6 },
+  cards: { vars: "[--list-max:54rem] md:[--list-max:38rem]", tallest: 1.2 },
+  /** (batch 24 section 1) about 3 short rows (stacked on phones) */ three: { vars: "[--list-max:21rem] sm:[--list-max:13rem]", tallest: 0.6 },
+} as const;
 /** (Batch 30 §16) A part's payment lines: more than this many sit in a panel. */
 export const PAY_LINES_SHOWN = 4;
 
@@ -27,7 +36,12 @@ export const LIST_PANEL = {
   liveTester: "min(27rem, 60vh)",
   /** (Owner, Nov 4, §182) The tester's own recordings on their session page, in "Your recording" (about one and a half recordings) */ ownRecordings: "min(24rem, 60vh)",
   /** (§182) The tester's own written answers, every question in one panel in "Your written answers" (about 10 closed questions) */ ownAnswers: "min(28rem, 60vh)",
+  /** (Owner, Nov 5, §237) The tester's "Your agreed scope" (was a fixed max-h-[32rem] box) */ scope: "32rem",
+  /** (§237) The Listing panel's fields, on the test page and the join page (was a fixed max-h-[32rem] box) */ listing: "32rem",
+  /** (§237) The developer's tester rows (was a fixed max-h-[36rem] box, about 6 rows) */ testerRows: "36rem",
 } as const;
+/** (§237) The tallest the grip drags the big panels above (scope, listing, tester rows): 80% of the screen (they start at 32–36rem, more than 60% of a phone). */
+export const BIG_PANEL_TALLEST = 0.8;
 /** (§152) The testers' calls list on the developer's test page drags up to 2 screens (it was already that tall). */
 export const TESTERS_CALLS_TALLEST = 2;
 /** (Batch 20 section 11) Past calls: more than this many sit in a panel. (Owner, Nov 4, §179) The tester's "Live call: N done" calls too. */
@@ -51,14 +65,17 @@ export function PayLinesBox({ id, count, children }: { /** the part (sent work o
 
 /**
  * (Owner, Oct 28, batch 16 section 14) Every list panel on the dashboards and the developer profile's "Open tests": everything in the list (no "Show N more",
- * no pages, no cut-off), in a plain scroll box. A short list shows without a scroll bar (the box only scrolls when it overflows). The heading, filters, chips
- * and search boxes sit above it, outside the box, so they never scroll away. (Blue boxes keep LongList's "3 lines, then Show N more".)
+ * no pages, no cut-off). A short list is only as tall as it is. The heading, filters, chips and search boxes sit above it, outside the box, so they never scroll
+ * away. (Blue boxes keep LongList's "3 lines, then Show N more".)
+ * (Owner, Nov 5, §237) The box is the draggable panel (ResizeBox): it keeps its old height until its grip is dragged, and the height dragged to is kept by `id`
+ * (by default `list-<label>`, or `list-<size>` with no label). It is a panel, so the panels inside it are plain (§187) and its boxes (QA, reasons) keep theirs.
  */
-export function ScrollList({ children, className = "space-y-2", size = "rows", as: Tag = "ul", label }: { children: ReactNode; className?: string; size?: keyof typeof HEIGHT; as?: "ul" | "div"; label?: string }) {
+export function ScrollList({ children, className = "space-y-2", size = "rows", as: Tag = "ul", label, id }: { children: ReactNode; className?: string; size?: keyof typeof HEIGHT; as?: "ul" | "div"; label?: string; /** (§237) unique on the page */ id?: string }) {
+  const h = HEIGHT[size];
+  const key = id ?? `list-${label ? label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : size}`;
   return (
-    <Tag className={`${className} ${HEIGHT[size]} overflow-y-auto pr-1`} data-scroll-list={size} aria-label={label}>
-      {/* (Owner, Nov 4, §187) It scrolls: a panel inside it is plain (only the outermost scrolls). */}
-      <InsidePanel>{children}</InsidePanel>
-    </Tag>
+    <ResizeBox id={key} label={label ?? "List"} defaultMax="var(--list-max)" tallest={h.tallest} className={h.vars}>
+      <Tag className={className} data-scroll-list={size} aria-label={label}>{children}</Tag>
+    </ResizeBox>
   );
 }

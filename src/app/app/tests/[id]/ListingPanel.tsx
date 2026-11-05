@@ -2,6 +2,8 @@ import { ClipboardList } from "lucide-react";
 import { UpdatedTag } from "@/components/ListingInfo";
 import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { NdaBox } from "@/components/NdaBox";
+import { ResizeBox } from "@/components/Panel";
+import { BIG_PANEL_TALLEST, LIST_PANEL } from "@/components/ScrollList";
 import { QuestionTexts, ValueText } from "@/components/QA";
 import { qRequired, qText } from "@/lib/questions";
 import type { PanelKey, PanelRow, PanelSide } from "@/lib/listingPanel";
@@ -31,7 +33,9 @@ export function ListingPanel({ rows, listing, when, savedAt, side = "developer",
       {head}
       <details id="listing" data-saved-at={savedAt} className="scroll-mt-24">
         <summary className="fold-chevron flex cursor-pointer items-center gap-2 font-semibold text-white"><ClipboardList className="h-5 w-5 text-indigo-300" /> Listing</summary>
-        <div className="mt-3 max-h-[32rem] overflow-y-auto overscroll-contain pr-2" data-listing-scroll="">
+        {/* (Owner, Nov 5, §237) The fields in the draggable panel (ResizeBox, 32rem at first; was a fixed scroll box); the boxes inside keep their own. */}
+        <ResizeBox id={`listing-${side}`} label="Listing" defaultMax={LIST_PANEL.listing} tallest={BIG_PANEL_TALLEST} className="mt-3">
+        <div data-listing-scroll="">
         <p className="text-xs text-slate-400">{intro ?? "What testers see now. A field your last save changed shows when: tap it for before and now."}</p>
         <ul className="mt-3 space-y-2.5 text-sm" data-listing-fields="">
           {rows.map((l) => (
@@ -57,6 +61,7 @@ export function ListingPanel({ rows, listing, when, savedAt, side = "developer",
           ))}
         </ul>
         </div>
+        </ResizeBox>
       </details>
       {foot}
     </section>

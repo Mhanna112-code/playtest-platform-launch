@@ -22,6 +22,7 @@ import { sideFor } from "@/lib/sides";
 import { openTestsV, profileOpenTests } from "@/lib/server/profileOpenTests";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { otherSideNotice } from "@/components/OtherSideNotice";
+import { BIO_BOX_MAX, ValueText } from "@/components/QA";
 
 
 export const metadata = { title: "Developer · Playtest" };
@@ -78,7 +79,8 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
       {/* (Owner, Nov 3, batch 35 §134) The developer side's own bio (the tester side's stays on their tester profile), as the tester profile's About shows theirs. */}
       <section className="card space-y-3" data-developer-about="">
         <h2 className="font-semibold text-white">About</h2>
-        <p className="whitespace-pre-wrap break-words text-sm text-slate-300">{p.devBio || <span className="text-slate-500">No bio yet.</span>}</p>
+        {/* (Owner, Nov 5, §237) The bio in the shared box for long text: drags taller, its own scroll. */}
+        {p.devBio ? <ValueText id={`dev-bio-${p.id}`} label="About" defaultMax={BIO_BOX_MAX}>{p.devBio}</ValueText> : <p className="text-sm text-slate-500">No bio yet.</p>}
       </section>
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">Open tests</h2>
@@ -87,7 +89,7 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
         {iBlocked && <p className="text-sm text-slate-400" data-blocked-tests="">{blockedTestsLine(name, p.pronoun)}</p>}
         {/* (Owner, Oct 28, batch 16 section 14) Every open test, in a plain scroll box (no "Show N more"). */}
         {iBlocked ? null : open.length === 0 ? <p className="text-sm text-slate-400">No open tests right now.</p> : (
-          <ScrollList className="space-y-2">
+          <ScrollList className="space-y-2" label="Open tests">
             {open.map((t) => (
               <li key={t.id}>
                 {(devOff || (!mine && viewer.testerSuspendedAt)) ? <div className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100"><span className="min-w-0 flex-1"><span className="block truncate font-medium text-white" title={t.title}>{t.title}</span></span></div> : <Link href={mine ? `/app/tests/${t.id}` : isAdmin(viewer) ? `/app/find/${t.id}` : t.sessionId ? `/app/sessions/${t.sessionId}` : `/app/find/${t.id}?from=profile`} className="flex items-center gap-3 rounded-xl border border-white/10 p-3 text-ink-100 no-underline hover:bg-white/[0.04] hover:no-underline">

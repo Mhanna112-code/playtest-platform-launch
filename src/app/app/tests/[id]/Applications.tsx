@@ -4,7 +4,7 @@ import { MARKABLE } from "@/lib/markJump";
 import { ChangesBox } from "@/components/ChangesBox";
 import { PressDone } from "@/components/PressDone";
 import { usePress } from "@/lib/usePress";
-import { ClampText } from "@/components/ClampText";
+import { ReasonQuote } from "@/components/ScrollText";
 import { Fold, ResizeBox } from "@/components/Panel";
 import { useRef } from "react";
 import { useRouter } from "next/navigation";
@@ -35,7 +35,8 @@ export function Applications({ testId, seenAt, apps, needs, embedded = false }: 
               <ResizeBox id={`app-${a.id}`} label="Their application">
                 {a.tag && <span className="badge border-amber-300/40 text-amber-200">{a.tag}</span>}
                 <p className="text-xs text-slate-500">{a.detail}</p>
-                {a.note && <ClampText text={`“${a.note}”`} />}
+                {/* (Owner, Nov 5, §237) The note in its own reason box (drags taller; no Show more). */}
+                {a.note && <ReasonQuote id={`app-note-${a.id}`} label="Their note" text={a.note} />}
               </ResizeBox>
             </Fold>
             <div className="flex flex-wrap gap-2">

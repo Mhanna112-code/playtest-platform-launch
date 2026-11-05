@@ -6,7 +6,8 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { api, errOf } from "@/lib/client";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
-import { LongText } from "@/components/LongText";
+import { OwnPanel, ResizeBox } from "@/components/Panel";
+import { QA_BOX_TALLEST, ValueText } from "@/components/QA";
 import { allKept, deletedRange, deleteFrom, excerptOf, GAP, keptChars, runsOf, squash } from "@/lib/excerptTrim";
 
 // (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and the tester's Remove. None of them stops once: a press goes through
@@ -17,6 +18,8 @@ const MIN = 10, MAX = 500;
 
 /** (§196) The trim box: about 5 lines, scrolling inside; (owner, Nov 5) no "Open the box taller" button: its corner drags it taller, up to the text boxes' height cap. */
 export const TRIM_BOX_SHUT = "calc(5lh + 1rem)";
+/** (§237) The answer above the trim box: its first height (about 6 lines; it was folded at 3 with Show more). */
+export const EXCERPT_BOX_MAX = "9rem";
 
 /**
  * "Show an excerpt on your profile" on a paid written part: pick one answer and trim it. (Batch 18 section 7) It always reads "From <test>": no "Don't name the product" tick.
@@ -96,11 +99,14 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
           {/* (§196) The answer, read-only, with what's left out struck through. */}
           <div className="min-w-0 space-y-1" data-excerpt-original="">
             <p className="text-xs text-slate-400">Your answer{cut ? " (struck through: what you're leaving out)" : ""}</p>
-            <LongText key={index} text={original} id={`excerpt-original-${submissionId}`} label="Your answer" className="rounded-md border border-white/10 bg-white/[0.02] p-2 text-slate-300">
-              <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                {runs.map((r, i) => r.kept ? <span key={i}>{r.text}</span> : <del key={i} className="rounded-sm bg-rose-400/20 text-rose-200/80 decoration-rose-300" data-excerpt-left-out="">{r.text}</del>)}
-              </div>
-            </LongText>
+            {/* (Owner, Nov 5, §237) In the shared draggable box (ResizeBox in OwnPanel, as QA's boxes): its own scroll, no Show more. */}
+            <OwnPanel>
+              <ResizeBox id={`excerpt-original-${submissionId}`} label="Your answer" defaultMax={EXCERPT_BOX_MAX} tallest={QA_BOX_TALLEST}>
+                <div className="whitespace-pre-wrap break-words text-slate-300 [overflow-wrap:anywhere]" data-excerpt-original-text="">
+                  {runs.map((r, i) => r.kept ? <span key={i}>{r.text}</span> : <del key={i} className="rounded-sm bg-rose-400/20 text-rose-200/80 decoration-rose-300" data-excerpt-left-out="">{r.text}</del>)}
+                </div>
+              </ResizeBox>
+            </OwnPanel>
           </div>
           {/* (§196) Its own limiter (data-typing-limit): it never takes more than the answer, so the paste note "Cut to the N-character limit." never shows here. */}
           <label className="label req" htmlFor={`excerpt-text-${submissionId}`}>The excerpt (delete what you don&apos;t want)</label>
@@ -114,10 +120,11 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
           {excerpt.text !== squash(shown) && (
             <div className="min-w-0 text-xs text-slate-400" data-excerpt-shown-as="">
               <p>Shown as:</p>
-              {/* About 4 lines, scrolling inside (not folded: a fold's own "…" would look like a gap). Each gap's " … " stands out. */}
-              <p className="max-h-[calc(4lh+0.5rem)] overflow-y-auto break-words rounded-md bg-white/[0.03] px-2 py-1 text-slate-200 [overflow-wrap:anywhere]" tabIndex={0} data-excerpt-shown-text="">
-                {excerpt.pieces.map((p, i) => <Fragment key={i}>{i > 0 && <b className="font-semibold text-amber-200" data-excerpt-gap="">{GAP}</b>}{p}</Fragment>)}
-              </p>
+              {/* About 4 lines, scrolling inside (not folded: a fold's own "…" would look like a gap). Each gap's " … " stands out. (Owner, Nov 5, §237) In the
+                  shared draggable box (6rem at first; was fixed at 4 lines). */}
+              <ValueText id={`excerpt-shown-as-${submissionId}`} label="Shown as">
+                <span data-excerpt-shown-text="">{excerpt.pieces.map((p, i) => <Fragment key={i}>{i > 0 && <b className="font-semibold text-amber-200" data-excerpt-gap="">{GAP}</b>}{p}</Fragment>)}</span>
+              </ValueText>
             </div>
           )}
           <p className={`text-xs ${n < MIN || n > MAX ? "text-rose-300" : "text-slate-500"}`} data-excerpt-count="">{n} / {MAX} (at least {MIN})</p>

@@ -86,7 +86,7 @@ describe("developer profile: open tests in the plain scroll box (section 14, as 
     const page = src("app/app/developers/[id]/page.tsx");
     expect(page).toContain('import { ScrollList } from "@/components/ScrollList";');
     expect(page).not.toContain("LongList");
-    expect(page).toMatch(/<h2 className="font-semibold text-white">Open tests<\/h2>[\s\S]*<ScrollList className="space-y-2">[\s\S]*<\/ScrollList>/);
+    expect(page).toMatch(/<h2 className="font-semibold text-white">Open tests<\/h2>[\s\S]*<ScrollList className="space-y-2" label="Open tests">[\s\S]*<\/ScrollList>/); // (§237) labelled: its panel's id
     expect(page).not.toMatch(/Open tests<\/h2>[\s\S]{0,400}<ul className="space-y-2">/);
   });
 });

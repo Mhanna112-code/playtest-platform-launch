@@ -4461,3 +4461,33 @@ back to it when the check ends with nothing charged). The rule is one helper, `b
 (`partPayStatus` / `partPaymentLines`, `src/lib/server/partPayments.ts`) use it too: a waiting charge reads "waiting for your bank (Confirm with your bank)" only
 while its check is open, else "waiting until your tests resume". **Tests:** `tests/payment-piece-names.test.ts` (§240: the lift line, the one payment's open
 check, the check cancelled, its own check; a part's payments, the same three cases).
+## §237 Long text in draggable boxes (owner, Nov 5)
+Every long free text sits in the shared draggable box: `ResizeBox` (components/Panel.tsx), in `OwnPanel` when it sits inside another panel, as QA.tsx's boxes.
+No Show more inside a box; long words wrap anywhere, so a 375px phone never scrolls sideways.
+- **Reasons and notes (`ReasonQuote`, components/ScrollText.tsx):** the box itself (6rem at first, the grip drags it to 60% of the screen), keeping the quote
+  look (italic, “…”, a left rule). Every caller follows: dispute reasons, the developer's side, the team's decision and pause notes, stop and end-early reasons,
+  call cancel / no-show / length notes, the admin's suspend, delete, report and q-reason notes. Its id is the caller's, or one made from the text (`textId`,
+  QA.tsx). An admin line that jumps on click (MineLine) ignores a click on the box's grip. The old fixed `ScrollText` box is gone (its last uses are boxes now).
+- **List panels (`ScrollList`):** the draggable panel, at its old height until dragged (per screen width, through `--list-max`); kept by `id`, by default
+  `list-<label>` (the dashboards' lists now pass their labels). The cards drag up to 1.2 screens. Its panels inside are plain (§187), its boxes keep theirs.
+- **"See the work" (`AnswersBox`):** the draggable panel, 20rem at first, kept by the piece (`answers-<piece>`).
+- **Excerpts:** the question in its question box (QA's `QuestionText`, "Question"), the quote in the value box (`ExcerptQuote`: ValueText in “…”), and "Replaces
+  the excerpt shown now" each in a box: the dashboard's and the test page's requests, the restricted view's shown excerpts, Your excerpts, Excerpts of her work.
+  The excerpt picker's answer (with what's struck through) and "Shown as" are boxes (9rem and 6rem at first; Shown as was fixed at 4 lines).
+- **Application notes:** a reason box ("Their note"). **Bios** (both profiles): the value box, 9rem at first (`BIO_BOX_MAX`); "No bio yet." stays a line.
+- **Rating comments:** the session page's "You rated …: 4 ★" and "… rated you: 4 ★" and the test page's "… rated you" keep their line; the comment is in a reason
+  box under it. The profile's "Your ratings": each comment in a reason box, all of them in a list panel (`rating-comments`, no "Show N more").
+- **The join page's questions:** QA's `QuestionTexts` ("Question N", "Required" a tag); more than 3 sit in the draggable panel (PanelWhen).
+- **Edit's notes (FieldNote):** what it replaced, "What you typed (not saved)" (its Copy stays) and the old NDA in value boxes (`FoldText` is now ValueText);
+  the questions list is `QuestionTexts`, every question (no "+N more").
+- **The answer preview before Send:** a box (18rem at first, its own even inside the questions' box). **Contact us messages** (admin): a value box, 12rem.
+- **No double scrolls:** the test page's dispute reason in Needs you is the reason box itself (no panel around it); the tester rows (`RowsBox`, 36rem), the
+  Listing panel (32rem) and "Your agreed scope" (32rem) are draggable panels (up to 80% of the screen, `BIG_PANEL_TALLEST`) keeping the boxes inside; past calls
+  in their panel have no inner max-h-72 box.
+- **Calls made:** the tester rows' panel keeps the panels inside it as they were (`OwnPanel`: a part's sent work with its Pay box §139, the Had calls §209), and
+  the scope panel keeps §236's Terms history its own panel, so only the outer fixed box changed. An open bank check still lifts the height of the panel holding it
+  (globals.css), now the whole tester rows panel.
+- Not changed: the chat thread, the add-to-answer box, recording notes.
+- **Tests:** new `tests/boxes-237.test.ts`. Updated: `batch16-dashboard-search`, `batch16-edit-tabs`, `batch16-excerpt-question`, `batch16-lists`,
+  `batch17-stop-reason`, `batch20`, `batch23`, `batch35-admin-tabs`, `batch35-excerpt-live`, `batch35-numbers-notes`, `batch35-parts-fold`,
+  `excerpt-delete-only-196`, `layout-fixes-187`.

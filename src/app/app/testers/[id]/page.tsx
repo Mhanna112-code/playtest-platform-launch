@@ -23,6 +23,7 @@ import { myExcerpts, shownExcerpts } from "@/lib/server/excerpts";
 import { TesterTests } from "@/components/TesterTests";
 import { testerTestsFor } from "@/lib/server/testerTests";
 import { otherSideNotice } from "@/components/OtherSideNotice";
+import { BIO_BOX_MAX, ValueText } from "@/components/QA";
 
 export const metadata = { title: "Tester · Playtest" };
 export const dynamic = "force-dynamic";
@@ -75,7 +76,8 @@ export default async function TesterProfilePage({ params }: { params: Promise<{ 
       {mine ? <MyExcerpts items={await myExcerpts(p.id, true)} /> : <ShownExcerpts items={await shownExcerpts(p.id)} poss={pron.poss} />}
       <section className="card space-y-3">
         <h2 className="font-semibold text-white">About</h2>
-        <p className="whitespace-pre-wrap break-words text-sm text-slate-300">{pr?.bio || <span className="text-slate-500">No bio yet.</span>}</p>
+        {/* (Owner, Nov 5, §237) The bio (up to 2,000 characters) in the shared box for long text: drags taller, its own scroll. */}
+        {pr?.bio ? <ValueText id={`bio-${p.id}`} label="About" defaultMax={BIO_BOX_MAX}>{pr.bio}</ValueText> : <p className="text-sm text-slate-500">No bio yet.</p>}
         <div className="flex flex-wrap gap-2">
           {(pr?.categories ?? []).map((c) => <span key={c} className="badge">{c}</span>)}
           {(pr?.devices ?? []).map((d) => <span key={d} className="badge"><Monitor className="h-3.5 w-3.5" /> {d}</span>)}

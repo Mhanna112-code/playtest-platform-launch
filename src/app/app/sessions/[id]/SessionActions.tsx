@@ -29,6 +29,10 @@ import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { fileSize } from "@/lib/format";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
+import { OwnPanel, ResizeBox } from "@/components/Panel";
+
+/** (§237) The answer preview's first height (it was a fixed max-h-72). */
+export const PREVIEW_BOX_MAX = "18rem";
 
 /**
  * (Owner, Nov 5, §213) A Send refused because the test is paused: a blue notice naming the press, above the "kept as a draft" line. The page redraws for the
@@ -107,11 +111,16 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
           {preview ? "Hide preview" : `Preview${files ? ` (${files} ${files === 1 ? "file" : "files"})` : ""}`}
         </button>
       )}
-      {/* (Owner, Oct 30) The preview scrolls in its own box (about 12 lines) instead of growing the page. */}
+      {/* (Owner, Oct 30) The preview scrolls in its own box (about 12 lines) instead of growing the page. (Owner, Nov 5, §237) The box is the shared draggable
+          box (ResizeBox in OwnPanel: 18rem at first, the grip drags it to 60% of the screen), its own even inside the questions' box. */}
       {preview && value.trim() && (
-        <div className="max-h-72 overflow-y-auto rounded-lg border border-white/10 p-2" tabIndex={0} data-answer-preview="">
-          <AnswerWithAttachments text={value} attachments={attachments} onRemove={(id) => { onChange(removeAttachmentMarker(value, id, attachments)); onRemove(id); }} />
-        </div>
+        <OwnPanel>
+          <ResizeBox id={`preview-${id}`} label="Preview" defaultMax={PREVIEW_BOX_MAX}>
+            <div data-answer-preview="">
+              <AnswerWithAttachments text={value} attachments={attachments} onRemove={(at) => { onChange(removeAttachmentMarker(value, at, attachments)); onRemove(at); }} />
+            </div>
+          </ResizeBox>
+        </OwnPanel>
       )}
       {/* (Owner, Nov 4, §189) An addition's box (`alone`): this is its one counter ("N / 20,000", the addition's own text); the add form draws no second one. */}
       <CharacterCount value={value} count={withoutAttachmentMarkers(value).length} minCount={chars} min={min ? ANSWER_MIN_CHARS : 0} max={WRITTEN_MAX_CHARS} required={required || short} data-answer-count={chars} {...(alone ? { "data-written-count": "" } : {})} />

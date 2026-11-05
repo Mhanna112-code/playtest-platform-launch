@@ -28,9 +28,10 @@ describe("plain scroll boxes on the dashboards and the developer profile (sectio
     // The chips stay above the box (outside it).
     expect(page.indexOf("<CategoryChips basePath=\"/app\"")).toBeLessThan(page.indexOf("<YourTestsSearch"));
     const box = src("components/ScrollList.tsx");
-    expect(box).toContain("overflow-y-auto");
-    expect(box).toContain('rows: "max-h-[22rem]"');
-    expect(box).toContain('cards: "max-h-[54rem] md:max-h-[38rem]"');
+    // (Owner, Nov 5, §237) The box is the draggable panel (ResizeBox), starting at the old heights.
+    expect(box).toContain('<ResizeBox id={key} label={label ?? "List"} defaultMax="var(--list-max)"');
+    expect(box).toContain('rows: { vars: "[--list-max:22rem]"');
+    expect(box).toContain('cards: { vars: "[--list-max:54rem] md:[--list-max:38rem]"');
     expect(box).not.toContain("<button"); // no Show N more
     // Blue boxes keep the 3-lines rule.
     for (const f of ["components/LiveNotices.tsx", "components/LiveTop.tsx", "components/ChangesBox.tsx", "components/RestrictedBox.tsx"]) expect(src(f), f).toContain("LongList");

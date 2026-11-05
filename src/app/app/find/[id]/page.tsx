@@ -9,8 +9,9 @@ import { CategoryTile, mainCategory, PartBadges } from "@/components/Ui";
 import { db } from "@/lib/db";
 import { displayName, fmtDateIn, fmtDateTimeIn, money, pronouns } from "@/lib/format";
 import { REVIEW_DAYS, closedToNewLine, dueFromJoin, joinerDays, perTesterLine, termsLine, testerDaysOf, testerShare, testPaused, yourDeadlineLine } from "@/lib/rules";
-import { ScrollText } from "@/components/ScrollText";
-import { QUESTION_BOX_AFTER, QuestionBox } from "@/components/QuestionBox";
+import { QuestionTexts } from "@/components/QA";
+import { QUESTION_BOX_AFTER } from "@/components/QuestionBox";
+import { LIST_PANEL, PanelWhen } from "@/components/ScrollList";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { asListing, needsLines } from "@/lib/server/tests";
 import { JoinBox } from "./JoinBox";
@@ -24,7 +25,6 @@ import { JoinWatch } from "./JoinWatch";
 import { ANSWER_MIN_LINE, qRequired, qText } from "@/lib/questions";
 import { ratingSummary } from "@/lib/server/ratings";
 import { NoThanksButton } from "./NoThanksButton";
-import { ClampText } from "@/components/ClampText";
 import { LongList } from "@/components/LongList";
 import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
@@ -205,12 +205,11 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
         <div className="card space-y-3">
           <h2 className="flex items-center gap-2 font-semibold text-white"><HelpCircle className="h-5 w-5 text-indigo-300" /> {dev} wants to know</h2>
           {l.questions.length ? (
-            // (Batch 20 section 1) More than 3 questions: every one inside a scroll box about 3 questions tall, each long one cut to 3 lines with "Show more".
-            l.questions.length > QUESTION_BOX_AFTER ? (
-              <QuestionBox count={l.questions.length} as="ul" className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q, i) => <li key={i} data-question=""><ClampText text={qText(q)} />{qRequired(q) && <span className="text-ink-500"> · required</span>}</li>)}</QuestionBox>
-            ) : (
-              <ul className="list-disc space-y-1 pl-5 text-sm text-slate-300">{l.questions.map((q) => <li key={q}><ScrollText text={qText(q)} label="Question" />{qRequired(q) && <span className="text-ink-500"> · required</span>}</li>)}</ul>
-            )
+            // (Batch 20 section 1) More than 3 questions sit in a panel. (Owner, Nov 5, §237) Each question in its question box ("Question N", "Required" a tag:
+            // QA's QuestionTexts, drags taller, no Show more); more than 3 in the draggable panel (PanelWhen), each box keeping its own scroll.
+            <PanelWhen on={l.questions.length > QUESTION_BOX_AFTER} id={`join-questions-${t.id}`} label="Questions" defaultMax={LIST_PANEL.questions}>
+              <QuestionTexts id={`join-q-${t.id}`} items={l.questions.map((q) => ({ text: qText(q), required: qRequired(q) }))} />
+            </PanelWhen>
           ) : (
             <p className="text-sm text-slate-400">Where you got stuck, any bugs, and what you liked.</p>
           )}

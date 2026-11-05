@@ -80,5 +80,18 @@ export function QuestionTexts({ id, items, empty = "none" }: { id: string; items
   );
 }
 
+/**
+ * (Owner, Nov 5, §237) A box's id made from its text, for a box with no record id of its own (a reason, a note's before / after): `<prefix>-<hash>`. The same
+ * text gets the same id (its dragged height is kept by it); a plain string hash, the same on the server and in the browser.
+ */
+export function textId(prefix: string, text: string) {
+  let h = 5381;
+  for (let i = 0; i < text.length; i++) h = ((h << 5) + h + text.charCodeAt(i)) | 0;
+  return `${prefix}-${(h >>> 0).toString(36)}`;
+}
+
+/** (§237) A bio's first height (about 6 lines: it is the About section's whole content). */
+export const BIO_BOX_MAX = "9rem";
+
 /** (§231) The NDA box's first height (it is read before agreeing, so it starts taller than the other boxes). */
 export const NDA_BOX_MAX = "12rem";

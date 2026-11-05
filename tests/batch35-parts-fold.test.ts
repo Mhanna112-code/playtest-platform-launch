@@ -60,11 +60,12 @@ describe("the shared long-text fold", () => {
     expect(f).toContain('el.addEventListener("load", check, true)');
   });
 
-  it("FieldNote's fold is the same component (3 lines, Show more)", () => {
+  it("(§237) FieldNote's long value is the shared draggable box (QA's ValueText), no Show more", () => {
     const h = html(createElement(FoldText, { text: "x".repeat(20_000) }));
-    expect(h).toContain('data-fold-text="closed"');
-    expect(h).toContain("line-clamp-3");
-    expect(src("components/FieldNote.tsx")).toContain("return <LongText text={text} lines={ANSWER_LINES} />;");
+    expect(h).toContain('data-qa-text="value"');
+    expect(h).toContain("data-panel-grip");
+    expect(h).not.toContain("Show more");
+    expect(src("components/FieldNote.tsx")).toContain("return <ValueText id={textId(\"note\", `${label}|${text}`)} label={label}>{text}</ValueText>;");
   });
 
   it("a jump to something inside a folded text opens it first", () => {

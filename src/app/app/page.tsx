@@ -30,10 +30,9 @@ import { ratingSummary } from "@/lib/server/ratings";
 import { unreadCount } from "@/lib/server/messages";
 import { asListing, findTests, profileSaved } from "@/lib/server/tests";
 import { RestrictedBox } from "@/components/RestrictedBox";
-import { ClampText } from "@/components/ClampText";
 import { ExcerptDecision } from "@/components/Excerpts";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
-import { ExcerptQuestion, ExcerptReplaces } from "@/components/ExcerptList";
+import { ExcerptQuestion, ExcerptQuote, ExcerptReplaces } from "@/components/ExcerptList";
 import { devRestricted, restrictionsOf } from "@/lib/restricted";
 import { PayoutBanner } from "@/components/PayoutBanner";
 import { CallsBox } from "./CallsBox";
@@ -145,7 +144,7 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
             {disputeBox.map((d) => (
               <li key={d.id} id={`item-dispute-${d.id}`} className="space-y-1.5 rounded-lg border border-white/10 p-3 text-sm">
                 <p className="text-slate-300"><b className="text-white"><NameLink text={d.name} href={d.testerHref} /></b> disputed what you paid for {d.what} on “<NameLink text={d.testTitle} kind="test" href={`/app/tests/${d.testId}`} />”:</p>
-                <ReasonQuote text={d.reason} />
+                <ReasonQuote id={`dispute-reason-${d.id}`} label="Their reason" text={d.reason} />
                 <DisputeSide seenAt={now.toISOString()} testId={d.testId} disputeId={d.id} />
               </li>
             ))}
@@ -158,9 +157,9 @@ export default async function AppHome({ searchParams }: { searchParams: Promise<
               <p className="text-slate-300"><b className="text-white"><NameLink text={x.tester} href={x.testerHref} /></b> would like to show this from “<NameLink text={x.testTitle} kind="test" href={`/app/tests/${x.testId}`} />” on {x.testerPoss} profile:</p>{/* (Owner, Nov 3) no "(names the product: …)" */}
               {x.ndaNote && <p className="note" data-excerpt-nda="">{x.ndaNote}</p>}
               {/* (Batch 16 section 37) The question it answers, above the quote. */}
-              <ExcerptQuestion question={x.question} />
-              <ClampText text={`“${x.text}”`} className="text-slate-200" />
-              <ExcerptReplaces texts={x.replaces} />
+              <ExcerptQuestion id={x.id} question={x.question} />
+              <ExcerptQuote id={`excerpt-text-${x.id}`} text={x.text} />
+              <ExcerptReplaces id={x.id} texts={x.replaces} />
               <ExcerptDecision excerptId={x.id} seenAt={now.toISOString()} />
             </li>
           ))}
@@ -286,7 +285,7 @@ async function DeveloperDashboard({ user, now, category, restricted }: { user: V
             <span className="h-2 w-2 rounded-full bg-amber-400" /> Needs you <span className="text-sm font-normal text-slate-400">{num(shown.length + reviewRows.length)}</span>
           </h2>
           {/* Newest first, every item in a plain scroll box (batch 16 section 14). */}
-          <ScrollList className="space-y-2">
+          <ScrollList className="space-y-2" label="Needs you">
             {reviewRows.map((r) => (
               <li key={`review-${r.id}`} id="needs-review" data-needs-review={r.id}>
                 <Link href={`/app/tests/${r.id}#needs-you`} className="rounded-lg border border-white/10 flex items-center gap-3 p-3 no-underline transition-colors hover:bg-white/5 hover:no-underline">
@@ -544,7 +543,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           <p className="card text-sm text-slate-400">{suspended ? "Nothing to do while your account is suspended." : "Nothing to finish. Pick up a new test below."}</p>
         ) : (
           <DevSearchList rows={[...answers.map((a) => a.c), ...todoParts.map((x) => x.c), ...allSent].map((c) => ({ title: c.title, developer: displayName(c.test.developer) }))}>
-          <ScrollList className="space-y-2">
+          <ScrollList className="space-y-2" label="To do">
             {answers.map((a) => (
               <DevSearchHit key={a.key} title={a.c.title} developer={displayName(a.c.test.developer)}>
               {/* (Owner, Nov 5, §238) The row opens through a link laid over the card (as Messages' rows, §124), so the line's "…" and arrow (WholeLine) and the
@@ -604,7 +603,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {(waiting.length > 0 || waitingCalls.length > 0 || waitingApps.length > 0 || inviteOnlyApps.length > 0) && (
         <section className="space-y-3">
           {sectionTitle(<Hourglass className="h-5 w-5 text-amber-300" />, "Waiting for the developer")}
-          <ScrollList className="space-y-2">
+          <ScrollList className="space-y-2" label="Waiting for the developer">
             {waitingApps.map((a) => (
               <li key={a.id}>
                 <Link href={`/app/find/${a.testId}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline">
@@ -668,7 +667,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
             {sectionTitle(<RotateCcw className="h-5 w-5 text-rose-300" />, "Tests you were removed from", removed.length)}
             {!suspended && removed.length > 1 && <DismissRemoved contractId={removed[0].id} all />}
           </div>
-          <ScrollList className="space-y-2">{removed.map((c) => removedCard(c))}</ScrollList>
+          <ScrollList className="space-y-2" label="Tests you were removed from">{removed.map((c) => removedCard(c))}</ScrollList>
         </section>
       )}
 
@@ -676,7 +675,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
         <section className="space-y-3" id="charge-or-cancel">
           {sectionTitle(<Banknote className="h-5 w-5 text-amber-300" />, "Charge or cancel", chargeable.length)}
           <p className="note">Parts the developer hasn&apos;t reviewed once {REVIEW_DAYS} days have passed since you sent them and your deadline has passed: charge for them, or let them go.</p>
-          <ScrollList className="space-y-2">
+          <ScrollList className="space-y-2" label="Charge or cancel">
             {chargeable.map(({ c, parts }) => (
               <li key={c.id}>
                 <Link href={`/app/sessions/${c.id}#part-${parts[0].kind}`} className="card card-hover flex flex-wrap items-center gap-3 border-amber-400/30 p-4 no-underline hover:no-underline">
@@ -719,7 +718,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {!suspended && invites.length > 0 && (
         <section className="space-y-3" id="invitations">
           {sectionTitle(<Inbox className="h-5 w-5 text-emerald-300" />, "Invitations", invites.length)}
-          <ScrollList className="space-y-2">
+          <ScrollList className="space-y-2" label="Invitations">
             {invites.map((i) => (
               <li key={i.id} className="info flex flex-wrap items-center gap-2">
                 {/* (Batch 35 §137) The names in the sentence link: the developer's profile, the test's page. */}
@@ -740,7 +739,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
       {!suspended && left.length > 0 && (
         <section className="space-y-3" id="rejoin">
           {sectionTitle(<RotateCcw className="h-5 w-5 text-sky-300" />, "Tests you left", left.length)}
-          <ScrollList className="space-y-2">{left.map((c) => leftCard(c))}</ScrollList>
+          <ScrollList className="space-y-2" label="Tests you left">{left.map((c) => leftCard(c))}</ScrollList>
         </section>
       )}
 
@@ -787,7 +786,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
           <h2 className="text-lg font-semibold text-white">History</h2>
           {/* (Owner, Oct 31, batch 35 §81) Every test: the ones you're still in first ("In progress"), then the ended ones; a search box filters by test or developer. */}
           <HistorySearch />
-          <ScrollList className="space-y-2">
+          <ScrollList className="space-y-2" label="History">
             {working.map((c) => (
               <li key={c.id} data-hist-search={`${c.title} ${displayName(c.test.developer)}`.toLowerCase()}>
                 <Link href={`/app/sessions/${c.id}`} className="card card-hover flex flex-wrap items-center gap-3 p-4 no-underline hover:no-underline" data-history-now={c.id}>

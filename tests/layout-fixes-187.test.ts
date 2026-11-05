@@ -43,9 +43,10 @@ describe("§187 items 1 and 2: only the outermost panel scrolls", () => {
     expect(render(h(ResizeBox, { id: "alone", label: "x" }, "y"))).toContain("data-panel-grip");
   });
   it("a scroll list (ScrollList) counts as the outer panel too", () => {
+    // (Owner, Nov 5, §237) The list is the draggable panel itself: its one grip; the panel inside it is plain.
     const html = render(h(ScrollList, { as: "div", children: null }, h(ResizeBox, { id: "in-list", label: "Calls" }, "c")));
     expect(html).toContain('data-panel-flat=""');
-    expect(html).not.toContain("data-panel-grip");
+    expect(count(html, "data-panel-grip")).toBe(1);
     expect(render(h(InsidePanel, null, h(ResizeBox, { id: "x", label: "x" }, "y")))).toContain('data-panel-flat=""');
   });
   it("Show more inside a panel opens the text inline (no 8-line box of its own); outside any panel it keeps the box", () => {

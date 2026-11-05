@@ -150,7 +150,7 @@ describe("§126.3 the same question replaces", () => {
     const denied = (await ask(s.tester.cookie, s.sub.id, "harbour level felt great")).body.id as string;
     const rows = await X.pendingForDeveloper(s.dev.user.id, s.testId);
     expect(rows.find((r) => r.id === denied)?.replaces).toEqual(["the second boss was far too hard"]);
-    const html = renderToStaticMarkup(React.createElement(ExcerptReplaces, { texts: rows[0].replaces }));
+    const html = renderToStaticMarkup(React.createElement(ExcerptReplaces, { id: rows[0].id, texts: rows[0].replaces }));
     expect(html).toContain(REPLACES_LINE);
     expect(html).toContain("the second boss was far too hard");
     await decide(s.dev.cookie, denied, "deny");
@@ -164,7 +164,7 @@ describe("§126.3 the same question replaces", () => {
     // A request with nothing shown for its question says nothing about replacing.
     const other = (await ask(s.tester.cookie, s.sub.id, "Nowhere really, the menus were smooth", 1)).body.id as string;
     expect((await X.pendingForDeveloper(s.dev.user.id, s.testId)).find((r) => r.id === other)?.replaces).toEqual([]);
-    expect(renderToStaticMarkup(React.createElement(ExcerptReplaces, { texts: [] }))).toBe("");
+    expect(renderToStaticMarkup(React.createElement(ExcerptReplaces, { id: "none", texts: [] }))).toBe("");
     // The shown one from another submission of the same session is replaced too.
     const t = await paidWork();
     const older = await elsewhere(t, "harbour level felt great", "shown");
