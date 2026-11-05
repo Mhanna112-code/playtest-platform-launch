@@ -4457,5 +4457,7 @@ A charge made before the hold (status "deferred", made before `holdStartedAt`) r
 bank check was open (Pay what you owe's one payment covering it waiting for the bank). When its check is really open (its own `actionPi`, the one payment covering
 it in needs_action / needs_confirmation with a check, or the chargeback hold's reservation's check) it now reads "… · waiting for your bank (Confirm with your
 bank)" (`OWED_BANK_WAIT_TAIL`, `owedLines` in `src/lib/server/holds.ts`). A charge truly waiting for the lift keeps "waiting until your tests resume" (and goes
-back to it when the check ends with nothing charged). **Tests:** `tests/payment-piece-names.test.ts` (§240: the lift line, the one payment's open check, the check
-cancelled, its own check).
+back to it when the check ends with nothing charged). The rule is one helper, `bankCheckOpen` (holds.ts), and a part's payments on the developer's test page
+(`partPayStatus` / `partPaymentLines`, `src/lib/server/partPayments.ts`) use it too: a waiting charge reads "waiting for your bank (Confirm with your bank)" only
+while its check is open, else "waiting until your tests resume". **Tests:** `tests/payment-piece-names.test.ts` (§240: the lift line, the one payment's open
+check, the check cancelled, its own check; a part's payments, the same three cases).

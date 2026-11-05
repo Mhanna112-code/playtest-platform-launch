@@ -10,6 +10,7 @@ import { OwedBox } from "@/components/OwedBox";
 import { chargebackOwedLine, cut10, disputeDecisionName, partOf, pieceName } from "@/lib/rules";
 import { bankToConfirm, bankWaitingOnTest, confirmItems } from "@/lib/server/confirm";
 import { OWED_BANK_WAIT_TAIL, owedLines, startHold } from "@/lib/server/holds";
+import { partPaymentLines, partPayStatus } from "@/lib/server/partPayments";
 import { joined, sact, setup } from "./fixtures";
 
 // (Owner, Nov 2, §131) Every developer-facing payment line names WHICH tester, WHICH part and WHICH test, with one helper (pieceName): the tester's and the test's names
@@ -149,5 +150,18 @@ describe("§240 a charge made before the hold that's waiting for the bank (owner
     // Its own check open (a check made before §117): the bank too.
     await db.payment.update({ where: { id: waits.id }, data: { coveredById: null, actionPi: "pi_" + randomUUID() } });
     expect(tail(await owedLines(w.dev.user.id))).toBe(OWED_BANK_WAIT_TAIL);
+  });
+
+  it("a part's payments (the developer's test page) use the same rule: the bank wording only while its check is open, else the lift's line", async () => {
+    const w = await world();
+    const waits = await db.payment.create({ data: { ...w.base, kind: "dispute", submissionId: w.recording.id, amountCents: 9600, status: "deferred" } });
+    const status = async () => (await partPaymentLines(await db.payment.findMany({ where: { contractId: w.sessionId } }), (d) => d.toISOString())).get(w.recording.id)!.find((l) => l.id === waits.id)!.status;
+    expect(await status()).toBe("waiting until your tests resume");
+    const one = await db.payment.create({ data: { kind: "owed", developerId: w.dev.user.id, testerId: w.dev.user.id, amountCents: 9600, feeCents: 9600, testerCents: 0, transferStatus: "none", note: "press", ...bankWait() } });
+    await db.payment.update({ where: { id: waits.id }, data: { coveredById: one.id } });
+    expect(await status()).toBe(OWED_BANK_WAIT_TAIL);
+    await db.payment.update({ where: { id: one.id }, data: { status: "cancelled", actionPi: null } });
+    expect(await status()).toBe("waiting until your tests resume");
+    expect(partPayStatus({ status: "deferred" }, null, true)).toBe(OWED_BANK_WAIT_TAIL);
   });
 });

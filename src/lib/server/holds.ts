@@ -707,6 +707,17 @@ export async function tellArrived(p: { contractId: string | null; submissionId: 
 /** (Owner, Nov 5, §240) Pay what you owe's line for a charge made before the hold whose bank check is still open. */
 export const OWED_BANK_WAIT_TAIL = "waiting for your bank (Confirm with your bank)";
 
+/**
+ * (Owner, Nov 5, §240) Whether a waiting charge's bank check is really open: its own check (`actionPi`), the one payment covering it waiting for the bank
+ * (needs_action / needs_confirmation with a check), or the chargeback hold's reservation covering it waiting for the bank. Pay what you owe's box and a part's
+ * payments both read the bank wording only then.
+ */
+export async function bankCheckOpen(p: { id: string; actionPi?: string | null; coveredById?: string | null }) {
+  if (p.actionPi) return true;
+  if (p.coveredById && (await db.payment.count({ where: { id: p.coveredById, actionPi: { not: null }, status: { in: ["needs_action", "needs_confirmation"] } } }))) return true;
+  return (await db.reservation.count({ where: { covers: { has: p.id }, status: "needs_action" } })) > 0;
+}
+
 /** (§125) A charge that came in while the one payment is in flight. */
 export const OWED_AFTER_CHECK = "Charged right after the payment above goes through";
 
@@ -767,7 +778,7 @@ export async function owedLines(devId: string) {
     // (Owner, Nov 5, §240) A charge made before the hold whose bank check is open (its own, the one payment's covering it, or the hold's reservation's) is waiting for
     // the bank, never for the lift: "… · waiting for your bank (Confirm with your bank)".
     const before = p.status === "deferred" && !!u?.holdStartedAt && p.createdAt < u.holdStartedAt;
-    const bankWait = before && (!!p.actionPi || !!reserving.get(p.id) || (!!p.coveredById && !!(await db.payment.findFirst({ where: { id: p.coveredById, actionPi: { not: null }, status: { in: ["needs_action", "needs_confirmation"] } }, select: { id: true } }))));
+    const bankWait = before && (!!reserving.get(p.id) || (await bankCheckOpen(p)));
     const tail = p.status === "owed" || p.status === "deferred" || (p.status === PAYING && !p.owedUntil)
       // (Owner, Nov 2) One made before this hold started (its bank check paused when the hold began) reads "waiting until your tests resume", not "… while paused".
       ? ` ${money(p.amountCents)} · ${bankWait ? OWED_BANK_WAIT_TAIL : before ? "waiting until your tests resume" : `${p.kind === "dispute" ? "decided" : p.callId && (await db.review.findUnique({ where: { callId: p.callId }, select: { auto: true } }))?.auto ? "charged automatically" : "charged by the tester"} while your tests were paused`}`
