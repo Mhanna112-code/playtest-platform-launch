@@ -103,3 +103,10 @@ describe("(Owner, Nov 5) §221 the questions changed: one block per question", (
     expect(s).not.toContain("Your answers so far:");
   });
 });
+
+describe("(Owner, Nov 5) §224 no 'added to this after you paid' line on the part", () => {
+  it("the update row's fold has no '<name> added to this after you paid (…)' line; the bell and email keep it", () => {
+    expect(read("src/app/app/tests/[id]/page.tsx")).not.toContain("updateRowLine(");
+    expect(read("src/lib/server/paidUpdates.ts")).toContain("updateRowLine(name, room.paidCents, room.roomCents)");
+  });
+});

@@ -4238,3 +4238,7 @@ place (`cutPieces` lines the cut text up with the whole line). A row with nothin
 The new-terms box's "The questions changed: before and after" listed all the Before questions, then all the After ones, then "Your answers so far: a / b / c" run
 together. Now one block per question number: "Question 1", its Before, its After and your answer so far, each in its own box that scrolls and drags taller
 (ResizeBox); a question only one side has reads "(new)" or "(removed)", and an unanswered one "(no answer yet)". Test: `tests/nov5-batch2.test.ts`.
+
+## §224 No "added to this after you paid" line on the part (owner, Nov 5)
+The developer's update row (a part a tester added to after it was paid) no longer shows "bb added to this after you paid ($19.00 paid · up to $981.00 more)" under
+"Updated …": the part's payments and its Pay more say it. The bell and the email that tell the developer of the addition keep the line.

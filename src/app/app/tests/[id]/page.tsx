@@ -79,7 +79,7 @@ import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision } from "@/components/Excerpts";
-import { UPDATED_AT_CAP, pieceDay, teamClosedLine, updateRowLine, updateWaiting } from "@/lib/moneyLines";
+import { UPDATED_AT_CAP, pieceDay, teamClosedLine, updateWaiting } from "@/lib/moneyLines";
 
 import { testV } from "@/lib/server/pulseV";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -526,7 +526,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     <div key={`update-${x.id}`} id={`update-${x.id}`} className="rounded-lg border border-white/10 p-2 scroll-mt-24 sm:p-3" data-update-row={x.id}>
       <HoldFold openOn={[`update-${x.id}`]} className="min-w-0" summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-part-${x.id}` }} summary={x.kind === "written" ? "Written answers" : "Recording"}>
         <p className="text-xs text-slate-400" data-part-when="">Updated {fmtDateTime(x.paidUpdateAt!)}</p>
-        <p className="text-sm text-slate-200" data-update-line="">{updateRowLine(displayName(c.tester), rooms.get(x.id)!.paid, rooms.get(x.id)!.room)}</p>
+        {/* (Owner, Nov 5, §224) No "<name> added to this after you paid ($X paid · up to $Y more)" line here: the part's payments and Pay more say it. */}
         {/* (Owner, Nov 3, batch 35 §152) What was paid for it so far (a panel above 4). */}
         <PartPayments id={x.id} lines={partPays.get(x.id)} />
         <ResizeBox id={`update-${x.id}`} label={x.kind === "written" ? "Written answers" : "Recordings"}>
