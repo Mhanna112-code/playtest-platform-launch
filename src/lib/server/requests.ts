@@ -23,13 +23,16 @@ import { callsLeftCents, ceilingRefusal, checkCeiling } from "./callMoney";
 import { CALL_MIN_MINUTES } from "@/lib/rules";
 import { bookableMinutes, lengthCapLine } from "@/lib/callMeasure";
 import { CALL_ACTS } from "./live";
-import { MAX_CALLS, MAX_SENT_PER_DAY, callLimitLine, clashNotes, localFmt, sentTodayLine } from "@/lib/callClash";
+import { MAX_CALLS, MAX_SENT_PER_DAY, callLimitLine, callRoomLine, clashNotes, localFmt, sentRoomLine } from "@/lib/callClash";
 import { dayIn } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { dateZone } from "./dateZone";
 import { DROP_BOTH, DROP_DEV_BUSY, DROP_TESTER_BUSY, dropLine, dropReasonFor, isDropReason } from "@/lib/requestDrop";
 
-/** (Batch 15 section 34) The calls a request books if accepted: the most of any one row (a "choose one" row books 1; a set books all of its calls, up to the end). */
+/**
+ * (Batch 15 section 34) The calls a request books if accepted: the most of any one row (an older "choose one" row books 1; a set books all of its calls, up to the
+ * end). (§208) For a press's rows (each its own request): the most any one of them books, each checked as it would be accepted.
+ */
 const callsIfAccepted = (rows: CallRow[], end: Date | null) => Math.max(1, ...rows.map((r) => occurrences(r, end).length));
 
 /**
@@ -44,8 +47,10 @@ export const pageRows = (r: { rows?: unknown; times: Date[]; startsAt: Date; wee
 
 // Calls are ALWAYS requests (owner rules). Every call starts as a request from one side and is booked only when the
 // other side accepts, or by auto-match. A request is ONE of:
-//   "Choose one": up to 3 possible times; the other side picks one → 1 call.
+//   "Once": one time → 1 call.
 //   "Daily"/"Weekly": 1 time repeated 2–8 times; accepting books them all (each an ordinary call afterwards).
+// (Owner, Nov 5, §208) "+ Another time" (up to 3 rows) sends each row as its OWN request: they count separately toward the limits and are answered separately.
+// Older "choose one" requests (several times in one request; the other side picks one, the rest close) still waiting keep working as they were; none is made now.
 // The developer requests with one or more ticked testers (the first tester to accept takes the whole request); the
 // developer never sets a price, and neither does the tester (the "Ask $" was removed; every call is at the contract rate). Limit (§185): 3 in total per tester per test (both sides' pending requests and booked times; a daily/weekly set = 1). Clash checks:
 // sending refuses overlaps with calls/requests between the same two; accepting refuses overlaps with anyone's calls.
@@ -155,7 +160,7 @@ function readRows(body: Record<string, unknown>, end: Date | null): CallRow[] {
     } else rows = times.map((startsAt) => ({ startsAt, repeat: "once" as const, count: 1 }));
   }
   if (!rows.length) throw new HttpError(400, "bad_time", leadLine(CALL_MIN_AHEAD_MINUTES));
-  if (rows.length > MAX_ROWS) throw new HttpError(400, "bad_kind", "Offer up to 3 times to choose from.");
+  if (rows.length > MAX_ROWS) throw new HttpError(400, "bad_kind", "Send up to 3 times at once."); // (§208) each its own request
   // (Batch 35 §132) A Daily / Weekly row's calls after the end are dropped, not refused (only its first one left: a single call); Forever runs until the end.
   return rows.map((r) => cutRow(r, end) ?? r).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 }
@@ -163,11 +168,17 @@ function readRows(body: Record<string, unknown>, end: Date | null): CallRow[] {
 /** (Batch 35 §132) `end`: when testers' work on the test ends (the call window's end). One already passed isn't checked here: the press is refused as the work ended. */
 function readKind(body: Record<string, unknown>, end: Date | null) {
   const rows = readRows(body, end && end.getTime() > Date.now() ? end : null);
-  // The older columns keep their meaning for a single counted repeating row (what the rest of the app reads).
-  const single = rows.length === 1 && rows[0].repeat !== "once" && rows[0].count > 0 ? rows[0] : null;
-  return { rows, startsAt: rows[0].startsAt, times: rows.map((r) => r.startsAt), weeks: single?.count ?? 0, repeat: single?.repeat ?? "" };
+  // (Owner, Nov 5, §208) "+ Another time" sends each row as its OWN request (never a "choose one" request any more): `each` is one request per row, in time order.
+  return { rows, each: rows.map(kindOfRow) };
 }
-type Kind = ReturnType<typeof readKind>;
+/** (§208) One row as its own request; the older columns keep their meaning for a counted repeating row (what the rest of the app reads). */
+const kindOfRow = (r: CallRow) => {
+  const single = r.repeat !== "once" && r.count > 0 ? r : null;
+  return { rows: [r], startsAt: r.startsAt, times: [r.startsAt], weeks: single?.count ?? 0, repeat: single?.repeat ?? "" };
+};
+type Kind = ReturnType<typeof kindOfRow>;
+/** (§208) A new request's stored columns. */
+const kindData = (k: Kind) => ({ startsAt: k.startsAt, times: k.times, weeks: k.weeks, repeat: k.repeat, rows: toJson(k.rows) as Prisma.InputJsonValue });
 const unitOf = (repeat: string) => (repeat === "daily" ? "daily" : "weekly");
 /** "weekly calls (4 weeks)" / (batch 35 §132) "daily calls (until testers' work ends)" for a one-row repeat, else "a call". */
 const kindWords = (rows: CallRow[]) => {
@@ -176,10 +187,10 @@ const kindWords = (rows: CallRow[]) => {
 };
 
 /** Sending: a time overlapping a booked call or a pending request between the same two people is refused. */
-async function sendClash(contractId: string, times: Date[], minutes: number, otherName: string, exceptId?: string, mine?: { side: Side; otherPoss: string }, end: Date | null = null) {
+async function sendClash(contractId: string, times: Date[], minutes: number, otherName: string, /** (§208) the requests this press books (its auto-matches) */ exceptIds: string[] = [], mine?: { side: Side; otherPoss: string }, end: Date | null = null) {
   const [calls, reqs] = await Promise.all([
     db.call.findMany({ where: { contractId, status: "booked", startsAt: { gt: new Date(Date.now() - 6 * 3_600_000) } } }),
-    db.callRequest.findMany({ where: { contractId, status: "pending", ...(exceptId ? { id: { not: exceptId } } : {}) } }),
+    db.callRequest.findMany({ where: { contractId, status: "pending", ...(exceptIds.length ? { id: { notIn: exceptIds } } : {}) } }),
   ]);
   for (const t of times) {
     const call = calls.find((x) => overlaps(t, minutes, x.startsAt, x.minutes));
@@ -249,32 +260,78 @@ export async function sentToday(contractId: string, side: Side, tz: string | nul
 }
 /** (Owner, Nov 4, §185) What counts toward the pair's limit: booked times + waiting requests (both sides). */
 export const callsTaken = async (contractId: string, tx: Tx = db) => (await bookedTimes(contractId, tx)) + (await pendingRequests(contractId, tx));
+type Pending = Awaited<ReturnType<typeof db.callRequest.findMany>>[number];
 /**
- * (§185) The single exact match an auto-match would book: the other side's waiting single-time request (same length) at one of these "once" times. The same test
- * the auto-match itself makes, read before the gate so a send that would only book their request is never refused for the limit.
+ * (§185) The exact matches an auto-match would book: the other side's waiting single-time request (same length) at a row's "once" time. The same test the
+ * auto-match itself makes, read before the gate so a send that would only book their request is never refused for the limit. (§208) Per row, by the row's index:
+ * each row is its own request, so each may book one of theirs (a request at most once).
  */
-async function autoMatchOf(contractId: string, theirSide: Side, onceStarts: Date[], minutes: number | null) {
-  if (!onceStarts.length || minutes == null) return null;
+async function autoMatches(contractId: string, theirSide: Side, rows: CallRow[], minutes: number | null) {
+  const out = new Map<number, { match: Pending; hit: Date }>();
+  if (minutes == null || !rows.some((r) => r.repeat === "once")) return out;
   const reqs = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: theirSide, weeks: 0, minutes, startsAt: { gt: new Date() } }, orderBy: { createdAt: "asc" } });
-  for (const m of reqs) {
-    const hit = onceTimes(m).find((t) => onceStarts.some((x) => x.getTime() === t.getTime()));
-    if (hit) return { match: m, hit };
-  }
-  return null;
+  const used = new Set<string>();
+  rows.forEach((r, i) => {
+    if (r.repeat !== "once") return;
+    for (const m of reqs) {
+      if (used.has(m.id)) continue;
+      const hit = onceTimes(m).find((t) => t.getTime() === r.startsAt.getTime());
+      if (!hit) continue;
+      out.set(i, { match: m, hit });
+      used.add(m.id);
+      return;
+    }
+  });
+  return out;
 }
 
-/** A deadline crossed during the stop check cannot create a new request. */
-async function createRequest({ data }: { data: Prisma.CallRequestUncheckedCreateInput }) {
+/** (§208) Which §185 limit a press doesn't fit, and what the pair already has toward it (sent today / booked + waiting). */
+type Room = { kind: "day" | "total"; have: number };
+/**
+ * (Owner, Nov 5, §208) A press's room under the §185 limits (null when it fits): `sends` requests sent (each new request and each auto-match counts toward the 3 a
+ * day), `adds` of them new waiting requests (an auto-match turns their request into a booked time: nothing new). It is refused as a whole, naming how many more
+ * can go: the tighter of the two limits (a tie: today's).
+ */
+function roomOf(now: { sent: number; taken: number }, sends: number, adds: number): Room | null {
+  const dayOver = sends > 0 && now.sent + sends > MAX_SENT_PER_DAY;
+  // Only auto-matches: refused only for a pair already over 3 (from before the limit).
+  const totalOver = adds > 0 ? now.taken + adds > MAX_CALLS : sends > 0 && now.taken > MAX_CALLS;
+  if (!dayOver && !totalOver) return null;
+  return dayOver && (!totalOver || MAX_SENT_PER_DAY - now.sent <= MAX_CALLS - now.taken) ? { kind: "day", have: now.sent } : { kind: "total", have: now.taken };
+}
+/** The refusal's words; `short`: the developer's "Press again to send to the others" box (§185's shorter lines when nothing more can go). */
+const roomText = (name: string, r: Room, short = false) =>
+  r.kind === "day"
+    ? short && r.have >= MAX_SENT_PER_DAY ? `You've sent ${MAX_SENT_PER_DAY} call requests to ${name} today.` : sentRoomLine(name, r.have)
+    : short && r.have >= MAX_CALLS ? `You already have ${MAX_CALLS} calls booked or requested with ${name}.` : callRoomLine(name, r.have);
+/** (§208) The press's refusal line for one person ("" when it fits). */
+export function roomLine(name: string, now: { sent: number; taken: number }, sends: number, adds: number) {
+  const r = roomOf(now, sends, adds);
+  return r ? roomText(name, r) : "";
+}
+
+/**
+ * A deadline crossed during the stop check cannot create a new request. (Owner, Nov 5, §208) A press's requests (one per row, per tester) are created together, under
+ * the test's lock, and re-checked there as a whole: two sends at once (two tabs, both sides) never pass 3 together, nor 3 sent today; over either, nothing is made.
+ */
+async function createRequests(datas: Prisma.CallRequestUncheckedCreateInput[]) {
+  if (!datas.length) return [];
   return db.$transaction(async (tx) => {
-    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${data.testId} FOR UPDATE`;
-    await assertWorkOpen(tx, data.testId);
-    const c = await tx.contract.findUniqueOrThrow({ where: { id: data.contractId }, include: { tester: true, test: { include: { developer: true } } } });
-    if (c.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
-    // (Owner, Nov 4, §185) Re-checked under the test's lock: two sends at once (two tabs, both sides) never pass 3 together, nor 3 sent today.
-    const sender = data.fromSide === "developer" ? c.test.developer : c.tester;
-    if ((await sentToday(c.id, data.fromSide as Side, sender.timeZone, tx)) >= MAX_SENT_PER_DAY) throw new HttpError(409, "limit", sentTodayLine(displayName(data.fromSide === "developer" ? c.tester : c.test.developer)));
-    if ((await callsTaken(c.id, tx)) >= MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(data.fromSide === "developer" ? c.tester : c.test.developer)));
-    return tx.callRequest.create({ data });
+    await tx.$queryRaw`SELECT id FROM "Test" WHERE id = ${datas[0].testId} FOR UPDATE`;
+    await assertWorkOpen(tx, datas[0].testId);
+    const per = new Map<string, Prisma.CallRequestUncheckedCreateInput[]>();
+    for (const d of datas) per.set(d.contractId, [...(per.get(d.contractId) ?? []), d]);
+    for (const [contractId, list] of per) {
+      const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId }, include: { tester: true, test: { include: { developer: true } } } });
+      if (c.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
+      const side = list[0].fromSide as Side;
+      const sender = side === "developer" ? c.test.developer : c.tester;
+      const line = roomLine(displayName(side === "developer" ? c.tester : c.test.developer), { sent: await sentToday(c.id, side, sender.timeZone, tx), taken: await callsTaken(c.id, tx) }, list.length, list.length);
+      if (line) throw new HttpError(409, "limit", line);
+    }
+    const made = [];
+    for (const data of datas) made.push(await tx.callRequest.create({ data }));
+    return made;
   });
 }
 
@@ -449,7 +506,22 @@ async function lengthOverCap(minutes: number, targets: { contractId: string; rat
   return best && best.max >= CALL_MIN_MINUTES && minutes > best.max ? lengthCapLine(best.max, best.name) : "";
 }
 
-/** Developer: Request a time with one or more ticked working testers. */
+/** (§208) Who a press can't go to for the limits, and why: grouped into one line per kind and room ("You can send 1 more request to Ana Silva and Ben Carter today."). */
+type Limited = { name: string; room: Room };
+function limitText(list: Limited[], order: Room["kind"][], short = false) {
+  const groups = new Map<string, { room: Room; names: string[] }>();
+  for (const k of order) for (const l of list.filter((x) => x.room.kind === k)) {
+    const key = `${l.room.kind}:${l.room.have}`;
+    groups.set(key, { room: l.room, names: [...(groups.get(key)?.names ?? []), l.name] });
+  }
+  return [...groups.values()].map((g) => roomText(andList(g.names), g.room, short)).join(" ");
+}
+
+/**
+ * Developer: Request a time with one or more ticked working testers. (Owner, Nov 5, §208) Each row of the form is its OWN request: one batch per row, sent to every
+ * ticked tester (the first tester to accept a row's request takes it and that row's other copies close, as before); the rows never close each other. Each counts
+ * toward the §185 limits (3 in total, 3 sends a day): a tester the whole press doesn't fit is refused for all of it, saying how many more can go.
+ */
 export async function devRequestTime(dev: U, testId: string, body: Record<string, unknown>) {
   const ids = Array.isArray(body.contractIds) ? body.contractIds.map(String) : body.contractId ? [String(body.contractId)] : [];
   if (!ids.length) throw new HttpError(400, "none", "Tick at least one tester.");
@@ -467,21 +539,52 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for each ticked tester's calls (red at the box).
   const overCap = await lengthOverCap(reqMinutes, all.map((x) => ({ contractId: x.c.id, rateCents: bookRate(x.c.test, x.c), name: displayName(x.c.tester) })));
   if (overCap) throw new HttpError(400, "bad_minutes", overCap);
-  const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
-  const sameAgain = async (contractId: string) => !!(await db.callRequest.findFirst({ where: { contractId, fromSide: "developer", status: "pending", startsAt: kind.startsAt } }));
-  // (Owner, Nov 4, §185) Every ticked tester already at 3 (booked + waiting, both sides): refused on the first press, never a stop first. One that this press would
-  // only auto-match (their own request at that time), or that already has this very time requested (said below), is left to the checks after the gate.
-  // (§185) Likewise every ticked tester already sent 3 requests today (by the developer's own day): "You've sent 3 call requests to Ana Silva today. …".
+  // (Batch 16 section 21) A time of this press already requested with them (e.g. in another tab meanwhile): already done, said plainly after the gate.
+  const starts = kind.rows.map((r) => r.startsAt);
+  const sameAgain = async (contractId: string) => !!(await db.callRequest.findFirst({ where: { contractId, fromSide: "developer", status: "pending", startsAt: { in: starts } } }));
   const devZone = all[0].me.timeZone;
-  const cappedToday = new Set<string>();
-  for (const { c } of all) if ((await sentToday(c.id, "developer", devZone)) >= MAX_SENT_PER_DAY) cappedToday.add(c.id);
-  {
-    const capped: string[] = [], full: string[] = [];
+  /**
+   * (§208) Who the press goes to: each "once" row that is exactly a ticked tester's waiting request books it (the first such tester, in tick order: an auto-match,
+   * as before) and is sent to nobody else; every other row is a new request to each tester. A tester whose share doesn't fit the limits (§185: `roomOf`) is left
+   * out, which can hand their auto-match to the next tester, so it is worked out until nothing changes. `exempt`: never left out here (said after the gate).
+   */
+  const plan = async (exempt: Set<string>) => {
+    const now = new Map<string, { sent: number; taken: number }>();
+    const cands = new Map<string, Map<number, { match: Pending; hit: Date }>>();
     for (const { c } of all) {
-      if (cappedToday.has(c.id)) capped.push(displayName(c.tester));
-      else if ((await callsTaken(c.id)) >= MAX_CALLS && !(await autoMatchOf(c.id, "tester", onceStarts, reqMinutes)) && !(await sameAgain(c.id))) full.push(displayName(c.tester));
+      now.set(c.id, { sent: await sentToday(c.id, "developer", devZone), taken: await callsTaken(c.id) });
+      cands.set(c.id, await autoMatches(c.id, "tester", kind.rows, reqMinutes));
     }
-    if (capped.length + full.length === all.length) throw new HttpError(409, "limit", [...(capped.length ? [sentTodayLine(andList(capped))] : []), ...(full.length ? [callLimitLine(andList(full))] : [])].join(" "));
+    const refused = new Map<string, Limited>();
+    for (;;) {
+      const match = new Map<number, { x: Ctx; match: Pending; hit: Date }>();
+      kind.rows.forEach((_, i) => {
+        for (const x of all) {
+          const m = refused.has(x.c.id) ? undefined : cands.get(x.c.id)!.get(i);
+          if (m && ![...match.values()].some((v) => v.match.id === m.match.id)) return void match.set(i, { x, ...m });
+        }
+      });
+      let more = false;
+      for (const x of all) {
+        if (refused.has(x.c.id) || exempt.has(x.c.id)) continue;
+        const mine = [...match.values()].filter((m) => m.x === x).length;
+        const sends = kind.rows.length - (match.size - mine); // a row booked with another tester isn't sent to them
+        const room = roomOf(now.get(x.c.id)!, sends, sends - mine);
+        if (room) {
+          refused.set(x.c.id, { name: displayName(x.c.tester), room });
+          more = true;
+        }
+      }
+      if (!more) return { match, refused };
+    }
+  };
+  // (Owner, Nov 4, §185) Every ticked tester over the limits (3 in total, 3 sent today): refused on the first press, never a stop first. (§208) With several times,
+  // the line says how many more can go: "You already have 2 calls or requests with Ana Silva: you can send 1 more." / "You can send 1 more request to Ana Silva today."
+  const exempt = new Set<string>();
+  for (const { c } of all) if (await sameAgain(c.id)) exempt.add(c.id);
+  {
+    const first = await plan(exempt);
+    if (first.refused.size === all.length) throw new HttpError(409, "limit", limitText([...first.refused.values()], ["day", "total"]));
   }
   // (Batch 16 section 21) Another tab's call action with any of these testers stops it once.
   await db.$transaction((tx) => devGate(tx, testId, body, {}, [], undefined, { acts: CALL_ACTS, keys: ids.map((id) => `c:${id}`) }));
@@ -489,73 +592,82 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   const again: string[] = [];
   for (const { c } of all) if (await sameAgain(c.id)) again.push(displayName(c.tester));
   if (again.length) throw new HttpError(409, "already", alreadyRequestedLine(again));
-  // Auto-match ("choose one" only): a tester already requested one of these exact times at the contract rate.
-  if (onceStarts.length) {
-    for (const { c } of all) {
-      if (cappedToday.has(c.id)) continue; // (§185) an auto-match is a send too
-      const found = await autoMatchOf(c.id, "tester", onceStarts, reqMinutes);
-      if (found) {
-        const { match, hit } = found;
-        const clash = await acceptClash(c, "developer", [hit], match.minutes);
-        if (clash.length) throw new HttpError(409, "clash", clash[0]);
-        // (Owner, Nov 4, §185) Booking their request turns one request into one booked time: refused only for a pair already over 3 (from before the limit).
-        if ((await callsTaken(c.id)) > MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(c.tester)));
-        await checkCeiling(c.id, bookRate(c.test, c), match.minutes, 1, displayName(c.tester));
-        const call = await bookAt(c.id, hit, match.minutes, bookRate(c.test, c), null, true, false, { id: match.id }); // (Owner, Nov 4, §184) its own match is booked below, never dropped
-        await db.callRequest.update({ where: { id: match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
-        const line = `Booked: you both picked ${T(hit)}`;
-        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
-        return { booked: true, callId: call.id, message: renderTimes(line, dateZone()) }; // (§177) the page shows it: the time written, never its token
-      }
-    }
+  const p = await plan(new Set());
+  // Auto-matches: a row exactly a tester's waiting request books it (checked as the Accept would be: clashes with anyone's calls, the $1,000).
+  for (const m of p.match.values()) {
+    const clash = await acceptClash(m.x.c, "developer", [m.hit], m.match.minutes);
+    if (clash.length) throw new HttpError(409, "clash", clash[0]);
+    await checkCeiling(m.x.c.id, bookRate(m.x.c.test, m.x.c), m.match.minutes, 1, displayName(m.x.c.tester));
   }
+  // (Batch 16 section 33) Your other calls, and (§208) two times of this press overlapping each other: refused at the row.
   {
     const own = await ownCallClash("developer", dev, all.map((x) => x.c.id), kind.rows, reqMinutes, end);
     if (own) throw new HttpError(409, "clash", own);
   }
-  // Clashes and (§185) the limit of 3 booked + waiting, per tester.
-  const blocked: string[] = [], atLimit: string[] = [], ok: Ctx[] = [], dayCap: string[] = [];
+  const sendRows = kind.each.filter((_, i) => !p.match.has(i));
+  const matchIds = [...p.match.values()].map((m) => m.match.id);
+  // Clashes and the $1,000, per tester; (§185) the limits from the plan.
+  const blocked: string[] = [], limited: Limited[] = [], ok: Ctx[] = [];
   for (const x of all) {
-    const minutes = reqMinutes;
-    // (§185) 3 sent to them today: not sent to them (named in the box with the others).
-    if (cappedToday.has(x.c.id)) {
-      dayCap.push(displayName(x.c.tester));
+    const lim = p.refused.get(x.c.id);
+    if (lim) {
+      limited.push(lim);
       continue;
     }
-    const clash = await sendClash(x.c.id, requestTimes(kind, end), minutes, displayName(x.c.tester), undefined, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined, end);
-    // (Batch 15 section 34) Over the $1,000 for this tester's calls: refused for them (named with what's left).
-    const ceiling = await ceilingRefusal(x.c.id, bookRate(x.c.test, x.c), minutes, callsIfAccepted(kind.rows, end), displayName(x.c.tester));
-    if (clash) blocked.push(clash);
-    else if (ceiling) blocked.push(ceiling);
-    else if ((await callsTaken(x.c.id)) >= MAX_CALLS) atLimit.push(displayName(x.c.tester));
-    else ok.push(x);
+    if (sendRows.length) {
+      const clash = await sendClash(x.c.id, sendRows.flatMap((k) => requestTimes(k, end)), reqMinutes, displayName(x.c.tester), matchIds, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined, end);
+      // (Batch 15 section 34) Over the $1,000 for this tester's calls: refused for them (named with what's left). Each request on its own, as it would be accepted.
+      const ceiling = clash ? "" : await ceilingRefusal(x.c.id, bookRate(x.c.test, x.c), reqMinutes, callsIfAccepted(sendRows.flatMap((k) => k.rows), end), displayName(x.c.tester));
+      if (clash || ceiling) {
+        blocked.push(clash || ceiling);
+        continue;
+      }
+    }
+    ok.push(x);
   }
   if (all.length === 1 && blocked.length) throw new HttpError(409, "clash", blocked[0]);
-  if (all.length === 1 && atLimit.length) throw new HttpError(409, "limit", callLimitLine(atLimit[0]));
-  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...(atLimit.length ? [callLimitLine(andList(atLimit))] : []), ...(dayCap.length ? [sentTodayLine(andList(dayCap))] : [])].join(" "));
-  if (blocked.length || atLimit.length || dayCap.length) {
-    // (§185) "You already have 3 calls booked or requested with Ana Silva and Ben Carter." / "You've sent 3 call requests to Cara Diaz today." (the others go on
-    // the second press).
-    const text = [...blocked, ...(atLimit.length ? [`You already have ${MAX_CALLS} calls booked or requested with ${andList(atLimit)}.`] : []), ...(dayCap.length ? [`You've sent ${MAX_SENT_PER_DAY} call requests to ${andList(dayCap)} today.`] : [])].join(" ");
+  if (all.length === 1 && limited.length) throw new HttpError(409, "limit", limitText(limited, ["total", "day"]));
+  if (!ok.length) throw new HttpError(409, "limit", [...blocked, ...(limited.length ? [limitText(limited, ["total", "day"])] : [])].join(" "));
+  if (blocked.length || limited.length) {
+    // (§185) "You already have 3 calls booked or requested with Ana Silva and Ben Carter." / "You've sent 3 call requests to Cara Diaz today." (§208) / "You can send
+    // 1 more request to Cara Diaz today." (the others go on the second press).
+    const text = [...blocked, ...(limited.length ? [limitText(limited, ["total", "day"], true)] : [])].join(" ");
     // (Owner, NEXT-UI 12b) The second press names what the box said (limitSeen); if who is blocked / at the limit changed
     // since, it stops again with the new line.
     if (body.confirmed !== true || body.limitSeen !== text) {
       throw new HttpError(409, "stop_once", "Press again to send to the others.", { changes: [{ text, at: new Date() }], tail: `Press again to send to the others (${ok.map((x) => displayName(x.c.tester)).join(", ")}).`, limit: true, limitSeen: text });
     }
   }
-  const batchId = randomBytes(8).toString("hex");
-  const made: string[] = [];
-  for (const { c } of ok) {
-    const minutes = reqMinutes;
-    const row = await createRequest({ data: { testId, contractId: c.id, fromSide: "developer", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes, batchId } });
-    made.push(row.id);
+  // The auto-matches book first (each turns their request into one booked time; §184: its own match is booked here, never dropped).
+  const callIds: string[] = [];
+  let bookedLine = "";
+  for (const m of p.match.values()) {
+    if (!ok.includes(m.x)) continue;
+    const c = m.x.c;
+    const call = await bookAt(c.id, m.hit, m.match.minutes, bookRate(c.test, c), null, true, false, { id: m.match.id });
+    await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
+    const line = `Booked: you both picked ${T(m.hit)}`;
+    await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
+    callIds.push(call.id);
+    bookedLine ||= line;
   }
-  await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(kind.rows)} from ${T(kind.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
-  // (Batch 20 section 7) The new requests' ids: the form never counts them as a clash with itself.
-  return { requested: ok.length, batchId, ids: made };
+  // (§208) Then one request per row: a batch per row (the first tester to accept it takes it), all created together under the test's lock.
+  const batchIds = sendRows.map(() => randomBytes(8).toString("hex"));
+  const made = await createRequests(sendRows.flatMap((k, i) => ok.map(({ c }) => ({ testId, contractId: c.id, fromSide: "developer", ...kindData(k), minutes: reqMinutes, batchId: batchIds[i] }))));
+  // One live line per request (per row), as a single send writes it.
+  for (const k of sendRows) await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(k.rows)} from ${T(k.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
+  // (Batch 20 section 7) The new requests' ids (and a booked call's): the form never counts them as a clash with itself.
+  return {
+    requested: sendRows.length ? ok.length : 0, batchId: batchIds[0] ?? "", batchIds, ids: made.map((r) => r.id),
+    // (§177) the page shows it: the time written, never its token
+    ...(callIds.length ? { booked: true, callId: callIds[0], callIds, message: renderTimes(bookedLine, dateZone()) } : {}),
+  };
 }
 
-/** Tester: Request a time (choose one or weekly), always at the contract rate. */
+/**
+ * Tester: Request a time, always at the contract rate. (Owner, Nov 5, §208) Each row of the form is its OWN request (once, or a daily / weekly set): the developer
+ * answers each on its own. A row exactly at one of the developer's waiting single times books it (auto-match), as before.
+ */
 export async function testerRequestTime(user: U, contractId: string, body: Record<string, unknown>) {
   const x = await ctx(user.id, contractId);
   const { c, side } = x;
@@ -566,56 +678,65 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   const end = await workEndOf(db, c.testId);
   const kind = readKind(body, end);
   const devName = displayName(c.test.developer);
-  // (Owner, Nov 4, §185) Already 3 with the developer (booked + waiting, both sides): refused on the first press, never a stop first (unless this press would only
-  // auto-match the developer's own request at that time: it books it, which adds nothing). The form's own mistakes (the length, red at its box) come first, now
-  // before the gate as on the developer's side.
+  const n = kind.rows.length;
+  // (Owner, Nov 4, §185) Over the limits with the developer (3 in total, both sides; 3 sent today): refused on the first press, never a stop first (a row that only
+  // auto-matches the developer's own request at that time books it, which adds nothing to the total). The form's own mistakes (the length, red at its box) come
+  // first, now before the gate as on the developer's side. (§208) Each row is a request: the press is refused as a whole, saying how many more can go.
   const minutes = readMinutes(body);
   // (Batch 18 section 6) The Length is at most what's left of the $1,000 for their calls (red at the box).
   const overCap = await lengthOverCap(minutes, [{ contractId, rateCents: bookRate(c.test, c), name: devName }]);
   if (overCap) throw new HttpError(400, "bad_minutes", overCap);
+  const limitNow = async (matches: number) => roomLine(devName, { sent: await sentToday(contractId, "tester", x.me.timeZone), taken: await callsTaken(contractId) }, n, n - matches);
   {
-    const onceNow = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
-    // (§185) 3 sent to the developer today (her own day; an auto-match counts too): "You've sent 3 call requests to Nora Lane today. …".
-    if ((await sentToday(contractId, "tester", x.me.timeZone)) >= MAX_SENT_PER_DAY) throw new HttpError(409, "limit", sentTodayLine(devName));
-    if ((await callsTaken(contractId)) >= MAX_CALLS && !(await autoMatchOf(contractId, "developer", onceNow, minutes))) throw new HttpError(409, "limit", callLimitLine(devName));
+    const line = await limitNow((await autoMatches(contractId, "developer", kind.rows, minutes)).size);
+    if (line) throw new HttpError(409, "limit", line);
   }
   await testerGate(c.testerId, contractId, c.testId, body, undefined, CALL_PRESS);
-  // Auto-match ("choose one", rates match): a developer request with one of these exact times books it.
-  const onceStarts = kind.rows.filter((r) => r.repeat === "once").map((r) => r.startsAt);
-  if (onceStarts.length) {
-    const devReqs = await db.callRequest.findMany({ where: { contractId, status: "pending", fromSide: "developer", weeks: 0, minutes } });
-    for (const m of devReqs) {
-      const hit = onceTimes(m).find((t) => onceStarts.some((k) => k.getTime() === t.getTime()));
-      if (!hit) continue;
-      const clash = await acceptClash(c, "tester", [hit], m.minutes);
-      if (clash.length) throw new HttpError(409, "clash", clash[0]);
-      // (Owner, Nov 4, §185) Booking their request turns one request into one booked time: refused only for a pair already over 3 (from before the limit).
-      if ((await callsTaken(contractId)) > MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(devName));
-      await checkCeiling(contractId, bookRate(c.test, c), m.minutes, 1, devName);
-      const call = await bookAt(contractId, hit, m.minutes, bookRate(c.test, c), null, false, false, { id: m.id, batchId: m.batchId }); // (Owner, Nov 4, §184) its batch closes as taken below
-      // (Owner, Nov 4, §185) "matched": the tester's auto-match counts as one of her sends today (sentToday), as the developer's does.
-      await db.callRequest.update({ where: { id: m.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
-      await closeBatch(m.batchId, m.id);
-      const line = `Booked: you both picked ${T(hit)}`;
-      await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId });
-      return { booked: true, callId: call.id, message: renderTimes(line, dateZone()) }; // (§177) the page shows it: the time written, never its token
-    }
+  // Auto-match (rates match): a row at exactly one of the developer's waiting single times books it.
+  const match = await autoMatches(contractId, "developer", kind.rows, minutes);
+  for (const m of match.values()) {
+    const clash = await acceptClash(c, "tester", [m.hit], m.match.minutes);
+    if (clash.length) throw new HttpError(409, "clash", clash[0]);
+    await checkCeiling(contractId, bookRate(c.test, c), m.match.minutes, 1, devName);
   }
-  const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33)
+  const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33; §208: two rows overlapping each other too)
   if (own) throw new HttpError(409, "clash", own);
-  const clash = await sendClash(contractId, requestTimes(kind, end), minutes, devName, undefined, { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
-  if (clash) throw new HttpError(409, "clash", clash);
-  if ((await callsTaken(contractId)) >= MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(devName)); // (§185) changed since the first check
-  await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(kind.rows, end), devName);
-  const r = await createRequest({
-    data: { testId: c.testId, contractId, fromSide: "tester", startsAt: kind.startsAt, times: kind.times, weeks: kind.weeks, repeat: kind.repeat, rows: toJson(kind.rows) as Prisma.InputJsonValue, minutes },
-  });
-  await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${kind.rows.length === 1 && kind.rows[0].repeat !== "once" ? `${kindWords(kind.rows)} from` : "a call for"} ${T(kind.startsAt)}`, false, {}, contractId, "", `req-${r.id}`));
-  // (Batch 15 section 35) The developer's bell: "<name> asked for a call: <time(s)>", stacked with the day's other request lines; each time in the reader's own zone.
-  // (Batch 17 section 4) It opens the Live session's Call requests panel with this request highlighted, like the Needs you row (batch 16 section 35).
-  const when = kind.rows.map((x) => `${T(x.startsAt)}${x.repeat === "once" ? "" : x.repeat === "daily" ? " (daily)" : " (weekly)"}`).join(" or ");
-  await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${when}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: "callrequests" });
-  return { requested: true, id: r.id, ids: [r.id] };
+  const sendRows = kind.each.filter((_, i) => !match.has(i));
+  if (sendRows.length) {
+    const clash = await sendClash(contractId, sendRows.flatMap((k) => requestTimes(k, end)), minutes, devName, [...match.values()].map((m) => m.match.id), { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
+    if (clash) throw new HttpError(409, "clash", clash);
+  }
+  {
+    const line = await limitNow(match.size); // (§185) changed since the first check
+    if (line) throw new HttpError(409, "limit", line);
+  }
+  if (sendRows.length) await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(sendRows.flatMap((k) => k.rows), end), devName);
+  const callIds: string[] = [];
+  let bookedLine = "";
+  for (const m of match.values()) {
+    const call = await bookAt(contractId, m.hit, m.match.minutes, bookRate(c.test, c), null, false, false, { id: m.match.id, batchId: m.match.batchId }); // (Owner, Nov 4, §184) its batch closes as taken below
+    // (Owner, Nov 4, §185) "matched": the tester's auto-match counts as one of her sends today (sentToday), as the developer's does.
+    await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
+    await closeBatch(m.match.batchId, m.match.id);
+    const line = `Booked: you both picked ${T(m.hit)}`;
+    await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId });
+    callIds.push(call.id);
+    bookedLine ||= line;
+  }
+  const made = await createRequests(sendRows.map((k) => ({ testId: c.testId, contractId, fromSide: "tester", ...kindData(k), minutes })));
+  for (const [i, r] of made.entries()) {
+    const k = sendRows[i];
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "requested", `${displayName(c.tester)} requested ${k.rows[0].repeat !== "once" ? `${kindWords(k.rows)} from` : "a call for"} ${T(k.startsAt)}`, false, {}, contractId, "", `req-${r.id}`));
+    // (Batch 15 section 35) The developer's bell: "<name> asked for a call: <time>", stacked with the day's other request lines; each time in the reader's own zone.
+    // (Batch 17 section 4) It opens the Live session's Call requests panel with this request highlighted. (§208) One per request, so each links to its own.
+    const row = k.rows[0];
+    await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${T(row.startsAt)}${row.repeat === "once" ? "" : row.repeat === "daily" ? " (daily)" : " (weekly)"}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: "callrequests" });
+  }
+  return {
+    requested: made.length > 0, id: made[0]?.id, ids: made.map((r) => r.id),
+    // (§177) the page shows it: the time written, never its token
+    ...(callIds.length ? { booked: true, callId: callIds[0], callIds, message: renderTimes(bookedLine, dateZone()) } : {}),
+  };
 }
 
 /** Either side's Request a time (one contract). */

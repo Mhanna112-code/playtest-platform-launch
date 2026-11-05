@@ -11,7 +11,7 @@ import { matchesName, noMatchLine } from "@/components/CallRequestsPanel";
 import { clashNotes, localFmt } from "@/lib/callClash";
 import { bellKeyIn, groupTitle } from "@/lib/bell";
 import { json, makeUser, req } from "./helpers";
-import { act, atHours, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, atHours, joined, oldChooseOne, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 4, §185) Calls with one person on a test: 3 in total (booked times + waiting requests, both sides), 3 sends a day per side, two request boxes on the
 // developer's page (Requests to you / Your requests, each with a name search), the other side's withdrawal never a stop (one refusal when answered, a quiet live
@@ -302,7 +302,8 @@ describe("§185 two request boxes on the developer's page, each with a name sear
     expect((await testerReq(ben.sessionId, ben.tester.cookie, { times: [atHours(50)] })).status).toBe(200);
     await later();
     expect((await testerReq(ana.sessionId, ana.tester.cookie, { times: [atHours(52)] })).status).toBe(200);
-    expect((await testerReq(ana.sessionId, ana.tester.cookie, { times: [atHours(54), atHours(56)] })).status).toBe(200);
+    // (§208) An older "one of" request (2 times in one request): none is made now, but one still waiting keeps its rows.
+    await oldChooseOne(ana.sessionId, "tester", [atHours(54), atHours(56)]);
     expect((await devReq(f.testId, f.dev.cookie, ana.sessionId, { times: [atHours(60)] })).status).toBe(200);
     auth.user = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     const html = await testPage(f.testId);

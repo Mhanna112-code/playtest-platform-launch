@@ -17,7 +17,7 @@ import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
-import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
+import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, sentLine, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallCheck } from "@/components/CallCheck";
 import { PressDone } from "@/components/PressDone";
 import type { CallEnd } from "@/lib/callWindow";
@@ -83,7 +83,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       setRows([newRow()]);
       setMinutes("");
       await keep.clear();
-      finish("Request sent.");
+      finish(sentLine(r)); // (§208) "3 requests sent." for 3 times
     } else setFrozen(null);
   };
   const checked = formClashInputs(testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })), frozen ? frozen.testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })) : null, made);

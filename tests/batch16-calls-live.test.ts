@@ -27,7 +27,7 @@ describe("clash checks (section 33)", () => {
     expect(other.rows[0][0].text).toBe("You have a call with Ana Silva then (1:30–2:00 PM).");
     const two = clashNotes({ rows: [once(base), once("2026-11-02T13:50:00.000Z")], minutes: 30, side: "tester", targets: [], elsewhere: [], fmt });
     expect(two.rows[0]).toEqual([]);
-    expect(two.rows[1][0]).toEqual({ tone: "red", text: "Overlaps time 1 in this request (Mon, Nov 2, 1:38–2:08 PM)." });
+    expect(two.rows[1][0]).toEqual({ tone: "red", text: "Overlaps time 1 in this form (Mon, Nov 2, 1:38–2:08 PM)." });
     // Nothing is checked until the length is known.
     expect(clashNotes({ rows: [once(base)], minutes: null, side: "developer", targets: [{ name: "fbbb", calls: [{ start: base, minutes: 30 }], requests: [] }], elsewhere: [], fmt }).rows[0]).toEqual([]);
   });

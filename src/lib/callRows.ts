@@ -1,5 +1,6 @@
-// (NEXT-UI 7) A call request is up to 3 time ROWS; each row is "Once" (default), "Daily" or "Weekly", and a repeating row
-// has a number of calls (2-8) or "Forever" (count 0). The other side picks ONE row; a repeating pick books the whole set
+// (NEXT-UI 7) The call request form has up to 3 time ROWS; each row is "Once" (default), "Daily" or "Weekly", and a repeating row
+// has a number of calls (2-8) or "Forever" (count 0). (Owner, Nov 5, §208) Each row is sent as its own request (an older request may still hold several rows:
+// the other side picks ONE of them); a repeating row books the whole set when accepted
 // (Forever: the next 4 ahead, the daily job adds the next as each passes). Pure helpers, shared by the server and the pages.
 // (Owner, Nov 2, batch 35 §132) No call of a row is after testers' work on the test ends (the END): a counted row keeps the calls up to it (one left: a single call),
 // and Forever runs until it ("until testers' work ends").

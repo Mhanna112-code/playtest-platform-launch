@@ -65,3 +65,19 @@ export async function bookCall(testId: string, devCookie: string, sessionId: str
   return db.call.findFirstOrThrow({ where: { contractId: sessionId, status: "booked" }, orderBy: { createdAt: "desc" } });
 }
 export const atHours = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setUTCSeconds(0, 0); return d.toISOString(); };
+
+/**
+ * (Owner, Nov 5, §208) An older "choose one" request (several times in ONE request: the other side picks one, the rest close), stored as the app made it before
+ * Nov 5. None is made now ("+ Another time" sends each time as its own request), but those still waiting keep working: the tests of that behaviour start from one.
+ * `rows`: times (each "once"), or rows with their repeat.
+ */
+export async function oldChooseOne(sessionId: string, fromSide: "developer" | "tester", rows: (string | { startsAt: string; repeat: string; count?: number })[], minutes = 30) {
+  const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
+  const rs = rows
+    .map((r) => (typeof r === "string" ? { startsAt: r, repeat: "once", count: 1 } : { startsAt: r.startsAt, repeat: r.repeat, count: r.repeat === "once" ? 1 : (r.count ?? 0) }))
+    .sort((a, b) => a.startsAt.localeCompare(b.startsAt));
+  const times = rs.map((r) => new Date(r.startsAt));
+  return db.callRequest.create({
+    data: { testId: c.testId, contractId: sessionId, fromSide, startsAt: times[0], times, weeks: 0, repeat: "", rows: rs, minutes, batchId: fromSide === "developer" ? `old-${Math.random().toString(36).slice(2, 10)}` : "" },
+  });
+}

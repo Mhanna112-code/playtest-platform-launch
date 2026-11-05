@@ -20,7 +20,7 @@ import { NavMenu } from "@/components/NavMenu";
 import { CallRequestsPanel, goneLineFor, OTHER_TIME_BOOKED_LINE, timeRows, type PanelReq } from "@/components/CallRequestsPanel";
 import { acceptChoices, describeRows } from "@/components/RequestRows";
 import { callsTaken, OTHER_TIME_BOOKED, TIME_GONE } from "@/lib/server/requests";
-import { act, atHours, joined, sact, seen, settle, setup } from "./fixtures";
+import { act, atHours, joined, oldChooseOne, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 4, §187) The layout fixes found by the Nov 4 screenshot run, and the two server fixes (the tester's Charge refusals; a "one of" request as one row per time).
 
@@ -217,7 +217,6 @@ describe("§187 item 9: the tester's Charge refusals", () => {
 });
 
 // ---------- item 10: a "one of" request, one row per time ----------
-const testerReq = (sessionId: string, cookie: string, times: string[]) => sact(sessionId, "request-time", cookie, { seenAt: seen(), confirmed: true, minutes: 30, times });
 const devAnswer = (testId: string, cookie: string, contractId: string, requestId: string, action: string, extra: Record<string, unknown> = {}) =>
   act(testId, "answer-request", cookie, { contractId, requestId, action, seenAt: seen(), confirmed: true, ...extra });
 const testerAnswer = (sessionId: string, cookie: string, requestId: string, action: string, extra: Record<string, unknown> = {}) =>
@@ -263,7 +262,7 @@ describe("§187 item 10: a \"one of\" request is one row per time", () => {
     const s = await setup();
     const j = await joined(s.testId);
     const T = [atHours(50), atHours(74), atHours(98)];
-    expect((await testerReq(j.sessionId, j.tester.cookie, T)).status).toBe(200);
+    await oldChooseOne(j.sessionId, "tester", T); // (§208) an older "one of" request still waiting (none is made now)
     const r = await db.callRequest.findFirstOrThrow({ where: { contractId: j.sessionId, status: "pending" } });
     expect(await callsTaken(j.sessionId)).toBe(1);
     const d1 = await devAnswer(s.testId, s.dev.cookie, j.sessionId, r.id, "decline", { time: T[1] });
@@ -288,7 +287,7 @@ describe("§187 item 10: a \"one of\" request is one row per time", () => {
     const s = await setup();
     const j = await joined(s.testId);
     const T = [atHours(50), atHours(74)];
-    await testerReq(j.sessionId, j.tester.cookie, T);
+    await oldChooseOne(j.sessionId, "tester", T);
     const r = await db.callRequest.findFirstOrThrow({ where: { contractId: j.sessionId, status: "pending" } });
     expect((await testerAnswer(j.sessionId, j.tester.cookie, r.id, "withdraw", { time: T[0] })).status).toBe(200);
     expect((await db.callRequest.findUniqueOrThrow({ where: { id: r.id } })).times.map((x) => x.toISOString())).toEqual([T[1]]);
@@ -300,7 +299,7 @@ describe("§187 item 10: a \"one of\" request is one row per time", () => {
     const s = await setup();
     const j = await joined(s.testId);
     const T = [atHours(50), atHours(74), atHours(98)];
-    await testerReq(j.sessionId, j.tester.cookie, T);
+    await oldChooseOne(j.sessionId, "tester", T);
     const r = await db.callRequest.findFirstOrThrow({ where: { contractId: j.sessionId, status: "pending" } });
     const a = await devAnswer(s.testId, s.dev.cookie, j.sessionId, r.id, "accept", { time: T[1] });
     expect(a.status).toBe(200);
@@ -317,7 +316,7 @@ describe("§187 item 10: a \"one of\" request is one row per time", () => {
     const s = await setup();
     const j = await joined(s.testId);
     const T = [atHours(50), atHours(74)];
-    await testerReq(j.sessionId, j.tester.cookie, T);
+    await oldChooseOne(j.sessionId, "tester", T);
     const r = await db.callRequest.findFirstOrThrow({ where: { contractId: j.sessionId, status: "pending" } });
     await testerAnswer(j.sessionId, j.tester.cookie, r.id, "withdraw", { time: T[0] });
     const a = await devAnswer(s.testId, s.dev.cookie, j.sessionId, r.id, "accept", { time: T[0] });

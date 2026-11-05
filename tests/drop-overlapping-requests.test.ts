@@ -6,7 +6,7 @@ import { GET as pulseGET } from "@/app/api/pulse/route";
 import { DROP_BOTH, DROP_DEV_BUSY, DROP_TESTER_BUSY } from "@/lib/requestDrop";
 import { topUpForeverSets } from "@/lib/server/requests";
 import { json, makeUser, req } from "./helpers";
-import { act, atHours, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
+import { act, atHours, joined, listingBody, oldChooseOne, sact, seen, settle, setup } from "./fixtures";
 
 // (Owner, Nov 4, §184) The moment a call is booked, every OTHER waiting call request of either person in it (any test, sent by either side) whose time overlaps
 // the call is dropped: a single time closes, a "choose one" request loses only the overlapping times (closing when none is left). The request's other person is
@@ -82,7 +82,8 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     const ana = await joined(testId, "Ana Silva", "she");
     const ben = await joined(testId, "Ben Carter", "he");
     const t = atHours(60), t2 = atHours(84);
-    expect((await testerReq(ben.sessionId, ben.tester.cookie, { times: [t, t2] })).status).toBe(200);
+    // (§208) An older "choose one" request still waiting (none is made now).
+    await oldChooseOne(ben.sessionId, "tester", [t, t2]);
     const rb = await pendingFrom(ben.sessionId, "tester");
     expect((await devReq(testId, dev.cookie, ana.sessionId, { times: [t] })).status).toBe(200);
     const ra = await pendingFrom(ana.sessionId, "developer");
@@ -109,7 +110,8 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     const ana = await joined(testId, "Ana Silva", "she");
     const ben = await joined(testId, "Ben Carter", "he");
     const t = atHours(60);
-    expect((await testerReq(ben.sessionId, ben.tester.cookie, { times: [plus(t, -20), plus(t, 25)] })).status).toBe(200);
+    await oldChooseOne(ben.sessionId, "tester", [plus(t, -20), plus(t, 25)]); // (§208) an older "choose one" request still waiting
+
     const rb = await pendingFrom(ben.sessionId, "tester");
     expect((await devReq(testId, dev.cookie, ana.sessionId, { times: [t] })).status).toBe(200);
     const ra = await pendingFrom(ana.sessionId, "developer");

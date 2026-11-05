@@ -21,7 +21,8 @@ export type Fmt = { range: (start: Date, minutes: number) => string; times: (sta
 
 /**
  * (Owner, Nov 4, §185) The limit per developer–tester pair on a test: booked times and waiting requests (both sides) together, at most 3. A daily / weekly set (and a
- * Forever set while it runs) is one booked time; a "one of" request is one request. It replaces "up to 3 booked + up to 3 requests". The same for both sides.
+ * Forever set while it runs) is one booked time; an older "one of" request is one request; (§208) each time of a press is its own request. It replaces "up to 3
+ * booked + up to 3 requests". The same for both sides.
  */
 export const MAX_CALLS = 3;
 /** (§185) The refusal (and the form's red line), naming the pair's other person: "You already have 3 calls booked or requested with Nina Park. …". */
@@ -33,6 +34,15 @@ export const MAX_SENT_PER_DAY = 3;
 /** (§185) "You've sent 3 call requests to Nina Park today. You can send more tomorrow." */
 export const sentTodayLine = (name: string) => `You've sent ${MAX_SENT_PER_DAY} call requests to ${name} today. You can send more tomorrow.`;
 export const callLimitLine = (name: string) => `You already have ${MAX_CALLS} calls booked or requested with ${name}. Wait until one is answered, over or cancelled, or withdraw a request.`;
+/**
+ * (Owner, Nov 5, §208) "+ Another time" sends each time as its OWN request, so one press can make up to 3. A press that would pass a limit is refused as a whole,
+ * saying how many more can be sent: "You already have 2 calls or requests with Ana Silva: you can send 1 more." (none left: callLimitLine as before).
+ */
+export const callRoomLine = (name: string, taken: number) =>
+  taken >= MAX_CALLS ? callLimitLine(name) : `You already have ${taken} ${taken === 1 ? "call or request" : "calls or requests"} with ${name}: you can send ${MAX_CALLS - taken} more.`;
+/** (§208) "You can send 1 more request to Ana Silva today." (none left: sentTodayLine as before). */
+export const sentRoomLine = (name: string, sent: number) =>
+  sent >= MAX_SENT_PER_DAY ? sentTodayLine(name) : `You can send ${MAX_SENT_PER_DAY - sent} more request${MAX_SENT_PER_DAY - sent === 1 ? "" : "s"} to ${name} today.`;
 const DAY = 86_400_000;
 /** The starts a row covers for the checks: one; a set's calls; Forever: its first 8; (batch 35 §132) none after the end (`until`) but the first. */
 export const rowStarts = (r: RowJson) => {
@@ -62,8 +72,9 @@ function inSet(k: number, at: Date, text: string, f: Fmt) {
 export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "developer" | "tester"; targets: ClashTarget[]; elsewhere: (Slot & { name: string })[]; fmt: Fmt }) {
   const rows: ClashLine[][] = p.rows.map(() => []);
   const limits: string[] = [];
-  // (§185) The people a row matches exactly (their waiting request at that very time): the press books it, so it adds nothing toward their limit.
-  const exactWith = new Set<string>();
+  // (§185) The rows that match a person exactly (their waiting request at that very time): the press books it, so it adds nothing toward their limit. (§208) Every
+  // other row is a new request of its own.
+  const exactWith = new Map<string, Set<number>>();
   const m = p.minutes;
   if (!m || !Number.isFinite(m) || m <= 0) return { rows, limits };
   p.rows.forEach((row, i) => {
@@ -74,7 +85,7 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
       const exact = row.repeat === "once" ? t.requests.find((q) => !q.mine && q.minutes === m && q.rows.some((x) => x.repeat === "once" && new Date(x.startsAt).getTime() === new Date(row.startsAt).getTime())) : undefined;
       if (exact) {
         rows[i].push({ tone: "blue", text: `${t.name} asked for exactly this: Request a time books it.` });
-        exactWith.add(t.name);
+        exactWith.set(t.name, (exactWith.get(t.name) ?? new Set<number>()).add(i));
       }
       if (red) continue;
       starts.forEach((at, k) => {
@@ -99,14 +110,19 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
       if (red) return;
       for (let j = 0; j < i; j++) {
         const hit = rowStarts(p.rows[j]).find((s) => overlap(at, m, s, m));
-        if (hit) { red = inSet(k, at, `Overlaps time ${j + 1} in this request (${p.fmt.range(hit, m)}).`, p.fmt); return; }
+        // (§208) Each time is its own request now: "in this form", not "in this request".
+        if (hit) { red = inSet(k, at, `Overlaps time ${j + 1} in this form (${p.fmt.range(hit, m)}).`, p.fmt); return; }
       }
     });
     if (red) rows[i].unshift({ tone: "red", text: red });
   });
   for (const t of p.targets) {
-    // (Owner, Nov 4, §185) Booked times and waiting requests together, at most 3 (an exact match books their request instead: nothing new).
-    if ((t.pending ?? 0) + (t.booked ?? 0) >= MAX_CALLS && !exactWith.has(t.name)) limits.push(callLimitLine(t.name));
+    // (Owner, Nov 4, §185) Booked times and waiting requests together, at most 3 (an exact match books their request instead: nothing new). (§208) Each other
+    // row is a request of its own: 2 taken and 2 new rows read "You already have 2 calls or requests with Ana Silva: you can send 1 more." (No row filled yet:
+    // the line shows only once nothing more can be sent, as before.)
+    const taken = (t.pending ?? 0) + (t.booked ?? 0);
+    const adds = p.rows.length ? p.rows.length - (exactWith.get(t.name)?.size ?? 0) : 1;
+    if (adds > 0 && taken + adds > MAX_CALLS) limits.push(callRoomLine(t.name, taken));
     else if (t.leftCents != null && p.rows.length) {
       const one = t.rateCents == null ? Math.round((UNLISTED_CALL_RATE_CENTS * m) / 60) : callCharge(t.rateCents, m);
       const n = callsIfAccepted(p.rows);

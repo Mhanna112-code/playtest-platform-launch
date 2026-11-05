@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { topUpForeverSets } from "@/lib/server/requests";
-import { act, atHours, joined, sact, seen, setup } from "./fixtures";
+import { act, atHours, joined, oldChooseOne, sact, seen, setup } from "./fixtures";
 
 // (NEXT-UI 7) Each time row has its own Once / Daily / Weekly and a count (2-8, or Forever). The other side picks ONE row; a
 // repeating pick books the whole set (Forever: the next 4 ahead, the daily job adds the next). Cancel on the set is the only
@@ -12,16 +12,16 @@ const pending = (contractId: string, fromSide: string) => db.callRequest.findFir
 const DAY = 24;
 
 describe("call request rows", () => {
-  it("mixed rows: the other side picks ONE; a counted repeating pick books the whole set as 1 booked time", async () => {
-    const { dev, testId } = await setup();
+  it("an older request with mixed rows: the other side picks ONE; a counted repeating pick books the whole set as 1 booked time", async () => {
+    const { testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const rows = [
       { startsAt: atHours(50), repeat: "once" },
       { startsAt: atHours(74), repeat: "weekly", count: 3 },
       { startsAt: atHours(98), repeat: "daily", count: 2 },
     ];
-    expect((await devReq(testId, dev.cookie, [sessionId], { rows })).status).toBe(200);
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane asked for a call: pick one of 3 times" } })).toBe(0); // (Owner) a call request is not a bell line
+    // (Owner, Nov 5, §208) A press now sends each row as its own request: this is an older request with several rows, still waiting, which keeps working.
+    await oldChooseOne(sessionId, "developer", rows);
     const r = await pending(sessionId, "developer");
     expect((await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept" })).body.error.message).toBe("Pick one of the times.");
     const done = await sact(sessionId, "answer-request", tester.cookie, { requestId: r.id, action: "accept", time: rows[1].startsAt });
@@ -42,7 +42,7 @@ describe("call request rows", () => {
     // (Owner, Nov 3) With an end (every test has one), any count from 2 that fits; the form lists them all.
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ ...one, count: 1 }] })).body.error.message).toBe("Weekly calls repeat at least 2 times.");
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: [] })).status).toBe(400);
-    expect((await devReq(testId, dev.cookie, [sessionId], { rows: Array.from({ length: 4 }, (_, i) => ({ startsAt: atHours(50 + i * 30), repeat: "once" })) })).body.error.message).toBe("Offer up to 3 times to choose from.");
+    expect((await devReq(testId, dev.cookie, [sessionId], { rows: Array.from({ length: 4 }, (_, i) => ({ startsAt: atHours(50 + i * 30), repeat: "once" })) })).body.error.message).toBe("Send up to 3 times at once.");
     expect((await devReq(testId, dev.cookie, [sessionId], { rows: [{ startsAt: new Date(Date.now() - 3_600_000).toISOString(), repeat: "once" }] })).status).toBe(400);
   });
 
