@@ -4882,3 +4882,17 @@ filters." (`filteredOut` from invitePanel; blocked and deleted accounts are neve
 - Once a stop box on the page listed a pause or lift line, no other button there stops for it again (§250's `shownIds` / `sid`).
 - Tests: tests/pause-stops-every-press-271.test.ts. batch15-paused's "the developer's side never stops" now stops once for the suspension since the page
   loaded; other-tab's declined-Pay gate now lists "This test was paused at …" after the delayed line (the hold the decline started).
+## §274 Tester search bars in Needs you and the Testers list; Suggested its own section; the invite search applies to every section (owner, Nov 5)
+- Needs you: a "Search testers" box at its top keeps only the people (§181's drop-downs) whose name matches as you type, with the invite search's name match
+  (`nameMatches`), on the page only. Nobody matching: "No testers match “x”.". Hidden when Needs you holds only one person (the Applications drop-down, §199, is not
+  a person and is never filtered). Both views (the restricted one too). `data-needs-who` on each person carries the name.
+- Testers list: the same box right below the row of avatars (TesterListSearch, TesterSearch.tsx); the tester rows follow it, with the avatar filter (§140) as
+  before. It replaces RowsBox's "Find a tester by name" box (shown from 7 testers). Hidden with only one tester row.
+- Invite testers: Suggested is its own section below People you've worked with, with its own heading and scroll box (the same style; §257's sticky heading in
+  each). The "Tick at least one tester" red ring and its line stay on the two lists together (`data-invite-lists`, following `none`).
+- The Find testers search applies to all three sections: a typed name keeps only the matching people in Find testers, People you've worked with and Suggested (a
+  person shows in every section they belong to, one tick); the device / language ticks now narrow People you've worked with too (invitePanel: `passes()` and the
+  name on `worked`). Suggested's top 5 is taken after the filters. An emptied section says "Nobody you've worked with matches." / "No suggestions match.";
+  §273's line for Find testers stays. While the server's answer is on its way, the rows shown narrow to the typed name at once.
+- Tests: tests/tester-search-bars-274.test.ts. batch35-tester-folds' RowsBox check follows the new filter call; batch35-hard-limits lists TesterSearch.tsx with
+  the page's other search filters (no character limit).

@@ -134,7 +134,7 @@ describe("§140 every limited box stops at its limit", () => {
   })("src");
   const src = (f: string) => fs.readFileSync(f, "utf8");
   // Boxes with no character limit at all (no counter, nothing checked by the server): the page's own search filters.
-  const NO_LIMIT = ["DevSearch.tsx", "HistorySearch.tsx", "InvitePanel.tsx", "RowsBox.tsx"].map((f) => path.sep + f);
+  const NO_LIMIT = ["DevSearch.tsx", "HistorySearch.tsx", "InvitePanel.tsx", "RowsBox.tsx", "TesterSearch.tsx" /* (§274) Search testers */].map((f) => path.sep + f);
   it("every text box (textarea, text / email / url / search input) has maxLength or the shared limiter", () => {
     const missing: string[] = [];
     for (const f of files) {

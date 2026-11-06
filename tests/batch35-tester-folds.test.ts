@@ -29,7 +29,7 @@ describe("the circles filter the tester list", () => {
     expect(filter).toContain('onClick={() => choose(on ? "" : testerId)}');
     expect(filter).toContain("All testers");
     // The list hides the other rows (the name search still works with it).
-    expect(src("app/app/tests/[id]/RowsBox.tsx")).toContain('|| !rowShown(el.dataset.testerId ?? "", chosen);');
+    expect(src("app/app/tests/[id]/RowsBox.tsx")).toContain('(el) => rowShown(el.dataset.testerId ?? "", chosen)'); // (§274) with the Search testers box
     expect(src("app/app/tests/[id]/TestersJoined.tsx")).toContain("<AvatarButton testerId={seat.testerId} name={seat.name} obj={pronouns(seat.pronoun).obj} />"); // (batch 35 §162)
   });
 });

@@ -6,6 +6,7 @@ import { fmtDateIn, pronouns } from "@/lib/format";
 import { PlusMore } from "@/components/PlusMore";
 import { LongList } from "@/components/LongList";
 import { AllTesters, AvatarButton } from "./TesterFilter";
+import { TesterListSearch } from "./TesterSearch";
 
 // The full app's "Testers joined" card (dev test page, right after the header): the Seats avatar row (one circle per
 // spot; each tester's circle has a hover / tap card with their profile summary, a link to the profile and Block at its
@@ -44,7 +45,7 @@ export function seatsOverflow(joined: number, spots: number, shown: number) {
   return [more ? `+${more} more joined` : "", open ? `${open} open` : ""].filter(Boolean).join(" · ");
 }
 
-export function TestersJoined({ testId, spots, seats, gone, status, children, timeZone }: { timeZone?: string | null; testId: string; spots: number; seats: Seat[]; gone: Gone[]; status: string; children?: ReactNode }) {
+export function TestersJoined({ testId, spots, seats, gone, status, children, timeZone, rows = 0 }: { timeZone?: string | null; testId: string; spots: number; seats: Seat[]; gone: Gone[]; status: string; children?: ReactNode; /** (§274) how many tester rows the list below holds */ rows?: number }) {
   const joined = seats.length;
   const shown = Math.min(spots, 12);
   const stopped = status === "stopped";
@@ -61,6 +62,8 @@ export function TestersJoined({ testId, spots, seats, gone, status, children, ti
         {spots > shown && <span className="text-sm text-slate-400" data-seats-more="">{seatsOverflow(joined, spots, shown)}</span>}
         <AllTesters />
       </div>
+      {/* (Owner, Nov 5, §274) "Search testers" right below the avatars: the tester rows below follow it as you type. Only with more than one tester. */}
+      {rows > 1 && <TesterListSearch />}
       {children}
       {gone.length > 0 && (
         <details className="text-sm text-slate-400">

@@ -151,7 +151,8 @@ export type InviteFilters = { q?: unknown; devices?: unknown; languages?: unknow
 const strings = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === "string") : []);
 
 /**
- * (Owner, Oct 28, batch 16 section 12) The invite panel, computed over every tester on the server: People you've worked with (all of them),
+ * (Owner, Oct 28, batch 16 section 12) The invite panel, computed over every tester on the server: People you've worked with (all of them; since §274 after the
+ * ticks and the typed name),
  * Suggested (the top 5 after the device / language ticks) and Find testers (name search from 1 character (batch 20 section 9: 1-2 characters match the start of a word or the whole name, 3+ any part), any case; every match, the exact name first,
  * ranked invitable first, then meets and score; above SEARCH_LIMIT the first ones and searchCapLine). Testers already invited are in "Invited".
  */
@@ -166,12 +167,15 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
   const appOf = await greyApplicants(testId, lean);
   // (Batch 34 §11) People you've worked with and Suggested leave out testers CURRENTLY in this test (a working contract) and testers already invited (they're in
   // the Invited list with Cancel invite); someone who left the test shows again. The name search below still finds them, greyed with the reason.
-  const worked = notInvited.filter((x) => x.section === "worked" && !x.inTest);
-  const suggested = notInvited.filter((x) => x.section === "other" && !x.inTest && !x.grey && passes(x)).slice(0, 5);
+  // (Owner, Nov 5, §274) The Find testers search applies to every section: a typed name keeps only the people whose name matches (nameMatches, as Find testers),
+  // and the device / language ticks narrow People you've worked with too (they narrowed only Suggested and Find testers). Suggested's top 5 is taken after both.
+  const named = (x: (typeof lean)[number]) => !q || nameMatches(x.name, q);
+  const worked = notInvited.filter((x) => x.section === "worked" && !x.inTest && passes(x) && named(x));
+  const suggested = notInvited.filter((x) => x.section === "other" && !x.inTest && !x.grey && passes(x) && named(x)).slice(0, 5);
   // (Batch 30 §7) The name search finds everyone who matches, invitable or not (blocked and deleted accounts are never in `lean`): a match who can't be invited shows
   // greyed with why (already invited, already in this test, applied, or "Can't join this test"), after the invitable ones, so "No testers match" means nobody matches.
-  const named = q.length >= 1 ? lean.filter((x) => passes(x) && nameMatches(x.name, q)) : [];
-  const matches = exactFirst([...named.filter((x) => !x.inv && !x.grey), ...named.filter((x) => x.inv || x.grey)], q, (x) => [x.name]);
+  const hits = q.length >= 1 ? lean.filter((x) => passes(x) && nameMatches(x.name, q)) : [];
+  const matches = exactFirst([...hits.filter((x) => !x.inv && !x.grey), ...hits.filter((x) => x.inv || x.grey)], q, (x) => [x.name]);
   const [w, s, f] = await Promise.all([full(worked), full(suggested), full(matches.slice(0, SEARCH_LIMIT))]);
   const found = f.map((r) => ({ ...r, ...whyNotInvitable(r, appOf.get(r.id)) }));
   // (Owner, Nov 5, §273) Nobody matches with the ticked devices / languages, but someone of that name exists: how many (blocked and deleted accounts are never in
