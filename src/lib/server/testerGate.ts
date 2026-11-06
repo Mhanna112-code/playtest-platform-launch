@@ -57,7 +57,9 @@ export async function testerChanges(testerId: string, contractId: string, testId
   // built from the rows themselves at read time, so older changes get their place the same way.
   for (const d of sides) out.push({ kind: "dispute", text: devSideLine(dev, c.test.developer.pronoun, d.call ? fmtDateTime(d.call.startsAt) : null, d.submission?.kind), createdAt: d.devSideAt!, link: testerPartRow({ kind: d.submission?.kind, callId: d.callId }) });
   // (Batch 35 §53) The offer is a consequence for a working tester; its fields are the listing's one line ("See it") and the offer box, never a list here.
-  for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you the new terms: Switch or Keep below`, createdAt: o.createdAt, item: o.id, link: TERMS_OFFER_BOX });
+  // (Owner, Nov 6, §304b) No "below": in a stop box under Leave (and other buttons) the Switch / Keep box is ABOVE the line, so the wording names no position
+  // (the same line in the stop boxes and the top box; the bell has its own "<dev> updated the listing: …").
+  for (const o of offers) out.push({ kind: "terms", text: `${dev} offered you new terms: Switch or Keep them`, createdAt: o.createdAt, item: o.id, link: TERMS_OFFER_BOX });
   const owed = await db.payment.findMany({ where: { contractId, status: "failed", owedUntil: { not: null }, settledAt: null }, select: { submissionId: true, callId: true } });
   const owedKeys = new Set(owed.map((p) => p.submissionId ?? p.callId));
   const settledLate = await db.payment.findMany({ where: { contractId, settledAt: { not: null } }, select: { submissionId: true, callId: true } });

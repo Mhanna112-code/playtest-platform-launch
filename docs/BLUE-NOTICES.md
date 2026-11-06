@@ -213,7 +213,7 @@ Task 12 normalizes the gate's older `pageSeenAt`/`loadedAt` baselines to `seenAt
 
 | Kind | Exact wording | Trigger / Alerts |
 | --- | --- | --- |
-| terms | &lt;dev&gt; offered you the new terms: Switch or Keep below | An open/superseded offer since the unseen baseline; always, even Alerts Off. |
+| terms | &lt;dev&gt; offered you new terms: Switch or Keep them (§304b: no "below") | An open/superseded offer since the unseen baseline; always, even Alerts Off. |
 | dispute | &lt;dev&gt; added their side to your dispute | Developer side added. (§171 A2) Forced: stops every press of theirs on the test once, even with Alerts Off. |
 | paid | &lt;dev&gt; paid $X for your &lt;part&gt; | New review, excluding tester choices / delayed duplicates; ordinary Alerts. |
 | rejected | &lt;dev&gt; rejected your &lt;part&gt; | New rejection; ordinary Alerts. |

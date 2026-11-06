@@ -37,7 +37,7 @@ describe("batch 35 §59: Leave stops once for contract changes, like the other t
     expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
     // top: the page goes up to the Switch / Keep offer box (the contract box), as every other tester press's terms stop does.
     expect(r.body.error.top).toBe(true);
-    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(/offered you the new terms/)]);
+    expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual([expect.stringMatching(/offered you new terms: Switch or Keep them/)]);
     expect(await status(sessionId)).toBe("working");
     expect((await sact(sessionId, "leave", tester.cookie, { seenAt: loaded, confirmed: true })).status).toBe(200);
     expect(await status(sessionId)).toBe("left");

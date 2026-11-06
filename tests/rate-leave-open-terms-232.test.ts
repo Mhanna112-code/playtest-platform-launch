@@ -38,7 +38,7 @@ describe("(Owner, Nov 5) §268 Rate and Leave: open new terms follow the ordinar
     const x = await ready();
     const first = await press(x, action, { seenAt: before, pageSeenAt: before, loadedAt: before });
     expect(first.body.error?.code, JSON.stringify(first.body)).toBe("stop_once");
-    expect(texts(first)).toContain("Nora Lane offered you the new terms: Switch or Keep below");
+    expect(texts(first)).toContain("Nora Lane offered you new terms: Switch or Keep them");
     const second = await press(x, action, { seenAt: before, confirmed: true, boxAt: first.body.error.now });
     expect(second.status, JSON.stringify(second.body)).toBe(200);
   });

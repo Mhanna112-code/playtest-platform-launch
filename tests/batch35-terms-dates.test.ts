@@ -13,7 +13,7 @@ const CENTRAL = "America/Chicago";
 
 // (Owner, Oct 31, batch 35 §53) One listing line also covers the terms: no "changed the terms: <fields>" line anywhere.
 describe("batch 35 §53: the terms line folds into the one listing line", () => {
-  it("a working tester's offer line names no fields: '<Dev> offered you the new terms: Switch or Keep below'", async () => {
+  it("a working tester's offer line names no fields: '<Dev> offered you new terms: Switch or Keep them'", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const pageLoaded = new Date();
@@ -21,7 +21,7 @@ describe("batch 35 §53: the terms line folds into the one listing line", () => 
     await act(testId, "edit", dev.cookie, { version: await version(testId), fields: { writtenCents: "12.00", questions: ["Q one?", "Q two?"], description: "Sail the new route" }, confirmed: true });
     const { testerChanges } = await import("@/lib/server/testerGate");
     const lines = (await testerChanges(tester.user.id, sessionId, testId, pageLoaded)).map((e) => e.text);
-    expect(lines).toContain("Nora Lane offered you the new terms: Switch or Keep below");
+    expect(lines).toContain("Nora Lane offered you new terms: Switch or Keep them");
     expect(lines).toContain("Nora Lane edited the listing");
     expect(lines.filter((t) => /\$|→|questions changed/.test(t))).toEqual([]);
   });

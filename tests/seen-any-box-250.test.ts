@@ -139,7 +139,7 @@ describe("§250 the tester's session page", () => {
     const rate = (extra: Record<string, unknown>) => sessionPOST(req(`/api/sessions/${ana.sessionId}/rate`, { cookie: ana.tester.cookie, body: { stars: 5, seenAt: loaded, pageSeenAt: loaded, loadedAt: loaded, ...extra } }), { params: Promise.resolve({ id: ana.sessionId, action: "rate" }) }).then(json) as Promise<Res>;
     const leave = (await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: loaded, pageSeenAt: loaded })) as Res;
     expect(leave.body.error?.code, JSON.stringify(leave.body)).toBe("stop_once");
-    expect(texts(leave)).toContain("Nora Lane offered you the new terms: Switch or Keep below");
+    expect(texts(leave)).toContain("Nora Lane offered you new terms: Switch or Keep them");
     // The offer line is seen now: Rate goes through.
     const r1 = await rate({ shownIds: sids(leave) });
     expect(r1.status, JSON.stringify(r1.body)).toBe(200);

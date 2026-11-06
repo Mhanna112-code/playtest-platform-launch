@@ -5355,3 +5355,10 @@ A tester whose key doesn't work says so in chat; the developer deletes a free ke
   tester reported, "Works now", and the rejoin swap (a returning tester whose key was reported got a new free key unless they ticked that it works again).
 - Tests: tests/no-key-report-304.test.ts. Updated: batch15-keys (section 45 removed; reuse and in-use kept), batch14, post-edit, bell-parity-286,
   batch35-pronouns, batch16-oct28, batch16-tester-stopped, press-names, key-copy, end-early-gone-278, nda-acknowledge-302, batch30-session-info, batch34-fixes.
+
+## §304b The new-terms line without "below" (owner, Nov 6)
+The tester's line for new terms read "<developer> offered you the new terms: Switch or Keep below", but in the stop box under Leave (and other buttons) the
+Switch / Keep box is ABOVE it. It now reads "<developer> offered you new terms: Switch or Keep them" (testerGate's `terms` line: the stop boxes and the top
+box; the bell already has its own "<developer> updated the listing: …", which names no position). With §304 the same box's Alerts hint lost "a key marked as
+working".
+- Tests: updated batch35-rate-all-stops, batch35-terms-dates, rate-leave-open-terms-232, seen-any-box-250, batch35-leave-stops.

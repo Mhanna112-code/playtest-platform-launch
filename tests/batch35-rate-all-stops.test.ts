@@ -36,7 +36,7 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     await edit(x, { writtenCents: "12.00" });
     const first = await rate(x, loaded);
     expect(first.body.error?.code).toBe("stop_once");
-    expect(texts(first)).toContain("Nora Lane offered you the new terms: Switch or Keep below");
+    expect(texts(first)).toContain("Nora Lane offered you new terms: Switch or Keep them");
     expect(await db.rating.count({ where: { contractId: x.sessionId } })).toBe(0);
     expect((await rate(x, loaded, { confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
     expect(await db.rating.count({ where: { contractId: x.sessionId, side: "tester" } })).toBe(1);
@@ -128,7 +128,7 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     await settle(); await edit(x, { writtenCents: "12.00" });
     const second = await rate(x, loaded, { confirmed: true, boxAt: first.body.error.now });
     expect(second.body.error?.code).toBe("stop_once");
-    expect(texts(second)).toContain("Nora Lane offered you the new terms: Switch or Keep below");
+    expect(texts(second)).toContain("Nora Lane offered you new terms: Switch or Keep them");
     expect((await rate(x, loaded, { confirmed: true, boxAt: second.body.error.now })).status).toBe(200);
   });
 
