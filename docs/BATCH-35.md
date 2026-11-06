@@ -5052,3 +5052,30 @@ with ×.
 - Tests: tests/calls-no-booking-cap-280.test.ts (unlisted daily and weekly 180-minute sets past $1,000 requested and accepted on both sides; a request with $5 left
   booked both ways, then that call ends at 10 minutes for both with the line; an unlisted call ending at $200/h, later calls not counted). batch11, batch15-calls,
   batch16-calls-live, batch18-misc (section 6 reversed) and batch30-money-fixes follow §280; batch18-call-cap's other calls took place before the one in progress.
+## §285 Terms history: Then / Now (owner, Nov 6)
+
+- The tester's Terms history: an older offer's "Questions then and now" drop-down labels its two lists "Then" and "Now" (was "Offered"), matching the summary.
+  The developer's per-tester copy (§263, QuestionsChangedEntry) already said "Then" / "Now". No other Then / Offered pair is drawn there (the NDA left Terms
+  history in §266). Test: tests/batch35-numbers-notes.test.ts.
+
+## §284 Every top-box line opens what it's about, ignored ones too (owner, Nov 6)
+
+- Seen: the tester's top box had "fbbb requested a call for Sat, Nov 21, 1:20 AM" greyed (her Alerts ignore calls); only "fbbb" was a link (§270), the rest
+  opened nothing: the tester-side line had no place. Now every line about something with a place on the page opens it (jumps and marks, as other row links
+  do). Ignored lines keep their grey and their title; their other words open the row in the line's own colour. §270's name and test links stay.
+- The places are the rows' own ids (lib/lineAnchors.ts). Tester side (testerGate's lines, built from the rows at read time, so older changes work too): the
+  developer's call request, and it withdrawn, taken or closed: its row in her Call requests box (`req-<id>`), once it has left the box (`requests`, the Live
+  session's Requests section; then `call-requests` / `your-requests` / `live`); her own request declined: the same; booked: the call's row; a call cancelled:
+  the call's row; a payment, Pay more, a $0 close, a rejection, a delayed payment, the team's decision or the developer's side on a dispute: that part
+  (`part-written`, `part-recording`, a call's `call-<id>`); new terms: the new-terms box (§268's pill target; the contract card once decided); the NDA:
+  `#info-nda` (§267); her key marked working: the key box; a request dropped by a booking: its row, else the box; her own actions in another tab: what they
+  touched. A key given keeps its See it.
+- Developer side: a tester's call request (already linked), withdrawn, declined or dropped: its row (the box once it has left); joined, left, rated, switched
+  terms, a key reported, a bank reversal: the tester's row in Testers (`tester-<contract>`); an application: its Needs you row (`item-app-<id>`, already
+  linked); work sent, a Charge, Let it go, an automatic call charge, a dispute: their part or Needs you row (already linked); a tester booking or cancelling a
+  call: the call's row; the team's dispute decision: the part decided; a payment that went through or failed on this test: its part; the developer's own
+  actions in another tab: what they touched.
+- Stored when the event is recorded (recordEvent / logEvent's `link`: requests, calls, joins, leaving, ratings, keys, terms, decisions); an older event with
+  none gets it at read time (lib/server/liveLinks.ts: by kind, contract, and the row changed within a minute of it). Only the kinds that stored a place before
+  read their item or part from it: the new places never change what a press stops for.
+- Tests: tests/live-line-links-284.test.ts; batch15-gaps follows the jump with fallback.

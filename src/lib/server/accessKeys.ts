@@ -4,6 +4,7 @@ import { displayName } from "@/lib/format";
 import { keyNeedLine, keyRefusal, keyReportedLine, keyToldNote, KEY_MAX_LENGTH, KEY_TOO_LONG, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 import { HttpError } from "./http";
 import { logEvent } from "./live";
+import { testerRow } from "@/lib/lineAnchors";
 
 type Tx = Prisma.TransactionClient | typeof db;
 
@@ -138,7 +139,7 @@ export async function reportKeyBroken(tester: { id: string; name: string; email:
     return { already: false, replaced: [] as { contractId: string }[] };
   });
   if (result.already) return { reported: true, replaced: false, note: keyToldNote(true, c.test.developer.pronoun) };
-  await logEvent(c.testId, "key", keyReportedLine(displayName(tester), tester.pronoun), c.id);
+  await logEvent(c.testId, "key", keyReportedLine(displayName(tester), tester.pronoun), c.id, testerRow(c.id)); // (Owner, Nov 6, §284) the place the line opens
   return { reported: true, replaced: false, note: keyToldNote(false, c.test.developer.pronoun) };
 }
 

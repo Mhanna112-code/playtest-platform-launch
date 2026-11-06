@@ -57,6 +57,7 @@ import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { PageLoaded } from "@/components/PageLoaded";
 import { NdaBox } from "@/components/NdaBox";
+import { TESTER_REQUESTS_BOX } from "@/lib/lineAnchors";
 import { QuestionTexts, ValueText } from "@/components/QA";
 /** (Owner, Nov 5, §231) The listing information lines whose value can be long: each in the shared box (the others are short lines). */
 const LONG_INFO: string[] = ["title", "productName", "mature"];
@@ -541,8 +542,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
                     {/* (Batch 35 §29) Labels apart from the questions, numbered with their Required tags. */}
                     {/* (Owner, Nov 5, §231) Each question in its own question box (components/QA.tsx). */}
+                    {/* (Owner, Nov 6, §285) Labelled "Then" and "Now" (was "Offered"), matching the summary and the Questions changed entries. */}
                     <div className="mt-1"><FieldLabel>Then</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-then`} items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div>
-                    <div className="mt-1"><FieldLabel>Offered</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-offered`} items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
+                    <div className="mt-1"><FieldLabel>Now</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-now`} items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
                 )}
                 {/* (§266) No "NDA then and now": the NDA isn't a limited field. */}
               </li>) }] : []; }),
@@ -717,7 +719,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           })()}
           {!limited && <>
           {(canRequestCall || (pendingReqs.length > 0 && !paused && !refusal)) && (
-            <section className="space-y-1.5" aria-label="Call requests" data-live-section="Requests">
+            <section id={TESTER_REQUESTS_BOX} className="scroll-mt-24 space-y-1.5 rounded-xl transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" aria-label="Call requests" data-live-section="Requests">
+              {/* (Owner, Nov 6, §284) The top box's request lines land here when their row has left (TESTER_REQUESTS_BOX). */}
               <h3 className="text-sm font-semibold text-white">Requests</h3>
               <CallRequests
                 leadMinutes={CALL_MIN_AHEAD_MINUTES}

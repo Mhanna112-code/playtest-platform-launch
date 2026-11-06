@@ -13,6 +13,7 @@ import { answerTermsFirst } from "./terms";
 import { devGate, devGateIfSeen, ownContract, ownTest, recordEvent } from "./tests";
 import { CALL_ACTS } from "./live";
 import { callIceServers } from "./turn";
+import { callRow } from "@/lib/lineAnchors";
 
 type U = { id: string; email: string; name: string; pronoun: string };
 
@@ -86,7 +87,7 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     await testerGate(tester, c0, body);
     await tx.call.update({ where: { id: call.id }, data: { status: "cancelled", cancelledBy: "tester", cancelledAt: new Date(), cancelNote: reason } });
     await tx.callSlot.update({ where: { id: call.slotId }, data: { status: "open" } });
-    await recordEvent(tx, c0.testId, "cancelled", `${displayName(tester)} cancelled ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(call.startsAt)}`, false, {}, contractId);
+    await recordEvent(tx, c0.testId, "cancelled", `${displayName(tester)} cancelled ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(call.startsAt)}`, false, {}, contractId, "", callRow(call.id)); // (Owner, Nov 6, §284) the place the line opens
     return call;
   });
   const line = cancelLine(displayName(tester), call.startsAt, "");

@@ -26,6 +26,7 @@ import type { TestEventLike } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { dateZone } from "./dateZone";
 import { DROP_BOTH, DROP_DEV_BUSY, DROP_TESTER_BUSY, dropLine, dropReasonFor, isDropReason } from "@/lib/requestDrop";
+import { callRow, requestRow } from "@/lib/lineAnchors";
 
 /**
  * (Owner, Nov 2, batch 35 §132) What a page with a call request form passes down besides its lead: when testers' work on the test ends, in the reader's words (the
@@ -348,7 +349,7 @@ async function bookAt(contractId: string, startsAt: Date, minutes: number, rateC
     if (fresh.status !== "working") throw new HttpError(409, "closed", "This session has ended.");
     const slot = await tx.callSlot.create({ data: { testId: c.testId, startsAt, minutes, allowedTesterIds: [c.testerId], status: "booked" } });
     const call = await tx.call.create({ data: { slotId: slot.id, contractId, startsAt, minutes, rateCents, setId } });
-    if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${T(startsAt)}` : `${displayName(c.tester)} booked a call for ${T(startsAt)}`, false, {}, contractId);
+    if (!quiet) await recordEvent(tx, c.testId, "booked", byDeveloper ? `You booked a call with ${displayName(c.tester)} for ${T(startsAt)}` : `${displayName(c.tester)} booked a call for ${T(startsAt)}`, false, {}, contractId, "", callRow(call.id)); // (Owner, Nov 6, §284) the place the line opens
     await dropOverlapping(tx, { startsAt, minutes, people: [c.test.developerId, c.testerId] }, except, bells);
     return call;
   });
@@ -415,8 +416,9 @@ async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date
     // The developer's line and the tester's (both on the request's test, for its contract): each names the request's other person, with their pronoun (§162).
     const devText = dropLine({ reason, side: "developer", fromReader: r.fromSide === "developer", other: displayName(tester), otherPronoun: tester.pronoun, when, partial });
     const testerText = dropLine({ reason, side: "tester", fromReader: r.fromSide === "tester", other: displayName(dev), otherPronoun: dev.pronoun, when, partial });
-    await recordEvent(tx, r.testId, devBusy ? "req_dropped" : "req_closed", `${devText}`, false, {}, r.contractId);
-    await recordEvent(tx, r.testId, testerBusy ? "t_req_dropped" : "t_req_closed", `${testerText}`, false, {}, r.contractId);
+    // (Owner, Nov 6, §284) Both lines open the request's row while it is shown (a time left in it), else the Call requests box.
+    await recordEvent(tx, r.testId, devBusy ? "req_dropped" : "req_closed", `${devText}`, false, {}, r.contractId, "", requestRow(r.id));
+    await recordEvent(tx, r.testId, testerBusy ? "t_req_dropped" : "t_req_closed", `${testerText}`, false, {}, r.contractId, "", requestRow(r.id));
     // (Owner, Nov 4, §185) The request's other person (the one without the call) is no longer stopped by it (req_closed / t_req_closed are quiet live-box lines
     // now, like the person with the call's): they get a bell instead (and its email, per their settings), stacked per test and day ("Call requests · 3 closed today").
     if (!devBusy) bells.push({ userId: dev.id, text: devText, link: `/app/tests/${r.testId}`, testId: r.testId });
@@ -846,16 +848,16 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       const now = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
       throw new HttpError(409, "gone", now.status !== "pending" ? refusalFor(now, displayName(other), mine) : rowsOf(now).some((x) => sameTime(x.startsAt, pick!)) ? "This request changed meanwhile. Press again." : TIME_GONE);
     }
-    await timeAnswered(user, c, side, other, status, hit.startsAt);
+    await timeAnswered(user, c, side, other, status, hit.startsAt, r.id);
     return { [status]: true, time: hit.startsAt.toISOString(), left: kept.length };
   }
   await claimRequest(r.id, status, other, mine);
-  await timeAnswered(user, c, side, other, status, hit?.startsAt ?? r.startsAt);
+  await timeAnswered(user, c, side, other, status, hit?.startsAt ?? r.startsAt, r.id);
   return { [status]: true };
 }
 
 /** The live lines (and a withdrawal's bell) for a declined or withdrawn request, or (§187) one time of it: "You declined Ana Silva's call request for …". */
-async function timeAnswered(user: U, c: Ctx["c"], side: Side, other: Ctx["other"], status: "withdrawn" | "declined", at: Date) {
+async function timeAnswered(user: U, c: Ctx["c"], side: Side, other: Ctx["other"], status: "withdrawn" | "declined", at: Date, requestId: string) {
   const contractId = c.id;
   // (Owner bug, Oct 31, batch 35 §74) The developer's own withdraw / decline is theirs ("You …": never a stop from the same page; another tab's is the action log's
   // "You withdrew a call request for … in another tab"), and the past tense is "withdrew" (it read "dev withdrawn a call request").
@@ -864,7 +866,7 @@ async function timeAnswered(user: U, c: Ctx["c"], side: Side, other: Ctx["other"
   const text = side === "developer" ? `You ${verb} ${status === "withdrawn" ? "a" : `${displayName(other)}'s`} call request for ${when}` : `${displayName(user)} ${verb} a call request for ${when}`;
   // (Owner, Nov 4, §185) A tester's withdrawal ("withdrew_req") is a quiet live-box line for the developer (DEV_QUIET_KINDS), never a stop; a decline (an answer
   // to the developer's request) stops as a Call change.
-  await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId));
+  await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId, "", requestRow(requestId))); // (Owner, Nov 6, §284) the place the line opens
   // (Owner, Nov 4, §185) A withdrawal is never a stop for the other person (a quiet live-box line): they get a bell instead (and its email, per their settings),
   // stacked per test and day with the requests a booking closed ("Call requests · 3 closed today").
   if (status === "withdrawn") {
@@ -901,7 +903,7 @@ export async function cancelCallSet(user: U, contractId: string, body: Record<st
     await tx.call.updateMany({ where: { id: { in: calls.map((x) => x.id) } }, data: { status: "cancelled", cancelledBy: side, cancelledAt: now, cancelNote: reason } });
     await tx.callSlot.updateMany({ where: { id: { in: calls.map((x) => x.slotId) } }, data: { status: "removed" } });
     if (set) await tx.callSet.update({ where: { id: set.id }, data: { status: "cancelled" } });
-    await recordEvent(tx, c.testId, "cancelled", `${side === "developer" ? "You" : displayName(user)} cancelled the ${unit} calls from ${T(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId);
+    await recordEvent(tx, c.testId, "cancelled", `${side === "developer" ? "You" : displayName(user)} cancelled the ${unit} calls from ${T(calls[0].startsAt)} (${calls.length} left)`, false, {}, contractId, "", callRow(calls[0].id)); // (Owner, Nov 6, §284) the place the line opens
   });
   // (Batch 15 sections 11 and 20) The time in the reader's own zone; the reason only in the email, never in the bell line.
   const line = `${displayName(user)} cancelled the remaining ${unit} calls (${calls.length}), starting ${T(calls[0].startsAt)}.`;

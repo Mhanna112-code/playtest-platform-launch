@@ -9,6 +9,8 @@ import { INFO_FIELDS, LISTING_SAVE, SAVED_ELSEWHERE_LINE, editedLine, ndaAgainLi
 import { LISTING_SAVED, panelKeysOf, parseSaved } from "@/lib/listingPanel";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { sidOf } from "./shownLines";
+import { devPartRow, ownLink, testerPartRow, testerRow } from "@/lib/lineAnchors";
+import { withEventLinks } from "./liveLinks";
 
 type Tx = Prisma.TransactionClient;
 
@@ -182,7 +184,9 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  */
 export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean; press?: Press } = {}): Promise<TestEventLike[]> {
   // (Batch 14) The live box (`all`) also lists the quiet kinds: a tester's Switch (stacked per day) and a key reported as not working. They never stop a press.
-  const events = stackSwitches(await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed", ...(opts.all ? DEV_QUIET_KINDS : [])] } }, orderBy: { createdAt: "asc" }, take: 100 }));
+  const found = stackSwitches(await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed", ...(opts.all ? DEV_QUIET_KINDS : [])] } }, orderBy: { createdAt: "asc" }, take: 100 }));
+  // (Owner, Nov 6, §284) The live box: each line opens what it is about; an older event that stored no place gets it now (liveLinks.ts).
+  const events = opts.all ? await withEventLinks(testId, found, tx) : found;
   // (Owner, Oct 28) The developer's OWN listing edit (from another tab) is already said once, in their own voice, by the action log ("You saved the listing in another tab: description, access keys"):
   // its listing-info event ("Nora Lane changed the description") is dropped, and a rename of their own reads "You renamed the test to ...".
   const me = displayName(await tx.user.findUniqueOrThrow({ where: { id: devId } }));
@@ -206,18 +210,23 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
     }
     // (Owner, Nov 4, §171 A1) A line about one part ("part-<submission>", "call-<call>": work sent, a Charge, an automatic call charge…) names it (`piece`), so a
     // payment press on that very part always stops for it.
-    const piece = /^(?:part|call)-/.test(e.link) ? e.link.replace(/^(?:part|call)-/, "") : "";
+    // (Owner, Nov 6, §284) Only the kinds that stored a place before §284 read their item or part from it: the places added since (a booked or cancelled call,
+    // a request withdrawn or dropped, a decision's part) only open the row, they never change what a press stops for.
+    const tagged = LINK_TAG_KINDS.has(e.kind);
+    const piece = tagged && /^(?:part|call)-/.test(e.link) ? e.link.replace(/^(?:part|call)-/, "") : "";
     // (Owner, Nov 4, §193) A charge about a tester: their Charge on a part, or an automatic call charge on one of their calls (a "paid" line on a part that isn't the
     // developer's own "You paid …"; those never reach here). A call closed with nothing to pay charged nothing: not a charge.
     const charge = e.kind === "paid" && !!piece && !!e.contractId && !e.text.endsWith(" closed with nothing to pay");
     // (Owner, Nov 5, §250) The line is this test event: its row id is its identity once a stop box listed it.
-    return [{ ...e, eventId: e.id, ...(/^(?:req|part|item-app|item-dispute)-/.test(e.link) ? { item: e.link.replace(/^(?:req|part|item-app|item-dispute)-/, "") } : {}), ...(piece ? { piece } : {}), ...(charge ? { charge } : {}) }];
+    return [{ ...e, eventId: e.id, ...(tagged && /^(?:req|part|item-app|item-dispute)-/.test(e.link) ? { item: e.link.replace(/^(?:req|part|item-app|item-dispute)-/, "") } : {}), ...(piece ? { piece } : {}), ...(charge ? { charge } : {}) }];
   });
   // (Owner, Oct 29, batch 29 section 12) What the developer did in another tab can't be switched off in Alerts: the changes in BIG_OWN_ACTS show in the live box;
   // (batch 35 §67) every action of theirs in another tab stops every press on the test page and on Edit once (Edit's Save turns another tab's Save into its per-field lines). A line reads "You paid Ana Silva $10.00 for the written answers in another tab".
   const own = mine.flatMap((o): TestEventLike[] => {
     // (Batch 34 §14) A listing Save in another tab: its line carries See it to the test page's Listing panel. (Batch 35 §34) What it closed or re-sent: own lines.
-    const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt, ...(o.about?.a === "edit" ? { listing: true } : {}) };
+    // (§284) It opens what it touched (a request, a call, a part, an application, a dispute, the tester's row).
+    const link = ownLink(o.about?.k, (s) => devPartRow({ submissionId: s }), testerRow);
+    const line = { kind: "own", text: o.live ?? o.text, createdAt: o.createdAt, ...(o.about?.a === "edit" ? { listing: true } : {}), ...(link ? { link } : {}) };
     const lines: TestEventLike[] = [line, ...(o.about?.a === "edit" ? (o.about.x ?? []).map((x) => ({ kind: "own", text: consequenceLine(x), createdAt: o.createdAt, save: true })) : [])];
     if (opts.all) return has(LIVE_OWN_ACTS, o.about?.a) ? lines : [];
     // (Owner, Oct 31, batch 35 §67) ANY action of theirs in another tab since the page's seen time stops every press once (no longer only BIG_OWN_ACTS or a
@@ -250,6 +259,9 @@ export async function devChanges(devId: string, testId: string, since: Date, tab
   };
   return ignored.size ? loud.filter(keep) : loud;
 }
+
+/** (§284) The kinds whose stored place (`link`) has always named their item (a request, an application, a dispute) or their part (`piece`). */
+const LINK_TAG_KINDS = new Set(["requested", "applied", "dispute", "sent", "sentpaid", "choice", "rejected", "paid"]);
 
 /** (Owner, Nov 4, §171 A2) The testers (contracts) a developer press is about: a payment press's `stopCheck`, and every "c:<contract>" it touches (End early, call requests and their answers or cancels). */
 export const pressContracts = (press?: Press) => (press ? [...(press.stopCheck ? [press.stopCheck] : []), ...press.keys.filter((k) => k.startsWith("c:")).map((k) => k.slice(2))] : []);
@@ -413,7 +425,7 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
     where: { developerId: devId, contractId: { not: null }, OR: [{ status: "failed", owedUntil: { not: null }, createdAt: { gt: since } }, { settledAt: { gt: since } }] },
     take: 100,
   });
-  const contracts = await tx.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, tester: true, test: { select: { title: true } } } });
+  const contracts = await tx.contract.findMany({ where: { id: { in: pays.map((p) => p.contractId!) } }, select: { id: true, testId: true, tester: true, test: { select: { title: true } } } });
   const cmap = new Map(contracts.map((c) => [c.id, c]));
   const kinds = await subKinds(pays.map((p) => p.submissionId), tx);
   const starts = await callStarts(pays.map((p) => p.callId), tx);
@@ -436,7 +448,9 @@ export async function devPaymentChanges(devId: string, testId: string, since: Da
     // (Owner, Nov 4, §193) A charge about the tester (`charge`): the team's dispute-decision charge, and the tester's Charge or an automatic call charge (a "review"
     // or "call" row the developer never pressed: no press key). The developer's own Pay keeps its press key; Pay more is "extra": never a charge.
     const charge = p.kind === "dispute" || ((p.kind === "review" || p.kind === "call") && !p.pressKey);
-    const tags = { ...(piece ? { piece } : {}), ...(charge ? { charge } : {}) };
+    // (Owner, Nov 6, §284) A payment on this test opens its part.
+    const link = c?.testId === testId ? devPartRow(p) : "";
+    const tags = { ...(piece ? { piece } : {}), ...(charge ? { charge } : {}), ...(link ? { link } : {}) };
     if (p.settledAt && p.settledAt > since) out.push({ kind: "payment", text: `Payment went through on ${title}: ${who}`, createdAt: p.settledAt, contractId: p.contractId, key: `pay:${p.id}`, ...tags, ...(p.owedUntil ? { quiet: true } : {}) } as TestEventLike);
     else if (p.status === "failed" && p.createdAt > since) out.push({ kind: "payment", text: `Payment failed on ${title}: ${who}${next}`, createdAt: p.createdAt, contractId: p.contractId, key: `pay:${p.id}`, ...tags } as TestEventLike);
   }
@@ -473,17 +487,19 @@ export async function testerPaymentChanges(testerId: string, contractId: string,
     // When a delayed payment goes through: the normal paid line (on another session: naming the test).
     const late = (p.status === "deferred" || p.status === "owed" || !!p.owedUntil) && p.createdAt > since;
     const piece = (p.contractId === contractId && (p.submissionId ?? p.callId)) || undefined;
+    // (Owner, Nov 6, §284) A payment on this session opens its part.
+    const link = piece ? testerPartRow({ kind: kinds.get(p.submissionId ?? ""), callId: p.callId }) : undefined;
     // (Batch 35 §76) One line per payment, its latest state: once it went through, the paid line replaces its "delayed" line (a failed then paid one shows paid); both
     // carry the payment's key, so the live box's paid line replaces the delayed one it already lists.
-    if (late && !(p.settledAt && p.settledAt > since)) out.push({ kind: "payment", text: delayedPayLine(dev, label, p.amountCents, title), createdAt: p.createdAt, piece, key: `pay:${p.id}` });
-    if (p.settledAt && p.settledAt > since) out.push({ kind: "paid", text: `${dev} paid ${money(p.amountCents)} for your ${label}${title ? ` on ${title}` : ""}`, createdAt: p.settledAt, piece, key: `pay:${p.id}` });
+    if (late && !(p.settledAt && p.settledAt > since)) out.push({ kind: "payment", text: delayedPayLine(dev, label, p.amountCents, title), createdAt: p.createdAt, piece, key: `pay:${p.id}`, ...(link ? { link } : {}) });
+    if (p.settledAt && p.settledAt > since) out.push({ kind: "paid", text: `${dev} paid ${money(p.amountCents)} for your ${label}${title ? ` on ${title}` : ""}`, createdAt: p.settledAt, piece, key: `pay:${p.id}`, ...(link ? { link } : {}) });
   }
   for (const d of disputes) {
     const r = await db.review.findFirst({ where: d.submissionId ? { submissionId: d.submissionId } : { callId: d.callId! } });
     const raised = d.decidedCents != null && r && d.decidedCents > r.amountCents;
     const part = d.call ? `live call on ${fmtDateTime(d.call.startsAt)}` : d.submission?.kind === "recording" ? "recording" : "written answers";
     // (Owner, Nov 5, §214) Names whose pay it was: "The team decided your dispute with Omar Reyes about your written answers: …".
-    out.push({ kind: "admin", text: raised ? `The team decided your dispute with ${dev} about your ${part}: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute with ${dev} about your ${part}: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt!, piece: (d.submissionId ?? d.callId) || undefined });
+    out.push({ kind: "admin", text: raised ? `The team decided your dispute with ${dev} about your ${part}: the pay was raised to ${money(d.decidedCents!)}` : `The team decided your dispute with ${dev} about your ${part}: the pay stays at ${money(r?.amountCents ?? 0)}`, createdAt: d.decidedAt!, piece: (d.submissionId ?? d.callId) || undefined, link: testerPartRow({ kind: d.submission?.kind, callId: d.callId }) });
   }
   return out;
 }
@@ -531,4 +547,4 @@ export async function listingSaveLines(testId: string, since: Date, viewerId: st
 }
 
 /** (Owner, Nov 5, §250) Each line carries its identity (`sid`): once a stop box lists it, no other press on that page stops for it (shownLines.ts). */
-export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: renderTimes(e.text, dateZone()), at: e.createdAt, ...sidOf(e), ...(e.forced ? { forced: true } : {}), ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...((e as { link?: string }).link ? { link: (e as { link?: string }).link } : {}), ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
+export const asLines = (changes: TestEventLike[], ignored: ReadonlySet<string> = new Set()) => changes.map((e) => ({ text: renderTimes(e.text, dateZone()), at: e.createdAt, ...sidOf(e), ...(e.forced ? { forced: true } : {}), ...(e.key ? { key: e.key } : {}), ...(e.keys?.length ? { keys: e.keys } : {}), ...(e.timed ? { timed: true } : {}), ...(e.nda ? { nda: true } : {}), ...(e.listing ? { listing: true } : {}), ...(e.saveAt ? { saveAt: e.saveAt } : {}), ...(e.link ? { link: e.link } : {}) /* (§284) the place the line opens */, ...(e.kind === "stop" || e.kind === "info" || e.kind === "renamed" || e.kind === "keygiven" /* (batch 34 §12) its See it jumps to the key box */ ? { kind: e.kind } : {}), ...(e.kind === "terms" && (e as { contractId?: string | null }).contractId ? { kind: "terms", contract: (e as { contractId?: string | null }).contractId } : {}), ...(alertOf(e.kind) ? { alert: alertOf(e.kind)! } : {}), ...(ignored.has(alertOf(e.kind) ?? "") ? { ignored: true } : {}) }));
