@@ -1,8 +1,6 @@
 // (Owner, Oct 28, batch 16 section 33) Clash checks for Request a time, shown while the form is filled (both sides) and re-checked by the server on press.
 // Pure: the page passes what it shows (calls and waiting requests between the two people, the requester's other calls, the limits) and a time formatter.
 import type { RowJson } from "@/lib/callRows";
-import { bookableMinutes, callsCeilingLine, UNLISTED_CALL_RATE_CENTS } from "@/lib/callMeasure";
-import { CALL_MIN_MINUTES, callCharge } from "@/lib/rules";
 
 export type Slot = { start: string; minutes: number; /** (Batch 20 section 7) the call's id, so a press never clashes with the call it booked */ id?: string };
 export type ClashReq = { id?: string; rows: RowJson[]; minutes: number; mine: boolean };
@@ -13,8 +11,11 @@ export type ClashTarget = {
   calls: Slot[];
   /** Waiting requests between the two of you, both directions. */
   requests: ClashReq[];
-  /** Waiting requests with them now (both sides), booked times ahead, and what's left of the $1,000 (null: not known). */
-  pending?: number; booked?: number; leftCents?: number | null; rateCents?: number | null;
+  /**
+   * Waiting requests with them now (both sides) and booked times ahead. (Owner, Nov 6, §280) No longer what's left of the $1,000: booking is never checked against
+   * it (the call room ends a call at it instead).
+   */
+  pending?: number; booked?: number;
 };
 export type ClashLine = { tone: "red" | "blue"; text: string };
 export type Fmt = { range: (start: Date, minutes: number) => string; times: (start: Date, minutes: number) => string; day: (d: Date) => string };
@@ -52,8 +53,6 @@ export const rowStarts = (r: RowJson) => {
   const until = r.until ? new Date(r.until).getTime() : Number.POSITIVE_INFINITY;
   return Array.from({ length: n }, (_, k) => new Date(s + k * step)).filter((d, k) => k === 0 || d.getTime() <= until);
 };
-/** How many calls accepting the request books (Forever: the next 4; batch 35 §132: up to the end), as the server counts for the $1,000. */
-const callsIfAccepted = (rows: RowJson[]) => Math.max(1, ...rows.map((r) => (r.repeat === "once" ? 1 : Math.min(r.count === 0 ? 4 : r.count, rowStarts(r).length))));
 const overlap = (a: Date, am: number, b: Date, bm: number) => a.getTime() < b.getTime() + bm * 60_000 && b.getTime() < a.getTime() + am * 60_000;
 const ORD = ["1st", "2nd", "3rd"];
 const ord = (n: number) => ORD[n - 1] ?? `${n}th`;
@@ -123,12 +122,7 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
     const taken = (t.pending ?? 0) + (t.booked ?? 0);
     const adds = p.rows.length ? p.rows.length - (exactWith.get(t.name)?.size ?? 0) : 1;
     if (adds > 0 && taken + adds > MAX_CALLS) limits.push(callRoomLine(t.name, taken));
-    else if (t.leftCents != null && p.rows.length) {
-      const one = t.rateCents == null ? Math.round((UNLISTED_CALL_RATE_CENTS * m) / 60) : callCharge(t.rateCents, m);
-      const n = callsIfAccepted(p.rows);
-      // (Batch 18 section 6) One call longer than what's left allows is red at the Length box ("At most 95 minutes: ..."); this line is for sets, and for under 10 minutes left.
-      if (one * n > t.leftCents && (n > 1 || bookableMinutes(t.rateCents ?? null, t.leftCents) < CALL_MIN_MINUTES)) limits.push(callsCeilingLine(t.name, t.leftCents));
-    }
+    // (Owner, Nov 6, §280) No red line for the $1,000 for this tester's calls any more: a request, a set or an Accept is never refused for it.
   }
   return { rows, limits };
 }

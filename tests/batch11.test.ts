@@ -345,9 +345,9 @@ describe("batch 11 item 6 (with batch 12 section 2): one Pay box, Pay more", () 
     const second = await took(72);
     expect((await pay(s.dev.cookie, { kind: "call", id: second.id, amount: "400.01", tickedCents: 40_001, over200: true })).body.error.message).toBe(overCeilingLine(40_000));
     expect((await pay(s.dev.cookie, { kind: "call", id: second.id, amount: "400.00", tickedCents: 40_000, over200: true })).status).toBe(200);
-    // Nothing left: another call can't even be booked.
+    // (Owner, Nov 6, §280) Nothing left, yet another call can still be requested: booking is never checked against the $1,000 (the call room ends it at what's left).
     const startsAt = new Date(Date.now() + 96 * 3_600_000); startsAt.setSeconds(0, 0);
-    expect((await act(s.testId, "request-time", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [j.sessionId], startsAt: startsAt.toISOString() })).body.error.message).toBe("Calls with Ana Silva on this test can come to at most $1,000; $0.00 is left, so this call can't be booked.");
+    expect((await act(s.testId, "request-time", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [j.sessionId], startsAt: startsAt.toISOString() })).status).toBe(200);
   });
 
   it("the tester rows keep a Pay more box on paid pieces; no separate Extra pay", () => {

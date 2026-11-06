@@ -174,10 +174,14 @@ async function endCall(call: CapCall & { presences: Presence[] }, reason: string
 
 /**
  * The most minutes this call can be paid before its pay at the call's rate reaches what's left of the $1,000 for that tester's calls on this test (this call's own
- * booked reservation not counted); null when that never binds before the 150% cap (or the call is free).
+ * booked reservation not counted); null when that never binds before the 150% cap (or the call is free). The rate: the contract rate stored on a listed call
+ * (`rateCents`), $200/h (UNLISTED_CALL_RATE_CENTS) for an unlisted one (`rateCents` null).
+ * (Owner, Nov 6, §280) What's left: everything paid for that tester's calls, plus the unpaid reference of calls that started before this one; calls booked after it
+ * no longer count (booking isn't checked against the $1,000 any more, so a set booked past it must not end the first call at once). This end is now the only place
+ * the $1,000 stops a call.
  */
-export async function callCapMinutes(call: Pick<CapCall, "id" | "contractId" | "rateCents" | "minutes">) {
-  const cap = capMinutesFor(call.rateCents, await callsLeftCents(call.contractId, db, call.id));
+export async function callCapMinutes(call: Pick<CapCall, "id" | "contractId" | "rateCents" | "minutes" | "startsAt">) {
+  const cap = capMinutesFor(call.rateCents, await callsLeftCents(call.contractId, db, call.id, call.startsAt));
   return cap == null || cap >= Math.floor(call.minutes * MEASURE_CAP) ? null : cap;
 }
 

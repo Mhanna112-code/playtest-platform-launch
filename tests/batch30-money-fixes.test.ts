@@ -53,6 +53,7 @@ describe("batch 30 §20 (2): the kept refusal names the call request's actual bu
 
 describe("batch 30 §20 (3): a line the form already shows red isn't shown or counted twice", () => {
   it("the server's copy of the calls cap is dropped; other lines stay", () => {
+    // (Owner, Nov 6, §280) That line is no longer made (booking isn't checked against the $1,000); it stays here only as a sample red line.
     const cap = "Calls with Ana Silva on this test can come to at most $1,000; $20.00 is left, so this call can't be booked.";
     expect(notShownYet([cap], [cap])).toEqual([]);
     expect(notShownYet([cap, "Enter a length in minutes."], [` ${cap} `])).toEqual(["Enter a length in minutes."]);

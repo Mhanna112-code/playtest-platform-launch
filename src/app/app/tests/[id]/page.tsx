@@ -271,7 +271,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
       // (Batch 16 section 33) Their waiting requests and yours, as they arrive (answered in the Call requests panel).
-      pending: reqs.filter((r) => r.contractId === c.id).length, leftCents: callsLeft.get(c.id) ?? null, rateCents: callListed(t, c) ? c.liveRateCents : null,
+      pending: reqs.filter((r) => r.contractId === c.id).length, // (Owner, Nov 6, §280) what's left of the $1,000 no longer goes to the form: booking isn't checked against it
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({
         id: r.id, minutes: r.minutes, rows: pageRows(r, callEnd), mine: r.fromSide === "developer",
         rate: devRateLabel(callListed(t, c) ? c.liveRateCents : null, c.liveRateCents, t.liveRateCents, c.tester.pronoun),

@@ -3,7 +3,7 @@
 // connected at the same time (a gap under 5 minutes, a reload or a brief drop, still counts as connected), capped at 150% of the booked length. It's final when the
 // server ends the call, when both have left, or 30 minutes after the latest allowed end.
 import { money } from "./format";
-import { CALL_MAX_MINUTES, CALL_MIN_MINUTES, callCharge } from "./rules";
+import { callCharge } from "./rules";
 
 export const HEARTBEAT_MS = 10_000;
 /** A gap shorter than this between two heartbeats counts as still present. */
@@ -97,8 +97,8 @@ export const rateFromAmount = (amountCents: number, minutes: number) => (minutes
 
 // ---------- (Batch 15 section 34) The $1,000 for all of a tester's calls ----------
 const dollars = (c: number) => money(c).replace(/\.00$/, "");
-/** Refused booking (a request, an offer, an Accept), on both sides. `who` is the other person. */
-export const callsCeilingLine = (who: string, leftCents: number) => `Calls with ${who} on this test can come to at most ${dollars(CALLS_TOTAL_CENTS)}; ${money(leftCents)} is left, so this call can't be booked.`;
+// (Owner, Nov 6, §280) No booking check against it any more: requests, offers, sets and Accept are never refused or cut for it (callsCeilingLine, "Calls with Ana on
+// this test can come to at most $1,000; $X is left, so this call can't be booked.", is gone). Only the call itself ends at it (capEndedLine, below).
 /** The small warning when what's left is under one hour at the tester's listed rate (or under $200 when their calls aren't listed). */
 export function callsLeftWarning(leftCents: number, rateCents: number | null, side: "developer" | "tester", testerName: string) {
   const hour = rateCents ?? UNLISTED_CALL_RATE_CENTS;
@@ -210,33 +210,5 @@ export function roomStatusLine(r: { setup: "camera" | "allow" | "ready"; connect
 /** Join on a call that ended at the $1,000. */
 export const CALL_OVER_LINE = "This call is over.";
 
-// ---------- (Owner, Oct 28, batch 18 section 6) Booking: the Length is capped by what's left of the $1,000 ----------
-// In Request a time (both sides) and Accept, the longest call is the smaller of 180 minutes and the whole minutes left of the $1,000 for that tester's calls on this test at
-// the call's rate (the contract rate for a listed call, $200/h unlisted). Shown in the Length hint, red at the box, refused on the server; with several testers ticked the
-// smallest applies, named. Under 10 minutes nothing can be booked: the existing "can't be booked" line says so.
-
-/** The longest call that can be booked with what's left. */
-export function bookableMinutes(rateCents: number | null, leftCents: number) {
-  const cap = capMinutesFor(rateCents, leftCents);
-  return cap == null ? CALL_MAX_MINUTES : Math.min(CALL_MAX_MINUTES, cap);
-}
-/** The Length hint: "10–95 min (the $1,000 for calls with Ana)". */
-export const lengthCapHint = (max: number, who: string) => `${CALL_MIN_MINUTES}–${max} min (the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who})`;
-/** Red at the Length box, and the server's refusal: "At most 95 minutes: the $1,000 for calls with Ana on this test." */
-export const lengthCapLine = (max: number, who: string) => `At most ${max} minutes: the ${dollars(CALLS_TOTAL_CENTS)} for calls with ${who} on this test.`;
-/**
- * The Length box's cap over the testers it books with (the smallest applies, named): null when the $1,000 doesn't bring it under 180 minutes. `line` is the message for
- * a longer length (under 10 minutes left: the "can't be booked" line).
- */
-export function lengthCap(targets: { name: string; leftCents?: number | null; rateCents?: number | null }[]) {
-  let best: { max: number; name: string; left: number } | null = null;
-  for (const t of targets) {
-    if (t.leftCents == null) continue;
-    const max = bookableMinutes(t.rateCents ?? null, t.leftCents);
-    if (max < CALL_MAX_MINUTES && (!best || max < best.max)) best = { max, name: t.name, left: t.leftCents };
-  }
-  if (!best) return null;
-  return best.max >= CALL_MIN_MINUTES
-    ? { max: best.max, hint: lengthCapHint(best.max, best.name), line: lengthCapLine(best.max, best.name) }
-    : { max: best.max, hint: `${CALL_MIN_MINUTES}–${CALL_MAX_MINUTES}`, line: callsCeilingLine(best.name, best.left) };
-}
+// (Owner, Nov 6, §280) Batch 18 section 6's booking cap is gone: the Length box is 10–180 minutes whatever is left of the $1,000 (no "At most 95 minutes: …", no
+// "10–95 min (the $1,000 for calls with Ana)" hint), and the server refuses no length for it. A call that reaches what's left ends itself in the call room.

@@ -1,7 +1,6 @@
 "use client";
 import { useRef, useState } from "react";
 import { PressDone } from "@/components/PressDone";
-import { lengthCap } from "@/lib/callMeasure";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
 import { FormMistakes } from "@/components/FormMistakes";
@@ -29,8 +28,11 @@ export function CallRequests(p: {
   leadMinutes: number;
   /** (Owner, Nov 2, batch 35 §132) When testers' work on this test ends (the server's, in the reader's words): the time box's latest time and the calls drop-down. */
   end?: CallEnd;
-  /** (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked, what's left of the $1,000, the rate). */
-  clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number; leftCents: number | null; rateCents: number | null };
+  /**
+   * (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked). (Owner, Nov 6, §280) No longer
+   * what's left of the $1,000 or the rate: booking isn't checked against it.
+   */
+  clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number };
 }) {
   // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
   const [limitSeen, setLimitSeen] = useState("");
@@ -54,7 +56,7 @@ export function CallRequests(p: {
   const [frozen, setFrozen] = useState<{ targets: ClashTarget[]; elsewhere: (Slot & { name: string })[] } | null>(null);
   const [made, setMade] = useState<PressMade | null>(null);
   const liveTargets: ClashTarget[] = p.clash && p.side === "tester" && p.targets[0]
-    ? [{ name: p.targets[0].name, calls: p.clash.calls, requests: p.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })), pending: p.clash.pending, booked: p.clash.booked, leftCents: p.clash.leftCents, rateCents: p.clash.rateCents }]
+    ? [{ name: p.targets[0].name, calls: p.clash.calls, requests: p.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })), pending: p.clash.pending, booked: p.clash.booked }]
     : [];
   const liveElsewhere = p.clash?.elsewhere ?? [];
   // (Owner, Nov 5, §261) From Request a time until it ends (and, gone through, until the redraw), the times and the length are read-only and Discard waits.
@@ -79,8 +81,7 @@ export function CallRequests(p: {
   const clash = liveTargets.length
     ? alignedClash(rows, minutes, "tester", formClashInputs(liveTargets, frozen?.targets ?? null, made), frozen?.elsewhere ?? liveElsewhere, p.end)
     : { notes: undefined, limits: [] as string[] };
-  // (Batch 18 section 6) The Length is at most what's left of the $1,000 for your calls at the call's rate.
-  const lenCap = p.clash && p.side === "tester" && p.targets[0] ? lengthCap([{ name: p.targets[0].name, leftCents: p.clash.leftCents, rateCents: p.clash.rateCents }]) : null;
+  // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $1,000 for your calls (no "At most N minutes", no cap in the hint).
   const form = useRef<HTMLDivElement>(null);
   const minNow = useLocalMin(p.leadMinutes); // (batch 27 section 6; batch 29 section 20) the server's lead, passed from the server
   // (Batch 35 §132) Less than the lead left before testers' work ends: no time fits, so the form goes and a line says why.
@@ -137,9 +138,9 @@ export function CallRequests(p: {
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
           <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">
-            <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line} data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
-              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} {...lockText(sendLocked)} /> min</label>
-            <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
+            <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
+              data-match="length in minutes|live call lasts" value={minutes} onChange={(e) => setMinutes(e.target.value)} {...lockText(sendLocked)} /> min</label>
+            <span className="pb-2 text-xs text-slate-500" data-length-hint="">10–180</span>
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
             {keep.restored && <DraftTag disabled={busy} kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); }} />}
           </div>

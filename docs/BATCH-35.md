@@ -5034,3 +5034,21 @@ with ×.
   session page and the written Send). The owner's case: bb's video, sent in an answer whose question changed, no longer shows under the form.
 - Tests: tests/written-answers-283.test.ts; qa-look-254-256 (the tag), batch35-added-per-question(-222), paid-cut-226-227, written-form-234-235,
   old-questions-263-264 and questions-dropdown-282 follow.
+## §280 Calls: no booking check against the $1,000; the call still ends itself at the limit (owner, Nov 6)
+- Booking is never checked against the $1,000 for all of a tester's calls on a test (batch 15 section 34, batch 18 section 6): Request a time (both sides, a single
+  time or a daily / weekly / Forever set), the auto-match, Accept and a Forever set's daily top-up never refuse, skip or cut a call for it. Gone: callsCeilingLine
+  ("Calls with Ana on this test can come to at most $1,000; $X is left, so this call can't be booked.") and its red line in the form (callClash), the Length box's
+  cap (bookableMinutes, lengthCap, its "10–95 min (the $1,000 for calls with Ana)" hint and "At most 95 minutes: …" line; the box is 10–180 again on both forms),
+  the server's lengthOverCap / ceilingRefusal / checkCeiling, and the top-up's "… was skipped: calls on this test can come to at most $1,000." The other limits stay
+  (10–180 minutes, 3 calls or requests per tester, 3 sends a day, overlaps, the call window).
+- The call room's end stays: a call ends for both when its pay at the call's rate reaches what's left (callCapMinutes / callEndState). Listed: the contract rate
+  stored on the call (`rateCents`); unlisted (`rateCents` null): $200/h (UNLISTED_CALL_RATE_CENTS). Both pages say why with the existing line, "Call ended: the
+  $1,000 for calls with <other person> on this test is reached.", after the 2-minute "This call ends at 3:42 PM." warning; Join is refused after.
+- What's left, for that end only, now counts what's paid plus the unpaid reference of the calls that started BEFORE this one (callsLeftCents' new `before`):
+  calls booked after it no longer count, since booking may now pass $1,000 (three 180-minute unlisted calls reserve $1,800, which would have ended the first
+  one at once). Pay, Pay more, the dispute range and a listed call's automatic charge are unchanged (they still count every booked call not paid yet).
+- Terms of Use, section 4 Calls (folded into version 2: nothing has launched): "… Booking isn't limited by it: a call ends by itself, for both people, when its pay
+  at the call's rate ($200 an hour for a call that isn't listed) reaches what's left." DESIGN-DOC's booking lines follow.
+- Tests: tests/calls-no-booking-cap-280.test.ts (unlisted daily and weekly 180-minute sets past $1,000 requested and accepted on both sides; a request with $5 left
+  booked both ways, then that call ends at 10 minutes for both with the line; an unlisted call ending at $200/h, later calls not counted). batch11, batch15-calls,
+  batch16-calls-live, batch18-misc (section 6 reversed) and batch30-money-fixes follow §280; batch18-call-cap's other calls took place before the one in progress.
