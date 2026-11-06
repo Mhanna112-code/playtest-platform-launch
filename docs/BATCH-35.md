@@ -5103,3 +5103,10 @@ with ×.
   - The Terms of Use's "Paying for work" says when disputes close.
 - Tests: tests/dispute-closes-288.test.ts. Updated: ratings (Dispute after rating is now refused), batch17-rate (the developer's Rate disabled by a dispute still
   open, created directly), batch17-close-out (wording), batch10 and batch20 (sources).
+
+## §289 Needs you: Questions without its own scroll (owner, Nov 6)
+
+- In Needs you (a part's row and an update row), the "Questions (N)" list (§282) is a plain drop-down with no ResizeBox, so the person's panel is the only
+  scroll (§187). Each question's and answer's own box keeps its scroll, as before (QA.tsx). The Testers list and the team's "See the work" keep the
+  draggable scroll panel. SentWork's `questionsFold.ownScroll: false`.
+- Tests: tests/needs-questions-289.test.ts; questions-dropdown-282 follows.

@@ -500,8 +500,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               {/* (Owner, Nov 3, batch 35 §139; was batch 10's 16-line box) Inside the part's drop-down: the answers or recordings in a small panel (about 12rem)
                   that drags taller or shorter and scrolls inside, so the Pay box under it is in view; then the Pay box. */}
               {/* (Owner, Nov 6, §282) Two panels: first the content (a written part: its questions in ONE "Questions (N)" drop-down, SentWork's
-                  questionsFold with its own draggable scroll panel, open at first since the developer is about to pay; a recording: its recordings in their
-                  panel, flat inside the person's, §187), then right under it the Pay panel. */}
+                  questionsFold, open at first since the developer is about to pay; (Owner, Nov 6, §289) a plain drop-down with no scroll of its own, the
+                  person's panel the only scroll; a recording: its recordings in their panel, flat inside the person's, §187), then right under it the Pay panel. */}
               {((body: ReactNode) => <div className={`${PART_PANEL} space-y-2`} data-part-panel="content">{x.s!.kind === "written" ? body
                 : <ResizeBox id={`needs-${x.s!.id}`} label="Recordings">{body}</ResizeBox>}</div>)(<>
                 {/* (Batch 13 section 8) What was last sent, under the questions it answered; an earlier set says so (reviewed and paid at the price it was sent at). */}
@@ -509,7 +509,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Nov 5, §226) Only what is new: never paid, every answered question (not the unanswered ones). (Owner, Nov 5, §255) No "new question" tag.
                     (Owner, Nov 5, §263) A new, unpaid answer or addition to a question that has since changed shows too, after the current ones, with a small
                     "Old" tag beside the question, so it can be paid; once paid it is only in Terms history. */}
-                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true }} />
+                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true, ownScroll: false }} />
               </>)}
               <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
               <PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
@@ -547,13 +547,14 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         <p className="text-xs text-slate-400" data-part-when="">Updated {fmtDateTime(x.paidUpdateAt!)}</p>
         {/* (Owner, Nov 5, §224) No "<name> added to this after you paid ($X paid · up to $Y more)" line here: the part's payments and Pay more say it. */}
         {/* (Owner, Nov 5, §225) Its payments are listed only in the Testers list, never in Needs you. */}
-        {/* (Owner, Nov 6, §282) Two panels: the content (a written part's "Questions (N)" drop-down, open at first; a recording's panel), then the Pay panel. */}
+        {/* (Owner, Nov 6, §282) Two panels: the content (a written part's "Questions (N)" drop-down, open at first, §289: no scroll of its own in Needs you; a
+            recording's panel), then the Pay panel. */}
         {((body: ReactNode) => <div className={`${PART_PANEL} space-y-2`} data-part-panel="content">{x.kind === "written" ? body
           : <ResizeBox id={`update-${x.id}`} label="Recordings">{body}</ResizeBox>}</div>)(<>
           {/* (Owner, Nov 5, §226) Only what came after the last payment: the questions answered or added to since, with just the new parts. */}
           {/* (Owner, Nov 5, §263; replaces §234's "never a past question in Needs you") An old question's new answer or addition shows, tagged "Old".
               (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} questionsFold={{ open: true }} />
+          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} questionsFold={{ open: true, ownScroll: false }} />
         </>)}
         {/* (Owner, Nov 5, §226) In Needs you the press for what's new on a paid part is "Pay" (Pay more's route, checks and stops; the Testers list keeps Pay more). */}
         <HoldFold openOn={[`update-${x.id}`]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">

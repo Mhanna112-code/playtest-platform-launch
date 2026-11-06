@@ -112,7 +112,7 @@ describe("§282 on the developer's test page", () => {
     expect(foldTag(page, `needs-${sub.id}-questions`)).toMatch(/^<details open=""/);
     const needs = page.slice(needsAt, page.indexOf(`id="part-${sub.id}"`));
     expect(needs).toContain('data-questions-count="2">Questions (2)<');
-    const panelAt = needs.indexOf(`data-panel="needs-${sub.id}-questions-list"`), pay = needs.indexOf('data-fold="needs-pay-');
+    const panelAt = needs.indexOf(`data-questions-plain="needs-${sub.id}-questions-list"`), pay = needs.indexOf('data-fold="needs-pay-');
     expect(panelAt).toBeGreaterThan(0);
     const list = needs.slice(panelAt, pay);
     expect(list).toContain(`data-fold="needs-${sub.id}-q-${keyOf(Q1)}"`);
@@ -177,8 +177,9 @@ describe("§282 on the developer's test page", () => {
 
   it("the sources: Needs you's part and update rows open, the Testers list closed, the team's See the work open; the tester's own page unchanged", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true }} />");
-    expect(page).toContain("newOnly={{ since: paidCut(x) }} questionsFold={{ open: true }} />");
+    // (Owner, Nov 6, §289) In Needs you without a scroll of its own.
+    expect(page).toContain("newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true, ownScroll: false }} />");
+    expect(page).toContain("newOnly={{ since: paidCut(x) }} questionsFold={{ open: true, ownScroll: false }} />");
     expect(page).toContain("until={paidCut(r.sub)} questionsFold={{ open: false }} />");
     expect(src("app/admin/DisputeWork.tsx")).toContain("questionsFold={{ open: true }}");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("questionsFold");
