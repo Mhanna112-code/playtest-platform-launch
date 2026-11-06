@@ -917,8 +917,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         elsewhere={otherCalls}
       />
       {/* (Owner, Nov 5, §229; was right under Needs you, §181) Call requests sit right under the Live session panel. (§185) Two boxes: "Requests to you" (Needs
-          you's "2 call requests ↓" lines jump here) and "Your requests". */}
-      {callRequests.length > 0 && <CallRequestsBox testId={t.id} seenAt={seenAt} requests={callRequests} leadMinutes={CALL_MIN_AHEAD_MINUTES} />}
+          you's "2 call requests ↓" lines jump here) and "Your requests". (Owner, Nov 5, §228 fix) Always drawn: it draws nothing with no request, and keeps a
+          request the page just dropped for its 6 seconds. */}
+      <CallRequestsBox testId={t.id} seenAt={seenAt} requests={callRequests} leadMinutes={CALL_MIN_AHEAD_MINUTES} />
       {!t.workEndedAt && t.status !== "stopped" && !restricted && (
         <InvitePanel
           testId={t.id}

@@ -128,8 +128,9 @@ describe("(Owner, Nov 5) §228 closed requests leave; §229 Call requests under 
   it("a request no longer waiting shows what happened for a few seconds, then leaves the list; a refused press keeps its line at the top", () => {
     const p = read("src/components/CallRequestsPanel.tsx");
     expect(p).toContain("export const GONE_SHOWN_MS = 6_000;");
-    expect(p).toContain("const live = requests.filter((r) => !(goneAt[r.id] && Date.now() - goneAt[r.id] > GONE_SHOWN_MS));");
-    expect(p).toContain("const lost = lostRefusal(at, error, live);");
+    // (Owner, Nov 5, §228 fix) From any cause, 6 s from when the line first shows: tests/call-requests-gone-228.test.ts.
+    expect(p).toContain("export function useClosingRequests(requests: PanelReq[])");
+    expect(p).toContain("const lost = lostRefusal(at, error, live.filter((r) => !closing.left(r.id)));");
   });
   it("the Call requests box comes right after the Live session panel", () => {
     const s = read("src/app/app/tests/[id]/page.tsx");

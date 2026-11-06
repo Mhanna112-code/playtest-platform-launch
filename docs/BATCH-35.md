@@ -4651,3 +4651,15 @@ A removed question reads "Question 1 · Removed · <its words>" (it was "Questio
 "Your bank wants you to confirm" on the developer's dashboard is drawn by a server component (BankToConfirm) that handed the client BankWaiting a function
 (`render`, for the green test links), which a server component can't do: the dashboard showed "Application error" whenever a charge waited for the bank. It now
 hands the links as data (`tests`) and BankWaiting builds them itself. The quoted test names in payment lines (withTestLinks) are green, as every test link (§245).
+
+## Fix of §228: a closed call request shows what happened for 6 s from any cause (recording B6, Nov 5)
+The line came only from the box's own /api/pulse check every 8 s, and the page's redraw dropped a closed request at once: the developer's Accept showed no line
+(gone 1.0 s after the press), the tester's Withdraw in their own tab showed none (gone at the redraw, 12.7 s), and a Withdraw seen while live updates were held
+back showed "Withdrawn" for 0.2 s. Now the box's owner (CallRequestsBox on the test page, CallRequests on the tester's session page) holds the list
+(`useClosingRequests`, CallRequestsPanel.tsx): a request the redraw drops stays in its row (as last drawn, no buttons) and the box checks the pulse at once; your own
+press checks at once too. The line is the pulse's own ("Booked", "Declined", "Withdrawn", "Another tester took this time at …", "Closed: …"; never a guessed one) and
+shows GONE_SHOWN_MS (6 s) from when the page first shows it, then the row leaves. A time that passed reads "Closed: its time passed" (the pulse now says so for a
+waiting request whose time is past, which the page already leaves out). A dropped request the server says is still waiting leaves at once with no line; with no
+answer at all (offline) after 6 s. The test page now always draws CallRequestsBox (nothing with no request), so a box whose last request closed stays for the
+line. A refused press's line still goes to the top of the box at once (§207); the row then says what happened for its 6 s. Not covered: the tester's whole
+"Requests" section is drawn by the server only while they can request or have one waiting, so when a block closes their last request it goes with no line.

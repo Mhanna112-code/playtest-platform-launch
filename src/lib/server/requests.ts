@@ -90,6 +90,8 @@ export const devRateLabel = (rateCents: number | null, contractRate: number | nu
  * (Batch 26 section 10) A waiting call request that is no longer waiting, as its row says it live on an open page: "Closed: the tester finished their part",
  * "Withdrawn", "Declined", "Booked", or the taken line. "" while it waits.
  */
+/** A waiting request whose time passed closes with this reason ("Closed: its time passed"). */
+export const TIME_PASSED_REASON = "its time passed";
 export function requestGoneLine(r: { status: string; closedReason: string }, /** (§162) the tester's: "the tester finished her part" */ testerPronoun?: string | null,
   /** (Owner, Nov 4, §184) the reader's side and the request's other person: a dropped request reads "Closed: fbbb is no longer free at that time" */ view?: { side: Side; other: string }) {
   if (r.status === "pending") return "";
@@ -760,7 +762,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
   if (side === "tester") await answerTermsFirst(contractId);
   const action = String(body.action ?? "");
   const mine = r.fromSide === side;
-  if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: "its time passed" } });
+  if (r.status === "pending" && r.startsAt < new Date()) await db.callRequest.update({ where: { id: r.id }, data: { status: "closed", closedReason: TIME_PASSED_REASON } });
   const fresh = await db.callRequest.findUniqueOrThrow({ where: { id: r.id } });
   // (Batch 16 section 21) Answered or withdrawn in another tab: the developer's press stops once naming it, then it's already done.
   // (Owner, Nov 4, §184) A request dropped when a call was booked: refused at once (a single refusal), never a stop first.
