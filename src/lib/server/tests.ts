@@ -379,7 +379,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let changeId: string | null = null;
   let keysGiven: Awaited<ReturnType<typeof giveKeysToWorking>> = [];
   // (Owner, Nov 5, §265) The working testers whose questions this Save changed (each is told in the bell).
-  let questionsFollowed: { contractId: string; email: string }[] = [];
+  const questionsFollowed: { contractId: string; email: string }[] = [];
   // (Owner, Nov 5, §267) The working testers whose NDA this Save changed (each gets its own notice in the bell).
   let ndaFollowed: Awaited<ReturnType<typeof followNda>> = [];
   const result = await db.$transaction(async (tx) => {
