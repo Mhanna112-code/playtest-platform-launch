@@ -142,7 +142,7 @@ describe("§171 A1: same part always stops, whatever the Alerts ticks", () => {
   it("the holds' Charge, Let it go and automatic call charge lines carry their part", async () => {
     const src = (await import("node:fs")).readFileSync("src/lib/server/holds.ts", "utf8");
     expect(src.match(/false, \{\}, c\.id, "", `part-\$\{s\.id\}`\)/g)?.length).toBe(4); // choice, let go, charge (twice)
-    expect(src.match(/false, \{\}, c\.id, "", `call-\$\{x\.id\}`\)/g)?.length).toBe(5); // closed with nothing, the automatic charge, let go, charge (twice)
+    expect(src.match(/false, \{\}, c\.id, "", `call-\$\{x\.id\}`\)/g)?.length).toBe(6); // closed with nothing, (§311e) an unlisted call closed with nothing paid, the automatic charge, let go, charge (twice)
   });
 
   it("a call: the tester's problem report and its length becoming final each stop Pay on that call once (Calls ticked off), forced", async () => {
