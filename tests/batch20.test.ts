@@ -1049,6 +1049,6 @@ describe("batch 20 section 28: Send isn't refused when the required question is 
     expect(form).toContain("(missingAt != null ? document.getElementById(`a${missingAt}`) : null)");
     // (Batch 26 sections 11 and 14) The "*" right after the question's words, only on a Required question. (Owner, Nov 4, §182) The question folds the shared way (LongText, 2 lines);
     // (§187 item 6) `inline`: Show more beside its last line, Show less after its last word.
-    expect(form).toContain('<label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>');
+    expect(form).toContain('<label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}'); // (§283) the "new question" tag may follow, before </label>
   });
 });
