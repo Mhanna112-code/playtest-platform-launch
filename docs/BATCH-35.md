@@ -5316,3 +5316,7 @@ recording, each call in Had / Cancelled) now reads, top to bottom:
 - Tests: tests/pay-panels-301.test.ts. Updated: questions-dropdown-282 (the Testers list's payments above the content; the call's payFold; four pay panels in
   the source), nov5-batch2 (§225's PartPayments line), batch35-tester-folds (no calls line in the summary), batch17-bank-check and needs-kind-folds-199 (the
   link up on the Pay more drop-down's summary), written-answers-283 (no empty pay panel after the content).
+
+## §305 A local testing switch for the limits (owner, Nov 6)
+`NEXT_PUBLIC_TESTING_NO_LIMITS=1` in a LOCAL .env lifts the 3 changes per limited field after testers join, the 3 calls or waiting requests per tester and the
+3 call requests a day (src/lib/testingLimits.ts `limitOr`). Ignored on Vercel (VERCEL=1). Without it every limit is unchanged.

@@ -1,3 +1,4 @@
+import { limitOr } from "./testingLimits";
 // (Owner, Oct 28, batch 16 section 33) Clash checks for Request a time, shown while the form is filled (both sides) and re-checked by the server on press.
 // Pure: the page passes what it shows (calls and waiting requests between the two people, the requester's other calls, the limits) and a time formatter.
 import type { RowJson } from "@/lib/callRows";
@@ -36,13 +37,13 @@ export const busyLine = (name: string, at: string) => `${name} already has a cal
  * Forever set while it runs) is one booked time; an older "one of" request is one request; (§208) each time of a press is its own request. It replaces "up to 3
  * booked + up to 3 requests". The same for both sides.
  */
-export const MAX_CALLS = 3;
+export const MAX_CALLS = limitOr(3); // (§305) unlimited with the local testing switch
 /** (§185) The refusal (and the form's red line), naming the pair's other person: "You already have 3 calls booked or requested with Nina Park. …". */
 /**
  * (Owner, Nov 4, §185) And each side SENDS at most 3 call requests a day to the same person on a test, counted on the sender's calendar day in their saved zone:
  * every request sent counts (later withdrawn, declined, dropped or closed too; an auto-match that books directly is one); withdrawing never counts.
  */
-export const MAX_SENT_PER_DAY = 3;
+export const MAX_SENT_PER_DAY = limitOr(3); // (§305)
 /** (§185) "You've sent 3 call requests to Nina Park today. You can send more tomorrow." */
 export const sentTodayLine = (name: string) => `You've sent ${MAX_SENT_PER_DAY} call requests to ${name} today. You can send more tomorrow.`;
 export const callLimitLine = (name: string) => `You already have ${MAX_CALLS} calls booked or requested with ${name}. Wait until one is answered, over or cancelled, or withdraw a request.`;
