@@ -115,7 +115,8 @@ describe("O) pop-up failures", () => {
 });
 
 // (Owner, Nov 6, §313a) The hold's one line names each paused test's closing date.
-const HOLD_LINE = /^Your tests are paused until you pay what you owe: “Harbor Run” closes on .+$/;
+// (Owner, Nov 6, §315) Started by a declined payment: the same one line names it first.
+const HOLD_LINE = /^A \$10\.00 payment for .+'s written answers on “Harbor Run” was declined, so your tests are paused until you pay what you owe: “Harbor Run” closes on .+$/;
 describe("Q) a declined payment starts the hold at once (no owed window)", () => {
   async function owing() {
     const { dev, testId } = await setup();
@@ -153,7 +154,7 @@ describe("Q) a declined payment starts the hold at once (no owed window)", () =>
     expect((await lines(dev.user.id)).filter((x) => x.text.startsWith("Pay $"))).toHaveLength(0);
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdCount).toBe(1);
     // It ignores Off: it goes in the ONE end-of-day email, once.
-    const mails = await db.outboxEmail.findMany({ where: { to: dev.user.email, text: { contains: "Your tests are paused" } } });
+    const mails = await db.outboxEmail.findMany({ where: { to: dev.user.email, text: { contains: "was declined, so your tests are paused" } } }); // (§315) the line names the payment
     expect(mails).toHaveLength(1);
     expect(mails[0].subject).toMatch(/^Your Playtest payment updates/); // (batch 28 §18) the hold lines are payment lines
     // The tester reads only "delayed".

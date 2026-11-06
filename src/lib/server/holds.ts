@@ -99,7 +99,8 @@ export async function declinedPayment(devId: string, paymentId: string, cents: n
   // (Owner, Oct 29, batch 12 section 1) A deleted developer has no account left to hold: the payment stays "delayed" for the tester and is listed for the admins
   // (the platform doesn't cover it).
   if ((await db.user.findUnique({ where: { id: devId }, select: { deletedAt: true } }))?.deletedAt) return false;
-  const started = await startHold(devId, "unpaid");
+  // (Owner, Nov 6, §315) The decline that starts the hold names itself in the hold's one line ("A $10.00 payment for … was declined, so your tests are paused …").
+  const started = await startHold(devId, "unpaid", { cents, what });
   if (!started) {
     const dev = await db.user.findUniqueOrThrow({ where: { id: devId } });
     await bell(devId, `Another payment was declined: ${money(cents)} for ${what} was added to what you owe`, dev.holdReason === "chargeback" ? "/app/payments#chargeback-steps" : "/app/payments#owed", undefined, { side: "developer", payment: true, group: "payhold" });
@@ -107,7 +108,16 @@ export async function declinedPayment(devId: string, paymentId: string, cents: n
   return started;
 }
 
-export async function startHold(devId: string, reason: string) {
+/**
+ * (Owner, Nov 6, §315) The decline that starts a payment hold, in the hold's one line: "A $10.00 payment for Ana Silva's written answers on “Harbor Run” was
+ * declined" (a payment named only by its amount, "a payment of $10.00 (not confirmed with your bank)": "A $10.00 payment (not confirmed with your bank) was declined").
+ */
+export function declinedLead(cents: number, what: string) {
+  const bare = `a payment of ${money(cents)}`;
+  return what.startsWith(bare) ? `A ${money(cents)} payment${what.slice(bare.length)} was declined` : `A ${money(cents)} payment for ${what} was declined`;
+}
+
+export async function startHold(devId: string, reason: string, /** (§315) the declined payment that starts it (a payment hold) */ declined?: { cents: number; what: string }) {
   const now = new Date();
   // (Owner, Nov 4, §178) A chargeback hold starts with no card check and no team approval, in the same write that starts it (before, chargebackOpened cleared them
   // seconds later, after its emails, and so wiped an approval the team had made in between).
@@ -149,7 +159,11 @@ export async function startHold(devId: string, reason: string) {
     await notify(dev.email, closing ? `Your tests are paused after a chargeback: ${closing} unless you finish the steps` : "Your tests are paused after a chargeback", ["Your bank reversed a payment, so your tests are paused: you can't change anything on them, and testers stay in them.", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval. Open Payments to see which steps remain.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#chargeback-steps", { side: "developer", always: true, now: true, payment: true, group: "payhold" }); // (§294) emailed immediately
     return true;
   }
-  await notify(dev.email, closing ? `Your tests are paused until you pay what you owe: ${closing}` : "Your tests are paused", ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
+  // (Owner, Nov 6, §315) Started by a declined payment: the line names it ("A $10.00 payment for … was declined, so your tests are paused until you pay what you
+  // owe: …"); a hold started any other way reads as before.
+  const paused = `Your tests are paused until you pay what you owe${closing ? `: ${closing}` : ""}`;
+  const subject = declined ? `${declinedLead(declined.cents, declined.what)}, so ${paused.charAt(0).toLowerCase()}${paused.slice(1)}` : closing ? paused : "Your tests are paused";
+  await notify(dev.email, subject, ["Your tests are paused until you pay what you owe: you can't change anything on them, and testers stay in them.", "Open Payments and press Pay what you owe: your tests resume at once.", `A test that stays paused for ${PAUSE_CLOSE_DAYS} days is closed.`], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "payhold" });
   return true;
 }
 
