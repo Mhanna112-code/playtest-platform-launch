@@ -1,4 +1,5 @@
 "use client";
+import { filteredOutLine } from "@/lib/inviteText";
 import { Cut, NameLink } from "@/components/Cut";
 import { inviteAvailabilityV } from "@/lib/inviteAvailability";
 import { LIVE_TICK, rideLiveClock } from "@/lib/liveSync";
@@ -28,7 +29,7 @@ type RowUpdate = { id: string; name: string; seen: SeenTester; tag: string; deta
 type SeenTester = { devices: string[]; languages: string[]; rating: number | null };
 type Sent = { id: string; testerId: string; name: string; status: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
 /** (Batch 16 section 12) What the server works out over every tester: worked with, Suggested after the ticks, and the name search. */
-type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; foundTotal: number; capLine: string; searched: boolean };
+type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; foundTotal: number; capLine: string; searched: boolean; /** (§273) */ filteredOut?: number };
 
 
 /**
@@ -430,7 +431,8 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
         <div className="space-y-1.5" data-invite-find="">
           {data.capLine && <p className="note" data-invite-cap="">{data.capLine}</p>}
           {found.length > 0 && <ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">{found.map((t) => (t.why ? whyRow(t) : row(t, "f")))}</ul>}
-          {data.searched && !searching && found.length === 0 && <p className="note" data-invite-none="">No testers match “{term}”.</p>}
+          {/* (Owner, Nov 5, §273) Nobody only because of the ticks: says so, naming them, and how many match without them. */}
+          {data.searched && !searching && found.length === 0 && (data.filteredOut ? <p className="note" data-invite-none="filters">{filteredOutLine(term, [...f.devices, ...f.languages], data.filteredOut)}</p> : <p className="note" data-invite-none="">No testers match “{term}”.</p>)}
         </div>
       )}
       {/* (Batch 16 section 10) Nothing ticked: the lists are the field, red with their line under them, and listed under Invite. */}

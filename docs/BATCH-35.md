@@ -4793,3 +4793,7 @@ parts and prices), on the tester's session page and on the developer's per-teste
   closes them unanswered." with "See the new terms" (to the offer box). No notice without an open offer.
 - While an offer is open, "Your agreed scope" carries a "New terms" pill (the look of the other update pills) that stays across reloads until pressed; pressing
   it records it on the offer (`TermsOffer.pillPressedAt`) and brings the new terms into view. A newer offer brings it back. It's separate from the live pill.
+
+## §273 Invite testers: "no matches" says when the filters are why (owner, Nov 5)
+A name search that finds nobody only because of the ticked devices / languages reads "No testers match “mha” with Korean ticked: 1 tester matches without the
+filters." (`filteredOut` from invitePanel; blocked and deleted accounts are never counted). Nobody of that name at all keeps "No testers match “mha”.".

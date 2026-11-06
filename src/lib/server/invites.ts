@@ -174,7 +174,10 @@ export async function invitePanel(devId: string, testId: string, filters: Invite
   const matches = exactFirst([...named.filter((x) => !x.inv && !x.grey), ...named.filter((x) => x.inv || x.grey)], q, (x) => [x.name]);
   const [w, s, f] = await Promise.all([full(worked), full(suggested), full(matches.slice(0, SEARCH_LIMIT))]);
   const found = f.map((r) => ({ ...r, ...whyNotInvitable(r, appOf.get(r.id)) }));
-  return { worked: w, suggested: s, found, foundTotal: matches.length, capLine: matches.length > SEARCH_LIMIT ? searchCapLine(matches.length) : "", searched: q.length >= 1 };
+  // (Owner, Nov 5, §273) Nobody matches with the ticked devices / languages, but someone of that name exists: how many (blocked and deleted accounts are never in
+  // `lean`, so never counted or revealed).
+  const filteredOut = q.length >= 1 && !matches.length && (devices.length || languages.length) ? lean.filter((x) => nameMatches(x.name, q)).length : 0;
+  return { worked: w, suggested: s, found, foundTotal: matches.length, capLine: matches.length > SEARCH_LIMIT ? searchCapLine(matches.length) : "", searched: q.length >= 1, filteredOut };
 }
 
 /** (Batch 30 §7) Why a search match can't be invited, in the row's words ("fbbb · already invited, waiting for them to join"), or nothing when they can be. */
