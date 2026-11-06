@@ -1025,7 +1025,8 @@ describe("batch 20 section 27: End early's and Stop's reason need at least 5 cha
     expect((await st("Over")).body.error.message).toBe("Say a little more: at least 5 characters.");
     expect((await st("Over.")).status).toBe(200);
     expect(src("components/WhyBox.tsx")).toContain("data-min-chars={String(WHY_MIN_CHARS)} data-msg={WHY_TOO_SHORT}");
-    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("disabled={busy || reason.trim().length < WHY_MIN_CHARS || !picked.length");
+    // (§278) The button counts only ticks still in the list (`chosenIds`), not hidden stale ones.
+    expect(src("app/app/tests/[id]/TopPanel.tsx")).toContain("disabled={busy || reason.trim().length < WHY_MIN_CHARS || !chosenIds.length");
   });
 });
 
