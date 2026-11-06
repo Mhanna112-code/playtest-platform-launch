@@ -47,7 +47,7 @@ import { unreadCount } from "@/lib/server/messages";
 import { PersonHover } from "@/components/PersonHover";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { LiveTop } from "@/components/LiveTop";
-import { qRequired, qText } from "@/lib/questions";
+import { qRequired, qText, sameQuestionSet } from "@/lib/questions";
 import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
@@ -524,7 +524,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               ...offers.flatMap((o) => { const diff = limitedTermsDiff(o.diff); return diff ? [{ at: o.createdAt, key: o.id, node: (<li key={o.id}>
                 {histLine(`${fmtDate(o.createdAt)}: ${dev} offered new terms (${diff}) · ${o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}`)}
                 {/* (Owner, Nov 5, §263) A switch that wrote its own "Questions changed" entry (the earlier set kept at the same moment) shows its questions there. */}
-                {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && !(o.decidedAt && questionsHistory.some((q) => new Date(q.at).getTime() === o.decidedAt!.getTime())) && (
+                {Array.isArray(o.fromQuestions) && !sameQuestionSet(o.fromQuestions as string[], (o.questions as string[]) ?? []) /* (§269) never a reorder */ && !(o.decidedAt && questionsHistory.some((q) => new Date(q.at).getTime() === o.decidedAt!.getTime())) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
                     {/* (Batch 35 §29) Labels apart from the questions, numbered with their Required tags. */}
@@ -782,7 +782,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <div className="space-y-2" data-answer-form={written ? "open" : "first"}>
             {/* (Owner, Nov 5, §260) No "What you sent is for the questions until <date>. Send your answers to these questions: …" line over the form. */}
             {written && openQs.length > 0 && <p className="text-sm font-medium text-white" data-open-questions-title="">Questions you haven&apos;t answered yet</p>}
-            <WrittenForm key={written ? `open:${openQs.join("|")}` : "first"} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
+            <WrittenForm key={written ? "open" : "first" /* (Owner, Nov 5, §269) one form: other questions switch it in place (typed text kept by words) */} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
               initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </div>
         )}

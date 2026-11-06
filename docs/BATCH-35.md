@@ -4793,3 +4793,32 @@ parts and prices), on the tester's session page and on the developer's per-teste
   closes them unanswered." with "See the new terms" (to the offer box). No notice without an open offer.
 - While an offer is open, "Your agreed scope" carries a "New terms" pill (the look of the other update pills) that stays across reloads until pressed; pressing
   it records it on the offer (`TermsOffer.pillPressedAt`) and brings the new terms into view. A newer offer brings it back. It's separate from the live pill.
+
+## §269 Question order doesn't matter; a stale page's Send stops once, then takes the new questions (owner, Nov 5)
+1. Order doesn't matter. Question lists compare as sets of their words and Required ticks (`sameQuestionSet` / `sameQuestionWords` in lib/questions.ts).
+- A Save that only reorders the questions (or leaves the same words and Required ticks) is not a questions change: Edit's changed fields leave "questions" out
+  (`sameListingValue` in rules.ts: the Save's fields, `changedTerms`, `editNews`), so it uses none of the 3 question changes (criticalCounts; Edit's own lock
+  check `countedKeys` too, so a reorder works at 0 changes left), writes no listing / listing_save / listing_values / listing_saved record (no "Updated" mark,
+  top-box line, Listing panel tag or bell), no Terms history set (`followQuestions` compares words as sets) and no stop-once reason. The new order is saved on
+  the test and on every working contract with the same questions (`saveQuestionOrder`), so the question numbers follow it. Answers stay with their questions by
+  their words (they always did: carriedAnswers, questionKey).
+- A Save that reorders AND changes words counts once as before; its Terms history entry shows the real change: Now lists the questions that stayed in Then's
+  order, then the new ones (`inThenOrder`, lib/questionHistory.ts), and an older entry that was only a reorder is no longer listed. An old offer's "Questions then
+  and now" compares as a set too.
+2. Stop on press, then update the questions.
+- Send Answers and Add to this answer list a questions change question by question, in the stop lines' words: "Nora Lane removed the question “…”", "… added the
+  question “…”", "… made the question “…” required / not required" (`questionChangeTexts`, `questionChangeLines` from the listing Saves since the page). They
+  follow the ordinary rule (changed after the page loaded, not shown by the live pill or a stop box: Alerts on); a box that listed the listing's own line for
+  those Saves showed them.
+- The page always sends its form's questions with Send (`for`); the server reads the answers by their words, never by place. A form that holds a question the
+  contract no longer has (or lacks one a change since the page added) never sends: the press stops once whatever the Alerts, a confirmed press or the live pill
+  (`staleQuestions`, forced lines). What was typed is kept: a current question's text in the written draft, a removed question's text in the draft snapshot of
+  the Terms history entry that removed it ("Draft (not sent)"; `keepStaleTyped`). The Send's lock checks the questions again ("Your questions changed just now:
+  nothing was sent…").
+- Add to this answer on a question removed after the page loaded stops once the same way (its typed text stays kept under the question); once those lines were
+  listed, the plain refusal (QUESTION_GONE).
+- A stop that lists a questions change (`questions` in its reply) redraws the page at once; the written form is one form now (no remount per question set) and
+  switches in place: each box keeps its text by the question's words, a new question is an empty box (a draft the server kept for it, e.g. a question that came
+  back, is put back: `keep.reload`), a removed question's box goes. The next press sends normally.
+- Comes back (§263, unchanged and covered): answered, its answer and additions return and Add to this answer works; unanswered, it is a box in the form and its
+  snapshotted draft (now including what a stale page's Send held for it) is put back.

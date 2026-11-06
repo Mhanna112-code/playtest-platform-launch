@@ -5,7 +5,7 @@ import { withoutAttachmentMarkers } from "./answerAttachments";
 import type { Prisma } from "@prisma/client";
 import { money, pronouns } from "./format";
 import { LIMITS } from "./limits";
-import { qText } from "./questions";
+import { qText, sameQuestionSet } from "./questions";
 import { T, safeZone } from "./tz";
 
 // ---------- Money ----------
@@ -814,9 +814,16 @@ export function mergeEdit(current: Listing, touched: Partial<Listing>): Listing 
   return out;
 }
 
-/** Which term fields differ between two listings (to decide whether the listing version moves on). */
+/**
+ * (Owner, Nov 5, §269) Does a listing field hold the same value? The questions compare as a set (their words and Required ticks, in any order): a Save that
+ * only reorders them is not a questions change (no count, notice, Terms history set or stop); the new order is simply saved.
+ */
+export const sameListingValue = (k: keyof Listing, a: unknown, b: unknown) =>
+  k === "questions" && Array.isArray(a) && Array.isArray(b) ? sameQuestionSet(a as string[], b as string[]) : JSON.stringify(a) === JSON.stringify(b);
+
+/** Which term fields differ between two listings (to decide whether the listing version moves on). (§269) Never the questions' order alone. */
 export function changedTerms(a: Listing, b: Listing) {
-  return TERM_FIELDS.filter((k) => JSON.stringify(a[k]) !== JSON.stringify(b[k]));
+  return TERM_FIELDS.filter((k) => !sameListingValue(k, a[k], b[k]));
 }
 
 // ---------- Join ----------

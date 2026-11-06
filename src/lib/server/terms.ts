@@ -1,7 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, pronouns } from "@/lib/server/dateFormat";
-import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms } from "@/lib/rules";
+import { newDueAt, switchedLine, termsDiff, testerRefusal, type ContractTerms, type TestEventLike } from "@/lib/rules";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
 import { HttpError } from "./http";
 import { notify } from "./notify";
@@ -9,7 +9,7 @@ import { testerGate } from "./testerGate";
 import { logEvent } from "./live";
 import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
 import { carriedAnswers } from "@/lib/additions";
-import { qText } from "@/lib/questions";
+import { qText, sameQuestionWords } from "@/lib/questions";
 import { closeOffersOfEnded } from "./offerClose";
 import { ndaBlockLine, ndaBlocked, ndaChangeOf, ndaNoticeHref } from "@/lib/ndaNotice";
 export { closeOffersOfEnded };
@@ -105,11 +105,13 @@ export async function answerTermsFirst(contractId: string) {
  * (Owner, Nov 4, §183) `piece`: the sent part this press adds to (its submission id; none for a first Send): a developer payment on it since the page loaded stops
  * once whatever the tester's Alerts. `skipTerms` only drops the terms lines (an open offer already blocked the press), so the piece needs nothing more there.
  */
-export async function testerSendGate(contractId: string, body: Record<string, unknown>, piece?: string) {
+export async function testerSendGate(contractId: string, body: Record<string, unknown>, piece?: string, written?: { stale?: TestEventLike[] }) {
   const c = await db.contract.findUniqueOrThrow({ where: { id: contractId } });
   await (await import("./workWindow")).finishWorkIfDue(c.testId);
   await (await import("./workWindow")).assertWorkOpen(db, c.testId);
-  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true, sendPiece: piece });
+  // (Owner, Nov 5, §269) Send Answers and Add to this answer (`written`) list a questions change question by question; a page whose questions are no longer the
+  // contract's (`written.stale`: what changed) always stops once, and the page then takes the new questions.
+  await testerGate(c.testerId, contractId, c.testId, body, undefined, { skipTerms: true, sendPiece: piece, questionLines: !!written, staleQuestions: written?.stale });
 }
 
 /**
@@ -189,7 +191,8 @@ export async function followQuestions(tx: Prisma.TransactionClient, c: { id: str
   const old = (c.questions as string[]) ?? [];
   // (Batch 26 sections 14 and 15) Compared by the questions' words only: a Required tick added or removed (or the old "[not required] " marker going) is written
   // into the contract but makes no earlier set.
-  if (JSON.stringify(old.map(qText)) === JSON.stringify(next.map(qText))) {
+  // (Owner, Nov 5, §269) Order doesn't matter: the same words in another order are not a change either (the new order is written, no earlier set).
+  if (sameQuestionWords(old, next)) {
     if (JSON.stringify(old) !== JSON.stringify(next)) await tx.contract.update({ where: { id: c.id }, data: { questions: next as Prisma.InputJsonValue } });
     return false;
   }

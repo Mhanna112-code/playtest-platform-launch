@@ -98,7 +98,7 @@ describe("batch 20 section 1: more than 3 questions sit in a scroll box", () => 
     expect(box).toBeGreaterThan(0);
     expect(form.indexOf("</QuestionBox>")).toBeLessThan(form.indexOf('htmlFor="notes"'));
     expect(form.indexOf("</QuestionBox>")).toBeLessThan(form.indexOf('data-written-count=""')); // the form's total (§189: an addition's box carries the hook on its editor's counter, above)
-    expect(form).toContain('<div key={i} data-question="">');
+    expect(form).toContain('<div key={qText(q)} data-question="">'); // (Owner, Nov 5, §269) keyed by the question's words
     expect(src("components/FieldChecks.tsx")).toContain("if (!scrollQuestionBoxTo(el)) el.scrollIntoView?.(");
     // Post and Edit are unchanged.
     expect(src("app/app/tests/TestForm.tsx")).not.toContain("<QuestionBox");
