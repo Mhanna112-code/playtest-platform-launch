@@ -88,11 +88,11 @@ describe("§263 on both sides", () => {
     const { dev, testId, sub } = await switched();
     const page = await testPage(testId, dev.user.id);
     const row = page.slice(page.indexOf(`id="part-${sub.id}"`));
-    const rowPanel = row.slice(row.indexOf(`data-panel="row-${sub.id}"`), row.indexOf('data-question-body="else"'));
+    const rowPanel = row.slice(row.indexOf(`data-panel="row-${sub.id}-questions-list"`), row.indexOf('data-question-body="else"'));
     expect(rowPanel).toContain(Q3);
     expect(rowPanel).not.toContain(Q2);
     expect(page).not.toContain("data-past-questions");
-    const needs = page.slice(page.indexOf(`data-panel="needs-${sub.id}"`), page.indexOf(`id="part-${sub.id}"`));
+    const needs = page.slice(page.indexOf(`data-panel="needs-${sub.id}-questions-list"`), page.indexOf(`id="part-${sub.id}"`));
     expect(needs).toContain(Q2);
     expect(needs).toContain("late note on Q2");
     expect(needs).toContain(`data-old-question="">${OLD_TAG}</span>`);
@@ -130,9 +130,9 @@ describe("§235 the tester's written part", () => {
     expect(page).not.toContain("data-add-buttons");
     const q1 = page.slice(page.indexOf(`data-question-body="${k1}"`), page.indexOf(`data-question-body="${k2}"`));
     expect(q1).toContain('data-add-more="written">Add to this answer</button>');
-    const q2 = page.slice(page.indexOf(`data-question-body="${k2}"`), page.indexOf('data-question-body="else"'));
-    expect(q2).toContain('data-answer-below="">Answer it in the form below.</p>');
-    expect(q2).not.toContain("data-add-more");
+    // (Owner, Nov 6, §283) The unanswered Q2 isn't in the list at all (no fold, no "Answer it in the form below"): only its box in the form.
+    expect(page).not.toContain(`data-question-body="${k2}"`);
+    expect(page).not.toContain("data-answer-below");
     expect(page.slice(page.indexOf('data-question-body="else"'))).toContain('data-add-more="written"');
     const form = page.slice(page.indexOf('data-answer-form="open"'));
     expect(form).toContain("Questions you haven't answered yet");

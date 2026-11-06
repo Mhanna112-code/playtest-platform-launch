@@ -123,7 +123,7 @@ export type AddedText = { at: string; text: string; files: string[] };
 export type QuestionThread = { key: string; question: string; required: boolean; answer: string; fresh: boolean; at?: string; adds: AddedText[];
   /** (Owner, Nov 5, §263) its answer as last sent (the first answer, or a later changed-questions send's), whatever set it was in: what a Send keeps for it */ latest?: string };
 /** (§167) A changed-questions send's notes and its files not placed in an answer, shown under the notes with its date. */
-export type SetExtra = { at: string; notes: string; files: string[]; texts: string[] };
+export type SetExtra = { at: string; notes: string; files: string[]; texts: string[]; /** (Owner, Nov 6, §283) every answer that send carried (its file markers place its files) */ answers: string[] };
 
 /**
  * (Owner, Nov 3, §167; replaces §136's one list) A written part by question: a thread per question that was sent (the first questions, then each new question
@@ -157,7 +157,7 @@ export function writtenThreads(answers: unknown, questions: string[], stored: un
         placed.push(it.answer);
       });
       if (a.notes || a.files.length) {
-        const x = { at: a.at, notes: a.notes ?? "", files: a.files, texts: placed };
+        const x = { at: a.at, notes: a.notes ?? "", files: a.files, texts: placed, answers: a.items.map((it) => it.answer) };
         extras.push(x);
         other.push({ kind: "set", set: x });
       }

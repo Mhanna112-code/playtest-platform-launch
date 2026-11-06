@@ -104,7 +104,9 @@ export function checkPay(amountCents: number | null, listingCents: number | null
 export const REASON_WHEN_UNDER_LISTING = true;
 export const ZERO_PAY_REASON = "Say why you're paying $0 (the tester reads it).";
 /** (Batch 15 section 30) A $0 payment, on both sides: Paid $0: “<reason>”. */
-export const paidZeroLine = (reason: string) => `Paid $0: “${reason}”`;
+/** (Owner, Nov 6, §281) On the pages its reason is in the reason box under the line "Paid $0 · <when>" (LabeledReason): never inline. */
+export const PAID_ZERO_LABEL = "Paid $0";
+export const paidZeroLine = (reason: string) => `${PAID_ZERO_LABEL}: “${reason}”`;
 /** (Batch 15 section 30) The line under every Pay button. */
 export const payUnderLine = (name: string, listed: boolean) => (listed ? `${name} can dispute the amount once.` : `This part isn't listed: pay any amount, $0 included. ${name} can dispute the amount once.`);
 

@@ -97,21 +97,31 @@ describe("§254 / §263 on both sides", () => {
   });
 });
 
-describe("§255 the new question tag", () => {
-  it("SentWork draws it by default (the tester) and not with newQuestionTag={false} (the developer)", () => {
+describe("§255 / §283 the new question tag", () => {
+  // (Owner, Nov 6, §283; replaces §255's tag on the tester's answer folds) No tag in SentWork at all; the tester's form puts it beside an unanswered question that
+  // came after their sends ("Questions you haven't answered yet"); once answered, no tag; the developer never sees it.
+  it("SentWork never draws it (no newQuestionTag prop any more); the form does", () => {
     const props = { id: "n", kind: "written", answers: [item(Q1, "a")], questions: [Q1, Q3], notes: "", additions: [{ at: "2026-11-05T10:00:00.000Z", items: [item(Q1, "a"), item(Q3, "c")], notes: "", files: [] }], files: [] };
-    expect(renderToStaticMarkup(h(SentWork, props))).toContain(`data-new-question="">${NEW_QUESTION_TAG}</span>`);
-    expect(renderToStaticMarkup(h(SentWork, { ...props, newQuestionTag: false }))).not.toContain("data-new-question");
+    expect(renderToStaticMarkup(h(SentWork, props))).not.toContain("data-new-question");
     const dev = src("app/app/tests/[id]/page.tsx");
     expect(count(dev, "<SentWork ")).toBe(3);
-    expect(count(dev, "newQuestionTag={false}")).toBe(3); // Needs you, the update row, the Testers list ((§263) no Past questions box any more)
-    expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("newQuestionTag");
+    expect(dev).not.toContain("newQuestionTag");
+    expect(src("components/SentWork.tsx")).not.toContain("NEW_QUESTION_TAG");
+    expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain('{newQs.includes(qText(q)) && <span className="badge ml-1 shrink-0 whitespace-nowrap border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}');
     expect(src("app/app/tests/[id]/ByQuestion.tsx")).not.toContain("NEW_QUESTION_TAG");
   });
 
-  it("the pages: the tester sees it on Q3, the developer nowhere", async () => {
+  it("the pages: answered Q3 has no tag; a later, unanswered Q4 has it in the tester's form only; the developer nowhere", async () => {
     const { dev, testId, j } = await switched(false);
-    expect(await sessionPage(j.sessionId, j.tester.user.id)).toContain("data-new-question");
+    expect(await sessionPage(j.sessionId, j.tester.user.id)).not.toContain("data-new-question");
+    const Q4 = "Which device did you use?";
+    await db.contract.update({ where: { id: j.sessionId }, data: { questions: [Q1, Q3, Q4] } });
+    const page = await sessionPage(j.sessionId, j.tester.user.id);
+    const form = page.slice(page.indexOf('data-answer-form="open"'));
+    expect(form).toContain(Q4);
+    const at = form.indexOf(Q4);
+    expect(form.slice(at, at + 600)).toContain(`data-new-question="">${NEW_QUESTION_TAG}</span>`);
+    expect(page.match(/data-new-question=""/g)).toHaveLength(1);
     expect(await testPage(testId, dev.user.id)).not.toContain("data-new-question");
   });
 });

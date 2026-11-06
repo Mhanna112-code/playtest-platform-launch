@@ -83,7 +83,8 @@ describe("batch 30 §20 (4): money transactions get more time, and a timeout is 
 describe("batch 30 §20: the small ones", () => {
   it("no full stop after the decision's quoted note; no '0 testers on this test'; the automatic call payment in 'You were paid'", () => {
     const session = src("app/app/sessions/[id]/page.tsx");
-    expect(session).toContain('`The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : "."}`');
+    // (Owner, Nov 6, §281) The note is in the reason box under the line now: the full stop only when there's no note.
+    expect(session).toContain('line={`${teamDecidedLabel(money(dispute.decidedCents))}${dispute.decisionNote.trim() ? "" : "."}`}');
     expect(session).toContain('{testersIn > 0 && <span className="badge"><Users className="h-3.5 w-3.5" /> {testersIn} tester');
     expect(src("lib/server/holds.ts")).toContain('`/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tpaid" });');
   });

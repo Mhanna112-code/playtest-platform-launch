@@ -78,7 +78,32 @@ export async function followNda(tx: Prisma.TransactionClient, testId: string, be
   if (!kind) return [];
   const cs = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, tester: { select: { email: true } } } });
   if (cs.length) await tx.contract.updateMany({ where: { id: { in: cs.map((c) => c.id) } }, data: { ndaText: after, ...(kind === "changed" ? {} : { ndaAcceptedAt: null }), ndaChangedAt: now, ndaChangeKind: kind } });
+  // (Owner, Nov 6, §283) Every other contract on the test (left, ended) takes the listing's NDA text too, with no notice or block (nothing to press there); one
+  // who rejoins accepts the listing's NDA on joining as usual.
+  await tx.contract.updateMany({ where: { testId, status: { not: "working" } }, data: { ndaText: after } });
   return cs.map((c) => ({ contractId: c.id, email: c.tester.email, kind }));
+}
+
+/**
+ * (Owner, Nov 6, §283) Existing data: a contract that isn't working (left, ended) and that no Save reached (before §283 only working contracts followed) still
+ * holds its old questions. On read (the developer's test page, the tester's session page), each such contract is brought onto the listing's questions by
+ * followQuestions (its Terms history entry, dated now, keeps the old answered questions readable there). Nothing is deleted; a contract already in line costs
+ * one comparison. Returns the ids changed.
+ */
+export async function syncEndedQuestions(testId: string, stored: unknown) {
+  const listing = Array.isArray(stored) ? (stored as string[]) : [];
+  const stale = (await db.contract.findMany({ where: { testId, status: { not: "working" } }, select: { id: true, questions: true } }))
+    .filter((c) => !sameQuestionWords((c.questions as string[]) ?? [], listing));
+  if (!stale.length) return [];
+  const now = new Date();
+  return db.$transaction(async (tx) => {
+    const changed: string[] = [];
+    for (const { id } of stale) {
+      const c = await tx.contract.findUniqueOrThrow({ where: { id }, select: { id: true, testerId: true, questions: true, prevSets: true, status: true } });
+      if (c.status !== "working" && (await followQuestions(tx, c, listing, now))) changed.push(c.id);
+    }
+    return changed;
+  });
 }
 
 /** The newest open offer for a contract, if any. */

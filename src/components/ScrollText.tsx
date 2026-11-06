@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
 import { QA_BOX_MAX, QA_BOX_TALLEST, textId } from "@/components/QA";
 
@@ -24,6 +25,23 @@ export function ReasonQuote({ text, className = "", id, label = "Reason" }: { te
           <blockquote className="whitespace-pre-wrap break-words italic [overflow-wrap:anywhere]" data-reason-text="">“{t}”</blockquote>
         </ResizeBox>
       </OwnPanel>
+    </div>
+  );
+}
+
+/**
+ * (Owner, Nov 6, §281) A payment's or a dispute's short typed note (the developer's note when paying, at Pay and each Pay more; the team's decision note; the
+ * developer's side; the tester's dispute reason; a $0 or a team close-out's reason) is never inline: its line ("Paid $0 · Fri, Nov 6, 12:37 AM", "The team decided:
+ * $0.00 in all", "The developer's side") is the box's label line, above it, and the note sits in the shared draggable reason box (ReasonQuote, §237), short or long
+ * (it starts small, the ReasonQuote default, for one look everywhere). No note: just the line. Long words wrap anywhere, in the line too. `data`: the line's own
+ * data-* attributes (kept on the wrapper). A <div>: never inside a <p>.
+ */
+export function LabeledReason({ line, text, id, label, className = "", lineClassName = "", data }: { line: ReactNode; text: string | null | undefined; id?: string; /** the box's name for screen readers (default: the line, when it's text) */ label?: string; className?: string; lineClassName?: string; data?: Record<string, string> }) {
+  const t = (text ?? "").trim();
+  return (
+    <div className={`min-w-0 max-w-full space-y-0.5 ${className}`} data-labeled-reason="" {...data}>
+      <p className={`[overflow-wrap:anywhere] ${lineClassName}`} data-reason-label="">{line}</p>
+      {t && <ReasonQuote id={id} label={label ?? (typeof line === "string" ? line : "Note")} text={t} />}
     </div>
   );
 }

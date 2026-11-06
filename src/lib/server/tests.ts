@@ -8,7 +8,7 @@ import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText, sameQuestio
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
 import { patchKept, setKept } from "./kept";
 import { questionChangeTexts } from "@/lib/questionHistory";
-import { itemsFor, prevSetsOf, sameQuestions } from "@/lib/answerSets";
+import { itemsFor, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
 import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys, noAnswerYet } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
@@ -509,14 +509,18 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (Owner, Nov 5, §265) Questions follow the listing: a Save that changed them writes them into every working tester's contract in this transaction (the one
     // place that keeps them in step, so "old" means the same on both sides), each change kept as a Terms history entry with that moment's answers and draft
     // (followQuestions). A contract whose questions already differ from the listing (an offer kept before §265) is brought in line here too.
+    // (Owner, Nov 6, §283; was working contracts only) EVERY contract on the test follows, working or not (left, ended): the same Terms history entry, so an
+    // ended tester's old answered questions live in Terms history like everyone else's and the Testers list shows the listing's questions. Only the working
+    // testers are told (the bell); one who comes back is on the listing's questions already.
     if (fields.includes("questions")) {
       const now = new Date();
-      for (const c of await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, questions: true, prevSets: true, tester: { select: { email: true } } } }))
-        if (await followQuestions(tx, c, next.questions, now)) questionsFollowed.push({ contractId: c.id, email: c.tester.email });
+      for (const c of await tx.contract.findMany({ where: { testId }, select: { id: true, testerId: true, questions: true, prevSets: true, status: true, tester: { select: { email: true } } } }))
+        if (await followQuestions(tx, c, next.questions, now) && c.status === "working") questionsFollowed.push({ contractId: c.id, email: c.tester.email });
     }
     // (§269) Reordered only (the Save changed other fields): the listing took the new order above; every working contract with the same questions takes it too.
     if (reordered) await saveQuestionOrder(tx, testId, next.questions);
     // (Owner, Nov 5, §267) The NDA follows the listing the same way: copied into every working contract, with the change's kind for its notice (and block).
+    // (Owner, Nov 6, §283) And into every other contract on the test (left, ended), with no notice (followNda).
     if (fields.includes("ndaText")) ndaFollowed = await followNda(tx, testId, current.ndaText ?? "", next.ndaText ?? "", new Date());
     // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
     keysGiven = await giveKeysToWorking(tx, testId);
@@ -953,28 +957,39 @@ export async function nextRound(dev: U, testId: string) {
 
 /** Open tests the tester can join (not their own, not full, not already joined). (Batch 17 section 8) `q`: the search box (test, product or developer name). */
 export async function findTests(tester: U, q?: unknown) {
-  const tests = await db.test.findMany({
-    where: {
-      ...(await import("./findSearch")).testSearchWhere(q),
-      status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { devSuspendedAt: null, holdStartedAt: null },
-      // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
-      contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
-      // (Owner, Oct 30, batch 15 section 38) Invite-only tests are never in Find, not even for invited testers (they reach them from their invites, the bell or the email).
-      joinMode: { not: "invite" },
-      // (Batch 15 section 18) After Open until the test is closed to everyone who hasn't joined: out of Find.
-      OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }],
-    },
-    include: { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, timeZone: true } }, contracts: { where: { testerId: tester.id }, select: { status: true } } },
-    orderBy: { createdAt: "desc" },
-    take: 100,
-  });
+  const search = (await import("./findSearch")).testSearchWhere(q);
+  const include = { _count: { select: { contracts: { where: { status: "working" } } } }, developer: { select: { name: true, email: true, timeZone: true } }, contracts: { where: { testerId: tester.id }, select: { id: true, status: true } } } as const;
+  const [tests, joined] = await Promise.all([
+    db.test.findMany({
+      where: {
+        ...search,
+        status: "open", adminPausedAt: null, developerId: { notIn: [tester.id, ...(await blockPartners(tester.id))] }, developer: { devSuspendedAt: null, holdStartedAt: null },
+        // Not joined, or LEFT (they can come back: not after rating, not if the developer ended them).
+        contracts: { none: { testerId: tester.id, OR: [{ status: { not: "left" } }, { endKind: "rated" }] } },
+        // (Owner, Oct 30, batch 15 section 38) Invite-only tests are never in Find, not even for invited testers (they reach them from their invites, the bell or the email).
+        joinMode: { not: "invite" },
+        // (Batch 15 section 18) After Open until the test is closed to everyone who hasn't joined: out of Find.
+        OR: [{ openUntil: null }, { openUntil: { gt: new Date() } }],
+      },
+      include,
+      orderBy: { createdAt: "desc" },
+      take: 100,
+    }),
+    // (Owner, Nov 6, §279) A test the tester is working in stays in Find (the search applies as to any other test), even when it's closed to new joiners (full,
+    // joining closed, invite only, paused): the card reads "Joined" and opens their session. Left, ended or rated: only the query above (today's rules).
+    db.test.findMany({ where: { ...search, contracts: { some: { testerId: tester.id, status: "working" } } }, include, orderBy: { createdAt: "desc" }, take: 100 }),
+  ]);
   // Most relevant first (owner): tests needing a device the tester has, then tests open to any device, then tests
   // needing a device they don't list; newest first within each group.
   const p = await db.testerProfile.findUnique({ where: { userId: tester.id } });
   const rank = (t: { devices: string[]; languages: string[] }) =>
     t.devices.length ? (t.devices.some((d) => p?.devices.includes(d)) ? 0 : 2) : 1;
-  return tests.filter((t) => t._count.contracts < t.spots).map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
+  const all = [...tests.filter((t) => t._count.contracts < t.spots), ...joined.filter((j) => !tests.some((t) => t.id === j.id))].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  return all.map((t, i) => ({ t, i })).sort((a, b) => rank(a.t) - rank(b.t) || a.i - b.i).map((x) => x.t);
 }
+
+/** (Owner, Nov 6, §279) The tester's working contract on a Find card's test (its card reads "Joined" and opens /app/sessions/<id>), if any. */
+export const joinedContract = (t: { contracts?: { id: string; status: string }[] }) => t.contracts?.find((c) => c.status === "working") ?? null;
 
 /** (NEWEST+8) One line for EACH unmet need (devices, languages); none when the profile fits. */
 export function needsLines(t: { devices: string[]; languages: string[] }, p: { devices: string[]; languages: string[] } | null) {
@@ -1054,6 +1069,9 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (t.ndaText && body.ndaAccepted !== true && !ndaAt) throw new HttpError(400, "nda", "Accept the NDA to join.");
     // (Batch 15 section 18) The tester's deadline: the day they join + the test's tester days (counted in the developer's time zone, like Open until).
     const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion, testerDays: t.testerDays, tz: dev.timeZone }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
+    // (Owner, Nov 6, §283) Coming back: on the listing's questions; if theirs still differ (an ended contract no Save reached), the change is a Terms history
+    // entry first (followQuestions), so the old answered questions stay readable there.
+    if (old) await followQuestions(tx, old, asListing(t).questions, new Date());
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
@@ -1202,7 +1220,10 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const items = itemsFor(qs, answers);
     // (Batch 30 §3) Added to a late piece, it stays late; added after the deadline, the piece is late (and Charge, if it had opened, no longer applies).
     const late = !!existing?.late || isLate(c.dueAt, now);
-    const files = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
+    // (Owner, Nov 6, §283) Only unsent uploads (never one already sent), and not one that went with a draft into Terms history (snapshotOnlyFiles).
+    const unsentFiles = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true, filename: true } });
+    const snapped = snapshotOnlyFiles(c.prevSets, unsentFiles, [...answers, notes]);
+    const files = unsentFiles.filter((f) => !snapped.has(f.id));
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data: {
           // (Batch 13 §8) While unpaid, the piece is priced at the current contract's written price; it no longer reads "Sent for the questions until".

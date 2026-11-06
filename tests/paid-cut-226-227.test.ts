@@ -65,7 +65,9 @@ describe("§226 SentWork: as paid (until) and only the new (newOnly)", () => {
     expect(html).toContain("paid addition");
     expect(html).toContain("my notes");
     for (const later of ["new addition", "first answer to Q2", "new in anything else", "later.txt"]) expect(html, later).not.toContain(later);
-    expect(html.slice(html.indexOf(`data-question-body="${K2}"`))).toContain("(no answer)");
+    // (Owner, Nov 6, §283) Q2, unanswered as paid, isn't listed (it was "(no answer)" before).
+    expect(html).not.toContain(`data-question-body="${K2}"`);
+    expect(html).not.toContain("(no answer)");
   });
 
   it("newOnly since the last payment: only the questions answered or added to since, with just the new; unchanged and unanswered left out", () => {

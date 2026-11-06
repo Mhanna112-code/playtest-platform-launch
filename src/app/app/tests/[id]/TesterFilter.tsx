@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 /**
  * (Owner, Nov 3, batch 35 §140) The circles at the top of the tester list filter it: pressing one shows only that tester's row (the circle is marked); pressing it
  * again, or "All testers", shows everyone. Buttons with aria-pressed, so the keyboard works. The choice is kept while the page redraws.
+ * (Owner, Nov 6, §283) Choosing a circle clears the "Search testers" box under them, and typing there clears the choice (TesterListSearch listens for
+ * FILTER_EVENT): one way of narrowing the list at a time.
  */
 export const FILTER_EVENT = "tester-filter";
 const KEY = "tester-filter";
@@ -24,6 +26,8 @@ function choose(id: string) {
   }
   window.dispatchEvent(new CustomEvent(FILTER_EVENT, { detail: id }));
 }
+/** (Owner, Nov 6, §283) Typing in "Search testers" clears the circles' choice (the two never narrow the list together). */
+export const clearTesterFilter = () => { if (read()) choose(""); };
 /** The tester shown alone (""; everyone). */
 export function useTesterFilter() {
   const [id, setId] = useState("");

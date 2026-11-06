@@ -100,7 +100,7 @@ describe("batch 9 item 2: an unlisted part has only Pay", () => {
     const d = await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered every question fully" });
     expect(d.status).toBe(200); // (Batch 10) every reviewed part can be disputed, unlisted ones too
     expect(src("app/app/tests/[id]/PayBox.tsx")).not.toContain("go(\"reject\")"); // (batch 15 section 30) no Reject anywhere
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("paidZeroLine(review.reason)");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("line={`${PAID_ZERO_LABEL} · ${fmtDateTime(review.createdAt)}`} label={PAID_ZERO_LABEL} id={`review-note-${id}`} text={review.reason}"); // (Owner, Nov 6, §281)
   });
 
   it("(batch 15 section 2) the developer's reminders follow the review marks to the review date, then stop; the row stays", async () => {
@@ -132,7 +132,7 @@ describe("batch 9 item 3: an optional note on every Pay", () => {
     expect(await db.notification.count({ where: { userId: tester.user.id, text: "Nora Lane paid you $2.00 more for your written answers on “Harbor Run”" } })).toBe(1);
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain("Note to {p.name}");
     expect(src("app/app/tests/[id]/PayBox.tsx")).toContain('{needsReason ? "" : " (optional)"}');
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain('data-extra-line=""');
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain('data={{ "data-extra-line": "" }}'); // (Owner, Nov 6, §281) the note in its reason box
   });
 });
 

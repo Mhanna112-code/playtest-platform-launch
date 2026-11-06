@@ -87,7 +87,7 @@ describe("the developer's view: a fold per question", () => {
     expect(general.indexOf("my notes")).toBeLessThan(general.indexOf("old general addition"));
   });
 
-  it("changed questions: a new question gets its own fold with a \"new question\" tag; an unchanged one whose answer changed gets it as an addition", () => {
+  it("changed questions: a new question gets its own fold (§283: no tag); an unchanged one whose answer changed gets it as an addition", () => {
     const Q3 = "What would you change?";
     const t = writtenThreads([item(Q1, "liked"), item(Q2, "stuck")], [], [
       { at: at1, items: [item(Q1, "liked"), item(Q3, "the map")], notes: "", files: [] },
@@ -97,8 +97,9 @@ describe("the developer's view: a fold per question", () => {
     const changed = writtenThreads([item(Q1, "liked")], [], [{ at: at1, items: [item(Q1, "liked more now")], notes: "", files: [] }]);
     expect(changed.threads[0].adds).toEqual([{ at: at1, text: "liked more now", files: [] }]);
     const h = renderToStaticMarkup(createElement(SentWork, { timeZone: "UTC", kind: "written", answers: [item(Q1, "liked")], notes: "", additions: [{ at: at1, items: [item(Q1, "liked"), item(Q3, "the map")], notes: "", files: [] }], files: [] }));
-    expect(h).toContain(`data-new-question="">${NEW_QUESTION_TAG}</span>`);
-    expect(h.match(/data-new-question/g)).toHaveLength(1);
+    // (Owner, Nov 6, §283) No "new question" tag in the answer lists any more (it is on an unanswered question in the tester's form).
+    expect(h).toContain(`>${Q3}</span>`);
+    expect(h).not.toContain(`>${NEW_QUESTION_TAG}<`);
   });
 
   it("files placed in an addition still show in place; recordings keep their list with the date next to each Added", () => {

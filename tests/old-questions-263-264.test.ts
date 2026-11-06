@@ -70,7 +70,7 @@ const tList = (html: string) => { const s = html.slice(html.indexOf('data-panel=
 const tForm = (html: string) => { const at = html.indexOf("data-answer-form="); return at < 0 ? "" : html.slice(at, html.indexOf("</section>", at)); };
 const entries = (html: string) => html.split("data-questions-changed=").slice(1).map((e) => e.slice(0, e.indexOf("</ol>", e.indexOf('data-history-now=""'))));
 // The developer's Testers list part's list (as paid), and the tester's Terms history under it.
-const dList = (html: string, subId: string) => { const s = html.slice(html.indexOf(`data-panel="row-${subId}"`)); return s.slice(0, s.indexOf('data-question-body="else"')); };
+const dList = (html: string, subId: string) => { const s = html.slice(html.indexOf(`data-panel="row-${subId}-questions-list"`)); return s.slice(0, s.indexOf('data-question-body="else"')); };
 // The Then part of an entry, one question's drop-down in it (by its words).
 const thenOf = (entry: string) => entry.slice(entry.indexOf('data-history-then=""'), entry.indexOf('data-history-now=""'));
 const thenQ = (entry: string, q: string) => { const t = thenOf(entry); const i = t.indexOf(`>${q}</span>`); const e = t.indexOf('data-question=""', i); return i < 0 ? "" : t.slice(i, e < 0 ? t.length : e); };
@@ -107,7 +107,7 @@ describe("§263 lib", () => {
     const list = renderToStaticMarkup(h(SentWork, props));
     expect(list).not.toContain(Q2);
     expect(list).not.toContain("data-old-question");
-    const needs = renderToStaticMarkup(h(SentWork, { ...props, newOnly: { since: null }, newQuestionTag: false }));
+    const needs = renderToStaticMarkup(h(SentWork, { ...props, newOnly: { since: null } }));
     expect(needs.indexOf(Q3)).toBeLessThan(needs.indexOf(Q2));
     expect(foldOf(needs, Q2)).toContain(OLD);
     expect(foldOf(needs, Q2)).not.toContain("data-add-more");
@@ -177,7 +177,7 @@ describe("§263 a question flips old → current → old → current, on both si
     expect((await add(j.sessionId, j.tester.cookie, Q2, "refused")).status).toBe(409); // old: never added to
     let theirs = await testPage(testId, dev.user.id);
     expect(dList(theirs, sub.id)).not.toContain(Q2);
-    expect(foldOf(theirs.slice(theirs.indexOf(`data-panel="needs-${sub.id}"`)), Q2)).toContain(OLD); // never paid: Needs you still has it, tagged Old
+    expect(foldOf(theirs.slice(theirs.indexOf(`data-panel="needs-${sub.id}-questions-list"`)), Q2)).toContain(OLD); // never paid: Needs you still has it, tagged Old
     expect((await send(j.sessionId, j.tester.cookie, { answers: ["the map colours", ""], for: [Q3, Q4] })).status).toBe(200);
     await setKept(tid, `written:${j.sessionId}`, { answers: ["a laptop, I think"], questions: [Q4], notes: "" });
     await settle();
@@ -274,13 +274,13 @@ describe("§263 Needs you: an unpaid answer to a question changed since is shown
     const sub = await written(j.sessionId);
     await changeTo(testId, dev.cookie, [Q1, Q3]);
     let html = await testPage(testId, dev.user.id);
-    const needs = html.slice(html.indexOf(`data-panel="needs-${sub.id}"`), html.indexOf(`id="part-${sub.id}"`));
+    const needs = html.slice(html.indexOf(`data-panel="needs-${sub.id}-questions-list"`), html.indexOf(`id="part-${sub.id}"`));
     expect(foldOf(needs, Q2)).toContain("level two gate");
     expect(foldOf(needs, Q2)).toContain(OLD);
     expect((await payReview(dev.cookie, sub.id, "10.00")).status).toBe(200);
     await settle();
     html = await testPage(testId, dev.user.id);
-    expect(html).not.toContain(`data-panel="needs-${sub.id}"`);
+    expect(html).not.toContain(`data-panel="needs-${sub.id}-questions-list"`);
     expect(html).not.toContain("data-old-question");
   });
 });

@@ -13,7 +13,7 @@ import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
-import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, PAID_ZERO_LABEL } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -23,7 +23,7 @@ import { testerAutoChargeLine } from "@/lib/rules";
 import { chargeClosesLine, closeOutSoon } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 
-import { ReasonQuote } from "@/components/ScrollText";
+import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
@@ -52,7 +52,7 @@ import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
-import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lateSentLine, teamClosedLine, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
+import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lateSentLine, TEAM_CLOSED_LABEL, DEV_SIDE_LABEL, teamDecidedLabel, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { PageLoaded } from "@/components/PageLoaded";
@@ -67,7 +67,7 @@ import { ndaBlocked, ndaNoticeOpen } from "@/lib/ndaNotice";
 import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
 import { questionChanges } from "@/lib/questionHistory";
 import { cutNamesIn } from "@/lib/cutNames";
-import { carryOver, itemsFor } from "@/lib/answerSets";
+import { carryOver, itemsFor, itemsOf, snapshotOnlyFiles } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -99,6 +99,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const head = await db.contract.findUnique({ where: { id }, select: { testId: true, testerId: true } });
   if (head?.testerId === u.id) await (await import("@/lib/server/confirm")).expireActions(new Date(), { contractId: id });
   if (head?.testerId === u.id) await (await import("@/lib/server/workWindow")).finishWorkIfDue(head.testId);
+  // (Owner, Nov 6, §283) A left or ended contract that no Save reached is brought onto the listing's questions (its Terms history keeps the old ones).
+  if (head?.testerId === u.id) { const lt = await db.test.findUnique({ where: { id: head.testId }, select: { questions: true } }); if (lt) await (await import("@/lib/server/terms")).syncEndedQuestions(head.testId, lt.questions); }
   const pageV = head && head.testerId === u.id ? await testV(u.id, head.testId, id) : "";
   const c = await db.contract.findUnique({
     where: { id },
@@ -152,6 +154,16 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const historyFiles = c.recordings.filter((r) => r.part === "written" && r.uploadedAt);
   // (Owner, Nov 5, §235) The current questions with no answer yet (none answered after the first send: all of them); the form below the answers holds only these.
   const openQs = written ? writtenQuestions(c).filter((_, i) => carriedNow[i] == null) : writtenQuestions(c);
+  // (Owner, Nov 6, §283; the tag moved here from the answers list, §255) Of those, the ones that came after the tester's sends (never among a send's questions,
+  // by their words): "new question" beside the question's words in the form. Once answered the question leaves the form, and the tag with it.
+  const sentQs = new Set(written ? [...itemsOf(written.answers, []), ...additionsOf(written.additions).flatMap((a) => a.items ?? [])].map((x) => qText(x.question)) : []);
+  const newQs = written ? openQs.filter((q) => !sentQs.has(qText(q))).map(qText) : [];
+  // (Owner, Nov 6, §283) The form's files: unsent uploads only (one already sent is never listed or sent again), and not one that went with a draft into Terms
+  // history with its question (§263 / §269); it comes back with that draft if the question becomes current again (then it is in the kept draft).
+  const keptDraft = await db.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
+  const unsentFiles = c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId);
+  const snappedFiles = snapshotOnlyFiles(c.prevSets, unsentFiles, [JSON.stringify(keptDraft?.data ?? null)]);
+  const formFiles = unsentFiles.filter((r) => !snappedFiles.has(r.id));
   // (§235; replaces §182's rows below the panel) "Add to this answer" sits in each answered question's fold, right under its answer and additions (and Anything
   // else's), with its own 5, "N of 5 additions left" and its full note. A question with no answer yet is answered in the form below instead.
   const addUnder = (key: string, question: string) => {
@@ -782,8 +794,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <div className="space-y-2" data-answer-form={written ? "open" : "first"}>
             {/* (Owner, Nov 5, §260) No "What you sent is for the questions until <date>. Send your answers to these questions: …" line over the form. */}
             {written && openQs.length > 0 && <p className="text-sm font-medium text-white" data-open-questions-title="">Questions you haven&apos;t answered yet</p>}
-            <WrittenForm key={written ? "open" : "first" /* (Owner, Nov 5, §269) one form: other questions switch it in place (typed text kept by words) */} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
-              initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+            <WrittenForm key={written ? "open" : "first" /* (Owner, Nov 5, §269) one form: other questions switch it in place (typed text kept by words) */} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} newQs={newQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
+              initialAttachments={formFiles.map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </div>
         )}
         {/* (Owner, Nov 5, §254; replaces batch 13 §8 / §234's earlier sets shown here before anything was sent) No earlier sets' folds: nothing sent, nothing
@@ -824,32 +836,37 @@ function TesterReview({ timeZone, sessionId, kind, id, review, dispute, off = fa
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
       <PayLinesBox id={id} count={1 + extras.length + (update ? 1 : 0)}>
+      {/* (Owner, Nov 6, §281) Every typed note here (the developer's when paying, at Pay and each Pay more or a $0 update; a rejection's or the team's reason; the
+          team's decision note; the developer's side) is in the draggable reason box under its line (LabeledReason), never inline: a long unbroken note no longer
+          fills the card. */}
       {review.rejected ? (
         // (Batch 15 section 30) Old rejections stay, and read "Rejected".
-        <p><b>Rejected</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
+        <LabeledReason line={<><b>Rejected</b> ({fmtDateTime(review.createdAt)})</>} label="Rejected" id={`review-note-${id}`} text={review.reason} />
       ) : review.teamClosedById ? (
         // (Batch 30 §5) The team closed it for $0, with the team's reason.
-        <p data-team-closed="">{teamClosedLine(review.reason)} ({fmtDateTime(review.createdAt)})</p>
+        <LabeledReason data={{ "data-team-closed": "" }} line={`${TEAM_CLOSED_LABEL} (${fmtDateTime(review.createdAt)})`} label={TEAM_CLOSED_LABEL} id={`review-note-${id}`} text={review.reason} />
       ) : review.amountCents === 0 && review.reason && !byTesterChoice(review.reason) ? (
-        <p data-paid-zero="">{paidZeroLine(review.reason)} ({fmtDateTime(review.createdAt)})</p>
+        <LabeledReason data={{ "data-paid-zero": "" }} line={`${PAID_ZERO_LABEL} · ${fmtDateTime(review.createdAt)}`} label={PAID_ZERO_LABEL} id={`review-note-${id}`} text={review.reason} />
       ) : review.amountCents === 0 ? (
         <p data-paid-zero="">{dev} paid $0 for this ({fmtDateTime(review.createdAt)})</p>
       ) : (
-        <p>
+        <LabeledReason data={{ "data-paid-line": "" }} label="Paid" id={`review-note-${id}`} text={byTesterChoice(review.reason) ? "" : review.reason} line={<>
           <b>Paid {money(review.amountCents)}</b>{review.rateCents != null && <> ({money(review.rateCents)}/h)</>}: you get {money(testerShare(review.amountCents))} ({fmtDateTime(review.createdAt)})
-          {review.reason && <> · “{review.reason}”</>}
-        </p>
+          {/* Charge / Let it go: the app's own words, not a typed note. */}
+          {byTesterChoice(review.reason) && <> · “{review.reason}”</>}
+        </>} />
       )}
       {/* (Batch 30 §2) The developer closed an update at $0 (with their note, if any). */}
-      {update && <p data-update-closed="">{updateClosedZeroLine(dev)} ({fmtDateTime(update.at)}){update.note && <> · “{update.note}”</>}</p>}
-      {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
+      {update && <LabeledReason data={{ "data-update-closed": "" }} line={`${updateClosedZeroLine(dev)} (${fmtDateTime(update.at)})`} label="Paid $0 more" id={`update-note-${id}`} text={update.note} />}
+      {extras.map((x, i) => <LabeledReason key={i} data={{ "data-extra-line": "" }} line={`Extra ${money(x.amountCents)}: you get ${money(testerShare(x.amountCents))} (${fmtDateTime(x.createdAt)})`} label={`Extra ${money(x.amountCents)}`} id={`extra-note-${id}-${i}`} text={x.note} />)}
       </PayLinesBox>
-      {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : "."}`}</p>}
+      {dispute && (dispute.status === "open" ? <p>You disputed this: waiting for the team.</p>
+        : <LabeledReason data={{ "data-team-decided": "" }} line={`${teamDecidedLabel(money(dispute.decidedCents))}${dispute.decisionNote.trim() ? "" : "."}`} label="The team's decision" id={`decision-note-${id}`} text={dispute.decisionNote} />)}
       {/* (Owner, Oct 29, batch 28 §14) Whether this part can still be paid more (grey; not a stop). */}
       {more && !review.rejected && !review.teamClosedById && (
         <p className="note" data-pay-more-state="">{more.allCents <= more.paidCents ? testerPaidMostLine(more.paidCents) : more.closedOn ? payClosedLine(more.closedOn, true) : testerPayMoreLine(dev, more.paidCents, more.allCents)}</p>
       )}
-      {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
+      {dispute?.devSide && <LabeledReason data={{ "data-dev-side": "" }} line={DEV_SIDE_LABEL} id={`dev-side-${id}`} text={dispute.devSide} />}
       {may && !off && <DisputeForm sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} limit={disputeLimitText(room ?? 0)} />}
       {/* (Batch 30 §5) Final: no dispute on a team closure. */}
       {review.teamClosedById && !dispute && !off && (

@@ -1,4 +1,5 @@
 import { qOptional, qText } from "./questions";
+import { markerIds } from "./answerAttachments";
 
 /**
  * (Owner, Oct 29, batch 13 section 8) Written answers are stored as whole SETS: each question with the answer it got, so answers sent before a switch to changed
@@ -81,3 +82,14 @@ export function restoreDraft(questions: string[], initial: string[], kept: { ans
 
 /** Add a previous set at the front, keeping at most MAX_PREV_SETS. */
 export const pushPrev = (sets: PrevSet[], set: PrevSet) => [set, ...sets].slice(0, MAX_PREV_SETS);
+
+/**
+ * (Owner, Nov 6, §283) The unsent uploads that went with a draft into Terms history: placed (by their markers) in a draft snapshot of an earlier set (§263 /
+ * §269, a question no longer current), and not in `texts` (what the form holds now: the kept draft, or a Send's answers and notes). The form never lists them
+ * as loose files and a Send never takes them; they come back with the snapshot if its question becomes current again (its draft is then in the kept draft).
+ */
+export function snapshotOnlyFiles(prevSets: unknown, uploads: readonly { id: string; filename?: string }[], texts: readonly string[]) {
+  const snapped = markerIds(JSON.stringify(prevSetsOf(prevSets).flatMap((p) => (p.versions ?? []).filter((v) => v.kind === "draft").map((v) => v.items))), uploads);
+  const now = markerIds(texts.join(" "), uploads);
+  return new Set([...snapped].filter((id) => !now.has(id)));
+}

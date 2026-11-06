@@ -4968,3 +4968,69 @@ with ×.
 - "Refresh to see the latest." is gone from every notice and refusal (`staleNote` removed; "This page is out of date." stays where it was the start; the live
   route's bad `since` reads "This page is out of date."): the page's live updates already redraw. BLUE-NOTICES.md follows.
 - Tests: tests/end-early-gone-278.test.ts; flow.test.ts and group-c.test.ts follow the new rule and wording.
+## §279 Find tests shows the tests you're in, tagged "Joined", opening your session (owner, Nov 6)
+- `findTests` left out every test the tester had a contract on (except left ones). It now also lists the tests they're working in (a working contract), with the
+  search applied as to any other test, even when the test is closed to new joiners (full, joining closed, invite only, paused). Ordering is unchanged (device
+  rank, then newest). The dashboard's "more tests" already skipped working ones, so it's unchanged.
+- The card: a green "Joined" badge (the Invited / Open tone, `data-find-joined`), no "N spots open to you" or needs lines, and the card (title included) opens
+  /app/sessions/<contractId> instead of the join page (`joinedContract` in lib/server/tests.ts). The category counts and "All N" include these tests, since
+  they're shown.
+- Unchanged: a tester who left, was ended or rated (today's rules: rejoin, "You left this test", out of Find after rating); an admin's Find.
+- Tests: tests/find-joined-279.test.ts; batch17-find's source check follows the card's new href.
+
+## §281 Payment and dispute notes in the draggable reason box everywhere (owner, Nov 6)
+- The short typed notes around a payment or a dispute are never inline: each sits in the shared draggable reason box (ReasonQuote, §237: its own scroll, drags
+  taller, OwnPanel when nested) under its line, which is the box's label line (`LabeledReason` in components/ScrollText.tsx). Short notes go in the same box (it
+  starts small, the ReasonQuote default); no note, just the line. Long words wrap anywhere, in the line too.
+- The tester's session page (each part's and call's payment card, `TesterReview`): "Paid $0 · <when>" (PAID_ZERO_LABEL) with the developer's note; "Paid $X …"
+  with the note at Pay; each "Extra $X: you get …" (Pay more) and a $0 update's "… paid $0 more for what you added." with their notes; "Rejected (<when>)";
+  "The team closed this for $0 (<when>)" (TEAM_CLOSED_LABEL); "The team decided: $X in all" (teamDecidedLabel; a full stop only with no note) with the
+  team's note; "The developer's side" (DEV_SIDE_LABEL). Charge / Let it go have no typed note (their review reason is the app's own words): unchanged.
+- The developer's test page, Testers list: a part's "Paid $0 · <when>" and the team's $0 close-out (parts and calls) in the box under the line. Already boxed
+  and unchanged: Needs you's dispute rows (the tester's reason), the dashboard's dispute box, the team's dispute rows (the tester's reason, the developer's note
+  when paying, the developer's side, the decision note), the admin person and test boxes (dispute reasons, close-out and hold notes). The payment lists show no
+  typed notes; Needs you's update rows have none.
+- paidZeroLine / teamClosedLine keep their text (built from the labels). Tests: tests/notes-in-boxes-281.test.ts; batch9, batch30-money, batch30-money-fixes and
+  batch35-admin-tabs follow the new markup.
+
+## §282 Written answers: all questions in one "Questions (N)" drop-down; every part is a content panel, then a pay panel (owner, Nov 6)
+- SentWork's `questionsFold` (`{ open }`): a written part's question folds, and Anything else (the list's fixed last fold), sit inside ONE drop-down
+  "Questions (N)" (N: the questions shown, Anything else not counted), its list in the draggable scroll panel (ResizeBox in OwnPanel, as §249's QuestionTexts:
+  min(24rem, 55vh) at first, QUESTIONS_LIST_MAX). Each question's drop-down is unchanged inside (the Old tag in Needs you, "· N added", the boxes, attachments,
+  §226's new-only parts). The drop-down is a Fold (`<id>-questions`), so its open state is kept per part. Nothing to show (Needs you after paying): no
+  drop-down, "Nothing new since you paid." as before.
+- Where: Needs you's part and update rows (open at first), the Testers list's written part (closed at first), the team's "See the work" (open at first: the
+  fold above it was just opened; its AnswersBox stays for recordings only). Not the tester's own "Your written answers": that is already one drop-down with
+  every question in one panel (§182), so a second one inside it would only nest.
+- Two panels per part, in Needs you and the Testers list, for written answers, recordings and calls (PART_PANEL, the bordered panel look): first the content
+  (the Questions drop-down; the recordings in their panel; a call's length and notes), then right under it, its own panel, the paying (Needs you: the Pay
+  drop-down with its box; the Testers list: the part's payments (§225), closed-unpaid, Pay more and its box, at-cap, $0 / team-closed notes, the bank), hidden
+  when empty. A written part has no outer panel around the Questions drop-down any more (its own panel is the one that scrolls); a recording's panel is as
+  before (flat inside Needs you's person panel, §187). The Testers list's Terms history stays in the content panel, under the Questions drop-down.
+- Tests: tests/questions-dropdown-282.test.ts; batch10, batch35-sent-panels, old-questions-263-264 and written-form-234-235 follow the new markup.
+
+## §283 Written answers: only answered current questions everywhere, the new-question tag in the form, every contract follows the questions, and more (owner, Nov 6)
+- The "new question" tag (NEW_QUESTION_TAG) moved: never in an answers list (SentWork's `newQuestionTag` prop is gone, the developer never saw it, §255);
+  it sits in the tester's form ("Questions you haven't answered yet") beside the words of an unanswered question that came after their sends (not among any
+  send's questions, by its words: WrittenForm's `newQs`). Once answered it leaves the form, and the tag with it.
+- Every answers list (the tester's "Your written answers", Needs you, the update rows, the Testers list, the team's See the work) lists only answered questions:
+  a non-blank answer, or at least one addition, as drawn. An unanswered current question is only its box in the tester's form.
+- Questions follow the listing into EVERY contract on the test on a Save (left and ended too, not only working), with the same Terms history entry
+  (followQuestions); only the working testers are told in the bell. The NDA text follows into the non-working contracts too, with no notice (followNda).
+  Existing data: a non-working contract no Save reached is brought onto the listing's questions when the developer's test page or the tester's session page is
+  read (`syncEndedQuestions` in lib/server/terms.ts: followQuestions, its Terms history entry dated then; nothing deleted; an in-line contract costs one
+  comparison). A tester who rejoins gets the same entry first, then the listing's questions (the rejoin snapshot). Old answers come back into the lists only
+  if their question becomes current again.
+- The Testers list's avatars and "Search testers" clear each other: choosing a circle clears the box, typing a name clears the circle (TesterListSearch's
+  `searchTyped` / `onCircleChosen`, TesterFilter's `clearTesterFilter`). Needs you has no circles, so its own box is unchanged.
+- Anything else counts a changed-questions send ("N added", its "Added · <date>" entry) only when it brought notes or loose files: files no answer of that send
+  places with its marker (SetExtra's new `answers`). A file placed in an answer shows there only; the owner's case (a 9-answer send, notes "", one video placed
+  in an answer) no longer draws "· 1 added" and an empty dated entry. Every SentWork surface.
+- The Testers list: each tester's Terms history drop-down (§263) moved from under the written answers to the very bottom of the tester's drop-down, below all
+  their part panels (written answers, recording, calls and their Pay panels).
+- The tester's written form never lists ("Files not in an answer …") or sends a file already sent (submissionId set): its files are the unsent uploads only. An
+  unsent file placed in a draft answer to a question that changed went with that draft into the Terms history snapshot (§263 / §269): not listed as loose,
+  not taken by the next Send; it comes back with the draft if the question becomes current again (`snapshotOnlyFiles` in lib/answerSets.ts, used by the
+  session page and the written Send). The owner's case: bb's video, sent in an answer whose question changed, no longer shows under the form.
+- Tests: tests/written-answers-283.test.ts; qa-look-254-256 (the tag), batch35-added-per-question(-222), paid-cut-226-227, written-form-234-235,
+  old-questions-263-264 and questions-dropdown-282 follow.

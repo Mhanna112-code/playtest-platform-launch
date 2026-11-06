@@ -40,7 +40,12 @@ export const updateClosedZeroLine = (dev: string) => `${dev} paid $0 more for wh
 // ---------- (Batch 30 §5) The team closes open reviews at $0 ----------
 
 /** The tester's line on a piece the team closed (the reason is the team's). */
-export const teamClosedLine = (reason: string) => `The team closed this for $0: “${reason}”`;
+/** (Owner, Nov 6, §281) On the pages: this label as the line, the team's reason in the reason box under it (LabeledReason). */
+export const TEAM_CLOSED_LABEL = "The team closed this for $0";
+export const teamClosedLine = (reason: string) => `${TEAM_CLOSED_LABEL}: “${reason}”`;
+/** (Owner, Nov 6, §281) The label lines over the team's decision note and the developer's side (each note in the reason box under it, LabeledReason). */
+export const teamDecidedLabel = (amount: string) => `The team decided: ${amount} in all`;
+export const DEV_SIDE_LABEL = "The developer's side";
 export const TEAM_CLOSED_NO_DISPUTE = "The team closed this for $0, so it can't be disputed.";
 export const TEAM_CLOSED_NO_CHANGE = "The team closed this for $0, so it can't be changed.";
 export const TEAM_CLOSED_NO_PAY = "The team closed this for $0.";
