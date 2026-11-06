@@ -287,7 +287,9 @@ export async function deferredForBox(devId: string) {
   const rows = await db.payment.findMany({ where: { developerId: devId, status: "deferred", coveredById: null }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   // (Owner, Nov 4, §177) An automatic call charge names its call's date as a time token: written in the developer's zone for the page.
   const day = await pageCallDay(devId); // (§178)
-  return Promise.all(rows.map(async (p) => ({ id: p.id, amountCents: p.amountCents, what: await renderFor(devId, await deferredWhat(p, false, day)), full: await renderFor(devId, await deferredWhat(p, true, day)), href: p.contractId ? `/app/tests/${(await db.contract.findUniqueOrThrow({ where: { id: p.contractId }, select: { testId: true } })).testId}` : "/app/payments" })));
+  return Promise.all(rows.map(async (p) => ({ id: p.id, amountCents: p.amountCents, what: await renderFor(devId, await deferredWhat(p, false, day)), full: await renderFor(devId, await deferredWhat(p, true, day)),
+    // (Owner, Nov 5, §270) The row's words open the exact part on the test page (its sent work, its call, else the tester's row).
+    href: p.contractId ? `/app/tests/${(await db.contract.findUniqueOrThrow({ where: { id: p.contractId }, select: { testId: true } })).testId}#${p.submissionId ? `piece-${p.submissionId}` : p.callId ? `call-${p.callId}` : `tester-${p.contractId}`}` : "/app/payments" })));
 }
 
 /**
@@ -1374,7 +1376,11 @@ export async function adminCases(now = new Date(), forDigest = false) {
 
 /** For the "Pay what you owe" box: failed charges and reversed payments. */
 export async function owedForBox(devId: string) {
-  return owedLines(devId);
+  // (Owner, Nov 5, §270) Every person and test a line (or a line of what it covered) names is its own green link.
+  const [lines, { linkPool, lineLinks }] = await Promise.all([owedLines(devId), import("./lineLinks")]);
+  if (!lines.length) return lines;
+  const pool = await linkPool(devId);
+  return lines.map((o) => ({ ...o, links: lineLinks(pool, o.full ?? o.text), ...("covers" in o && o.covers ? { covers: o.covers.map((x) => ({ ...x, links: lineLinks(pool, x.full || x.text) })) } : {}) }));
 }
 
 /** 1. Sent work not paid within the review window (REVIEW_DAYS, 7): the developer's daily "pay it", Charge / Let it go opening for the tester, and its reminders. */

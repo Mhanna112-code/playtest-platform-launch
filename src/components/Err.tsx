@@ -1,4 +1,6 @@
 "use client";
+import { withLineLinks } from "@/components/LineLinks";
+import { knownLinks } from "@/lib/lineLinkRegistry";
 import { useEffect, useRef } from "react";
 import { FIELD } from "@/lib/client";
 import { isNdaBlockLine } from "@/lib/ndaNotice";
@@ -33,7 +35,7 @@ export function Err({ text, press = "" }: { text: string; press?: string }) {
   if (isNdaBlockLine(text)) {
     const at = text.lastIndexOf(": ");
     const tail = text.slice(at + 2), link = tail.startsWith("read it") ? "read it" : "see the change";
-    return <p ref={ref} className="info" data-nda-refusal="">{text.slice(0, at + 2)}<a href="?nda=open#info-nda" data-nda-link="">{link}</a>{tail.slice(link.length)}</p>;
+    return <p ref={ref} className="info" data-nda-refusal="">{withLineLinks(text.slice(0, at + 2), knownLinks(), { draw: (t) => t })}<a href="?nda=open#info-nda" data-nda-link="">{link}</a>{tail.slice(link.length)}</p>;
   }
   const red = text.startsWith(FIELD);
   const line = red ? text : refusalLine(press, text);
@@ -41,7 +43,7 @@ export function Err({ text, press = "" }: { text: string; press?: string }) {
   // (Owner, Nov 1, §114) Google's sign-up step for the email of a deleted account that wasn't clean: the line exactly, with Contact us after it.
   if (!red && text === ACCOUNT_CLOSED) return <p ref={ref} className="err" data-account-closed="">{text} <Link href={CONTACT_US_HREF} className="underline" data-contact-us="">Contact us</Link></p>;
   // (Owner, Nov 5, §227) A refusal about what's owed ("Pay what you owe first.") links to Pay what you owe on Payments (it's never on the test page).
-  if (!red && /pay what you owe/i.test(text)) return <p ref={ref} className="err" data-refusal-named={line !== text ? "" : undefined} data-owed-refusal="">{line} <PayOwedLink /></p>;
+  if (!red && /pay what you owe/i.test(text)) return <p ref={ref} className="err" data-refusal-named={line !== text ? "" : undefined} data-owed-refusal="">{withLineLinks(line, knownLinks(), { draw: (t) => t })} <PayOwedLink /></p>;
   if (!red && isPerkRefusal(text)) return <p ref={ref} className="err flex flex-wrap items-center gap-2" data-perk-refusal="">{line} <SubscribeLink /></p>;
-  return <p ref={ref} className={red ? "err-field" : "err"} {...(!red && line !== text ? { "data-refusal-named": "" } : {})}>{red ? text.slice(1) : line}</p>;
+  return <p ref={ref} className={red ? "err-field" : "err"} {...(!red && line !== text ? { "data-refusal-named": "" } : {})}>{red ? text.slice(1) : withLineLinks(line, knownLinks(), { draw: (t) => t }) /* (Owner, Nov 5, §270) its names and tests, green links */}</p>;
 }

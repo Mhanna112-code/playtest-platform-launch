@@ -1,4 +1,5 @@
 "use client";
+import { withLineLinks } from "@/components/LineLinks";
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { api } from "@/lib/client";
@@ -18,7 +19,7 @@ export async function openNdaNotice(sessionId: string, router?: { refresh(): voi
  * before you go on" ("removed the NDA from this test: see the change before you go on"), with the link. Opening it (here, from the bell's link, which arrives
  * with `?nda=open`, or from a refusal's link) records it as seen.
  */
-export function NdaNotice({ sessionId, dev, kind, open, block }: { sessionId: string; dev: string; kind: string; open: boolean; block: boolean }) {
+export function NdaNotice({ sessionId, dev, devHref, kind, open, block }: { sessionId: string; dev: string; /** (Owner, Nov 5, §270) the developer's profile: their name is a green link (none: a deleted account) */ devHref?: string | null; kind: string; open: boolean; block: boolean }) {
   const router = useRouter();
   const path = usePathname();
   useEffect(() => {
@@ -28,10 +29,11 @@ export function NdaNotice({ sessionId, dev, kind, open, block }: { sessionId: st
     void openNdaNotice(sessionId, router);
   }, [sessionId, path, router]);
   if (!open) return null;
+  const who = devHref ? [{ text: dev, href: devHref, kind: "person" as const }] : [];
   const link = (text: string) => <a href="#info-nda" data-nda-link="" onClick={(e) => { e.preventDefault(); void openNdaNotice(sessionId, router); }}>{text}</a>;
   if (block) {
     const p = ndaBlockParts(dev, kind);
-    return <p className="info" data-nda-block={kind}>{p.before}{link(p.link)}{p.after}</p>;
+    return <p className="info" data-nda-block={kind}>{withLineLinks(p.before, who, { draw: (t) => t })}{link(p.link)}{p.after}</p>;
   }
-  return <p className="info" data-nda-notice={kind}>{dev} {link(NDA_CHANGED)}</p>;
+  return <p className="info" data-nda-notice={kind}>{withLineLinks(dev, who, { draw: (t) => t })} {link(NDA_CHANGED)}</p>;
 }

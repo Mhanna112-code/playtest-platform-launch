@@ -1,4 +1,6 @@
 "use client";
+import { withLineLinks } from "@/components/LineLinks";
+import { splitLinks } from "@/lib/lineLinks";
 import { useEffect, useRef, useState } from "react";
 import { api } from "@/lib/client";
 import type { Change } from "@/components/ChangesBox";
@@ -170,7 +172,8 @@ export function LiveTop({ scope, seenAt, seeIt, contractLink }: { scope: string;
           <li key={key(l)} className={`${l.ignored ? "text-sky-100/50" : ""} ${flash === key(l) ? "rounded bg-sky-300/20 transition-colors" : ""}`} data-flash={flash === key(l) ? "" : undefined} title={l.ignored ? "You turned these stops off in Alerts" : undefined}>
             {/* (Batch 15 section 35) A line about a row on this page opens it (a new dispute: its Needs you row). */}
             {/* (Batch 30 §10) A listing save's line says its own time ("Marc Hanna edited the listing at 6:55 PM: …"): not twice. */}
-            <b>{l.timed ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {l.link ? <a href={`#${l.link}`} onClick={(e) => { e.preventDefault(); jumpTo(l.link!); }}>{l.text}</a> : l.text}
+            <b>{l.timed ? "Updated:" : `Updated · ${time(l.at)}:`}</b> {/* (Owner, Nov 5, §270) Each person and test it names is its own green link; a line about a row keeps its other words opening that row, beside them. */}
+            {l.link ? (l.links?.length && splitLinks(l.text, l.links).some((p) => p.link) ? withLineLinks(l.text, l.links, { draw: (t) => t, rest: `#${l.link}` }) : <a href={`#${l.link}`} onClick={(e) => { e.preventDefault(); jumpTo(l.link!); }}>{l.text}</a>) : withLineLinks(l.text, l.links, { draw: (t) => t })}
             {/* (Owner, Oct 27) A tester switched to or kept after new terms: "See their contract" scrolls to their row on the test page; on Edit it opens the test page at that row in a new tab. */}
             {l.kind === "terms" && l.contract && contractLink && (
               <>

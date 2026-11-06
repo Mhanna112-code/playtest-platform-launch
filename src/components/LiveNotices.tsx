@@ -1,4 +1,5 @@
 "use client";
+import { withLineLinks } from "@/components/LineLinks";
 import { useEffect, useRef, useState } from "react";
 import type { Change } from "@/components/ChangesBox";
 import { JustUpdated } from "@/components/GapDialog";
@@ -24,7 +25,7 @@ export function LiveNotices({ open }: { open: boolean }) {
     <div className="info basis-full" role="status" aria-live="polite" data-live-notices="">
       <LongList className="space-y-1" tall="max-h-52">
         {newest.map((c, i) => (
-          <li key={`${c.at}|${c.text}|${i}`}><JustUpdated at={c.at} /> {c.text}</li>
+          <li key={`${c.at}|${c.text}|${i}`}><JustUpdated at={c.at} /> {withLineLinks(c.text, c.links, { draw: (t) => t }) /* (Owner, Nov 5, §270) */}</li>
         ))}
       </LongList>
     </div>

@@ -214,8 +214,9 @@ describe("§191 What you've paid groups the items one charge paid", () => {
     expect(text(groupOf(html, w.g.g4.id))).toMatch(/^▸Pay what you owe · \$7\.00 · .* · your bank reversed this \(chargeback\)/);
     // Hooks: items keep data-paid-what (and link their test); each group carries its payment's id.
     expect(groupOf(html, w.g.g1.id)).toContain(`data-paid-group-item="${i.g1a.id}"`);
-    expect(groupOf(html, w.g.g1.id)).toContain(`href="/app/tests/${w.testId}"`);
-    expect(groupOf(html, w.g.g2.id)).toContain(`href="/app/tests/${w.test2}"`);
+    // (§270) The item's words open its exact part on that test page (#piece-…, #call-…, #tester-…), its names and test green links.
+    expect(groupOf(html, w.g.g1.id)).toContain(`href="/app/tests/${w.testId}`);
+    expect(groupOf(html, w.g.g2.id)).toContain(`href="/app/tests/${w.test2}`);
   });
 
   it("the team's copy shows the same groups; the group links the ONE PaymentIntent", async () => {

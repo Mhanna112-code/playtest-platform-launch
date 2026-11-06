@@ -257,7 +257,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // Payments: no Confirm of its own, a link to the same button.
     const items = await confirmItems(dev.user.id);
     // (§131) It names the piece: which tester, which part, which test (cut at 10 characters; `full` uncut, the hover).
-    expect(items).toEqual([{ tests: expect.any(Array), id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href, cents: 1000,
+    expect(items).toEqual([{ tests: expect.any(Array), links: expect.any(Array) /* (§270) */, id: p.id, text: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), full: expect.stringMatching(/^A payment for Ana Silva's written answers on “Harbor Run” \$10\.00 · confirm by /), href, cents: 1000,
       // (Owner, Nov 5, §246) The row's "what" apart from its amount and "confirm by" (outside the cut).
       what: "A payment for Ana Silva's written answers on “Harbor Run”", amount: "$10.00", by: expect.stringMatching(/^confirm by /) }]); // (§147) its amount: over $200 its Confirm needs the tick
     const list = renderToStaticMarkup(createElement(ConfirmList, { items }));
@@ -269,7 +269,7 @@ describe("batch 17 §11: a charge made while away is confirmed on the test page"
     // The test page: under the piece (the tester's written answers), the box the link marks. (Owner, Nov 4, §175) Listed under the tester's name, the line names the
     // piece by her pronoun ("she").
     const rows = await bankWaitingOnTest(dev.user.id, testId);
-    expect(rows).toEqual([{ id: p.id, at: expect.any(Date), cents: 1000, contractId: sessionId, pieceId: sub.id, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for her written answers, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("for her written answers, made") }]); // (Owner, Nov 4, §180) on the test's own page: no test name
+    expect(rows).toEqual([{ id: p.id, at: expect.any(Date), cents: 1000, contractId: sessionId, pieceId: sub.id, links: [] /* (§270) a line naming her by pronoun names no one */, line: expect.stringMatching(/^Your bank wants you to confirm a \$10\.00 payment for her written answers, made while you were away\. Confirm it by .+\.$/), full: expect.stringContaining("for her written answers, made") }]); // (Owner, Nov 4, §180) on the test's own page: no test name
     const box = renderToStaticMarkup(createElement(BankWaiting, { paymentId: p.id, line: rows[0].line }));
     expect(box).toContain(`id="bank-${p.id}"`);
     expect(box).toContain("data-[marked]:ring-2");

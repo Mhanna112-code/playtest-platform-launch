@@ -1,4 +1,5 @@
 "use client";
+import { rememberReply } from "./lineLinkRegistry";
 import { TAB, api, pageUser } from "@/lib/client";
 import type { CancelKind } from "@/lib/bankNotice";
 
@@ -94,6 +95,7 @@ export async function peekBank(t: PeekTarget, since?: string): Promise<PeekResul
     if (!res.ok) return { status: "waiting" };
     const data = (await res.json().catch(() => null)) as { status?: unknown; changes?: unknown; still?: unknown; cancelled?: unknown } | null;
     const changes = Array.isArray(data?.changes) ? data.changes.filter((x): x is string => typeof x === "string" && !!x) : [];
+    rememberReply(data); // (Owner, Nov 5, §270) the notice's lines' green links
     return {
       status: data?.status === "done" ? "done" : "waiting",
       ...(changes.length ? { changes } : {}),

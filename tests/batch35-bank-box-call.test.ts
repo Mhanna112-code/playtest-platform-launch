@@ -80,7 +80,7 @@ describe("§174 a Pay more on a CALL open at the bank", () => {
     const r = await peek(o.dev.cookie, { paymentId: o.paymentId, pi: o.pi, since: o.since });
     expect(r.status).toBe(200);
     // (Owner, Nov 4, §177) The line names WHICH call (its date and time; UTC in tests). The peek sends no page: the test's own page, so no "On “…”:" prefix.
-    expect(r.body).toEqual({ status: "waiting", changes: [`Ana Silva disputed the pay for her live call on ${o.when}`], still: "Complete still pays $2.00 as pressed; or press Cancel." });
+    expect(r.body).toEqual({ status: "waiting", changes: [`Ana Silva disputed the pay for her live call on ${o.when}`], still: "Complete still pays $2.00 as pressed; or press Cancel.", links: [expect.objectContaining({ text: "Ana Silva", kind: "person" })] }); // (§270) the line's green links
     // The page's watch hands it to the notice as it arrives.
     let notice = NO_NOTICE;
     await new Promise<void>((done) => {

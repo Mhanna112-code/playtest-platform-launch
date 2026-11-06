@@ -1,3 +1,4 @@
+import { withLineLinks } from "@/components/LineLinks";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
@@ -376,7 +377,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   };
   // The kinds both views share: a person's charges waiting for the bank, their disputes waiting for your side, their excerpt requests.
   const bankKind = (c: (typeof t.contracts)[number], extra: Record<string, string> = {}) => ({ who: whoOf(c), kind: "bank", label: CONFIRM_WITH_BANK, ats: bankOf(c.id).map((b) => b.at), data: { "data-bank-group": c.id, ...extra },
-    node: bankOf(c.id).map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />) });
+    node: bankOf(c.id).map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={withLineLinks(b.line, b.links, { draw: (t) => t }) /* (Owner, Nov 5, §270) */} full={b.full} seenAt={seenAt} />) });
   const disputeKind = (c: (typeof t.contracts)[number], extra: Record<string, string> = {}) => {
     const mine = disputesWaiting.filter((d) => d.contractId === c.id);
     return { who: whoOf(c), kind: "disputes", label: "Disputes", ats: mine.map((d) => d.at), data: extra, node: mine.map((d) => (

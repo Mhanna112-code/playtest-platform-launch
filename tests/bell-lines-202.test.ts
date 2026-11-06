@@ -53,7 +53,7 @@ describe("§202 bell lines: 50 characters (§251), then the whole line on the ar
     const list = src("app/app/notifications/BellList.tsx");
     expect(list).toContain("if (!wide) markRead([l]);");
     expect(list).toContain('opensInBox(l.text) ? <OwnPanel><ResizeBox id={`bell-${l.id}`}');
-    expect(list).toContain("{bellWords(l.text, l.test)}");
+    expect(list).toContain(": bellWords(l.text, l.test)}"); // (§270) a line naming no one
   });
 });
 

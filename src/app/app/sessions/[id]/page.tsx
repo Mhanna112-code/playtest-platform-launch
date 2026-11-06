@@ -376,7 +376,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} devPronoun={c.test.developer.pronoun} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
       {/* (Owner, Nov 5, §267) The NDA's own notice (and, for an added or removed NDA, the block's banner) until it's opened. */}
-      <NdaNotice sessionId={c.id} dev={dev} kind={c.ndaChangeKind} open={ndaNoticeOpen(c)} block={ndaBlocked(c) && c.status === "working"} />
+      <NdaNotice sessionId={c.id} dev={dev} devHref={devHref} kind={c.ndaChangeKind} open={ndaNoticeOpen(c)} block={ndaBlocked(c) && c.status === "working"} />
       <ListingSeeIt box="scope" />
       {/* (Owner, Nov 5, §265) An offer never carries questions (they follow the listing): no "The questions changed" block and no Switch wording about them. */}
       {/* (Owner, Nov 5, §267) Nor the NDA: it follows the listing with its own notice. */}

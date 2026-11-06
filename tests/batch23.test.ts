@@ -404,7 +404,7 @@ describe("batch 23 section 9: Confirm with your bank runs the stop-once check fi
     const b = src("components/BankWaiting.tsx");
     expect(b).toContain('press<Omit<BankAction, "requiresAction">>("/api/payments/confirm", { paymentId, start: true, page: location.pathname, ...(over ? { over200 } : {}) }, "bank")');
     expect(b).toContain("<ChangesBox changes={changes} error={error} press={CONFIRM_WITH_BANK} />");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />");
+    expect(src("app/app/tests/[id]/page.tsx")).toContain("<BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={withLineLinks(b.line, b.links, { draw: (t) => t }) /* (Owner, Nov 5, §270) */} full={b.full} seenAt={seenAt} />");
   });
 });
 
@@ -478,7 +478,7 @@ describe("batch 23 section 5: Edit keeps what you typed; it shows what the other
     expect(lines.filter((l) => l.kind === "yours")).toEqual([expect.objectContaining({ text: "Instructions: your version will replace the one saved in another tab", fields: ["description"] })]);
     expect(lines.some((l) => /title|Name of this test/.test(l.text) && l.kind === "yours")).toBe(false); // untouched here: no stop for it
     expect(replaceLine("description")).toBe("Instructions: your version will replace the one saved in another tab");
-    expect(src("components/ChangesBox.tsx")).toContain('c.kind === "yours" ? `${c.text} at ${time(c.at)}.`');
+    expect(src("components/ChangesBox.tsx")).toContain('c.kind === "yours" ? <>{linked(c.text, c.links)} at {time(c.at)}.</>'); // (§270) names as green links
     const second = await saveA({ description: "Only the first reef." }, { confirmed: true, boxAt: r.body.error.now ?? new Date().toISOString(), base: await formOf(testId) });
     expect(second.status).toBe(200);
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });

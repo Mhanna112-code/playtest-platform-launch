@@ -1,5 +1,6 @@
 import { LongList } from "@/components/LongList";
 import { WhatLine } from "@/components/WholeLine";
+import { withLineLinks, type LineLink } from "@/components/LineLinks";
 import { money } from "@/lib/format";
 import { OWED_BANK_WAITING } from "@/lib/rules";
 import { plainLabel } from "@/lib/server/paymentRows";
@@ -29,9 +30,13 @@ type Pay = PaidList["list"][number];
 const marks = (p: Pay, row: PaidRow | undefined) =>
   p.status === "not_set_up" ? " · recorded (payments not set up)" : p.status === "refunded" ? " · refunded (your bank's chargeback was reversed)" : row?.reversed && p.chargeback === "won" ? " · your bank reversed this, then decided in your favour (chargeback won)" : row?.reversed ? (row?.reversedCents ? ` · your bank reversed ${money(row.reversedCents)} of this (chargeback)` : " · your bank reversed this (chargeback)") : "";
 /** A line's "what": its test linked, then how it was paid. (Owner, Nov 5, §246; was §216's per-name cut) The "what" cut at 50 (§251) with the arrow, opened in place (WhatLine). */
-function What({ p, line, testId, testHref }: { p: Pay; line: { what: string; full: string; how: string } | undefined; testId: string | null | undefined; testHref: (testId: string) => string }) {
+function What({ p, line, testId, testHref, exact }: { p: Pay; line: { what: string; full: string; how: string; links?: LineLink[] } | undefined; testId: string | null | undefined; testHref: (testId: string) => string;
+  /** (Owner, Nov 5, §270) the exact part on the test page ("/app/tests/<id>#piece-<id>"; the team's copy opens the same part on its own test page) */ exact?: string | null }) {
   if (!line) return <>{plainLabel(p.kind)}</>;
-  return <WhatLine text={line.full || line.what} href={testId ? testHref(testId) : undefined} after={line.how ? <span className="text-slate-400">, {line.how}</span> : null} />;
+  // (§270) Each person and test named is its own green link; the other words open the exact part (beside them, never nested).
+  const onPage = (href: string) => { const m = /^\/app\/tests\/([^/#?]+)(.*)$/.exec(href); return m ? `${testHref(m[1])}${m[2]}` : href; };
+  const links = line.links?.map((l) => (l.kind === "test" ? { ...l, href: onPage(l.href) } : l));
+  return <WhatLine text={line.full || line.what} href={exact ? onPage(exact) : testId ? testHref(testId) : undefined} links={links} after={line.how ? <span className="text-slate-400">, {withLineLinks(line.how, links)}</span> : null} />;
 }
 
 /** (Owner, Nov 4, §192) A refund's amount: "−$25.00" (a true minus sign). */
@@ -44,7 +49,7 @@ const minus = (cents: number) => `−${money(cents)}`;
 function RefundItem({ r, fmtDateTime, stripeUrl, inGroup }: { r: RefundLine; fmtDateTime: (d: Date) => string; stripeUrl?: Common["stripeUrl"]; inGroup: boolean }) {
   const body = (
     <>
-      <span data-paid-refund-what=""><WhatLine text={r.full || r.what} className="text-slate-200" after={<><span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-refund-amount="">{minus(r.amountCents)}</span>{r.createdAt ? <> · {fmtDateTime(r.createdAt)}</> : null}{stripeUrl && <StripeLink href={stripeUrl(r.stripePaymentIntentId)} />}</span></>} /></span>
+      <span data-paid-refund-what=""><WhatLine text={r.full || r.what} className="text-slate-200" links={r.links} after={<><span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-refund-amount="">{minus(r.amountCents)}</span>{r.createdAt ? <> · {fmtDateTime(r.createdAt)}</> : null}{stripeUrl && <StripeLink href={stripeUrl(r.stripePaymentIntentId)} />}</span></>} /></span>
     </>
   );
   return inGroup
@@ -72,7 +77,7 @@ function PaidGroupLine({ g, rows, refunds, fmtDateTime, stripeUrl, testHref }: {
         <ul className="ml-1.5 mt-1.5 space-y-1.5 border-l border-white/10 pl-3">
           {g.items.flatMap((p) => [
             <li key={p.id} className="text-slate-200" data-paid-group-item={p.id}>
-              <span data-paid-what=""><What p={p} line={rows.get(p.id)?.group} testId={rows.get(p.id)?.testId} testHref={testHref} /></span>
+              <span data-paid-what=""><What p={p} line={rows.get(p.id)?.group} testId={rows.get(p.id)?.testId} testHref={testHref} exact={rows.get(p.id)?.href ?? null} /></span>
               {/* A repayment: "$1.00 + $15.00 chargeback fee" (what the bank reversed, and the fee); anything else its amount. */}
               <span className="text-slate-400"> · <span className="whitespace-nowrap" data-paid-group-item-amount="">{rows.get(p.id)?.group?.amount ?? money(p.amountCents)}</span>{marks(p, rows.get(p.id))}</span>
             </li>,
@@ -88,12 +93,13 @@ function PaidGroupLine({ g, rows, refunds, fmtDateTime, stripeUrl, testHref }: {
 /** The developer's "What you've paid": newest first, 8 rows, then "Show N more" opening a scroll box (the long-list rule); the total beside the heading. */
 export function DevPaidList({ paid, fmtDateTime, stripeUrl, heading = "What you've paid", testHref = (id) => `/app/tests/${id}` }: Common & { paid: PaidList; testHref?: (testId: string) => string }) {
   const { list: paidOut, rows } = paid;
+  // (Owner, Nov 5, §270) A row's words open the exact part on the test page (the team's copy: the same part on its own test page, §190's same lines).
   // (Owner, Nov 4, §191) The items one charge paid together are one group line; the rest one line each (as before).
   const entries = paid.entries ?? paidOut.map((pay) => ({ pay }));
   // A payment paid on its own: what it was for and how, then its date, amount and marks.
   const ownLine = (p: Pay) => (
     <li key={p.id} className="space-y-0.5 py-2">
-      <span className="block text-slate-200" data-paid-what=""><What p={p} line={rows.get(p.id)} testId={rows.get(p.id)?.testId} testHref={testHref} /></span>
+      <span className="block text-slate-200" data-paid-what=""><What p={p} line={rows.get(p.id)} testId={rows.get(p.id)?.testId} testHref={testHref} exact={rows.get(p.id)?.href ?? null} /></span>
       {/* (§133) Part of a payment reversed: "your bank reversed $96.00 of this (chargeback)". */}
       <span className="block text-slate-400">{fmtDateTime(p.createdAt)} · <span className="whitespace-nowrap">{money(p.amountCents)}</span>{marks(p, rows.get(p.id))}{stripeUrl && <StripeLink href={stripeUrl(p.stripePaymentIntentId)} />}</span>
       {/* (Owner, Nov 4, §192) Each refund of it: its own negative line right under it. */}
@@ -128,7 +134,7 @@ export function TesterEarnedList({ earned, fmtDateTime, stripeUrl, heading = "Yo
       <LongList shown={8} tall="max-h-96" className="divide-y divide-white/5 text-sm">
         {paidIn.map((p) => (
           <li key={p.id} className="space-y-0.5 py-2">
-            <span className="block text-slate-200" data-earned-what="">You get <span className="whitespace-nowrap">{money(p.testerCents)}</span>{rows.get(p.id) ? <> <WhatLine text={rows.get(p.id)!.full || rows.get(p.id)!.what} after={rows.get(p.id)!.how ? `, ${rows.get(p.id)!.how}` : null} /></> : p.kind === "extra" ? " · extra pay" : ""}</span>
+            <span className="block text-slate-200" data-earned-what="">You get <span className="whitespace-nowrap">{money(p.testerCents)}</span>{rows.get(p.id) ? <> <WhatLine text={rows.get(p.id)!.full || rows.get(p.id)!.what} links={rows.get(p.id)!.links} after={rows.get(p.id)!.how ? `, ${rows.get(p.id)!.how}` : null} /></> : p.kind === "extra" ? " · extra pay" : ""}</span>
             <span className="block text-slate-400">{fmtDateTime(p.createdAt)}{p.status === "not_set_up" || p.transferStatus === "waiting" ? " · delayed until your payout account is ready" : ""}{stripeUrl && <StripeLink href={stripeUrl(p.stripePaymentIntentId)} />}</span>
           </li>
         ))}

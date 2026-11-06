@@ -70,7 +70,8 @@ describe("§267 a Save that changes the NDA", () => {
     }
     // The page: the banner with its link; the NDA line in "The listing information" (not in "Your contract"), with its box.
     const page = await sessionPage(j.sessionId, j.tester.user.id);
-    expect(page).toContain(`data-nda-block="added">Nora Lane added an NDA to this test: <a href="#info-nda" data-nda-link="">read it</a> before you go on</p>`);
+    // (§270) The developer's name is a green link to their profile.
+    expect(page).toMatch(/data-nda-block="added"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> added an NDA to this test: <a href="#info-nda" data-nda-link="">read it<\/a> before you go on<\/p>/);
     const info = page.slice(page.indexOf('data-scope-info=""'), page.indexOf('data-terms-history=""'));
     expect(info).toMatch(/<li id="info-nda" data-nda=""[^>]*data-info-line="nda"/);
     expect(info).toContain(NDA);
@@ -90,7 +91,7 @@ describe("§267 a Save that changes the NDA", () => {
     let r = await press(j.sessionId, j.tester.cookie, "request-time", {});
     expect(r.body.error?.code).not.toBe("nda_block");
     let page = await sessionPage(j.sessionId, j.tester.user.id);
-    expect(page).toContain(`data-nda-notice="changed">Nora Lane <a href="#info-nda" data-nda-link="">changed the NDA</a></p>`);
+    expect(page).toMatch(/data-nda-notice="changed"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> <a href="#info-nda" data-nda-link="">changed the NDA<\/a><\/p>/); // (§270)
     expect(page).not.toContain("data-nda-block");
     await edit(testId, dev.cookie, { ndaText: "" });
     r = await press(j.sessionId, j.tester.cookie, "request-time", {});

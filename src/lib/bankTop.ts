@@ -1,3 +1,4 @@
+import type { LineLink } from "@/lib/lineLinks";
 import { money, zoneOpt } from "@/lib/format";
 import { disputeDecisionName, partOf, pieceName } from "@/lib/rules";
 
@@ -58,7 +59,8 @@ export function splitLead(lead: string): { amount: string; sep: string; what: st
 }
 
 /** `full`: the lead with the names uncut, the row's hover (§131). */
-export type BankTopRow = { id: string; lead: string; full: string; by: string; soon: boolean; href: string; at: number; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: { name: string; href: string }[]; /** (§147) an open Confirm all check (drawn by Confirm all, not as a row) */ all?: boolean; /** (§147) its amount: over $200 its Confirm needs the tick */ cents?: number };
+export type BankTopRow = { id: string; lead: string; full: string; by: string; soon: boolean; href: string; at: number; /** (Owner, Nov 2) the tests its quoted names link to */ tests?: { name: string; href: string }[]; /** (§147) an open Confirm all check (drawn by Confirm all, not as a row) */ all?: boolean; /** (§147) its amount: over $200 its Confirm needs the tick */ cents?: number;
+  /** (Owner, Nov 5, §270) the people and tests it names, each its own green link */ links?: LineLink[] };
 
 /** The dashboard poll's fingerprint for the box: a row appearing, leaving or turning red refreshes it. */
 export const bankTopV = (rows: BankTopRow[]) => rows.map((r) => `${r.id}:${r.lead}:${r.by}:${r.soon ? 1 : 0}`).join(",");

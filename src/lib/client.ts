@@ -3,6 +3,7 @@ import { pressLabelOf } from "./pressLabels";
 import { keepRefusal } from "./keptRefusal";
 import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_EVENT, ANSWER_TERMS_FIRST, termsBlockedPath } from "./answerTerms";
+import { rememberReply } from "./lineLinkRegistry";
 
 /** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
 let LAST_PRESS = "";
@@ -141,6 +142,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
       window.location.href = `/app?failed=${encodeURIComponent(data.error.failed)}`;
     }
     const e = data?.error;
+    rememberReply(e); // (Owner, Nov 5, §270) the refusal's and its stop lines' green links
     LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path, body);
     // (Batch 27 section 1) The server refused for an open offer (an old page that hasn't shown it too): up to the Switch / Keep box (it loads if the page lacks it).
     if (e?.code === ANSWER_TERMS_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));

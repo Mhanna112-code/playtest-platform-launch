@@ -1,4 +1,6 @@
 "use client";
+import { withLineLinks } from "@/components/LineLinks";
+import { knownLinks } from "@/lib/lineLinkRegistry";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
 import { bringInView } from "@/lib/markJump";
@@ -60,7 +62,7 @@ export function BankNotice({ notice, id = "card" }: { notice: Notice; /** (§194
     if (el && atBottom.current) el.scrollTop = el.scrollHeight;
   }, [notice.lines.length]);
   if (!notice.lines.length && !notice.cancelled) return null;
-  const lines = <ul ref={list} className={`${long ? "" : "my-1 "}list-disc pl-5`}>{notice.lines.map((l) => <li key={l} data-bank-notice-line="">{l}</li>)}</ul>;
+  const lines = <ul ref={list} className={`${long ? "" : "my-1 "}list-disc pl-5`}>{notice.lines.map((l) => <li key={l} data-bank-notice-line="">{withLineLinks(l, knownLinks(), { draw: (t) => t }) /* (Owner, Nov 5, §270) */}</li>)}</ul>;
   return (
     <div className="info" role="status" aria-live="polite" data-bank-notice="">
       {notice.lines.length > 0 && (
