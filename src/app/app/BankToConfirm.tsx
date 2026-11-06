@@ -35,7 +35,9 @@ export function BankToConfirmBox({ rows, seenAt = "", all }: { rows: BankTopRow[
       {/* (Owner, Nov 5, §246) The amount and "confirm by" always show; only the "what" between them is cut at 50 (§251) (WhatLine). */}
       {rows.filter((r) => !r.all).map((r) => { const lead = splitLead(r.lead), whole = splitLead(r.full || r.lead); return (
         <li key={r.id} className="rounded-lg border border-white/10 p-3 text-sm" data-bank-top-row={r.id}>
-          <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} before={lead.amount ? <><span className="whitespace-nowrap" data-bank-top-amount="">{lead.amount}</span>{lead.sep}</> : null} full={whole.what} text={lead.what} render={(t) => withTestLinks(t, r.tests)} after={<> · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} line={<>{withTestLinks(r.lead, r.tests)} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
+          {/* (Owner, Nov 5, hotfix of §230) The test links as data (`tests`): a server component can't hand a function (`render`) to the client BankWaiting, and the
+              dashboard failed to load while a charge waited for the bank. */}
+          <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} before={lead.amount ? <><span className="whitespace-nowrap" data-bank-top-amount="">{lead.amount}</span>{lead.sep}</> : null} full={whole.what} text={lead.what} tests={r.tests} after={<> · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} line={<>{withTestLinks(r.lead, r.tests)} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
         </li>
       ); })}
     </DashboardActionBox>

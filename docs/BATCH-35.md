@@ -4674,3 +4674,7 @@ wording changed.
   AdminButton), the dispute decision's total and note, the team's close reason, the hold's note to the developer.
 - Not locked: search and filter boxes (nothing is sent), Invite (no typed text goes), ticks and choices that aren't text (except the request rows' and
   the excerpt's, which change the typed text on its way). The recording part has no text box (§239), its file picker was already disabled while sending.
+## Hotfix of §230: the dashboard failed while a charge waited for the bank (recording B4x, Nov 5)
+"Your bank wants you to confirm" on the developer's dashboard is drawn by a server component (BankToConfirm) that handed the client BankWaiting a function
+(`render`, for the green test links), which a server component can't do: the dashboard showed "Application error" whenever a charge waited for the bank. It now
+hands the links as data (`tests`) and BankWaiting builds them itself. The quoted test names in payment lines (withTestLinks) are green, as every test link (§245).
