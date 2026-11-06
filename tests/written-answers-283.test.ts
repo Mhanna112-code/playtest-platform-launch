@@ -248,7 +248,9 @@ describe("§283 6: the Testers list's Terms history at the bottom of the tester'
     expect(hist).toBeGreaterThan(fold.lastIndexOf('data-part-panel="'));
     expect(hist).toBeGreaterThan(fold.indexOf('data-parts-sent=""'));
     if (fold.includes("data-calls-fold=")) expect(hist).toBeGreaterThan(fold.indexOf("data-calls-fold="));
-    expect(fold.slice(fold.indexOf('data-part-panel="content"'), fold.indexOf('data-part-panel="pay"'))).not.toContain("data-dev-terms-history");
+    // (Owner, Nov 6, §301) No Pay drop-down when there's nothing to pay: the content panel ends before the Terms history.
+    expect(fold.indexOf('data-part-panel="content"')).toBeLessThan(hist);
+    expect(fold.slice(fold.indexOf('data-part-panel="content"'), hist)).toContain("data-sent-work=");
   });
 });
 

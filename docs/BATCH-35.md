@@ -5293,3 +5293,26 @@ From the email catalog (playtest-lite-evidence/email-catalog-nov6), four of its 
 ## §300 A cancelled call's time names its day (owner, Nov 6)
 "Cancelled (N)"'s badge read "Cancelled by fbbb · 8:48 AM" whatever the day. It now shows the time alone when the cancel was today, and the date and time on any other
 day ("Cancelled by fbbb · Fri, Nov 6, 8:48 AM"), in the viewer's timezone (`fmtWhen` on the test page and the session page).
+
+## §301 The Testers list: payments in a Payments (N) drop-down under the part; Pay more its own drop-down (owner, Nov 6)
+The owner: the payments weren't under Written answers, and Pay more had no drop-down of its own. Each part in a tester's drop-down (written answers, a
+recording, each call in Had / Cancelled) now reads, top to bottom:
+- **its heading line**, as before ("Written answers · Required · Updated … · paid $X of $Y"; a call's time and badge);
+- **"Payments (N)"**, right under the heading and above the content (owner's correction, Nov 6): the part's payments list (§225, §152) in a drop-down, N its
+  lines, closed at first, kept per part (Fold's keptFold, `row-pays-<id>`); its list keeps the draggable panel above 4 lines. It replaces the plain "Payments
+  for this part" label, and is left out when there are no payments (PartPayments).
+- **the content panel**: a written part's "Questions (N)", a recording's recordings, a call's length and notes (as §282);
+- **a separate "Pay more" drop-down** ("Pay" before anything was paid on the part) right under the content (`payFold`, page.tsx): closed at first, kept per part
+  (`row-pay-<id>`), opened by a jump into it (markJump's jumpTo opens every fold above its target) and, as §139, by a link to its part. Inside: the Pay more box
+  (its plain "Pay more" heading is now the summary) and the lines that sat with it: closed unpaid, at its cap (with the "updated at its cap" badge), paid $0
+  and closed by the team (their reason boxes), and a call's "Pay it in Needs you ↑". With nothing inside, no drop-down.
+- **The bank line on the summary.** "Confirm with your bank in Needs you ↑" (a charge waiting for the bank) must be seen without opening the drop-down, so it
+  sits on its summary line; while the box itself is greyed for a check (bankWaits) and there is no such link, the summary says "· waiting for your bank". A
+  waiting charge on a part with nothing else to pay keeps the link alone under the content, without a drop-down.
+- **Needs you** already had content first, then the Pay drop-down (§282), and shows no payments (§225): unchanged.
+- **The "Calls: …" line under Chat is gone** ("Calls: 3 cancelled", also "N booked ahead" and "N done"): the Live call part's "N done" and Had (N) /
+  Cancelled (N) say it, and the calls ahead are in the Live session (§209). It was the only line there repeating a part (the paid line went with §195).
+- Kept: §187's nesting, the anchors (piece-, part-, call-), Pay's behaviour, stop-once and the bank checks. Fold takes `data` (data-part-panel="pay").
+- Tests: tests/pay-panels-301.test.ts. Updated: questions-dropdown-282 (the Testers list's payments above the content; the call's payFold; four pay panels in
+  the source), nov5-batch2 (§225's PartPayments line), batch35-tester-folds (no calls line in the summary), batch17-bank-check and needs-kind-folds-199 (the
+  link up on the Pay more drop-down's summary), written-answers-283 (no empty pay panel after the content).

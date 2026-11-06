@@ -13,6 +13,7 @@ import { joined, sact, seen, setup } from "./fixtures";
 // its list in the draggable scroll panel, above Pay / Pay more; each question still its own drop-down inside, unchanged (Old tag, "N added", boxes). Open at
 // first in Needs you, closed in the Testers list; its open state kept per part (Fold's keptFold). Every part (written answers, recordings, calls) in Needs you and
 // the Testers list is two panels: its content, then right under it, separate, its paying (Pay or Pay more; in the Testers list its payments too).
+// (Owner, Nov 6, §301) In the Testers list the payments moved to a "Payments (N)" drop-down above the content, and Pay more is its own drop-down under it.
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
@@ -163,15 +164,20 @@ describe("§282 on the developer's test page", () => {
       if (kind === "written") expect(content).toContain(`data-fold="needs-${s.id}-questions"`);
       else expect(content).toContain(`data-panel="needs-${s.id}"`);
     }
-    // The Testers list: once something was paid, its payments (and, after a review, Pay more) sit in the pay panel under the content.
+    // The Testers list (Owner, Nov 6, §301; was §282's pay panel under the content): once something was paid, its payments are in "Payments (N)" ABOVE the
+    // content panel; with no review there is no Pay more, so no Pay drop-down under it (tests/pay-panels-301.test.ts has the whole order).
     for (const s of [sub, rec]) await db.payment.create({ data: { kind: "review", amountCents: 500, status: "charged", contractId: j.sessionId, submissionId: s.id, developerId: dev.user.id, testerId: j.tester.user.id, feeCents: 0, testerCents: 0 } });
     page = await testPage(testId, dev.user.id);
     for (const [s, kind] of [[sub, "written"], [rec, "recording"]] as const) {
       const part = elementAt(page, page.indexOf(`id="part-${s.id}"`));
-      const { content, payPanel } = panels(part, kind, `data-part-payments="${s.id}"`);
+      const content = elementAt(part, part.indexOf('data-part-panel="content"'));
+      expect(content, kind).toContain(`data-sent-work="${kind}"`);
+      expect(content, kind).not.toContain("data-part-payments");
+      expect(part.indexOf(`data-part-payments="${s.id}"`), kind).toBeGreaterThan(0);
+      expect(part.indexOf(`data-part-payments="${s.id}"`), kind).toBeLessThan(part.indexOf(content));
       if (kind === "written") expect(content).toContain(`data-fold="row-${s.id}-questions"`);
       else expect(content).toContain(`data-panel="row-${s.id}"`);
-      expect(payPanel).toContain("empty:hidden"); // nothing to pay or list: no empty panel
+      expect(part).not.toContain('data-part-panel="pay"'); // nothing to pay or note: no empty Pay drop-down
     }
   });
 
@@ -183,10 +189,11 @@ describe("§282 on the developer's test page", () => {
     expect(page).toContain("until={paidCut(r.sub)} questionsFold={{ open: false }} />");
     expect(src("app/admin/DisputeWork.tsx")).toContain("questionsFold={{ open: true }}");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("questionsFold");
-    // Calls follow the same two panels: Needs you's call (its details, then the Pay drop-down) and the Testers list's call rows (details, then payments and Pay more).
+    // Calls follow the same two panels: Needs you's call (its details, then the Pay drop-down) and the Testers list's call rows ((Owner, Nov 6, §301) Payments
+    // (N), details, then the Pay more drop-down).
     expect(page).toContain('<div className={`${PART_PANEL} space-y-2`} data-part-panel="content">');
     expect(page.indexOf('data-part-panel="content"', page.indexOf("(Owner, Nov 6, §282) A call too"))).toBeLessThan(page.indexOf('data-call-length="">{lengthOf(x.x!)}'));
-    expect(page.indexOf('data-part-panel="pay"', page.indexOf("<Fold id={`row-call-${x.id}`}"))).toBeLessThan(page.indexOf("<PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind=\"call\""));
-    expect(page.match(/"data-part-panel": "pay"/g)).toHaveLength(3); // Needs you: a sent part, a call, an update row
+    expect(page.indexOf("{payFold(`row-pay-${x.id}`", page.indexOf("<Fold id={`row-call-${x.id}`}"))).toBeLessThan(page.indexOf("<PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind=\"call\""));
+    expect(page.match(/"data-part-panel": "pay"/g)).toHaveLength(4); // Needs you: a sent part, a call, an update row; (§301) the Testers list's payFold
   });
 });

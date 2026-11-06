@@ -118,7 +118,7 @@ describe("(Owner, Nov 5) §225 a part's individual payments only in the Testers 
   it("Needs you's part and update rows have no payments list; the Testers list's part and call drop-downs keep it", () => {
     const s = read("src/app/app/tests/[id]/page.tsx");
     expect(s.match(/<PartPayments /g)?.length).toBe(2);
-    expect(s).toContain("{r.sub && <PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />}");
+    expect(s).toContain("<PartPayments id={r.sub.id} lines={partPays.get(r.sub.id)} />"); // (Owner, Nov 6, §301) in "Payments (N)" above the part's content
   });
 });
 

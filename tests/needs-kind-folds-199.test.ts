@@ -167,7 +167,10 @@ describe("§199 Needs you: each kind a drop-down, Rate plain, one Applications d
     // The part's Pay more box in the row is greyed with the charge's line only (no working Confirm with your bank there; §188 B's copy stays in Needs you's boxes).
     const waits = row.slice(row.indexOf('data-pay-more-waits=""'));
     expect(waits).toMatch(/^data-pay-more-waits="" data-waits-kind="away"><p class="info">Confirm Alex Morgan&#x27;s \$6\.00 charge with your bank first\./);
-    expect(waits.indexOf(`data-bank-up="${w.charge.id}"`)).toBeGreaterThan(0);
+    // (Owner, Nov 6, §301) The link up is on the part's closed "Pay more" drop-down's summary line, so it shows without opening it; the greyed box inside.
+    const summary = row.slice(row.indexOf("<summary", row.indexOf('data-part-panel="pay"')), row.indexOf("</summary>", row.indexOf('data-part-panel="pay"')));
+    expect(summary).toContain(`data-bank-up="${w.charge.id}"`);
+    expect(row.indexOf(`data-bank-up="${w.charge.id}"`)).toBeLessThan(row.indexOf('data-pay-more-waits=""'));
     expect(src()).toMatch(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} awayInNeeds owes=\{owesNow\} kind="submission"/);
     expect(src()).toMatch(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} awayInNeeds owes=\{owesNow\} kind="call"/);
     expect(src()).toMatch(/<PayBox more=\{\{ testId: t\.id, contractId: c\.id \}\} moreLabel="Pay" update owes/); // (§226) named Pay in Needs you

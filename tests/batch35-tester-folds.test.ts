@@ -45,8 +45,10 @@ describe("each tester folds by their name", () => {
     // (Owner, Nov 5, §254) No "<PrevSetFolds" any more; (§263, final) the tester's Terms history for the questions sits under the written answers.
     for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', "data-dev-terms-history={c.id}"]) expect(inside).toContain(s);
     expect(inside).not.toContain("<PrevSetFolds");
-    // (Owner, Nov 4, §195) No "Paid in all:" in the summary: the paid so far is on the right of the name row (the fold's heading); the calls line stays.
-    for (const s of ['data-tester-calls=""', "rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);
+    // (Owner, Nov 4, §195) No "Paid in all:" in the summary: the paid so far is on the right of the name row (the fold's heading). (Owner, Nov 6, §301) Nor the
+    // calls line ("Calls: 3 cancelled"): the Live call part's Had (N) / Cancelled (N) say it.
+    for (const s of ["rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);
+    expect(summary).not.toContain("data-tester-calls");
     expect(summary).not.toContain("Paid in all");
     expect(r.slice(fold, inside.indexOf("</>}>") + fold)).toContain("<PaidSoFar cents={paidSoFar(c.id)}");
     // Open by default only when there's one tester; the state is kept like every fold (sessionStorage, through redraws).
