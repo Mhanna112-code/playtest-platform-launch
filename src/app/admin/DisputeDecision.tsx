@@ -12,6 +12,7 @@ import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
 import { ReasonQuote } from "@/components/ScrollText";
 import { Cut } from "@/components/Cut";
+import { lockText } from "@/lib/sendLock";
 
 /** (Owner, Nov 5, §238) A line with the developer's name in it: the name cut at 20 (Cut: the full name on hover, on a tap and when copied). */
 const nameCut = (line: string, name: string) => (name && line.includes(name) ? line.split(name).flatMap((part, i) => (i ? [<Cut key={i} text={name} />, part] : [part])) : line);
@@ -85,7 +86,7 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
         <label className="text-sm" htmlFor={`total-${id}`}>Total pay for this piece</label>
         <span>$</span>
         <input id={`total-${id}`} className="input w-28" inputMode="decimal" data-money="" aria-label="Total pay for this piece ($)" data-min={String(minCents / 100)} data-max={String(maxCents / 100)}
-          data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} data-match="^(?!Keep it to)" value={total} onChange={(e) => setTotal(e.target.value)} />
+          data-msg={`Enter an amount from ${dollars(minCents)} to ${dollars(maxCents)}, or leave it blank to keep the pay as it is.`} data-match="^(?!Keep it to)" value={total} onChange={(e) => setTotal(e.target.value)} {...lockText(busy || fin.done)} />
         {/* (Owner, Oct 31, batch 35 §39) One Discard for the total and the note (nothing is saved for them): both emptied, the tick needed again. */}
         {keep.restored && (total !== "" || note !== "") && <DraftTag disabled={busy || fin.done} kind="discard" field="decide" onUseSaved={() => { setTotal(""); setNote(""); setTickedFor(null); }} />}
         <span className="text-xs text-slate-500">{dollars(minCents)}-{dollars(maxCents)} · leave blank to keep it as it is</span>
@@ -95,8 +96,9 @@ export function DisputeDecision({ id, minCents: min0, maxCents: max0, range: ran
         <label className="text-sm" htmlFor={`note-${id}`}>Note to both</label>
         {/* (Batch 15 section 20) Up to 1,000 characters, a live counter, red when over. */}
         <span className="flex w-full flex-col">
-        {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). */}
-        <textarea id={`note-${id}`} rows={2} maxLength={LIMITS.reason} className={`input w-full max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} />
+        {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). (Owner, Nov 5, §261) The total and the note are read-only while
+            Decide is going through. */}
+        <textarea id={`note-${id}`} rows={2} maxLength={LIMITS.reason} className={`input w-full max-w-full ${note.length > LIMITS.reason ? "field-bad" : ""}`} data-match="^Keep it to" data-red-msg={note.length > LIMITS.reason ? reasonTooLong() : undefined} value={note} onChange={(e) => setNote(e.target.value)} {...lockText(busy || fin.done)} />
         <span className={`block text-right text-xs ${note.length > LIMITS.reason ? "text-rose-300" : "text-slate-500"}`} data-reason-count="">{counterText(note.length, LIMITS.reason)}</span>
         {note.length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
         </span>

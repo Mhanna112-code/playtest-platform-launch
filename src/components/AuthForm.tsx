@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { FormMistakes } from "@/components/FormMistakes";
 import { api, errOf } from "@/lib/client";
 import { announceAuth } from "@/components/SessionWatch";
+import { useLockInside } from "@/lib/sendLock";
 
 /**
  * A signed-out form (log in, sign up, forgot, reset): posts its fields as JSON; a form mistake shows red, a refusal
@@ -13,6 +14,10 @@ export function AuthForm(p: { announce?: "in"; /** (Batch 35 §153) Sign-up: the
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
   const [ok, setOk] = useState(false);
+  // (Owner, Nov 5, §261) While the press is going through (and, gone through, while the next page loads), the form's boxes are read-only (they are its pages'
+  // own, so they are locked here, inside the form, and put back exactly when a refusal ends it).
+  const form = useRef<HTMLFormElement>(null);
+  useLockInside(form, busy);
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const fd = new FormData(e.currentTarget);
@@ -40,7 +45,7 @@ export function AuthForm(p: { announce?: "in"; /** (Batch 35 §153) Sign-up: the
   }
   if (ok && p.done) return <div className="card space-y-2">{p.done}</div>;
   return (
-    <form method="post" onSubmit={onSubmit} className="card space-y-4" noValidate {...(p.allAtOnce ? { "data-red-and-blue": "" } : {})}>
+    <form ref={form} method="post" onSubmit={onSubmit} className="card space-y-4" noValidate {...(p.allAtOnce ? { "data-red-and-blue": "" } : {})}>
       {p.children}
       <button className="btn w-full" disabled={busy}>{busy ? p.busy : p.submit}</button>
       <FormMistakes text={err} press={p.submit} />

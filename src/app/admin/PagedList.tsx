@@ -23,6 +23,7 @@ import { adminDraftKey } from "@/lib/keptText";
 import { usePauseDraftGoes } from "./TestActions";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
+import { lockText } from "@/lib/sendLock";
 
 /** (§237) A Contact us message's first height: about 8 lines, as the old scroll box. */
 const MESSAGE_BOX_MAX = "12rem";
@@ -47,8 +48,8 @@ function LiftApprove({ id, seen }: { id: string; seen?: string }) {
     <div className="flex w-full flex-col items-start gap-2" data-admin-box="stacked">
       {!fin.done && <>
       <label className="text-sm" htmlFor={`lift-note-${id}`}>Note to the developer</label>
-      {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). */}
-      <input id={`lift-note-${id}`} className="input w-full max-w-full" maxLength={LIMITS.reason} value={note} onChange={(e) => setNote(e.target.value)} />
+      {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). (Owner, Nov 5, §261) Read-only while Approve is going through. */}
+      <input id={`lift-note-${id}`} className="input w-full max-w-full" maxLength={LIMITS.reason} value={note} onChange={(e) => setNote(e.target.value)} {...lockText(busy || fin.done)} />
       <CharacterCount value={note} max={LIMITS.reason} data-lift-note-count="" />
       {keep.restored && note !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setNote("")} />}
       </>}

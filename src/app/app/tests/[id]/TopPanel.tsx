@@ -71,7 +71,15 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
   const chosenAhead = chosen.reduce((n, w) => n + w.ahead, 0);
   const allPicked = p.working.length > 0 && picked.length === p.working.length;
 
+  // (Owner, Nov 5, §261) The press under way (from the click until it ends: its draft cleared, the redraw): Stop's and End early's Why? are read-only only
+  // while their OWN press goes (this panel's `busy` is every button's).
+  const [going, setGoing] = useState("");
+  const sendingAs = (action: string) => going === action || (busy && at === action);
   async function go(action: string, body: Record<string, unknown> = {}) {
+    setGoing(action);
+    try { await goNow(action, body); } finally { setGoing(""); }
+  }
+  async function goNow(action: string, body: Record<string, unknown>) {
     const r = await press<{ id?: string }>(`/api/tests/${p.id}/${action}`, body, action);
     if (!r) return;
     if (action === "end-early") await keepEnd.clear();
@@ -143,7 +151,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
                     )}
                     <p>The test stops for good: it takes no new testers and can&apos;t be edited or reopened. You can still read everything and pay what was sent.</p>
                     <WhyBox id="stop-reason" label="Why? (testers read it)" placeholder="e.g. We found what we needed in this build: thank you!" requiredMsg="Say why you're stopping the test (testers read it)."
-                      match="stopping the test|keep it to" value={stopReason} onChange={setStopReason} max={LIMITS.stopReason} countAttr="data-stop-count" />
+                      match="stopping the test|keep it to" value={stopReason} onChange={setStopReason} max={LIMITS.stopReason} countAttr="data-stop-count" locked={sendingAs("stop")} />
                     {/* (Batch 35 §8) Back after signing in: "Draft" with "Use saved" (nothing saved yet: it empties). */}
                     {keepStop.restored && stopReason !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setStopReason("")} />}
                     <p className="font-medium text-white">This can&apos;t be undone.</p>
@@ -192,7 +200,7 @@ export function TopPanel(p: { timeZone?: string | null; joinClosedLine?: string;
             {noTick && <p className="err-field">Tick at least one tester.</p>}
             {/* (Owner, Oct 30, batch 15 section 22) Required, up to 10,000 characters with a counter. (Batch 17 §15) The same box as Stop's. (Batch 20 section 27) At least 5 characters. */}
             <WhyBox id="reason" label="Why? (each tester you tick reads it)" placeholder="e.g. We have what we need for this build: thank you!" requiredMsg="Say why you're ending their work (they read it)."
-              match="ending their work|keep it to" value={reason} onChange={setReason} max={LIMITS.endEarlyReason} countAttr="data-end-count" />
+              match="ending their work|keep it to" value={reason} onChange={setReason} max={LIMITS.endEarlyReason} countAttr="data-end-count" locked={sendingAs("end-early")} />
             {keepEnd.restored && reason !== "" && <DraftTag disabled={busy} kind="discard" onUseSaved={() => setReason("")} />}
             <p className="note">Their work ends now. What they already sent still waits for you to pay; calls ahead are cancelled.</p>
             <div>

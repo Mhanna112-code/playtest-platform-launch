@@ -21,6 +21,7 @@ import { TERMS_UPDATED_CODE } from "@/lib/termsOfUse";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { CharacterCount } from "@/components/CharacterCount";
 import { LIMITS } from "@/lib/limits";
+import { lockText } from "@/lib/sendLock";
 
 /**
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
@@ -241,8 +242,9 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
       {(applying || rejoining) && (
         <div>
           <label className="label" htmlFor="note">A note to the developer{rejoining ? " (optional)" : ""}{keep.restored && note !== "" && <DraftTag disabled={busy || !!done} kind="discard" onUseSaved={() => setNote("")} />}</label>
-          {/* (Owner, Nov 3, batch 35 §140) Up to 1,000 characters (the server's limit), with its count; typing stops there. */}
-          <textarea id="note" rows={2} className="input" maxLength={LIMITS.joinNote} value={note} onChange={(e) => setNote(e.target.value)} />
+          {/* (Owner, Nov 3, batch 35 §140) Up to 1,000 characters (the server's limit), with its count; typing stops there. (Owner, Nov 5, §261) Read-only while
+              Apply / Ask to rejoin / Join is going through (and once it went through). */}
+          <textarea id="note" rows={2} className="input" maxLength={LIMITS.joinNote} value={note} onChange={(e) => setNote(e.target.value)} {...lockText(busy || !!done)} />
           <CharacterCount value={note} max={LIMITS.joinNote} data-join-note-count="" />
         </div>
       )}

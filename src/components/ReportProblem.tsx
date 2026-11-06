@@ -4,6 +4,7 @@ import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { usePress } from "@/lib/usePress";
+import { lockText } from "@/lib/sendLock";
 
 /**
  * "Report a problem with this call" (the full app's fold, call-tools.tsx there): No-show / Late, a note, Send to the team.
@@ -30,7 +31,8 @@ export function ReportProblem({ path, callId, otherName, seenAt, reported }: { p
           <label className="flex items-center gap-1.5"><input type="radio" name={`kind-${callId}`} checked={kind === "no_show"} onChange={() => setKind("no_show")} /> {otherName} didn&apos;t show up</label>
           <label className="flex items-center gap-1.5"><input type="radio" name={`kind-${callId}`} checked={kind === "late"} onChange={() => setKind("late")} /> {otherName} was late</label>
         </div>
-        <textarea className="input min-h-14 text-sm" maxLength={1000} placeholder="What happened" aria-label="What happened" value={note} onChange={(e) => setNote(e.target.value)} />
+        {/* (Owner, Nov 5, §261) While Send to the team is going through, the note is read-only. */}
+        <textarea className="input min-h-14 text-sm" maxLength={1000} placeholder="What happened" aria-label="What happened" value={note} onChange={(e) => setNote(e.target.value)} {...lockText(busy)} />
         <CharacterCount value={note} max={1000} />
         <button className="btn-secondary px-3 py-1.5 text-sm" disabled={busy} onClick={async () => { if (await press(path, { callId, kind, note })) finish(); }}>Send to the team</button>
         <ChangesBox changes={changes} error={error} />

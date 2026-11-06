@@ -4650,3 +4650,23 @@ A removed question reads "Question 1 · Removed · <its words>" (it was "Questio
 ## §260 No "What you sent is for the questions until …" line (owner, Nov 5)
 The tester's answer form no longer starts with "What you sent is for the questions until <date>. Send your answers to these questions: they're added under what you
 sent." (`data-set-until-form`); "Questions you haven't answered yet" and the boxes follow straight on.
+
+## §261 Text boxes locked while their Send is going through (owner, Nov 5)
+"Disable typing in boxes while their send is going through." From the press until it ends (the server's answer, any bank check it opens, and after it went
+through until the page's redraw or next page), every box whose text that press sends is read-only (`readOnly`, never `disabled`: the text stays selectable and
+readable), dimmed with a not-allowed pointer (`[data-send-locked]`, globals.css). The same form's file pickers, formatting buttons (Bold, Italic, Code block, 📎),
+a file's × in the answer preview, "Use theirs" and the call request's repeat choices, Remove and + Another time are disabled (Discard / Use saved keep §58's
+rule). Refused, failed, stopped once or not confirmed by the bank, the boxes are exactly as before, with the draft. No press, stop-once rule, draft saving or
+wording changed.
+- One rule, lib/sendLock.ts: `lockText(sending)` / `lockPick(sending)` spreads on the boxes a form draws; `useSending()` covers a whole press (its request, then
+  its bank check or draft clearing) so the boxes never open for a moment in between; PressButton tells its caller with `onSending`; the written answers'
+  AnswerBox reads its form's `SendingScope`; `useLockInside(form, busy)`
+  locks a form whose boxes are drawn by many parts (AuthForm's sign-in / sign-up / forgot / reset, Post a test / Edit with KeyBoxes and FieldNote's Use theirs)
+  and puts back exactly the boxes it locked.
+- Where: the written answers (Send Answers: every answer, Anything else), Add to this answer / Answer this question; Dispute the pay; Add your side; chat and
+  direct messages; Request a time (times, Length) and each Cancel's Why (only the menu pressed: the panel's busy is every button's); Report a problem / Report a
+  person; the excerpt (and its answer picks, Use original answer); Pay / Pay more (rate, amount, note); Rate's note; the join / application note; Charge's
+  amount; Stop's and End early's Why? (each only while its own press goes); profile name and bio; Contact us; every admin button with a box (once, in
+  AdminButton), the dispute decision's total and note, the team's close reason, the hold's note to the developer.
+- Not locked: search and filter boxes (nothing is sent), Invite (no typed text goes), ticks and choices that aren't text (except the request rows' and
+  the excerpt's, which change the typed text on its way). The recording part has no text box (§239), its file picker was already disabled while sending.

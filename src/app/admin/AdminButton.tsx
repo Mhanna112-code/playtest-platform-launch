@@ -13,6 +13,7 @@ import { DraftTag, useKept } from "@/lib/useKept";
 import { adminDraftKey } from "@/lib/keptText";
 import { useFinished } from "@/lib/usePress";
 import { PressDone } from "@/components/PressDone";
+import { lockPick, lockText } from "@/lib/sendLock";
 
 /** (Batch 35 §11) Where a draft keeps the state it was typed for (`draftFor`). */
 export const DRAFT_FOR = "_for";
@@ -60,13 +61,16 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
   // (Owner's screenshot, Oct 31, batch 35 §36) Every admin button with a box (a reason, a note, Extend's days) is laid out as Suspend's: the box the panel's full
   // width, its counter under the box's right edge, the button below it. A plain button stays inline.
   const stack = stacked || fields.length > 0;
+  // (Owner, Nov 5, §261) Once for every admin button: while its press is going through, its boxes (a reason, a note, the days) are read-only and its side choice
+  // is disabled; refused or stopped once, they are as before (with the draft).
+  const sending = busy || fin.done;
   return (
     <span className={stack ? "flex w-full flex-col items-start gap-2" : "inline-flex flex-wrap items-center gap-2"} data-mistakes-root="" data-admin-box={stack ? "stacked" : undefined}>
       {!fin.done && choice && (
         <span className="inline-flex flex-wrap items-center gap-2" role="radiogroup" aria-label={choice.label} data-side-choice="">
           {choice.options.map((o) => (
             <label key={o.value} className="inline-flex items-center gap-1 text-sm">
-              <input type="radio" name={`${action}-${id}-${choice.name}`} value={o.value} checked={v[choice.name] === o.value} onChange={() => setV({ ...v, [choice.name]: o.value })} /> {o.label}
+              <input type="radio" name={`${action}-${id}-${choice.name}`} value={o.value} checked={v[choice.name] === o.value} onChange={() => setV({ ...v, [choice.name]: o.value })} {...lockPick(sending)} /> {o.label}
             </label>
           ))}
         </span>
@@ -78,13 +82,13 @@ export function AdminButton({ action, id, label, fields = [], danger, disabled, 
             {/* (Owner, Nov 3, batch 35 §140) Typing and pasting stop at the limit (maxLength). */}
             <textarea id={`${action}-${id}-note`} aria-label={f.label} placeholder={f.ph ?? f.label} rows={2} maxLength={LIMITS.reason} className={`input w-full max-w-full ${(v[f.name] ?? "").length > LIMITS.reason ? "field-bad" : ""}`}
               {...(action === "delete-account" || action === "suspend" ? { "data-required": "", "data-required-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).`, "data-min-chars": "3", "data-msg": `Record why (it is kept with the ${action === "suspend" ? "suspension" : "deletion"}).` } : {})} data-match="record why|keep it to"
-              data-red-msg={(v[f.name] ?? "").length > LIMITS.reason ? reasonTooLong() : undefined} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} />
+              data-red-msg={(v[f.name] ?? "").length > LIMITS.reason ? reasonTooLong() : undefined} value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })} {...lockText(sending)} />
             <CharacterCount value={v[f.name] ?? ""} max={LIMITS.reason} min={action === "delete-account" || action === "suspend" ? 3 : 0} required data-reason-count="" />
             {(v[f.name] ?? "").length > LIMITS.reason && <span className="err-field">{reasonTooLong()}</span>}
           </span>
         ) : (
           <input key={f.name} aria-label={f.label} placeholder={f.ph ?? f.label} className="input w-40" value={v[f.name] ?? ""} onChange={(e) => setV({ ...v, [f.name]: e.target.value })}
-            {...(f.name === "days" ? { inputMode: "numeric" as const, "data-whole": "" } : {})} />
+            {...(f.name === "days" ? { inputMode: "numeric" as const, "data-whole": "" } : {})} {...lockText(sending)} />
         ),
       )}
       {keep.restored && put && typedAny && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setV({})} />}

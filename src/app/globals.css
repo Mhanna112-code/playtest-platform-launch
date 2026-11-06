@@ -26,6 +26,9 @@ html { scroll-padding-top: 4.5rem; }
 /* (Owner, Nov 3, batch 35 §138) Every text box that can be dragged taller (answers, steps, questions, notes, reasons, the bio…) stops at 60% of the screen,
    32rem at most; past that its text scrolls inside it. */
 textarea { max-height: min(60vh, 32rem); overflow-y: auto; }
+/* (Owner, Nov 5, §261) A box (or file picker, formatting or "Use theirs" button) locked while its press's send is going through (lib/sendLock.ts): dimmed, and
+   the pointer says it can't be changed. Its text stays selectable. A file picker hidden inside its label button dims the label. */
+[data-send-locked], label:has(> input[data-send-locked]) { opacity: 0.6; cursor: not-allowed; }
 /* (Owner, Nov 3) Phones' browsers draw no drag corner on text boxes, so on a touch screen each one shows its own grip mark (TouchResize.tsx
    does the dragging). The mark stays in the corner while the text scrolls; the right padding keeps text out from under it. */
 @media (pointer: coarse) {

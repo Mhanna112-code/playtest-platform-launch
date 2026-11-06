@@ -34,6 +34,7 @@ import { ShieldCheck } from "lucide-react";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { jumpTo } from "@/lib/markJump";
 import { lockedChangeLine, lockedChangeParts, shortValue, type LockedItem } from "@/lib/lockedChange";
+import { useLockInside } from "@/lib/sendLock";
 
 // Post and Edit share this form. Prices are typed in dollars ("7.50"; "0" for free). Edit sends only the fields the
 // user touched plus the version it loaded; if the test changed since, Save stops once and lists what changed.
@@ -164,6 +165,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // (Batch 16 section 10) The server's mistakes go to their fields (FieldChecks); only those that belong to no field are kept here, for the list.
   const [orphans, setOrphans] = useState<string[]>([]);
   const formRef = useRef<HTMLFormElement>(null);
+  // (Owner, Nov 5, §261) While Save / Post the test is going through (until the test page shows, or a refusal, stop or mistake ends it), every text box in the
+  // form is read-only and every "Use theirs" disabled; ended, exactly those are put back.
+  useLockInside(formRef, busy);
   const [changes, setChanges] = useState<Change[] | null>(null);
   const [listingEdited, setListingEdited] = useState(false);
   // (Owner) When the box last updated: the next Save goes ahead only if nothing new happened since.

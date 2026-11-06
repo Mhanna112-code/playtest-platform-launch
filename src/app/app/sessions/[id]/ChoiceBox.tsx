@@ -11,6 +11,7 @@ import { stopBox, useStopBox } from "@/lib/topStop";
 import { ChangesBox } from "@/components/ChangesBox";
 import { PressDone } from "@/components/PressDone";
 import { useFinished } from "@/lib/usePress";
+import { lockText } from "@/lib/sendLock";
 
 /**
  * (Owner, Nov 3, long text) "Charge <developer> $X": a long name (an unbroken one too) wraps inside the button instead of pushing it past the box, and the
@@ -71,9 +72,10 @@ export function ChoiceBox({ paused = false, sessionId, submissionId, callId, lin
         </div>
       ) : (
         <div className="flex flex-wrap items-center gap-2">
+          {/* (Owner, Nov 5, §261) The amount is read-only while Charge / Let it go is going through. */}
           <label className="inline-flex items-center gap-1">
             $ <input className="input w-24" inputMode="decimal" data-money="" aria-label="Amount to charge" id={`charge-${submissionId ?? callId}`} data-min="0.5" data-max={String(cents / 100)} data-msg="Enter an amount like 5.00." data-min-msg="The smallest card charge is $0.50." data-max-msg={`At most ${money(cents)}.`}
-              data-match="amount like|at most|smallest card charge" value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} />
+              data-match="amount like|at most|smallest card charge" value={amount} onChange={(e) => { setAmount(e.target.value); setTicked(false); }} {...lockText(busy)} />
             <span className="note whitespace-nowrap">(up to {money(cents)})</span>
           </label>
           {over && (

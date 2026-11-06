@@ -23,6 +23,7 @@ import { PressDone } from "@/components/PressDone";
 import type { CallEnd } from "@/lib/callWindow";
 import { ResizeBox } from "@/components/Panel";
 import { LIST_PANEL, TESTERS_CALLS_TALLEST } from "@/components/ScrollList";
+import { lockText, useSending } from "@/lib/sendLock";
 
 export type DevCall = { id: string; when: string; minutes: number; rate: string; canCancel: boolean; started: boolean; reported: boolean; late?: string; joinable?: boolean; report?: { byMe: boolean; note: string } | null; measuring?: string };
 /** A booked daily / weekly set: its line ("Weekly · Mon 3:00 PM (3 left)", or no count for Forever), and whether Cancel needs a reason. */
@@ -75,7 +76,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   // (its new requests, or the call it booked); the form clears as soon as it goes through.
   const [frozen, setFrozen] = useState<{ testers: DevTester[]; elsewhere: OtherCall[] } | null>(null);
   const [made, setMade] = useState<PressMade | null>(null);
-  const request = async (body: Record<string, unknown>) => {
+  // (Owner, Nov 5, §261) From Request a time until it ends (and, gone through, until the redraw), the times and the length are read-only and Discard waits.
+  const requesting = useSending();
+  const request = (body: Record<string, unknown>) => requesting.run(async () => {
     setFrozen({ testers, elsewhere });
     const r = await press<{ message?: string }>(`/api/tests/${testId}/request-time`, body, "request");
     if (r) {
@@ -85,7 +88,8 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       await keep.clear();
       finish(sentLine(r)); // (§208) "3 requests sent." for 3 times
     } else setFrozen(null);
-  };
+  });
+  const sendLocked = requesting.sending || (busy && at === "request");
   const checked = formClashInputs(testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })), frozen ? frozen.testers.map((t) => ({ ...t, calls: [...t.calls, ...t.sets.flatMap((x) => x.calls)] })) : null, made);
   const all = testers.length > 0 && testers.every((t) => ticked.includes(t.contractId));
   const filled = rowsPayload(rows, end);
@@ -157,13 +161,13 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
       {canRequest && testers.length > 0 && shut && <p className="note" data-window-shut="">{shut}</p>}
       {canRequest && testers.length > 0 && !shut && (
         <div className="space-y-2 text-sm" ref={form} data-mistakes-root="">
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={leadMinutes} end={end} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={leadMinutes} end={end} locked={sendLocked} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {already.length > 0 && <ul className="space-y-0.5 text-xs text-amber-200" data-already="">{already.map((l) => <li key={l}>{l}</li>)}</ul>}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
           <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">
             <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line} data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
-              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
+              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} {...lockText(sendLocked)} /> min</label>
             <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
             <button
               className="btn"
