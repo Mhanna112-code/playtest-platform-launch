@@ -4623,3 +4623,6 @@ On the dashboard, "Disputes: add your side" has one drop-down per tester (their 
 "Find testers" now heads the Search by name box (always shown); its results stay right under the box, above "People you've worked with". In the lists' scroll box,
 "People you've worked with" and "Suggested" stick to the top of the box while their rows scroll under them (before, a scrolled box lost its heading, and a row's
 open "Worked with you on 1 test" could sit at the top with no name or heading over it).
+
+## §258 The questions changed: no "(before)" on a removed question (owner, Nov 5)
+A removed question reads "Question 1 · Removed · <its words>" (it was "Question 1 (before)"): the Removed tag already says it.
