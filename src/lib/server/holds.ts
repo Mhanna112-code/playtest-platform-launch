@@ -908,9 +908,10 @@ export async function chargebackOpened(paymentIntentId: string, disputedCents: u
     const one = await onePaymentName(p, true);
     // (§133) Part of a payment: "Your bank reversed $96.00 of your $444.67 payment for …: it was added to what you owe".
     const line = `Your bank reversed ${one ? reversedWords(cb, "your", one) : reversedPart(cb) ? reversedWords(cb) : `a ${money(p.amountCents)} payment`}${piece ? ` for ${p.kind === "dispute" ? disputeDecisionName(piece) : piece}` : ""}: ${before.holdStartedAt && before.holdReason !== "chargeback" ? "your payment hold is now a chargeback hold" : "it was added to what you owe"}`;
-    // A payment hold that becomes a chargeback hold is a chargeback hold starting (its email ignores Off); a further chargeback just adds to what is owed.
-    if (before.holdStartedAt && before.holdReason !== "chargeback") await notify(before.email, line, [line + ".", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval."], "/app/payments#chargeback-steps", { side: "developer", always: true, payment: true, group: "payhold" });
-    else await bell(p.developerId, line, "/app/payments#chargeback-steps", undefined, { side: "developer", payment: true, group: "payhold" });
+    // (Owner, Nov 6, §294) EVERY chargeback is emailed at once, whatever the email setting (`always`), as the admins' chargeback email is: the one that starts the
+    // hold (its "Your tests are paused after a chargeback"), the one that turns a payment hold into a chargeback hold, and a further one during a chargeback hold
+    // (before §294 a bell line only). In the bell they stay in the day's "payhold" entry. A hold already on needs the steps again (its card check and approval cleared).
+    await notify(before.email, line, [line + ".", "To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval."], "/app/payments#chargeback-steps", { side: "developer", always: true, payment: true, group: "payhold" });
   }
   // (Owner, Nov 4, §178) The card check and approval are no longer cleared here, after the emails: they were cleared in the claim (a hold already on) or when
   // startHold started this one, so an approval the team made since (the same second the hold appeared) stands.
@@ -1144,13 +1145,14 @@ async function followAmount(reversalId: string, cents: number, status: string, e
     if (ok > 0) {
       const line = bankLoweredLine(p.amountCents, piece, ok, one);
       const recorded = sent.every((x) => x.status !== "refunded");
-      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", payment: true });
+      // (Owner, Nov 6, §294) A chargeback's amount changing is emailed at once, whatever the email setting (`always`); in the bell it's unchanged.
+      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", always: true, payment: true });
     }
     return "followed" as const;
   }
   await note(`${head}: followed after repayment: charged ${money(r.cents)} more.`);
   const line = bankRaisedLine(p.amountCents, piece, r.cents, one);
-  await notify(dev.email, line, [line], "/app/payments", { side: "developer", payment: true });
+  await notify(dev.email, line, [line], "/app/payments", { side: "developer", always: true, payment: true }); // (§294) emailed at once, as when lowered
   // Charged now like any charge made while away (during a hold, a suspension or the team's pause of its test it waits, as they do).
   await chargeDeferred(p.developerId);
   return "followed" as const;

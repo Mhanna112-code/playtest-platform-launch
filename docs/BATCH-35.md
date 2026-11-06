@@ -5174,3 +5174,19 @@ with ×.
 ## §293 Cancel's reason field says it's optional until 24 hours before (owner, Nov 6)
 Under the Why field of a call's Cancel (both sides, a set's "Cancel the remaining calls" too), in small grey: "Optional until 24 hours before the call", while
 the call is 24 hours or more away. Within 24 hours the field is required as before (no hint). The rule itself is unchanged (cancel any time until it starts).
+
+## §294 Chargeback emails go out at once, every one (owner, Nov 6)
+- Every chargeback the developer gets is now emailed at once, whatever their email setting (`always: true`, as the admins' "Playtest: new chargeback of $X"
+  email already was):
+  - the one that starts the hold ("Your tests are paused after a chargeback", unchanged);
+  - the one that turns a payment hold into a chargeback hold ("Your bank reversed …: your payment hold is now a chargeback hold", unchanged);
+  - a further one during a chargeback hold ("Your bank reversed …: it was added to what you owe"): before, a bell line only. Its email adds "To resume: verify a
+    card with 3D Secure, pay what you owe, and wait for the team's approval." (the new chargeback clears the card check and approval);
+  - the bank changing its amount after the repayment (§192's "Your bank lowered what it took back …" / "Your bank raised what it took back …"): before, payment
+    lines in the end-of-day payment email only.
+- The bell is unchanged: the hold lines and the chargeback lines stay in the day's "Payments and holds" (`payhold`) entry; the lowered / raised lines stay their
+  own entries. No new stacks (an earlier draft of §294 with "Chargebacks" and "Payments declined" stacks was dropped by the owner).
+- Unchanged: a won chargeback's line (payhold, the end-of-day payment email); a decline during a hold, "Another payment was declined: $X for … was added to what
+  you owe" (payhold, bell and the end-of-day payment email); the admins' chargeback emails.
+- Not covered (no developer line exists): the bank changing the amount BEFORE the repayment (§192 "followed" in what is owed; the team's Chargebacks box only).
+- Tests: tests/chargeback-emails-294.test.ts. Updated: batch18 (the list of emails that ignore Off: two more in holds.ts).
