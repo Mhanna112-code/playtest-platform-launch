@@ -311,9 +311,10 @@ describe("batch 13 section 9: long text", () => {
     expect(f).toContain('<LineList box="questions" text={f.questions} max={LIMITS.question}');
     expect(f).toContain("maxLength={LIMITS.nda}");
     expect(src("components/NdaBox.tsx")).toContain("<ValueText id={id}"); // (§231) the shared box for contract and listing texts, 12rem at first
-    for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx"]) expect(src(p)).toContain("<NdaBox");
+    // (Owner, Nov 5, §267) The offer box no longer shows an NDA (it follows the listing): the join page and the session page keep the box.
+    for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx"]) expect(src(p)).toContain("<NdaBox");
     expect(f).not.toContain("<NdaBox"); // (batch 16 section 8) no "How testers see it" preview on Post / Edit
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox id={`offer-${offer.id}-nda-before`} label="Before"');
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).not.toContain("<NdaBox");
     // (Owner, Nov 5, §265) No questions block in the offer any more: each change of the questions is a Terms history entry (QuestionTexts there).
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).not.toContain("x.before"); 
   });

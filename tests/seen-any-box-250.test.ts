@@ -124,7 +124,8 @@ describe("§250 the tester's session page", () => {
     expect((await sact(x.ana.sessionId, "leave", x.ana.tester.cookie, { seenAt: loaded, shownIds: sids(send, leave) })).status).toBe(200);
   });
 
-  it("the exception (§232): Rate and Leave each stop once for an open offer, even after a box listed it", async () => {
+  // (Owner, Nov 5, §268; replaces §232's exception) No exception: once a box listed the offer, Rate and Leave go through like every press.
+  it("no exception any more (§268): once a box listed the offer, Rate and Leave go through", async () => {
     const s = await setup();
     const ana = await joined(s.testId, "Ana Silva");
     expect((await sact(ana.sessionId, "written", ana.tester.cookie, { answers: ["a", "b"], seenAt: seen(), confirmed: true })).status).toBe(200);
@@ -139,16 +140,9 @@ describe("§250 the tester's session page", () => {
     const leave = (await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: loaded, pageSeenAt: loaded })) as Res;
     expect(leave.body.error?.code, JSON.stringify(leave.body)).toBe("stop_once");
     expect(texts(leave)).toContain("Nora Lane offered you the new terms: Switch or Keep below");
-    // The offer line is seen now; Rate still stops once for the open offer (its own line, never marked seen).
+    // The offer line is seen now: Rate goes through.
     const r1 = await rate({ shownIds: sids(leave) });
-    expect(r1.body.error?.code, JSON.stringify(r1.body)).toBe("stop_once");
-    expect(texts(r1)).toEqual(["Nora Lane offered you new terms: Switch or Keep in the box above, or rating closes them unanswered"]);
-    expect(r1.body.error!.changes![0].sid).toBeUndefined();
-    // And Leave again (a first press) stops once for it too, whatever was listed.
-    const l2 = (await sact(ana.sessionId, "leave", ana.tester.cookie, { seenAt: loaded, pageSeenAt: loaded, shownIds: sids(leave, r1) })) as Res;
-    expect(l2.body.error?.code).toBe("stop_once");
-    expect(texts(l2)).toEqual(["Nora Lane offered you new terms: Switch or Keep in the box above, or leaving closes them unanswered"]);
-    expect((await rate({ confirmed: true, boxAt: r1.body.error!.now, shownIds: sids(leave) })).status).toBe(200);
+    expect(r1.status, JSON.stringify(r1.body)).toBe(200);
   });
 });
 

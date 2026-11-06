@@ -10,8 +10,7 @@ import type { TestEventLike } from "@/lib/rules";
  *
  * Identity: the test event's row id when the line is one (`eventId`), otherwise its kind, time (ms) and raw text (before the reader's zone is applied), hashed short.
  *
- * Exceptions (never marked seen by a listing, stop each press they apply to):
- * - `everyPress` lines: Rate / Leave's open-terms line (§232, openOfferMoment): it stops each of those presses once while the offer is open.
+ * (Owner, Nov 5, §268) No exceptions any more: §232's Rate / Leave open-terms line (`everyPress`) is gone.
  * Lines with no identity (`sid`) never count: Pay what you owe's stop (holds.ts keeps its own seenIds / seenAmounts) and other boxes outside the two gates.
  */
 export const SHOWN_IDS_MAX = 300;
@@ -33,8 +32,8 @@ function hash(str: string) {
 export function lineId(e: { kind?: string; text: string; createdAt: Date; eventId?: string }) {
   return hash(e.eventId ? `ev|${e.eventId}` : `${e.kind ?? ""}|${e.createdAt.getTime()}|${e.text}`);
 }
-/** The `sid` a stop line carries (none for an `everyPress` line: no listing makes it seen). */
-export const sidOf = (e: TestEventLike) => (e.everyPress ? {} : { sid: lineId(e) });
+/** The `sid` a stop line carries. */
+export const sidOf = (e: TestEventLike) => ({ sid: lineId(e) });
 
 /** The identities the page's stop boxes listed (`shownIds`), capped. */
 export function shownIdsOf(body: Record<string, unknown>): Set<string> {
@@ -42,8 +41,8 @@ export function shownIdsOf(body: Record<string, unknown>): Set<string> {
   if (!Array.isArray(v)) return new Set();
   return new Set(v.slice(-SHOWN_IDS_MAX).filter((x): x is string => typeof x === "string" && x.length > 0 && x.length <= 32));
 }
-/** Was this line listed in a stop box on the page already? Never for an `everyPress` line. */
-export const wasListed = (e: TestEventLike, shown: ReadonlySet<string>) => !e.everyPress && shown.size > 0 && shown.has(lineId(e));
+/** Was this line listed in a stop box on the page already? */
+export const wasListed = (e: TestEventLike, shown: ReadonlySet<string>) => shown.size > 0 && shown.has(lineId(e));
 /** The lines no stop box on the page listed yet. */
 export const notListed = <T extends TestEventLike>(lines: T[], body: Record<string, unknown>): T[] => {
   const shown = shownIdsOf(body);

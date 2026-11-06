@@ -26,8 +26,9 @@ import {
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
-import { answerTermsFirst, followQuestions, offerNewTerms, testerSendGate } from "./terms";
-import { openOfferMoment, testerGate } from "./testerGate";
+import { answerTermsFirst, followNda, followQuestions, offerNewTerms, testerSendGate } from "./terms";
+import { ndaChangedLine, ndaNoticeHref } from "@/lib/ndaNotice";
+import { testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
@@ -379,6 +380,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let keysGiven: Awaited<ReturnType<typeof giveKeysToWorking>> = [];
   // (Owner, Nov 5, §265) The working testers whose questions this Save changed (each is told in the bell).
   let questionsFollowed: { contractId: string; email: string }[] = [];
+  // (Owner, Nov 5, §267) The working testers whose NDA this Save changed (each gets its own notice in the bell).
+  let ndaFollowed: Awaited<ReturnType<typeof followNda>> = [];
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -478,7 +481,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const terms = changedTerms(current, next);
     const what = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])].join(", ");
     // (Owner, Nov 5, §265) The questions are no longer a term: they follow the listing (below), so a Save that changes only them makes no Switch / Keep offer.
-    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "ndaText"].includes(f));
+    // (Owner, Nov 5, §267) Nor the NDA: it follows the listing (below), with its own notice; a Save that changes only it makes no offer.
+    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays"].includes(f));
     // (NEWEST+12) Testers are alerted to EVERY change except the number of spots and Open until: those two never make an "edited" line / bump the listing version.
     const listingFields = fields.filter((f) => f !== "spots" && f !== "openUntil");
     switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
@@ -498,6 +502,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       for (const c of await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, questions: true, prevSets: true, tester: { select: { email: true } } } }))
         if (await followQuestions(tx, c, next.questions, now)) questionsFollowed.push({ contractId: c.id, email: c.tester.email });
     }
+    // (Owner, Nov 5, §267) The NDA follows the listing the same way: copied into every working contract, with the change's kind for its notice (and block).
+    if (fields.includes("ndaText")) ndaFollowed = await followNda(tx, testId, current.ndaText ?? "", next.ndaText ?? "", new Date());
     // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
     keysGiven = await giveKeysToWorking(tx, testId);
     // (Owner, Oct 30, batch 15 section 43) A Save that changed the terms or the names: one entry in the developer's Contract changes.
@@ -579,6 +585,12 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   for (const q of questionsFollowed) {
     const line = questionsUpdatedLine(displayName(dev));
     await notify(q.email, line, [`${line}.`, "Questions you haven't answered yet are on your session page; your earlier answers are in Terms history."], `/app/sessions/${q.contractId}#scope`, { about: dev.id, testId });
+  }
+  // (Owner, Nov 5, §267) The NDA's own notice, apart from "updated the listing": "<developer> changed the NDA", linking to its line (opening it there counts as
+  // seen, which lifts an added or removed NDA's block).
+  for (const n of ndaFollowed) {
+    const line = ndaChangedLine(displayName(dev));
+    await notify(n.email, line, [`${line}.`, n.kind === "changed" ? "Read it on your session page." : `Open it on your session page before you go on: until then your presses on this test wait for it (except Rate and Leave).`], ndaNoticeHref(n.contractId), { about: dev.id, testId });
   }
   // (Batch 30 §17) Each tester given a key: a line in their session page's top box and a bell line (the key itself only on their page, never in the bell or email).
   for (const g of keysGiven) {
@@ -1048,7 +1060,8 @@ export async function leaveTest(tester: U, contractId: string, body: Record<stri
   // for changes the page hasn't shown (Alerts Off: only contract changes; new terms send the page up to the offer box), the confirmed press leaves. A refusal
   // (leaving can't happen) comes first and is unchanged.
   refused(c0);
-  await testerGate(tester.id, contractId, c0.testId, body, undefined, { moments: await openOfferMoment(contractId, body, "leaving") }); // (§232)
+  // (Owner, Nov 5, §268; replaces §232's open-terms stop) New terms follow the ordinary rule for Leave (Alerts on and not yet shown only); the NDA block never applies.
+  await testerGate(tester.id, contractId, c0.testId, body, undefined, { ordinaryTerms: true });
   const c = await db.$transaction(async (tx) => {
     await lockTest(tx, c0.testId);
     const c = await tx.contract.findUniqueOrThrow({ where: { id: contractId } });

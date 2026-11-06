@@ -61,6 +61,9 @@ import { QuestionTexts, ValueText } from "@/components/QA";
 /** (Owner, Nov 5, §231) The listing information lines whose value can be long: each in the shared box (the others are short lines). */
 const LONG_INFO: string[] = ["title", "productName", "mature"];
 import { NameLine } from "@/components/WholeLine";
+import { NdaNotice } from "@/components/NdaNotice";
+import { OpenTermsNotice, TermsPill } from "@/components/OpenTerms";
+import { ndaBlocked, ndaNoticeOpen } from "@/lib/ndaNotice";
 import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
 import { questionChanges } from "@/lib/questionHistory";
 import { cutNamesIn } from "@/lib/cutNames";
@@ -372,9 +375,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
       {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} devPronoun={c.test.developer.pronoun} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
+      {/* (Owner, Nov 5, §267) The NDA's own notice (and, for an added or removed NDA, the block's banner) until it's opened. */}
+      <NdaNotice sessionId={c.id} dev={dev} kind={c.ndaChangeKind} open={ndaNoticeOpen(c)} block={ndaBlocked(c) && c.status === "working"} />
       <ListingSeeIt box="scope" />
       {/* (Owner, Nov 5, §265) An offer never carries questions (they follow the listing): no "The questions changed" block and no Switch wording about them. */}
-      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText } : null} />
+      {/* (Owner, Nov 5, §267) Nor the NDA: it follows the listing with its own notice. */}
+      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff } : null} />
       {limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}
       {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal}</p>{c.status === "left" && c.endKind !== "rated" && <p data-rejoin-link="">{/* (Owner, Oct 30) The way back after leaving: the test's page asks the developer. */}<a href={`/app/find/${c.testId}`}>Ask to rejoin on the test&apos;s page →</a></p>}
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
@@ -436,6 +442,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           working={rateWarn.working}
           headline={rateWarn.working ? `Rating ends your part in ${title}. You won't be able to send more work, book calls or join this test again.` : `Once you rate, you won't be able to join ${title} again.`}
           lines={rateWarn.lines}
+          // (Owner, Nov 5, §268) New terms still open: a notice in the pop-up (information only; Rate goes through).
+          notice={offer && !refusal ? <OpenTermsNotice dev={dev} press="rate" /> : undefined}
         />
       )}
       {/* (Batch 34 §13, owner) No "Ask to rejoin" / "invited you back" card here: the tester asks to rejoin (or joins on an invite back) from the test's own page,
@@ -448,7 +456,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           information (always the current listing, live; a line changed since joining carries "Updated <time>": before → now). The top box's See it opens it.
           (Owner, Nov 5, §264) What to do, the build link, languages and devices sit under "Your contract" (below Due), still live and marked the same way. */}
       <details className="card scroll-mt-24" id="scope" data-scope="">
-        <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><FileSignature className="h-5 w-5 text-indigo-300" /> Your agreed scope</summary>
+        {/* (Owner, Nov 5, §268) While new terms wait for Switch or Keep, a "New terms" pill that stays until pressed (it opens the new terms). */}
+        <summary className="flex cursor-pointer items-center gap-2 font-semibold text-white"><FileSignature className="h-5 w-5 text-indigo-300" /> Your agreed scope{offer && !refusal && !offer.pillPressedAt && <TermsPill sessionId={c.id} />}</summary>
         {/* (Owner, Oct 31, batch 35 §91) The whole scope in one scroll box (about 32rem tall), so the page below stays close. (Owner, Nov 5, §237) It is the draggable
             panel (ResizeBox, 32rem at first); the boxes inside (questions, NDA, listing texts, Terms history) keep their own. */}
         <ResizeBox id={`scope-${c.id}`} label="Your agreed scope" defaultMax={LIST_PANEL.scope} tallest={BIG_PANEL_TALLEST} className="mt-1">
@@ -480,12 +489,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               <QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />
             </li>
           ))(questionsHistory.filter((q) => new Date(q.at) > c.joinedAt).at(-1))}
-          {c.ndaText && c.ndaAcceptedAt ? (
-            <li data-nda="">
-              <FieldLabel>NDA</FieldLabel>
-              <FieldValue><details><summary className="cursor-pointer">Accepted {fmtDate(c.ndaAcceptedAt)}</summary><div className="mt-1"><NdaBox id={`scope-nda-${c.id}`} text={c.ndaText} /></div></details></FieldValue>
-            </li>
-          ) : <li><FieldLabel>NDA</FieldLabel><FieldValue>None</FieldValue></li>}
+          {/* (Owner, Nov 5, §267) The NDA moved to "The listing information" below: it follows the listing (a Save changes it for everyone, with its own notice). */}
           <li data-scope-due=""><FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue></li>
           {/* (Owner, Nov 5, §264) Below Due: what to do, the build link, languages and devices, moved here from the listing information. They stay live (the
               current listing, "Updated <time>" with before → now), so the sentence under them says so. */}
@@ -496,6 +500,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <p className="text-xs text-slate-400">Always the current listing: it follows <NameLink text={dev} href={devHref} />&apos;s changes as they&apos;re made.</p>
         <ul className="mt-1 space-y-2.5 text-sm" data-scope-info="">
           {info.filter((l) => !(CONTRACT_INFO as readonly string[]).includes(l.key)).filter((l) => l.key !== "productName" || l.now !== "(none)" || l.before != null).filter((l) => l.key !== "mature" || c.test.mature || l.before != null).map(infoItem)}
+          {/* (Owner, Nov 5, §267; was in "Your contract") The NDA, in its box: the notice's link ("changed the NDA") and the block's land here (`#info-nda`,
+              `data-info-line="nda"`, marked like the top box's See it). "Updated <time>" when it changed since you joined; "Accepted <date>" when you accepted it. */}
+          <li id="info-nda" data-nda="" className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line="nda" {...(c.ndaChangedAt ? { "data-updated-at": c.ndaChangedAt.toISOString() } : {})}>
+            <FieldLabel tag={c.ndaChangedAt && c.ndaChangedAt > c.joinedAt ? <span className="badge border-sky-300/40 text-[11px] text-sky-200" data-nda-updated="">Updated {fmtDateTimeIn(c.ndaChangedAt, u.timeZone)}</span> : null}>NDA</FieldLabel>
+            <FieldValue>{c.ndaText ? <>{c.ndaAcceptedAt && <p className="text-xs text-slate-400">Accepted {fmtDate(c.ndaAcceptedAt)}</p>}<NdaBox id={`scope-nda-${c.id}`} text={c.ndaText} /></> : "None"}</FieldValue>
+          </li>
         </ul>
         {/* (Design doc 9) The terms history: every offer and what you chose, with the questions and NDA you were on. */}
         {/* (Batch 35 §91) Folded shut by default: the Updated tags above already show what changed; this keeps the full record. */}
@@ -788,7 +798,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <section className="card space-y-3 text-sm" id="leave">
           <h2 className="font-semibold text-white">Can&apos;t finish?</h2>
           <p className="text-slate-400">You can leave this test: what you sent is still reviewed and paid as usual, the parts you haven&apos;t sent close with no pay, and calls ahead are cancelled. You can join again later while the test is open: your session comes back.</p>
-          <LeaveButton sessionId={c.id} seenAt={seenAt} title={title} />
+          <LeaveButton sessionId={c.id} seenAt={seenAt} title={title} notice={offer && !refusal ? <OpenTermsNotice dev={dev} press="leave" /> : undefined} />
         </section>
       )}
 

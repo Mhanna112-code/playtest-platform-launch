@@ -79,7 +79,8 @@ describe("Edit (design doc 5)", () => {
     expect((await edit(testId, dev.cookie, { title: "New name" })).status).toBe(200);
   });
 
-  it("an NDA change is a new offer the tester accepts (switch); the tester's terms history keeps the old text", async () => {
+  // (Owner, Nov 5, §267; was "a new offer the tester accepts (switch)") The NDA follows the listing: the contract takes it at once, with its own notice.
+  it("an NDA change applies to the working tester at once (no offer), with its notice", async () => {
     const { dev, testId } = await setup({ ndaText: "Keep it secret." });
     const t = await makeUser({ tester: true, name: "Ana Silva" });
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).listingVersion;
@@ -90,12 +91,8 @@ describe("Edit (design doc 5)", () => {
     expect(c.ndaText).toBe("Keep it secret.");
     expect(c.ndaAcceptedAt).not.toBeNull();
     expect((await edit(testId, dev.cookie, { ndaText: "Keep it very secret." })).status).toBe(200);
-    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: c.id, status: "open" } });
-    expect(offer).toMatchObject({ ndaText: "Keep it very secret.", fromNdaText: "Keep it secret.", diff: "NDA changed" });
-    // Still on the old NDA until they switch.
-    expect((await db.contract.findUniqueOrThrow({ where: { id: c.id } })).ndaText).toBe("Keep it secret.");
-    expect((await sact(c.id, "terms", t.cookie, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true })).status).toBe(200);
-    expect((await db.contract.findUniqueOrThrow({ where: { id: c.id } })).ndaText).toBe("Keep it very secret.");
+    expect(await db.termsOffer.count({ where: { contractId: c.id } })).toBe(0);
+    expect(await db.contract.findUniqueOrThrow({ where: { id: c.id } })).toMatchObject({ ndaText: "Keep it very secret.", ndaChangeKind: "changed" });
   });
 
   it("shortening the deadline is ignored for working testers (no offer)", async () => {

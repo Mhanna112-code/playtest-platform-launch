@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { jumpTo } from "@/lib/markJump";
 import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
-import { NdaBox } from "@/components/NdaBox";
 import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
@@ -19,7 +18,7 @@ import { PressDone } from "@/components/PressDone";
  * (Batch 35 §40, §41) Switch / Keep change the terms every part of the page is built on, so the page loads again, keeping its place (a "#…" in the address is
  * dropped first); until then both buttons stay greyed with the result line.
  */
-export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; } | null; devName: string }) {
+export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
   // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
@@ -86,16 +85,7 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         {devName} updated the listing: {offer.diff}.
       </p>
       <p className="text-xs">Switching applies to work you send from now on; work you&apos;ve already sent keeps its price. Your deadline never moves earlier.</p>
-      {offer.ndaText != null && offer.ndaText !== (offer.fromNdaText ?? "") && (
-        <details className="text-sm" open>
-          <summary className="cursor-pointer font-medium">{offer.ndaText ? "The NDA" : "The NDA is removed"}{offer.fromNdaText ? " (changed)" : ""}: switching means you accept it</summary>
-          {/* (Batch 13 section 9) "Before" and "Offered" as two scroll boxes, never in full. (§231) The shared box for contract texts, like the questions below. */}
-          <div className="mt-1 space-y-2">
-            {offer.fromNdaText && <NdaBox id={`offer-${offer.id}-nda-before`} label="Before" text={offer.fromNdaText} />}
-            {offer.ndaText && <NdaBox id={`offer-${offer.id}-nda-offered`} label="Offered" text={offer.ndaText} />}
-          </div>
-        </details>
-      )}
+      {/* (Owner, Nov 5, §267; replaces batch 13 §9's NDA Before / Offered here) An offer never carries the NDA: it follows the listing, with its own notice. */}
       {/* (Owner, Nov 5, §265; replaces §221 / §233 / §242's questions-changed block, before and after) An offer never carries questions: they follow the
           listing (each change is a "Questions changed" entry in Terms history). */}
       <div className="flex flex-wrap gap-2">

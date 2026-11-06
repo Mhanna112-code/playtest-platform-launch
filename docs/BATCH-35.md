@@ -4721,3 +4721,32 @@ parts and prices), on the tester's session page and on the developer's per-teste
   lines (not a field change, left as they were).
 - Left out: title and product name (the "Renamed" contract notes), categories, Mature and its reason, Open until, spots, the deadline, and the NDA (the offers'
   "NDA then and now" and any NDA part of an offer's diff). An offer that changed only fields left out (e.g. only the NDA) gets no entry.
+
+## §267 The NDA is a listing change with its own notice; adding or removing one blocks until seen (owner, Nov 5)
+- Like the questions (§265): a Save that adds, removes or changes the NDA copies it into every working contract in the Save's transaction (`followNda` in
+  lib/server/terms.ts), recording the change's kind and time on the contract (`ndaChangeKind`, `ndaChangedAt`). The NDA is no longer a term: a Save that
+  changes only it makes no Switch / Keep offer (an offer carries the contract's own NDA), and Switch never writes the NDA (or its acceptance) back, so an older
+  open offer can't either. The offer box's NDA Before / Offered is gone. Terms history already leaves NDA lines out (§266).
+- Its own notice, apart from "updated the listing": the bell line "<developer> changed the NDA" (emailed as bell lines are), linking to
+  `/app/sessions/<id>?nda=open#info-nda`; at the top of the session page "<developer> changed the NDA" with "changed the NDA" as the link (NdaNotice); and an
+  ordinary stop-once line for presses whose page hadn't shown it (testerChanges, kind "nda": Alerts on only). The link (here, the bell's, a refusal's) records
+  `Contract.ndaNoticeSeenAt` (action "nda-seen"), brings the NDA line into view and marks it. An added NDA opened this way counts as read: "Accepted <date>" on
+  its line and the developer's "NDA accepted" badge.
+- The NDA line moved from "Your contract" into "The listing information" (`id="info-nda"`, `data-info-line="nda"`, with "Updated <time>" when it changed since
+  joining, the text in its NdaBox, or "None").
+- The block (`ndaBlocked`, lib/ndaNotice.ts): an ADDED or REMOVED NDA whose notice wasn't opened refuses every press of the tester's on that test (the session
+  route's presses: Send Answers, Add to this answer, recordings, calls and requests, Charge / Let it go, disputes, Switch / Keep, messages; and calls through
+  `answerTermsFirst`) with one line in the blue notice (§213's look) whose link opens the notice: "<developer> added an NDA to this test: read it before you go
+  on" / "<developer> removed the NDA from this test: see the change before you go on". The page shows the same line as a banner at the top. Rate and Leave are
+  never blocked (§268), nor an upload already under way. Opening the notice lifts it. A changed text only notifies (the owner's rule; adding "changed" to
+  `BLOCKING_KINDS` would extend it). A tester who joins after the change accepts the NDA at join as before and is never blocked (their contract records no change).
+- The developer's side is unchanged apart from no offer being made for an NDA change. Migration 20261120090000_nda_notice_terms_pill (hand-written, columns only).
+
+## §268 Rate and Leave follow the ordinary stop-once rule; the contract box's "New terms" pill (owner, Nov 5; replaces §232)
+- §232's special stop for Rate and Leave (`openOfferMoment`, `everyPress`: "…, or rating / leaving closes them unanswered", even when shown) is gone. Rate and
+  Leave follow the ordinary testerGate rule for new terms and an NDA change (`ordinaryTerms`): they stop once only with Alerts on, and only when the change came
+  before what the page (or its live pill) showed; with Alerts Off an offer never stops them. The NDA block (§267) never applies to them.
+- Their pop-ups show a small blue notice while new terms are open, information only: "<developer> offered new terms you haven't answered: rating (leaving)
+  closes them unanswered." with "See the new terms" (to the offer box). No notice without an open offer.
+- While an offer is open, "Your agreed scope" carries a "New terms" pill (the look of the other update pills) that stays across reloads until pressed; pressing
+  it records it on the offer (`TermsOffer.pillPressedAt`) and brings the new terms into view. A newer offer brings it back. It's separate from the live pill.

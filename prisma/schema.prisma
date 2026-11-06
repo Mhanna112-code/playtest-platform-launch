@@ -343,6 +343,11 @@ model Contract {
   devRatePromptedAt DateTime?
   /// (Owner, Oct 27) A tester removed by a suspension dismissed the "Suspended" card on their dashboard
   removedDismissedAt DateTime?
+  /// (Owner, Nov 5, batch 35 §267) The NDA follows the listing: when a Save last changed it for this contract, how ("added" | "removed" | "changed"), and when the
+  /// tester opened its notice. An added or removed NDA blocks the tester's presses on the test (not Rate or Leave) until the notice is opened.
+  ndaChangedAt    DateTime?
+  ndaChangeKind   String   @default("")
+  ndaNoticeSeenAt DateTime?
 
   submissions Submission[]
   recordings  Recording[]
@@ -905,6 +910,8 @@ model TermsOffer {
   /// "open" | "switched" | "kept" | "superseded"
   status         String    @default("open")
   decidedAt      DateTime?
+  /// (Owner, Nov 5, batch 35 §268) When the tester pressed the contract box's "New terms" pill for this offer (null: the pill still shows)
+  pillPressedAt  DateTime?
   createdAt      DateTime  @default(now())
 
   @@index([contractId, createdAt])

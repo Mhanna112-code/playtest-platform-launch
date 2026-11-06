@@ -11,6 +11,7 @@ import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/a
 import { carriedAnswers } from "@/lib/additions";
 import { qText } from "@/lib/questions";
 import { closeOffersOfEnded } from "./offerClose";
+import { ndaBlockLine, ndaBlocked, ndaChangeOf, ndaNoticeHref } from "@/lib/ndaNotice";
 export { closeOffersOfEnded };
 
 const nameOf = async (id: string) => displayName(await db.user.findUniqueOrThrow({ where: { id } }));
@@ -31,7 +32,8 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
   for (const c of working) {
     // (5) Shortening the deadline applies to new testers only and is ignored here: an existing tester is only ever offered more time. (Owner, Nov 5, §265) The
     // questions are not a term any more: the offer carries the contract's own (the Save already wrote the listing's into it), so they're never in its diff.
-    const newTerms = { ...termsOf(t), deadlineDays: Math.max(c.deadlineDays, t.deadlineDays), questions: (c.questions as string[]) ?? [] };
+    // (Owner, Nov 5, §267) Nor the NDA: the offer carries the contract's own (the Save already copied the listing's into it).
+    const newTerms = { ...termsOf(t), deadlineDays: Math.max(c.deadlineDays, t.deadlineDays), questions: (c.questions as string[]) ?? [], ndaText: c.ndaText ?? "" };
     const diff = termsDiff(termsOf(c), newTerms);
     // Repeated saves replace a waiting offer with the newest one.
     await db.termsOffer.updateMany({ where: { contractId: c.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
@@ -53,6 +55,32 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
 /** (Owner, Nov 2, batch 35 §118) Switch / Keep pressed after the tester's part ended (rated, left, removed, stopped, the work window ended). */
 export const PART_ENDED_TERMS = "Your part on this test has ended, so these terms no longer apply.";
 
+/**
+ * (Owner, Nov 5, §267) The NDA block: an added or removed NDA the tester hasn't opened the notice of refuses every press of theirs on the test (Rate and Leave
+ * never come here, §268), with one line whose link opens the notice ("Nora Lane added an NDA to this test: read it before you go on").
+ */
+export function ndaBlockCheck(c: { id: string; ndaChangedAt: Date | null; ndaChangeKind: string; ndaNoticeSeenAt: Date | null }, dev: string) {
+  if (ndaBlocked(c)) throw new HttpError(409, NDA_BLOCK_CODE, ndaBlockLine(dev, c.ndaChangeKind), { ndaLink: ndaNoticeHref(c.id) });
+}
+export const NDA_BLOCK_CODE = "nda_block";
+/** (§267) The block for a press by contract id (the session route's presses). */
+export async function ndaBlockFirst(contractId: string) {
+  const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
+  if (c) ndaBlockCheck(c, displayName(c.test.developer));
+}
+/**
+ * (Owner, Nov 5, §267) A Save changed the NDA: every working contract takes the listing's at once (no Switch / Keep), with the change's kind and time for its
+ * notice and block. An added or removed NDA clears `ndaAcceptedAt` (an added one counts as accepted once its notice is opened); a changed text keeps it.
+ * Returns the contracts changed.
+ */
+export async function followNda(tx: Prisma.TransactionClient, testId: string, before: string, after: string, now: Date) {
+  const kind = ndaChangeOf(before, after);
+  if (!kind) return [];
+  const cs = await tx.contract.findMany({ where: { testId, status: "working" }, select: { id: true, tester: { select: { email: true } } } });
+  if (cs.length) await tx.contract.updateMany({ where: { id: { in: cs.map((c) => c.id) } }, data: { ndaText: after, ...(kind === "changed" ? {} : { ndaAcceptedAt: null }), ndaChangedAt: now, ndaChangeKind: kind } });
+  return cs.map((c) => ({ contractId: c.id, email: c.tester.email, kind }));
+}
+
 /** The newest open offer for a contract, if any. */
 export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where: { contractId, status: "open" }, orderBy: { createdAt: "desc" } });
 
@@ -65,6 +93,8 @@ export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where
 export async function answerTermsFirst(contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || testerRefusal(c, c.test, displayName(c.test.developer), fmtDate, new Date())) return;
+  // (Owner, Nov 5, §267) An added or removed NDA whose notice the tester hasn't opened blocks the press first (calls too, which come through here).
+  ndaBlockCheck(c, displayName(c.test.developer));
   const offer = await openOffer(contractId);
   // (Batch 29 section 20) `sessionId`: a Join call refused away from the session page (the dashboard's Upcoming calls) links to the Switch / Keep box there.
   if (offer) throw new HttpError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, { offerId: offer.id, sessionId: contractId });
@@ -125,14 +155,14 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
   if (body.choice === "switch") {
     // (Owner, Nov 5, §265) Switch never writes the questions: they follow the listing on every Save (followQuestions), so an older offer can never put stale
     // questions back into the contract.
-    const { questions: _offered, ...terms } = termsOf(target);
-    void _offered;
+    // (Owner, Nov 5, §267) Nor the NDA: it follows the listing too (a Save copies it into every working contract), so an older offer never writes one back.
+    const { questions: _offered, ndaText: _nda, ...terms } = termsOf(target);
+    void _offered; void _nda;
     await db.$transaction([
       db.contract.update({
         where: { id: contractId },
-        // Switching to terms with an NDA means accepting it now.
         data: { ...terms, listingVersion: target.listingVersion, // (Batch 15 section 18) With an Open until, each tester's deadline is their join + the tester days (an Edit moving Open until already moved it): switching never moves it.
-        dueAt: c.test.openUntil ? c.dueAt : newDueAt(c.dueAt, c.joinedAt, target.deadlineDays), termsSwitchedAt: now, ndaAcceptedAt: target.ndaText ? (target.ndaText === c.ndaText ? c.ndaAcceptedAt ?? now : now) : null },
+        dueAt: c.test.openUntil ? c.dueAt : newDueAt(c.dueAt, c.joinedAt, target.deadlineDays), termsSwitchedAt: now },
       }),
       db.termsOffer.update({ where: { id: target.id }, data: { status: "switched", decidedAt: now } }),
     ]);

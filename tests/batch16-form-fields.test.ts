@@ -138,6 +138,7 @@ describe("Mature (18+): say why the box is red (section 9)", () => {
 describe("no NDA preview on Post / Edit (section 8)", () => {
   it("TestForm has no NdaBox; the join page, session page and terms history keep it", () => {
     expect(src("app/app/tests/TestForm.tsx")).not.toMatch(/NdaBox|How testers see it/);
-    for (const f of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx"]) expect(src(f)).toContain("<NdaBox");
+    // (Owner, Nov 5, §267) Not the offer box any more (the NDA follows the listing).
+    for (const f of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx"]) expect(src(f)).toContain("<NdaBox");
   });
 });

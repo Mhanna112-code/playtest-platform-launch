@@ -7,6 +7,7 @@ import { keyGivenToYouLine } from "@/lib/keys";
 import { KEY_GIVEN } from "./accessKeys";
 import { DROP_KINDS, isDropReason } from "@/lib/requestDrop";
 import { notListed } from "./shownLines";
+import { ndaChangedLine } from "@/lib/ndaNotice";
 import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answers, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
 // The tester's ONE set of stop-once reasons (owner rule, NEWEST+3), used by every tester button on the session page:
@@ -96,6 +97,8 @@ export async function testerChanges(testerId: string, contractId: string, testId
   if (fixed) out.push({ kind: "keyfixed", text: `${dev} marked your key as working (${fixed.value})`, createdAt: fixed.fixedAt! });
   // (Batch 30 §17) The developer's Save gave this tester a key (the test had none when they joined): "<dev> gave you an access key for “<test>”" (the key is in its box).
   for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: seenAt } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, c.test.title), createdAt: e.createdAt });
+  // (Owner, Nov 5, §267) The NDA changed (its own notice): an ordinary line (Alerts on, not yet shown), apart from the block an added or removed one makes.
+  if (c.ndaChangedAt && c.ndaChangedAt > seenAt) out.push({ kind: "nda", text: ndaChangedLine(dev), createdAt: c.ndaChangedAt });
   // (F) the listing's info (title, description, devices, languages) changed: (batch 30 §10) one line per save.
   out.push(...(await listingSaveLines(testId, seenAt, testerId, "session")));
   out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));
@@ -122,7 +125,8 @@ export const owedChange = (e: TestEventLike, piece: string) => (e.kind === "paid
  */
 export const disputeChange = (e: TestEventLike) => e.kind === "dispute" || (e.kind === "admin" && !!e.piece);
 
-const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute"];
+// (Owner, Nov 5, §267) "nda": the NDA changed (its own notice), an ordinary kind (Alerts on).
+const KINDS = ["terms", "paid", "rejected", "cancelled", "booked", "requested", "info", "payment", "admin", "own", "dispute", "nda"];
 /**
  * (Owner, Oct 28, batch 16 section 38B) The call changes a tester sees (the developer's requests, withdrawn or taken, their own request accepted or declined, a call
  * cancelled). They stop every tester press once even after the live box or a refresh of the page showed them: counted from when the page loaded in this tab
@@ -133,7 +137,9 @@ export const TESTER_CALL_KINDS = new Set(["requested", "booked", "cancelled"]);
 /** The one tester gate: the first press stops (the box shows under that button); the second goes ahead. */
 export async function testerGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>, tail = "Press again to go ahead.", opts: { skipTerms?: boolean; keep?: (e: TestEventLike) => boolean; piece?: string; /** (Batch 35 §79) what the press answers */ answers?: Answers; /** (§93) Stop/pause moments: always stop, in the same box as the shared lines. */ moments?: TestEventLike[];
   /** (§159 rule 4) Charge / Let it go on this piece (submission or call id): a developer payment on it, or the team's decision on any of the tester's disputes. */ owedPiece?: string;
-  /** (Owner, Nov 4, §183) Send / Add to this answer / a recording's add on this sent part (its submission id): a developer payment on it always stops once. */ sendPiece?: string } = {}) {
+  /** (Owner, Nov 4, §183) Send / Add to this answer / a recording's add on this sent part (its submission id): a developer payment on it always stops once. */ sendPiece?: string;
+  /** (Owner, Nov 5, §268; replaces §232's open-terms stop) Rate and Leave: new terms (and an NDA change) follow the ordinary rule: they stop once only with Alerts
+   * on, and only when the change came before what the live pill showed (seen counts, §90). */ ordinaryTerms?: boolean } = {}) {
   // (Owner, Oct 29, batch 29 section 11; replaces batch 16 section 25) A stopped, closed or paused test, or a tester whose work ended: every press still allowed follows
   // these same stop-once rules (Block never stops; batch 35 §59: Leave stops like the rest).
   // (Owner) The second press goes ahead only if nothing new happened since the box last updated (boxAt); Leave and
@@ -143,7 +149,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const seenAt = body.confirmed === true ? boxAt : seenOf(body.seenAt);
   if (!seenAt) return;
   // New terms count from the page's own render (pageSeenAt), or from the box's time on a second press; everything else from `seenAt`.
-  const termsFrom = body.confirmed === true ? seenAt : seenOf(body.pageSeenAt) ?? seenAt;
+  const termsFrom = body.confirmed === true || opts.ordinaryTerms ? seenAt : seenOf(body.pageSeenAt) ?? seenAt;
   const loadedAt = body.confirmed === true ? null : seenOf(body.loadedAt);
   const boxSeen = seenOf(body.boxSeenAt);
   const fromBox = boxSeen && loadedAt && boxSeen > loadedAt ? boxSeen : loadedAt;
@@ -171,18 +177,17 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // decision on ANY of this tester's disputes change what they're owed: one the page hasn't shown stops the press once even with Alerts Off. A payment on their
   // other parts follows their Alerts as before.
   const rest = r.go ? [] : off ? r.changes.filter((e) => ALERTS_OFF_KINDS.has(e.kind) || disputeChange(e) || (!!piece && e.piece === piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece))) : r.changes;
+  // (§268) Rate and Leave with Alerts Off: an offer never stops them (it's an ordinary line for them).
+  const termsShown = off && opts.ordinaryTerms ? [] : terms;
   // (Batch 35 §79) Never the line about the very thing this press answers (Accept on the developer's call request that just arrived).
-  // (Owner, Nov 5, §250) Nor a line a stop box on this page already LISTED (any button's box: `shownIds`), forced lines and stop / pause moments included. Never
-  // Rate / Leave's open-terms line (§232, `everyPress`): it stops each of those presses once while the offer is open.
-  // (§250) Rate / Leave's open-terms moment gives way only to an offer line this box will still list (one a box already listed no longer covers it).
-  const termsLeft = notListed(terms, body);
-  const list = withRenamed(notListed((await unanswered(testerId, testId, [...terms, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt && !(e.kind === "terms" && termsLeft.length))])).filter((e) => !answersIt(e, opts.answers)), body), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  // (Owner, Nov 5, §250) Nor a line a stop box on this page already LISTED (any button's box: `shownIds`), forced lines and stop / pause moments included.
+  const list = withRenamed(notListed((await unanswered(testerId, testId, [...termsShown, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt)])).filter((e) => !answersIt(e, opts.answers)), body), body).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
   // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, a key marked working, their own other-tab
   // actions, a stop or pause, and the piece rules (Dispute's payment on that piece; Charge / Let it go's payment on that part and any team decision) always stop.
   // (§171 A2) And the team's decision on her dispute, or the developer's side added to it, on every press.
-  const forced = (e: TestEventLike) => ALERTS_OFF_KINDS.has(e.kind) || e.kind === "stop" || disputeChange(e) || (!!piece && e.piece === piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece));
-  if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: terms.some((t) => list.includes(t)) /* (§250) a listed offer line no longer sends the page up */, alertsOff: !!off });
+  const forced = (e: TestEventLike) => (ALERTS_OFF_KINDS.has(e.kind) && !(opts.ordinaryTerms && e.kind === "terms")) || e.kind === "stop" || disputeChange(e) || (!!piece && e.piece === piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece));
+  if (list.length) throw new HttpError(409, "stop_once", tail, { changes: asLines(list.map((e) => (forced(e) ? { ...e, forced: true } : e))), tail, top: termsShown.some((t) => list.includes(t)) /* (§250) a listed offer line no longer sends the page up */, alertsOff: !!off });
 }
 
 /** (Owner, Nov 4, §183) "Nora Lane paid $0 more for what you added to your written answers" (the bell's words), when she closed the tester's update at $0 since `since`. */
@@ -199,18 +204,3 @@ function requestWords(r: { rows?: unknown; times: Date[]; startsAt: Date; weeks:
   const x = rows[0];
   return x.repeat === "once" ? `a call for ${when}` : `${x.repeat === "daily" ? "daily" : "weekly"} calls from ${when}${x.count ? "" : " (until testers' work ends)"}`;
 }
-
-/**
- * (Owner, Nov 5, §232) Rate and Leave end the tester's part, which closes an open new-terms offer unanswered. So their FIRST press always stops once for an
- * open offer, even when the page already shows its box (§90's "shown counts as seen" doesn't apply here): "<dev> offered you new terms: Switch or Keep in the box
- * above, or <rating / leaving> closes them unanswered." The second press goes ahead (the line is dated now, so it never stops the confirmed press).
- */
-export async function openOfferMoment(contractId: string, body: Record<string, unknown>, press: "rating" | "leaving"): Promise<TestEventLike[]> {
-  if (body.confirmed === true) return [];
-  const offer = await db.termsOffer.findFirst({ where: { contractId, status: "open" }, select: { id: true } });
-  if (!offer) return [];
-  const c = await db.contract.findUnique({ where: { id: contractId }, select: { test: { select: { developer: true } } } });
-  // (Owner, Nov 5, §250's exception) `everyPress`: a box listing it never marks it seen; Rate and Leave each stop for it once while the offer is open.
-  return [{ kind: "terms", text: `${c ? displayName(c.test.developer) : "The developer"} offered you new terms: Switch or Keep in the box above, or ${press} closes them unanswered`, createdAt: new Date(), everyPress: true }];
-}
-

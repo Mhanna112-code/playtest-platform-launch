@@ -61,9 +61,9 @@ describe("§266 the tester's Terms history", () => {
     expect(history).not.toContain("Harbor Run 2");
     expect(history).not.toContain("NDA then and now");
     expect(history).not.toContain("NDA");
-    // The NDA's offer was replaced by the price's (one offer open at a time); its diff is limited to the price.
+    // (§267) The NDA change made no offer at all (it follows the listing); the price's offer lists the price.
     const offers = await db.termsOffer.findMany({ where: { contractId: j.sessionId } });
-    expect(offers.some((o) => o.diff.includes("NDA"))).toBe(true);
+    expect(offers.some((o) => o.diff.includes("NDA"))).toBe(false);
     expect(history).toContain("offered new terms");
     expect(history).toContain("written $10 → $12");
   });

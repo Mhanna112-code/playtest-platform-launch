@@ -200,7 +200,7 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
     const scope = s.slice(s.indexOf('<details className="card scroll-mt-24" id="scope"'), s.indexOf("{/* (Design doc 9) The terms history"));
     expect(scope).toContain("<FieldLabel>{x.name}</FieldLabel>");
     expect(scope).toContain("<QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />"); // (§231)
-    expect(scope).toContain("<FieldLabel>NDA</FieldLabel>");
+    expect(scope).toContain(">NDA</FieldLabel>"); // (§267) in the listing information now, with its Updated tag
     expect(scope).toContain("<FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue>");
     // (Owner, Nov 5, §264) A listing line is drawn by one helper (infoItem), in "Your contract" (four lines) and in the listing information.
     const item = s.slice(s.indexOf("const infoItem = "), s.indexOf("const CONTRACT_INFO = "));

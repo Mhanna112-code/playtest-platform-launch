@@ -1,6 +1,7 @@
 "use client";
 import { useEffect, useRef } from "react";
 import { FIELD } from "@/lib/client";
+import { isNdaBlockLine } from "@/lib/ndaNotice";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { bringInView } from "@/lib/markJump";
 import { isPerkRefusal } from "@/lib/subscription";
@@ -28,6 +29,12 @@ export function Err({ text, press = "" }: { text: string; press?: string }) {
   const gone = useGoneOnNewVersion(text.startsWith(FIELD) ? "" : text, text);
   if (!text || gone) return null;
   if (text === ANSWER_TERMS_FIRST) return <p ref={ref} className="err" data-answer-terms="">{text}</p>;
+  // (Owner, Nov 5, §267) The NDA block's refusal: the blue notice (§213's look) with its link, which opens the NDA notice on the session page (recorded as seen).
+  if (isNdaBlockLine(text)) {
+    const at = text.lastIndexOf(": ");
+    const tail = text.slice(at + 2), link = tail.startsWith("read it") ? "read it" : "see the change";
+    return <p ref={ref} className="info" data-nda-refusal="">{text.slice(0, at + 2)}<a href="?nda=open#info-nda" data-nda-link="">{link}</a>{tail.slice(link.length)}</p>;
+  }
   const red = text.startsWith(FIELD);
   const line = red ? text : refusalLine(press, text);
   if (!red && text.startsWith("Confirm your email first.")) return <p ref={ref} className="err flex flex-wrap items-center gap-2">{line} <ResendConfirm label="Resend the link" /></p>;
