@@ -313,8 +313,8 @@ describe("§185 two request boxes on the developer's page, each with a name sear
     expect(toYou).toBeGreaterThan(0);
     expect(yours).toBeGreaterThan(toYou);
     const a = html.slice(toYou, yours), b = html.slice(yours);
-    expect(a).toContain('<h2 class="inline">Requests to you</h2> <span class="text-sm font-normal text-slate-400">(<span data-call-requests-count="">3</span>)</span>');
-    expect(b).toContain('<h2 class="inline">Your requests</h2> <span class="text-sm font-normal text-slate-400">(<span data-call-requests-count="">1</span>)</span>');
+    expect(a).toContain('<h2 class="inline">Call requests to you</h2> <span class="text-sm font-normal text-slate-400">(<span data-call-requests-count="">3</span>)</span>');
+    expect(b).toContain('<h2 class="inline">Call requests you sent</h2> <span class="text-sm font-normal text-slate-400">(<span data-call-requests-count="">1</span>)</span>');
     // Each box open, with its own search; people in the order of their oldest request (Ben asked first), closed.
     expect(a).toContain('data-request-search="to-you"');
     expect(b).toContain('data-request-search="yours"');
@@ -350,9 +350,9 @@ describe("§185 two request boxes on the developer's page, each with a name sear
     const toYou = html.indexOf('id="call-requests"'), yours = html.indexOf('id="your-requests"');
     expect(toYou).toBeGreaterThan(0);
     expect(yours).toBeGreaterThan(toYou);
-    expect(html.slice(toYou, yours)).toContain('Requests to you<span class="font-normal text-slate-400"> (1)</span>');
+    expect(html.slice(toYou, yours)).toContain('Call requests to you<span class="font-normal text-slate-400"> (1)</span>');
     expect(html.slice(toYou, yours)).toContain("Decline</button>");
-    expect(html.slice(yours)).toContain('Your requests<span class="font-normal text-slate-400"> (1)</span>');
+    expect(html.slice(yours)).toContain('Call requests you sent<span class="font-normal text-slate-400"> (1)</span>');
     expect(html.slice(yours)).toContain("Withdraw</button>");
     expect(html).not.toContain("data-request-search=");
   });

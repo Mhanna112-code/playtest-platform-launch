@@ -5079,3 +5079,6 @@ with ×.
   none gets it at read time (lib/server/liveLinks.ts: by kind, contract, and the row changed within a minute of it). Only the kinds that stored a place before
   read their item or part from it: the new places never change what a press stops for.
 - Tests: tests/live-line-links-284.test.ts; batch15-gaps follows the jump with fallback.
+
+## §287 Call requests' headings start with "Call" (owner, Nov 6)
+"Requests to you" reads "Call requests to you" and "Your requests" reads "Call requests you sent", on the developer's test page and the tester's session page.

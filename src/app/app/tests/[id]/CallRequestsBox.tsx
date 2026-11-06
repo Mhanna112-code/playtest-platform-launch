@@ -28,8 +28,8 @@ export function CallRequestsBox({ testId, seenAt, requests, leadMinutes }: { tes
   );
   return (
     <>
-      {toYou.length > 0 && box("to-you", "Requests to you", toYou)}
-      {yours.length > 0 && box("yours", "Your requests", yours)}
+      {toYou.length > 0 && box("to-you", "Call requests to you", toYou) /* (Owner, Nov 6, §287) "Call" first */}
+      {yours.length > 0 && box("yours", "Call requests you sent", yours)}
     </>
   );
 }

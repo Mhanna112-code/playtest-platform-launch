@@ -115,8 +115,8 @@ export function CallRequests(p: {
         if (!all.length) return <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`call-requests-${id}`} requests={[]} />;
         return (
           <>
-            {toYou.length > 0 && panel("Requests to you", toYou, "call-requests")}
-            {yours.length > 0 && panel("Your requests", yours, "your-requests")}
+            {toYou.length > 0 && panel("Call requests to you", toYou, "call-requests") /* (Owner, Nov 6, §287) "Call" first */}
+            {yours.length > 0 && panel("Call requests you sent", yours, "your-requests")}
           </>
         );
       })()}
