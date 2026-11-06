@@ -8,7 +8,7 @@ import { serverKey } from "./pressKeys";
 import { receipt } from "./payments";
 import { recordEvent } from "./tests";
 import {
-  DELETE_ENDS_SUBSCRIPTION, FREE_NOTICE_DAYS, MAX_OPEN_TESTS, TOO_MANY_OPEN_LINE, RETRY_DAYS, SECOND_TEST_LINE, SUBSCRIBE_WAITS, SUBSCRIPTION_CENTS, SUBSCRIPTION_ENDED, SUBSCRIPTION_PRICE,
+  DELETE_ENDS_SUBSCRIPTION, FREE_LAUNCH_ENDED_LINE, FREE_NOTICE_DAYS, MAX_OPEN_TESTS, TOO_MANY_OPEN_LINE, RETRY_DAYS, SECOND_TEST_LINE, SUBSCRIBE_WAITS, SUBSCRIPTION_CENTS, SUBSCRIPTION_ENDED, SUBSCRIPTION_ENDED_FREE_LINE, SUBSCRIPTION_ENDED_LINE, SUBSCRIPTION_PRICE,
   launchFrom, perkLine, periodEnd, subscribed, type Launch, type Perk,
 } from "@/lib/subscription";
 
@@ -305,6 +305,11 @@ export async function endSubscription(devId: string, reason: "cancelled" | "laps
   for (const t of await db.test.findMany({ where: { developerId: devId, status: { not: "stopped" } }, select: { id: true } })) {
     await db.$transaction((tx) => recordEvent(tx, t.id, "subscription", SUBSCRIPTION_ENDED, false));
   }
+  // (Owner, Nov 6, §307) "Your subscription ended: …" on the day it ends, in the bell and that day's email (always: even with email Off), linking to the
+  // subscription. Every end that had no line: the developer's own cancel running out (the daily job), Stripe ending it (customer.subscription.deleted, not past
+  // due), and a Stripe subscription found gone (§130). Once per end: only the press that claimed the end above tells. A lapse already says LAPSED_LINE (lapse()),
+  // and a deleted account has nobody left to tell. The perks' refusals are unchanged (the free plan's rules, requirePerk / canOpenAnother).
+  if (reason === "cancelled") await tell(await userOf(devId), (await launchState(now)).free ? SUBSCRIPTION_ENDED_FREE_LINE : SUBSCRIPTION_ENDED_LINE, true);
   return true;
 }
 
@@ -501,5 +506,9 @@ export async function freeLaunchNotices(now = new Date()) {
   // (One write: the developers who aren't paying, i.e. not active / past due.)
   const tests = await db.test.findMany({ where: { status: { not: "stopped" }, developer: { deletedAt: null, subscriptionStatus: { notIn: ["active", "past_due"] } } }, select: { id: true } });
   await db.testEvent.createMany({ data: tests.map((t) => ({ testId: t.id, kind: "subscription", text: FREE_ENDED_LINE })) });
-  return 0;
+  // (Owner, Nov 6, §307) And ONE line on that day to each of them, in the bell and that day's email (always), linking to the subscription: once per end date (the
+  // "free-ended" mark above). Not to one whose own subscription ended in the last day: "Your subscription ended: …" already told them (§307, endSubscription).
+  const ids = (await db.user.findMany({ where: { isDeveloper: true, deletedAt: null, subscriptionStatus: { notIn: ["active", "past_due"] }, OR: [{ subscriptionEndedAt: null }, { subscriptionEndedAt: { lte: new Date(now.getTime() - DAY) } }] }, select: { id: true } })).map((u) => u.id);
+  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: FREE_LAUNCH_ENDED_LINE, link: "/app/payments#subscription", mustEmail: true, own: false, groupKey: "payhold", side: "developer", payment: true })) });
+  return ids.length;
 }

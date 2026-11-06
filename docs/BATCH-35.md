@@ -5342,3 +5342,19 @@ summary, whose "Disputes · N new" and "Hold lifts waiting" bell lines repeated 
   which are marked and so not repeated in the weekly / monthly. `now` lines (§294, §299) are written already marked.
 - Tests: tests/admin-one-email-306.test.ts. Updated: batch3, batch29-bell, schedule and batch30-emails (they find the admin's items by the "For the team"
   section instead of the "Playtest admin:" subject; adminDaily.ts no longer calls sendEmail).
+
+## §307 "Your subscription ended", on the day it ends (owner, Nov 6)
+Nothing was sent when a subscription ended after the developer's own cancel, or when the free launch ended (only the 30-day and 7-day notices; email catalog,
+note 19). Now ONE bell line on the day it ends, in the subscription's "Payments and holds" stack (`payhold`), `always` (and `payment`), linking to
+/app/payments#subscription, so it is also in that day's end-of-day email whatever the setting:
+- **"Your subscription ended: you're on the free plan now, which runs one open test at a time."** (lib/subscription.ts `SUBSCRIPTION_ENDED_LINE`, in
+  Payments' own words for the free plan), from endSubscription for every end with reason "cancelled": the developer's own cancel running out (the daily job),
+  Stripe ending it (customer.subscription.deleted, not past due) and a Stripe subscription found gone (§130). During a free launch still running it reads
+  "Your subscription ended: everything is still free during launch." A lapse keeps its own LAPSED_LINE; a deleted account is not told.
+- **"Free during launch ended: you're on the free plan now, which runs one open test at a time."** (`FREE_LAUNCH_ENDED_LINE`) from freeLaunchNotices, to each
+  developer without a subscription (not active / past due), next to the stop-once line it already wrote. Not to one whose own subscription ended in the last
+  day (they already have "Your subscription ended").
+- **Never twice for the same end:** endSubscription tells only when its own claim ended the subscription (a second job run or Stripe's later event finds it
+  ended); the launch line rides the existing "free-ended" mark (once per end date).
+- The presses that need a subscription are unchanged (Next round, Invite, Approved-only, a second open test are refused as before).
+- Tests: tests/subscription-ended-307.test.ts.
