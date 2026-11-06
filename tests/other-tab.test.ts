@@ -333,7 +333,8 @@ describe("payments and disputes, only for this test", () => {
     const delayed = "Nora Lane's payment for your written answers ($10) is delayed. You'll be told when it arrives.";
     const bells = await db.notification.findMany({ where: { userId: ana.tester.user.id }, orderBy: { createdAt: "asc" } });
     // (Owner, Nov 4, §177) The bell is read away from the session page: it names the test.
-    expect(bells.slice(notesBefore).map((n) => n.text)).toEqual(["Nora Lane's payment for your written answers on “Harbor Run” ($10) is delayed. You'll be told when it arrives."]);
+    // (Owner, Nov 6, §295) The hold the decline started also tells the tester the test is paused (never why).
+    expect(bells.slice(notesBefore).map((n) => n.text)).toEqual(["“Harbor Run” is paused", "Nora Lane's payment for your written answers on “Harbor Run” ($10) is delayed. You'll be told when it arrives."]);
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
     // (Batch 15 section 25) Leave no longer stops; the tester's gate itself (every other tester button) stops once with the line.
     const gate = await (await import("@/lib/server/testerGate")).testerGate(ana.tester.user.id, ana.sessionId, (await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).testId, { seenAt: pageLoaded }).then(() => null, (e: { data?: { changes?: { text: string }[] } }) => e.data?.changes?.map((c) => c.text));
