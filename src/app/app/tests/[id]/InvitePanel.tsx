@@ -23,6 +23,7 @@ import { EVERYONE_MEETS, everyoneMeets, gapsOf, isMissingNeedLine, missingNeedLi
 import { LiveNotices } from "@/components/LiveNotices";
 import { inviteTicksKey, notTickedLine, readInviteTicks, restoredTicks, writeInviteTicks, type DroppedTick } from "@/lib/inviteTicks";
 import { tabStore } from "@/lib/keepTyped";
+import { nameMatches } from "@/lib/nameSearch";
 
 type Tester = { details?: string; availability?: string; changedAt?: string; id: string; name: string; rating?: string; ratingAvg?: number | null; devices: string[]; languages: string[]; categories: string[]; invited: boolean; inviteId: string | null; grey: string | null; section: string; gap: string; was?: string; tag?: string; tagItems?: string[]; detail?: string; together?: { id: string; title: string; state?: string }[]; /** (Batch 30 §7) A search match who can't be invited: why, in the row's words */ why?: string; whyKind?: "invited" | "in" | "applied" | "cant"; appId?: string };
 type RowUpdate = { id: string; name: string; seen: SeenTester; tag: string; detail: string; changedAt: string };
@@ -36,13 +37,19 @@ type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; found
  * The invite panel (test page only), the full app's fold ("Invite testers" with its icon opens and closes it). Sections:
  * Invited (Cancel invite) · the filters (the devices / languages THIS test needs) · Search by name with Find testers right under it
  * (batch 16 section 29: hidden until you search) · People you've worked with · Suggested (batch 34 §11: neither lists a tester working in this test or already invited;
- * someone who left shows again; the name search still finds them greyed with why). The filters narrow Suggested and Find testers. Greyed rows can't be ticked. A
+ * someone who left shows again; the name search still finds them greyed with why). The filters narrow all three (§274: People you've worked with too), and a typed
+ * name keeps only the matching people in each. Greyed rows can't be ticked. A
  * ticked tester missing something the test needs gets an in-page confirm under Invite (Invite anyway / Cancel).
  * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (from 1 character since batch 20 section 9, after a short pause in
  * typing) and the ticks ask it again; every match shows in a scroll box, and above 100 the first 100 with "Showing 100 of N: type more of the name".
  */
 /** (Owner, Nov 5, §257) A list heading inside the lists' scroll box: stuck to its top, on the card's colour, while its rows scroll under it. */
 const LIST_HEAD = "sticky top-0 z-10 bg-ink-900 py-1";
+/** (Owner, Nov 5, §274) Each list's own scroll box: People you've worked with, and Suggested below it. */
+const LIST_BOX = "max-h-72 space-y-2 overflow-y-auto";
+/** (§274) A list with nobody left after the typed name or the ticks. */
+export const NO_WORKED_MATCH = "Nobody you've worked with matches.";
+export const NO_SUGGESTED_MATCH = "No suggestions match.";
 /** The pause in typing before the name search asks the server (a redraw's search asks at once: batch 35 §46). */
 export const SEARCH_PAUSE = 300;
 
@@ -170,9 +177,12 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
     const t = setTimeout(ask, SEARCH_PAUSE);
     return () => clearTimeout(t);
   }, [term, f, p.testId, again]);
-  const worked = data.worked;
-  // Suggested: the top 5 invitable newcomers after the device / language ticks (ranked on the server: meets, score, accepted parts, matches).
-  const suggested = data.suggested;
+  // (Owner, Nov 5, §274) The search applies to every section: the server sends People you've worked with and Suggested already narrowed by the typed name and the
+  // ticks (Suggested's top 5 taken after them); while the server's answer is on its way after a keystroke, the rows shown are narrowed to the name at once.
+  const narrowing = !!term || f.devices.length > 0 || f.languages.length > 0;
+  const worked = term ? data.worked.filter((t) => nameMatches(t.name, term)) : data.worked;
+  // Suggested: the top 5 invitable newcomers after the device / language ticks and the typed name (ranked on the server: meets, score, accepted parts, matches).
+  const suggested = term ? data.suggested.filter((t) => nameMatches(t.name, term)) : data.suggested;
   const found = term && data.searched ? data.found : [];
   // (Owner, Oct 28, batch 16 section 31) What this panel last showed for each tester (their devices and languages): Invite sends it, with the test's requirements
   // as shown, so the server stops once when either changed since. A ticked tester who is now greyed is unticked when the panel refreshes.
@@ -435,14 +445,20 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
           {data.searched && !searching && found.length === 0 && (data.filteredOut ? <p className="note" data-invite-none="filters">{filteredOutLine(term, [...f.devices, ...f.languages], data.filteredOut)}</p> : <p className="note" data-invite-none="">No testers match “{term}”.</p>)}
         </div>
       )}
-      {/* (Batch 16 section 10) Nothing ticked: the lists are the field, red with their line under them, and listed under Invite. */}
-      <div id="invite-lists" className={`max-h-72 space-y-2 overflow-y-auto text-sm ${none ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}`} data-invite-lists="" data-red-msg={none ? "Tick at least one tester." : undefined}>
-        {/* (Owner, Nov 5, §257) Each list's heading stays at the top of the scroll box while its rows scroll under it, so a scrolled box still says which list
+      {/* (Batch 16 section 10) Nothing ticked: the lists are the field, red with their line under them, and listed under Invite. (Owner, Nov 5, §274) The ring
+          goes round both lists (People you've worked with and Suggested, each now in its own scroll box), so they are still marked as the field together. */}
+      <div id="invite-lists" className={`space-y-3 text-sm ${none ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}`} data-invite-lists="" data-red-msg={none ? "Tick at least one tester." : undefined}>
+        {/* (Owner, Nov 5, §257) Each list's heading stays at the top of its scroll box while its rows scroll under it, so a scrolled box still says which list
             it is (a row's open "Worked with you on …" can't sit there nameless under no heading). */}
-        <h3 className={LIST_HEAD} data-invite-list-head="worked">People you&apos;ve worked with</h3>
-        {worked.length ? <ul className="space-y-1.5">{worked.map((t) => row(t, "w"))}</ul> : <p className="note">Nobody yet.</p>}
-        <h3 className={LIST_HEAD} data-invite-list-head="suggested">Suggested</h3>
-        {suggested.length ? <ul className="space-y-1.5">{suggested.map((t) => row(t, "s"))}</ul> : <p className="note">No suggestions right now.</p>}
+        <div className={LIST_BOX} data-invite-list="worked">
+          <h3 className={LIST_HEAD} data-invite-list-head="worked">People you&apos;ve worked with</h3>
+          {worked.length ? <ul className="space-y-1.5">{worked.map((t) => row(t, "w"))}</ul> : <p className="note" data-invite-list-none="worked">{narrowing ? NO_WORKED_MATCH : "Nobody yet."}</p>}
+        </div>
+        {/* (Owner, Nov 5, §274) Suggested is its own section below People you've worked with: its own heading and scroll box, the same style. */}
+        <div className={LIST_BOX} data-invite-list="suggested">
+          <h3 className={LIST_HEAD} data-invite-list-head="suggested">Suggested</h3>
+          {suggested.length ? <ul className="space-y-1.5">{suggested.map((t) => row(t, "s"))}</ul> : <p className="note" data-invite-list-none="suggested">{narrowing ? NO_SUGGESTED_MATCH : "No suggestions right now."}</p>}
+        </div>
       </div>
       {none && <p className="err-field">Tick at least one tester.</p>}
       <div className="flex flex-wrap items-center gap-2">

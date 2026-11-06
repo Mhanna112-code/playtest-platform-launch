@@ -83,7 +83,7 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
   const gaps = needsLines(t, profile);
   const blocked = (await db.block.count({ where: { OR: [{ blockerId: u.id, blockedId: t.developerId }, { blockerId: t.developerId, blockedId: u.id }] } })) > 0;
   const l = { ...asListing(t), testerDays: t.testerDays }; // (batch 15 section 18) the terms line says "14 days"
-  const devRating = await ratingSummary(t.developerId);
+  const devRating = await ratingSummary(t.developerId, "developer"); // (Owner, Nov 5, §276) "by <dev> · 1.0 ★": ratings they got as a developer only
   const devStats = await developerStats(t.developerId);
   const ratedHere = mine ? (await db.rating.count({ where: { contractId: mine.id } })) > 0 : false;
   const invite = await db.invite.findFirst({ where: { testId: t.id, testerId: u.id, status: "sent" } });

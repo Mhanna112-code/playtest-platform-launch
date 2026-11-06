@@ -62,7 +62,6 @@ import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
 import { keyBoxes } from "@/lib/server/accessKeys";
-import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { RowsBox } from "./RowsBox";
@@ -87,7 +86,7 @@ import { otherSideNotice } from "@/components/OtherSideNotice";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
-export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string; saved?: string; offered?: string; skipped?: string; closed?: string; resent?: string; spotclosed?: string; spots?: string }> }) {
+export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string }> }) {
   const { id } = await params;
   // First: a restricted developer may open a test page only in its restricted view (batch 15 section 29); every other page sends them to the dashboard top.
   const u = await requireOpenPage(`/app/tests/${id}`);
@@ -101,7 +100,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   await (await import("@/lib/server/confirm")).expireActions(new Date(), { developerId: u.id });
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
-  const { saved, offered, skipped, closed, resent, failed } = await searchParams;
+  const { failed } = await searchParams; // (Owner, Nov 5, §275 revised) the Save's note is on Edit now: no saved/offered/closed/resent/skipped here
   const seenAt = new Date().toISOString();
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const pageV = await testV(u.id, id);
@@ -347,7 +346,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     return people.sort((a, b) => oldest(a) - oldest(b)).map((p) => {
       const count = p.kinds.reduce((n, k) => n + (k.count ?? k.ats.length), 0);
       return (
-        <HoldFold key={p.key} data={{ "data-needs-person": p.key }} toggleData={{ "data-needs-person-toggle": "" }}
+        <HoldFold key={p.key} data={{ "data-needs-person": p.key, "data-needs-who": p.name /* (Owner, Nov 5, §274) Search testers matches it */ }} toggleData={{ "data-needs-person-toggle": "" }}
           // (Owner, Nov 4, §187) The whole name, cut with "…" only when the row is full (it was cut at 12 characters with room to spare); "· N things" never cut.
           // (Owner, Nov 4, §195) A tester's paid so far on the right of the row ("paid $15.00 so far"), never cut either.
           summary={<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span><span className="shrink-0 whitespace-nowrap font-normal text-slate-400" data-needs-person-count="">· {count} thing{count === 1 ? "" : "s"}</span>{p.paidCents != null && <PaidSoFar cents={p.paidCents} />}</span>}>
@@ -416,6 +415,15 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   if (restricted) {
     // (Owner, Nov 4, §172; replaces batch 17 §14) No Rate here: a test the team paused hides Rate as a suspension does.
     const restrictedNeeds = bankRows.length + bookedAhead.length + excerptReqs.length + disputesWaiting.length;
+    const restrictedPeople = needsPeople(t.contracts.flatMap((c) => {
+      const calls = bookedAhead.filter((x) => x.contractId === c.id);
+      return [
+        bankKind(c, { "data-restricted-bank": "" }),
+        disputeKind(c, { "data-restricted-disputes": "" }),
+        { who: whoOf(c), kind: "calls", label: "Booked calls", ats: calls.map((x) => x.at), node: <RestrictedCalls testId={t.id} seenAt={seenAt} calls={calls} embedded person={c.id} /> },
+        excerptKind(c, { "data-restricted-excerpts": "" }),
+      ];
+    }));
     return (
       <>
         <AutoRefresh query={`test=${t.id}`} v={pageV} />
@@ -441,17 +449,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
         {/* (Owner, Nov 4, §181) One drop-down per person: their charges waiting for the bank (Batch 17 §11: a charge made while away, e.g. a retry during the pause,
             confirmed here), their disputes (Batch 15 section 27: the developer's side is optional, never stopped, works while paused or restricted), their booked calls
             with Cancel, their excerpt requests (Batch 15 section 39: Allow / Deny go through anything; batch 29 section 30: no Take down). "#calls" lands on the list. */}
-        {restrictedNeeds > 0 && <NeedsYou count={restrictedNeeds}>
+        {restrictedNeeds > 0 && <NeedsYou count={restrictedNeeds} people={restrictedPeople.length}>
           <div className="space-y-2" id={bookedAhead.length > 0 ? "calls" : undefined} data-needs-people="">
-            {needsPeople(t.contracts.flatMap((c) => {
-              const calls = bookedAhead.filter((x) => x.contractId === c.id);
-              return [
-                bankKind(c, { "data-restricted-bank": "" }),
-                disputeKind(c, { "data-restricted-disputes": "" }),
-                { who: whoOf(c), kind: "calls", label: "Booked calls", ats: calls.map((x) => x.at), node: <RestrictedCalls testId={t.id} seenAt={seenAt} calls={calls} embedded person={c.id} /> },
-                excerptKind(c, { "data-restricted-excerpts": "" }),
-              ];
-            }))}
+            {restrictedPeople}
           </div>
         </NeedsYou>}
         {shownEx.length > 0 && <section className="card space-y-2" aria-label="Shown excerpts">
@@ -573,6 +573,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       ];
     }),
   ];
+  // (Owner, Nov 5, §274) The people, rendered once: NeedsYou shows its "Search testers" box only when there is more than one.
+  const needsPeopleShown = needsPeople(needsEntries);
   // (Owner, Nov 4, §199) One "Applications (N)" drop-down above all the names: every pending application and ask to rejoin on this test, oldest first, each with its
   // own Accept / Decline exactly as before (one Applications per request, so a press on one never greys the others, §181). They are no longer in the people's
   // drop-downs: an applicant who hasn't joined is no longer a name of their own; a rejoiner with other things keeps those under their name. Closed at first, a
@@ -644,12 +646,12 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <ListingPanel rows={listingRows} listing={listingNow} when={(d) => fmtDateTimeIn(d, u.timeZone)} savedAt={lastSave?.at.toISOString() ?? ""} />
       {/* (NEXT-UI 21) NEEDS YOU: everything waiting for the developer, the full app's pattern. Every Pay box for sent work and calls that took place lives here. */}
       {needsCount > 0 && !restricted && (
-        <NeedsYou count={needsCount}>
+        <NeedsYou count={needsCount} people={needsPeopleShown.length}>
           {/* (Owner, Nov 4, §181) One drop-down per person, holding everything in Needs you about them (needsEntries). */}
           {/* (Owner, Nov 4, §199) The Applications drop-down first, above all the names. */}
           <div className="space-y-2">
             {needsApplications}
-            <div className="space-y-2" data-needs-people="">{needsPeople(needsEntries)}</div>
+            <div className="space-y-2" data-needs-people="">{needsPeopleShown}</div>
           </div>
         </NeedsYou>
       )}
@@ -657,6 +659,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       {/* (Owner) The full app's "Testers joined" right after the header: avatars with their hover cards (Block inside). */}
       <TestersJoined timeZone={u.timeZone}
         testId={t.id}
+        rows={t.contracts.length}
         spots={t.spots}
         status={t.status}
         seats={await Promise.all(working.map(async (c) => ({
@@ -665,7 +668,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           pronoun: c.tester.pronoun,
           summary: [
             [...(c.tester.profile?.devices ?? []), ...(c.tester.profile?.languages ?? [])].join(", "),
-            (await ratingSummary(c.testerId)).line || "No ratings yet",
+            (await ratingSummary(c.testerId, "tester")).line || "No ratings yet", // (Owner, Nov 5, §276) their tester-side ratings only
             `Accepted parts: ${(await testerStats(c.testerId)).accepted.value} ${(await testerStats(c.testerId)).accepted.hint}`,
           ].filter(Boolean),
           block: null, // (Owner, Oct 27) Block and Report live only on profiles
@@ -676,7 +679,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       >
       {/* (NEXT-UI 21; owner, Oct 27) TESTERS JOINED, one row per tester: parts sent (Required / Not required), paid per part and in total, the call summary and the agreed scope (their current contract only: no history fold for developers). No Pay boxes here. */}
       {t.contracts.length > 0 && (
-        <RowsBox many={t.contracts.length > 6} id={`tester-rows-${t.id}`}>
+        <RowsBox id={`tester-rows-${t.id}`}>
           {t.contracts.map((c) => {
             const name = displayName(c.tester);
             // (Batch 35 §137) Their name in a sentence links to their profile (cut, with its hover and tap pop-up).
@@ -936,14 +939,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           initial={invitePanelData ?? { worked: [], suggested: [], found: [], foundTotal: 0, capLine: "", searched: false }}
           sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, testerId: i.testerId, name: people.get(i.testerId) ?? "?", status: `waiting for ${pronouns(inviteUsers.find((x) => x.id === i.testerId)?.pronoun).obj} to join`, ...inviteInfo.get(i.testerId)! }))}
         />
-      )}
-      {saved && (
-        <SavedNote><p className="ok">
-          {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}
-          {closed && ` Closed ${closed.split(", ").length} application${closed.split(", ").length === 1 ? "" : "s"}: ${closed.slice(0, 500)}.`}
-          {resent && ` Invites re-sent on the new listing: ${resent.slice(0, 500)}.`}
-          {skipped && ` Not re-invited: ${skipped.slice(0, 500)}.`}
-        </p></SavedNote>
       )}
 
       <section className="space-y-3">

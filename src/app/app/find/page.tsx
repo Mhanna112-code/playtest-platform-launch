@@ -67,7 +67,7 @@ export default async function FindPage({ searchParams }: { searchParams: Promise
   const freshV = await discoveryV(u, typed, ticked);
   const found = admin ? await adminFindTests(typed, ticked) : null;
   const [open, profile] = await Promise.all([found ? found.tests : findTests(u, typed), admin ? null : db.testerProfile.findUnique({ where: { userId: u.id } })]);
-  const devRatings = new Map(await Promise.all([...new Set(open.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id)).line] as const)));
+  const devRatings = new Map(await Promise.all([...new Set(open.map((t) => t.developerId))].map(async (id) => [id, (await ratingSummary(id, "developer")).line] as const))); // (Owner, Nov 5, §276) ratings they got as a developer only
   const invitedTo = admin ? new Set<string>() : new Set((await db.invite.findMany({ where: { testerId: u.id, status: "sent", testId: { in: open.map((t) => t.id) } } })).map((i) => i.testId));
   // (Owner, Nov 3, batch 35 §144) Tick-box filters: every ticked category (AND); one of the ticked devices, languages, parts (OR within a group);
   // the groups together (AND). "Everything" is the default; "Matching my profile" (mine=1) ticks the profile's devices and languages. Old links

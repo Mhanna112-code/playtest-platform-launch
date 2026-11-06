@@ -138,9 +138,19 @@ export async function stillHidden(rows: { id: string; side: string; contractId: 
   );
 }
 
-/** "4.6 ★ (12 ratings)" and the comments (never the rater's name); revealed ratings only. */
-export async function ratingSummary(userId: string) {
-  const all = await db.rating.findMany({ where: { rateeId: userId, ...revealedWhere() }, orderBy: { createdAt: "desc" } });
+/**
+ * (Owner, Nov 5, §276) The role a person was rated in. "tester": only the ratings developers gave them as a tester (Rating rows with side "developer", the rater's
+ * side); "developer": only the ones their testers gave them as a developer (side "tester"). Someone on both sides never shows one side's ratings on the other.
+ */
+export type RatedAs = "tester" | "developer";
+export const ratedAsSide = (as: RatedAs): Side => (as === "tester" ? "developer" : "tester");
+
+/**
+ * "4.6 ★ (12 ratings)" and the comments (never the rater's name); revealed ratings only. (Owner, Nov 5, §276) `as`: only the ratings they got in that role (see
+ * RatedAs); omitted, both sides (only where no side applies).
+ */
+export async function ratingSummary(userId: string, as?: RatedAs) {
+  const all = await db.rating.findMany({ where: { rateeId: userId, ...(as ? { side: ratedAsSide(as) } : {}), ...revealedWhere() }, orderBy: { createdAt: "desc" } });
   const hidden = await stillHidden(all);
   const rows = all.filter((r) => !hidden.has(r.id));
   if (!rows.length) return { line: "", comments: [] as string[], n: 0, avg: 0, at: null as Date | null };

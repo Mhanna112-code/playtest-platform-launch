@@ -28,6 +28,7 @@ import { LineList } from "@/components/LineList";
 import { KEY_RULE, QUESTION_RULE, limitedChange } from "@/lib/typingLimit";
 import { fmtDateTime, toCents } from "@/lib/format";
 import { KeyBoxes, freeBoxCheck, type KeysData } from "./KeyBoxes";
+import { savedHref } from "@/lib/savedNote";
 import { FieldNote, GroupNote, NoteItems, TheirsNote, WasNote, type NoteItem } from "@/components/FieldNote";
 import { CHANGED_ELSEWHERE, SAVED_ELSEWHERE, UPDATED_AT, mergeElsewhere, takesTheirs } from "@/lib/editMerge";
 import { ShieldCheck } from "lucide-react";
@@ -464,7 +465,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // and a blue note under it says what changed; the In use / Free boxes follow too.
   const versionRef = useRef(version);
   versionRef.current = version;
-  // (Batch 34 §9) A Save went through and the page is on its way to the test page: nothing redraws it meanwhile (no flash of "Changes left" or of a lock line).
+  // (Batch 34 §9) A Save went through and the page is loading again (§275 revised: Edit with "Saved."): nothing redraws it meanwhile (no flash of "Changes left" or of a lock line).
   const leaving = useRef(false);
   const live = useRef({ applyElsewhere, applyKeys, f, base, keysData });
   live.current = { applyElsewhere, applyKeys, f, base, keysData };
@@ -569,7 +570,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       const all = toApi(f);
       const fields: Record<string, unknown> = {};
       for (const k of touched) for (const a of API_FIELDS[k]) fields[a] = all[a];
-      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; spotClosed?: string[]; spots?: number; version?: number; listing?: Listing; keys?: KeysData }>(`/api/tests/${edit.id}/edit`, {
+      const r = await api<{ offered: number; notReinvited?: string[]; resent?: string[]; closedApps?: string[]; version?: number; listing?: Listing; keys?: KeysData }>(`/api/tests/${edit.id}/edit`, {
         version, fields, confirmHigh: confirmHigh(), payRulesOk: payTick, seenAt: edit.seenAt, confirmed: changes != null, ...(changes != null && boxAt ? { boxAt } : {}), timeZone: browserZone(),
         keysAdd: fb.added, keysRemove: fb.removed,
         // (Batch 16 section 17) What this tab loaded and what it holds: another tab's save of the same values is no reason to stop.
@@ -579,8 +580,9 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
       else leaving.current = true;
       // (Batch 35 §120) The units this Save sent go; another tab's draft of a field this Save didn't touch stays.
       await keep.clear(new Set([...[...touched].map((k) => testUnitOf(k)), ...(keysChanged ? [KEYS_UNIT] : [])]));
-      const q = (k: string, v?: string[]) => (v?.length ? `&${k}=${encodeURIComponent(v.join(", "))}` : "");
-      window.location.href = `/app/tests/${edit.id}?saved=1&offered=${r.offered ?? 0}${q("closed", r.closedApps)}${q("resent", r.resent)}${q("skipped", r.notReinvited)}${r.spotClosed?.length ? `${q("spotclosed", r.spotClosed)}&spots=${r.spots}` : ""}`;
+      // (Owner, Nov 5, §275 revised) The developer stays on Edit: the page loads again (the saved values, counters and "Changes left" as a fresh load has them)
+      // with "Saved." at the top of the form; the test page shows no note. Replaced, not pushed: Back still leads where Edit was opened from.
+      window.location.replace(savedHref(edit.id, r));
     } catch (err) {
       if (err instanceof ApiError && err.code === "changed") {
         // The blue stop (what changed since Edit opened), and any red mistakes with it. Fields saved elsewhere take their new value here.
@@ -627,7 +629,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
         if (err instanceof ApiError && err.data.criticalCounts) setCritCounts(countsOf(err.data.criticalCounts));
       }
     } finally {
-      // (Batch 34 §9) Leaving after a Save: the button stays "Saving…" until the test page shows (a Back return frees it).
+      // (Batch 34 §9) Leaving after a Save: the button stays "Saving…" until Edit shows again with "Saved." (a Back return frees it).
       if (!leaving.current) setBusy(false);
     }
   }

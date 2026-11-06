@@ -441,7 +441,7 @@ async function TesterDashboard({ user, now }: { user: Viewer; now: Date }) {
     db.callRequest.findMany({ where: { contractId: { in: ids }, status: "pending", fromSide: "developer", startsAt: { gt: now } } }),
     db.application.findMany({ where: { testerId: userId, status: "pending" }, orderBy: { createdAt: "desc" } }),
     db.payment.aggregate({ where: { testerId: userId, kind: { not: "subscription" }, status: { in: ["charged", "not_set_up"] } }, _sum: { testerCents: true } }),
-    ratingSummary(userId),
+    ratingSummary(userId, "tester"), // (Owner, Nov 5, §276) the tester dashboard's Rating tile: ratings they got as a tester only
     db.invite.findMany({ where: { testerId: userId, status: "sent", test: { status: "open" } }, orderBy: { createdAt: "desc" }, include: { test: { include: { developer: true, _count: { select: { contracts: { where: { status: "working" } } } } } } } }),
     Promise.all(contracts.map(async (c) => [c.id, await unreadCount(userId, c.testId, c.testerId)] as const)),
     suspended ? Promise.resolve([] as Awaited<ReturnType<typeof findTests>>) : findTests(user),

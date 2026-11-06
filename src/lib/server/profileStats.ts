@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { compact } from "@/lib/format";
 import { LET_GO_BY_TESTER, chargedByTester } from "@/lib/rules";
-import { ratingSummary } from "./ratings";
+import { ratingSummary, type RatedAs } from "./ratings";
 
 const DAY = 86_400_000;
 const median = (xs: number[]) => {
@@ -26,9 +26,10 @@ export const TESTER_FOOTNOTE =
 /** "of the listing, over 4 pieces of work" / "of the listing, over 1 piece of work" / "no paid work yet" (the value is then "-"). */
 export const paysHint = (n: number) => (n ? `of the listing, over ${n} piece${n === 1 ? "" : "s"} of work` : "no paid work yet");
 
-/** The rating tile: "4.6 ★" with "12 ratings" (revealed ratings only). */
-export async function ratingTile(userId: string) {
-  const r = await ratingSummary(userId);
+/** The rating tile: "4.6 ★" with "12 ratings" (revealed ratings only). (Owner, Nov 5, §276) `as`: only the ratings they got on that side (a tester's tiles: from
+ * developers; a developer's: from testers). */
+export async function ratingTile(userId: string, as: RatedAs) {
+  const r = await ratingSummary(userId, as);
   return { value: r.n ? `${r.avg.toFixed(1)} ★` : "-", hint: r.n ? `${r.n} rating${r.n === 1 ? "" : "s"}` : "no ratings yet" };
 }
 

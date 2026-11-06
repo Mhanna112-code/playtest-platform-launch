@@ -4882,3 +4882,47 @@ filters." (`filteredOut` from invitePanel; blocked and deleted accounts are neve
 - Once a stop box on the page listed a pause or lift line, no other button there stops for it again (§250's `shownIds` / `sid`).
 - Tests: tests/pause-stops-every-press-271.test.ts. batch15-paused's "the developer's side never stops" now stops once for the suspension since the page
   loaded; other-tab's declined-Pay gate now lists "This test was paused at …" after the delayed line (the hold the decline started).
+## §274 Tester search bars in Needs you and the Testers list; Suggested its own section; the invite search applies to every section (owner, Nov 5)
+- Needs you: a "Search testers" box at its top keeps only the people (§181's drop-downs) whose name matches as you type, with the invite search's name match
+  (`nameMatches`), on the page only. Nobody matching: "No testers match “x”.". Hidden when Needs you holds only one person (the Applications drop-down, §199, is not
+  a person and is never filtered). Both views (the restricted one too). `data-needs-who` on each person carries the name.
+- Testers list: the same box right below the row of avatars (TesterListSearch, TesterSearch.tsx); the tester rows follow it, with the avatar filter (§140) as
+  before. It replaces RowsBox's "Find a tester by name" box (shown from 7 testers). Hidden with only one tester row.
+- Invite testers: Suggested is its own section below People you've worked with, with its own heading and scroll box (the same style; §257's sticky heading in
+  each). The "Tick at least one tester" red ring and its line stay on the two lists together (`data-invite-lists`, following `none`).
+- The Find testers search applies to all three sections: a typed name keeps only the matching people in Find testers, People you've worked with and Suggested (a
+  person shows in every section they belong to, one tick); the device / language ticks now narrow People you've worked with too (invitePanel: `passes()` and the
+  name on `worked`). Suggested's top 5 is taken after the filters. An emptied section says "Nobody you've worked with matches." / "No suggestions match.";
+  §273's line for Find testers stays. While the server's answer is on its way, the rows shown narrow to the typed name at once.
+- Tests: tests/tester-search-bars-274.test.ts. batch35-tester-folds' RowsBox check follows the new filter call; batch35-hard-limits lists TesterSearch.tsx with
+  the page's other search filters (no character limit).
+
+## §275 The Save's note: at the top, "Saved.", fades (owner, Nov 5)
+After a Save the test page's note sat under Invite and stayed until the page was left (a live redraw kept it), reading "Saved. New testers join on the new listing;
+testers already in keep their contract." (no longer true since §264/§265/§267). It now sits at the top (above the Listing panel) and reads "Saved.", followed only by
+what else the Save did (new terms offered to N testers, applications closed, invites re-sent, not re-invited); it fades after 8 seconds (SAVED_NOTE_MS) or closes
+with ×.
+
+## §276 Invite testers: only tester-side ratings; unrated testers after rated ones (owner, Nov 5)
+- A tester row shows only the ratings they got as a tester (Rating rows with side "developer": a developer rated them). Someone who is also a developer showed
+  "3.0 ★ (1 rating)" from their own tester's rating of them as a developer; they now read "No ratings yet". `ratingSummary(userId, as)` takes the role they were
+  rated in ("tester" / "developer", `RatedAs`; omitted, both as before), with the same reveal rules (revealedWhere and stillHidden). In Invite testers: the rating
+  line, "No ratings yet", `ratingAvg`, the row's figures and changedAt (rankedTesters' full rows, testerRowInfo for application and invited rows, the Invite and
+  Cancel invite rating-changed stops, and the application answer's stop in joining.ts, so the shown and current ratings compare the same side).
+- The other one-sided places now use their side: the tester's hover on the developer's test page, TesterTiles / the tester dashboard's Rating tile ("tester");
+  Find tests' "by <dev> · 4.0 ★", the join page's "by <dev> · 1.0 ★" and its Rating line, the session page's developer hover, DeveloperTiles ("developer"); the
+  Messages / chat hover follows the profile it links to; your own profile's "Your ratings" follows the side the page is on.
+- Ranking (rankedTesters, testers not worked with): meets, then rated before unrated (rated = at least one revealed tester-side rating, the ones the score
+  counts), then score, accepted, matches. The score's formula (platform average) is unchanged. This orders Suggested (its top 5 after §274's filters) and Find
+  testers; People you've worked with keeps its order; grey last and invitable first as before.
+- Tests: tests/invite-rank-276.test.ts (own fixtures; the seeded "Rankdemo" testers are untouched). batch35-green-names and profile-stats follow the side argument.
+
+## §275 revised: Save stays on Edit and shows "Saved." there (owner, Nov 5; replaces §275)
+- A Save that goes through no longer opens the test page: Edit loads again in place (`window.location.replace(savedHref(...))`, so Back still leads where Edit was
+  opened from), as a fresh load of Edit (the saved values, the counters and "Changes left"; the drafts this Save sent were already cleared, as before).
+- At the top of the form (under Edit's line about new testers): "Saved.", followed only by what else the Save did (new terms offered to N working testers,
+  applications closed, invites re-sent, not re-invited), from `savedNoteText` (lib/savedNote.ts). Just "Saved." fades after 8 s (SAVED_NOTE_MS); a note that lists
+  any of those stays until ×. The address's saved/offered/closed/resent/skipped go at once, so a reload never replays it.
+- Edit's "← Back to the test" link stays. The test page no longer shows a note or reads those params (only `failed` stays); spotclosed/spots, read nowhere, are
+  no longer sent. Post a test still opens the new test page, which never showed this note.
+- Tests: tests/saved-note-275.test.ts rewritten for the Edit placement.

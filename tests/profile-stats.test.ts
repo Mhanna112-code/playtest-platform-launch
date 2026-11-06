@@ -39,7 +39,7 @@ describe("profile tiles", () => {
 
     expect((await testerStats(full.tester.user.id)).accepted).toEqual({ value: "1", hint: "of 1 sent · 1 session with accepted work" });
     expect((await testerStats(rej.tester.user.id)).accepted).toEqual({ value: "0", hint: "of 1 sent · 0 sessions with accepted work" });
-    expect(await ratingTile(dev.user.id)).toEqual({ value: "-", hint: "no ratings yet" });
+    expect(await ratingTile(dev.user.id, "developer")).toEqual({ value: "-", hint: "no ratings yet" });
   });
 
   it("a dispute decided for the tester raises the share and is counted", async () => {
