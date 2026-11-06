@@ -634,23 +634,13 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {/* The full app's ONE Live session panel: the rate, Booked, the calls that are over and Requests (calls are always requests).
           (Owner, Nov 5, §209; replaces §186's "Call history" card) The calls ahead (or running) are back here in "Booked" with Join call and Cancel, and under
           them "Had (N)" and "Cancelled (N)": the calls that are over. Shown whenever there is one, even when nothing else here works (a closed tester side:
-          only those two). */}
+          only those two). (Owner, Nov 6, §291) "Booked (N)" moved to the bottom: Had / Cancelled, the Requests, then Booked. */}
       {((!limited && (c.calls.length > 0 || canRequestCall || pendingReqs.length > 0)) || overCalls.length > 0) && (
         <LivePanel minutes={c.calls.filter((x) => x.status === "booked" && x.startsAt > now).sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime())[0]?.minutes ?? null}>
           {!limited && <>
           {termLine("Live call", c.liveRateCents, c.liveRequired, true, liveCalls.reduce((a, x) => a + (partPaid.get(x.id) ?? 0), 0))}
           {!listedCall && c.liveRateCents != null && <p className="note" data-unlisted-call="">New calls: {NOT_LISTED}</p>}
           {callsWarning && <p className="text-xs text-amber-200" data-calls-warning="">{callsWarning}</p>}
-          <TesterCallPanel
-            sessionId={c.id}
-            seenAt={seenAt}
-            refusal={refusal}
-            devName={dev}
-            mine={mineCalls}
-            sets={mineSets}
-            noReport={meOff}
-            lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
-          />
           </>}
           {/* (Owner, Nov 5, §209; replaces §186's Call history "Booked (N)" / "Cancelled (N)") Under the calls ahead, two drop-downs, both closed at first.
               "Had (N)": the calls that took place (in any form that can be paid or disputed: a no-show report's 0-minute call too), newest first, each with its
@@ -748,6 +738,18 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               />
             </section>
           )}
+          {/* (Owner, Nov 6, §291) "Booked (N)" is the Live session's LAST section: the calls ahead (or running), in their scroll panel, under Had / Cancelled
+              and the Requests. */}
+          <TesterCallPanel
+            sessionId={c.id}
+            seenAt={seenAt}
+            refusal={refusal}
+            devName={dev}
+            mine={mineCalls}
+            sets={mineSets}
+            noReport={meOff}
+            lateNote={now > c.dueAt ? `Your deadline was ${fmtDate(c.dueAt).replace(/, \d{4}$/, "")} (a guide, not a limit): a call you book now reads “${bookedLateLabel(displayName(u), c.dueAt, (d) => fmtDate(d).replace(/, \d{4}$/, ""))}”.` : undefined}
+          />
           </>}
         </LivePanel>
       )}

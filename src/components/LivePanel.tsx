@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { Radio } from "lucide-react";
-import { ResizeBox } from "@/components/Panel";
+import { OwnPanel, ResizeBox } from "@/components/Panel";
 
 // The full app's ONE live-session panel (components/live-panel.tsx there), the same shell on both sides: "Live session ·
 // <length>", then its sections (Booked, Requests, Past calls). Lean: calls are always requests, so "Requests" takes the
@@ -28,14 +28,16 @@ export function LivePanel({ minutes, children, id = "live", fold = false }: { mi
  * One section of it, by name (nothing when it has nothing to show and no `empty` line). (Owner, Nov 3, batch 35 §152) `panel`: its list sits in the draggable
  * panel (ResizeBox), kept by that id, starting at `panelMax`.
  */
-export function LiveSection({ title, children, empty, show = true, id, panel, panelMax }: { title: string; children?: ReactNode; empty?: string; show?: boolean; id?: string; panel?: string; panelMax?: string }) {
+export function LiveSection({ title, children, empty, show = true, id, panel, panelMax, count }: { title: string; children?: ReactNode; empty?: string; show?: boolean; id?: string; panel?: string; panelMax?: string;
+  /** (Owner, Nov 6, §291) shown in the heading: "Booked (2)" */ count?: number }) {
   if (!show && !empty) return null;
   // (Owner, Nov 5, §237) Past calls have no inner scroll box of their own (it was a fixed max-h-72 box inside the panel): the panel (`panel`) scrolls them.
   const list = <ul className="divide-y divide-white/5" data-scroll={title === LIVE_SECTIONS.past ? "past-calls" : undefined}>{children}</ul>;
   return (
     <section className="space-y-1.5" data-live-section={title} id={id}>
-      <h3 className="text-sm font-semibold text-white">{title}</h3>
-      {show ? (panel ? <ResizeBox id={panel} label={`${title} calls`} defaultMax={panelMax}>{list}</ResizeBox> : list) : <p className="text-sm text-slate-400">{empty}</p>}
+      <h3 className="text-sm font-semibold text-white">{title}{count != null && ` (${count})`}</h3>
+      {/* (Owner, Nov 6, §291) The panel is its own scroll (OwnPanel), as the app's other lists. */}
+      {show ? (panel ? <OwnPanel><ResizeBox id={panel} label={`${title} calls`} defaultMax={panelMax}>{list}</ResizeBox></OwnPanel> : list) : <p className="text-sm text-slate-400">{empty}</p>}
     </section>
   );
 }

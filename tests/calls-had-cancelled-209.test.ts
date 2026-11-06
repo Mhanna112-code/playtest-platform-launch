@@ -76,8 +76,10 @@ describe("§209 the developer's tester row: Had (N) and Cancelled (N); the calls
     expect(list).toContain("My train was late");
     expect(list).toContain(">Nobody joined<");
     expect(row).not.toContain("45 min");
-    // No "Booked (N)" any more, and no Call history box anywhere (§197 never built).
-    expect(html).not.toContain("Booked (");
+    // No "Booked (N)" in the tester's row any more, and no Call history box anywhere (§197 never built). (Owner, Nov 6, §291) The one "Booked (N)" is the Live
+    // session's own section.
+    expect(html.split("Booked (").length - 1).toBe(1);
+    expect(html).toContain('<h3 class="text-sm font-semibold text-white">Booked (0)</h3>');
     expect(html).not.toContain("calls-booked-");
     expect(html).not.toContain("Call history");
   });
@@ -179,8 +181,11 @@ describe("§209 the tester's session page: no Call history; the Live session hol
     expect(live.indexOf(`id="call-${sooner.id}"`)).toBeLessThan(live.indexOf(`id="call-${later.id}"`));
     expect(between(live, `id="call-${sooner.id}"`, "</li>")).toContain("Add to calendar");
     expect(between(live, `id="call-${sooner.id}"`, "</li>")).toContain("Cancel");
-    // Under them Had and Cancelled, then the Requests.
-    expect(live.indexOf(`id="call-${later.id}"`)).toBeLessThan(live.indexOf(`id="calls-had-${j.sessionId}"`));
+    // Had and Cancelled, then the Requests; (Owner, Nov 6, §291) Booked is the last section, "Booked (2)".
+    expect(live.indexOf(`id="calls-cancelled-${j.sessionId}"`)).toBeLessThan(live.indexOf('data-live-section="Requests"'));
+    expect(live.indexOf('data-live-section="Requests"')).toBeLessThan(live.indexOf('data-live-section="Booked"'));
+    expect(live.indexOf('data-live-section="Booked"')).toBeLessThan(live.indexOf(`id="call-${sooner.id}"`));
+    expect(live).toContain(">Booked (2)</h3>");
     expect(live.indexOf(`id="calls-had-${j.sessionId}"`)).toBeLessThan(live.indexOf(`id="calls-cancelled-${j.sessionId}"`));
     const fold = between(live, `data-calls-fold="${j.sessionId}"`, 'data-live-section="Requests"');
     expect(fold).toContain(">Had (4)</summary>");

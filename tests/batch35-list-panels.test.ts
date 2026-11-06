@@ -36,7 +36,8 @@ describe("§152: every call list in the draggable panel, with a stable id", () =
       ["app/app/tests/[id]/CallRequestsBox.tsx", "panelId={`${kind === \"to-you\" ? \"call-requests\" : \"your-requests\"}-${testId}`}"], // (§181) the box of its own; (§185) two: call-requests-<test> / your-requests-<test>
       ["components/CallRequests.tsx", "panelId={`${kind}-${id}`}"], // (§185) the tester's two lists: call-requests-<session> / your-requests-<session>
       ["app/app/tests/[id]/DevCallPanel.tsx", "<ResizeBox id={`booked-${t.contractId}`} label={`Booked calls with ${t.name}`} defaultMax={LIST_PANEL.booked}>"],
-      ["app/app/tests/[id]/DevCallPanel.tsx", "<ResizeBox id={`testers-calls-${testId}`} label=\"Testers' calls\" defaultMax={LIST_PANEL.testersCalls} tallest={TESTERS_CALLS_TALLEST}>"],
+      // (Owner, Nov 6, §291) The Live session's "Booked (N)" section: its own scroll (OwnPanel), one drop-down per tester inside.
+      ["app/app/tests/[id]/DevCallPanel.tsx", "<OwnPanel><ResizeBox id={`testers-calls-${testId}`} label=\"Booked calls\" defaultMax={LIST_PANEL.testersCalls} tallest={TESTERS_CALLS_TALLEST}>"],
       ["app/app/tests/[id]/RestrictedCalls.tsx", "<ResizeBox id={person ? `booked-restricted-${testId}-${person}` : `booked-restricted-${testId}`} label=\"Booked calls\" defaultMax={LIST_PANEL.restricted}>"],
       ["app/app/CallsBox.tsx", '<ResizeBox id="dash-calls" label="Calls" defaultMax={LIST_PANEL.dashCalls}>'],
       ["app/app/page.tsx", '<ResizeBox id="dash-upcoming-calls" label="Upcoming calls" defaultMax={LIST_PANEL.dashCalls}>'],

@@ -5144,3 +5144,18 @@ with ×.
   "Booked calls · 2 today" (also Call requests, Direct messages, Call requests closed, Applications withdrawn). The summary email reads "• Call requests · 4".
 - A "Booked:" bell names who the call is with: "Booked: a call with Ana Silva, Wed, Nov 11, 4:00 PM" / "Booked: a call with Omar Reyes: you both picked …".
 - The tester's stop boxes (Send Answers, Add, Leave, Dispute) always name their press: "Your Send Answers didn't go through." (it could read "Your press …").
+
+## §291 Booked: its own section at the bottom of the Live session (owner, Nov 6)
+- The developer's test page: the booked calls leave the per-tester cards under the request form. They are now the Live session's LAST section, "Booked (N)"
+  (N: every booked call ahead or running, each call of a set too; "Booked (0)" with "No calls booked yet." while calls can be requested).
+- Under the heading, the draggable scroll panel (`testers-calls-<testId>`, OwnPanel: its own scroll). Inside it, one drop-down per tester with a call (HoldFold
+  `booked-person-<contractId>`): the green name, then "· N calls"; testers by their soonest call. Closed at first, open while one of their calls can be joined; a
+  link to `#call-<id>` opens it (the §284 anchors stay the jump target); a Cancel under way or its stop box keeps it open.
+- Each drop-down holds that tester's calls and daily / weekly sets soonest first, in a scroll box of its own (`booked-<contractId>`, OwnPanel). Every row keeps
+  Join call, Add to calendar, Cancel and its Why, Report a problem, Check your call setup and its `call-<id>` anchor. As in §187 item 5, the rows don't repeat the
+  name (it's on the drop-down); the Cancel rule still names who is told.
+- The tester's session page: "Booked (N)" moves to the bottom of the Live session, under Had / Cancelled and the Requests, in its scroll panel (`booked-<session>`,
+  OwnPanel), calls and sets soonest first. No per-name drop-down (one developer).
+- Tests: tests/booked-section-291.test.ts. Updated: calls-had-cancelled-209 (the order; the one "Booked (" is the Live session's), batch35-list-panels,
+  layout-fixes-187, batch35-green-names, batch35-answering-press (the name is on the drop-down).
+

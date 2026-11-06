@@ -87,8 +87,9 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
     expect(invite).toContain("<NameLink text={s.name} href={`/app/testers/${s.testerId}`} newTab /> · {s.status}");
     const calls = src("app/app/tests/[id]/DevCallPanel.tsx");
     // (Owner, Nov 4, §187) The testers' calls cards, the call request rows and the held view's calls: the whole name, cut only when the row is full (`fit`).
-    expect(calls).toContain('{!rowsNamed(t) && <h3 className="min-w-0"><NameLink fit text={t.name} href={t.testerHref} /></h3>}');
-    expect(calls.match(/<span className="mr-auto min-w-0"><NameLink fit text=\{t\.name\} href=\{t\.testerHref\} \/>/g)).toHaveLength(2);
+    // (Owner, Nov 6, §291) The Booked section's drop-down per tester carries the green name, once; the call and set rows under it don't repeat it.
+    expect(calls).toContain('<span className="min-w-0"><NameLink fit text={t.name} href={t.testerHref} /></span>');
+    expect(calls.match(/<NameLink fit text=\{t\.name\} href=\{t\.testerHref\} \/>/g)).toHaveLength(1);
     expect(src("components/CallRequestsPanel.tsx")).toContain('<b className="text-white"><NameLink fit text={r.tester} href={r.testerHref} /></b>');
     expect(src("app/app/tests/[id]/RestrictedCalls.tsx")).toContain("<NameLink fit text={c.who} href={c.whoHref} />");
     expect(src("app/app/tests/[id]/KeysNotice.tsx")).toContain("<NameLink text={k.tester} href={k.testerHref} />");

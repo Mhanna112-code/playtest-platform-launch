@@ -22,7 +22,7 @@ const fmt = (iso: string) => new Date(iso).toLocaleString("en-US", { weekday: "s
  * The tester's calls still ahead or running, in the Live session's "Booked" (Join call while it can be joined, Cancel). Cancel and Report a problem stop once
  * for call changes since the page loaded (box under the button).
  * (Owner, Nov 5, §209; undoes §186's move of these rows into a "Call history" card) Back in the Live session, in the §152 draggable panel `booked-<sessionId>`
- * as before §186; the calls that are over are in the Live session's "Had (N)" and "Cancelled (N)" right under this list.
+ * as before §186. (Owner, Nov 6, §291) "Booked (N)", the LAST section of the Live session: under "Had (N)" / "Cancelled (N)" and the Requests.
  */
 export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mine[]; sets?: TesterSet[]; refusal: string; lateNote?: string; devName: string; noReport?: boolean }) {
   const { press, changes, error, busy, at, finish } = usePress(p.seenAt);
@@ -77,31 +77,40 @@ export function TesterCallPanel(p: { sessionId: string; seenAt: string; mine: Mi
       {!m.cancelled && !m.ended && <CallCheck className="w-full" />}
     </li>
   );
+  const setRow = (st: TesterSet) => {
+    const calls = p.mine.filter((m) => st.callIds.includes(m.id));
+    const shown = open[st.id] ?? calls.some((m) => m.joinable);
+    return (
+      <li key={st.id} className="space-y-1 py-2 text-sm" data-call-set="">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-auto text-slate-200">{st.label} · {st.minutes} min · {st.rate}</span>
+          <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [st.id]: !shown })}>{shown ? "Hide calls" : "Show calls"}</button>
+          {!p.refusal && <CancelMenu needsReason={st.needsReason} busy={busy} other={p.devName} label="Cancel the remaining calls"
+            rule={`Cancels every call still ahead and ${p.devName} is told.${st.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
+            onCancel={(why) => go("cancel-set", { setId: st.id, reason: why }, "cancel-set-" + st.id)} />}
+        </div>
+        <p className="text-xs text-slate-400">Cancel to stop the remaining calls.</p>
+        {box("cancel-set-" + st.id)}
+        {shown && <ul className="ml-4 divide-y divide-white/5">{calls.map(row)}</ul>}
+      </li>
+    );
+  };
+  // (Owner, Nov 6, §291) Calls and sets in one list, soonest first (a set by its next call); the heading counts every call ahead, a set's too (a running Forever
+  // set with none listed is one booked time, as §185 counts it).
+  const items = [
+    ...booked.map((call) => ({ kind: "call" as const, at: call.when, call })),
+    ...sets.map((set) => ({ kind: "set" as const, at: p.mine.filter((m) => set.callIds.includes(m.id)).map((m) => m.when).sort()[0] ?? "", set })),
+  ].sort((a, b) => a.at.localeCompare(b.at));
+  const bookedN = booked.length + sets.reduce((n, st) => n + Math.max(1, p.mine.filter((m) => st.callIds.includes(m.id) && !m.cancelled && !m.ended).length), 0);
   if (!p.mine.length) return null;
   return (
     <div className="space-y-4" id="calls" data-calls-ahead={booked.length + sets.length}>
       {p.lateNote && !p.refusal && <p className="note">{p.lateNote}</p>}
-      {/* (Owner, Nov 3, batch 35 §152) The booked calls in the draggable panel (scrolls inside; the grip drags it shorter or taller). */}
-      <LiveSection title={LIVE_SECTIONS.booked} show={booked.length > 0 || sets.length > 0} panel={`booked-${p.sessionId}`} panelMax={LIST_PANEL.testerBooked}>
-        {booked.map(row)}
-        {sets.map((st) => {
-          const calls = p.mine.filter((m) => st.callIds.includes(m.id));
-          const shown = open[st.id] ?? calls.some((m) => m.joinable);
-          return (
-            <li key={st.id} className="space-y-1 py-2 text-sm" data-call-set="">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="mr-auto text-slate-200">{st.label} · {st.minutes} min · {st.rate}</span>
-                <button className="btn-ghost text-xs" onClick={() => setOpen({ ...open, [st.id]: !shown })}>{shown ? "Hide calls" : "Show calls"}</button>
-                {!p.refusal && <CancelMenu needsReason={st.needsReason} busy={busy} other={p.devName} label="Cancel the remaining calls"
-                  rule={`Cancels every call still ahead and ${p.devName} is told.${st.needsReason ? " The next one is less than 24 hours away: say why." : ""}`}
-                  onCancel={(why) => go("cancel-set", { setId: st.id, reason: why }, "cancel-set-" + st.id)} />}
-              </div>
-              <p className="text-xs text-slate-400">Cancel to stop the remaining calls.</p>
-              {box("cancel-set-" + st.id)}
-              {shown && <ul className="ml-4 divide-y divide-white/5">{calls.map(row)}</ul>}
-            </li>
-          );
-        })}
+      {/* (Owner, Nov 3, batch 35 §152) The booked calls in the draggable panel (scrolls inside; the grip drags it shorter or taller).
+          (Owner, Nov 6, §291) At the bottom of the Live session (the page draws this panel last), headed "Booked (N)", calls and sets soonest first; one
+          developer, so no per-name drop-down. */}
+      <LiveSection title={LIVE_SECTIONS.booked} count={bookedN} show={booked.length > 0 || sets.length > 0} panel={`booked-${p.sessionId}`} panelMax={LIST_PANEL.testerBooked}>
+        {items.map((it) => it.kind === "call" ? row(it.call) : setRow(it.set))}
       </LiveSection>
     </div>
   );

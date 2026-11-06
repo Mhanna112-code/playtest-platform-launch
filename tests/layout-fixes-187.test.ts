@@ -80,7 +80,9 @@ describe("§187 item 3: names are cut only when the row is full", () => {
     expect(src("app/app/tests/[id]/page.tsx")).toContain('<span className="flex min-w-0 flex-1 items-baseline gap-1"><span className="min-w-0" data-needs-person-name=""><NameLink fit text={p.name} href={p.href} /></span>');
     expect(src("components/CallRequestsPanel.tsx")).toContain('<span className="min-w-0"><NameLink fit text={p.name} href={p.href} /></span>');
     const calls = src("app/app/tests/[id]/DevCallPanel.tsx");
-    expect(calls.match(/<span className="mr-auto min-w-0"><NameLink fit text=\{t.name\}/g)!.length).toBe(2);
+    // (Owner, Nov 6, §291) The name is on the tester's Booked drop-down (fitted, in a row that may shrink); the call rows under it don't repeat it.
+    expect(calls).toContain('<span className="min-w-0"><NameLink fit text={t.name} href={t.testerHref} /></span>');
+    expect(calls).not.toMatch(/<span className="mr-auto min-w-0"><NameLink/);
     expect(calls).toContain('<fieldset className="max-h-48 min-w-0 space-y-1');
   });
 });
