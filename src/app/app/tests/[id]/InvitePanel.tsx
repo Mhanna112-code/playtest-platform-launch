@@ -40,6 +40,8 @@ type PanelData = { worked: Tester[]; suggested: Tester[]; found: Tester[]; found
  * (Owner, Oct 28, batch 16 section 12) The lists come from the server over EVERY tester: the name search (from 1 character since batch 20 section 9, after a short pause in
  * typing) and the ticks ask it again; every match shows in a scroll box, and above 100 the first 100 with "Showing 100 of N: type more of the name".
  */
+/** (Owner, Nov 5, §257) A list heading inside the lists' scroll box: stuck to its top, on the card's colour, while its rows scroll under it. */
+const LIST_HEAD = "sticky top-0 z-10 bg-ink-900 py-1";
 /** The pause in typing before the name search asks the server (a redraw's search asks at once: batch 35 §46). */
 export const SEARCH_PAUSE = 300;
 
@@ -419,12 +421,13 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
           {ticks("languages", "Languages", p.options.languages)}
         </div>
       )}
+      {/* (Owner, Nov 5, §257) "Find testers" heads the search box, always shown; its results stay right under the box, above People you've worked with. */}
+      <h3 data-invite-find-title="">Find testers</h3>
       <input className="input max-w-xs" placeholder="Search by name" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find testers" />
       {/* (Owner, Oct 28, batch 16 section 29) The search's results right under the box, in their own scroll box (every match, about 8 rows tall; above 100, the
           first 100 and the line saying so), so a search never needs scrolling down the lists. With the box empty, the heading and results are hidden. */}
       {term && (
         <div className="space-y-1.5" data-invite-find="">
-          <h3>Find testers</h3>
           {data.capLine && <p className="note" data-invite-cap="">{data.capLine}</p>}
           {found.length > 0 && <ul className="max-h-64 space-y-1.5 overflow-y-auto" data-invite-found="">{found.map((t) => (t.why ? whyRow(t) : row(t, "f")))}</ul>}
           {data.searched && !searching && found.length === 0 && <p className="note" data-invite-none="">No testers match “{term}”.</p>}
@@ -432,9 +435,11 @@ export function InvitePanel(p: { testId: string; /** (§173) the signed-in accou
       )}
       {/* (Batch 16 section 10) Nothing ticked: the lists are the field, red with their line under them, and listed under Invite. */}
       <div id="invite-lists" className={`max-h-72 space-y-2 overflow-y-auto text-sm ${none ? "rounded-xl p-2 ring-1 ring-rose-400" : ""}`} data-invite-lists="" data-red-msg={none ? "Tick at least one tester." : undefined}>
-        <h3>People you&apos;ve worked with</h3>
+        {/* (Owner, Nov 5, §257) Each list's heading stays at the top of the scroll box while its rows scroll under it, so a scrolled box still says which list
+            it is (a row's open "Worked with you on …" can't sit there nameless under no heading). */}
+        <h3 className={LIST_HEAD} data-invite-list-head="worked">People you&apos;ve worked with</h3>
         {worked.length ? <ul className="space-y-1.5">{worked.map((t) => row(t, "w"))}</ul> : <p className="note">Nobody yet.</p>}
-        <h3>Suggested</h3>
+        <h3 className={LIST_HEAD} data-invite-list-head="suggested">Suggested</h3>
         {suggested.length ? <ul className="space-y-1.5">{suggested.map((t) => row(t, "s"))}</ul> : <p className="note">No suggestions right now.</p>}
       </div>
       {none && <p className="err-field">Tick at least one tester.</p>}

@@ -4618,3 +4618,8 @@ tester's reason sits right under the line in its box (no drop-down of its own), 
 ## §253 Disputes: add your side, one drop-down per person (owner, Nov 5)
 On the dashboard, "Disputes: add your side" has one drop-down per tester (their name, "· N disputes"); inside, each dispute is its own drop-down as in §252: its line
 ("Disputed what you paid for … on “<test>”") the summary, the reason right under it in its box, then "Add your side". All open at first.
+
+## §257 Invite testers: "Find testers" above the search box; list headings stay put (owner, Nov 5)
+"Find testers" now heads the Search by name box (always shown); its results stay right under the box, above "People you've worked with". In the lists' scroll box,
+"People you've worked with" and "Suggested" stick to the top of the box while their rows scroll under them (before, a scrolled box lost its heading, and a row's
+open "Worked with you on 1 test" could sit at the top with no name or heading over it).
