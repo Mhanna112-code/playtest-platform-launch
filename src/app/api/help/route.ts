@@ -6,8 +6,11 @@ import { db } from "@/lib/db";
 import { CONTACT_LIMIT_PER_DAY, LIMITS, contactLimitLine } from "@/lib/limits";
 import { readText } from "@/lib/server/http";
 import { appUrl } from "@/lib/server/auth";
+import { teamEmails } from "@/lib/server/notify";
 
-// "Contact us": the message goes to the team (every ADMIN_EMAILS address, or the outbox when none is set) with the sender's name and email.
+// "Contact us": the message goes to the team with the sender's name and email. (Owner, Nov 6, §299) The team is every admin account's confirmed email plus every
+// ADMIN_EMAILS address, each once (teamEmails); never a placeholder address: with neither, nothing is emailed and it is logged (the message is still kept for
+// the admin console's Contact list).
 // (Owner, Oct 27) It is the appeal path, so a suspended or held account of either role can always send: requireUser, never requireActive.
 // At most 5 messages per account per day; the 6th press is a blue notice under Send.
 const SAME_MESSAGE_MS = 10 * 60_000;
@@ -31,9 +34,9 @@ export async function POST(req: Request) {
       if (today >= CONTACT_LIMIT_PER_DAY) throw new HttpError(409, "limit", contactLimitLine());
       await tx.contactMessage.create({ data: { userId: u.id, topic, message } });
     });
-    const team = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
+    const team = await teamEmails(`Contact us (${topic})`);
     const text = `From ${u.name || "(no name)"} <${u.email}>\nAbout: ${topic}\n\n${message}`;
-    for (const to of team.length ? team : ["team@playtest.local"]) await sendEmail({ to, subject: `Contact us: ${topic}`, text, button: { label: "Open the admin console", url: `${appUrl()}/admin#contact` } });
+    for (const to of team) await sendEmail({ to, subject: `Contact us: ${topic}`, text, button: { label: "Open the admin console", url: `${appUrl()}/admin#contact` } });
     return ok({ sent: true });
   });
 }

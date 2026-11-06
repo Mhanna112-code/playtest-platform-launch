@@ -102,7 +102,8 @@ export async function extendPauseClosure(testId: string, days: unknown, now = ne
   if (from && adminId) stopIfChanged("Extend", await testChangesSince(testId, adminId, from, seen?.tab));
   const at = new Date(info.at.getTime() + n * DAY);
   await db.test.update({ where: { id: testId }, data: { pauseCloseAt: at, pauseCloseSetAt: now } });
-  await notify(t.developer.email, `“${t.title}” will close later`, [`The team moved the date “${t.title}” closes to ${T(at, "date")} (it stays paused until your account is cleared).`], `/app/tests/${testId}`, { own: true });
+  // (Owner, Nov 6, §299) Like the team's pause: `always` (with email Off too, in the end-of-day email), in the same "Payments and holds" stack.
+  await notify(t.developer.email, `“${t.title}” will close later`, [`The team moved the date “${t.title}” closes to ${T(at, "date")} (it stays paused until your account is cleared).`], `/app/tests/${testId}`, { always: true, group: "payhold" });
   return { ok: true, closesAt: at.toISOString() };
 }
 

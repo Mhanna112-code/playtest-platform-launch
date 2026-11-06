@@ -5267,3 +5267,25 @@ Narrowed by the owner the same day: only the developer's Invite testers panel.
 - Tests: tests/email-stacks-298.test.ts. Updated: email-fixes-295 (the pause lines are `mustEmail`; with Off they reach the end-of-day email), batch18 (the
   always list: two more in holds.ts, two more in restrictions.ts), paid-stack-201 and nov5-batch2 (emailLines takes whole lines; EMAIL_STACKED removed),
   bell-parity-286.
+
+## §299 Pay more on finished tests reaches the tester; the 15-minute call reminder at once; the team's lift like its pause; Contact us to every admin (owner, Nov 6)
+From the email catalog (playtest-lite-evidence/email-catalog-nov6), four of its findings.
+- **Payment lines always reach.** The bell-reach rule (`inReach`, notify.ts: a line `about` a counterpart arrives only while a test between them is open) no
+  longer applies to payment lines (`payment: true`), in notify() and bell() alike. So "Nora Lane paid you $5.00 more …" and "… paid $0 more …" (payments.ts,
+  the only tester payment lines that carried `about`) reach the tester, bell and email, on a stopped or closed test too. Other lines keep the rule.
+- **The 15-minute call reminder is emailed at once** (calls.ts, notify's `now`, §294), to both people, so it arrives before the call. The bell line stays and
+  is written as already emailed, so no summary repeats it. It is not `always`: with email Off, only the bell line (`now` without `always` or `payment` now
+  follows the email setting; the chargeback lines, `always`, are unchanged).
+- **The team lifting its pause and moving a paused test's closing date are `always`**, in the pause's "Payments and holds" stack (were own lines that followed
+  the email setting). The lift's email text says "it is running again" only when nothing else pauses the test; with the developer's hold or suspension still
+  on, "it stays paused until you pay what you owe / your account is cleared". Kept: one "Your tests are running again" per hold or suspension lift (not per
+  test); a team-paused test stays paused when a hold lifts and its testers hear nothing; STILL_SUSPENDED_LINE while a suspension is on; never a second
+  "running again" for one moment.
+- **Contact us and the team's chargeback emails go to every admin account** (`teamEmails`, notify.ts): every admin account's confirmed email (adminUsers(): not
+  deleted, not suspended), plus every ADMIN_EMAILS address (kept, so nothing set on a deploy is lost), each address once in any case. The team@playtest.local
+  placeholder is gone: with neither, nothing is emailed and it is logged (Contact us messages stay in the admin console's list).
+- Stale comments fixed: holds.ts (the admin email follows each admin's setting; the Open until heads-ups are in the summary; closeRequests rings the tester's
+  bell), notify.ts's bell() description, and "the longer text is emailed" in calls.ts, restrictions.ts and payments.ts (it is emailed only to an address with
+  no account).
+- Tests: tests/email-catalog-fixes-299.test.ts. Updated: batch18 (the always list: one more in restrictions.ts, one more in pauseClosure.ts), bell-admin (the
+  lift and the moved date are `always` in "Payments and holds", no longer own lines).

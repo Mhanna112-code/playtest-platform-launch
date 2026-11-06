@@ -437,7 +437,8 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   await (await import("./pauseClosure")).bellPausedTests(dev.id);
   // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.
   if (!dev.holdStartedAt && !dev.devSuspendedAt) await tellTestersPaused([testId]);
-  // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page and in the email.
+  // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page. (Owner, Nov 6, §299) The longer text below is
+  // emailed only to an address with no account: an account's email lists the bell line.
   // (Owner, Nov 4, §172) The email lists exactly what a developer suspension still allows, for this test.
   await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} ${TEAM_PAUSED_EMAIL_LINE}${callsCancelled ? ` ${teamPauseCallsLine(callsCancelled)}` : ""}`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
@@ -482,7 +483,11 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
     for (const c of await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } }))
       await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused", always: true });
   }
-  await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
+  // (Owner, Nov 6, §299) The lift reaches the developer like the pause: `always` (with email Off too, in the end-of-day email), in the same "Payments and holds"
+  // stack. Running again only when nothing else pauses the test: while the developer's own hold or suspension still pauses it, the lift says what still does
+  // (and the hold's or reinstatement's own line says running again when that lifts: never two for one moment).
+  const still = devNow.holdStartedAt ? "you pay what you owe" : devNow.devSuspendedAt ? "your account is cleared" : "";
+  await notify(dev.email, `The team lifted the pause on “${t.title}”`, [still ? `The team lifted the pause on “${t.title}”: it stays paused until ${still}.` : `The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { always: true, group: "payhold" });
   return { ok: true };
 }
 

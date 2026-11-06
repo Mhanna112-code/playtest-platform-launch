@@ -503,6 +503,8 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // chargeback hold), and the bank lowering or raising a chargeback's amount (two more); and its amount changing before the repayment (one more).
     // (Owner, Nov 6, §298) The tester's "“X” is paused" and "“X” is running again": holds.ts two more (the pause starting, running again after a hold),
     // restrictions.ts two more (running again after a reinstatement, after the team's pause lifted).
-    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Nov 6, §299) The team lifting its pause reaches the developer like the pause: restrictions.ts one more; the team moving a paused test's closing
+    // date later: pauseClosure.ts one more.
+    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

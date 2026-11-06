@@ -43,7 +43,8 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
     await recordEvent(tx, testId, "cancelled", `You cancelled the call with ${name} on ${fmtDateTime(c.startsAt)}`, false, {}, c.contractId);
     return c;
   });
-  // (Batch 15 section 20) The reason is in the email and on the page, never in the bell line.
+  // (Batch 15 section 20) The reason is on the page, never in the bell line. (Owner, Nov 6, §299) The longer text below is emailed only to an address with no
+  // account: an account's email (its summary) lists the bell line.
   const line = cancelLine(displayName(dev), call.startsAt, "");
   await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
   return { cancelled: true };
@@ -401,6 +402,8 @@ const reminderKey = (callId: string) => `call15:${callId}`;
 /**
  * Bell and email (following each person's email setting) 15 minutes before a booked call, to both, the same line. Once per call and person; none for a call booked
  * less than 15 minutes ahead. Checked with the call sweep (every page load / poll, and the daily job). It opens the call's row, where "Check your call setup" is.
+ * (Owner, Nov 6, §299) The email goes out at once (notify's `now`, §294), to both, so it arrives before the call; the bell line stays, written as already emailed,
+ * so no later summary repeats it. Email Off: the bell line only (not `always`).
  */
 export async function remindCallsSoon(now = new Date()) {
   const soon = new Date(now.getTime() + CALL_REMINDER_MIN * 60_000);
@@ -414,12 +417,12 @@ export async function remindCallsSoon(now = new Date()) {
     const c = call.contract, dev = c.test.developer, tester = c.tester;
     if (!(await db.notification.count({ where: { userId: tester.id, reminderKey: reminderKey(call.id) } }))) {
       const line = callReminderLine(displayName(dev), c.title, call.startsAt);
-      await notify(tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: dev.id, reminder: reminderKey(call.id) });
+      await notify(tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: dev.id, reminder: reminderKey(call.id), now: true });
       n++;
     }
     if (!(await db.notification.count({ where: { userId: dev.id, reminderKey: reminderKey(call.id) } }))) {
       const line = callReminderLine(displayName(tester), c.title, call.startsAt);
-      await notify(dev.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: tester.id, reminder: reminderKey(call.id) });
+      await notify(dev.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: tester.id, reminder: reminderKey(call.id), now: true });
       n++;
     }
   }

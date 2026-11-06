@@ -7,7 +7,7 @@ import {
   owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
 } from "@/lib/rules";
 import { HttpError } from "./http";
-import { adminUsers, bell, notify, renderFor, sendSummaries } from "./notify";
+import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
 import { appUrl } from "./auth";
 import { accountEvent, labelled, reportedOver3 } from "./reports";
 import { sendEmail } from "./email";
@@ -36,7 +36,6 @@ import { teamPausedNow } from "@/lib/restricted";
 /** A test that is not paused (no payment hold, no suspension, no team pause): reminders tied to a test wait while it is paused and restart when it resumes. */
 // (Batch 12 section 1) A deleted developer's work under review never opens Charge, and they get no reminders.
 const PAUSE_FREE = { adminPausedAt: null, developer: { holdStartedAt: null, devSuspendedAt: null, deletedAt: null } } as const;
-const admins = () => (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean);
 
 export async function onHold(devId: string) {
   const u = await db.user.findUnique({ where: { id: devId }, select: { holdStartedAt: true } });
@@ -135,7 +134,7 @@ export async function startHold(devId: string, reason: string) {
   for (const t of tests) {
     // Pending call requests close (both told).
     for (const r of await (await import("./requests")).closeRequests({ contractIds: (await db.contract.findMany({ where: { testId: t.id }, select: { id: true } })).map((x) => x.id) }, "the test is paused")) {
-      void r; // (Owner) a closed call request is not a bell line
+      void r; // (Owner, Nov 6, §286) closeRequests rings the tester's bell itself when the developer's request closes for the pause; nothing more here
     }
     await db.$transaction((tx) => recordEvent(tx, t.id, "paused", pausedUntil(reason === "chargeback"), false) /* (batch 35 §22) */);
   }
@@ -916,7 +915,8 @@ export async function chargebackOpened(paymentIntentId: string, disputedCents: u
   if (!started && !before.holdStartedAt) await db.user.updateMany({ where: { id: p.developerId, holdStartedAt: { not: null }, holdReason: { not: "chargeback" } }, data: { holdReason: "chargeback", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });
   // (Owner, Oct 26) A chargeback email goes to every admin at once, whatever their email setting. (§133) It says what the bank reversed: "Playtest: new chargeback of
   // $96.00", "A developer's bank reversed $96.00 of a $444.67 payment (pi_…)".
-  const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
+  // (Owner, Nov 6, §299) Every admin account's confirmed email plus every ADMIN_EMAILS address, each once (teamEmails).
+  const to = await teamEmails("new chargeback");
   // (Owner, Nov 4, §193b) Which payment, by its part or (a one payment) its kind, time and items, full names: "… reversed $20.00 of a $35.00 Pay what you owe payment
   // on Wed, Nov 4, 12:30 PM (Ana Silva's written answers on “Harbor Run”, …) (pi_…)".
   const named = await reversedNaming(p, true, (d) => fmtDateTime(d));
@@ -1188,7 +1188,7 @@ async function followAmount(reversalId: string, cents: number, status: string, e
 
 /** (§192) An email to every admin, whatever their email setting (as the chargeback's own). */
 export async function tellAdmins(subject: string, line: string) {
-  const to = new Set([...admins(), ...(await adminUsers()).map((a) => a.email)]);
+  const to = await teamEmails(subject); // (Owner, Nov 6, §299) every admin account's confirmed email and ADMIN_EMAILS, each once
   for (const a of to) await sendEmail({ to: a, subject, text: [line, `${appUrl()}/admin#chargebacks`, "", "Playtest"].join("\n"), button: { label: "Open the admin console", url: `${appUrl()}/admin#chargebacks` } }).catch((e) => console.error("[email] chargeback amount:", e.message));
 }
 
@@ -1310,7 +1310,7 @@ async function runDailyLocked(now: Date) {
   await testerChargeLines(now, co);
   await payNowLines(now, co);
   await closeOutReminders(now, co);
-  // 3a. (Owner, Oct 27) ONE daily email per admin that can't be turned off, sent only when it has something in it (see adminDaily.ts).
+  // 3a. (Owner, Oct 27) ONE admin email per admin, following each admin's own email setting (Off: none), sent only when it has something in it (see adminDaily.ts).
   out.alerts = await (await import("./adminDaily")).adminDailyEmails(now);
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
   const pc = await import("./pauseClosure");
@@ -1321,7 +1321,8 @@ async function runDailyLocked(now: Date) {
   for (const t of closing) {
     const m = countdownDue(t.openUntil, now, t.notifiedMarks, t.createdAt);
     if (!m) continue;
-    // Bell notifications only, never emailed. (Batch 15 sections 11 and 18) The reader's own zone; Open until is the last day to join.
+    // Bell lines, also in the developer's Daily / Weekly / Monthly summary like every bell line (Off: the bell only). (Batch 15 sections 11 and 18) The reader's
+    // own zone; Open until is the last day to join.
     await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` });
     await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: m.mark }, ...(m.mark === "1d" ? { notified1d: true, notified3d: true } : m.mark === "3d" ? { notified3d: true } : {}) } });
     out.headsUps++;

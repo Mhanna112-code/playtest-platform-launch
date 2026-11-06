@@ -17,6 +17,8 @@ import { sendEmail } from "./email";
  * person is in, or was in, one of the recipient's tests that is still open (the recipient's own as developer, or one they
  * are / were in as tester with that person as the developer). Notices that are not about a counterpart (an invite, an
  * application, a stopped test, the site's own notices) don't pass `about`.
+ * (Owner, Nov 6, §299) A PAYMENT line (`payment: true`) is never dropped by reach: money paid to a tester reaches her (bell and email) whatever the state of the
+ * test it was paid on (open, closed, stopped). notify() and bell() skip this check for payment lines.
  */
 export async function inReach(recipientId: string, otherId: string) {
   const n = await db.contract.count({
@@ -52,9 +54,12 @@ const flags = (o: { own?: boolean; group?: string; payment?: boolean }) => ({ ow
 /** (Batch 34 §5) A line's side: the caller's, else its link's page (your own public profile is the side it shows), else the account's (null). */
 export const lineSide = (userId: string, link: string, side: Side | null | undefined) => (side !== undefined ? side : sideForPath(link, userId));
 
+/** The email settings that send summaries (anything else is Off). */
+const EMAIL_ON = ["daily", "weekly", "monthly"];
+
 export async function notify(to: string, subject0: string, lines0: string[], path: string, opts: Opts = {}, client: Prisma.TransactionClient | typeof db = db) {
-  const user = await client.user.findUnique({ where: opts.recipientId ? { id: opts.recipientId } : { email: to }, select: { id: true, timeZone: true } });
-  if (user && opts.about && !(await inReach(user.id, opts.about))) return;
+  const user = await client.user.findUnique({ where: opts.recipientId ? { id: opts.recipientId } : { email: to }, select: { id: true, timeZone: true, emailPref: true } });
+  if (user && opts.about && !opts.payment && !(await inReach(user.id, opts.about))) return; // (Owner, Nov 6, §299) payment lines always reach
   // (Batch 15 section 11) Times in the line are written in the recipient's own time zone (unknown: UTC).
   const subject = renderTimes(subject0, user?.timeZone), lines = lines0.map((l) => renderTimes(l, user?.timeZone));
   if (!user && opts.recipientId) return; // A known account never falls back to a non-account email.
@@ -70,9 +75,11 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   }
   // (Owner, Nov 6, §294) `now` (with `always`): the email is sent immediately through sendEmail, the path the admins' chargeback emails take, never queued for
   // the summary or the end-of-day email; the bell line is written as already emailed (summarizedAt), so no later email repeats it. Used for the developer's
-  // chargeback emails.
+  // chargeback emails. (Owner, Nov 6, §299) Also the 15-minute call reminder, WITHOUT `always`: it follows the person's email setting (Off: the bell line only, and
+  // no later email repeats it either), but when it is emailed it goes at once, before the call, never in a later summary.
   if (opts.now) {
-    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: true, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+    if (!opts.always && !opts.payment && !EMAIL_ON.includes(user.emailPref)) return;
     try {
       await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`, "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}${path}` } });
     } catch (e) {
@@ -85,9 +92,12 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
   await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
 
-/** A bell notification only (no email unless the person's summary takes it, or `always`), e.g. the Open until heads-ups. */
+/**
+ * A notification written straight to the bell (no immediate email, and no email text of its own), e.g. the Open until heads-ups. Like every line it is in the
+ * person's Daily / Weekly / Monthly summary; with `always` or `payment` it also reaches the end-of-day email with email Off.
+ */
 export async function bell(userId: string, text0: string, link: string, about?: string, opts: Pick<Opts, "own" | "testId" | "group" | "payment" | "reminder" | "always" | "side"> = {}) {
-  if (about && !(await inReach(userId, about))) return;
+  if (about && !opts.payment && !(await inReach(userId, about))) return; // (Owner, Nov 6, §299) payment lines always reach
   const text = await renderFor(userId, text0);
   await db.notification.create({ data: { side: lineSide(userId, link, opts.side), userId, text, link, testId: opts.testId ?? (await testIdOfLink(link)), mustEmail: !!opts.always, reminderKey: opts.reminder ?? null, ...flags(opts) } });
 }
@@ -109,7 +119,20 @@ export async function linesFor(userIds: string[], text: string) {
 export async function adminUsers() {
   const listed = (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
   // (Batch 15 sections 35 and 41) Listed emails count only once confirmed; a suspended admin gets nothing.
-  return db.user.findMany({ where: { deletedAt: null, devSuspendedAt: null, testerSuspendedAt: null, OR: [{ isAdmin: true }, ...(listed.length ? [{ email: { in: listed }, emailVerifiedAt: { not: null } }] : [])] }, select: { id: true, email: true } });
+  return db.user.findMany({ where: { deletedAt: null, devSuspendedAt: null, testerSuspendedAt: null, OR: [{ isAdmin: true }, ...(listed.length ? [{ email: { in: listed }, emailVerifiedAt: { not: null } }] : [])] }, select: { id: true, email: true, emailVerifiedAt: true } });
+}
+
+/**
+ * (Owner, Nov 6, §299) Where the team's emails go (Contact us, and the chargeback emails sent to the team at once): every admin account's email (adminUsers(): not
+ * deleted, not suspended), confirmed addresses only, plus every ADMIN_EMAILS address, so nothing set on a deploy is lost; each address once (any case). Never
+ * the old team@playtest.local placeholder: with no admin account and no ADMIN_EMAILS it is empty and the reason is logged (`what` names the email).
+ */
+export async function teamEmails(what: string) {
+  const out = new Map<string, string>();
+  for (const a of await adminUsers()) if (a.emailVerifiedAt && !out.has(a.email.toLowerCase())) out.set(a.email.toLowerCase(), a.email);
+  for (const e of (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim()).filter(Boolean)) if (!out.has(e.toLowerCase())) out.set(e.toLowerCase(), e);
+  if (!out.size) console.error(`[email] ${what}: not sent: no admin account with a confirmed email and no ADMIN_EMAILS address to send it to.`);
+  return [...out.values()];
 }
 
 /**

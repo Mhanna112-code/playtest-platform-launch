@@ -305,7 +305,8 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
   await notify(
     c.tester.email,
     // (Batch 11 section 6) "<dev> paid you $X" for the first payment ("<dev> paid you $X more" for a Pay more).
-    // (Batch 15 section 20) The note never rides in the bell line; it's in the email and on the session page.
+    // (Batch 15 section 20) The note never rides in the bell line; it's on the session page. (Owner, Nov 6, §299) The longer text is emailed only to an
+    // address with no account: an account's email lists the bell line.
     // (Owner, Nov 4, §177) Which call: "… for your live call on “Harbor Run” (Tue, Oct 27, 8:00 AM EST)".
     rev.amountCents === 0 ? `${displayName(dev)} paid $0 for ${await partOnTest(p, "your", c.title)}` : `${displayName(dev)} paid you ${money(rev.amountCents)} for ${await partOnTest(p, "your", c.title)}`,
     [
@@ -815,6 +816,7 @@ async function closeUpdateAtZero(dev: U, c: { id: string; testId: string; tester
   });
   if (done) {
     const line = `${displayName(dev)} paid $0 more for what you added to your ${label} on “${c.test.title}”`; // (batch 35 §136)
+    // (Owner, Nov 6, §299) A payment line: it reaches her whatever the test's state (stopped or closed included); `about` no longer drops it (notify's reach).
     await notify(c.tester.email, line, [line + ".", ...(note ? [`${pronouns(dev.pronoun).Poss} note: “${note}”`] : [])], `/app/sessions/${c.id}#part-${label === "recording" ? "recording" : "written"}`, { payment: true, group: "tpaid", about: dev.id });
   }
   return { paid: true, amountCents: 0, status: "closed" };
@@ -834,6 +836,7 @@ export async function finishExtraPay(paymentId: string, result: { status: string
     if (p.submissionId) await answerUpdate(tx, p.submissionId, p.createdAt);
   });
   const line = `${displayName(dev)} paid you ${money(amount)} more for ${await partOnTest(p, "your", c.test.title)}`; // (§177) which call
+  // (Owner, Nov 6, §299) A payment line: it reaches her whatever the test's state (stopped or closed included); `about` no longer drops it (notify's reach).
   await notify(c.tester.email, line, [line + `. You get ${money(testerShare(amount))}.`, ...(p.note ? [`${pronouns(dev.pronoun).Poss} note: “${p.note}”`] : []), ...(result.status === "not_set_up" ? ["Payments aren't set up yet, so the money is delayed until they are."] : [])], `/app/sessions/${c.id}#${p.callId ? `call-${p.callId}` : `part-${label === "recording" ? "recording" : "written"}`}`, { payment: true, group: "tpaid", about: dev.id }); // (batch 29 §25) in the day's "You were paid" entry, no longer "Extra pay"
   await receipt(dev.email, `extra pay for ${pieceName({ tester: name, part: label, test: c.title, full: true, when: await callWhen(p) })}`, amount, result.status, `/app/tests/${c.testId}#tester-${c.id}`); // (§178)
   return { paid: true, amountCents: amount, status: result.status };
