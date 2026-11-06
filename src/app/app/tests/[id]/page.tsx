@@ -44,7 +44,7 @@ import { inviteBlocked, rateNeedsLine, NOT_LISTED, callListed, deletedNoPayoutsL
 import { ChargebackSteps } from "@/components/ChargebackSteps";
 import { chargebackSteps } from "@/lib/server/chargeback";
 import { PayBox } from "./PayBox";
-import { CONFIRM_WITH_BANK, autoChargeLine, bankAnchor, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
+import { CONFIRM_WITH_BANK, autoChargeLine, unlistedCloseLine, bankAnchor, joinerDays, paidMostLine, pausedUntil } from "@/lib/rules";
 import { closedOut, payMoreClosesAt, pieceCloseOut } from "@/lib/server/closeOut";
 import { BankWaiting } from "@/components/BankWaiting";
 import { HoldFold } from "@/components/HoldFold";
@@ -552,8 +552,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
               </div>
               <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
               <PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
-                /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
-                note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
+                /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. (Owner, Nov 6, §311e) An unlisted one closes
+                   with nothing paid then: the same note, in its words. */
+                note={x.x!.payBy && x.x!.payBy > now ? (x.x!.rateCents != null ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : unlistedCloseLine(pieceDay(x.x!.payBy, u.timeZone))) : undefined}
                 minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}
                 listingCents={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).cents}
                 listingText={callReference(x.x!.rateCents, callMinutesOf(x.x!)!, x.c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />

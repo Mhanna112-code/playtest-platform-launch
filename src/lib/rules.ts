@@ -1513,6 +1513,8 @@ export const unlistedCallClosedLine = (call: string) => `${call} closed with not
 export const AUTO_CHARGE_NO_CHOICE = "This call is charged automatically, so there's nothing to choose.";
 /** The developer's line in a listed call's Pay box: "If you don't pay by Nov 5, it's charged automatically: $25.00 (30 min × $50.00/h)." */
 export const autoChargeLine = (date: string, cents: number, minutes: number, rateCents: number) => `If you don't pay by ${date}, it's charged automatically: ${money(cents)} (${minutes} min × ${money(rateCents)}/h).`;
+/** (Owner, Nov 6, §311e) The developer's Pay box note on an UNLISTED call before its pay date: "If you don't pay by Nov 5, it closes with nothing paid." */
+export const unlistedCloseLine = (date: string) => `If you don't pay by ${date}, it closes with nothing paid.`;
 /** The tester's line on a listed call waiting for pay: "If Nora Lane doesn't pay by Nov 5, it's charged automatically." */
 export const testerAutoChargeLine = (dev: string, date: string) => `If ${dev} doesn't pay by ${date}, it's charged automatically.`;
 /** (Batch 12 section 6) The reason stored on tester charges made before the review window dropped to 7 days. */

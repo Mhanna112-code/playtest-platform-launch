@@ -202,6 +202,20 @@ describe("§311e an unlisted call: the listed call's reminders, then closed with
     // Once only.
     await autoChargeCalls(new Date());
     expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { endsWith: "closed with nothing paid (it wasn't listed)" } } })).toBe(1);
+    // Disputable exactly as an unlisted call paid $0 by hand: the admin's bounds are $0 to $100 (30 min × $200/h, within the $1,000 for calls).
+    const P = await import("@/lib/server/payments");
+    expect(await P.disputeBounds({ submissionId: null, callId: call.id })).toMatchObject({ min: 0, max: 10_000 });
+    const d = await sact(j.sessionId, "dispute", j.tester.cookie, { kind: "call", id: call.id, reason: "We talked for the whole half hour", seenAt: seen(), confirmed: true });
+    expect(d.status).toBe(200);
+  });
+
+  it("the pages: the developer's Pay box note before the date; the tester's paid line reads the closing reason", async () => {
+    expect(R.unlistedCloseLine("Nov 5")).toBe("If you don't pay by Nov 5, it closes with nothing paid.");
+    const page = src("app/app/tests/[id]/page.tsx");
+    expect(page).toContain(": unlistedCloseLine(pieceDay(x.x!.payBy, u.timeZone))) : undefined}");
+    // The tester's session page shows a $0 review's reason under "Paid $0", as for a listed call's "Closed with nothing to pay."; no Charge (a reviewed call).
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("review.amountCents === 0 && review.reason && !byTesterChoice(review.reason) ? (");
+    expect(R.UNLISTED_CALL_CLOSED).toBe("Closed with nothing paid (it wasn't listed).");
   });
 });
 
