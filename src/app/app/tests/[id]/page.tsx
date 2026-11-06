@@ -642,6 +642,18 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <ListingSeeIt box="listing" />
       {/* (Batch 30) The seen marker starts at this page's first load in the tab: a redraw never skips a change the page hasn't shown. */}
       <PageLoaded at={seenAt} />
+      {/* (Owner, Nov 5, §275) The Save's note at the top (it sat under Invite): just "Saved.", with what else the Save did (applications closed, invites re-sent,
+          not re-invited) only when it did something; it fades after a few seconds or closes with ×. ("New testers join on the new listing; testers already in
+          keep their contract" went: since §264/§265/§267 much of a Save reaches testers already in.) */}
+      {saved && (
+        <SavedNote><p className="ok">
+          Saved.
+          {Number(offered) > 0 && ` Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.`}
+          {closed && ` Closed ${closed.split(", ").length} application${closed.split(", ").length === 1 ? "" : "s"}: ${closed.slice(0, 500)}.`}
+          {resent && ` Invites re-sent on the new listing: ${resent.slice(0, 500)}.`}
+          {skipped && ` Not re-invited: ${skipped.slice(0, 500)}.`}
+        </p></SavedNote>
+      )}
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} canEdit={t.status !== "stopped" && t.status !== "closed"} />
       {/* (Owner, Oct 30, batch 34 §14) The first panel under the overview (and its notices): the current listing, as testers see it. */}
       <ListingPanel rows={listingRows} listing={listingNow} when={(d) => fmtDateTimeIn(d, u.timeZone)} savedAt={lastSave?.at.toISOString() ?? ""} />
@@ -940,14 +952,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           initial={invitePanelData ?? { worked: [], suggested: [], found: [], foundTotal: 0, capLine: "", searched: false }}
           sent={expired ? [] : invites.filter((i) => i.status === "sent").map((i) => ({ id: i.id, testerId: i.testerId, name: people.get(i.testerId) ?? "?", status: `waiting for ${pronouns(inviteUsers.find((x) => x.id === i.testerId)?.pronoun).obj} to join`, ...inviteInfo.get(i.testerId)! }))}
         />
-      )}
-      {saved && (
-        <SavedNote><p className="ok">
-          {Number(offered) > 0 ? `Saved. Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.` : "Saved. New testers join on the new listing; testers already in keep their contract."}
-          {closed && ` Closed ${closed.split(", ").length} application${closed.split(", ").length === 1 ? "" : "s"}: ${closed.slice(0, 500)}.`}
-          {resent && ` Invites re-sent on the new listing: ${resent.slice(0, 500)}.`}
-          {skipped && ` Not re-invited: ${skipped.slice(0, 500)}.`}
-        </p></SavedNote>
       )}
 
       <section className="space-y-3">

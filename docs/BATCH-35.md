@@ -4896,3 +4896,9 @@ filters." (`filteredOut` from invitePanel; blocked and deleted accounts are neve
   §273's line for Find testers stays. While the server's answer is on its way, the rows shown narrow to the typed name at once.
 - Tests: tests/tester-search-bars-274.test.ts. batch35-tester-folds' RowsBox check follows the new filter call; batch35-hard-limits lists TesterSearch.tsx with
   the page's other search filters (no character limit).
+
+## §275 The Save's note: at the top, "Saved.", fades (owner, Nov 5)
+After a Save the test page's note sat under Invite and stayed until the page was left (a live redraw kept it), reading "Saved. New testers join on the new listing;
+testers already in keep their contract." (no longer true since §264/§265/§267). It now sits at the top (above the Listing panel) and reads "Saved.", followed only by
+what else the Save did (new terms offered to N testers, applications closed, invites re-sent, not re-invited); it fades after 8 seconds (SAVED_NOTE_MS) or closes
+with ×.
