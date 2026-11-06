@@ -64,8 +64,9 @@ describe("§283 2: only answered questions are listed; an unanswered one is only
     expect(form).toContain(Q2);
     expect(form).not.toContain("data-new-question"); // Q2 was there when they sent: not new
     const theirs = await testPage(testId, dev.user.id);
-    for (const where of [`needs-${sub.id}`, `row-${sub.id}`]) {
-      const at = theirs.indexOf(`data-panel="${where}-questions-list"`);
+    // (§289) Needs you's Questions has no scroll panel now: Needs you's list is found by data-questions-plain, the Testers list's by its scroll panel.
+    for (const [where, mark] of [[`needs-${sub.id}`, "data-questions-plain"], [`row-${sub.id}`, "data-panel"]]) {
+      const at = theirs.indexOf(`${mark}="${where}-questions-list"`);
       expect(at, where).toBeGreaterThan(0);
       const panel = theirs.slice(at, theirs.indexOf('data-question-body="else"', at));
       expect(panel, where).toContain(Q1);

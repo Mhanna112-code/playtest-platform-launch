@@ -92,7 +92,8 @@ describe("§263 on both sides", () => {
     expect(rowPanel).toContain(Q3);
     expect(rowPanel).not.toContain(Q2);
     expect(page).not.toContain("data-past-questions");
-    const needs = page.slice(page.indexOf(`data-panel="needs-${sub.id}-questions-list"`), page.indexOf(`id="part-${sub.id}"`));
+    // (§289) Needs you's Questions has no scroll panel now: its list is found by data-questions-plain.
+    const needs = page.slice(page.indexOf(`data-questions-plain="needs-${sub.id}-questions-list"`), page.indexOf(`id="part-${sub.id}"`));
     expect(needs).toContain(Q2);
     expect(needs).toContain("late note on Q2");
     expect(needs).toContain(`data-old-question="">${OLD_TAG}</span>`);

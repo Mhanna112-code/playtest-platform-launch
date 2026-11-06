@@ -177,7 +177,8 @@ describe("§263 a question flips old → current → old → current, on both si
     expect((await add(j.sessionId, j.tester.cookie, Q2, "refused")).status).toBe(409); // old: never added to
     let theirs = await testPage(testId, dev.user.id);
     expect(dList(theirs, sub.id)).not.toContain(Q2);
-    expect(foldOf(theirs.slice(theirs.indexOf(`data-panel="needs-${sub.id}-questions-list"`)), Q2)).toContain(OLD); // never paid: Needs you still has it, tagged Old
+    // (§289) Needs you's Questions has no scroll panel now: its list is found by data-questions-plain.
+    expect(foldOf(theirs.slice(theirs.indexOf(`data-questions-plain="needs-${sub.id}-questions-list"`)), Q2)).toContain(OLD); // never paid: Needs you still has it, tagged Old
     expect((await send(j.sessionId, j.tester.cookie, { answers: ["the map colours", ""], for: [Q3, Q4] })).status).toBe(200);
     await setKept(tid, `written:${j.sessionId}`, { answers: ["a laptop, I think"], questions: [Q4], notes: "" });
     await settle();
@@ -274,13 +275,16 @@ describe("§263 Needs you: an unpaid answer to a question changed since is shown
     const sub = await written(j.sessionId);
     await changeTo(testId, dev.cookie, [Q1, Q3]);
     let html = await testPage(testId, dev.user.id);
-    const needs = html.slice(html.indexOf(`data-panel="needs-${sub.id}-questions-list"`), html.indexOf(`id="part-${sub.id}"`));
+    // (§289) Needs you's Questions has no scroll panel now: its list is found by data-questions-plain.
+    const needs = html.slice(html.indexOf(`data-questions-plain="needs-${sub.id}-questions-list"`), html.indexOf(`id="part-${sub.id}"`));
+    expect(needs).not.toBe("");
     expect(foldOf(needs, Q2)).toContain("level two gate");
     expect(foldOf(needs, Q2)).toContain(OLD);
     expect((await payReview(dev.cookie, sub.id, "10.00")).status).toBe(200);
     await settle();
     html = await testPage(testId, dev.user.id);
-    expect(html).not.toContain(`data-panel="needs-${sub.id}-questions-list"`);
+    // (§289) Needs you's Questions has no scroll panel now: paid, Needs you's plain list is gone.
+    expect(html).not.toContain(`data-questions-plain="needs-${sub.id}-questions-list"`);
     expect(html).not.toContain("data-old-question");
   });
 });
