@@ -17,7 +17,7 @@ describe("rule checklist gaps (section 35)", () => {
     const at = atHours(50);
     expect((await sact(sessionId, "request-time", tester.cookie, { startsAt: at, seenAt: seen(), confirmed: true })).status).toBe(200);
     const n = await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, groupKey: "callrequests" } });
-    expect(n.text).toBe(`Ana Silva asked for a call: ${renderTimes(`⟦t:${new Date(at).toISOString()}:datetime⟧`, null)}`);
+    expect(n.text).toBe(`Ana Silva asked for a call on “Harbor Run”: ${renderTimes(`⟦t:${new Date(at).toISOString()}:datetime⟧`, null)}`);
   });
 
   it("the admin's Stop takes the same lock as the developer's: the second is refused", async () => {

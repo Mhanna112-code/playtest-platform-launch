@@ -107,7 +107,7 @@ describe("§295 point 3: an addition doesn't read as a second send", () => {
     await settle();
     expect((await sact(w.sessionId, "written-add", w.tester.cookie, { text: "And a note", question: ANYTHING_ELSE_KEY, seenAt: seen(), confirmed: true })).status).toBe(200);
     const ana = (await lines(w.anaId)).map((n) => n.text);
-    expect(ana.filter((t) => t.startsWith("Work sent:"))).toEqual(["Work sent: your written answers for “Harbor Run”"]); // the first send only
+    expect(ana.filter((t) => t.startsWith("Work sent:"))).toEqual([]); // (Owner, Nov 6, §312d) no line for a first send any more
     expect(ana).toContain("You added to your answer to “What did you like?” on “Harbor Run”");
     expect(ana).toContain("You added to your notes on “Harbor Run”");
     const dev = (await lines(w.devId)).map((n) => n.text);

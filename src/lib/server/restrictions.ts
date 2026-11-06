@@ -40,9 +40,10 @@ export async function cancelCallsNearPause(devId: string, now = new Date(), test
     if (!done.count) continue;
     await db.callSlot.update({ where: { id: c.slotId }, data: { status: "removed" } }).catch(() => null);
     n++;
-    const line = callCancelledLine(c.startsAt, "paused");
+    const line = callCancelledLine(c.startsAt, "paused", c.contract.title); // (Owner, Nov 6, §312a) names the test
     await notify(c.contract.tester.email, line, [line], `/app/sessions/${c.contractId}#call-${c.id}`, { about: c.contract.test.developerId });
-    await notify(c.contract.test.developer.email, line.replace("Your call", `Your call with ${displayName(c.contract.tester)}`), [line], `/app/tests/${c.contract.testId}#call-${c.id}`);
+    const devLine = callCancelledLine(c.startsAt, "paused", c.contract.test.title).replace("Your call", `Your call with ${displayName(c.contract.tester)}`);
+    await notify(c.contract.test.developer.email, devLine, [devLine], `/app/tests/${c.contract.testId}#call-${c.id}`);
   }
   return n;
 }

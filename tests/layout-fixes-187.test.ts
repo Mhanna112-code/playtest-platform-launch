@@ -293,7 +293,7 @@ describe("§187 item 10: a \"one of\" request is one row per time", () => {
     const r = await db.callRequest.findFirstOrThrow({ where: { contractId: j.sessionId, status: "pending" } });
     expect((await testerAnswer(j.sessionId, j.tester.cookie, r.id, "withdraw", { time: T[0] })).status).toBe(200);
     expect((await db.callRequest.findUniqueOrThrow({ where: { id: r.id } })).times.map((x) => x.toISOString())).toEqual([T[1]]);
-    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { contains: "withdrew a call request for" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { contains: "withdrew a call request on “Harbor Run” for" } } })).toBe(1);
     expect((await testerAnswer(j.sessionId, j.tester.cookie, r.id, "withdraw", { time: T[1] })).status).toBe(200);
     expect((await db.callRequest.findUniqueOrThrow({ where: { id: r.id } })).status).toBe("withdrawn");
   });

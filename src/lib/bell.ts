@@ -35,6 +35,7 @@ export const GROUP_TITLES: Record<string, string> = {
   ratings: "Ratings to give",
   apps: "Applications and invites",
   joined: "Joined",
+  // (Owner, Nov 6, §312b) No new line uses it ("updated the listing" is in its test's own stack): kept for the lines already written.
   newterms: "New terms to answer",
   excerpts: "Excerpts",
   deadlines: "Deadlines",

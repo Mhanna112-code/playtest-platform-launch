@@ -13,7 +13,7 @@ import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TIT
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
-import { givenDeletedLine, keyGivenEventLine, keyGivenToYouLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
+import { givenDeletedLine, keyGivenEventLine, keyNeedLine, keysAddedLine, keysRemovedLine, parseKeys } from "@/lib/keys";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { LIMITS } from "@/lib/limits";
@@ -623,12 +623,9 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const line = editedLine(displayName(dev));
     await notify(c.tester.email, line, [`${line}.`, "What changed is marked in Your agreed scope on your session page."], `/app/sessions/${c.id}#scope`, { recipientId: c.testerId, about: dev.id, testId });
   }
-  // (Batch 30 §17) Each tester given a key: a line in their session page's top box and a bell line (the key itself only on their page, never in the bell or email).
-  for (const g of keysGiven) {
-    await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
-    const line = keyGivenToYouLine(displayName(dev), result.title);
-    await notify(g.email, line, [`${line}.`, "Your key is on your session page."], `/app/sessions/${g.contractId}`, { testId });
-  }
+  // (Batch 30 §17) Each tester given a key: a line in their session page's top box (the key itself only on their page). (Owner, Nov 6, §312c) No bell or email
+  // line any more ("<dev> gave you an access key for “X”").
+  for (const g of keysGiven) await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
   return Object.assign(result, { offered, changed: changedNames, notReinvited, resent, closedApps, keysGiven: keysGiven.length });
 }
 
@@ -822,7 +819,7 @@ export async function cancelCallsAhead(tx: Tx, contractIds: string[], note: stri
 
 /** Tell each tester their booked call was cancelled (never any fault). */
 export async function tellCancelled(list: { email: string; startsAt: Date; contractId: string; title: string; callId?: string }[], why: Parameters<typeof callCancelledLine>[1]) {
-  for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why), [callCancelledLine(c.startsAt, why)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`);
+  for (const c of list) await notify(c.email, callCancelledLine(c.startsAt, why, c.title), [callCancelledLine(c.startsAt, why, c.title)], `/app/sessions/${c.contractId}${c.callId ? `#call-${c.callId}` : ""}`);
 }
 
 export async function stopTest(dev: U, testId: string, body: Record<string, unknown>) {
@@ -1085,8 +1082,10 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     // (Owner, Nov 6, §283) Coming back: on the listing's questions; if theirs still differ (an ended contract no Save reached), the change is a Terms history
     // entry first (followQuestions), so the old answered questions stay readable there.
     if (old) await followQuestions(tx, old, asListing(t).questions, new Date());
+    // (Owner, Nov 6, §312e) Rejoining accepts the listing as it is now, NDA included: the earlier stint's NDA change (and its unacknowledged notice, which blocked
+    // every press and showed "… changed the NDA … Acknowledge" on the fresh page) does not carry over.
     const contract = old
-      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
+      ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null, ndaChangedAt: null, ndaChangeKind: "", ndaNoticeSeenAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
     await stampCounting(testId, tx); // (batch 35 §66) the 3-change count starts with the first join
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
@@ -1448,8 +1447,9 @@ export async function tellSentByBell(
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss, dev = displayName(c0.test.developer);
   const anchor = part === "recording" ? "part-recording" : "part-written";
   // (Owner, Nov 6, §295) An addition doesn't read as a second send: "You added to your answer to “…” on “Harbor Run”" (Anything else: "You added to your notes on
-  // …"); a first send keeps "Work sent: your written answers for …".
-  await notify(tester.email, added ? youAddedLine(c0.title, part, n, question) : `Work sent: your ${part} for “${c0.title}”`, [added ? `What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.` : `Your ${part} ${part === "recording" ? "was" : "were"} sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
+  // …"). (Owner, Nov 6, §312d) A first send rings nothing for the tester any more (it was "Work sent: your written answers for …"); the addition's line is asked
+  // about: removing it is this one line.
+  if (added) await notify(tester.email, youAddedLine(c0.title, part, n, question), [`What you added ${part === "recording" ? `to your ${part}` : addedToWhat("your", question)} was sent to ${dev}.`], `/app/sessions/${c0.id}#${anchor}`);
   if (afterPaid) return notifyPaidUpdate(c0, tester, sub.id, part, afterPaid, n, question);
   const title = added ? `${name} ${addedWhat(poss, part, n, question)} for “${c0.title}”` : `${name} sent ${part === "recording" ? "a recording" : part} for “${c0.title}”`;
   const what = added ? addedWhat(poss, part, n, question) : `sent ${poss} ${part === "recording" ? "screen recording" : part}`;

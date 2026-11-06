@@ -50,9 +50,10 @@ describe("§286 the developer's call request rings the tester", () => {
     const r = await newest(a.sessionId, "developer");
     const mine = await bells(a.tester.user.id, "requested");
     expect(mine).toHaveLength(1);
-    expect(mine[0].text).toMatch(/^Nora Lane requested a call for .+ (AM|PM)( [A-Z]+)?$/);
+    expect(mine[0].text).toMatch(/^Nora Lane requested a call on “Harbor Run” for .+ (AM|PM)( [A-Z]+)?$/);
     // The same words as the line her top box shows.
-    expect(await sessionLines(a.sessionId, a.tester.cookie, loaded)).toContain(noZone(mine[0].text));
+    // (Owner, Nov 6, §312a) The bell names the test; the top box's line doesn't (the page does).
+    expect(await sessionLines(a.sessionId, a.tester.cookie, loaded)).toContain(noZone(mine[0].text.replace(" on “Harbor Run”", "")));
     expect(mine[0].link).toBe(`/app/sessions/${a.sessionId}#req-${r.id}`);
     expect(mine[0]).toMatchObject({ groupKey: "callrequests", testId: f.testId, own: false, side: "tester" });
     expect(await db.notification.count({ where: { userId: f.dev.user.id, text: { contains: "requested" } } })).toBe(0);
@@ -100,15 +101,15 @@ describe("§286 call requests closed: withdrawn (as before), declined, taken by 
     expect((await testerReq(a.sessionId, a.tester.cookie, [atHours(50)])).status).toBe(200);
     expect((await devAnswer(f.testId, f.dev.cookie, a.sessionId, (await newest(a.sessionId, "tester")).id, "decline")).status).toBe(200);
     const hers = await bells(a.tester.user.id, "declined");
-    expect(hers.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane declined your call request for .+ (AM|PM)( [A-Z]+)?$/)]);
+    expect(hers.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane declined your call request on “Harbor Run” for .+ (AM|PM)( [A-Z]+)?$/)]);
     expect(hers[0]).toMatchObject({ link: `/app/sessions/${a.sessionId}#calls`, groupKey: "callrequests" });
     expect((await devReq(f.testId, f.dev.cookie, [a.sessionId], [atHours(60)])).status).toBe(200);
     const loaded = new Date(Date.now() - 1000).toISOString();
     await later();
     expect((await answer(a.sessionId, a.tester.cookie, (await newest(a.sessionId, "developer")).id, "decline")).status).toBe(200);
     const his = await bells(f.dev.user.id, "declined");
-    expect(his.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva declined a call request for .+ (AM|PM)( [A-Z]+)?$/)]);
-    expect(await testLines(f.testId, f.dev.cookie, loaded)).toContain(noZone(his[0].text));
+    expect(his.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva declined a call request on “Harbor Run” for .+ (AM|PM)( [A-Z]+)?$/)]);
+    expect(await testLines(f.testId, f.dev.cookie, loaded)).toContain(noZone(his[0].text.replace(" on “Harbor Run”", ""))); // (§312a) the bell names the test
     expect(his[0]).toMatchObject({ link: `/app/tests/${f.testId}#calls`, groupKey: "callrequests" });
     // Their own declines never ring themselves.
     expect(await db.notification.count({ where: { userId: f.dev.user.id, text: { startsWith: "Nora Lane declined" } } })).toBe(0);
@@ -124,8 +125,8 @@ describe("§286 call requests closed: withdrawn (as before), declined, taken by 
     await later();
     expect((await answer(a.sessionId, a.tester.cookie, (await newest(a.sessionId, "developer")).id, "accept")).status).toBe(200);
     const bens = await bells(b.tester.user.id, "another tester took it");
-    expect(bens.map((n) => n.text)).toEqual([expect.stringMatching(/^The call time with Nora Lane on .+ is no longer available: another tester took it$/)]);
-    expect(await sessionLines(b.sessionId, b.tester.cookie, loaded)).toContain(noZone(bens[0].text));
+    expect(bens.map((n) => n.text)).toEqual([expect.stringMatching(/^The call time on “Harbor Run” with Nora Lane on .+ is no longer available: another tester took it$/)]);
+    expect(await sessionLines(b.sessionId, b.tester.cookie, loaded)).toContain(noZone(bens[0].text.replace(" on “Harbor Run”", ""))); // (§312a) the bell names the test
     expect(bens[0]).toMatchObject({ link: `/app/sessions/${b.sessionId}#calls`, groupKey: "callrequests" });
     expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "another tester took it" } } })).toBe(0);
   });
@@ -136,7 +137,7 @@ describe("§286 call requests closed: withdrawn (as before), declined, taken by 
     expect((await devReq(f.testId, f.dev.cookie, [a.sessionId], [atHours(50)])).status).toBe(200);
     await closeRequests({ contractIds: [a.sessionId] }, "the test is paused");
     const hers = await bells(a.tester.user.id, "no longer available");
-    expect(hers.map((n) => n.text)).toEqual([expect.stringMatching(/^The call time with Nora Lane on .+ is no longer available$/)]);
+    expect(hers.map((n) => n.text)).toEqual([expect.stringMatching(/^The call time on “Harbor Run” with Nora Lane on .+ is no longer available$/)]);
     expect(hers[0].groupKey).toBe("callrequests");
     expect((await devReq(f.testId, f.dev.cookie, [a.sessionId], [atHours(60)])).status).toBe(200);
     await closeRequests({ contractIds: [a.sessionId] }, "the tester left");
@@ -175,7 +176,7 @@ describe("§286 the other new tester bells", () => {
     expect((await act(f.testId, "dispute-side", f.dev.cookie, { disputeId: d.id, text: "Answers 2 and 3 were one word each" })).status).toBe(200);
     const hers = await bells(a.tester.user.id, "side to your dispute");
     expect(hers.map((n) => n.text)).toEqual(["Nora Lane added her side to your dispute about your written answers"]);
-    expect((await testerChanges(a.tester.user.id, a.sessionId, f.testId, before)).map((e) => e.text)).toContain(hers[0].text);
+    expect((await testerChanges(a.tester.user.id, a.sessionId, f.testId, before)).map((e) => e.text)).toContain(hers[0].text.replace(" on “Harbor Run”", "")); // (§312a)
     expect(hers[0]).toMatchObject({ link: `/app/sessions/${a.sessionId}#part-written`, groupKey: "disputeside" });
   });
 

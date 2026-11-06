@@ -43,13 +43,11 @@ describe("batch 30 §17: a keyless test's Save with keys", () => {
     expect(k.free.map((x) => x.value)).toEqual(["K3", "K4", "K5"]);
     expect(k.inUse.map((x) => `${x.value} · ${x.tester}`)).toEqual(["K1 · Ana Silva", "K2 · Ben Okafor"]); // the developer's Given
     expect(k.keyless).toBe(0);
-    // The tester's top box (live) and the bell; the key is only on their page.
+    // The tester's top box (live); the key is only on their page. (Owner, Nov 6, §312c) No bell line any more.
     const lines = (await testerChanges(a.tester.user.id, a.sessionId, testId, loaded)).filter((e) => e.kind === "keygiven");
     expect(lines.map((e) => e.text)).toEqual(["Nora Lane gave you an access key for “Harbor Run”"]);
     const bells = await db.notification.findMany({ where: { userId: a.tester.user.id, text: { contains: "access key" } } });
-    expect(bells.map((n) => n.text)).toEqual(["Nora Lane gave you an access key for “Harbor Run”"]);
-    expect(bells[0].link).toBe(`/app/sessions/${a.sessionId}`);
-    expect(bells.some((n) => n.text.includes("K1"))).toBe(false);
+    expect(bells).toEqual([]);
     // It stops a press once from a page opened before it, like other changes (the second press goes ahead).
     const stop = await sact(a.sessionId, "written", a.tester.cookie, { answers: ["x".repeat(60), "y".repeat(60)], seenAt: loaded.toISOString() });
     expect(stop.status).toBe(409);

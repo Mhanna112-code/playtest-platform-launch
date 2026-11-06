@@ -45,8 +45,8 @@ export async function devCancelCall(dev: U, testId: string, body: Record<string,
   });
   // (Batch 15 section 20) The reason is on the page, never in the bell line. (Owner, Nov 6, §299) The longer text below is emailed only to an address with no
   // account: an account's email (its summary) lists the bell line.
-  const line = cancelLine(displayName(dev), call.startsAt, "");
-  await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
+  const line = cancelLine(displayName(dev), call.startsAt, "", call.contract.title); // (Owner, Nov 6, §312a) names the test
+  await notify(call.contract.tester.email, line, [cancelLine(displayName(dev), call.startsAt, reason, call.contract.title)], `/app/sessions/${call.contractId}#call-${call.id}`, { about: dev.id });
   return { cancelled: true };
 }
 
@@ -91,8 +91,8 @@ export async function testerCancelCall(tester: U, contractId: string, body: Reco
     await recordEvent(tx, c0.testId, "cancelled", `${displayName(tester)} cancelled ${pronouns(tester.pronoun).poss} call on ${fmtDateTime(call.startsAt)}`, false, {}, contractId, "", callRow(call.id)); // (Owner, Nov 6, §284) the place the line opens
     return call;
   });
-  const line = cancelLine(displayName(tester), call.startsAt, "");
-  await notify(c0.test.developer.email, line, [cancelLine(displayName(tester), call.startsAt, reason), "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id });
+  const line = cancelLine(displayName(tester), call.startsAt, "", c0.test.title); // (Owner, Nov 6, §312a) names the test
+  await notify(c0.test.developer.email, line, [cancelLine(displayName(tester), call.startsAt, reason, c0.test.title), "The time is open again for other testers."], `/app/tests/${c0.testId}#call-${call.id}`, { about: tester.id });
   return { cancelled: true };
 }
 

@@ -313,7 +313,8 @@ describe("§23-27 the tester's stacks across tests", () => {
     expect(keys(ins).size).toBe(1);
   });
 
-  it("§25 new terms offers on two tests form one 'New terms to answer' entry, each opening the Switch / Keep box", async () => {
+  // (Owner, Nov 6, §312b) No more "New terms to answer" stack: each offer is in its test's own day stack (no group), still opening the Switch / Keep box.
+  it("§25 (§312b) new terms offers on two tests: each in its own test's stack, each opening the Switch / Keep box", async () => {
     const t = await makeUser({ tester: true });
     for (const title of ["Harbor Run", "Sky Lab"]) {
       const { dev, testId } = await setup({ title, productName: title });
@@ -325,9 +326,9 @@ describe("§23-27 the tester's stacks across tests", () => {
     }
     const offers = (await lines(t.user.id)).filter((l) => /^Nora Lane updated the listing: /.test(l.text));
     expect(offers).toHaveLength(2);
-    expect(offers.every((l) => l.groupKey === "newterms" && l.link.endsWith("#terms-offer"))).toBe(true);
-    expect(keys(offers).size).toBe(1);
-    expect(groupTitle("newterms", 2, 2)).toBe("New terms to answer · 2 tests");
+    expect(offers.every((l) => l.groupKey === null && !!l.testId && l.link.endsWith("#terms-offer"))).toBe(true);
+    expect(keys(offers).size).toBe(2);
+    expect(groupTitle("newterms", 2, 2)).toBe("New terms to answer · 2 tests"); // kept for the lines already written
   });
 
   it("§25 a Pay and a Pay more on one day form one 'You were paid' entry", async () => {

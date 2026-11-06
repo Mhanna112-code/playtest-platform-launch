@@ -28,7 +28,6 @@ import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
-import { paidLines } from "@/lib/server/paid";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
 import { BIG_PANEL_TALLEST, LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox } from "@/components/ScrollList";
@@ -77,7 +76,6 @@ import { otherSideNotice } from "@/components/OtherSideNotice";
 export const metadata = { title: "Your session · Playtest" };
 export const dynamic = "force-dynamic";
 
-const label = (inContract: boolean) => (inContract ? "In your contract" : NOT_LISTED);
 /** Listing (or "Not listed") and what's been paid for this part. */
 const partLine = (listing: number | null, paid: number) =>
   `${listing == null ? NOT_LISTED : `Listing: ${money(listing)}`} · Paid so far for this part: ${money(paid)} (you get 80%)`;
@@ -239,7 +237,6 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // form's time box stops there, its calls drop-down offers only what fits, and a waiting request's words say how many calls it covers.
   const callEnd = await workEndOf(db, c.testId);
   const unread = await unreadCount(u.id, c.testId, c.testerId);
-  const blockedByMe = (await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) > 0;
   const devRating = (await ratingSummary(c.test.developerId, "developer")).line; // (Owner, Nov 5, §276) ratings they got as a developer only
   const testersIn = await db.contract.count({ where: { testId: c.testId, status: "working" } });
   // (NEXT-UI 24) The same contract line at the top of the Written answers, Recording and Live session panels:
@@ -654,7 +651,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               Had with its payments. Past 3 rows each list is the draggable panel (§187: the only panel that scrolls; the payment lines' panels inside are flat). */}
           {(() => {
             const had = overCalls.filter((x) => x.status !== "cancelled" && !(blockedPair && callMinutesOf(x) == null));
-            const cancelled = overCalls.filter((x) => !had.includes(x));
+            // (Owner, Nov 6, §312e) A rejoined page starts fresh: calls cancelled before this stint began (when she left) aren't listed again.
+            const cancelled = overCalls.filter((x) => !had.includes(x) && !(x.cancelledAt && x.cancelledAt < c.joinedAt));
             if (!had.length && !cancelled.length) return null;
             const pastRow = (x: (typeof overCalls)[number]) => {
               const m = callMinutesOf(x);

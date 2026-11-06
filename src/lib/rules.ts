@@ -1359,7 +1359,8 @@ const callDay = (d: Date) => T(d, "dayTime");
 const CANCEL_WHY = { paused: "the test is paused", stopped: "the test was stopped", closed: "the test was closed", ended: "your session was ended" } as const;
 
 /** What a tester reads when a booked call is cancelled for them (never any fault). */
-export const callCancelledLine = (startsAt: Date, why: keyof typeof CANCEL_WHY) => `Your call on ${callDay(startsAt)} was cancelled because ${CANCEL_WHY[why]}.`;
+// (Owner, Nov 6, §312a) "Your call on “Harbor Run” on Thu, Nov 5 at 3:00 PM was cancelled because the test is paused." (`title`: the test it was on).
+export const callCancelledLine = (startsAt: Date, why: keyof typeof CANCEL_WHY, title?: string) => `Your call${title ? ` on “${title}”` : ""} on ${callDay(startsAt)} was cancelled because ${CANCEL_WHY[why]}.`;
 
 /** The Pay box reference for a call: the listing rate × the entered length (or the booked length). */
 export function callReference(rateCents: number | null, minutes: number, contractRate: number | null = rateCents) {
@@ -1424,7 +1425,8 @@ export function checkCancel(startsAt: Date, now: Date, reason: string): Check {
   return yes;
 }
 const whenLong = (d: Date) => T(d, "dayTime");
-export const cancelLine = (name: string, startsAt: Date, reason: string) => `${name} cancelled the call on ${whenLong(startsAt)}${reason.trim() ? `: ${reason.trim()}` : "."}`;
+// (Owner, Nov 6, §312a) The bell and email name the test: "Omar Reyes cancelled the call on “Harbor Run” on Wed, Nov 11 at 11:00 AM CST." (`title`).
+export const cancelLine = (name: string, startsAt: Date, reason: string, title?: string) => `${name} cancelled the call${title ? ` on “${title}”` : ""} on ${whenLong(startsAt)}${reason.trim() ? `: ${reason.trim()}` : "."}`;
 
 /**
  * (Batch 15 section 18) The last-3-days line. A working tester reads their OWN deadline: "⏱ Your deadline on Harbor Run is in 2 days 4 hours: send your work before then."

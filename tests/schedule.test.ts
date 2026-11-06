@@ -24,11 +24,12 @@ describe("notification schedule", { timeout: 120_000 }, () => {
     expect(R.countdownDue(at(-1), now, [], now)).toBeNull();
   });
 
-  it("the tester gets a 'Work sent' confirmation", async () => {
+  // (Owner, Nov 6, §312d) No "Work sent" line for the tester's own send any more.
+  it("the tester gets no 'Work sent' line", async () => {
     const { testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
-    expect(await db.notification.count({ where: { userId: tester.user.id, text: "Work sent: your written answers for “Harbor Run”" } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: tester.user.id, text: { startsWith: "Work sent:" } } })).toBe(0);
   });
 
   it("the developer is told 1 month / 1 week / 3 days / 1 day before Charge would open (skipping any already past), then daily after it opens", async () => {

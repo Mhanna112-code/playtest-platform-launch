@@ -141,7 +141,7 @@ describe("every bell line opens the exact place", () => {
     const testerLine = (re: RegExp) => lines(tester.user.id).then((l) => l.find((x) => re.test(x.text))!.link);
     expect(await devLine(/joined/)).toBe(`/app/tests/${testId}#tester-${sessionId}`);
     expect(await devLine(/written answers for/)).toBe(`/app/tests/${testId}#piece-${sub.id}`);
-    expect(await testerLine(/^Work sent: your written answers/)).toBe(`/app/sessions/${sessionId}#part-written`);
+    expect((await lines(tester.user.id)).some((x) => /^Work sent: /.test(x.text))).toBe(false); // (Owner, Nov 6, §312d) no "Work sent" line any more
     // Pay → the tester's line opens the written part.
     expect((await pay(dev.cookie, { kind: "submission", id: sub.id, amount: "10.00", tickedCents: 1000 })).status).toBe(200);
     expect(await testerLine(/paid you \$10\.00 for your written answers/)).toBe(`/app/sessions/${sessionId}#part-written`);
