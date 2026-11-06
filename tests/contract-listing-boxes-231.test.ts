@@ -40,8 +40,10 @@ describe("§231 the shared box for contract and listing texts", () => {
   it("QuestionTexts: each question its own question box, numbered, with the Required tag; NdaBox: the same box, 12rem at first", () => {
     const qs = renderToStaticMarkup(h(QuestionTexts, { id: "q", items: [{ text: "What did you like?", required: true }, { text: "Where did you get stuck?" }] }));
     expect(qs.match(/data-qa="question"/g)).toHaveLength(2);
-    expect(qs).toContain('data-qa-label="">Question 1<span');
-    expect(qs).toContain('data-qa-label="">Question 2</p>');
+    // (Owner, Nov 5, §259) no visible label over a question; still numbered for screen readers, and Required is the tag above its box.
+    expect(qs).toMatch(/<span class="sr-only">Question 1<\/span><p [^>]*data-qa-required=""><span [^>]*data-required-tag="">Required<\/span><\/p>/);
+    expect(qs).toContain('<span class="sr-only">Question 2</span>');
+    expect(qs).not.toContain("data-qa-label");
     expect(qs.match(/data-required-tag/g)).toHaveLength(1);
     expect(renderToStaticMarkup(h(QuestionTexts, { id: "q", items: [] }))).toBe("<span>none</span>");
     const nda = renderToStaticMarkup(h(NdaBox, { id: "n", text: "Keep it secret.", label: "Offered" }));
@@ -91,7 +93,7 @@ describe("§231 the tester's \"Your agreed scope\"", () => {
     const scope = page.slice(page.indexOf('data-scope=""'), page.indexOf('id="parts"'));
     expect(scope).toContain('data-scope-scroll=""');
     expect(scope).toContain(`data-panel="scope-q-${j.sessionId}-0"`);
-    expect(scope).toContain('data-qa-label="">Question 1');
+    expect(scope).toContain('<span class="sr-only">Question 1</span>'); // (Owner, Nov 5, §259) no visible label over a question; screen readers only
     expect(scope).toContain(`data-panel="scope-info-${j.sessionId}-title"`);
     expect(scope).toContain(`data-panel="scope-info-${j.sessionId}-description"`);
     expect(scope).not.toContain("data-panel-flat");

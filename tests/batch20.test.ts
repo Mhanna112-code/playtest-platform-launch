@@ -85,7 +85,8 @@ describe("batch 20 section 1: more than 3 questions sit in a scroll box", () => 
     // (Owner, Nov 5, §231; replaces the one box for all the questions) Each contract or listing question in its own question box (QuestionTexts).
     expect(session).toContain('<li data-scope-questions=""><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></li>');
     expect(session).toContain("<FieldLabel>Then</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-then`} items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue>");
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('label="Before" required={x.before.required}'); // (batch 35 §29)
+    // (Owner, Nov 5, §259) no visible label over a question; the questions changed' "Before" / "After" still show theirs (showLabel).
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('label="Before" showLabel required={x.before.required}'); // (batch 35 §29)
     expect(src("app/app/tests/[id]/ListingPanel.tsx")).toContain("<QuestionTexts id={`listing-${side}-q`} items="); // (§231; batch 34 §14) the Listing panel replaced Contract changes
     // (Owner, Nov 5, §237) The join page: each question in its question box; more than 3 in the draggable panel.
     expect(src("app/app/find/[id]/page.tsx")).toContain("<QuestionTexts open id={`join-q-${t.id}`}"); // (§249) the shared drop-down holds its own scroll panel

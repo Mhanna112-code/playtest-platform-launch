@@ -30,11 +30,16 @@ export function RequiredTag() {
 }
 
 /** A question's text in its box, under its label ("Question 1"). `id`: unique on the page (the box keeps its dragged height by it). */
-export function QuestionText({ id, label, required = false, children }: { id: string; label: string; required?: boolean; children?: ReactNode }) {
+export function QuestionText({ id, label, required = false, showLabel = false, children }: { id: string; label: string; required?: boolean;
+  /** (§259) shown above the box: only where the label says which version it is (the questions changed' "Before" / "After") */ showLabel?: boolean; children?: ReactNode }) {
   return (
     <div className="min-w-0 space-y-1" data-qa="question">
-      {/* (Owner, Nov 5, §256) The sky label and the sky-tinted box: never mistaken for an answer. */}
-      <p className={QUESTION_LABEL} data-qa-label="">{label}{required && <RequiredTag />}</p>
+      {/* (Owner, Nov 5, §256) The sky-tinted box: never mistaken for an answer. (Owner, Nov 5, §259) No label over a question ("Question 1"): the box says it is
+          one; the label is kept for screen readers, a Required question keeps its tag, and "Before" / "After" still show. */}
+      {showLabel ? <p className={QUESTION_LABEL} data-qa-label="">{label}{required && <RequiredTag />}</p> : <>
+        <span className="sr-only">{label}</span>
+        {required && <p className={QUESTION_LABEL} data-qa-required="">{<RequiredTag />}</p>}
+      </>}
       <OwnPanel>
         <ResizeBox id={id} label={label} defaultMax={QA_BOX_MAX} tallest={QA_BOX_TALLEST} className={QUESTION_BOX}>
           <div className="whitespace-pre-wrap break-words text-sm font-medium italic text-sky-100 [overflow-wrap:anywhere]" data-qa-text="question">{children}</div>

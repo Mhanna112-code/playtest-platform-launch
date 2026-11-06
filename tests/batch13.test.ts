@@ -312,6 +312,7 @@ describe("batch 13 section 9: long text", () => {
     for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx"]) expect(src(p)).toContain("<NdaBox");
     expect(f).not.toContain("<NdaBox"); // (batch 16 section 8) no "How testers see it" preview on Post / Edit
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox id={`offer-${offer.id}-nda-before`} label="Before"');
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('label="Before" required={x.before.required}'); // (batch 15 section 3; batch 35 §29 numbered)
+    // (Owner, Nov 5, §259) no visible label over a question; the questions changed' "Before" / "After" still show theirs (showLabel).
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('label="Before" showLabel required={x.before.required}'); // (batch 15 section 3; batch 35 §29 numbered)
   });
 });

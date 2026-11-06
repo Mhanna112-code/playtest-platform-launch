@@ -144,7 +144,9 @@ describe("§256 questions and answers told apart", () => {
   it("a question: a sky-tinted box with a sky border and left accent, a sky label; an answer: the volt accent and a volt label; Added stays green", () => {
     const q = renderToStaticMarkup(h(QuestionText, { id: "q", label: "Question 1", required: true }, "Why?"));
     expect(q).toContain("!border-sky-300/30 !border-l-2 !border-l-sky-300/70 !bg-sky-400/[0.08]");
-    expect(q).toMatch(/<p class="[^"]*text-sky-300" data-qa-label="">Question 1/);
+    // (Owner, Nov 5, §259) no visible label over a question; "Question 1" is for screen readers only; the Required tag sits in the sky label line.
+    expect(q).toContain('<span class="sr-only">Question 1</span>');
+    expect(q).toMatch(/<p class="[^"]*text-sky-300" data-qa-required=""><span [^>]*data-required-tag="">Required<\/span><\/p>/);
     expect(q).toContain('data-qa-text="question">Why?</div>');
     const a = renderToStaticMarkup(h(AnswerText, { id: "a" }, "Because."));
     expect(a).toContain("!border-l-2 !border-l-volt-300/60");
@@ -153,6 +155,16 @@ describe("§256 questions and answers told apart", () => {
     const added = renderToStaticMarkup(h(AnswerText, { id: "b", label: h(AddedLabel, { at: "2026-11-05T10:00:00.000Z" }) }, "More."));
     expect(added).toContain('class="text-xs font-semibold text-emerald-300" data-added-label=""');
     expect(added).not.toContain("text-volt-300");
+  });
+
+  it("(Owner, Nov 5, §259) no visible label over a question, except where showLabel is passed (the questions changed' Before / After), in sky", () => {
+    const plain = renderToStaticMarkup(h(QuestionText, { id: "q", label: "Question 1" }, "Why?"));
+    expect(plain).not.toContain("data-qa-label");
+    expect(plain).toContain('<span class="sr-only">Question 1</span>');
+    expect(plain).not.toContain("data-qa-required"); // not required: nothing above the box
+    const shown = renderToStaticMarkup(h(QuestionText, { id: "q", label: "Before", showLabel: true, required: true }, "Why?"));
+    expect(shown).toMatch(/<p class="[^"]*text-sky-300" data-qa-label="">Before<span [^>]*data-required-tag="">Required<\/span><\/p>/);
+    expect(shown).not.toContain('<span class="sr-only">Before</span>');
   });
 
   it("no answer box drawn by hand: the excerpt picker's answer is QA's AnswerText", () => {

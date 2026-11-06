@@ -107,7 +107,9 @@ describe("every place a tester's question, answer or addition shows uses it", ()
     const bq = html(createElement(ByQuestion, { testId: "t1", blocks: [{ title: Q1, required: false, answers: [{ contractId: "c1", tester: "Ana Silva", text: LONG, sentAt: new Date(at), status: "waiting" as const, paidCents: 0 }] }] }));
     expect(bq).toContain('data-qa="answer"');
     expect(bq).toContain(`data-question-title="">${Q1}</span>`);
-    expect(bq).toContain('data-qa-label="">Question 1</p>');
+    // (Owner, Nov 5, §259) no visible label over a question; "Question 1" is for screen readers only.
+    expect(bq).toContain('<span class="sr-only">Question 1</span>');
+    expect(bq).not.toContain('data-qa-label="">Question');
     expect(bqKey(Q1)).toBe(bqKey(Q1));
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("<LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />"); // (§187) Show more beside the question
   });

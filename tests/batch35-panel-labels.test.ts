@@ -55,7 +55,9 @@ describe("batch 35 §15: the Listing panel's labels read apart from its values",
       const q = line(h, "questions");
       expect(q).toContain("<ol");
       expect(q.match(/<li data-question="">/g)?.length).toBe(2);
-      expect(q).toMatch(/data-qa-label="">Question 1<span[^>]*data-required-tag="">Required<\/span>.*data-qa-text="question">What did you like\?<\/div>.*data-qa-label="">Question 2<\/p>.*>Where did you get stuck\?<\/div>/s);
+      // (Owner, Nov 5, §259) no visible label over a question; "Question N" is for screen readers only; Required is the tag above its box.
+      expect(q).toMatch(/<span class="sr-only">Question 1<\/span><p [^>]*data-qa-required=""><span [^>]*data-required-tag="">Required<\/span><\/p>.*data-qa-text="question">What did you like\?<\/div>.*<span class="sr-only">Question 2<\/span>.*>Where did you get stuck\?<\/div>/s);
+      expect(q).not.toContain("data-qa-label");
       expect(q.match(/data-required-tag/g)?.length).toBe(1);
       expect(q).not.toContain("(required)");
       expect(line(h, "description")).toContain('data-qa-text="value">Open the build.\nPlay the first level.</div>');

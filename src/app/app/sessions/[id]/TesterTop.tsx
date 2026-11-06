@@ -126,8 +126,8 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
                       <span className="min-w-0 flex-1 truncate font-normal text-slate-300">{head}</span>
                     </summary>
                     <div className="mt-2 space-y-2">
-                      {x.before ? <QuestionText id={`offer-${offer.id}-${key}-before`} label="Before" required={x.before.required}>{x.before.text}</QuestionText> : <><FieldLabel>Before</FieldLabel><p className="text-xs text-sky-200/70">(new)</p></>}
-                      {x.after ? <QuestionText id={`offer-${offer.id}-${key}-after`} label="After" required={x.after.required}>{x.after.text}</QuestionText> : <><FieldLabel>After</FieldLabel><p className="text-xs text-sky-200/70">(removed: after Switch it moves to Past questions)</p></>}
+                      {x.before ? <QuestionText id={`offer-${offer.id}-${key}-before`} label="Before" showLabel required={x.before.required}>{x.before.text}</QuestionText> : <><FieldLabel>Before</FieldLabel><p className="text-xs text-sky-200/70">(new)</p></>}
+                      {x.after ? <QuestionText id={`offer-${offer.id}-${key}-after`} label="After" showLabel required={x.after.required}>{x.after.text}</QuestionText> : <><FieldLabel>After</FieldLabel><p className="text-xs text-sky-200/70">(removed: after Switch it moves to Past questions)</p></>}
                       {x.before && <AnswerText id={`offer-${offer.id}-${key}-answer`} label="Your answer so far" name={`Your answer so far`} empty={!answer} emptyText="(no answer yet)">{answer}</AnswerText>}
                     </div>
                   </details>

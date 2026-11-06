@@ -449,8 +449,10 @@ describe("batch 26 section 15: previous sets show each question as a label above
     const html = renderToStaticMarkup(createElement(SetView, { items: [{ question: "aaaa", required: false, answer: "m;ll" }, { question: "dddd", required: true, answer: "" }] }));
     expect(html).toContain('data-set-question=""');
     // (Owner, Nov 5, §223) The one look for questions and answers: "Question N" over the question's quiet box ("Required" a tag), the answer in its own box.
-    expect(html).toContain('data-qa-label="">Question 1</p>');
-    expect(html).toContain('data-qa-label="">Question 2<span');
+    // (Owner, Nov 5, §259) no visible label over a question; "Question N" is for screen readers only; a Required question keeps its tag above the box.
+    expect(html).toContain('<span class="sr-only">Question 1</span>');
+    expect(html).toMatch(/<span class="sr-only">Question 2<\/span><p [^>]*data-qa-required=""><span [^>]*data-required-tag="">Required<\/span><\/p>/);
+    expect(html).not.toContain('data-qa-label="">Question');
     expect(html).toContain('data-set-answer=""><div class="min-w-0 space-y-1" data-qa="answer">');
     expect(html).toContain('data-no-answer="">(no answer)</p>');
     expect(html).not.toContain("not required");

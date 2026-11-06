@@ -4646,3 +4646,8 @@ open "Worked with you on 1 test" could sit at the top with no name or heading ov
 
 ## §258 The questions changed: no "(before)" on a removed question (owner, Nov 5)
 A removed question reads "Question 1 · Removed · <its words>" (it was "Question 1 (before)"): the Removed tag already says it.
+
+## §259 No label over a question (owner, Nov 5)
+A question box has no "Question 1" label over it any more: the sky-tinted box (§256) says it is a question. The label stays for screen readers (`sr-only`); a
+Required question keeps its small Required tag above the box; the questions changed' "Before" / "After" labels still show (`showLabel`). Answers keep "Answer" /
+"Added · <date>".

@@ -99,11 +99,12 @@ describe("(Owner, Nov 5) §221 the questions changed: one block per question", (
   it("each question number shows its Before, After and your answer so far, each in its own draggable scroll box", () => {
     const s = read("src/app/app/sessions/[id]/TesterTop.tsx");
     // (§242) Only changed questions, each its own drop-down with Before, After and your answer so far.
-    expect(s).toContain('label="Before" required={x.before.required}');
-    expect(s).toContain('label="After" required={x.after.required}');
+    // (Owner, Nov 5, §259) no visible label over a question; the questions changed' "Before" / "After" still show theirs (showLabel).
+    expect(s).toContain('label="Before" showLabel required={x.before.required}');
+    expect(s).toContain('label="After" showLabel required={x.after.required}');
     expect(s).toContain('label="Your answer so far"');
     // (Owner, Nov 5, §223) In the one look for questions and answers (components/QA.tsx: ResizeBox in OwnPanel).
-    expect(s).toContain('<QuestionText id={`offer-${offer.id}-${key}-before`} label="Before" required={x.before.required}>');
+    expect(s).toContain('<QuestionText id={`offer-${offer.id}-${key}-before`} label="Before" showLabel required={x.before.required}>'); // (Owner, Nov 5, §259) no visible label over a question; Before is labelled (showLabel)
     expect(s).toContain('<AnswerText id={`offer-${offer.id}-${key}-answer`}');
     expect(s).not.toContain("Your answers so far:");
   });
