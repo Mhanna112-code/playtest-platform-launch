@@ -4690,3 +4690,7 @@ waiting request whose time is past, which the page already leaves out). A droppe
 answer at all (offline) after 6 s. The test page now always draws CallRequestsBox (nothing with no request), so a box whose last request closed stays for the
 line. A refused press's line still goes to the top of the box at once (§207); the row then says what happened for its 6 s. Not covered: the tester's whole
 "Requests" section is drawn by the server only while they can request or have one waiting, so when a block closes their last request it goes with no line.
+## §262 Excerpt trim: a character deleted by accident can be typed back (owner, Nov 5)
+The trim box stays delete-only (§196), with one exception: typing, at the caret, the very next character of the answer that was left out there restores it (and
+the next, in order). Any other typing, pasting or dropping is still refused, so the excerpt is always the answer's own words (the server's check is unchanged).
+The hint reads "… you can only leave words out (deleted something by accident? Type it back where it was)." `insertedRange` / `restoreAt` in lib/excerptTrim.ts.

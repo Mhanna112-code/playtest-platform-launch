@@ -7,7 +7,7 @@ import { ConfirmButton } from "@/components/ConfirmButton";
 import { api, errOf } from "@/lib/client";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { AnswerText, ValueText } from "@/components/QA";
-import { allKept, deletedRange, deleteFrom, excerptOf, GAP, keptChars, runsOf, squash } from "@/lib/excerptTrim";
+import { allKept, deletedRange, deleteFrom, excerptOf, GAP, insertedRange, keptChars, restoreAt, runsOf, squash } from "@/lib/excerptTrim";
 import { lockPick, lockText } from "@/lib/sendLock";
 
 // (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and the tester's Remove. None of them stops once: a press goes through
@@ -28,7 +28,8 @@ export const EXCERPT_BOX_MAX = "9rem";
  * (Backspace, Delete, cut, a selection deleted, word deletes, on phones too). What's kept is a mask over the answer (lib/excerptTrim): each change is compared
  * with the box's previous text and accepted only when it removed one stretch, so it doesn't depend on which events a phone sends. What's deleted is struck
  * through in the answer above, live. A part removed from the middle reads " … " in the excerpt ("Shown as:" says how it will read). "Use original answer"
- * puts the whole answer back; picking another answer starts again from its whole text. The counter counts the excerpt as it will be stored, ellipses included.
+ * puts the whole answer back; picking another answer starts again from its whole text. (Owner, Nov 5, §262) Typing back a deleted character (the very next
+ * left-out character at the caret) restores it; any other typing is still refused. The counter counts the excerpt as it will be stored, ellipses included.
  */
 export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { submissionId: string; choices: { index: number; question: string; text: string }[]; /** drawn open (tests) */ defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -50,10 +51,17 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
   const cut = kept.some((k) => !k);
   const n = excerpt.text.length;
   // (§196) Inserting is refused before it happens where the browser lets us (desktop browsers); every change is checked again in onChange, whatever was sent.
+  // (Owner, Nov 5, §262) Except typing back a character deleted by accident: the very next left-out character of the answer at the caret is let through.
+  const now = useRef({ original, kept });
+  now.current = { original, kept };
   useEffect(() => {
     const el = box.current;
     if (!el) return;
-    const refuse = (e: InputEvent) => { if (!e.inputType.startsWith("delete")) e.preventDefault(); };
+    const refuse = (e: InputEvent) => {
+      if (e.inputType.startsWith("delete")) return;
+      const restores = e.inputType === "insertText" && !!e.data && el.selectionStart === el.selectionEnd && !!restoreAt(now.current.original, now.current.kept, el.selectionStart, e.data);
+      if (!restores) e.preventDefault();
+    };
     el.addEventListener("beforeinput", refuse);
     return () => el.removeEventListener("beforeinput", refuse);
   }, [open]);
@@ -62,6 +70,13 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
     const range = deletedRange(shown, el.value, el.selectionStart);
     if (range) {
       setKept(deleteFrom(kept, range.start, range.end));
+      return;
+    }
+    // (§262) Typed back: the deleted characters, exactly, where they were.
+    const typed = insertedRange(shown, el.value, el.selectionStart);
+    const back = typed && restoreAt(original, kept, typed.at, typed.text);
+    if (back) {
+      setKept(back);
       return;
     }
     // Refused: the text stays as it was, the caret where the change began.
@@ -87,7 +102,7 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
       {open && (
         <div className="min-w-0 space-y-2 rounded-lg border border-white/10 p-3 text-sm">
           <p className="font-medium text-white">Show an excerpt on your profile</p>
-          <p className="text-slate-400">Pick one answer, then delete what you don&apos;t want to show: you can only leave words out. It&apos;s shown as a plain quote, and the developer allows or denies it.</p>
+          <p className="text-slate-400">Pick one answer, then delete what you don&apos;t want to show: you can only leave words out (deleted something by accident? Type it back where it was). It&apos;s shown as a plain quote, and the developer allows or denies it.</p>
           <fieldset id={`excerpt-pick-${submissionId}`} className="space-y-1" data-field-group="" data-match="pick one of your answers">
             {choices.map((c) => (
               <label key={c.index} className="flex items-start gap-2">
