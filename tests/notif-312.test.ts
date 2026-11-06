@@ -99,6 +99,6 @@ describe("§312e a rejoined session page starts fresh", () => {
     // Her presses go through (no NDA block): a call request.
     expect((await sact(a.sessionId, "request-time", a.tester.cookie, { seenAt: seen(), confirmed: true, minutes: 30, times: [atHours(70)] })).status).toBe(200);
     expect(await db.termsOffer.count({ where: { contractId: c.id, status: "open" } })).toBe(0);
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("!(x.cancelledAt && x.cancelledAt < c.joinedAt)");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("!(rejoined && x.cancelledAt && x.cancelledAt < c.joinedAt)"); // only after a rejoin
   }, 60_000);
 });
