@@ -143,7 +143,7 @@ describe("Settings (section 27)", () => {
     // Second press: checked as usual (the current password is now tab A's).
     const b2 = await post(passwordPOST, "/api/auth/password", u.cookie, { current: "first-pass-1", password: "second-pass-2", confirm: "second-pass-2", seenAt, tab: "tabB", confirmed: true, boxAt: b.body.error.now });
     expect(b2.status).toBe(200);
-    expect(src("components/ChangesBox.tsx")).toContain('c.kind === "account-at" ? `${c.text} at ${time(c.at)}`');
+    expect(src("components/ChangesBox.tsx")).toContain('c.kind === "account-at" ? <>{linked(c.text, c.links)} at {time(c.at)}</>'); // (§270) names as green links
     expect(src("components/ChangesBox.tsx")).toContain('"Changed in another tab or device since you opened this page:"');
   });
 

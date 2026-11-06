@@ -12,6 +12,7 @@ import { closedForSuspended } from "@/lib/closedPages";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
 import { GROUP_COUNT_TITLES, bellKeyIn, dayKey, groupBase, groupTitle } from "@/lib/bell";
+import { lineLinks, linkPool } from "@/lib/server/lineLinks";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -30,6 +31,9 @@ export default async function Notifications() {
   const items = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: { createdAt: "desc" }, take: 200 });
   // (Design doc 9) Same-day lines about the same test stack into one entry, except the lines that always arrive on their own (own); opening a stack marks its lines read, a single line is read when clicked (batch 29 §28).
   const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
+  // (Owner, Nov 5, §270) Every person and test a line names is its own green link: the reader's link pool, matched against each line (its own test's people first).
+  const pool = await linkPool(u.id, items.map((n) => n.testId));
+  const testHrefOf = (testId: string | null) => (testId ? pool.byTest.get(testId)?.find((l) => l.kind === "test" && l.text === titles.get(testId))?.href : undefined);
   const groups = new Map<string, typeof items>();
   for (const n of items) {
     const k = bellKeyIn(n, u.timeZone);
@@ -44,8 +48,9 @@ export default async function Notifications() {
     title: g[0].groupKey ? groupTitle(g[0].groupKey, new Set(g.map((n) => n.testId ?? n.id)).size, g.length) : g[0].testId ? titles.get(g[0].testId) : undefined,
     counted: !!(g[0].groupKey && GROUP_COUNT_TITLES[groupBase(g[0].groupKey)]), // (§185) "reqclosed:<test>" counts as "reqclosed"
     test: !g[0].groupKey && !!g[0].testId,
+    ...(!g[0].groupKey && testHrefOf(g[0].testId) ? { testHref: testHrefOf(g[0].testId) } : {}),
     day: dayKey(g[0].createdAt, u.timeZone) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
-    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone), ...(n.testId && titles.get(n.testId) ? { test: titles.get(n.testId) } : {}) })),
+    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone), ...(n.testId && titles.get(n.testId) ? { test: titles.get(n.testId) } : {}), links: lineLinks(pool, n.text, n.testId) })),
   }));
   return (
     <div className="mx-auto max-w-2xl space-y-6">

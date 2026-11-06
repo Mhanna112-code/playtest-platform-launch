@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { lineLinks, linkPool } from "@/lib/server/lineLinks";
 import { displayName, fmtDate } from "@/lib/server/dateFormat";
 import { DEV_QUIET_KINDS, ratedYouLiveLine } from "@/lib/rules";
 import { handle, HttpError, ok } from "@/lib/server/http";
@@ -88,6 +89,9 @@ export async function GET(req: Request) {
     if (kind === "session") lines.forEach((l, i) => { if (shown[i].kind === DROP_KINDS.devQuiet) Object.assign(l, { quiet: true }); });
     // (Batch 15 section 26) A tester with Alerts Off: everything but their contract's changes shows greyed (it won't stop a press).
     if (kind === "session" && u.testerAlertsOff) lines.forEach((l, i) => { if (!ALERTS_OFF_KINDS.has(shown[i].kind)) Object.assign(l, { ignored: true }); });
-    return ok({ changes: [...lines, ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
+    // (Owner, Nov 5, §270) Each line's people and tests, each drawn as its own green link in the top box (and in a stop box that takes the line in).
+    const pool = lines.length ? await linkPool(u.id, [id]) : null;
+    const linked = pool ? lines.map((l) => ({ ...l, links: lineLinks(pool, l.text, kind === "test" ? id : null) })) : lines;
+    return ok({ changes: [...linked, ...outages].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()), now: seenTo.toISOString() });
   });
 }

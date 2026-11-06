@@ -9,7 +9,7 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
+import { api, ApiError, errOf, FIELD, offerShown, PRESS_REFUSED_EVENT } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
 import { DISCARD_ALL_LABEL, DraftButton, DraftTag, USE_SAVED_ALL_LABEL, useKept, useKeptUnits } from "@/lib/useKept";
 import { NOTES_UNIT, answerUnit, type Units } from "@/lib/draftUnits";
@@ -146,6 +146,18 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   const [box, setBox] = useStopBox();
   const [pausedNow, setPausedNow] = useState("");
   const [answers0, setAnswers] = useState<string[]>(questions.map((_, i) => initial[i] ?? ""));
+  // (Owner, Nov 5, §269) The questions the boxes are for. A redraw with other questions (a change, a reorder, one answered meanwhile) switches the form in
+  // place: each box keeps its text by the question's words, a new question is an empty box, a removed question's box goes (the server kept its text: in the
+  // draft snapshot of its Terms history entry when a Send stopped for it).
+  const [shownQs, setShownQs] = useState(questions);
+  // (§269) The boxes it just gained: a draft the server kept for one (a question that came back) is put back (keep.reload, below).
+  const [gained, setGained] = useState<string[]>([]);
+  if (JSON.stringify(shownQs) !== JSON.stringify(questions)) {
+    const byWords = new Map(shownQs.map((q, i) => [qText(q), answers0[i] ?? ""]));
+    setAnswers(questions.map((q, i) => byWords.get(qText(q)) ?? initial[i] ?? ""));
+    setGained(questions.filter((q) => !byWords.has(qText(q))).map(answerUnit));
+    setShownQs(questions);
+  }
   // (Batch 20 section 28, bug found by the owner) Always one answer per question shown, each a string: a shorter or holed list made a box uncontrolled (what was typed
   // showed but never reached the press), so the server got fewer answers than questions and refused "Answer every required question" with nothing red on the page.
   const answers = questions.map((_, i) => answers0[i] ?? "");
@@ -169,11 +181,13 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   };
   // (Owner's finding, Oct 30, batch 32 §12) Answers sent from another device or tab arrive with the page's next redraw: boxes nobody touched here take them
   // (they stayed empty while the button already read "Send my updated answers"); anything typed here is kept.
-  const lastSent = useRef({ answers: initial, notes: initialNotes });
+  const lastSent = useRef({ answers: initial, notes: initialNotes, questions });
   useEffect(() => {
     const was = lastSent.current;
-    lastSent.current = { answers: initial, notes: initialNotes };
+    lastSent.current = { answers: initial, notes: initialNotes, questions };
     if (JSON.stringify(was.answers) === JSON.stringify(initial) && was.notes === initialNotes) return;
+    // (§269) Other questions: the boxes were already matched by words above (never by place).
+    if (JSON.stringify(was.questions) !== JSON.stringify(questions)) return;
     setAnswers((cur) => questions.map((_, i) => ((cur[i] ?? "") === (was.answers[i] ?? "") ? initial[i] ?? "" : cur[i] ?? "")));
     setNotes((cur) => (cur === was.notes ? initialNotes : cur));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -185,7 +199,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   // (NEXT-UI 10) Typed and not sent: kept on the server, back after a reload or on another device, with "Draft" (batch 35 §8: after signing in, with "Use saved": the saved answers, or empty).
   const same = answers.every((a, i) => a === (initial[i] ?? "")) && notes === initialNotes;
   // The draft says which questions it was typed for: after a switch to changed questions, an answer never lands under a different question.
-  const [typedFor] = useState(questions); // the questions the boxes were made for (a refresh after a switch doesn't re-pair them)
+  // (§269) The questions the boxes are for now (matched by words when they change, above): a draft unit is a question's words, so it never lands elsewhere.
+  const typedFor = shownQs;
   // (Owner, Nov 2, batch 35 §120) Per-field: one unit per question's box and one for the notes; this tab keeps only the boxes it changed, and the server keeps each
   // box's latest (answer 1 typed in one tab and answer 2 in another both stay).
   const answerUnits = (as: string[], n: string): Units => ({ ...Object.fromEntries(typedFor.map((q, i) => [answerUnit(q), as[i] ?? ""])), [NOTES_UNIT]: n });
@@ -193,6 +208,13 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setAnswers((cur) => questions.map((q, i) => { const v = u[answerUnit(q)]; return typeof v === "string" ? v : cur[i] ?? ""; }));
     if (typeof u[NOTES_UNIT] === "string") setNotes(u[NOTES_UNIT] as string);
   }, { questions: typedFor });
+
+  useEffect(() => {
+    if (!gained.length) return;
+    keep.reload(gained);
+    setGained([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [gained]);
 
   /**
    * (Owner, Oct 31, batch 35 §18) A restored draft marks each box it changed, like Edit's fields: "Draft" with "Use saved" under every answer box (and the notes)
@@ -228,11 +250,13 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     setMsg(null);
     try {
       setMissingAt(null);
-      await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt, ...(only ? { for: questions } : {}) });
+      // (Owner, Nov 5, §269) Always with the questions the boxes are for (`for`): the server reads the answers by their words, and a page whose questions are no
+      // longer the contract's stops once (then takes the new questions) instead of sending them under other questions.
+      await api(`/api/sessions/${sessionId}/written`, { answers, notes, seenAt, confirmed, boxAt, for: questions });
       await keep.clear();
       fin.finish("Sent your answers.");
     } catch (err) {
-      const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); }
+      const sb = stopBox(err); if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(err)) redrawNow(); }
       else if (err instanceof ApiError && err.code === "paused") { rememberPaused(sessionId, sendPress, err.message); setPausedNow(err.message); }
       else {
         // (Batch 20 section 28) Which required question the server found empty: the red goes AT it.
@@ -257,8 +281,9 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       {/* (Batch 20 section 1) More than 3 questions: the questions and their answer boxes sit in a scroll box about 3 questions tall; the notes, counter, files
           and Send stay below it, and a red mistake scrolls the box to its question. */}
       <QuestionBox count={questions.length} size="form" className="space-y-3" >
+      {/* (Owner, Nov 5, §269) Keyed by the question's words: a box stays with its question when the questions change in place. */}
       {questions.map((q, i) => (
-        <div key={i} data-question="">
+        <div key={qText(q)} data-question="">
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. (Owner, Nov 4, §182) Now the shared fold: its first 2 lines, then Show more. */}
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
           <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
@@ -299,6 +324,11 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
     </SendingScope.Provider>
   );
 }
+
+/** (Owner, Nov 5, §269) A stop box that lists a questions change: the page redraws at once (AutoRefresh), so the form takes the new questions in place and the
+ * answers list shows a question that came back with its answer and additions; the box stays, and the next press sends normally. */
+const questionsChanged = (e: unknown) => e instanceof ApiError && e.data.questions === true;
+const redrawNow = () => window.dispatchEvent(new Event(PRESS_REFUSED_EVENT));
 
 /** (Batch 35 §136) The Add button's name, in its refusals and mistakes list. (§167) One per question. */
 export const ADD_PRESS = "Add to my answer";
@@ -375,7 +405,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       fin.finish(first ? "Your answer was sent." : "Added to your answer.");
     } catch (e) {
       const sb = stopBox(e);
-      if (sb) { setBox(sb); setBoxAt(sb.now); }
+      if (sb) { setBox(sb); setBoxAt(sb.now); if (questionsChanged(e)) redrawNow(); }
       else if (e instanceof ApiError && e.code === "paused") { rememberPaused(sessionId, `Add:${questionKey}`, e.message); setPausedNow(e.message); }
       else setErr(errOf(e));
       setBusy(false);

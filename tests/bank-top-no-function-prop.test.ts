@@ -11,7 +11,8 @@ describe("(Owner, Nov 5) hotfix of §230: the dashboard loads while a charge wai
     expect(s).not.toMatch(/<BankWaiting[^>]*render=\{/);
     expect(s).toContain("tests={r.tests}");
     const b = read("src/components/BankWaiting.tsx");
-    expect(b).toContain("render={render ?? (tests ? (t) => withTestLinks(t, tests) : undefined)}");
+    // (§270) The tests and the line's people, as data, drawn by the generalized link builder.
+    expect(b).toContain("render={render ?? (tests || links ? lineRender(withTests(links, tests), { newTab: true }) : undefined)}");
   });
   it("§245: a payment line's quoted test name is a green link", async () => {
     const { renderToStaticMarkup } = await import("react-dom/server");

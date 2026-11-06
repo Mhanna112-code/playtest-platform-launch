@@ -19,6 +19,12 @@ export async function POST(req: Request) {
       const r = await peekBankCheck(u, body);
       // (§160) The page holding the bank window is still open: its heartbeat (an open check with none for 3 minutes is ended like Cancel).
       await heartbeat(u.id, typeof body.paymentId === "string" && body.paymentId ? body.paymentId : typeof body.setupIntent === "string" ? body.setupIntent : "");
+      // (Owner, Nov 5, §270) The notice's lines name people and tests: their green links come with them.
+      const changes = (r as { changes?: unknown }).changes;
+      if (Array.isArray(changes) && changes.length) {
+        const { linkPool, linksForTexts } = await import("@/lib/server/lineLinks");
+        return ok({ ...r, links: linksForTexts(await linkPool(u.id), changes.filter((x): x is string => typeof x === "string")) });
+      }
       return ok(r);
     }
     // (Batch 23 section 9) The start runs the stop-once check (the page's seen marker) and the plain refusals first.

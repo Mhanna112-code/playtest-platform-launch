@@ -371,8 +371,27 @@ export function useKeptUnits(key: string, units: Units, saved: Units, restore: (
     [off, sendUnits],
   );
   const isDraft = (u: string) => unitIsDraft(drafted, u, units, saved);
+  /**
+   * (Owner, Nov 5, §269) Look at the server's copy again for these units (boxes the written form just gained when its questions changed in place): a draft kept
+   * for one (a question that came back with its snapshotted draft) is put back, as at load. A unit this tab already changed keeps what it has.
+   */
+  const reload = useCallback((only: string[]) => {
+    if (off || !only.length) return;
+    fetch(`/api/kept?key=${encodeURIComponent(key)}`, { cache: "no-store", headers: uidHeader() })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((r: { data: unknown } | null) => {
+        const kept = unitsOf(key, r?.data ?? null, questionsRef.current ?? []);
+        const back = Object.fromEntries(Object.entries(kept).filter(([u]) => only.includes(u) && !edited.current.has(u)));
+        if (!Object.keys(back).length) return;
+        setDraftedUnits(new Set([...draftedRef.current, ...Object.keys(back)]));
+        restoring.current = new Map([...restoring.current, ...Object.entries(back).map(([u, v]) => [u, JSON.stringify(v)] as [string, string])]);
+        restoreRef.current(back);
+        setRestored(true);
+      })
+      .catch(() => null);
+  }, [key, off, setDraftedUnits]);
 
-  return { restored, signedIn, restoredAt, drafted, isDraft, clear, write };
+  return { restored, signedIn, restoredAt, drafted, isDraft, clear, write, reload };
 }
 
 /** (Batch 35 §8) The tag on a restored draft. */

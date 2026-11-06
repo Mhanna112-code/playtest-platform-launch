@@ -4,6 +4,7 @@ import { ChevronDown } from "lucide-react";
 import { keepAmounts } from "@/components/Amounts";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
 import { bellShort, opensInBox } from "@/lib/bell";
+import { withLineLinks, type LineLink } from "@/components/LineLinks";
 
 /** (Owner, Nov 5, §220) The shown line split at each "…": the cut text, and what each "…" stands for in the whole line (null: they don't line up). */
 export function cutPieces(shown: string, full: string): { text: string; hidden?: string }[] | null {
@@ -76,13 +77,16 @@ export function NameLine({ shown, full, name, href }: { shown: string; full: str
  * 20 characters), so there are no per-name "…" toggles. The amount, dates, the marks and every button sit OUTSIDE it (`after`, or the row around it), always shown.
  * A mouse hover shows the whole "what" (§244). `href` links the words; `render` draws a piece of the text (the confirm rows' green test-name links, §245).
  */
-export function WhatLine({ text, href, after, className = "", render, startOpen = false }: { text: string; href?: string; after?: ReactNode; className?: string; render?: (t: string) => ReactNode;
-  /** drawn opened at first (the arrow still closes it) */ startOpen?: boolean }) {
+export function WhatLine({ text, href, after, className = "", render, startOpen = false, links }: { text: string; href?: string; after?: ReactNode; className?: string; render?: (t: string) => ReactNode;
+  /** drawn opened at first (the arrow still closes it) */ startOpen?: boolean;
+  /** (Owner, Nov 5, §270) the people and tests the "what" names, each its own green link (closed and opened; a name the 50 cut ended keeps its visible start
+   * linked); with `href`, the other words link to the row's exact place beside them (never nested) */ links?: LineLink[] }) {
   const [open, setOpen] = useState(startOpen);
   const id = useId();
-  const draw = render ?? keepAmounts;
+  const linked = !!links?.length;
+  const draw = linked ? (t: string) => withLineLinks(t, links, { rest: href ?? null, restClass: "hover:underline", draw: render ?? keepAmounts }) : render ?? keepAmounts;
   const short = bellShort(text);
-  const words = (t: ReactNode) => (href ? <a className="hover:underline" href={href} data-what-text="">{t}</a> : <span className={className || undefined} data-what-text="">{t}</span>);
+  const words = (t: ReactNode) => (href && !linked ? <a className="hover:underline" href={href} data-what-text="">{t}</a> : <span className={className || undefined} data-what-text="">{t}</span>);
   if (!short) return <>{words(draw(text))}{after}</>;
   const arrow = (
     <button type="button" className="ml-1 inline-flex rounded p-0.5 align-middle text-slate-400 hover:bg-white/10 hover:text-slate-100" aria-expanded={open}

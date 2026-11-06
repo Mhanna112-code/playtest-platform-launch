@@ -4797,3 +4797,57 @@ parts and prices), on the tester's session page and on the developer's per-teste
 ## §273 Invite testers: "no matches" says when the filters are why (owner, Nov 5)
 A name search that finds nobody only because of the ticked devices / languages reads "No testers match “mha” with Korean ticked: 1 tester matches without the
 filters." (`filteredOut` from invitePanel; blocked and deleted accounts are never counted). Nobody of that name at all keeps "No testers match “mha”.".
+## §269 Question order doesn't matter; a stale page's Send stops once, then takes the new questions (owner, Nov 5)
+1. Order doesn't matter. Question lists compare as sets of their words and Required ticks (`sameQuestionSet` / `sameQuestionWords` in lib/questions.ts).
+- A Save that only reorders the questions (or leaves the same words and Required ticks) is not a questions change: Edit's changed fields leave "questions" out
+  (`sameListingValue` in rules.ts: the Save's fields, `changedTerms`, `editNews`), so it uses none of the 3 question changes (criticalCounts; Edit's own lock
+  check `countedKeys` too, so a reorder works at 0 changes left), writes no listing / listing_save / listing_values / listing_saved record (no "Updated" mark,
+  top-box line, Listing panel tag or bell), no Terms history set (`followQuestions` compares words as sets) and no stop-once reason. The new order is saved on
+  the test and on every working contract with the same questions (`saveQuestionOrder`), so the question numbers follow it. Answers stay with their questions by
+  their words (they always did: carriedAnswers, questionKey).
+- A Save that reorders AND changes words counts once as before; its Terms history entry shows the real change: Now lists the questions that stayed in Then's
+  order, then the new ones (`inThenOrder`, lib/questionHistory.ts), and an older entry that was only a reorder is no longer listed. An old offer's "Questions then
+  and now" compares as a set too.
+2. Stop on press, then update the questions.
+- Send Answers and Add to this answer list a questions change question by question, in the stop lines' words: "Nora Lane removed the question “…”", "… added the
+  question “…”", "… made the question “…” required / not required" (`questionChangeTexts`, `questionChangeLines` from the listing Saves since the page). They
+  follow the ordinary rule (changed after the page loaded, not shown by the live pill or a stop box: Alerts on); a box that listed the listing's own line for
+  those Saves showed them.
+- The page always sends its form's questions with Send (`for`); the server reads the answers by their words, never by place. A form that holds a question the
+  contract no longer has (or lacks one a change since the page added) never sends: the press stops once whatever the Alerts, a confirmed press or the live pill
+  (`staleQuestions`, forced lines). What was typed is kept: a current question's text in the written draft, a removed question's text in the draft snapshot of
+  the Terms history entry that removed it ("Draft (not sent)"; `keepStaleTyped`). The Send's lock checks the questions again ("Your questions changed just now:
+  nothing was sent…").
+- Add to this answer on a question removed after the page loaded stops once the same way (its typed text stays kept under the question); once those lines were
+  listed, the plain refusal (QUESTION_GONE).
+- A stop that lists a questions change (`questions` in its reply) redraws the page at once; the written form is one form now (no remount per question set) and
+  switches in place: each box keeps its text by the question's words, a new question is an empty box (a draft the server kept for it, e.g. a question that came
+  back, is put back: `keep.reload`), a removed question's box goes. The next press sends normally.
+- Comes back (§263, unchanged and covered): answered, its answer and additions return and Add to this answer works; unanswered, it is a box in the form and its
+  snapshotted draft (now including what a stale page's Send held for it) is put back.
+
+## §270 Green links on every name and test; rows link to the exact part (owner, Nov 5)
+1. Every person and test a line names is its own green link (`text-volt-300`, the same for both): a person opens their profile (a tester `/app/testers/<id>`,
+   a developer `/app/developers/<id>`); a test opens the developer's test page, a tester's session page for it, else its public page (`/app/find/<id>`). A deleted
+   account and "You" / "your" are never links.
+- No new data: the server sends `links: { text, href, kind: "person" | "test" }[]` with each line (lib/lineLinks.ts: `personLink`, `testLink`, `linksIn`,
+  `splitLinks`), and the client turns those exact substrings into links (components/LineLinks.tsx `withLineLinks`, which generalizes `withTestLinks`). The lists
+  come from the reader's link pool (lib/server/lineLinks.ts `linkPool`: their tests as developer and as tester, the people on them, applicants and invitees, the
+  people they message), matched where each line is built; payment rows build theirs from the contracts the row already loads (paymentRows `ctxPool`).
+- A name the 50 cut ended ("on “Harbor…", "Alexandra…") keeps its visible start linked (the "…" is not part of it), closed and opened.
+- Where: bell lines alone and in stacks, the stack title naming a test, and the stack's preview; What you've paid (and its group items and refund lines), Your
+  earnings, the Testers list's part payments, Payments' charges waiting for the lift; the confirm rows (the dashboard's "Your bank wants you to confirm", Payments'
+  ConfirmList, Needs you's bank rows); Pay what you owe lines (and what a reversed payment covered, and the lines a stop hands back); stop-box bullets; refusals
+  (Err, the stop box's refusal, the kept refusal), the NDA notice and its block line; the top box's live lines; the bank window's notice lines (a plain check's
+  and Confirm all's). A refused or stopped press's reply carries its links (`handle()` adds them for the request's reader on 403 / 409 / 422: `links`,
+  `changes[i].links`, `lines[i].links`), as does a bank check's peek; the page keeps them for the lines it draws from those replies (lib/lineLinkRegistry.ts).
+2. A row that was one whole link now links its other words to the most specific place, beside the name links (never nested): a bell line's words keep its own
+  link (already the exact place: `#piece-<id>`, `#call-<id>`, `#tester-<id>`, the session's `#part-…`); a developer's payment row (What you've paid, a group
+  item) and a charge waiting for the lift open the exact part on the test page: `#piece-<submission>` (Needs you, else its row: HashJump's fallback),
+  `#call-<call>`, else `#tester-<contract>`. The team's copy keeps its own test pages. A stop line that opens its place (`link`) and a top-box line about a row do
+  the same. Pressing any piece of a bell line marks it read; a stack's heading is a `role="button"` so its test name can be a link (pressing it reads the stack).
+- Bell lines are matched when the bell is read (the notifications page), never stored, so lines written before §270 ("Receipt: you paid $15.50 for bb's live
+  call on “excerptexcer…” …") get their links too: the pool holds the line's test, its developer and its contracts' testers (the people a bell's `about` can be),
+  matched exactly as written; a test name an older cut ended with "…" matches by its visible start (`linksIn`). A name nobody in the pool has stays plain.
+3. Unchanged: the 50 cut and its arrow, hovers, amounts and buttons outside the cut, the stop-once rules, all wording. The tester's earnings rows had no link and
+  get only the name links.

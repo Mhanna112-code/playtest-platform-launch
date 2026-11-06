@@ -73,7 +73,8 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     expect(html).toContain("Your bank wants you to confirm");
     expect(html).toContain('class="text-sm font-normal text-slate-400">1</span>');
     // (Owner, Nov 5, §246) The amount and "confirm by" always show; the "what" between them is cut at 50 (§251) with its arrow (the whole "what" its hover).
-    expect(html).toContain(`data-bank-top-amount="">$12.50</span> · <span title="Anabela Silva Okafor&#x27;s written answers on “Harbor Run”" data-what-cut=""><span data-what-text="">Anabela Silva Okafor&#x27;s written answers on “Harbor…</span></span><button`);
+    // (Owner, Nov 5, §270) The tester's name and the test (cut by the 50 cut: its visible start) are green links.
+    expect(html).toMatch(/data-bank-top-amount="">\$12\.50<\/span> · <span title="Anabela Silva Okafor&#x27;s written answers on “Harbor Run”" data-what-cut=""><span data-what-text=""><a href="\/app\/testers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Anabela Silva Okafor<\/a>&#x27;s written answers on “<a href="\/app\/tests\/[^"]+" class="text-volt-300 hover:underline" data-line-link="test" target="_blank" rel="noreferrer">Harbor<\/a>…<\/span><\/span><button/);
     expect(html).toMatch(/data-whole-toggle=""[^>]*>[\s\S]*?<\/button> · <span class="text-slate-300" data-confirm-by="">confirm by /);
     expect(html).toContain(`data-bank-waiting="${p.id}"`);
     expect(html).toContain("Confirm with your bank</button>");
@@ -111,7 +112,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     // Payments' row for a renewal is the inline box carrying that anchor (marked by HashJump).
     // (Owner, Nov 4, §188 B) Every list's row keeps it (`anchor` true by default; only the Pay more box's second copy leaves it out).
     expect(src("components/BankWaiting.tsx")).toContain("id={anchor ? bankAnchor(paymentId) : undefined}");
-    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} cents={i.cents} line={withTestLinks(i.text, i.tests)} text={i.what ?? i.text}");
+    expect(src("app/app/payments/ConfirmList.tsx")).toContain("<BankWaiting paymentId={i.id} cents={i.cents} line={withLineLinks(i.text, withTests(i.links, i.tests), { newTab: true })} text={i.what ?? i.text}");
   });
 
   it("under 24 hours left the confirm-by part is red and names the day", async () => {
@@ -177,7 +178,7 @@ describe("batch 24 section 1: Your bank wants you to confirm, at the top of the 
     // (Owner, Nov 4, §175) under each tester's name; (§180 / §181) now each person's "Confirm with your bank" block inside their Needs you drop-down, in the
     // active view and the restricted one alike.
     const testPage = src("app/app/tests/[id]/page.tsx");
-    expect(testPage).toContain("node: bankOf(c.id).map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={b.line} full={b.full} seenAt={seenAt} />) });");
+    expect(testPage).toContain("node: bankOf(c.id).map((b) => <BankWaiting key={b.id} paymentId={b.id} cents={b.cents} line={withLineLinks(b.line, b.links, { draw: (t) => t }) /* (Owner, Nov 5, §270) */} full={b.full} seenAt={seenAt} />) });");
     expect(testPage).toContain('bankKind(c, { "data-restricted-bank": "" })');
     // The poll keeps refreshing during a hold or suspension.
     expect((await pulse(x.dev.cookie)).body).toMatchObject({ restricted: false });

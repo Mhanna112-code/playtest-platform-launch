@@ -1,3 +1,4 @@
+import { EMPTY_POOL, lineLinks, linkPool } from "@/lib/server/lineLinks";
 import { Cut, TestName } from "@/components/Cut";
 import { WhatLine } from "@/components/WholeLine";
 import { withDateZone } from "@/lib/server/dateZone";
@@ -87,6 +88,8 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
   const ranOut = dev ? await (await import("@/lib/server/owedOnce")).ranOutLine(u.id) : null;
   const inBox = new Set(owedNow.map((o) => o.id));
   const waitingCharges = dev ? (await deferredForBox(u.id)).filter((p) => !inBox.has(p.id)) : [];
+  // (Owner, Nov 5, §270) The reader's people and tests, for the green links in the lines built here.
+  const pool = dev && waitingCharges.length ? await linkPool(u.id) : EMPTY_POOL;
   // The tester's "Everything you sent": each part by test, newest first, with where its money is.
   const sent = tester
     ? await db.contract.findMany({
@@ -140,7 +143,7 @@ export default async function PaymentsPage({ searchParams }: { searchParams: Pro
       }))}
       {dev && waitingCharges.length > 0 && <section className="card space-y-3" id="waiting-charges" data-waiting-charges="">
         <h2>Charged once your tests resume</h2>
-        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><WhatLine text={p.full || p.what} href={p.href} after={<> · {money(p.amountCents)}</>} /></li>)}</LongList>
+        <LongList className="space-y-2 text-sm">{waitingCharges.map((p) => <li key={p.id}><WhatLine text={p.full || p.what} href={p.href} links={lineLinks(pool, p.full || p.what)} after={<> · {money(p.amountCents)}</>} /></li>)}</LongList>
       </section>}
       {/* (Batch 11) Payments the developer's bank wants confirmed (made while they weren't here). (Batch 17 §11) A charge on a test links to its test page's button. */}
       {/* (Owner, Nov 3, §147) Confirm all above the list (its state first: a Confirm all check that ran out lets go before the list is read). */}

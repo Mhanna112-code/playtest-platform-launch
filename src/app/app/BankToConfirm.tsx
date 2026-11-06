@@ -2,7 +2,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { DashboardActionBox } from "./DashboardActionBox";
 import { BankWaiting } from "@/components/BankWaiting";
 import { bankTopV, splitLead, type BankTopRow } from "@/lib/bankTop";
-import { withTestLinks } from "@/components/TestLinks";
+import { withLineLinks, withTests } from "@/components/LineLinks";
 import { bankToConfirm } from "@/lib/server/confirm";
 import { confirmAllState, type ConfirmAllState } from "@/lib/server/confirmAll";
 import { ConfirmAll } from "@/components/ConfirmAll";
@@ -37,7 +37,7 @@ export function BankToConfirmBox({ rows, seenAt = "", all }: { rows: BankTopRow[
         <li key={r.id} className="rounded-lg border border-white/10 p-3 text-sm" data-bank-top-row={r.id}>
           {/* (Owner, Nov 5, hotfix of §230) The test links as data (`tests`): a server component can't hand a function (`render`) to the client BankWaiting, and the
               dashboard failed to load while a charge waited for the bank. */}
-          <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} before={lead.amount ? <><span className="whitespace-nowrap" data-bank-top-amount="">{lead.amount}</span>{lead.sep}</> : null} full={whole.what} text={lead.what} tests={r.tests} after={<> · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} line={<>{withTestLinks(r.lead, r.tests)} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
+          <BankWaiting wide paymentId={r.id} cents={r.cents} seenAt={seenAt} before={lead.amount ? <><span className="whitespace-nowrap" data-bank-top-amount="">{lead.amount}</span>{lead.sep}</> : null} full={whole.what} text={lead.what} tests={r.tests} links={r.links} after={<> · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} line={<>{withLineLinks(r.lead, withTests(r.links, r.tests), { newTab: true })} · <span className={r.soon ? "font-medium text-rose-300" : "text-slate-300"} data-confirm-by={r.soon ? "soon" : ""}>{r.by}</span></>} />
         </li>
       ); })}
     </DashboardActionBox>

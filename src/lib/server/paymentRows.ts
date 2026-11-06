@@ -3,6 +3,7 @@ import { displayName, fmtDateTimeIn, money, pronouns } from "@/lib/format";
 import { CHARGEBACK_FEE_CENTS, CHARGED_BY_TESTER, CHARGED_BY_TESTER_14, cut10, disputeDecisionName, pieceName, raiseOf, repaidReversedLine, reversedOf, reversedPart } from "@/lib/rules";
 import { callAtFor } from "./dateFormat";
 import { dateZone } from "./dateZone";
+import { linksIn, personLink, testLink, type LineLink } from "@/lib/lineLinks";
 
 type Row = { id: string; kind: string; amountCents: number; contractId: string | null; submissionId: string | null; callId: string | null; repaysId: string | null; settledAt: Date | null; owedUntil: Date | null; chargebackAt: Date | null; reversedCents?: number | null; /** (§191) the one charge that paid it */ coveredById?: string | null; /** (§192) a raise charge's "raise:<from>:<to>" */ note?: string };
 /**
@@ -14,12 +15,13 @@ export type PayingRow = { /** (§193b) a one payment's id: its items are named *
  * `full` (§131): `what` with the names uncut, the row's hover on Payments. `testId` null: a row with no test to link (§133: the repayment of part of Pay what you owe's
  * one payment). `reversedCents` (§133): what the bank reversed of this payment when it was only part of it.
  */
-export type PaidRow = { what: string; full: string; how: string; testId: string | null; reversed: boolean; reversedCents?: number | null; /** (§191) its line inside its one payment's group */ group?: GroupItem };
+export type PaidRow = { what: string; full: string; how: string; testId: string | null; reversed: boolean; reversedCents?: number | null; /** (§191) its line inside its one payment's group */ group?: GroupItem;
+  /** (Owner, Nov 5, §270) the people and tests the line names, each its own green link */ links?: LineLink[]; /** (§270) the developer's row: the exact part on the test page (its sent work, its call, else the tester's row) */ href?: string };
 /**
  * (Owner, Nov 4, §191) An item's line inside the group of the ONE charge that paid it (Pay what you owe, Confirm all): exactly what it was, never "paid through Pay
  * what you owe" / "confirmed with Confirm all" (the group says it). `amount`: a repayment's "$1.00 + $15.00 chargeback fee" (else the page shows the item's amount).
  */
-export type GroupItem = { what: string; full: string; how: string; amount: string | null };
+export type GroupItem = { what: string; full: string; how: string; amount: string | null; /** (§270) its green name and test links */ links?: LineLink[] };
 
 type Counted = { amountCents: number; reversedCents?: number | null; chargebackAt: Date | null; chargeback: string; status: string };
 /**
@@ -108,6 +110,27 @@ async function lineContext(ps: PayingRow[]) {
   // (§191) Each call's start: a group's items name a call by its date AND time (§177/§178).
   const calls = new Map((await db.call.findMany({ where: { id: { in: all.map((p) => p.callId).filter((x): x is string => !!x) } }, select: { id: true, startsAt: true } })).map((x) => [x.id, x.startsAt]));
   return { src, repaid, contracts, reviewOf, partOf, calls, covered };
+}
+
+/**
+ * (Owner, Nov 5, §270) The names a payment line can hold, as green links for its reader: the developer's lines name testers (their tester profile) and tests (the
+ * test page); the tester's name the developer (their developer profile) and the test (the tester's session page). A deleted account stays plain.
+ */
+function ctxPool(ctx: Pick<Ctx, "contracts">, side: "developer" | "tester"): LineLink[] {
+  const out: (LineLink | null)[] = [];
+  for (const c of ctx.contracts.values()) {
+    const at = side === "developer" ? { developer: true } : { sessionId: c.id };
+    for (const title of new Set([c.title, c.test.title])) out.push(testLink({ id: c.testId, title }, at));
+    out.push(side === "developer" ? personLink({ id: c.tester.id, name: displayName(c.tester), deleted: !!c.tester.deletedAt }, "tester") : personLink({ id: c.test.developer.id, name: displayName(c.test.developer), deleted: !!c.test.developer.deletedAt }, "developer"));
+  }
+  return out.filter((x): x is LineLink => !!x);
+}
+/** (§270) The exact part a developer's payment line is about on the test page: its sent work (#piece-<id>), its call (#call-<id>), else the tester's row. */
+function partHref(ctx: Ctx, p: PayingRow): string | undefined {
+  const o = ctx.src(p);
+  const c = o.contractId ? ctx.contracts.get(o.contractId) : undefined;
+  if (!c) return undefined;
+  return `/app/tests/${c.testId}#${o.submissionId ? `piece-${o.submissionId}` : o.callId ? `call-${o.callId}` : `tester-${c.id}`}`;
 }
 type Ctx = Awaited<ReturnType<typeof lineContext>>;
 
@@ -273,14 +296,15 @@ async function paidVia(ps: Row[]): Promise<Map<string, Via>> {
 export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise<Map<string, PaidRow>> {
   const ctx = await lineContext(ps);
   const via = await paidVia(ps);
+  const pool = ctxPool(ctx, side); // (Owner, Nov 5, §270)
   const out = new Map<string, PaidRow>();
   for (const p of ps) {
     if (side === "developer") {
       const cut = devLine(ctx, p, false, via.get(p.id)), whole = devLine(ctx, p, true, via.get(p.id));
       // (§191) Its line inside the group of the one charge that paid it (drawn only there).
       const g = p.coveredById ? groupLine(ctx, p, false) : null;
-      const group = g ? { ...g, full: groupLine(ctx, p, true).what } : undefined;
-      if (cut && whole) out.set(p.id, { what: cut.what, full: whole.what, how: cut.how, testId: cut.testId, reversed: !!p.chargebackAt, reversedCents: p.chargebackAt && reversedPart(p) ? reversedOf(p) : null, group });
+      const group = g ? { ...g, full: groupLine(ctx, p, true).what, links: linksIn(groupLine(ctx, p, true).what, pool) } : undefined;
+      if (cut && whole) out.set(p.id, { what: cut.what, full: whole.what, how: cut.how, testId: cut.testId, reversed: !!p.chargebackAt, reversedCents: p.chargebackAt && reversedPart(p) ? reversedOf(p) : null, group, links: linksIn(`${whole.what}, ${cut.how}`, pool), href: partHref(ctx, p) });
       else if (group) out.set(p.id, { what: plainLabel(p.kind), full: plainLabel(p.kind), how: "", testId: null, reversed: !!p.chargebackAt, reversedCents: p.chargebackAt && reversedPart(p) ? reversedOf(p) : null, group });
       continue;
     }
@@ -294,7 +318,7 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
     // (Owner, Nov 4) How the developer confirmed it is theirs: the tester's row reads as the charge itself (Pay what you owe kept as before).
     const how = p.kind === "chargeback" ? "" : via.get(p.id) === "owed" ? "paid through Pay what you owe" : byTester ? "charged by you after 7 days without a review" : own && r?.auto ? "charged automatically after 7 days" : "";
     const what = `from ${displayName(c.test.developer)} for your ${ctx.partOf(o)} on “${c.title}”${p.kind === "extra" ? " (extra pay)" : p.kind === "dispute" ? " (dispute decision)" : ""}`;
-    out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false });
+    out.set(p.id, { what, full: what, how, testId: c.testId, reversed: false, links: linksIn(what, pool) });
   }
   return out;
 }
@@ -305,7 +329,7 @@ export async function paidRows(ps: Row[], side: "developer" | "tester"): Promise
  * lowered what it took back from your $20.00 Pay for …: $20.00 → $12.00" (lowered after the repayment). `amountCents` is positive (the page writes it "−$25.00").
  * `createdAt` null: a refund made before §192 (only its refunded repayment records it; its date isn't known). `stripePaymentIntentId`: the PaymentIntent refunded.
  */
-export type RefundLine = { id: string; paymentId: string; amountCents: number; createdAt: Date | null; what: string; full: string; stripePaymentIntentId: string | null };
+export type RefundLine = { id: string; paymentId: string; amountCents: number; createdAt: Date | null; what: string; full: string; stripePaymentIntentId: string | null; /** (§270) its green name and test links */ links?: LineLink[] };
 
 const WON_HEAD = "Refunded: your bank's chargeback on ", WON_TAIL = " was reversed in your favour";
 /**
@@ -325,6 +349,7 @@ export async function refundLines(ps: (Row & { status: string; stripePaymentInte
   if (!srcs.length) return out;
   const recs = await db.paymentRefund.findMany({ where: { paymentId: { in: srcs.map((p) => p.id) }, status: { not: "failed" } }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
   const ctx = await lineContext(srcs);
+  const pool = ctxPool(ctx, "developer"); // (Owner, Nov 5, §270)
   const line = (src: Row, rec: { reason: string; fromCents: number | null; toCents: number | null }, full: boolean) => {
     const o = src.repaysId ? ctx.repaid.get(src.repaysId) : undefined;
     const phrase = o ? paidPhrase(ctx, o, full) : "a payment your bank reversed";
@@ -333,9 +358,9 @@ export async function refundLines(ps: (Row & { status: string; stripePaymentInte
   };
   for (const p of srcs) {
     const mine = recs.filter((r) => r.paymentId === p.id);
-    const list: RefundLine[] = mine.map((r) => ({ id: r.id, paymentId: p.id, amountCents: r.amountCents, createdAt: r.createdAt, what: line(p, r, false), full: line(p, r, true), stripePaymentIntentId: p.stripePaymentIntentId ?? null }));
+    const list: RefundLine[] = mine.map((r) => ({ id: r.id, paymentId: p.id, amountCents: r.amountCents, createdAt: r.createdAt, what: line(p, r, false), full: line(p, r, true), stripePaymentIntentId: p.stripePaymentIntentId ?? null, links: linksIn(line(p, r, true), pool) }));
     // A repayment refunded before §192 (won after it was repaid): its whole amount, as its own line too.
-    if (!mine.length && p.status === "refunded") list.push({ id: `refunded-${p.id}`, paymentId: p.id, amountCents: p.amountCents, createdAt: null, what: line(p, { reason: "won", fromCents: null, toCents: null }, false), full: line(p, { reason: "won", fromCents: null, toCents: null }, true), stripePaymentIntentId: p.stripePaymentIntentId ?? null });
+    if (!mine.length && p.status === "refunded") list.push({ id: `refunded-${p.id}`, paymentId: p.id, amountCents: p.amountCents, createdAt: null, what: line(p, { reason: "won", fromCents: null, toCents: null }, false), full: line(p, { reason: "won", fromCents: null, toCents: null }, true), stripePaymentIntentId: p.stripePaymentIntentId ?? null, links: linksIn(line(p, { reason: "won", fromCents: null, toCents: null }, true), pool) });
     if (list.length) out.set(p.id, list);
   }
   return out;

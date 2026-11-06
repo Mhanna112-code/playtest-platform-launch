@@ -1,5 +1,6 @@
 "use client";
 import { WhatLine } from "@/components/WholeLine";
+import { withLineLinks, type LineLink } from "@/components/LineLinks";
 import { Err } from "@/components/Err";
 import { useState } from "react";
 import { useFinished } from "@/lib/usePress";
@@ -25,7 +26,7 @@ export function linesAfterStop<L>(owed: L[], data: Record<string, unknown>): L[]
 const OWED_FOLD = 4;
 
 /** (Batch 35 §117) `waiting`: locked by a bank check (`checkId`, the check "Cancel this check" cancels); the button doesn't pay it. */
-type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string; /** (§133) part of Pay what you owe's one payment reversed: what that payment covered (the bank doesn't say which), each with its hover */ covers?: { text: string; full: string }[]; /** (§246) the payment named (cut at 50 (§251)) and the rest (amount, status, date: always shown) */ what?: string; rest?: string };
+type Line = { id: string; retry: boolean; amountCents: number; until: string | null; text: string; /** (§131) the line with the names uncut: its hover */ full?: string; waiting?: boolean; checkId?: string | null; /** (§125) a charge that came in after the one payment was made: charged right after it */ after?: string; /** (§133) part of Pay what you owe's one payment reversed: what that payment covered (the bank doesn't say which), each with its hover */ covers?: { text: string; full: string; /** (§270) */ links?: LineLink[] }[]; /** (§246) the payment named (cut at 50 (§251)) and the rest (amount, status, date: always shown) */ what?: string; rest?: string; /** (Owner, Nov 5, §270) the people and tests it names, each its own green link */ links?: LineLink[] };
 
 /** (Owner, Nov 2, batch 35 §117 rule 3) "Cancel this check": the bank's check is cancelled and what it covered can be paid at once (the page redraws). */
 function CancelCheck({ id }: { id: string }) {
@@ -130,7 +131,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
         <ul className="list-disc pl-5">
           {owed.map((o, i) => !allLines && i >= OWED_FOLD && !cancelAt(o, i) ? null : (
             <li key={o.id} data-owed-line={o.id} data-waiting={o.waiting ? "" : undefined}>
-              {allLines ? (o.full ?? o.text) : o.what != null ? <WhatLine text={o.what} after={o.rest ? <span data-owed-rest="">{o.rest}</span> : null} /> : <WhatLine text={o.full ?? o.text} />}
+              {allLines ? withLineLinks(o.full ?? o.text, o.links) : o.what != null ? <WhatLine text={o.what} links={o.links} after={o.rest ? <span data-owed-rest="">{o.rest}</span> : null} /> : <WhatLine text={o.full ?? o.text} links={o.links} />}
               {o.waiting && !o.after && <> · <b>{OWED_BANK_WAITING}</b></>}
               {o.after && <> · <b data-owed-after="">{o.after}</b></>}
               {/* A row's own check: its Cancel next to it (Pay what you owe's sits under its line, below). */}
@@ -139,7 +140,7 @@ export function OwedBox({ onHold, owed: drawn, chargeback = false, review = fals
               {o.covers && o.covers.length > 0 && (
                 <div className="mt-1 text-xs" data-owed-covers={o.id}>
                   That payment covered:
-                  <ul className="list-[circle] pl-5">{o.covers.map((x, j) => <li key={j}>{allLines ? (x.full ?? x.text) : <WhatLine text={x.full || x.text} />}</li>)}</ul>
+                  <ul className="list-[circle] pl-5">{o.covers.map((x, j) => <li key={j}>{allLines ? withLineLinks(x.full ?? x.text, x.links) : <WhatLine text={x.full || x.text} links={x.links} />}</li>)}</ul>
                 </div>
               )}
             </li>

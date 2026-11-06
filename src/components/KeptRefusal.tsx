@@ -1,4 +1,6 @@
 "use client";
+import { withLineLinks } from "@/components/LineLinks";
+import { knownLinks } from "@/lib/lineLinkRegistry";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { KEEP_MS, currentKept, dropKept, keptPlacement, keptShows, keptOnPage, refusalTextOutsideKept, notePress, onKept, type Kept, type Spot } from "@/lib/keptRefusal";
@@ -134,7 +136,7 @@ export function KeptRefusal() {
   if (host) {
     return createPortal(
       <p className="info mt-2" role="status" data-kept-refusal="">
-        {kept.text}
+        {withLineLinks(kept.text, knownLinks(), { draw: (t) => t }) /* (Owner, Nov 5, §270) its names and tests, green links */}
       </p>,
       host,
     );

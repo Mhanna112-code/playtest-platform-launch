@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { Err } from "@/components/Err";
 import { mergeChanges, useLiveAppend } from "@/lib/live";
-import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine, capQuestions } from "@/lib/questions";
+import { QUESTIONS_RULE_LINE, qRequired, qStored, qText, questionLimitLine, capQuestions, sameQuestionSet } from "@/lib/questions";
 import { MistakeList, focusFirstMistake, markServerMistakes, useLocalMin } from "@/components/FieldChecks";
 import { BUILD_URL_LINE, BUILD_URL_PATTERN, fieldOfMistake, isCriticalLine, type ListingField } from "@/lib/listingFields";
 import { Choices, PICK_CHIP } from "@/components/Choices";
@@ -315,9 +315,12 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
   // A field changed here that another tab's Save locked meanwhile doesn't save: the field is red and its line says so.
   const apiOf = (ks: (keyof F)[]) => ks.flatMap((k) => API_FIELDS[k]);
   // (Batch 14) Each field's own counter: the build link, and ONE for the parts and prices (part ticks, prices, Required, Free, the live rate and call length).
-  const lockedNow = edit ? countersOf(apiOf(changedKeys)).filter(fieldLocked) : [];
+  // (Owner, Nov 5, §269) Order doesn't matter: questions only reordered (the same words and Required ticks) use none of the 3 changes, so they never lock.
+  const reorderedOnly = useMemo(() => sameQuestionSet(toApi(f).questions as string[], toApi(base).questions as string[]), [f, base]);
+  const countedKeys = changedKeys.filter((k) => !(reorderedOnly && (k === "questions" || k === "requiredQs")));
+  const lockedNow = edit ? countersOf(apiOf(countedKeys)).filter(fieldLocked) : [];
   const locked = lockedNow.length > 0;
-  const lockedKey = (k: keyof F) => locked && changedKeys.includes(k) && API_FIELDS[k].some((a) => { const c = counterOf(a); return !!c && lockedNow.includes(c); });
+  const lockedKey = (k: keyof F) => locked && countedKeys.includes(k) && API_FIELDS[k].some((a) => { const c = counterOf(a); return !!c && lockedNow.includes(c); });
   /** "Changes left: 2 of 3" next to a limited field's label (Edit, once a tester has joined). */
   const left = (f: CriticalField) => (limited ? <span className="ml-2 text-xs font-normal text-slate-500" data-changes-left={f}>{changesLeftLine(critCounts[f])}</span> : null);
   /** The lock note under a field that used its 3 changes. */
@@ -327,7 +330,7 @@ export function TestForm({ init, edit, draft, perks = true, termsAgain = false, 
    * call rate ($24.00/h → $30.00/h) can't be saved: …") with Put it back.
    */
   const lockedItems = (c: CriticalField): LockedItem[] =>
-    changedKeys.filter((k) => API_FIELDS[k].some((a) => counterOf(a) === c)).map((k) => {
+    countedKeys.filter((k) => API_FIELDS[k].some((a) => counterOf(a) === c)).map((k) => {
       const unit = k === "liveRate" ? "/h" : "";
       const before = shortValue(valueText(k, base[k])), now = shortValue(valueText(k, f[k]));
       const name = (NAMES[k] ?? String(k)).replace(/^./, (x) => x.toLowerCase());

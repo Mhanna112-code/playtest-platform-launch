@@ -15,6 +15,26 @@ export const qText = (q: string) => (q.startsWith(REQUIRED) ? q.slice(REQUIRED.l
 /** A question as stored: "[required] Where did you get stuck?" or the plain text. */
 export const qStored = (text: string, required: boolean) => (required ? REQUIRED + text : text);
 
+/**
+ * (Owner, Nov 5, §269) Order doesn't matter: two question lists are the same questions when they hold the same words with the same Required ticks, in any
+ * order (compared as sets, a repeated question counted each time). A Save that only reorders them is not a questions change.
+ */
+const setOf = (qs: readonly string[], f: (q: string) => string) => JSON.stringify(qs.map(f).sort());
+const asStored = (q: string) => qStored(qText(q), qRequired(q));
+export const sameQuestionSet = (a: readonly string[], b: readonly string[]) => setOf(a, asStored) === setOf(b, asStored);
+/** (§269) The same words in any order (a Required tick may differ): no Terms history set. */
+export const sameQuestionWords = (a: readonly string[], b: readonly string[]) => setOf(a, qText) === setOf(b, qText);
+/** (§269) What changed between two question lists, never their order: the words removed and added, and the Required ticks that moved (by the question's words). */
+export function questionSetChanges(before: readonly string[], after: readonly string[]) {
+  const was = new Map(before.map((q) => [qText(q), qRequired(q)]));
+  const now = new Map(after.map((q) => [qText(q), qRequired(q)]));
+  return {
+    removed: [...was.keys()].filter((q) => !now.has(q)),
+    added: [...now.keys()].filter((q) => !was.has(q)),
+    required: [...now.entries()].filter(([q, r]) => was.has(q) && was.get(q) !== r).map(([q, r]) => ({ question: q, required: r })),
+  };
+}
+
 /** (Batch 26 section 14) The two refusals of Send my answers, at the field and in the mistakes list. */
 // (Owner, Oct 29, batch 32 §4) Shown above the questions, no box red: any one answer will do.
 export const ANSWER_ONE = "Answer at least one question before sending (any one; none is required).";

@@ -57,7 +57,14 @@ export async function handle(fn: () => Promise<Response>): Promise<Response> {
     } catch (e) {
       // (Owner) A stop says when the box was made: the next press sends it back as "boxAt" and goes ahead only if nothing
       // new happened since (else it stops again with the new lines).
-      if (e instanceof HttpError) return fail(e.status, e.code, e.message, e.code === "stop_once" || e.code === "changed" || e.code === "needs_confirm" ? { ...(e.data ?? {}), now: new Date().toISOString() } : e.data);
+      if (e instanceof HttpError) {
+        const data = e.code === "stop_once" || e.code === "changed" || e.code === "needs_confirm" ? { ...(e.data ?? {}), now: new Date().toISOString() } : e.data;
+        // (Owner, Nov 5, §270) A refusal (blue) or a stop box: the people and tests its lines name come with it, each drawn as its own green link. Never for a
+        // red form mistake (400 / 413), a sign-in refusal or a missing page; never in the way of the reply.
+        if (e.status !== 409 && e.status !== 403 && e.status !== 422) return fail(e.status, e.code, e.message, data);
+        const linked = await import("./lineLinks").then(async (m) => m.withLineLinksFor(await m.requestViewerId(), e.message, data)).catch(() => data);
+        return fail(e.status, e.code, e.message, linked);
+      }
       console.error(e);
       return fail(500, "server", "Something went wrong on our side. Try again in a moment.");
     }

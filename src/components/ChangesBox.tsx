@@ -1,4 +1,7 @@
 "use client";
+import { withLineLinks } from "@/components/LineLinks";
+import { splitLinks, type LineLink } from "@/lib/lineLinks";
+import { knownLinks } from "@/lib/lineLinkRegistry";
 import { isPerkRefusal } from "@/lib/subscription";
 import { SubscribeLink } from "@/components/SubscribeLink";
 import { useEffect, useRef, useState } from "react";
@@ -17,13 +20,17 @@ import { savedZone } from "@/components/TimeZoneSync";
 import { seeItClick, useSeeItTarget } from "@/components/ListingInfo";
 import { useGoneOnNewVersion } from "@/lib/pageVersion";
 
-export type Change = { text: string; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** (Batch 35 §34) the panel lines all the listing changes it covers changed */ keys?: string[]; /** (Owner, Nov 3, §160) it stops whatever the Alerts: no way to turn it off is offered for it */ forced?: boolean; /** (Owner, Nov 5, §250) the update's identity: once any stop box on the page lists it, no other press there stops for it */ sid?: string };
+export type Change = { text: string; /** (Owner, Nov 5, §270) the people and tests it names, each its own green link */ links?: LineLink[]; at: string; kind?: string; alert?: string; ignored?: boolean; contract?: string; link?: string; /** (Batch 16 section 19) the fields another tab changed (API names) */ fields?: string[]; /** (Batch 20 section 4) one line per thing: a newer line with the same key replaces it */ key?: string; /** (Batch 20 section 25) a live-box line that never stops a press */ quiet?: boolean; /** (Batch 30 §10) the text says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed (its tick clears) */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save the line is about: See it marks that Save's fields only */ saveAt?: string; /** (Batch 35 §34) the panel lines all the listing changes it covers changed */ keys?: string[]; /** (Owner, Nov 3, §160) it stops whatever the Alerts: no way to turn it off is offered for it */ forced?: boolean; /** (Owner, Nov 5, §250) the update's identity: once any stop box on the page lists it, no other press there stops for it */ sid?: string };
 
 /** (Owner, Nov 3, §160) The Alerts types the developer's box offers to turn off: only from lines that could be switched off (not `forced`, not already ignored, not terms). */
 export const optionalAlerts = (changes: Change[]) => [...new Set(changes.filter((c) => !c.forced && !c.ignored && c.kind !== "terms").map((c) => c.alert).filter((x): x is string => !!x))];
 /** (Owner, Nov 3, §160) The tester's box offers "Turn off alerts" only when a line in it is one the tester's Alerts could have switched off. */
 export const testerCanTurnOff = (changes: Change[]) => changes.some((c) => !c.forced && c.kind !== "terms" && c.kind !== "keyfixed" && c.kind !== "stop");
 
+/** (§270) A stop line or refusal drawn as it reads, its names and tests green links. */
+const plain = (t: string) => t;
+const linked = (t: string, links?: LineLink[]) => withLineLinks(t, links ?? knownLinks(), { draw: plain });
+const namesIn = (t: string, links?: LineLink[]) => splitLinks(t, links ?? knownLinks()).some((p) => p.link);
 /** (Batch 28 §4) Every time in the box is in the reader's saved zone (the browser's only when none is saved), like the stop lines. */
 const time = (iso: string) => fmtTimeIn(iso, savedZone());
 const DEFAULT_TAILS = new Set(["Press again to go ahead.", "Press again to go ahead"]);
@@ -71,7 +78,9 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
               <li key={`${c.at}|${c.text}|${i}`}>
                 {/* (Batch 16 section 21) A line can open what it's about (e.g. the next round's draft another tab made). */}
                 {/* (Batch 26 section 4) A stop line ("This test was stopped at 3:10 PM.") already says its time: shown once. */}
-                {c.link?.startsWith("/") ? <><a href={c.link} data-stop-link="">{c.text}</a> · {time(c.at)}</> : c.kind === "account-at" ? `${c.text} at ${time(c.at)}` : c.kind === "yours" ? `${c.text} at ${time(c.at)}.` /* (batch 23 section 5) Edit: "Instructions: your version will replace the one saved in another tab at 3:54 PM." */ : c.kind === "account" || c.kind === "stop" || c.timed ? c.text /* (batch 30 §10) "… edited the listing at 6:55 PM: …" says its own time */ : `${c.text} · ${time(c.at)}`}
+                {/* (Owner, Nov 5, §270) Each person and test the line names is its own green link (sent with the line; else the ones this page's replies carried); a
+                    line that opens what it's about keeps its other words linked there, beside them. */}
+                {c.link?.startsWith("/") ? <>{namesIn(c.text, c.links) ? withLineLinks(c.text, c.links ?? knownLinks(), { rest: c.link, draw: plain }) : <a href={c.link} data-stop-link="">{c.text}</a>} · {time(c.at)}</> : c.kind === "account-at" ? <>{linked(c.text, c.links)} at {time(c.at)}</> : c.kind === "yours" ? <>{linked(c.text, c.links)} at {time(c.at)}.</> /* (batch 23 section 5) Edit: "Instructions: your version will replace the one saved in another tab at 3:54 PM." */ : c.kind === "account" || c.kind === "stop" || c.timed ? linked(c.text, c.links) /* (batch 30 §10) "… edited the listing at 6:55 PM: …" says its own time */ : <>{linked(c.text, c.links)} · {time(c.at)}</>}
                 {/* (Owner, Oct 28) "Ana switched to the new terms" / "kept their current terms": the same "See their contract" as the top box (scrolls on the test page; a new tab from Edit). */}
                 {c.kind === "terms" && c.contract && <> <ContractLink contract={c.contract} /></>}
                 {/* (Batch 30 §10; batch 34 §14) A listing change (a tester's "… edited the listing at 6:55 PM: …", the developer's "You saved the listing in another tab: …"). */}
@@ -90,7 +99,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
       {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{refusalLine(named, error)} <ResendConfirm label="Resend the link" /></p> : isPerkRefusal(error) ? <p className="flex flex-wrap items-center gap-2" data-perk-refusal="">{refusalLine(named, error)} <SubscribeLink /></p> : link ? (
         // The refusal names something on this page (the other side's waiting request): the text links to it.
         <p><a href={`#${link}`} onClick={(e) => { e.preventDefault(); jumpTo(link); }}>{refusalLine(named, error)}</a></p>
-      ) : <p data-refusal="" {...(error === ANSWER_TERMS_FIRST ? { "data-answer-terms": "" } : {})}>{refusalLine(named, error)}</p>)}
+      ) : <p data-refusal="" {...(error === ANSWER_TERMS_FIRST ? { "data-answer-terms": "" } : {})}>{linked(refusalLine(named, error))}</p>)}
     </div>
   );
 }

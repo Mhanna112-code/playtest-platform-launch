@@ -104,7 +104,7 @@ describe("§160 the peek's changes: what would have stopped the press since it",
     for (let i = 0; i < 2; i++) {
       const r = await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since });
       expect(r.status).toBe(200);
-      expect(r.body).toEqual({ status: "waiting", changes: ["Ana Silva disputed the pay for her recording"], still: "Complete still pays $10.00 as pressed; or press Cancel." });
+      expect(r.body).toEqual({ status: "waiting", changes: ["Ana Silva disputed the pay for her recording"], still: "Complete still pays $10.00 as pressed; or press Cancel.", links: [expect.objectContaining({ text: "Ana Silva", kind: "person" })] }); // (§270)
     }
     // Read-only: no claim, no answered-log, nothing at Stripe.
     expect(await snapshot(o.dev.user.id)).toEqual(before);
@@ -128,7 +128,7 @@ describe("§160 the peek's changes: what would have stopped the press since it",
     await logEvent(o.testId, "admin", "The team decided Ana Silva's dispute: $5.00 more for her recording", o.sessionId);
     await settle();
     await db.actionLog.create({ data: { userId: o.dev.user.id, testId: o.testId, text: "invited Omar Reed", tab: TAB } });
-    expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since })).body).toEqual({ status: "waiting", changes: ["The team decided Ana Silva's dispute: $5.00 more for her recording"], still: stillPaysLine("$10.00") });
+    expect((await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since })).body).toEqual({ status: "waiting", changes: ["The team decided Ana Silva's dispute: $5.00 more for her recording"], still: stillPaysLine("$10.00"), links: [expect.objectContaining({ text: "Ana Silva", kind: "person" })] }); // (§270)
     await settle();
     await db.actionLog.create({ data: { userId: o.dev.user.id, testId: o.testId, text: "invited Lee Park", tab: "another-tab" } });
     const r = await peek(o.dev.cookie, { paymentId: o.paymentId, since: o.since });

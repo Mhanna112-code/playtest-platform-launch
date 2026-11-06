@@ -32,7 +32,7 @@ export function partPayStatus(p: { status: string }, row?: Pick<PaidRow, "revers
 }
 
 /** One line of a part's payments: Payments' line (`what`, `full` its hover, `how`), then `when`, `amount` and `status`. */
-export type PartPayLine = { id: string; what: string; full: string; how: string; when: string; amount: string; status: string };
+export type PartPayLine = { id: string; what: string; full: string; how: string; when: string; amount: string; status: string; /** (Owner, Nov 5, §270) the people and tests it names, green links */ links?: import("@/lib/lineLinks").LineLink[] };
 
 type Pay = Parameters<typeof paidRows>[0][number] & { status: string; createdAt: Date; actionPi?: string | null; coveredById?: string | null };
 
@@ -46,7 +46,7 @@ export async function partPaymentLines(ps: Pay[], when: (d: Date) => string): Pr
   for (const p of shown) {
     const r = rows.get(p.id);
     const key = (p.submissionId ?? p.callId)!;
-    out.set(key, [...(out.get(key) ?? []), { id: p.id, what: r?.what ?? plainLabel(p.kind), full: r?.full ?? plainLabel(p.kind), how: r?.how ?? "", when: when(p.createdAt), amount: money(p.amountCents), status: partPayStatus(p, r, p.status === "deferred" && (await bankCheckOpen(p))) }]);
+    out.set(key, [...(out.get(key) ?? []), { id: p.id, what: r?.what ?? plainLabel(p.kind), full: r?.full ?? plainLabel(p.kind), how: r?.how ?? "", when: when(p.createdAt), amount: money(p.amountCents), links: r?.links ?? [], status: partPayStatus(p, r, p.status === "deferred" && (await bankCheckOpen(p))) }]);
   }
   return out;
 }

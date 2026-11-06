@@ -1,6 +1,6 @@
-import { additionsUntil, writtenThreads, type AddedText } from "./additions";
+import { additionsUntil, quoteQuestion, writtenThreads, type AddedText } from "./additions";
 import { prevSetsOf, versionsOf, type SetItem } from "./answerSets";
-import { qOptional, qText } from "./questions";
+import { qOptional, qStored, qText, questionSetChanges, sameQuestionSet } from "./questions";
 
 /**
  * (Owner, Nov 5, batch 35 §263, final; replaces §234's Past questions box and §254's earlier-set answers in it) Old questions live only in Terms history. Each
@@ -35,6 +35,32 @@ export function questionChanges(prevSets: unknown, current: string[], sub: { ans
       return { question: qText(it.question), required: it.required, sent, draft: !sent && opts.drafts && draftText.trim() ? draftText : null };
     });
     const next = p.to ?? (sets[i + 1] ? sets[i + 1].items.map((x) => (x.required ? `[required] ${x.question}` : x.question)) : current);
-    return { at: p.until, then, now: asNow(next) };
-  });
+    return { at: p.until, then, now: inThenOrder(qs, asNow(next)) };
+  })
+    // (§269) An entry from before §269 that only reordered the questions (same words, same Required ticks) was no change: it isn't listed.
+    .filter((ch) => !sameQuestionSet(ch.then.map((q) => qStored(q.question, q.required)), ch.now.map((q) => qStored(q.question, q.required))));
+}
+
+/**
+ * (Owner, Nov 5, §269) Order doesn't matter: an entry shows the real changes, never a reorder made with them. Now lists the questions that stayed in Then's
+ * order, then the new ones (in the order they were saved), so Then → Now differs only by what was removed, added or ticked.
+ */
+function inThenOrder(then: string[], now: { question: string; required: boolean }[]) {
+  const at = (q: string) => then.findIndex((t) => qText(t) === qText(q));
+  const kept = now.filter((q) => at(q.question) >= 0).sort((a, b) => at(a.question) - at(b.question));
+  return [...kept, ...now.filter((q) => at(q.question) < 0)];
+}
+
+/**
+ * (Owner, Nov 5, §269) A Send Answers / Add to this answer stopped for a questions change its page hadn't shown: the box lists what changed, one line each, in
+ * the stop lines' words ("Nora Lane removed the question “Where did you get stuck?”", "… added the question “…”", "… made the question “…” required"). Never a
+ * reorder: order doesn't matter.
+ */
+export function questionChangeTexts(dev: string, before: readonly string[], after: readonly string[]) {
+  const ch = questionSetChanges(before, after);
+  return [
+    ...ch.removed.map((q) => `${dev} removed the question ${quoteQuestion(q)}`),
+    ...ch.added.map((q) => `${dev} added the question ${quoteQuestion(q)}`),
+    ...ch.required.map((r) => `${dev} made the question ${quoteQuestion(r.question)} ${r.required ? "required" : "not required"}`),
+  ];
 }

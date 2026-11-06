@@ -5,6 +5,7 @@ import { CONFIRM_DAYS, OVER_PAY_TICK_LINE, PAY_TICK_CENTS, PRESS_ACTION_MS, BANK
 import { awayFromTest, onTestLine } from "@/lib/rules"; // (§177)
 import { bankTopLead, confirmByText, pieceWords, type BankTopRow } from "@/lib/bankTop";
 import { HttpError } from "./http";
+import { lineLinks, linkPool } from "./lineLinks";
 import { payPressOf, seenOf } from "./live";
 import { notify, renderFor } from "./notify";
 import { ADD_CARD_FIRST, bankReturnUrl, checkUrlOf, fakeConfirm, fakeOn, forgetCard, getStripe, isMissing, stripeOn, type NeedsAction } from "./stripe";
@@ -164,6 +165,8 @@ export async function confirmItems(devId: string) {
   const once = await import("./owedOnce");
   const [covers, coversFull] = await Promise.all([once.coveredNames(owedIds), once.coveredNames(owedIds, true)]);
   const links = await testLinksOf(waiting);
+  // (Owner, Nov 5, §270) Every person and test the row names is its own green link (the developer's link pool).
+  const pool = await linkPool(devId);
   return waiting.map((p) => {
     const n = named(p);
     // (§131) `full`: the same line with the names uncut (the item's hover).
@@ -179,7 +182,7 @@ export async function confirmItems(devId: string) {
     const line = (piece: string | null, cov: Map<string, string[]>) => { const x = parts(piece, cov); return `${x.what} ${x.amount}${x.list}${x.on} · ${x.by}`; };
     // (Owner, Nov 5, batch 35 §246) For the row: the "what" (cut at 50 (§251) with its arrow), then its amount and "confirm by", always shown outside the cut.
     const whole = parts(n.full, coversFull);
-    return { id: p.id, what: `${whole.what}${whole.list}${whole.on}`, amount: whole.amount, by: whole.by, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [], cents: p.amountCents };
+    return { id: p.id, what: `${whole.what}${whole.list}${whole.on}`, amount: whole.amount, by: whole.by, text: line(n.piece, covers), full: line(n.full, coversFull), href: n.c ? bankHref(n.c.testId, p.id) : null, tests: links.get(p.id) ?? [], links: lineLinks(pool, line(n.full, coversFull), n.c?.testId), cents: p.amountCents };
   });
 }
 
@@ -201,6 +204,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
   const once = await import("./owedOnce");
   const [covers, coversFull] = await Promise.all([once.coveredNames(owedIds), once.coveredNames(owedIds, true)]);
   const links = await testLinksOf(waiting);
+  const pool = await linkPool(devId); // (Owner, Nov 5, §270) the row's names and test, green links
   return waiting
     .map((p): BankTopRow => {
       const n = named(p);
@@ -222,7 +226,7 @@ export async function bankToConfirm(devId: string, now = new Date()): Promise<Ba
         return bankTopLead(p.amountCents, namesTest ? null : c?.title ?? null, what);
       };
       const by = confirmByText(p.actionBy!, now, tz);
-      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [], cents: p.amountCents };
+      return { id: p.id, lead: lead(n.piece, covers), full: lead(n.full, coversFull), by: by.text, soon: by.soon, href: c ? bankHref(c.testId, p.id) : `/app/payments#${bankAnchor(p.id)}`, at: p.actionBy!.getTime(), tests: links.get(p.id) ?? [], links: lineLinks(pool, lead(n.full, coversFull), c?.testId), cents: p.amountCents };
     })
     .concat(allRow)
     .sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
@@ -239,13 +243,14 @@ export async function bankWaitingOnTest(devId: string, testId: string) {
   // (Batch 25 section 1) "Confirm it by" (and a call's time) in the developer's own time zone, like the dashboard's row.
   const tz = await zoneOf(devId);
   const named = await piecesNamed(waiting, (d) => fmtDateTimeIn(d, tz));
+  const pool = await linkPool(devId, [testId]); // (Owner, Nov 5, §270) any person or test the line names, a green link
   return waiting.map((p) => {
     const { c, sub, call, theirs, theirsFull } = named(p);
     const what = (x: string) => (p.kind === "dispute" ? pieceWords.dispute(x) : p.kind === "chargeback" ? pieceWords.reversed(x) : x);
     // (§131) `full`: the line with the names uncut, its hover. (Owner, Nov 4, §175) The page lists these under each tester's name, so a line names its piece by the
     // tester's pronoun: "… a $15.50 payment for her live call (Oct 30), made while you were away. …" (this line is shown only here; §180: so it names no test).
     // (Owner, Nov 4, §181) `at`: when it started waiting (Needs you puts the person whose oldest thing waits longest first).
-    return { id: p.id, at: p.createdAt, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(theirs!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(theirsFull!), fmtDateTimeIn(p.actionBy!, tz)) };
+    return { id: p.id, at: p.createdAt, cents: p.amountCents, contractId: c!.id, pieceId: sub?.id ?? call?.id ?? null, line: bankWaitingLine(p.amountCents, what(theirs!), fmtDateTimeIn(p.actionBy!, tz)), full: bankWaitingLine(p.amountCents, what(theirsFull!), fmtDateTimeIn(p.actionBy!, tz)), links: lineLinks(pool, bankWaitingLine(p.amountCents, what(theirsFull!), fmtDateTimeIn(p.actionBy!, tz)), testId) };
   });
 }
 

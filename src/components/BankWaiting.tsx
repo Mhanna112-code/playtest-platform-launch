@@ -1,6 +1,7 @@
 "use client";
 import { WhatLine } from "@/components/WholeLine";
-import { withTestLinks, type TestLink } from "@/components/TestLinks";
+import { type TestLink } from "@/components/TestLinks";
+import { lineRender, withTests, type LineLink } from "@/components/LineLinks";
 import { useState, type ReactNode } from "react";
 import { useBankCheck } from "@/components/BankCheck";
 import { useBankGroupHold } from "@/components/HoldFold";
@@ -41,7 +42,7 @@ export async function cancelOwnCheck(paymentId: string): Promise<{ ok: true; lin
  * (Owner, Oct 29, batch 23 section 9) On a test page the press runs the developer's stop-once check first, exactly like Pay on that piece: anything the page hasn't shown
  * stops it once in the blue box under the button; the second press opens the bank's check. Refusals (already confirmed, expired, cancelled) are plain.
  */
-export function BankWaiting({ text, render, tests, after, before, paymentId, line, full, seenAt = "", wide = false, cents, own = false, anchor = true }: { /** (hotfix of §230) the quoted test names to link (data, so a server component can pass it; `render` only from a client one) */ tests?: TestLink[]; /** (§230) the line as plain text (cut names), with `render` for its pieces and `after` (a date) — it then opens like a payment row */ text?: string; render?: (t: string) => ReactNode; after?: ReactNode; /** (§246) the amount before the "what", always shown */ before?: ReactNode; paymentId: string; /** (Owner, Nov 4, §188 B) false: a second copy (in a Pay more box) without the `bank-<id>` anchor, which stays on the list's row */ anchor?: boolean; /** (§160) the developer's own press (a Pay or Pay more whose bank window is open in another tab, or was left): Cancel this check is offered */ own?: boolean; line: ReactNode; /** (§131) the line with the names uncut: its hover */ full?: string; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string; /** (Owner, Nov 3) its amount: over $200 the tick "I confirm this payment is over $200." is needed (as Pay's) */ cents?: number }) {
+export function BankWaiting({ text, render, tests, links, after, before, paymentId, line, full, seenAt = "", wide = false, cents, own = false, anchor = true }: { /** (hotfix of §230) the quoted test names to link (data, so a server component can pass it; `render` only from a client one) */ tests?: TestLink[]; /** (Owner, Nov 5, §270) the people and tests the line names, each its own green link (data, as `tests`) */ links?: LineLink[]; /** (§230) the line as plain text (cut names), with `render` for its pieces and `after` (a date) — it then opens like a payment row */ text?: string; render?: (t: string) => ReactNode; after?: ReactNode; /** (§246) the amount before the "what", always shown */ before?: ReactNode; paymentId: string; /** (Owner, Nov 4, §188 B) false: a second copy (in a Pay more box) without the `bank-<id>` anchor, which stays on the list's row */ anchor?: boolean; /** (§160) the developer's own press (a Pay or Pay more whose bank window is open in another tab, or was left): Cancel this check is offered */ own?: boolean; line: ReactNode; /** (§131) the line with the names uncut: its hover */ full?: string; wide?: boolean; /** the test page's load time; none on Payments (a renewal: no test) */ seenAt?: string; /** (Owner, Nov 3) its amount: over $200 the tick "I confirm this payment is over $200." is needed (as Pay's) */ cents?: number }) {
   const bank = useBankCheck();
   // (Batch 35 §40, §41) Confirmed: the page redraws in place; until it has, the button stays greyed with the confirmed line.
   // (§176) On the dashboard: from its first load, never a redraw's render time (elsewhere: the page's own marker, unchanged).
@@ -84,7 +85,7 @@ export function BankWaiting({ text, render, tests, after, before, paymentId, lin
       {/* (Owner, Nov 5, §246; was §230's per-name cut) The "what" cut at 50 (§251) with the arrow, opened in place (WhatLine); `before` (the amount) and `after` (confirm by)
           always show, outside the cut, and so do the buttons below. A test page's sentence ("Your bank wants you to confirm a $10.00 payment for her written answers,
           … Confirm it by …") carries its amount and date inside it, so it shows whole. */}
-      <p className="[overflow-wrap:anywhere]">{before}{text != null ? <WhatLine text={full || text} render={render ?? (tests ? (t) => withTestLinks(t, tests) : undefined)} after={after} /> : line}</p>
+      <p className="[overflow-wrap:anywhere]">{before}{text != null ? <WhatLine text={full || text} render={render ?? (tests || links ? lineRender(withTests(links, tests), { newTab: true }) : undefined)} after={after} /> : line}</p>
       {over && !doneLine && (
         <label className="flex max-w-xs items-start gap-2 text-sm" data-over-tick="">
           <input type="checkbox" className="mt-1" data-match="^Tick “I confirm" checked={over200} onChange={(e) => setOver200(e.target.checked)} /> {OVER_PAY_TICK_LINE}
