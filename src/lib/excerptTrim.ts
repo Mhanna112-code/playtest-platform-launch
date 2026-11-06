@@ -1,5 +1,5 @@
 /**
- * (Owner, Nov 4, §196) Trimming an excerpt is delete-only: the box starts with the whole answer (its plain text) and only deleting works. What is kept is a mask
+ * (Owner, Nov 4, §196) Trimming an excerpt is delete-only (§262: typing back a deleted character, the very one, restores it): the box starts with the whole answer (its plain text) and only deleting works. What is kept is a mask
  * over the answer's characters (true: kept). Shared by the tester's box (Excerpts.tsx) and the server's check (excerpts.ts requestExcerpt).
  *   - Where a part was removed from the MIDDLE (words kept on both sides), the excerpt reads " … " there. Nothing marks a cut at the very start or end, and a
  *     removed run of spaces or line breaks only is one space (words are never glued together).
@@ -57,6 +57,43 @@ export function deletedRange(old: string, next: string, caret?: number | null): 
   while (s < next.length - p && old[old.length - 1 - s] === next[next.length - 1 - s]) s++;
   if (p + s !== next.length) return null;
   return { start: p, end: old.length - s };
+}
+
+/**
+ * (Owner, Nov 5, §262) A change that typed text into the box: where (a box position in the OLD value) and what, when `next` is `old` with exactly one run
+ * inserted, else null. `caret` (after the change, the end of what was typed) places it when the text alone can't tell.
+ */
+export function insertedRange(old: string, next: string, caret?: number | null): { at: number; text: string } | null {
+  if (next.length <= old.length) return null;
+  const len = next.length - old.length;
+  if (caret != null && caret >= len && caret <= next.length) {
+    const at = caret - len;
+    if (old.slice(0, at) === next.slice(0, at) && old.slice(at) === next.slice(caret)) return { at, text: next.slice(at, caret) };
+  }
+  let p = 0;
+  while (p < old.length && old[p] === next[p]) p++;
+  let s = 0;
+  while (s < old.length - p && old[old.length - 1 - s] === next[next.length - 1 - s]) s++;
+  if (p + s !== old.length) return null;
+  return { at: p, text: next.slice(p, next.length - s) };
+}
+
+/**
+ * (Owner, Nov 5, §262) Typing back what was deleted by accident: `text` typed at box position `at` restores the answer's left-out characters right there, in order
+ * (the first left-out character after the kept one before the caret, then the next ...), when each typed character is exactly that character. Anything else
+ * (a different character, typing where nothing was left out, typing past the left-out run) is refused: null. The result is still only the answer's own words.
+ */
+export function restoreAt(original: string, kept: readonly boolean[], at: number, text: string): boolean[] | null {
+  if (!text) return null;
+  let i = 0;
+  for (let seen = 0; i < original.length && seen < at; i++) if (kept[i] !== false) seen++;
+  const out = kept.slice();
+  for (const ch of text) {
+    if (i >= original.length || out[i] !== false || original[i] !== ch) return null;
+    out[i] = true;
+    i++;
+  }
+  return out;
 }
 
 /** The mask after deleting the box's characters [start, end) (box positions, mapped back onto the answer). */

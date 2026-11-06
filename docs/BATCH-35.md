@@ -4646,3 +4646,8 @@ open "Worked with you on 1 test" could sit at the top with no name or heading ov
 
 ## §258 The questions changed: no "(before)" on a removed question (owner, Nov 5)
 A removed question reads "Question 1 · Removed · <its words>" (it was "Question 1 (before)"): the Removed tag already says it.
+
+## §262 Excerpt trim: a character deleted by accident can be typed back (owner, Nov 5)
+The trim box stays delete-only (§196), with one exception: typing, at the caret, the very next character of the answer that was left out there restores it (and
+the next, in order). Any other typing, pasting or dropping is still refused, so the excerpt is always the answer's own words (the server's check is unchanged).
+The hint reads "… you can only leave words out (deleted something by accident? Type it back where it was)." `insertedRange` / `restoreAt` in lib/excerptTrim.ts.
