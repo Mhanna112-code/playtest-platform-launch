@@ -47,7 +47,17 @@ export async function paymentsV(u: User) {
   const names = await db.contract.findMany({ where: { id: { in: rows.flatMap((r) => r.contractId ? [r.contractId] : []) } }, orderBy: { id: "asc" }, select: { id: true, title: true, tester: { select: { name: true, email: true, deletedAt: true } }, test: { select: { developer: { select: { name: true, email: true, deletedAt: true } } } } } });
   // (Owner, Nov 4, §192) A refund line (the bank lowered what it took back after the repayment) redraws the developer's list too.
   const refunds = sideFor(u) === "tester" ? [] : await db.paymentRefund.findMany({ where: { developerId: u.id }, orderBy: { id: "asc" }, select: { id: true, status: true, amountCents: true } });
-  return stateV([rows, names, ...(refunds.length ? [refunds] : [])]);
+  // (Owner, Nov 5, §272) The developer's chargeback steps (a card verified, the team's approval) read from the account, not from a payment: Verify a card in
+  // another tab or device redraws this page (and the dashboard, whose version includes this one) on its next poll, the step ticked and the button gone.
+  const cb = sideFor(u) === "tester" ? null : await chargebackStateV(u.id);
+  return stateV([rows, names, ...(refunds.length ? [refunds] : []), ...(cb ? [cb] : [])]);
+}
+
+/** (Owner, Nov 5, §272) The account's chargeback hold state, as the chargeback steps read it: "" when there's no chargeback hold. */
+export async function chargebackStateV(userId: string) {
+  const me = await db.user.findUnique({ where: { id: userId }, select: { holdStartedAt: true, holdReason: true, chargebackCardVerifiedAt: true, chargebackApprovedAt: true } });
+  if (!me?.holdStartedAt || me.holdReason !== "chargeback") return "";
+  return [me.holdStartedAt.getTime(), me.chargebackCardVerifiedAt?.getTime() ?? 0, me.chargebackApprovedAt?.getTime() ?? 0].join(":");
 }
 
 export async function notificationsV(u: User) {

@@ -4851,3 +4851,13 @@ filters." (`filteredOut` from invitePanel; blocked and deleted accounts are neve
   matched exactly as written; a test name an older cut ended with "…" matches by its visible start (`linksIn`). A name nobody in the pool has stays plain.
 3. Unchanged: the 50 cut and its arrow, hovers, amounts and buttons outside the cut, the stop-once rules, all wording. The tester's earnings rows had no link and
   get only the name links.
+## §272 Verify a card turns off on every open page once verified (owner, Nov 5)
+- The owner's finding: a developer on a chargeback hold with Payments open in two tabs verified the card in one; the other tab's Verify a card stayed enabled
+  until a press was refused ("Your card is already verified.").
+- Rule: once the card is verified, every open page's Verify a card turns off on its next update (the page's poll redraw), without a press.
+- The Payments page's own version (`paymentsV`, `fresh=payments`) now reads the account's chargeback state (`chargebackStateV`: the hold's start, the card
+  verified, the team's approval), as `owedV` (`owed=1`) already did; the dashboard's version includes `paymentsV`, so its restricted box's steps line follows;
+  the test page's version (`testV`, which shows the developer's own chargeback steps) reads it too.
+- On the redraw the card step shows ticked in the same done style as the other steps, Verify a card is gone, and an open card form's Verify this card goes too
+  (kept only while its own press is in flight).
+- A press that lands before the update keeps its refusal (CARD_ALREADY_VERIFIED, §157). Test: tests/verify-card-turns-off-272.test.ts.
