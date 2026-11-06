@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { renderTimes } from "@/lib/tz";
-import { startHold } from "@/lib/server/holds";
+import { closeSoonMarkDue, startHold } from "@/lib/server/holds";
 import { pausedClosingWords } from "@/lib/server/pauseClosure";
 import { suspendAccount } from "@/lib/server/restrictions";
 import { makeUser } from "./helpers";
@@ -59,5 +59,33 @@ describe("§313a one line names the paused tests' closing dates", () => {
     expect(renderTimes((await pausedClosingWords(many.dev.user.id))!, "UTC")).toBe(`“T1”, “T2”, “T3”, “T4” and “T5” close on ${fmt(new Date(now.getTime() + 7 * DAY))} and 2 more`);
     const none = await devWith(["Quiet"]);
     expect(await pausedClosingWords(none.dev.user.id)).toBeNull();
+  });
+});
+
+describe("§313b Closing soon follows a moved closing date", () => {
+  it("a pause moving the date: no repeat that day; the new date's marks come; plain \"co:3\" counts as sent before", () => {
+    const from = new Date("2026-11-01T10:00:00Z");
+    const D = new Date("2026-11-20T15:00:00Z");
+    const rec: string[] = [];
+    const at = (iso: string) => new Date(iso);
+    const step = (close: Date, now: Date) => {
+      const r = closeSoonMarkDue(close, from, now, rec);
+      rec.push(...r.record);
+      return r.send;
+    };
+    expect(step(D, at("2026-11-10T09:00:00Z"))).toBeNull(); // first look
+    expect(step(D, at("2026-11-13T09:00:00Z"))).toBe(7);
+    expect(step(D, at("2026-11-17T09:00:00Z"))).toBe(3);
+    // Paused 5 days: the date moves; the same day's run sends nothing (3 days was sent for the old date).
+    const D2 = new Date(D.getTime() + 5 * DAY);
+    expect(step(D2, at("2026-11-17T12:00:00Z"))).toBeNull();
+    expect(step(D2, at("2026-11-22T09:00:00Z"))).toBe(3);
+    expect(step(D2, at("2026-11-24T09:00:00Z"))).toBe(1);
+    expect(step(D2, at("2026-11-24T18:00:00Z"))).toBeNull();
+    // A plain mark from before §313b: sent for an earlier date.
+    expect(closeSoonMarkDue(D, from, at("2026-11-17T09:00:00Z"), ["co:3"]).send).toBeNull();
+    // The month only when the date was more than a month away when Charge opened.
+    expect(closeSoonMarkDue(new Date(from.getTime() + 40 * DAY), from, new Date(from.getTime() + 10.5 * DAY), ["co:x:seen"]).send).toBe(30);
+    expect(closeSoonMarkDue(new Date(from.getTime() + 25 * DAY), from, new Date(from.getTime() + 18.5 * DAY), ["co:x:seen"]).send).toBe(7);
   });
 });

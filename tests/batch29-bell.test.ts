@@ -145,10 +145,10 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
       for (let d = 0; d <= closesInDays + 1; d++) {
         for (const h of [0, 6, 12, 18]) {
           const m = closeSoonMarkDue(at, from, new Date(from.getTime() + d * DAY + h * 3_600_000), sent);
-          if (m) sent.push(`co:${m}`);
+          sent.push(...m.record);
         }
       }
-      return sent;
+      return sent.filter((x) => !x.endsWith(":seen")).map((x) => `co:${x.split(":").pop()}`); // (§313b) keyed by the closing date
     };
     expect(run(40)).toEqual(["co:30", "co:7", "co:3", "co:1"]);
     expect(run(5)).toEqual(["co:3", "co:1"]);
@@ -185,7 +185,7 @@ describe("§22 closing soon (developer) and the tester's one daily Charge line",
     expect(soon[0].text).toContain("Ana's written answers on “Harbor Run”");
     expect(soon[0].text).toContain("Ben's written answers on “Sky Lab”");
     expect(soon[0]).toMatchObject({ link: "/app#needs-review", mustEmail: true, payment: true, groupKey: "closeout" });
-    expect((await db.submission.findUniqueOrThrow({ where: { id: a.sub.id } })).devMarks).toContain("co:3");
+    expect((await db.submission.findUniqueOrThrow({ where: { id: a.sub.id } })).devMarks.some((x) => /^co:\d+:3$/.test(x))).toBe(true); // (§313b) keyed by the closing date
     // The old per-piece lines are gone.
     expect((await lines(dev.user.id)).some((l) => /^Pay Ana Silva's work on/.test(l.text))).toBe(false);
     // "Pay now" is kept alongside it: one line for both.
