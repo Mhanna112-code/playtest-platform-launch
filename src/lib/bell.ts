@@ -21,8 +21,13 @@ export const GROUP_TITLES: Record<string, string> = {
   tarrived: "Delayed payments arrived",
   tstopped: "Tests stopped or ended",
   suspendedreview: "Suspended accounts",
-  // (Batch 15 section 35) A tester asked for a call.
+  // (Batch 15 section 35) A tester asked for a call. (Owner, Nov 6, §286) Every call-request line on either side (a request received, one withdrawn, declined, taken or
+  // closed), one entry a day across tests: "Call requests · 3 today".
   callrequests: "Call requests",
+  // (§286) Every booked-call line on either side ("Booked: …"), one entry a day across tests: "Booked calls · 2 today".
+  booked: "Booked calls",
+  // (§286) The developer added their side to the tester's dispute, one entry a day across tests.
+  disputeside: "Sides added to your disputes",
   // (Batch 19 section 1) The close-out reminders (3 days and 1 day before a piece closes) stack under a heading too.
   closeout: "Closing soon",
   // (Owner, Oct 29, batch 29 §21-29, §33) More lines of one kind stack across tests, one entry per kind per day.
@@ -36,7 +41,7 @@ export const GROUP_TITLES: Record<string, string> = {
   adminreports: "Reports",
   adminlifts: "Hold lifts waiting",
   // (Owner, Nov 4, §185) Per test and day ("reqclosed:<testId>", "appwithdrawn:<testId>"): call requests the other side withdrew or that a booking closed; a
-  // tester withdrawing her application.
+  // tester withdrawing her application. (§286) New call-request lines go in "callrequests" instead; "reqclosed" stays for the lines already written.
   reqclosed: "Call requests closed",
   appwithdrawn: "Applications withdrawn",
   // (Owner, Nov 5, §201) The developer's payments that went through (every receipt line), one entry a day across tests.
@@ -48,6 +53,10 @@ export const GROUP_TITLES: Record<string, string> = {
 export const DMS_GROUP = "dms";
 /** (§201) The group of every developer receipt line ("You paid $X for …"): "Paid · 3 payments today". */
 export const PAID_GROUP = "devpaid";
+/** (Owner, Nov 6, §286) Every call-request bell line, both sides, one entry a day across tests (it replaces §185's per-test "reqclosed:<test>" stacks). */
+export const CALL_REQUESTS_GROUP = "callrequests";
+/** (§286) Every booked-call bell line ("Booked: …"), both sides, one entry a day across tests. */
+export const BOOKED_GROUP = "booked";
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
 export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => string> = {
@@ -63,6 +72,9 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   reqclosed: (_n, lines) => `Call requests · ${lines} closed today`,
   appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn today`,
   dms: (_n, lines) => `Direct messages · ${lines} today`,
+  // (Owner, Nov 6, §286) "Call requests · 3 today", "Booked calls · 2 today" (counting lines, across tests).
+  callrequests: (_n, lines) => `Call requests · ${lines} today`,
+  booked: (_n, lines) => `Booked calls · ${lines} today`,
   // (Owner, Nov 5, §201) "Paid · 3 payments" (counting lines: each receipt line is one payment; a Confirm all line is one payment on the card).
   devpaid: (_n, lines) => `Paid · ${lines} payment${lines === 1 ? "" : "s"}`,
 };

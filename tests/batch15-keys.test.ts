@@ -76,11 +76,12 @@ describe("the broken-key warning (section 45)", () => {
     expect(k.broken).toEqual([]);
     expect((await db.accessKey.findUniqueOrThrow({ where: { id: ka.id } })).status).toBe("inuse");
     expect((await db.accessKey.findUniqueOrThrow({ where: { id: kb.id } })).status).toBe("broken"); // only hidden
-    // Ana's next press from her older page stops once, even with Alerts Off (it's her contract); no bell.
+    // Ana's next press from her older page stops once, even with Alerts Off (it's her contract). (Owner, Nov 6, §286; was "no bell") Her bell rings too, once,
+    // without the key.
     const r = await sact(a.sessionId, "written", a.tester.cookie, { answers: ["x", "y"], seenAt: loaded });
     expect(r.body.error?.code).toBe("stop_once");
     expect(r.body.error.changes.map((c: { text: string }) => c.text)).toEqual(["Nora Lane marked your key as working (K1)"]);
-    expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "marked your key" } } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: a.tester.user.id, text: { contains: "marked your key" } } })).toBe(1);
     // She can report it again: the warning shows again.
     await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
     expect((await keyBoxes(testId)).broken.map((x) => x.value)).toEqual(["K1"]);

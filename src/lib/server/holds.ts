@@ -1706,6 +1706,8 @@ export async function autoChargeCalls(now: Date) {
     if (!review) continue; // paid (or charged) meanwhile
     if (!amount) {
       await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${call} closed with nothing to pay`, false, {}, c.id, "", `call-${x.id}`));
+      // (Owner, Nov 6, §286) The developer's top box line, in their bell too (nothing was charged, so no receipt says it).
+      await bell(dev.id, `${call} closed with nothing to pay`, `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", testId: c.testId });
       continue;
     }
     // (§131) The developer's payment lines name the tester, the part and the test (pieceName).
@@ -1824,7 +1826,10 @@ export async function chooseOutcome(tester: { id: string; email: string; name: s
   const review = await claimChoice(c.testId, { submissionId: s.id }, displayName(dev), { submissionId: s.id, contractId: c.id, amountCents: amount, agreedCents: s.agreedCents, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} ${label} go: nothing charged`, false, {}, c.id, "", `part-${s.id}`));
+    const line = `${displayName(tester)} let ${pronouns(tester.pronoun).poss} ${label} go: nothing charged`;
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", line, false, {}, c.id, "", `part-${s.id}`));
+    // (Owner, Nov 6, §286) The developer's top box line rings their bell too, in the same words, linking to the part (its Charge her Charge would have paid).
+    await bell(dev.id, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { side: "developer", testId: c.testId });
     return { choice, amountCents: 0 };
   }
   // (Batch 35 §113) During a hold the tester's choice waits separately until the hold lifts; it never grows Pay what you owe.
@@ -1965,7 +1970,10 @@ async function chooseCallOutcome(tester: { id: string; email: string; name: stri
   const review = await claimChoice(c.testId, { callId: x.id }, displayName(dev), { callId: x.id, contractId: c.id, amountCents: amount, agreedCents: x.rateCents != null && minutes != null ? callReference(x.rateCents, minutes).cents : null, reason: choice === "charge" ? CHARGED_BY_TESTER : LET_GO_BY_TESTER, payKey });
   if (!review) throw new HttpError(409, "done", "This was already settled.");
   if (choice === "letgo") {
-    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)} go: nothing charged`, false, {}, c.id, "", `call-${x.id}`));
+    const line = `${displayName(tester)} let ${pronouns(tester.pronoun).poss} call on ${callAtFor(x.startsAt, dev)} go: nothing charged`;
+    await db.$transaction((tx) => recordEvent(tx, c.testId, "rejected", line, false, {}, c.id, "", `call-${x.id}`));
+    // (Owner, Nov 6, §286) The same line in the developer's bell, linking to the call.
+    await bell(dev.id, line, `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", testId: c.testId });
     return { choice, amountCents: 0 };
   }
   if (await deferIfHeld({ kind: "call", callId: x.id, contractId: c.id, developerId: dev.id, testerId: c.testerId, amountCents: amount, feeCents: 0, testerCents: 0 })) {

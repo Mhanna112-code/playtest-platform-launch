@@ -1,7 +1,7 @@
 import { dateZone } from "./dateZone";
 import { TEAM_LIFTED_EVENT, TEAM_PAUSED_EVENT, devLiftSince, devPauseMoments, devPauseSince, devStopSince, loadedOf } from "./stopMoment";
 import { replaceLine, takesTheirs } from "@/lib/editMerge";
-import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
+import { FIELD_NAMES, INFO_FIELDS, editedLine, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { notListed, sidOf } from "./shownLines";
 import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText, sameQuestionSet, sameQuestionWords } from "@/lib/questions";
@@ -385,6 +385,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   const questionsFollowed: { contractId: string; email: string }[] = [];
   // (Owner, Nov 5, §267) The working testers whose NDA this Save changed (each gets its own notice in the bell).
   let ndaFollowed: Awaited<ReturnType<typeof followNda>> = [];
+  // (Owner, Nov 6, §286) The working testers whose top box gets this Save's "Nora Lane edited the listing" line (it changed the title or the listing information).
+  let editedFor: { id: string; testerId: string; tester: { email: string } }[] = [];
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -575,6 +577,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (fields.includes("title")) await tx.testEvent.create({ data: { testId, kind: "renamed", text: `${displayName(dev)} renamed the test to ${next.title}` } });
     // (Batch 30 §10) Testers read ONE line per save, everywhere (join page, session page, stop boxes, top boxes): what this save changed, for each page to word.
     if (listingFields.length) await tx.testEvent.create({ data: { testId, kind: "listing_save", text: saveText({ by: displayName(dev), fields: listingFields, title: next.title, nda: !!next.ndaText }) } });
+    // (§286) The fields a working tester's line counts (saveLine's "session" side): the title and the listing information.
+    if (listingFields.some((f) => f === "title" || INFO_FIELDS.includes(f))) editedFor = await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, tester: { select: { email: true } } } });
     changedNames = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])];
     reinvite = fields.some((f) => CLOSING_FIELDS.includes(f));
     spotsChanged = fields.includes("spots");
@@ -613,6 +617,13 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   for (const n of ndaFollowed) {
     const line = ndaChangedLine(displayName(dev));
     await notify(n.email, line, [`${line}.`, n.kind === "changed" ? "Read it on your session page." : `Open it on your session page before you go on: until then your presses on this test wait for it (except Rate and Leave).`], ndaNoticeHref(n.contractId), { about: dev.id, testId });
+  }
+  // (Owner, Nov 6, §286) Every other working tester whose top box shows "Nora Lane edited the listing" gets it in the bell too, linking to "Your agreed scope" (each
+  // changed line marked there). A tester told of this Save's questions above already has its line (never two for one Save); the NDA keeps its own notice.
+  const questionsTold = new Set(questionsFollowed.map((q) => q.contractId));
+  for (const c of editedFor.filter((x) => !questionsTold.has(x.id))) {
+    const line = editedLine(displayName(dev));
+    await notify(c.tester.email, line, [`${line}.`, "What changed is marked in Your agreed scope on your session page."], `/app/sessions/${c.id}#scope`, { recipientId: c.testerId, about: dev.id, testId });
   }
   // (Batch 30 §17) Each tester given a key: a line in their session page's top box and a bell line (the key itself only on their page, never in the bell or email).
   for (const g of keysGiven) {

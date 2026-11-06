@@ -4951,3 +4951,32 @@ with ×.
   typed notes; Needs you's update rows have none.
 - paidZeroLine / teamClosedLine keep their text (built from the labels). Tests: tests/notes-in-boxes-281.test.ts; batch9, batch30-money, batch30-money-fixes and
   batch35-admin-tabs follow the new markup.
+
+## §286 A bell for every update a person's top box can show (owner, Nov 6)
+- The owner's rule: every kind of update that can show as a blue top-box line for a person also gives them a bell line (and its summary email, as their email
+  setting says), on both sides, in the top box's words, linking to the exact place. Old events get no bells afterwards. The developer's own presses (any tab)
+  never ring themselves.
+- New tester bells: the developer's call request, one per request (each row of a press is its own), "Nora Lane requested a call for …" linking to its row
+  (`/app/sessions/<id>#req-<request>`; an auto-matched row rings "Booked: …" instead); "Nora Lane declined your call request for …"; "The call time with Nora Lane
+  on … is no longer available: another tester took it" (closeBatch); "The call time with Nora Lane on … is no longer available" for the developer's requests
+  closed for a reason her top box shows, e.g. a pause (`testerSeesClosed` in testerGate.ts; never her own Leave or rating, the stop / end / early end, or §184's
+  drops); "Nora Lane added her side to your dispute about …" (to that part); "Nora Lane marked your key as working" (to her key box; never the key, as batch 30
+  §17; replaces batch 15 §45's "no bell"); "Nora Lane edited the listing" to each working tester when a Save changed the title or the listing information (to
+  "Your agreed scope"; a tester told of the same Save's questions by §265's bell gets only that one); "“Harbor Run” ended" when the test's time runs out
+  (finishWorkIfDue, in "Tests stopped or ended").
+- New developer bells: "Ana Silva declined a call request for …"; "Ana Silva reported her key doesn't work" (replaces batch 14 §6's "no bell"); "Ana Silva switched
+  to the new terms"; "Ana Silva said no thanks to your invite" (to the Invite testers panel); "Ana Silva let her written answers go: nothing charged" (and a
+  call's); "Ana Silva's call on … closed with nothing to pay".
+- Stacks (owner's addition): call requests on either side (received, withdrawn, declined, taken, closed, §185's drops) are ONE entry a day across tests,
+  "Call requests · 3 today" (group "callrequests"; §185's per-test "reqclosed:<test>" stays only for lines already written); booked calls ("Booked: …", both
+  sides) likewise, "Booked calls · 2 today" (group "booked"). Both stack in the email too (EMAIL_STACKED). Excerpt lines now stack in "Excerpts" on both sides
+  (the developer's "asked to show an excerpt" and the closed-on-deletion line joined the tester's decisions). The developer's side added to a dispute stacks in
+  "Sides added to your disputes" (group "disputeside").
+- Left out, with the reason: the person's own other-tab actions ("You … in another tab", their own "You requested / booked / withdrew …"); §184's quiet lines
+  about the person's own booking (t_req_dropped / req_dropped: their own booking, or the "Booked: …" line that already rang); "X is full" (a consequence of a
+  join that rang "joined", or of their own Save; the closed applicants get their own bells); "X can now charge or let go of …" (the developer's daily "Pay now"
+  line says it); a rating from a tester whose part had ended (the "You can rate her" bell, when the developer's window opens; ratings stay blind); the
+  subscription ending after their own cancel, or the free launch ending (told 30 and 7 days before); the old slot kinds (confirmed / offered / removed: no longer
+  written).
+- Tests: tests/bell-parity-286.test.ts; call-limit-request-boxes-185 and drop-overlapping-requests follow the one-a-day "Call requests" stack; batch15-keys
+  expects the key-marked-working bell.

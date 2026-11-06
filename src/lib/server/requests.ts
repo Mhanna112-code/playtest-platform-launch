@@ -11,8 +11,9 @@ import { DEV_SUSPENDED } from "./users";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
+import { BOOKED_GROUP, CALL_REQUESTS_GROUP } from "@/lib/bell";
 import { devGate, recordEvent } from "./tests";
-import { FINISHED_PART_REASON, finishedPartReason, testerGate } from "./testerGate";
+import { FINISHED_PART_REASON, finishedPartReason, requestWords, testerGate, testerSeesClosed } from "./testerGate";
 import { answerTermsFirst } from "./terms";
 import { CALL_MIN_AHEAD_MINUTES, farEnoughAhead } from "@/lib/callLead";
 import { afterEndToBookLine, beforeEndLine, leadLine, tooSoonToBookLine, windowShut, windowShutLine, type CallEnd } from "@/lib/callWindow";
@@ -361,7 +362,7 @@ async function bookAt(contractId: string, startsAt: Date, minutes: number, rateC
     return call;
   });
   // (Owner, Nov 4, §185) The bells for the requests it closed, once the booking is in (never for a booking that rolled back).
-  for (const b of bells) await bell(b.userId, b.text, b.link, undefined, { testId: b.testId, group: `reqclosed:${b.testId}` });
+  for (const b of bells) await bell(b.userId, b.text, b.link, undefined, { testId: b.testId, group: CALL_REQUESTS_GROUP });
   return booked;
 }
 /** (§185) A bell owed to the other person of a request a booking closed. */
@@ -426,7 +427,7 @@ async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date
     await recordEvent(tx, r.testId, devBusy ? "req_dropped" : "req_closed", `${devText}`, false, {}, r.contractId);
     await recordEvent(tx, r.testId, testerBusy ? "t_req_dropped" : "t_req_closed", `${testerText}`, false, {}, r.contractId);
     // (Owner, Nov 4, §185) The request's other person (the one without the call) is no longer stopped by it (req_closed / t_req_closed are quiet live-box lines
-    // now, like the person with the call's): they get a bell instead (and its email, per their settings), stacked per test and day ("Call requests · 3 closed today").
+    // now, like the person with the call's): they get a bell instead (and its email, per their settings), stacked (§286: one entry a day across tests, "Call requests · 3 today").
     if (!devBusy) bells.push({ userId: dev.id, text: devText, link: `/app/tests/${r.testId}`, testId: r.testId });
     if (!testerBusy) bells.push({ userId: tester.id, text: testerText, link: `/app/sessions/${r.contractId}`, testId: r.testId });
   }
@@ -435,13 +436,38 @@ async function dropOverlapping(tx: Prisma.TransactionClient, b: { startsAt: Date
 /** One request = one call (or one weekly run): once a copy of a developer batch books, the other copies close. */
 async function closeBatch(batchId: string, exceptId: string) {
   if (!batchId) return;
-  await db.callRequest.updateMany({ where: { batchId, id: { not: exceptId }, status: "pending" }, data: { status: "taken", closedReason: `Another tester took this time at ${fmtTime(new Date())}`, decidedAt: new Date() } });
+  const rows = await db.callRequest.findMany({ where: { batchId, id: { not: exceptId }, status: "pending" }, select: { id: true } });
+  const taken: string[] = [];
+  for (const r of rows) {
+    const done = await db.callRequest.updateMany({ where: { id: r.id, status: "pending" }, data: { status: "taken", closedReason: `Another tester took this time at ${fmtTime(new Date())}`, decidedAt: new Date() } });
+    if (done.count) taken.push(r.id);
+  }
+  // (Owner, Nov 6, §286) Each other tester's top box reads "The call time with Nora Lane on … is no longer available: another tester took it": her bell rings
+  // with the same words, in the day's call-request stack across tests ("Call requests · 3 today").
+  if (!taken.length) return;
+  const rowsTaken = await db.callRequest.findMany({ where: { id: { in: taken } } });
+  const cons = new Map((await db.contract.findMany({ where: { id: { in: rowsTaken.map((r) => r.contractId) } }, select: { id: true, testerId: true, test: { select: { developer: true } } } })).map((c) => [c.id, c]));
+  for (const r of rowsTaken) {
+    const c = cons.get(r.contractId);
+    if (!c) continue;
+    await bell(c.testerId, `The call time with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available: another tester took it`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
+  }
 }
 
 /** Close pending requests (time passed, block, hold, Stop, End early, Leave). */
 export async function closeRequests(where: { contractIds?: string[] }, reason: string) {
   const rows = await db.callRequest.findMany({ where: { status: "pending", ...(where.contractIds ? { contractId: { in: where.contractIds } } : {}) } });
   if (rows.length) await db.callRequest.updateMany({ where: { id: { in: rows.map((r) => r.id) } }, data: { status: "closed", closedReason: reason, decidedAt: new Date() } });
+  // (Owner, Nov 6, §286) The developer's requests closed for a reason the tester's top box shows ("The call time with Nora Lane on … is no longer available", e.g.
+  // the test paused): the same line rings her bell, stacked (§286: one entry a day across tests, "Call requests · 3 today"). The developer's top box has no line for these.
+  const told = rows.filter((r) => r.fromSide === "developer" && testerSeesClosed(reason));
+  if (told.length) {
+    const cons = new Map((await db.contract.findMany({ where: { id: { in: [...new Set(told.map((r) => r.contractId))] } }, select: { id: true, testerId: true, test: { select: { developer: true } } } })).map((c) => [c.id, c]));
+    for (const r of told) {
+      const c = cons.get(r.contractId);
+      if (c) await bell(c.testerId, `The call time with ${displayName(c.test.developer)} on ${T(r.startsAt)} is no longer available`, `/app/sessions/${r.contractId}#calls`, undefined, { testId: r.testId, group: CALL_REQUESTS_GROUP });
+    }
+  }
   return rows;
 }
 
@@ -479,8 +505,8 @@ async function refusals(c: Ctx["c"], side: Side) {
   if (await db.block.count({ where: { OR: [{ blockerId: c.testerId, blockedId: c.test.developerId }, { blockerId: c.test.developerId, blockedId: c.testerId }] } })) throw new HttpError(409, "gone", "This time isn't available.");
 }
 
-// (Owner) Call REQUESTS (requested, withdrawn, declined, closed) are not bell lines: they show in Needs you, the Live session
-// panel and the live top box. Booked and cancelled calls are bell lines (and stack there).
+// (Owner, Nov 6, §286; replaces "call requests are not bell lines") Every call-request line either person's top box shows is a bell line too: a request
+// (either side's), one withdrawn, declined, taken by another tester or closed. Booked and cancelled calls are bell lines (and stack there), as before.
 
 /**
  * (Owner, Oct 28, batch 16 section 33) The server's re-check of what the form shows red that the older checks don't cover: the requester's OTHER calls (another
@@ -653,7 +679,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const call = await bookAt(c.id, m.hit, m.match.minutes, bookRate(c.test, c), null, true, false, { id: m.match.id });
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
     const line = `Booked: you both picked ${T(m.hit)}`;
-    await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId });
+    await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
     callIds.push(call.id);
     bookedLine ||= line;
   }
@@ -662,6 +688,12 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   const made = await createRequests(sendRows.flatMap((k, i) => ok.map(({ c }) => ({ testId, contractId: c.id, fromSide: "developer", ...kindData(k), minutes: reqMinutes, batchId: batchIds[i] }))));
   // One live line per request (per row), as a single send writes it.
   for (const k of sendRows) await db.$transaction((tx) => recordEvent(tx, testId, "requested", `You requested ${kindWords(k.rows)} from ${T(k.startsAt)} with ${ok.length} tester${ok.length === 1 ? "" : "s"}`, false));
+  // (Owner, Nov 6, §286) Each tester's bell, in her top box's words ("Nora Lane requested a call for Sat, Nov 21, 1:20 AM"; the time in her own zone), one per
+  // request (each row of the press is its own), linking to its row in her Call requests panel; they stack with the day's other call-request lines ("Call requests · 3 today"),
+  // as the developer's do. An auto-matched row is not a request: its "Booked: …" line rings instead.
+  const devName = displayName(dev);
+  const testerOf = new Map(ok.map(({ c }) => [c.id, c.testerId]));
+  for (const r of made) await bell(testerOf.get(r.contractId)!, `${devName} requested ${requestWords(r, T(r.startsAt))}`, `/app/sessions/${r.contractId}#req-${r.id}`, dev.id, { testId, group: CALL_REQUESTS_GROUP });
   // (Batch 20 section 7) The new requests' ids (and a booked call's): the form never counts them as a clash with itself.
   return {
     requested: sendRows.length ? ok.length : 0, batchId: batchIds[0] ?? "", batchIds, ids: made.map((r) => r.id),
@@ -725,7 +757,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
     await closeBatch(m.match.batchId, m.match.id);
     const line = `Booked: you both picked ${T(m.hit)}`;
-    await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId });
+    await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId, group: BOOKED_GROUP }); // (§286)
     callIds.push(call.id);
     bookedLine ||= line;
   }
@@ -736,7 +768,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     // (Batch 15 section 35) The developer's bell: "<name> asked for a call: <time>", stacked with the day's other request lines; each time in the reader's own zone.
     // (Batch 17 section 4) It opens the Live session's Call requests panel with this request highlighted. (§208) One per request, so each links to its own.
     const row = k.rows[0];
-    await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${T(row.startsAt)}${row.repeat === "once" ? "" : row.repeat === "daily" ? " (daily)" : " (weekly)"}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: "callrequests" });
+    await bell(c.test.developerId, `${displayName(c.tester)} asked for a call: ${T(row.startsAt)}${row.repeat === "once" ? "" : row.repeat === "daily" ? " (daily)" : " (weekly)"}`, `/app/tests/${c.testId}#req-${r.id}`, c.testerId, { group: CALL_REQUESTS_GROUP });
   }
   return {
     requested: made.length > 0, id: made[0]?.id, ids: made.map((r) => r.id),
@@ -851,7 +883,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     await db.callRequest.update({ where: { id: r.id }, data: { callId: first!.id } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
     const what = row.repeat === "once" ? T(times[0]) : row.count ? `${times.length} ${unitOf(row.repeat)} calls from ${T(times[0])}` : `${unitOf(row.repeat)} calls from ${T(times[0])} (until testers' work ends)`;
-    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id });
+    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";
@@ -887,10 +919,15 @@ async function timeAnswered(user: U, c: Ctx["c"], side: Side, other: Ctx["other"
   // to the developer's request) stops as a Call change.
   await db.$transaction((tx) => recordEvent(tx, c.testId, status === "withdrawn" ? "withdrew_req" : "declined_req", text, false, {}, contractId));
   // (Owner, Nov 4, §185) A withdrawal is never a stop for the other person (a quiet live-box line): they get a bell instead (and its email, per their settings),
-  // stacked per test and day with the requests a booking closed ("Call requests · 3 closed today").
+  // stacked (§286: one entry a day across tests, "Call requests · 3 today").
   if (status === "withdrawn") {
     const line = `${displayName(user)} withdrew a call request for ${when}`;
-    await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}` : `/app/tests/${c.testId}`, undefined, { testId: c.testId, group: `reqclosed:${c.testId}` });
+    await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}` : `/app/tests/${c.testId}`, undefined, { testId: c.testId, group: CALL_REQUESTS_GROUP });
+  } else {
+    // (Owner, Nov 6, §286) A decline rings the person who asked, in their top box's words: the developer's "Ana Silva declined a call request for …" (the line
+    // above), the tester's "Nora Lane declined your call request for …"; in the day's call-request stack across tests ("Call requests · 2 today").
+    const line = side === "tester" ? text : `${displayName(user)} declined your call request for ${when}`;
+    await bell(other.id, line, side === "developer" ? `/app/sessions/${c.id}#calls` : `/app/tests/${c.testId}#calls`, undefined, { testId: c.testId, group: CALL_REQUESTS_GROUP });
   }
 }
 

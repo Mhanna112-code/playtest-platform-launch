@@ -52,9 +52,9 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     expect(benDrop).toHaveLength(1);
     expect(benDrop[0].text).toMatch(new RegExp(`^Nora Lane's request for ${T_} closed: she is no longer free at that time$`));
     expect(benDrop[0].quiet).toBe(true); // (Owner, Nov 4, §185) quiet now, with a bell
-    const benBell = await db.notification.findMany({ where: { userId: ben.tester.user.id, groupKey: `reqclosed:${testId}` } });
+    const benBell = await db.notification.findMany({ where: { userId: ben.tester.user.id, groupKey: "callrequests", text: { contains: " closed: " } } }); // (§286) the day's stack across tests
     expect(benBell.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane's request for .+ closed: she is no longer free at that time$/)]);
-    expect(await db.notification.count({ where: { userId: dev.user.id, groupKey: `reqclosed:${testId}` } })).toBe(0); // the developer has the call: no bell
+    expect(await db.notification.count({ where: { userId: dev.user.id, groupKey: "callrequests", text: { contains: " closed: " } } })).toBe(0); // the developer has the call: no bell
     expect(benLines.map((l) => l.text).join(" | ")).not.toContain("Ana");
     // The developer (her booking was Ana's Accept): her own dropped request, a quiet line.
     const devLines = await live(`test:${testId}`, dev.cookie, devLoaded);
@@ -156,8 +156,9 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     expect(onY).toHaveLength(1);
     expect(onY[0].text).toMatch(new RegExp(`^Ana Silva's request for ${T_} closed: she is no longer free at that time$`));
     expect(onY[0].quiet).toBe(true);
-    expect(await db.notification.count({ where: { userId: omar.user.id, groupKey: `reqclosed:${Y}` } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: omar.user.id, groupKey: `reqclosed:${Z}` } })).toBe(1);
+    // (§286) Both in the day's one "Call requests" stack across tests, each naming its own test.
+    expect(await db.notification.count({ where: { userId: omar.user.id, groupKey: "callrequests", testId: Y, text: { contains: " closed: " } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: omar.user.id, groupKey: "callrequests", testId: Z, text: { contains: " closed: " } } })).toBe(1);
     const onZ = (await live(`test:${Z}`, omar.cookie, loaded)).filter((l) => / closed: /.test(l.text));
     expect(onZ.map((l) => l.text)).toEqual([expect.stringMatching(new RegExp(`^Your request to Ana Silva for ${T_} closed: she is no longer free at that time$`))]);
     for (const l of [...onY, ...onZ]) expect(l.text).not.toContain("Nora");

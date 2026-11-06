@@ -7,6 +7,7 @@ import { displayName } from "@/lib/format";
 import { termsLine } from "@/lib/rules";
 import { asListing } from "@/lib/server/tests";
 import { reinvitedLine } from "@/lib/server/invites";
+import { bell } from "@/lib/server/notify";
 
 // The tester answers an invite with "No thanks" (no more reminders).
 // (Owner, Oct 28, batch 17 section 4) It follows batch 16 section 32 exactly like Join and Accept: a full test keeps the invite open (No thanks just declines it); a
@@ -47,6 +48,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     if ((await db.invite.updateMany({ where: { id: inv.id, status: "sent" }, data: { status: "declined" } })).count !== 1) throw await closed((await db.invite.findUniqueOrThrow({ where: { id: inv.id } })).status, inv.testId);
     await logAction(u.id, inv.testId, body, "said no thanks to the invite");
     await logEvent(inv.testId, "invite", `${displayName(u)} said no thanks to your invite`);
+    // (Owner, Nov 6, §286) The developer's top box line rings their bell too, in the same words, linking to their Invite testers panel.
+    const t = await db.test.findUnique({ where: { id: inv.testId }, select: { developerId: true } });
+    if (t) await bell(t.developerId, `${displayName(u)} said no thanks to your invite`, `/app/tests/${inv.testId}#invite`, undefined, { side: "developer", testId: inv.testId });
     return ok({ ok: true, ...(typeof body.__note === "string" ? { note: body.__note } : {}) });
   });
 }
