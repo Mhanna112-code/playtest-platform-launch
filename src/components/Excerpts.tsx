@@ -9,10 +9,12 @@ import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { AnswerText, ValueText } from "@/components/QA";
 import { allKept, deletedRange, deleteFrom, excerptOf, GAP, insertedRange, keptChars, restoreAt, runsOf, squash } from "@/lib/excerptTrim";
 import { lockPick, lockText } from "@/lib/sendLock";
+import { useStopOnce } from "@/lib/useStopOnce";
 
 // (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and the tester's Remove. None of them stops once: a press goes through
 // whatever changed meanwhile, and is refused only when the request (or excerpt) no longer exists, or (a request, an Allow) when the test now has an NDA.
 // (Owner, Oct 29, batch 29 section 12) Allow / Deny never stop for your own changes in another tab (the same decision made there is a plain refusal).
+// (Owner, Nov 5, §271) A request and Allow / Deny stop once for a pause of the test since the page loaded (or the team's lift of it), whatever the Alerts.
 
 const MIN = 10, MAX = 500;
 
@@ -33,6 +35,7 @@ export const EXCERPT_BOX_MAX = "9rem";
  */
 export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { submissionId: string; choices: { index: number; question: string; text: string }[]; /** drawn open (tests) */ defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
+  const stop = useStopOnce(); // (§271) the session page's load (PageLoaded)
   const [index, setIndex] = useState(choices[0]?.index ?? 0);
   const original = choices.find((c) => c.index === index)?.text ?? "";
   const [kept, setKept] = useState(() => allKept(choices[0]?.text ?? ""));
@@ -89,10 +92,14 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
     setBusy(true);
     setErr("");
     try {
-      await api("/api/excerpts", { action: "request", submissionId, index, text: excerpt.text });
+      await api("/api/excerpts", { action: "request", submissionId, index, text: excerpt.text, ...stop.marks() });
+      stop.clear();
       fin.finish();
     } catch (e) {
-      setErr(errOf(e));
+      if (!stop.stopped(e)) {
+        stop.clear();
+        setErr(errOf(e));
+      }
       setBusy(false);
     }
   }
@@ -149,6 +156,7 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
           </div>
         </div>
       )}
+      <ChangesBox changes={stop.box} press="Ask the developer" side="tester" />
       {/* (Batch 16 section 10) A mistake is red at its box and listed; a refusal stays blue. */}
       <FormMistakes text={err} press="Ask the developer" />
     </div>

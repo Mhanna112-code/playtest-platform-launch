@@ -10,6 +10,8 @@ import { DraftTag, useKept } from "@/lib/useKept";
 import { PersonHover } from "@/components/PersonHover";
 import type { PersonHoverInfo } from "@/lib/server/personHover";
 import { lockText } from "@/lib/sendLock";
+import { ChangesBox } from "@/components/ChangesBox";
+import { useStopOnce } from "@/lib/useStopOnce";
 
 /** (Batch 35 §124) `hover`: the sender's profile hover (the other person's messages only; none for a deleted account or someone who blocked you). */
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string; hover?: PersonHoverInfo | null };
@@ -32,6 +34,8 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
   // and comes back by itself once the page learns the restriction lifted.
   const [pausedNow, setPausedNow] = useState(false);
   useEffect(() => setPausedNow(false), [closed, pausedNote]);
+  // (Owner, Nov 5, §271) A pause of the test since the chat loaded (or the team's lift of it) stops Send once (its box under the box); the next Send goes ahead.
+  const stop = useStopOnce();
   // (Batch 15 section 13) One press id per message: made at the first Send of this text, kept while it isn't confirmed (a repeat after a lost answer posts once),
   // and replaced once it is, so the same words sent again on purpose post again.
   const pressId = useRef<string | null>(null);
@@ -80,12 +84,15 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
             setErr("");
             pressId.current ??= newPressId();
             try {
-              await api(path, { ...extra, body: text, clientId: pressId.current });
+              await api(path, { ...extra, body: text, clientId: pressId.current, ...stop.marks() });
+              stop.clear();
               pressId.current = null; // confirmed: the next message gets its own id
               setText("");
               await keep.clear();
               router.refresh();
             } catch (e2) {
+              if (stop.stopped(e2)) return;
+              stop.clear();
               if (e2 instanceof ApiError && e2.code === "closed") setShut(true);
               if (e2 instanceof ApiError && e2.code === "chat_paused") {
                 setPausedNow(true);
@@ -108,7 +115,7 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
         </form>
       )}
       {/* (Batch 16 section 10) A message mistake is red at the box (and listed); a refusal stays blue. */}
-      <div className="px-5 pb-3 empty:hidden"><FormMistakes text={err} press="Send" /></div>
+      <div className="px-5 pb-3 empty:hidden"><ChangesBox changes={stop.box} press="Send" />{/* (§271) */}<FormMistakes text={err} press="Send" /></div>
     </div>
   );
 }

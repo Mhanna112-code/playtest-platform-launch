@@ -9,7 +9,7 @@ import { finishedAndRatedLine, ratedYouLine, ratingClosedLine, RATE_CHARGE_FIRST
 import { cancelCallsAhead, lockTest, ownContract, ownTest, recordEvent, spotOpened } from "./tests";
 import { seenOf, unanswered, tabOf, testerPaymentChanges } from "./live";
 import { FINISHED_PART_REASON, payMoreLine, TESTER_CALL_KINDS, testerChanges, testerGate } from "./testerGate";
-import { devStopSince, loadedOf, stopBox, testerLiftSince, testerStopSince, testerPauseSince } from "./stopMoment";
+import { devPauseMoments, devStopSince, loadedOf, stopBox, testerStopSince } from "./stopMoment";
 import { closeOutOf, closedOut, devPauseSpans, mergeSpans, teamPauseSpans, windowEnd, type Span } from "./closeOut";
 import { closeOffersOfEnded } from "./offerClose";
 import { RATE_TEAM_PAUSED, teamPausedNow } from "@/lib/restricted";
@@ -209,9 +209,10 @@ function readRating(body: Record<string, unknown>) {
 async function testerRateGate(testerId: string, contractId: string, testId: string, body: Record<string, unknown>) {
   const since = body.confirmed === true ? seenOf(body.boxAt) : seenOf(body.seenAt) ?? seenOf(body.pageSeenAt);
   if (!since) return;
-  const moment = (await testerStopSince(contractId, since)) ?? (await testerPauseSince(contractId, since));
+  const moment = await testerStopSince(contractId, since);
   // (Owner, Nov 5, §268; replaces §232's open-terms stop) New terms follow the ordinary rule for Rate (`ordinaryTerms`): Alerts on and not yet shown only.
-  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { ordinaryTerms: true, moments: [...(moment ? [moment] : []), ...(await testerLiftSince(contractId, since))] }); // (§207) the team's lift too
+  // (Owner, Nov 5, §271) The pause and the team's lift (§207) come from the gate itself, as for every tester press.
+  await testerGate(testerId, contractId, testId, { ...body, seenAt: since.toISOString(), pageSeenAt: since.toISOString(), loadedAt: since.toISOString() }, undefined, { ordinaryTerms: true, moments: moment ? [moment] : [] });
 }
 /** (Batch 17 §§12, 14) The developer's Rate keeps its narrow list: this tester's dispute decided or the work stopping. */
 async function devRateGate(testId: string, contractId: string, body: Record<string, unknown>, devId = "") {
@@ -221,6 +222,8 @@ async function devRateGate(testId: string, contractId: string, body: Record<stri
   // (Owner, Oct 29, batch 29 section 12) The developer's own changes in another tab (a Pay more, a call change…) never stop Rate: it only races with Rate itself.
   const stop = await devStopSince(testId, contractId, since);
   if (stop) lines.push(stop);
+  // (Owner, Nov 5, §271) A pause (the team's, their own hold or suspension) or the team's lift since the page loaded stops Rate once too, whatever the Alerts.
+  lines.push(...(await devPauseMoments(testId, since)));
   lines.push(...(await db.testEvent.findMany({ where: { testId, contractId, kind: "admin", createdAt: { gt: since }, text: { startsWith: "The team decided" } } })).map((e) => ({ ...e, eventId: e.id })));
   // (Owner, Oct 29, batch 30 §4) No call changes here: the developer's Rate only opens after the tester rated (which ends their part) or at close-out, so "call changes
   // between the two of them while that tester is still working" could never apply.

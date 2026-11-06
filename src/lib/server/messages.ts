@@ -5,6 +5,7 @@ import { notify } from "./notify";
 import { CHAT_NOT_SENT } from "@/lib/rules";
 import { clientMessageId } from "./pressKeys";
 import { TEAM_PAUSED_LINE, teamPausedNow } from "@/lib/restricted";
+import { devPauseMoments, loadedOf, pauseStopOnce, testerPauseMoments } from "./stopMoment";
 
 // Per-test chat between the developer and one tester (owner rule): open to testers in the test, invited testers
 // (open invite), applicants (pending) and past participants; never after a block. Bell: "Nora Lane · Harbor Run:
@@ -71,7 +72,11 @@ const readClientId = clientMessageId;
 export const CHAT_PER_MINUTE = 30;
 export const CHAT_TOO_FAST = "You're sending messages very fast. Wait a minute, then send again.";
 
-export async function sendChat(user: { id: string; name: string; email: string }, testId: string, testerId: string, raw: unknown, clientIdRaw?: unknown) {
+/**
+ * (Owner, Nov 5, §271) `page`: the press's body with its page's load time. A pause since the chat page loaded (or the team's lift of it) stops Send once, whatever the
+ * Alerts (the tester reads only "paused" or "resumed"); a pause still on refuses Send instead (the paused notice, below), so that is all it shows.
+ */
+export async function sendChat(user: { id: string; name: string; email: string }, testId: string, testerId: string, raw: unknown, clientIdRaw?: unknown, page?: Record<string, unknown>) {
   const a = await chatAccess(user.id, testId, testerId);
   if (a.blocked) throw new HttpError(409, "closed", "This chat is closed.");
   // (Batch 15 section 13) The same press again (its answer was lost): the message it already posted, never a second one.
@@ -94,6 +99,7 @@ export async function sendChat(user: { id: string; name: string; email: string }
   const counts = await Promise.all([db.message.count({ where: recent }), db.directMessage.count({ where: recent })]);
   if (counts[0] + counts[1] >= CHAT_PER_MINUTE) throw new HttpError(429, "too_fast", CHAT_TOO_FAST);
   if (body.length > CHAT_MAX) throw new HttpError(400, "too_long", `Keep a message to ${CHAT_MAX.toLocaleString("en-US")} characters.`);
+  if (page) pauseStopOnce(iAmDev ? await devPauseMoments(testId, loadedOf(page)) : await testerPauseMoments(a.contract.id, loadedOf(page)), page);
   const m = await db.message.create({ data: { testId, testerId, contractId: a.contract.id, senderId: user.id, body, clientId } }).catch(async (e) => {
     // Two presses of the same message at once: the first one wins.
     const again = clientId ? await db.message.findFirst({ where: { senderId: user.id, clientId } }) : null;
@@ -112,9 +118,9 @@ export async function sendChat(user: { id: string; name: string; email: string }
 /** A chat message is at most this long. */
 export const CHAT_MAX = 4000;
 
-export async function sendMessage(user: { id: string; name: string; email: string }, contractId: string, raw: unknown, clientId?: unknown) {
+export async function sendMessage(user: { id: string; name: string; email: string }, contractId: string, raw: unknown, clientId?: unknown, page?: Record<string, unknown>) {
   const c = await chatFor(user.id, contractId);
-  return sendChat(user, c.testId, c.testerId, raw, clientId);
+  return sendChat(user, c.testId, c.testerId, raw, clientId, page);
 }
 
 export const chatMessages = (testId: string, testerId: string) =>

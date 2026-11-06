@@ -6,8 +6,8 @@ import { requireUser } from "@/lib/server/session";
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   return handle(async () => {
     const u = await requireUser(req);
-    await readJson(req);
+    const body = await readJson(req);
     const { id } = await params;
-    return ok(await joinCall(u, id));
+    return ok(await joinCall(u, id, body)); // (§271) with the page's load time: a pause or lift since then stops Join once
   });
 }

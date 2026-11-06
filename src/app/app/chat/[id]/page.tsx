@@ -13,6 +13,7 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { testV } from "@/lib/server/pulseV";
 import { otherSideNotice } from "@/components/OtherSideNotice";
 import { personHoverFor } from "@/lib/server/personHover";
+import { PageLoaded } from "@/components/PageLoaded";
 
 export const metadata = { title: "Chat · Playtest" };
 export const dynamic = "force-dynamic";
@@ -53,6 +54,8 @@ export default async function ChatPage({ params }: { params: Promise<{ id: strin
   return (
     <div className="mx-auto max-w-3xl space-y-4">
       <AutoRefresh query={dev ? `test=${c.testId}` : `session=${c.id}`} v={pageV} />
+      {/* (Owner, Nov 5, §271) When this chat first loaded: Send stops once for a pause (or the team's lift of it) since. */}
+      <PageLoaded at={new Date().toISOString()} />
       <Link href={dev ? `/app/tests/${c.testId}#tester-${c.id}` : `/app/sessions/${c.id}`} className="inline-flex items-center gap-1 text-sm text-slate-400 hover:text-white no-underline hover:no-underline"><ArrowLeft className="h-4 w-4" /> Back to {dev ? "the test" : "your session"}</Link>
       <Chat
         closed={blocked || paused}

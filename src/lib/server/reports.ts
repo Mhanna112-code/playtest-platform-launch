@@ -18,6 +18,9 @@ export async function reportPerson(me: { id: string }, body: Record<string, unkn
   const had = await db.report.findUnique({ where: { reporterId_reportedId: { reporterId: me.id, reportedId: otherId } } });
   if (had) throw new HttpError(409, "already", `You already reported ${displayName(other)} on ${fmtDate(had.createdAt)}.`);
   if (note.length < REPORT_NOTE_MIN) throw new HttpError(400, "bad_note", "Say what happened (the team reads it).");
+  // (Owner, Nov 5, §271) A tester reporting a developer whose test she works on: a pause of that test since the profile loaded (or the team's lift) stops it once.
+  const m = await import("./stopMoment");
+  m.pauseStopOnce(await m.testerPauseMomentsWith(me.id, otherId, body), body);
   const r = await db.report.create({ data: { reporterId: me.id, reportedId: otherId, note } }).catch(() => null);
   if (!r) throw new HttpError(409, "already", `You already reported ${displayName(other)}.`);
   // The admins are told (batch 29 §29: their own daily entry, "Reports · 2 new"; each line opens its row, marked); the reported person is NOT told.

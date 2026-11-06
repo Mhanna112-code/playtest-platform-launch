@@ -6,12 +6,16 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
 import { api, errOf } from "@/lib/client";
 import { lockText } from "@/lib/sendLock";
+import { ChangesBox } from "@/components/ChangesBox";
+import { useStopOnce } from "@/lib/useStopOnce";
 
 /**
  * "Report <name>" on a profile (owner, Oct 27): a reason box and Send to the team. Once sent (one report per pair, ever) the button is replaced by
  * "You reported <name> on <date>." The only stop is a race check: already reported in another tab, a blue notice under the button.
  */
-export function ReportButton({ userId, name, reportedOn }: { userId: string; name: string; reportedOn: string | null }) {
+export function ReportButton({ userId, name, reportedOn, seenAt }: { userId: string; name: string; reportedOn: string | null; /** (§271) the profile's load time */ seenAt?: string }) {
+  // (Owner, Nov 5, §271) A pause of a test of theirs she works on since the profile loaded (or the team's lift of it) stops Send to the team once.
+  const stop = useStopOnce(seenAt);
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState("");
   const [err, setErr] = useState("");
@@ -39,9 +43,12 @@ export function ReportButton({ userId, name, reportedOn }: { userId: string; nam
                 setBusy(true);
                 setErr("");
                 try {
-                  await api("/api/reports", { userId, note });
+                  await api("/api/reports", { userId, note, ...stop.marks() });
+                  stop.clear();
                   fin.finish();
                 } catch (e) {
+                  if (stop.stopped(e)) return setBusy(false);
+                  stop.clear();
                   setErr(errOf(e));
                   setBusy(false);
                 }
@@ -54,6 +61,7 @@ export function ReportButton({ userId, name, reportedOn }: { userId: string; nam
         </div>
       )}
       {/* (Batch 16 section 10) A mistake is red at the box and listed; a refusal (already reported) stays blue. */}
+      <ChangesBox changes={stop.box} press="Send to the team" side="tester" />
       <FormMistakes text={err} press="Send to the team" />
     </div>
   );

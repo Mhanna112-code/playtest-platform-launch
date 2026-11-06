@@ -337,7 +337,8 @@ describe("payments and disputes, only for this test", () => {
     expect((await live(ana.tester.cookie, `session:${ana.sessionId}`, pageLoaded)).body.changes.map((c: { text: string }) => c.text)).toEqual([delayed]);
     // (Batch 15 section 25) Leave no longer stops; the tester's gate itself (every other tester button) stops once with the line.
     const gate = await (await import("@/lib/server/testerGate")).testerGate(ana.tester.user.id, ana.sessionId, (await db.contract.findUniqueOrThrow({ where: { id: ana.sessionId } })).testId, { seenAt: pageLoaded }).then(() => null, (e: { data?: { changes?: { text: string }[] } }) => e.data?.changes?.map((c) => c.text));
-    expect(gate).toEqual([delayed]);
+    // (Owner, Nov 5, §271) The hold the decline started is a pause since the page loaded: it stops the press too, as "paused" only.
+    expect(gate).toEqual([delayed, expect.stringMatching(/^This test was paused at .+\.$/)]);
     for (const t of [delayed, ...bells.map((n) => n.text)]) expect(t).not.toMatch(/fail|declin|card|hold/i);
     // It goes through ("Pay what you owe"): exactly one more notification, the normal paid line; the top box says paid.
     decline = false;

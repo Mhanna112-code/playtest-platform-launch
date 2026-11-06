@@ -1,3 +1,4 @@
+import { PageLoaded } from "@/components/PageLoaded";
 import { TestName } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtDateIn, pronouns } from "@/lib/format";
@@ -108,6 +109,8 @@ export default async function DeveloperProfilePage({ params }: { params: Promise
         )}
       </section>
       {isAdmin(viewer) && !mine && <AdminPersonBoxes userId={p.id} adminId={viewer.id} developer={p.isDeveloper} tester={p.isTester} />}
+      {/* (Owner, Nov 5, §271) When this profile first loaded: Block and Report stop once for a pause (or the team's lift) of a test of theirs she works on since. */}
+      <PageLoaded at={new Date().toISOString()} />
       {/* Block the developer, as in the full app: a small link at the bottom of their profile (testers only). */}
       {viewer.isTester && !mine && !viewer.testerSuspendedAt && (
         <div className="space-y-2 text-right text-xs text-slate-500">

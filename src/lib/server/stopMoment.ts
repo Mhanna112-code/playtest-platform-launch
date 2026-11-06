@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { sidOf } from "./shownLines";
+import { notListed, sidOf } from "./shownLines";
 import { displayName, fmtDateTimeIn, fmtTimeIn } from "@/lib/format";
 import { liftMomentLine, pauseMomentLine, stopMomentLine, type TestEventLike } from "@/lib/rules";
 import { HttpError } from "./http";
@@ -9,6 +9,9 @@ import { seenOf } from "./live";
  * (Owner, Oct 28, batch 17 section 12) "Stops" = the developer's Stop, the team's Stop, the test closing (7 days paused, or Close now) and End early for that tester,
  * all treated alike. The next Charge / Let it go (tester), Pay / Pay more (developer) or Rate (both) on a page opened BEFORE the stop stops once with the stop as the
  * change; the second press (its stop box shown after the stop) goes ahead. Dispute, the developer's side of a dispute and excerpts never stop for it.
+ * (Owner, Nov 5, §271) That exemption is for STOPS only: a pause (the team's, the developer's payment or chargeback hold, a developer suspension) or the team's
+ * lift of its pause since the page loaded stops EVERY press on the test once, both sides, whatever the Alerts (testerPauseMoments / devPauseMoments below);
+ * the one exception is the team's Decide dispute.
  */
 
 /** When the page was loaded, as this press knows it: the stop box's time on a second press, else the page's render. null = an old client that sent no page time (no stop). */
@@ -119,9 +122,47 @@ export async function testerPauseSince(contractId: string, loaded: Date | null, 
 }
 
 /**
+ * (Owner, Nov 5, §271) A pause since the page loaded stops every tester press on the test ONCE, whatever her Alerts: "This test was paused at 3:10 PM." (never
+ * why), and a lift of the team's pause the same way ("This test resumed at 3:10 PM.", with the pause it ended when that came after the load too). Oldest first.
+ * testerGate adds these to every press that goes through it; the presses outside it (Join call, Block, Report, an excerpt request, a message) use pauseStopOnce.
+ */
+export async function testerPauseMoments(contractId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
+  if (!loaded) return [];
+  const pause = await testerPauseSince(contractId, loaded, now);
+  return [...(pause ? [pause] : []), ...(await testerLiftSince(contractId, loaded, now))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+/** (§271) The same for the developer's presses, in their own words ("The team paused this test at …", "Your tests were paused at …", the team's lift). */
+export async function devPauseMoments(testId: string, loaded: Date | null, now = new Date()): Promise<TestEventLike[]> {
+  if (!loaded) return [];
+  const pause = await devPauseSince(testId, loaded, now);
+  return [...(pause ? [pause] : []), ...(await devLiftSince(testId, loaded, now))].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+/**
+ * (§271) Block and Report on a developer's profile, pressed by a tester working on that developer's tests: the pause moments of each of those tests since the
+ * profile page loaded (none for anyone else, and none for the developer's own presses there).
+ */
+export async function testerPauseMomentsWith(testerId: string, devId: string, body: Record<string, unknown>): Promise<TestEventLike[]> {
+  const loaded = loadedOf(body);
+  if (!loaded) return [];
+  const cs = await db.contract.findMany({ where: { testerId, status: "working", test: { developerId: devId } }, select: { id: true } });
+  return (await Promise.all(cs.map((c) => testerPauseMoments(c.id, loaded)))).flat().sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+}
+
+/**
+ * (§271) A press outside the two gates: the pause moments a stop box on this page hasn't listed yet (`shownIds`, §250) stop it once; the second press (its box's
+ * time as `boxAt`, loadedOf) goes ahead. A press from a page that sent no load time never stops (an older page).
+ */
+export function pauseStopOnce(lines: TestEventLike[], body: Record<string, unknown>) {
+  const left = notListed(lines, body);
+  if (left.length) stopBox(left.map((e) => ({ ...e, forced: true })));
+}
+
+/**
  * The stop box itself (the same shape as every stop-once box). (Batch 26 section 4) A stop line already says its time ("…stopped at 3:10 PM."), so it goes as kind
  * "stop": the box shows it without adding the time again.
  */
 export function stopBox(lines: TestEventLike[], extra: Record<string, unknown> = {}): never {
-  throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines.map((e) => ({ text: e.text, at: e.createdAt, ...sidOf(e) /* (§250) its identity */, ...(e.kind === "stop" ? { kind: "stop" } : {}) })), tail: "Press again to go ahead.", ...extra });
+  throw new HttpError(409, "stop_once", "Press again to go ahead.", { changes: lines.map((e) => ({ text: e.text, at: e.createdAt, ...sidOf(e) /* (§250) its identity */, ...(e.kind === "stop" ? { kind: "stop" } : {}), ...(e.forced ? { forced: true } : {}) /* (§160) no Alerts tick turns it off */ })), tail: "Press again to go ahead.", ...extra });
 }
