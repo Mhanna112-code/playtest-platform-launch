@@ -161,15 +161,24 @@ export async function pausedClosingWords(devId: string): Promise<string | null> 
     if (g) g.titles.push(r.title);
     else groups.push({ at: r.at, titles: [r.title] });
   }
+  // (Owner, Nov 6, §313a) Names past the 5th are counted where their date is: "“T1”, “T2”, “T3”, “T4”, “T5” and 2 more close on Nov 13"; a later date with no
+  // name left reads "…, and 3 more on Nov 20" (several such dates: "…, and 4 more by Nov 22").
   let left = NAMES_SHOWN;
   const parts: string[] = [];
+  const hidden: { n: number; at: Date }[] = [];
   for (const [i, g] of groups.entries()) {
-    if (left <= 0) break;
-    const shown = g.titles.slice(0, left).map((x) => `“${x}”`);
+    const shown = g.titles.slice(0, Math.max(0, left)).map((x) => `“${x}”`);
     left -= shown.length;
+    const rest = g.titles.length - shown.length;
+    if (!shown.length) {
+      hidden.push({ n: rest, at: g.at });
+      continue;
+    }
     const verb = i === 0 ? (g.titles.length === 1 ? " closes" : " close") : "";
-    parts.push(`${andList(shown)}${verb} on ${day(g.at)}`);
+    const names = rest ? `${shown.join(", ")} and ${rest} more` : andList(shown);
+    parts.push(`${names}${verb} on ${day(g.at)}`);
   }
-  const more = rows.length - NAMES_SHOWN;
-  return `${parts.join(", ")}${more > 0 ? ` and ${more} more` : ""}`;
+  const n = hidden.reduce((a, h) => a + h.n, 0);
+  const tail = !hidden.length ? "" : hidden.length === 1 ? `${n} more on ${day(hidden[0].at)}` : `${n} more by ${day(hidden[hidden.length - 1].at)}`;
+  return tail ? `${parts.join(", ")}, and ${tail}` : parts.join(", ");
 }

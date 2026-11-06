@@ -56,7 +56,16 @@ describe("§313a one line names the paused tests' closing dates", () => {
     expect(renderTimes((await pausedClosingWords(s.dev.user.id))!, "UTC")).toBe(`“Harbor Run” closes on ${fmt(new Date(now.getTime() + 7 * DAY))}, “Sky Lab” on ${fmt(new Date(now.getTime() + 9 * DAY))}`);
     const many = await devWith(["T1", "T2", "T3", "T4", "T5", "T6", "T7"]);
     await db.user.update({ where: { id: many.dev.user.id }, data: { holdStartedAt: now, holdReason: "unpaid" } });
-    expect(renderTimes((await pausedClosingWords(many.dev.user.id))!, "UTC")).toBe(`“T1”, “T2”, “T3”, “T4” and “T5” close on ${fmt(new Date(now.getTime() + 7 * DAY))} and 2 more`);
+    expect(renderTimes((await pausedClosingWords(many.dev.user.id))!, "UTC")).toBe(`“T1”, “T2”, “T3”, “T4”, “T5” and 2 more close on ${fmt(new Date(now.getTime() + 7 * DAY))}`);
+    // Mixed dates past the 5th name: the rest counted at their date.
+    const mixed = await devWith(["A1", "A2", "A3", "A4", "B1", "C1", "C2", "C3"]);
+    await db.user.update({ where: { id: mixed.dev.user.id }, data: { holdStartedAt: now, holdReason: "unpaid" } });
+    const later = async (title: string, days: number) => db.test.updateMany({ where: { developerId: mixed.dev.user.id, title }, data: { pauseCloseAt: new Date(now.getTime() + days * DAY), pauseCloseSetAt: now } });
+    await later("B1", 9);
+    for (const t of ["C1", "C2", "C3"]) await later(t, 14);
+    expect(renderTimes((await pausedClosingWords(mixed.dev.user.id))!, "UTC")).toBe(
+      `“A1”, “A2”, “A3” and “A4” close on ${fmt(new Date(now.getTime() + 7 * DAY))}, “B1” on ${fmt(new Date(now.getTime() + 9 * DAY))}, and 3 more on ${fmt(new Date(now.getTime() + 14 * DAY))}`,
+    );
     const none = await devWith(["Quiet"]);
     expect(await pausedClosingWords(none.dev.user.id)).toBeNull();
   });
