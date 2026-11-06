@@ -1,7 +1,7 @@
 import { withDateZone } from "@/lib/server/dateZone";
 import { AutoRefresh } from "@/components/AutoRefresh";
 import { notificationsV } from "@/lib/server/pageFreshness";
-import { notificationScopeFor } from "@/lib/server/notify";
+import { notificationScopeFor, testTitlesOf } from "@/lib/server/notify";
 import { isAdmin } from "@/lib/server/session";
 import { Bell } from "lucide-react";
 import { db } from "@/lib/db";
@@ -11,7 +11,7 @@ import { sideFor, sideForPath, sideLink } from "@/lib/sides";
 import { closedForSuspended } from "@/lib/closedPages";
 import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
-import { GROUP_COUNT_TITLES, bellKeyIn, dayKey, groupBase, groupTitle } from "@/lib/bell";
+import { bellStacks, dayKey } from "@/lib/bell";
 import { lineLinks, linkPool } from "@/lib/server/lineLinks";
 import { adminBellLinks } from "@/lib/server/adminLinks";
 import type { LineLink } from "@/lib/lineLinks";
@@ -32,27 +32,23 @@ export default async function Notifications() {
   const freshV = await notificationsV(u);
   const items = await db.notification.findMany({ where: { userId: u.id, ...await notificationScopeFor(u.id) }, orderBy: { createdAt: "desc" }, take: 200 });
   // (Design doc 9) Same-day lines about the same test stack into one entry, except the lines that always arrive on their own (own); opening a stack marks its lines read, a single line is read when clicked (batch 29 §28).
-  const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
+  const titles = await testTitlesOf(items);
   // (Owner, Nov 5, §270) Every person and test a line names is its own green link: the reader's link pool, matched against each line (its own test's people first).
   const pool = await linkPool(u.id, items.map((n) => n.testId));
   // (Owner, Nov 5, §277) An admin's team lines (they open the admin console) take their links from the line's own data instead: the bell's test, the row it opens
   // and the people involved, each opening their place for the team (a profile with its admin box, a test's page with its admin box).
   const team = isAdmin(u) ? await adminBellLinks(items) : new Map<string, LineLink[]>();
   const testHrefOf = (testId: string | null) => (testId ? pool.byTest.get(testId)?.find((l) => l.kind === "test" && l.text === titles.get(testId))?.href : undefined);
-  const groups = new Map<string, typeof items>();
-  for (const n of items) {
-    const k = bellKeyIn(n, u.timeZone);
-    groups.set(k, [...(groups.get(k) ?? []), n]);
-  }
   const todayKey = dayKey(new Date(), u.timeZone);
   // (Owner, Oct 28) A restricted account: a line whose page is closed to it lands on the dashboard top.
   // (Batch 34 §5) Straight to the page (one of the other side shows the switch notice; the line's own side decides what's closed).
   const hrefFor = (link: string) => (closedForSuspended(link, u, sideForPath(link, u.id) ?? sideFor(u)) ? "/app" : sideLink(u, link));
-  const entries: BellEntry[] = [...groups.entries()].map(([key, g]) => ({
+  // (Owner, Nov 6, §298) The stacks and their titles come from bellStacks, the same grouping the summary emails use.
+  const entries: BellEntry[] = bellStacks(items, u.timeZone, (id) => titles.get(id)).map(({ key, lines: g, title, counted, test }) => ({
     key,
-    title: g[0].groupKey ? groupTitle(g[0].groupKey, new Set(g.map((n) => n.testId ?? n.id)).size, g.length) : g[0].testId ? titles.get(g[0].testId) : undefined,
-    counted: !!(g[0].groupKey && GROUP_COUNT_TITLES[groupBase(g[0].groupKey)]), // (§185) "reqclosed:<test>" counts as "reqclosed"
-    test: !g[0].groupKey && !!g[0].testId,
+    title,
+    counted,
+    test,
     ...(!g[0].groupKey && testHrefOf(g[0].testId) ? { testHref: testHrefOf(g[0].testId) } : {}),
     day: dayKey(g[0].createdAt, u.timeZone) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
     lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone), ...(n.testId && titles.get(n.testId) ? { test: titles.get(n.testId) } : {}), links: team.get(n.id) ?? lineLinks(pool, n.text, n.testId) })),

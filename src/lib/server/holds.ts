@@ -179,13 +179,14 @@ export const testerPausedLine = (title: string) => `“${title}” is paused`;
  * (Owner, Nov 6, §295) Testers are told when a test pauses, whatever the cause (the team's pause of the test, the developer's payment or chargeback hold, the
  * developer's suspension), at the moment the pause starts: every working tester of each test given. The callers pass only the tests no other cause was pausing
  * already, the mirror of "running again" (resumeTests / unpauseTest: only when no other cause still pauses it), so a second cause says nothing (one clock, batch 9).
- * It stacks with "running again" in the tester's "Pauses" entry (group `paused`) and follows her email setting (not `always`).
+ * It stacks with "running again" in the tester's "Pauses" entry (group `paused`). (Owner, Nov 6, §298) Both go out even with email Off (`always`: the
+ * end-of-day email), like the developer's hold and pause lines, still stacked under "Pauses · N" and still never saying why.
  */
 export async function tellTestersPaused(testIds: string[]) {
   if (!testIds.length) return;
   for (const c of await db.contract.findMany({ where: { status: "working", testId: { in: testIds }, test: { status: { not: "stopped" } } }, include: { tester: true }, orderBy: { joinedAt: "asc" } })) {
     const line = testerPausedLine(c.title);
-    await notify(c.tester.email, line, [`${line}. Your deadline moves on by the pause once it runs again.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "paused" });
+    await notify(c.tester.email, line, [`${line}. Your deadline moves on by the pause once it runs again.`], `/app/sessions/${c.id}`, { recipientId: c.testerId, group: "paused", always: true });
   }
 }
 
@@ -443,7 +444,7 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   } else if (dev.devSuspendedAt) await notify(dev.email, STILL_SUSPENDED_LINE, [STILL_SUSPENDED_LINE], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
   else await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
   const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
-  for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused" });
+  for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused", always: true });
   return true;
 }
 

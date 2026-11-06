@@ -149,7 +149,7 @@ describe("§201 the developer's payments stack under one 'Paid · N payments' en
   });
 
   it("the email: one line of a kind stays plain; deadlines still stack; two kinds stack side by side", () => {
-    const n = (id: string, text: string, groupKey: string | null, testId: string | null = null) => ({ id, text, link: "", groupKey, testId });
+    const n = (id: string, text: string, groupKey: string | null, testId: string | null = null) => ({ id, text, link: "", groupKey, testId, own: false, createdAt: new Date("2026-11-05T12:00:00Z") });
     const line = (x: { text: string }) => `• ${x.text}`;
     expect(emailLines([n("1", "You paid $4.00 for x", PAID_GROUP, "t1"), n("2", "Other", null)], line)).toEqual(["• You paid $4.00 for x", "• Other"]);
     expect(emailLines([n("1", "You paid $4.00 for x", PAID_GROUP, "t1"), n("2", "Deadline A", "deadlines", "t1"), n("3", "You paid $6.00 for y", PAID_GROUP, "t2"), n("4", "Deadline B", "deadlines", "t2")], line)).toEqual([

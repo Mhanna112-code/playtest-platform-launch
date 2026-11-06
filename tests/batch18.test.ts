@@ -501,6 +501,8 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // (Owner, Nov 5, §201) holds.ts also: the team's Approve of a payment hold lift sends its one "The team approved lifting your hold: your tests are running again." itself.
     // (Owner, Nov 6, §294) holds.ts also: every chargeback is emailed at once (a further one during a chargeback hold rides the same line as the hold turning into a
     // chargeback hold), and the bank lowering or raising a chargeback's amount (two more); and its amount changing before the repayment (one more).
-    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Nov 6, §298) The tester's "“X” is paused" and "“X” is running again": holds.ts two more (the pause starting, running again after a hold),
+    // restrictions.ts two more (running again after a reinstatement, after the team's pause lifted).
+    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

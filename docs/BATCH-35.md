@@ -5254,3 +5254,16 @@ Narrowed by the owner the same day: only the developer's Invite testers panel.
   when the daily job sends it that morning). Daily keeps "for Fri, Nov 6". With no earlier summary it starts at the oldest line's day, as before
   (`summaryHeading(…, afterLast)`, notify.ts).
 - Tests: tests/summary-heading-297.test.ts. Updated: email-fixes-295 (the sent weekly heading starts the day after its last summary).
+
+## §298 Emails stack exactly as the bell does; testers' pause lines reach them with email Off (owner, Nov 6)
+- **Every bell stack also stacks in the email**, the same way. One grouping function, `bellStacks` (lib/bell.ts), now drives both the Notifications page and
+  the summary / end-of-day emails (`emailLines`, notify.ts), so they can't drift apart: the same key (`own` lines alone; a `groupKey` across tests; else the
+  same test), one stack per day in the account's zone, the same titles. A stack of 2+ lines is one heading line, the bell's title without its day ("Disputes
+  filed · 2 updates", "Disputes · 3 new", "Harbor Run · 4 updates"; `stackHeading`, which BellList uses too), with its lines under it; a line alone in the bell
+  (own, or a single line) stays a single line. `EMAIL_STACKED` is gone. The "Your account" / "As a developer" / "As a tester" sections stay, each stacked.
+  Per-test stack titles come from `testTitlesOf` (notify.ts), shared with the page.
+- **Testers' "“X” is paused" and "“X” is running again" go out even with email Off** (`always: true`, the end-of-day email), like the developer's hold and
+  pause lines; still in the "Pauses · N" stack, still never saying why (holds.ts, restrictions.ts).
+- Tests: tests/email-stacks-298.test.ts. Updated: email-fixes-295 (the pause lines are `mustEmail`; with Off they reach the end-of-day email), batch18 (the
+  always list: two more in holds.ts, two more in restrictions.ts), paid-stack-201 and nov5-batch2 (emailLines takes whole lines; EMAIL_STACKED removed),
+  bell-parity-286.

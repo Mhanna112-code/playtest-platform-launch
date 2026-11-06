@@ -251,7 +251,7 @@ export async function reinstateAccount(userId: string, asked?: unknown, adminId:
     if (!u.holdStartedAt) await chargeDeferred(userId);
     await (await import("./subscription")).resumeBilling(userId, now);
     const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
-    for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused" });
+    for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: userId, group: "paused", always: true });
   }
   // (Owner, Oct 28) No automatic re-invite: the tests they were removed from wait on their dashboard with "You were removed from this test" and Ask to rejoin
   // (while the test is open, has a spot and isn't paused) until they ask or dismiss; the developer can also invite them again as usual.
@@ -480,7 +480,7 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
   if (!devNow.holdStartedAt && !devNow.devSuspendedAt) {
     await chargeDeferred(dev.id).catch((e) => console.error("[team pause] waiting charges:", (e as Error).message));
     for (const c of await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } }))
-      await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused" });
+      await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused", always: true });
   }
   await notify(dev.email, `The team lifted the pause on “${t.title}”`, [`The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { own: true });
   return { ok: true };

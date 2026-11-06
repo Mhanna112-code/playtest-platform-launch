@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@prisma/client";
 import { summaryDue } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
-import { BOOKED_GROUP, CALL_REQUESTS_GROUP, DMS_GROUP, PAID_GROUP, PAUSES_GROUP, bellKeyIn, groupTitle } from "@/lib/bell";
+import { bellKeyIn, bellStacks, stackHeading } from "@/lib/bell";
 import { appUrl } from "./auth";
 import { sendEmail } from "./email";
 
@@ -125,16 +125,24 @@ export async function adminUsers() {
  * with one line keeps its plain line, as in the bell.
  */
 // (Owner, Nov 6, §286) Call requests and booked calls stack in the email as in the bell. (§295) So do the tester's pauses ("Pauses · 2").
-export const EMAIL_STACKED = ["deadlines", PAID_GROUP, DMS_GROUP, CALL_REQUESTS_GROUP, BOOKED_GROUP, PAUSES_GROUP] as const;
-export function emailLines<N extends { text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string) {
-  const stacks = new Map(EMAIL_STACKED.map((k) => [k as string, items.filter((n) => n.groupKey === k)]));
+// (Owner, Nov 6, §298) EVERY bell stack stacks in the email, the same way: the email groups its lines with bellStacks, the very function the Notifications page uses
+// (same key: own lines alone, a `groupKey` across tests, else same test; one stack per day in the account's zone). A stack of 2+ lines is one heading line, the
+// bell's title without its day ("Disputes · 3 new", "Excerpts · 2 updates", "Harbor Run · 4 updates"), with its lines under it; a line alone in the bell (own, or a
+// single line) stays a single line.
+export type EmailItem = { text: string; link: string; groupKey: string | null; testId: string | null; id: string; own: boolean; createdAt: Date };
+export function emailLines<N extends EmailItem>(items: N[], line: (n: N) => string, timeZone?: string | null, titles: Map<string, string> = new Map()) {
   const out: string[] = [];
-  for (const n of items) {
-    const stacked = n.groupKey ? stacks.get(n.groupKey) : undefined;
-    if (!stacked || stacked.length < 2) out.push(line(n));
-    else if (n === stacked[0]) out.push(`• ${groupTitle(n.groupKey!, new Set(stacked.map((x) => x.testId ?? x.id)).size, stacked.length)}`, ...stacked.map((x) => `  ${line(x)}`));
+  for (const s of bellStacks(items, timeZone, (id) => titles.get(id))) {
+    if (s.lines.length < 2) out.push(line(s.lines[0]));
+    else out.push(`• ${stackHeading(s)}`, ...s.lines.map((x) => `  ${line(x)}`));
   }
   return out;
+}
+/** (§298) The names of the tests these lines are about, for the bell's and the email's per-test stack titles. */
+export async function testTitlesOf(items: { testId: string | null }[]) {
+  const ids = [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))];
+  if (!ids.length) return new Map<string, string>();
+  return new Map((await db.test.findMany({ where: { id: { in: ids } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
 }
 
 /**
@@ -142,12 +150,12 @@ export function emailLines<N extends { text: string; link: string; groupKey: str
  * and "As a tester" headings (a heading only when it has lines). An account with one side keeps the plain list.
  */
 export const SIDE_HEADINGS = { account: "Your account", developer: "As a developer", tester: "As a tester" } as const;
-function sidedEmailLines<N extends { side: string | null; text: string; link: string; groupKey: string | null; testId: string | null; id: string }>(items: N[], line: (n: N) => string, both: boolean) {
-  if (!both) return emailLines(items, line);
+function sidedEmailLines<N extends EmailItem & { side: string | null }>(items: N[], line: (n: N) => string, both: boolean, timeZone: string | null | undefined, titles: Map<string, string>) {
+  if (!both) return emailLines(items, line, timeZone, titles);
   const out: string[] = [];
   for (const [side, heading] of [[null, SIDE_HEADINGS.account], ["developer", SIDE_HEADINGS.developer], ["tester", SIDE_HEADINGS.tester]] as const) {
     const part = items.filter((n) => (n.side === "developer" || n.side === "tester" ? n.side : null) === side);
-    if (part.length) out.push(...(out.length ? [""] : []), heading, ...emailLines(part, line));
+    if (part.length) out.push(...(out.length ? [""] : []), heading, ...emailLines(part, line, timeZone, titles));
   }
   return out;
 }
@@ -226,7 +234,7 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
       // summary, or its oldest line, to now), a Daily one and every end-of-day email the day. (Owner, Nov 6, §297) From the day after the last summary.
       const period = due && (u.emailPref === "weekly" || u.emailPref === "monthly") ? u.emailPref : "daily";
       const heading = summaryHeading(period, u.lastSummaryAt ?? all[0].createdAt, now, u.timeZone, !!u.lastSummaryAt);
-      await sendEmail({ to: u.email, subject, text: [heading, "", ...sidedEmailLines(items, line, hasBoth(u)), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` }, heading });
+      await sendEmail({ to: u.email, subject, text: [heading, "", ...sidedEmailLines(items, line, hasBoth(u), u.timeZone, await testTitlesOf(items)), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` }, heading });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });
     } catch (e) {

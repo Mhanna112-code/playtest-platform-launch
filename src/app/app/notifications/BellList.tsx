@@ -8,7 +8,7 @@ import { LongList } from "@/components/LongList";
 import { refreshBell } from "@/components/BellLink";
 import { keepAmounts } from "@/components/Amounts";
 import { TestName } from "@/components/Cut";
-import { bellShort, opensInBox } from "@/lib/bell";
+import { bellShort, opensInBox, stackCount, stackHeading } from "@/lib/bell";
 import { LINE_LINK_CLASS, withLineLinks, type LineLink } from "@/components/LineLinks";
 
 export type BellLine = { id: string; text: string; href: string; read: boolean; ago: string; /** (§245) the test it is about: its name in the line is green */ test?: string;
@@ -89,7 +89,7 @@ export function BellList({ entries }: { entries: BellEntry[] }) {
             <div role="button" tabIndex={0} className="flex w-full cursor-pointer items-start gap-3 text-left" aria-expanded={!!open[e.key]} onClick={() => toggle(e)} onKeyDown={(k) => { if (k.target === k.currentTarget && (k.key === "Enter" || k.key === " ")) { k.preventDefault(); toggle(e); } }} data-bell-stack-head="">
               <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${e.lines.some((l) => !isRead(l)) ? "bg-indigo-400" : "bg-transparent"}`} />
               <span className="min-w-0 flex-1">
-                <span className={`block text-slate-100 ${e.lines.some((l) => !isRead(l)) ? "font-semibold" : "font-medium"}`}>{e.test && e.title ? <>{e.testHref ? <Link href={e.testHref} className={`${LINE_LINK_CLASS} [overflow-wrap:anywhere]`} data-line-link="test" onClick={(ev) => { ev.stopPropagation(); markRead(e.lines); }}>{e.title}</Link> : <TestName text={e.title} />} · {e.lines.length} updates {e.day}</> : e.counted ? `${e.title} ${e.day}` : `${e.title} · ${e.lines.length} updates ${e.day}`}</span>
+                <span className={`block text-slate-100 ${e.lines.some((l) => !isRead(l)) ? "font-semibold" : "font-medium"}`}>{e.test && e.title ? <>{e.testHref ? <Link href={e.testHref} className={`${LINE_LINK_CLASS} [overflow-wrap:anywhere]`} data-line-link="test" onClick={(ev) => { ev.stopPropagation(); markRead(e.lines); }}>{e.title}</Link> : <TestName text={e.title} />}{stackCount(e)} {e.day}</> : `${stackHeading(e)} ${e.day}`}</span>
                 <span className="block truncate text-sm text-slate-400" onClick={e.lines[0].links?.length ? (ev) => { if ((ev.target as HTMLElement).closest("a")) { ev.stopPropagation(); markRead(e.lines); } } : undefined}>{e.lines[0].links?.length ? withLineLinks(bellShort(e.lines[0].text) ?? e.lines[0].text, e.lines[0].links, { Anchor: Link }) : keepAmounts(bellShort(e.lines[0].text) ?? e.lines[0].text)}</span>
               </span>
               {e.lines.some((l) => !isRead(l)) && <span className="rounded-full bg-indigo-500 px-2 py-0.5 text-xs text-white">{e.lines.filter((l) => !isRead(l)).length}</span>}

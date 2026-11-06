@@ -5,7 +5,7 @@ import { PAUSES_GROUP, bellKeyIn, groupTitle } from "@/lib/bell";
 import { ANYTHING_ELSE_KEY, questionKeys, youAddedLine } from "@/lib/additions";
 import { itemsFor } from "@/lib/answerSets";
 import * as R from "@/lib/rules";
-import { EMAIL_STACKED, SUMMARY_HEADING, sendSummaries, summaryHeading } from "@/lib/server/notify";
+import { SUMMARY_HEADING, sendSummaries, summaryHeading } from "@/lib/server/notify";
 import { htmlOf } from "@/lib/server/email";
 import { chargebackOpened, disputeAmountChanged, liftHoldIfClear, runDaily, startHold, testerPausedLine } from "@/lib/server/holds";
 import { pauseTest, reinstateAccount, suspendAccount, unpauseTest } from "@/lib/server/restrictions";
@@ -39,14 +39,13 @@ describe("§295 point 1: testers are told when a test pauses", () => {
     await pauseTest(a.id, w.testId, "Checking the build");
     let mine = await pausedLines(w.anaId);
     expect(mine.map((n) => n.text)).toEqual(["“Harbor Run” is paused"]);
-    expect(mine[0]).toMatchObject({ text: testerPausedLine("Harbor Run"), link: `/app/sessions/${w.sessionId}`, side: "tester", mustEmail: false, own: false });
+    expect(mine[0]).toMatchObject({ text: testerPausedLine("Harbor Run"), link: `/app/sessions/${w.sessionId}`, side: "tester", mustEmail: true, own: false }); // (§298) always: it reaches her with email Off too
     await unpauseTest(w.testId, a.id);
     mine = await pausedLines(w.anaId);
     expect(mine.map((n) => n.text)).toEqual(["“Harbor Run” is paused", "“Harbor Run” is running again"]);
     // One bell entry: "Pauses · 2".
     expect(new Set(mine.map((n) => bellKeyIn(n))).size).toBe(1);
     expect(groupTitle(PAUSES_GROUP, 1, 2)).toBe("Pauses · 2");
-    expect(EMAIL_STACKED).toContain(PAUSES_GROUP);
     // Her daily summary stacks them under the same title; nothing in it says why.
     await sendSummaries(new Date(), [w.anaId]);
     const m = (await mails(w.tester.user.email)).at(-1)!;
@@ -74,16 +73,19 @@ describe("§295 point 1: testers are told when a test pauses", () => {
     expect((await pausedLines(w.anaId)).map((n) => n.text)).toEqual(["“Harbor Run” is paused", "“Harbor Run” is running again"]);
   });
 
-  it("a suspension: told at once; follows her email setting (Off: no email, not even end-of-day); a test already paused by the team says nothing", async () => {
+  it("a suspension: told at once; (§298) with email Off it still goes in her end-of-day email; a test already paused by the team says nothing", async () => {
     const w = await world();
     await db.user.update({ where: { id: w.anaId }, data: { emailPref: "off" } });
     const a = await admin();
     await suspendAccount(a.id, w.devId, "Checking", "developer");
     const mine = await pausedLines(w.anaId);
     expect(mine.map((n) => n.text)).toEqual(["“Harbor Run” is paused"]);
-    expect(mine[0].mustEmail).toBe(false);
+    expect(mine[0].mustEmail).toBe(true);
     await sendSummaries(new Date(), [w.anaId]);
-    expect((await mails(w.tester.user.email)).some((m) => m.text.includes("is paused"))).toBe(false);
+    // (Owner, Nov 6, §298, was §295's "follows her email setting") The pause reaches her with email Off, never saying why.
+    const m = (await mails(w.tester.user.email)).find((x) => x.text.includes("is paused"));
+    expect(m).toBeTruthy();
+    expect(m!.text).not.toMatch(/hold|suspend|team|Checking/i);
     await reinstateAccount(w.devId, undefined, a.id);
     expect((await pausedLines(w.anaId)).map((n) => n.text)).toEqual(["“Harbor Run” is paused", "“Harbor Run” is running again"]);
     // The team paused it first, then the developer is suspended: only the team's pause told her.

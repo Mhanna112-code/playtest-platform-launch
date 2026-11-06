@@ -95,6 +95,35 @@ export function bellKeyIn(n: { id: string; testId: string | null; own: boolean; 
   return n.testId ? `${n.testId}|${dayKey(n.createdAt, timeZone)}` : `solo|${n.id}`;
 }
 
+/**
+ * (Owner, Nov 6, §298) The bell's stacks: ONE grouping for the Notifications page and the summary / end-of-day emails, so they can't drift apart. Lines with the
+ * same bellKeyIn (in the reader's zone) form one stack, in the order their first line comes. Its title: the group's (groupTitle) for a `groupKey`, the test's
+ * name for a per-test stack, none for a line on its own (`own`, or about no test). `counted`: the title already counts (no "· N updates"); `test`: the title is
+ * a test's name. A stack of one line shows as that single line, in the bell and the email alike.
+ */
+export type BellStack<N> = { key: string; lines: N[]; title?: string; counted: boolean; test: boolean };
+export function bellStacks<N extends Parameters<typeof bellKeyIn>[0]>(items: N[], timeZone: string | null | undefined, testTitle: (testId: string) => string | undefined): BellStack<N>[] {
+  const groups = new Map<string, N[]>();
+  for (const n of items) {
+    const k = bellKeyIn(n, timeZone);
+    groups.set(k, [...(groups.get(k) ?? []), n]);
+  }
+  return [...groups.entries()].map(([key, g]) => {
+    const gk = g[0].groupKey;
+    return {
+      key,
+      lines: g,
+      title: gk ? groupTitle(gk, new Set(g.map((n) => n.testId ?? n.id)).size, g.length) : g[0].testId ? testTitle(g[0].testId) : undefined,
+      counted: !!(gk && GROUP_COUNT_TITLES[groupBase(gk)]), // (§185) "reqclosed:<test>" counts as "reqclosed"
+      test: !gk && !!g[0].testId,
+    };
+  });
+}
+/** (§298) What follows a stack's title: nothing when the title already counts ("Disputes · 3 new"), else " · N updates" ("Harbor Run · 4 updates"). */
+export const stackCount = (s: { counted?: boolean; lines: unknown[] }) => (s.counted ? "" : ` · ${s.lines.length} updates`);
+/** (§298) A stack's heading without its day, as the bell shows it (the page adds "today" / "on Nov 5") and the email writes it. */
+export const stackHeading = (s: { title?: string; counted?: boolean; lines: unknown[] }) => `${s.title ?? "Updates"}${stackCount(s)}`;
+
 /** Legacy callers group in UTC; page callers supply their viewer zone. */
 export const bellKey = (n: Parameters<typeof bellKeyIn>[0]) => bellKeyIn(n);
 

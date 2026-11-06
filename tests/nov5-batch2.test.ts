@@ -2,7 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { DMS_GROUP, groupTitle } from "@/lib/bell";
-import { EMAIL_STACKED } from "@/lib/server/notify";
+import { emailLines } from "@/lib/server/notify";
 
 const read = (f: string) => fs.readFileSync(path.resolve(__dirname, "..", f), "utf8");
 
@@ -24,7 +24,9 @@ describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
   it("§215: direct-message bells reach only people who share a test, and stack as one entry a day, in the email too", () => {
     expect(read("src/lib/server/directMessages.ts")).toContain("{ side: null, recipientId: a.other.id, about: userId, group: DMS_GROUP }");
     expect(groupTitle(DMS_GROUP, 1, 3)).toBe("Direct messages · 3") /* (§290) the page adds the day */;
-    expect(EMAIL_STACKED).toContain(DMS_GROUP);
+    // (Owner, Nov 6, §298) The email stacks them as the bell does (every bell stack stacks in the email).
+    const dm = (id: string) => ({ id, text: `DM ${id}`, link: "", groupKey: DMS_GROUP, testId: null, own: false, createdAt: new Date("2026-11-05T12:00:00Z") });
+    expect(emailLines([dm("a"), dm("b"), dm("c")], (n) => `• ${n.text}`, "UTC")).toEqual(["• Direct messages · 3", "  • DM a", "  • DM b", "  • DM c"]);
   });
 
   it("§216 (§246): payment rows open their whole text with the arrow (WhatLine: the 'what' cut at 50, §251), never only a hover", () => {

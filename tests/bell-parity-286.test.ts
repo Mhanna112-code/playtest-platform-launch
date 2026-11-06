@@ -5,7 +5,7 @@ import { GET as liveGET } from "@/app/api/live/route";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as invitePOST } from "@/app/api/invites/[id]/route";
 import { bellKeyIn, groupTitle } from "@/lib/bell";
-import { EMAIL_STACKED, emailLines } from "@/lib/server/notify";
+import { emailLines } from "@/lib/server/notify";
 import { closeRequests } from "@/lib/server/requests";
 import { testerChanges } from "@/lib/server/testerGate";
 import { autoChargeCalls } from "@/lib/server/holds";
@@ -77,7 +77,6 @@ describe("§286 the developer's call request rings the tester", () => {
     expect(all).toHaveLength(4);
     expect(new Set(all.map((n) => bellKeyIn(n, "UTC"))).size).toBe(1);
     // The email stacks them the same way.
-    expect(EMAIL_STACKED).toContain("callrequests");
     expect(emailLines(all, (n) => n.text)[0]).toBe("• Call requests · 4");
   });
 
