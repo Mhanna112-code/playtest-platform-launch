@@ -4951,3 +4951,9 @@ with ×.
   typed notes; Needs you's update rows have none.
 - paidZeroLine / teamClosedLine keep their text (built from the labels). Tests: tests/notes-in-boxes-281.test.ts; batch9, batch30-money, batch30-money-fixes and
   batch35-admin-tabs follow the new markup.
+
+## §285 Terms history: Then / Now (owner, Nov 6)
+
+- The tester's Terms history: an older offer's "Questions then and now" drop-down labels its two lists "Then" and "Now" (was "Offered"), matching the summary.
+  The developer's per-tester copy (§263, QuestionsChangedEntry) already said "Then" / "Now". No other Then / Offered pair is drawn there (the NDA left Terms
+  history in §266). Test: tests/batch35-numbers-notes.test.ts.

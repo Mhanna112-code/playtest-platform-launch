@@ -218,7 +218,10 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
     expect(src("components/QuestionsHistory.tsx")).toContain("<FieldLabel>Then</FieldLabel>");
     expect(src("components/QuestionsHistory.tsx")).toContain("<FieldLabel>Now</FieldLabel>");
     const s = src("app/app/sessions/[id]/page.tsx");
-    expect(s).toContain("<FieldLabel>Offered</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-offered`}"); // (§231)
+    // (Owner, Nov 6, §285) An older offer's questions then and now: "Then" and "Now", never "Offered".
+    expect(s).toContain("<FieldLabel>Then</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-then`}");
+    expect(s).toContain("<FieldLabel>Now</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-now`}"); // (§231)
+    expect(s).not.toContain("<FieldLabel>Offered</FieldLabel>");
     expect(s).not.toMatch(/>Then: <QuestionList|>Offered: <QuestionList/);
   });
 });

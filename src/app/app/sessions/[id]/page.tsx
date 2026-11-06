@@ -529,8 +529,9 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                     {/* (Batch 15 section 3) Each question cut to 3 lines with Show more. (Batch 20 section 1) More than 3: a scroll box about 3 questions tall. */}
                     {/* (Batch 35 §29) Labels apart from the questions, numbered with their Required tags. */}
                     {/* (Owner, Nov 5, §231) Each question in its own question box (components/QA.tsx). */}
+                    {/* (Owner, Nov 6, §285) Labelled "Then" and "Now" (was "Offered"), matching the summary and the Questions changed entries. */}
                     <div className="mt-1"><FieldLabel>Then</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-then`} items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div>
-                    <div className="mt-1"><FieldLabel>Offered</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-offered`} items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
+                    <div className="mt-1"><FieldLabel>Now</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-now`} items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
                 )}
                 {/* (§266) No "NDA then and now": the NDA isn't a limited field. */}
               </li>) }] : []; }),
