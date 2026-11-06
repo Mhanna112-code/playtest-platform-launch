@@ -164,7 +164,8 @@ describe("§207 3: Accept on a withdrawn request from an older page shows its re
     expect(lostRefusal("a-req1@t", "Ana Silva withdrew this request.", [{ id: "req1" }])).toBe(false); // still in its row
     expect(lostRefusal("a-req1@t", "", [])).toBe(false);
     const panel = src("components/CallRequestsPanel.tsx");
-    expect(panel).toContain("const lost = lostRefusal(at, error, live);");
+    // (Owner, Nov 5, §228 fix) On the page's own list: a request the page dropped stays drawn for its 6 s, but its refusal is at the top at once.
+    expect(panel).toContain("const lost = lostRefusal(at, error, live.filter((r) => !closing.left(r.id)));");
     expect(panel).toContain('{lost && <div data-request-refusal=""><ChangesBox side={side} changes={null} error={error} press={requestPressName(at)} /></div>}');
   });
 

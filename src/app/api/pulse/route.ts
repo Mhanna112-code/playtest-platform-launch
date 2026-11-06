@@ -102,8 +102,12 @@ export async function GET(req: Request) {
     // their part"). Only requests on this person's own sessions or tests.
     const reqIds = (q.get("requests") ?? "").split(",").map((x) => x.trim()).filter(Boolean).slice(0, 100);
     if (q.has("requests")) {
-      const { requestGoneLine } = await import("@/lib/server/requests");
-      const rows = reqIds.length ? await db.callRequest.findMany({ where: { id: { in: reqIds } }, select: { id: true, status: true, closedReason: true, contractId: true, callId: true } }) : [];
+      const { requestGoneLine, TIME_PASSED_REASON } = await import("@/lib/server/requests");
+      // (Owner, Nov 5, §228 fix) A waiting request whose time passed leaves the page's list at once (it lists only times ahead) though nothing has closed it yet:
+      // it reads as closed then ("Closed: its time passed"), so its row says so for its 6 seconds like any other.
+      const passedAt = new Date();
+      const rows = (reqIds.length ? await db.callRequest.findMany({ where: { id: { in: reqIds } }, select: { id: true, status: true, closedReason: true, contractId: true, callId: true, startsAt: true } }) : [])
+        .map((r) => (r.status === "pending" && r.startsAt <= passedAt ? { ...r, status: "closed", closedReason: TIME_PASSED_REASON } : r));
       // (Owner, Nov 4, §187) A "one of" request shows one row per time: once booked, the booked time's row reads "Booked" and its other times' rows "Another time
       // of this request was booked" (the page compares each row's time with `bookedAt`).
       const bookedIds = rows.flatMap((r) => (r.status === "booked" && r.callId ? [r.callId] : []));

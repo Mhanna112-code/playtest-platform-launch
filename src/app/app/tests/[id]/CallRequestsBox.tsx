@@ -1,5 +1,5 @@
 "use client";
-import { CallRequestsPanel, callRequestsAnchor, yourRequestsAnchor, type PanelReq } from "@/components/CallRequestsPanel";
+import { CallRequestsPanel, callRequestsAnchor, useClosingRequests, yourRequestsAnchor, type PanelReq } from "@/components/CallRequestsPanel";
 import { HoldFold } from "@/components/HoldFold";
 
 /**
@@ -13,14 +13,17 @@ import { HoldFold } from "@/components/HoldFold";
  * (your own waiting requests: Withdraw; panel `your-requests-<testId>`, people `your-requests-person-<contractId>`). Each has a name search above its people.
  */
 export function CallRequestsBox({ testId, seenAt, requests, leadMinutes }: { testId: string; seenAt: string; requests: PanelReq[]; leadMinutes: number }) {
-  const toYou = requests.filter((r) => !r.mine), yours = requests.filter((r) => r.mine);
+  // (Owner, Nov 5, §228 fix) Held over both boxes: a request that stops waiting keeps its row, saying what happened, for 6 seconds from any cause (the page drops
+  // it at once); a box whose last request closed stays drawn meanwhile (so the page draws this even with none waiting).
+  const { shown, closing } = useClosingRequests(requests);
+  const toYou = shown.filter((r) => !r.mine), yours = shown.filter((r) => r.mine);
   const box = (kind: "to-you" | "yours", title: string, list: PanelReq[]) => (
     <HoldFold defaultOpen className="card scroll-mt-24" summaryClassName="flex items-center gap-2 font-semibold text-white" bodyClassName="mt-4 min-w-0"
       data={{ "data-call-requests-box": "", [kind === "to-you" ? "data-requests-to-you" : "data-your-requests"]: "", "aria-label": title }}
       summary={<><h2 className="inline">{title}</h2> <span className="text-sm font-normal text-slate-400">(<span data-call-requests-count="">{list.length}</span>)</span></>}>
       <CallRequestsPanel byPerson side="developer" seenAt={seenAt} requests={list} path={() => `/api/tests/${testId}`} leadMinutes={leadMinutes} title={title} search={kind}
         sectionId={kind === "to-you" ? "call-requests" : "your-requests"} anchor={kind === "to-you" ? callRequestsAnchor : yourRequestsAnchor}
-        panelId={`${kind === "to-you" ? "call-requests" : "your-requests"}-${testId}`} />
+        panelId={`${kind === "to-you" ? "call-requests" : "your-requests"}-${testId}`} closing={closing} />
     </HoldFold>
   );
   return (

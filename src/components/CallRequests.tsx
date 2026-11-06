@@ -10,7 +10,7 @@ import { usePress } from "@/lib/usePress";
 import { DraftTag, useKept } from "@/lib/useKept";
 import type { RowJson } from "@/lib/callRows";
 import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, sentLine, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
-import { CallRequestsPanel } from "@/components/CallRequestsPanel";
+import { CallRequestsPanel, useClosingRequests } from "@/components/CallRequestsPanel";
 import type { ClashTarget, Slot } from "@/lib/callClash";
 import type { CallEnd } from "@/lib/callWindow";
 import { lockText, useSending } from "@/lib/sendLock";
@@ -45,6 +45,9 @@ export function CallRequests(p: {
     if (Array.isArray(v.rows) && v.rows.length) setRows(v.rows);
     setMinutes(typeof v.minutes === "string" ? v.minutes : "");
   });
+  // (Owner, Nov 5, §228 fix) The waiting requests as the panels show them, held over both lists: one that stops waiting keeps its row, saying what happened, for
+  // 6 seconds from any cause (even the last one: its list stays drawn meanwhile).
+  const { shown: reqsShown, closing } = useClosingRequests(p.requests.map((r) => ({ id: r.id, contractId: r.contractId, tester: p.side === "tester" ? "You" : r.who, asker: r.who, rows: r.rows, minutes: r.minutes ?? 0, mine: r.mine, rate: r.rate })));
   const red = error.startsWith(FIELD);
   const box = (k: string) => (at === k ? <ChangesBox side={p.side} changes={changes} error={k === "request" && red ? "" : error} link={typeof errData.requestId === "string" ? `req-${errData.requestId}` : undefined} /> : null);
   // (Batch 20 section 7) From the press until the reload, the clash checks use the data as it was when pressed and never what the press made.
@@ -101,11 +104,11 @@ export function CallRequests(p: {
           One person here (the developer), so no name search. Neither waiting: the one "No call requests waiting." line. */}
       {(() => {
         const id = p.path.split("/").filter(Boolean).pop() ?? "";
-        const all = p.requests.map((r) => ({ id: r.id, contractId: r.contractId, tester: p.side === "tester" ? "You" : r.who, asker: r.who, rows: r.rows, minutes: r.minutes ?? 0, mine: r.mine, rate: r.rate }));
+        const all = reqsShown;
         const toYou = all.filter((r) => !r.mine), yours = all.filter((r) => r.mine);
         const panel = (title: string, list: typeof all, kind: "call-requests" | "your-requests") => (
           <div data-requests-to-you={kind === "call-requests" ? "" : undefined} data-your-requests={kind === "your-requests" ? "" : undefined}>
-            <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`${kind}-${id}`} title={title} sectionId={kind} showCount requests={list} />
+            <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`${kind}-${id}`} title={title} sectionId={kind} showCount requests={list} closing={closing} />
           </div>
         );
         if (!all.length) return <CallRequestsPanel side={p.side} seenAt={p.seenAt} path={() => p.path} leadMinutes={p.leadMinutes} panelId={`call-requests-${id}`} requests={[]} />;
