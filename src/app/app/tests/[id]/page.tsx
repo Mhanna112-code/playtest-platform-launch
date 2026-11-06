@@ -62,7 +62,6 @@ import { TopPanel } from "./TopPanel";
 import { NeedsYou } from "./NeedsYou";
 import { KeysNotice } from "./KeysNotice";
 import { keyBoxes } from "@/lib/server/accessKeys";
-import { SavedNote } from "@/components/SavedNote";
 import { TestersJoined } from "./TestersJoined";
 import { ChatWithButton } from "@/components/ChatWithButton";
 import { RowsBox } from "./RowsBox";
@@ -87,7 +86,7 @@ import { otherSideNotice } from "@/components/OtherSideNotice";
 export const metadata = { title: "Test · Playtest" };
 export const dynamic = "force-dynamic";
 
-export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string; saved?: string; offered?: string; skipped?: string; closed?: string; resent?: string; spotclosed?: string; spots?: string }> }) {
+export default async function TestPage({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<{ failed?: string }> }) {
   const { id } = await params;
   // First: a restricted developer may open a test page only in its restricted view (batch 15 section 29); every other page sends them to the dashboard top.
   const u = await requireOpenPage(`/app/tests/${id}`);
@@ -101,7 +100,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   await (await import("@/lib/server/confirm")).expireActions(new Date(), { developerId: u.id });
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
-  const { saved, offered, skipped, closed, resent, failed } = await searchParams;
+  const { failed } = await searchParams; // (Owner, Nov 5, §275 revised) the Save's note is on Edit now: no saved/offered/closed/resent/skipped here
   const seenAt = new Date().toISOString();
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
   const pageV = await testV(u.id, id);
@@ -642,18 +641,6 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       <ListingSeeIt box="listing" />
       {/* (Batch 30) The seen marker starts at this page's first load in the tab: a redraw never skips a change the page hasn't shown. */}
       <PageLoaded at={seenAt} />
-      {/* (Owner, Nov 5, §275) The Save's note at the top (it sat under Invite): just "Saved.", with what else the Save did (applications closed, invites re-sent,
-          not re-invited) only when it did something; it fades after a few seconds or closes with ×. ("New testers join on the new listing; testers already in
-          keep their contract" went: since §264/§265/§267 much of a Save reaches testers already in.) */}
-      {saved && (
-        <SavedNote><p className="ok">
-          Saved.
-          {Number(offered) > 0 && ` Offered the new terms to ${offered} working tester${Number(offered) === 1 ? "" : "s"}.`}
-          {closed && ` Closed ${closed.split(", ").length} application${closed.split(", ").length === 1 ? "" : "s"}: ${closed.slice(0, 500)}.`}
-          {resent && ` Invites re-sent on the new listing: ${resent.slice(0, 500)}.`}
-          {skipped && ` Not re-invited: ${skipped.slice(0, 500)}.`}
-        </p></SavedNote>
-      )}
       <KeysNotice testId={t.id} keys={keysView.uses && !restricted ? keysView : null} canEdit={t.status !== "stopped" && t.status !== "closed"} />
       {/* (Owner, Oct 30, batch 34 §14) The first panel under the overview (and its notices): the current listing, as testers see it. */}
       <ListingPanel rows={listingRows} listing={listingNow} when={(d) => fmtDateTimeIn(d, u.timeZone)} savedAt={lastSave?.at.toISOString() ?? ""} />

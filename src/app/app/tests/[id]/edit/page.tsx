@@ -12,12 +12,15 @@ import { AutoRefresh } from "@/components/AutoRefresh";
 import { AlertsMenu } from "@/components/AlertsMenu";
 import { keyBoxes } from "@/lib/server/accessKeys";
 import { otherSideNotice } from "@/components/OtherSideNotice";
+import { SavedNote } from "@/components/SavedNote";
+import { savedNoteText, type SavedParams } from "@/lib/savedNote";
 
 export const metadata = { title: "Edit test · Playtest" };
 export const dynamic = "force-dynamic";
 
-export default async function EditTest({ params }: { params: Promise<{ id: string }> }) {
+export default async function EditTest({ params, searchParams }: { params: Promise<{ id: string }>; searchParams: Promise<SavedParams> }) {
   const { id } = await params;
+  const savedNote = savedNoteText(await searchParams);
   const u = await requireOpenDevPage();
   return withDateZone(u.timeZone, async () => {
 
@@ -46,6 +49,9 @@ export default async function EditTest({ params }: { params: Promise<{ id: strin
       ) : (
         <>
           <p className="note">Edit changes the listing for new testers only. Testers already in keep the contract they joined on.</p>
+          {/* (Owner, Nov 5, §275 revised) A Save that went through stays on Edit (a fresh load of it: the saved values, counters and "Changes left") and says
+              "Saved." at the top of the form, with what else the Save did only when it did something; it fades after 8 s, or stays until × when it lists that. */}
+          {savedNote && <SavedNote stay={savedNote.extras}><p className="ok" data-saved-text="">{savedNote.text}</p></SavedNote>}
           <TestForm
             init={asListing(t)}
             tz={u.timeZone}

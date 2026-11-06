@@ -4916,3 +4916,13 @@ with ×.
   counts), then score, accepted, matches. The score's formula (platform average) is unchanged. This orders Suggested (its top 5 after §274's filters) and Find
   testers; People you've worked with keeps its order; grey last and invitable first as before.
 - Tests: tests/invite-rank-276.test.ts (own fixtures; the seeded "Rankdemo" testers are untouched). batch35-green-names and profile-stats follow the side argument.
+
+## §275 revised: Save stays on Edit and shows "Saved." there (owner, Nov 5; replaces §275)
+- A Save that goes through no longer opens the test page: Edit loads again in place (`window.location.replace(savedHref(...))`, so Back still leads where Edit was
+  opened from), as a fresh load of Edit (the saved values, the counters and "Changes left"; the drafts this Save sent were already cleared, as before).
+- At the top of the form (under Edit's line about new testers): "Saved.", followed only by what else the Save did (new terms offered to N working testers,
+  applications closed, invites re-sent, not re-invited), from `savedNoteText` (lib/savedNote.ts). Just "Saved." fades after 8 s (SAVED_NOTE_MS); a note that lists
+  any of those stays until ×. The address's saved/offered/closed/resent/skipped go at once, so a reload never replays it.
+- Edit's "← Back to the test" link stays. The test page no longer shows a note or reads those params (only `failed` stays); spotclosed/spots, read nowhere, are
+  no longer sent. Post a test still opens the new test page, which never showed this note.
+- Tests: tests/saved-note-275.test.ts rewritten for the Edit placement.
