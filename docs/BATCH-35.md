@@ -4902,3 +4902,17 @@ After a Save the test page's note sat under Invite and stayed until the page was
 testers already in keep their contract." (no longer true since §264/§265/§267). It now sits at the top (above the Listing panel) and reads "Saved.", followed only by
 what else the Save did (new terms offered to N testers, applications closed, invites re-sent, not re-invited); it fades after 8 seconds (SAVED_NOTE_MS) or closes
 with ×.
+
+## §276 Invite testers: only tester-side ratings; unrated testers after rated ones (owner, Nov 5)
+- A tester row shows only the ratings they got as a tester (Rating rows with side "developer": a developer rated them). Someone who is also a developer showed
+  "3.0 ★ (1 rating)" from their own tester's rating of them as a developer; they now read "No ratings yet". `ratingSummary(userId, as)` takes the role they were
+  rated in ("tester" / "developer", `RatedAs`; omitted, both as before), with the same reveal rules (revealedWhere and stillHidden). In Invite testers: the rating
+  line, "No ratings yet", `ratingAvg`, the row's figures and changedAt (rankedTesters' full rows, testerRowInfo for application and invited rows, the Invite and
+  Cancel invite rating-changed stops, and the application answer's stop in joining.ts, so the shown and current ratings compare the same side).
+- The other one-sided places now use their side: the tester's hover on the developer's test page, TesterTiles / the tester dashboard's Rating tile ("tester");
+  Find tests' "by <dev> · 4.0 ★", the join page's "by <dev> · 1.0 ★" and its Rating line, the session page's developer hover, DeveloperTiles ("developer"); the
+  Messages / chat hover follows the profile it links to; your own profile's "Your ratings" follows the side the page is on.
+- Ranking (rankedTesters, testers not worked with): meets, then rated before unrated (rated = at least one revealed tester-side rating, the ones the score
+  counts), then score, accepted, matches. The score's formula (platform average) is unchanged. This orders Suggested (its top 5 after §274's filters) and Find
+  testers; People you've worked with keeps its order; grey last and invitable first as before.
+- Tests: tests/invite-rank-276.test.ts (own fixtures; the seeded "Rankdemo" testers are untouched). batch35-green-names and profile-stats follow the side argument.

@@ -34,7 +34,7 @@ export default async function ProfilePage() {
         <ProfileForm first init={{ name: u.name, pronoun: u.pronoun, isDeveloper: false, isTester: false, devices: p?.devices ?? [], categories: p?.categories ?? [], languages: p?.languages ?? [], bio: p?.bio ?? "" }} />
       </div>
     );
-  const rating = await ratingSummary(u.id);
+  const rating = await ratingSummary(u.id, side); // (Owner, Nov 5, §276) "Your ratings" on this side's profile: the ones they got on this side only
   return (
     <div className="mx-auto max-w-2xl">
       {side === "developer" ? (

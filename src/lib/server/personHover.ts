@@ -19,5 +19,6 @@ export async function personHoverFor(viewerId: string, side: Side | null, other:
   const href = side === "developer" ? (tester ?? dev) : (dev ?? tester);
   if (!href) return null;
   if ((await db.block.count({ where: { blockerId: other.id, blockedId: viewerId } })) > 0) return null;
-  return { name: displayName(other), href, summary: [(await ratingSummary(other.id)).line || "No ratings yet"] };
+  // (Owner, Nov 5, §276) The rating of the profile linked: their tester-side ratings for a tester's profile, their developer-side ones for a developer's.
+  return { name: displayName(other), href, summary: [(await ratingSummary(other.id, href === tester ? "tester" : "developer")).line || "No ratings yet"] };
 }

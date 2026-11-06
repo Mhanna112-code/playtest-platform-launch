@@ -325,7 +325,7 @@ export async function decideApplication(dev: U, testId: string, body: Record<str
     const listing = await db.test.findUniqueOrThrow({ where: { id: testId } });
     const lines = testerNeedsChangedLines(name, { devices: shownDevices, languages: shownLanguages }, current, listing);
     const shownRating = !("rating" in shownRaw) ? undefined : typeof shownRaw.rating === "number" ? shownRaw.rating : null;
-    const rating = await ratingSummary(tester.id);
+    const rating = await ratingSummary(tester.id, "tester"); // (Owner, Nov 5, §276) as the application row shows it
     const currentRating = rating.n ? Number(rating.avg.toFixed(1)) : null;
     const ratingLine = ratingChangedLine(name, shownRating, currentRating, tester.pronoun);
     if (ratingLine) lines.push(ratingLine);

@@ -60,6 +60,9 @@ async function rankedTesters(devId: string, testId: string) {
   // INVITABLE = not in the test, not invited, under 10 tests, not suspended; blocked or deleted testers never appear.
   // Worked with: invitable first, then your rating of them, tests together, most recent. Suggested (top 5 of the others, after the
   // device / language ticks): invitable newcomers by meets, score, accepted parts, matches. Find testers: invitable first, then meets and score.
+  // (Owner, Nov 5, §276) Only the ratings they got as a tester count (side "developer": a developer rated them; never what their own testers gave them as a
+  // developer). RATED = at least one such revealed rating (the ones the score counts); unrated testers come after every rated one: meets, rated, score, accepted,
+  // matches. The score's formula (the platform average) is unchanged.
   const [allRatings, sums, accepted] = await Promise.all([
     db.rating.aggregate({ where: { side: "developer", ...revealedRatingsWhere() }, _avg: { stars: true } }),
     db.rating.groupBy({ by: ["rateeId"], where: { side: "developer", ...revealedRatingsWhere() }, _sum: { stars: true }, _count: { _all: true } }),
@@ -85,7 +88,7 @@ async function rankedTesters(devId: string, testId: string) {
     const worked = workedWith.has(t.id);
     return {
       t, inv, grey, inTest: inTestSet.has(t.id), name: displayName(t), section: worked ? "worked" : "other",
-      meets: !needsGap(test, t.profile), score: scoreOf(t.id), accepted: acceptedBy.get(t.id) ?? 0, matches: matches(t),
+      meets: !needsGap(test, t.profile), rated: (sumOf.get(t.id)?._count._all ?? 0) > 0, score: scoreOf(t.id), accepted: acceptedBy.get(t.id) ?? 0, matches: matches(t),
       mineAvg: mineOf.get(t.id) ?? null, together: worked ? togetherCount(t.id) : 0, last: lastTogether.get(t.id) ?? 0,
     };
   });
@@ -94,11 +97,12 @@ async function rankedTesters(devId: string, testId: string) {
   lean.sort((a, b) =>
     byGrey(a, b) ||
     (a.section === "worked" && b.section === "worked" ? (b.mineAvg ?? -1) - (a.mineAvg ?? -1) || b.together - a.together || b.last - a.last
-      : Number(b.meets) - Number(a.meets) || b.score - a.score || b.accepted - a.accepted || b.matches - a.matches));
+      : Number(b.meets) - Number(a.meets) || Number(b.rated) - Number(a.rated) || b.score - a.score || b.accepted - a.accepted || b.matches - a.matches));
   /** The full rows the panel shows, built only for the rows returned. */
   const full = async (xs: L[]) => {
     const ids = xs.map((x) => x.t.id);
-    const ratings = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id)] as const)));
+    // (Owner, Nov 5, §276) The rating line, "No ratings yet", ratingAvg, the hover's figures and changedAt: their tester-side ratings only.
+    const ratings = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id, "tester")] as const)));
     // (Owner, Oct 28, batch 20 section 23) Each test with how their part went (their latest session on it): in it now, left, finished (rated) or ended.
     const together = (id: string) => {
       const seen = new Map<string, { title: string; state: string }>();
@@ -321,7 +325,7 @@ export async function inviteTesters(dev: U & { holdStartedAt?: Date | null }, te
     const invites = await tx.invite.findMany({ where: { testId, testerId: { in: ids } } });
     // Extra stop-once reasons for the ticked testers.
     const extra: TestEventLike[] = [];
-    const shownRatingRows = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id)] as const)));
+    const shownRatingRows = new Map(await Promise.all(ids.map(async (id) => [id, await ratingSummary(id, "tester")] as const))); // (§276) as the rows show it
     // (Owner, Oct 28, batch 16 section 31) What the panel showed: the test's requirements and each ticked tester's devices and languages. A change since then always
     // stops Invite / Invite anyway once (they're Invite's own checks, not Alerts types); the page shows the updated panel with it.
     const seenNeeds = needsOf(body.seenNeeds);
@@ -448,7 +452,7 @@ export async function cancelInvite(dev: U, testId: string, body: Record<string, 
   const extra: TestEventLike[] = [];
   if (shown && tester) {
     const lines = testerNeedsChangedLines(displayName(tester), shown, { devices: tester.profile?.devices ?? [], languages: tester.profile?.languages ?? [] }, inv.test);
-    const latest = await ratingSummary(tester.id);
+    const latest = await ratingSummary(tester.id, "tester"); // (Owner, Nov 5, §276) as the row shows it
     const line = ratingChangedLine(displayName(tester), shown.rating, latest.n ? Number(latest.avg.toFixed(1)) : null, tester.pronoun);
     if (line) lines.push(line);
     if (lines.length) extra.push({ kind: "profile", text: lines.join(" · "), createdAt: new Date(Math.max(tester.profile?.updatedAt.getTime() ?? 0, latest.at?.getTime() ?? 0)), key: `needs:${tester.id}` });
@@ -549,7 +553,7 @@ export async function reinviteAfterEdit(testId: string) {
 export async function testerRowInfo(devId: string, test: { devices: string[]; languages: string[] }, people: { id: string; profile: { devices: string[]; languages: string[]; updatedAt: Date } | null }[]) {
   const together = await db.contract.findMany({ where: { testerId: { in: people.map((p) => p.id) }, test: { developerId: devId } }, select: { testerId: true, testId: true } });
   return new Map(await Promise.all(people.map(async (p) => {
-    const r = await ratingSummary(p.id);
+    const r = await ratingSummary(p.id, "tester"); // (Owner, Nov 5, §276) only the ratings they got as a tester
     return [p.id, { seen: { devices: p.profile?.devices ?? [], languages: p.profile?.languages ?? [], rating: r.n ? Number(r.avg.toFixed(1)) : null }, tag: doesntListTag(test, p.profile), detail: withYouText(r.n ? r.avg : null, new Set(together.filter((c) => c.testerId === p.id).map((c) => c.testId)).size, r.n), changedAt: new Date(Math.max(p.profile?.updatedAt.getTime() ?? 0, r.at?.getTime() ?? 0)).toISOString() }] as const;
   })));
 }

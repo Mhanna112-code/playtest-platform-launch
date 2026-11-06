@@ -681,7 +681,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           pronoun: c.tester.pronoun,
           summary: [
             [...(c.tester.profile?.devices ?? []), ...(c.tester.profile?.languages ?? [])].join(", "),
-            (await ratingSummary(c.testerId)).line || "No ratings yet",
+            (await ratingSummary(c.testerId, "tester")).line || "No ratings yet", // (Owner, Nov 5, §276) their tester-side ratings only
             `Accepted parts: ${(await testerStats(c.testerId)).accepted.value} ${(await testerStats(c.testerId)).accepted.hint}`,
           ].filter(Boolean),
           block: null, // (Owner, Oct 27) Block and Report live only on profiles

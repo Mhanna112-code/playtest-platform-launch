@@ -79,7 +79,7 @@ describe("§166: no separate profile link next to a person, anywhere", () => {
     // (Owner, Nov 3) The "<name>: 1.0 ★ (1 rating)" line left the tester's section; the circle's card keeps the rating summary.
     expect(page).not.toContain("{ri?.avg");
     expect(page).not.toContain("avg: (await ratingSummary(c.testerId)).line");
-    expect(page).toContain('(await ratingSummary(c.testerId)).line || "No ratings yet",');
+    expect(page).toContain('(await ratingSummary(c.testerId, "tester")).line || "No ratings yet",'); // (Owner, Nov 5, §276) tester-side ratings only
     expect(src("app/app/tests/[id]/Applications.tsx")).toContain("<b><NameLink text={a.name} href={`/app/testers/${a.userId}`} /></b>");
     const invite = src("app/app/tests/[id]/InvitePanel.tsx");
     expect(invite).not.toMatch(/<a href=\{`\/app\/testers\/[^>]*text-inherit/);

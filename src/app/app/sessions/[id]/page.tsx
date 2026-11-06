@@ -224,7 +224,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const callEnd = await workEndOf(db, c.testId);
   const unread = await unreadCount(u.id, c.testId, c.testerId);
   const blockedByMe = (await db.block.count({ where: { blockerId: u.id, blockedId: c.test.developerId } })) > 0;
-  const devRating = (await ratingSummary(c.test.developerId)).line;
+  const devRating = (await ratingSummary(c.test.developerId, "developer")).line; // (Owner, Nov 5, §276) ratings they got as a developer only
   const testersIn = await db.contract.count({ where: { testId: c.testId, status: "working" } });
   // (NEXT-UI 24) The same contract line at the top of the Written answers, Recording and Live session panels:
   // "Written answers: $8 · Required" / "Recording: Not listed", then "Paid so far $Y" if any.
