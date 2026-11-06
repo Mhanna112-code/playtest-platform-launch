@@ -231,9 +231,31 @@ export function additionsUntil(stored: unknown, until: Date | string | null | un
  * question is matched by its words, as everywhere). Past questions leave the answers panel for the "Past questions" box (read-only, never added to).
  */
 export const isPastQuestion = (question: string, current: string[]) => !new Set(current.map(qText)).has(qText(question));
-/** (§234) The part's past questions (their threads: the answer and each addition), as the panel would draw them. */
-export const pastThreads = (answers: unknown, current: string[], stored: unknown) =>
-  writtenThreads(answers, current, stored).threads.filter((t) => isPastQuestion(t.question, current));
+/**
+ * (Owner, Nov 5, §254) The answers sent in an earlier set that no thread of the part holds. Since §136 a Send after a switch is ADDED under what was sent, so every
+ * sent answer is in the part's threads (the contract's earlier sets only copy them). Before §136 a Send after a switch REPLACED the sent set and kept the old one
+ * only in `Submission.prevSets`: those answers are in no thread. Each such answer (not blank; its question's thread, if any, holds neither it nor an addition with
+ * its words) becomes a read-only thread of its own, so the Past questions box still shows it now that the earlier sets' folds are gone. Each is listed once.
+ */
+export function earlierSent(threads: QuestionThread[], sets: SetItem[][]): QuestionThread[] {
+  const said = (q: string, a: string) => `${qText(q)}\n${a.trim()}`;
+  const held = new Set(threads.flatMap((t) => [t.answer, ...t.adds.map((x) => x.text)].map((a) => said(t.question, a))));
+  const out: QuestionThread[] = [];
+  for (const items of sets) for (const it of items) {
+    if (!it.answer.trim() || held.has(said(it.question, it.answer))) continue;
+    held.add(said(it.question, it.answer));
+    out.push({ key: `${questionKey(it.question)}-earlier-${out.length + 1}`, question: it.question, required: it.required, answer: it.answer, fresh: false, adds: [] });
+  }
+  return out;
+}
+/**
+ * (§234) The part's past questions (their threads: the answer and each addition), as the panel would draw them. (Owner, Nov 5, §254) Then the answers sent in an
+ * earlier set that no thread holds (`earlier`: those sets' items, earlierSent), each its own past question.
+ */
+export const pastThreads = (answers: unknown, current: string[], stored: unknown, earlier: SetItem[][] = []) => {
+  const { threads } = writtenThreads(answers, current, stored);
+  return [...threads.filter((t) => isPastQuestion(t.question, current)), ...earlierSent(threads, earlier)];
+};
 
 /**
  * (Owner, Nov 5, §235) What a current question already has: its answer as last sent (by its words, also after a switch to changed questions), when it was answered

@@ -35,7 +35,7 @@ import { BIG_PANEL_TALLEST, LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox
 import { Fold, OwnPanel, ResizeBox } from "@/components/Panel";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
-import { ANYTHING_ELSE_KEY, additionsOf, addsCounted, carriedAnswers, isPastQuestion, latestItems, noAnswerYet, pastThreads, questionKeys } from "@/lib/additions";
+import { ANYTHING_ELSE_KEY, additionsOf, addsCounted, carriedAnswers, latestItems, noAnswerYet, questionKeys } from "@/lib/additions";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
@@ -61,7 +61,6 @@ import { NdaBox } from "@/components/NdaBox";
 import { QuestionTexts, ValueText } from "@/components/QA";
 /** (Owner, Nov 5, §231) The listing information lines whose value can be long: each in the shared box (the others are short lines). */
 const LONG_INFO: string[] = ["title", "productName", "mature"];
-import { PrevSetFolds } from "@/components/AnswerSets";
 import { PastQuestions, pastCount } from "@/components/PastQuestions";
 import { NameLine } from "@/components/WholeLine";
 import { cutNamesIn } from "@/lib/cutNames";
@@ -141,11 +140,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
     const x = cutNamesIn(text, [dev, displayName(u), c.title, c.test.title]);
     return <NameLine shown={x.shown} full={x.full} name={dev} href={devHref} />;
   };
-  // (Owner, Nov 5, §234) Everything past in one box: the questions no longer in the contract (with what was sent and added to them) and the earlier sets' folds
-  // (only their unsent drafts here: what was sent shows once, as a past question). N counts each past question once, by its words.
-  const draftSets = prevSets.filter((s) => versionsOf(s, !!written).some((v) => v.kind === "draft"));
-  const pastN = pastCount(written ? pastThreads(written.answers, writtenQuestions(c), written.additions).map((t) => t.question) : [], draftSets.flatMap((s) => s.items.map((x) => x.question)), (q) => isPastQuestion(q, writtenQuestions(c)), qText);
-  const writtenUploads = c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }));
+  // (Owner, Nov 5, §234) Everything past in one box: the questions no longer in the contract (with what was sent and added to them). (Owner, Nov 5, §254; replaces
+  // §234's earlier sets' folds here) No "Previous questions and answers" folds: an answer sent in an earlier set that no thread holds (sent before §136, kept only
+  // in the piece's own earlier sets) is one more past question; the contract's sets' "Sent" versions are checked too (they only copy what was sent). N counts
+  // exactly what the box draws.
+  const earlierSets = written ? [...prevSetsOf(written.prevSets).map((s) => s.items), ...prevSets.flatMap((s) => versionsOf(s, true).filter((v) => v.kind === "sent").map((v) => v.items))] : [];
+  const pastN = written ? pastCount(written.answers, writtenQuestions(c), written.additions, earlierSets) : 0;
   // (Owner, Nov 5, §235) The current questions with no answer yet (none answered after the first send: all of them); the form below the answers holds only these.
   const openQs = written ? writtenQuestions(c).filter((_, i) => carriedAnswers(written, writtenQuestions(c))[i] == null) : writtenQuestions(c);
   // (§235; replaces §182's rows below the panel) "Add to this answer" sits in each answered question's fold, right under its answer and additions (and Anything
@@ -158,8 +158,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   };
   const pastBox = (
     <PastQuestions id={`own-past-${c.id}`} count={pastN}>
-      {written && <SentWork id={`own-past-${written.id}`} part="past" timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)} />}
-      <PrevSetFolds id={`own-prev-${c.id}`} draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={writtenUploads} />
+      {written && <SentWork id={`own-past-${written.id}`} part="past" earlier={earlierSets} timeZone={u.timeZone} kind="written" answers={written.answers} questions={writtenQuestions(c)} notes={written.notes} additions={written.additions} files={c.recordings.filter((r) => r.part === "written" && r.submissionId === written.id)} />}
     </PastQuestions>
   );
   // (Batch 13) "Show an excerpt on your profile": paid written answers, never while the test has an NDA, one pending request per part.
@@ -769,9 +768,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </div>
         )}
-        {/* (Batch 13 section 8) The previous sets of questions and answers, newest first, read-only. (Owner, Nov 5, §234) Inside the Past questions box: under
-            "Your written answers" once something was sent, else here. */}
-        {!written && pastBox}
+        {/* (Owner, Nov 5, §254; replaces batch 13 §8 / §234's earlier sets shown here before anything was sent) Nothing sent, nothing past: the Past questions box
+            only shows what was sent, under "Your written answers". */}
         {/* (Batch 13) Show an excerpt of paid written answers on the profile (the developer allows or denies it). */}
         {written && excerptPicks.length > 0 && <ExcerptPicker submissionId={written.id} choices={excerptPicks} />}
         {excerptPending && <p className="note" data-excerpt-pending="">Your excerpt request is waiting for <NameLink text={dev} href={devHref} />.</p>}

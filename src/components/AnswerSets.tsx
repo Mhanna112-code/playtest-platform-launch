@@ -1,8 +1,8 @@
 import { Formatted } from "@/components/Formatted";
 import { AnswerText, QuestionText } from "@/components/QA";
-import { fileSize, fmtDateIn } from "@/lib/format";
+import { fileSize } from "@/lib/format";
 import { RecordingVideo } from "@/components/RecordingVideo";
-import { versionsOf, type PrevSet, type SetItem } from "@/lib/answerSets";
+import type { SetItem } from "@/lib/answerSets";
 import { markerPattern, refOf, resolveMarker, type AnswerAttachment } from "@/lib/answerAttachments";
 import React, { type ReactNode } from "react";
 
@@ -47,31 +47,5 @@ export function AnswerWithAttachments({ text, attachments, onRemove }: { text: s
   return <div className="space-y-1" data-answer-renderer="">{parts}</div>;
 }
 
-/** "Previous questions and answers (until <date>)": a read-only fold per earlier set, newest first. */
-// (Owner, Oct 30, batch 15 section 14) The tester's sets say whether each version was sent or a draft: "Sent <date>" first, then "Draft (not sent)", each a read-only
-// fold. The developer's sets (`developer`) only ever hold what was sent.
-export function PrevSetFolds({ id = "prev", sets: all, sentPart = true, developer = false, attachments = [], timeZone, draftsOnly = false }: { /** (§223) unique on the page: its boxes' ids */ id?: string; timeZone?: string | null; sets: PrevSet[]; sentPart?: boolean; developer?: boolean; attachments?: AnswerAttachment[]; /** (batch 35 §136) only unsent drafts: what was sent shows once, in the part's own list */ draftsOnly?: boolean }) {
-  const sets = draftsOnly ? all.flatMap((s) => { const v = versionsOf(s, sentPart).filter((x) => x.kind === "draft"); return v.length ? [{ ...s, versions: v }] : []; }) : all;
-  if (!sets.length) return null;
-  return (
-    <div className="space-y-2" data-prev-sets="">
-      {sets.map((s, i) => {
-        const versions = developer ? [{ kind: "sent" as const, items: s.items }] : versionsOf(s, sentPart);
-        return (
-          <details key={i} className="rounded-lg border border-white/[0.08] p-2 text-sm" data-prev-set={s.until}>
-            <summary className="cursor-pointer text-slate-300">Previous questions and answers (until {fmtDateIn(s.until, timeZone)})</summary>
-            <div className="mt-2 space-y-2">
-              {versions.map((v, j) => (
-                <details key={j} open={versions.length === 1} className="rounded-md border border-white/[0.06] p-2" data-prev-version={v.kind}>
-                  <summary className="cursor-pointer text-xs font-medium text-slate-300">{v.kind === "sent" ? `Sent${v.at ? ` ${fmtDateIn(v.at, timeZone)}` : ""}` : "Draft (not sent)"}</summary>
-                  {/* (§223) Each question and answer scrolls in its own box: no second scroll around them. */}
-                  <div className="mt-2 space-y-2"><SetView id={`${id}-${i}-${j}`} items={v.items} attachments={attachments} /></div>
-                </details>
-              ))}
-            </div>
-          </details>
-        );
-      })}
-    </div>
-  );
-}
+// (Owner, Nov 5, §254) PrevSetFolds ("Previous questions and answers (until <date>)", a read-only fold per earlier set) is gone: its last place was the Past
+// questions box, which now shows an answer sent in an earlier set that no thread holds as one more past question (SentWork's `earlier`).

@@ -186,7 +186,8 @@ describe("one list per part, with Added", () => {
     expect(page.match(/<SentWork /g)).toHaveLength(4); // Needs you, the update row, the tester row, (§234) the tester row's Past questions
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
     expect(src("app/app/sessions/[id]/page.tsx")).toMatch(/<SentWork id=\{`own-\$\{written\.id\}`\} part="current" timeZone=\{u\.timeZone\} kind="written"/); // (§167, §234)
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("draftsOnly timeZone={u.timeZone} sets={prevSets}");
+    // (Owner, Nov 5, §254; was the earlier sets' draft folds) The tester's Past questions box is SentWork's past questions only (with the earlier sets' sent answers).
+    expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("draftsOnly");
     for (const f of ["lib/moneyLines.ts", "lib/server/paidUpdates.ts", "lib/server/tests.ts", "lib/server/recordings.ts", "app/app/page.tsx"]) expect(src(f)).not.toContain("updated version");
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).not.toContain("It stays with what you sent until you send again");
   });

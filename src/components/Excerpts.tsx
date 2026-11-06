@@ -6,8 +6,7 @@ import { FormMistakes } from "@/components/FormMistakes";
 import { ConfirmButton } from "@/components/ConfirmButton";
 import { api, errOf } from "@/lib/client";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
-import { OwnPanel, ResizeBox } from "@/components/Panel";
-import { QA_BOX_TALLEST, ValueText } from "@/components/QA";
+import { AnswerText, ValueText } from "@/components/QA";
 import { allKept, deletedRange, deleteFrom, excerptOf, GAP, keptChars, runsOf, squash } from "@/lib/excerptTrim";
 
 // (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and the tester's Remove. None of them stops once: a press goes through
@@ -97,16 +96,14 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
             ))}
           </fieldset>
           {/* (§196) The answer, read-only, with what's left out struck through. */}
-          <div className="min-w-0 space-y-1" data-excerpt-original="">
-            <p className="text-xs text-slate-400">Your answer{cut ? " (struck through: what you're leaving out)" : ""}</p>
-            {/* (Owner, Nov 5, §237) In the shared draggable box (ResizeBox in OwnPanel, as QA's boxes): its own scroll, no Show more. */}
-            <OwnPanel>
-              <ResizeBox id={`excerpt-original-${submissionId}`} label="Your answer" defaultMax={EXCERPT_BOX_MAX} tallest={QA_BOX_TALLEST}>
-                <div className="whitespace-pre-wrap break-words text-slate-300 [overflow-wrap:anywhere]" data-excerpt-original-text="">
-                  {runs.map((r, i) => r.kept ? <span key={i}>{r.text}</span> : <del key={i} className="rounded-sm bg-rose-400/20 text-rose-200/80 decoration-rose-300" data-excerpt-left-out="">{r.text}</del>)}
-                </div>
-              </ResizeBox>
-            </OwnPanel>
+          <div className="min-w-0" data-excerpt-original="">
+            {/* (Owner, Nov 5, §237) In the shared draggable box: its own scroll, no Show more. (Owner, Nov 5, §256; was a box drawn here by hand) QA's answer box
+                (AnswerText: its volt label and volt accent), so it reads as an answer like everywhere else. */}
+            <AnswerText id={`excerpt-original-${submissionId}`} label={`Your answer${cut ? " (struck through: what you're leaving out)" : ""}`} name="Your answer" defaultMax={EXCERPT_BOX_MAX} textClassName="whitespace-pre-wrap">
+              <div data-excerpt-original-text="">
+                {runs.map((r, i) => r.kept ? <span key={i}>{r.text}</span> : <del key={i} className="rounded-sm bg-rose-400/20 text-rose-200/80 decoration-rose-300" data-excerpt-left-out="">{r.text}</del>)}
+              </div>
+            </AnswerText>
           </div>
           {/* (§196) Its own limiter (data-typing-limit): it never takes more than the answer, so the paste note "Cut to the N-character limit." never shows here. */}
           <label className="label req" htmlFor={`excerpt-text-${submissionId}`}>The excerpt (delete what you don&apos;t want)</label>

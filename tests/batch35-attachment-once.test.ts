@@ -6,7 +6,8 @@ import { db } from "@/lib/db";
 import { joined, setup } from "./fixtures";
 import { describe, expect, it, vi } from "vitest";
 import { AttachmentList } from "@/components/AttachmentList";
-import { AnswerWithAttachments, PrevSetFolds, SetView } from "@/components/AnswerSets";
+import { AnswerWithAttachments, SetView } from "@/components/AnswerSets";
+import { SentWork } from "@/components/SentWork";
 import { DisputeWork } from "@/app/admin/DisputeWork";
 import { attachmentMarker, markerIds } from "@/lib/answerAttachments";
 
@@ -62,9 +63,11 @@ describe("§115: a file placed inline is not listed again", () => {
     const list = html.slice(html.indexOf('<ul'));
     expect(list).not.toContain(href(image.id)); expect(list).toContain(href(file.id));
   });
+  // (Owner, Nov 5, §254; was PrevSetFolds' "Sent" version) An earlier set's sent answer no thread holds is a past question in the Past questions box, its file inline.
   it("previous sent sets keep their file inline and a current set does not hide an unplaced file", () => {
-    const html = render(h(React.Fragment, null, h(PrevSetFolds, { sets: [{ until: "2026-11-01T00:00:00Z", items }], attachments, developer: true }), h(AttachmentList, { items: uploads, inlineText: ["The new answer"] })));
-    expect(html).toContain('data-prev-version="sent"');
+    const now = [{ question: "What now?", answer: "The new answer", required: true }];
+    const html = render(h(React.Fragment, null, h(SentWork, { id: "past", part: "past", kind: "written", answers: now, questions: ["What now?"], notes: "", additions: [], files: uploads.map((f) => ({ ...f, uploadedAt: new Date() })), earlier: [items] }), h(AttachmentList, { items: uploads, inlineText: ["The new answer"] })));
+    expect(html).toContain('data-question-title="">What happened?');
     expect(html).toContain(`<img src="${href(image.id)}"`);
     expect(html.slice(html.indexOf('<ul'))).toContain(href(image.id));
   });

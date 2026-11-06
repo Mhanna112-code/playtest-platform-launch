@@ -96,7 +96,8 @@ describe("§237 items 4–11: long texts in boxes", () => {
     for (const f of ["app/app/page.tsx", "app/app/tests/[id]/page.tsx", "components/ExcerptList.tsx"]) expect(src(f), f).not.toContain("ClampText");
     expect(src("app/app/tests/[id]/page.tsx")).toContain("<ExcerptQuote id={`shown-excerpt-${e.id}`} text={e.text} />");
     const picker = src("components/Excerpts.tsx");
-    expect(picker).toContain("<ResizeBox id={`excerpt-original-${submissionId}`} label=\"Your answer\" defaultMax={EXCERPT_BOX_MAX} tallest={QA_BOX_TALLEST}>");
+    // (Owner, Nov 5, §256; was a ResizeBox drawn by hand) QA's answer box, at the picker's own first height.
+    expect(picker).toContain("<AnswerText id={`excerpt-original-${submissionId}`} label={`Your answer${cut ? \" (struck through: what you're leaving out)\" : \"\"}`} name=\"Your answer\" defaultMax={EXCERPT_BOX_MAX} textClassName=\"whitespace-pre-wrap\">");
     expect(picker).toContain("<ValueText id={`excerpt-shown-as-${submissionId}`} label=\"Shown as\">");
     expect(picker).not.toContain("max-h-[calc(4lh+0.5rem)]");
     expect(picker).not.toContain("LongText");

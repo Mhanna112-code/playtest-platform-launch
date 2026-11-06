@@ -4618,3 +4618,24 @@ tester's reason sits right under the line in its box (no drop-down of its own), 
 ## §253 Disputes: add your side, one drop-down per person (owner, Nov 5)
 On the dashboard, "Disputes: add your side" has one drop-down per tester (their name, "· N disputes"); inside, each dispute is its own drop-down as in §252: its line
 ("Disputed what you paid for … on “<test>”") the summary, the reason right under it in its box, then "Add your side". All open at first.
+
+## §254 Past questions without the earlier sets' "Previous questions and answers" folds (owner, Nov 5)
+The "Past questions (N)" box ends with the part's past questions only (SentWork part="past"), on both sides: the tester's session page and the developer's Testers
+list. The earlier sets' folds (PrevSetFolds) are gone; it had no other use (the team's "See the work" uses SentWork), so it is deleted.
+- Nothing sent is lost. Since §136 a Send after a switch is ADDED under what was sent (`Submission.additions`), so every sent answer is one of the part's threads;
+  the contract's earlier sets (`Contract.prevSets`) only copy them (their "Sent" version), plus the tester's unsent draft. Before §136 a Send after a switch
+  REPLACED the sent set and kept the old one only in `Submission.prevSets`: those answers are in no thread. They are now drawn after the past questions as more
+  read-only past questions in the same boxes (`earlierSent`, lib/additions.ts): each non-blank answer of an earlier set whose question's thread holds neither it
+  nor an addition with its words, once. The developer's come from the piece's own earlier sets; the tester's from those and the contract's "Sent" versions.
+- An earlier set's unsent draft (the tester's "Draft (not sent)") is no longer shown: it was never sent. With nothing sent there is no Past questions box.
+- `pastCount` counts exactly the folds the box draws (`pastThreads` with the same earlier sets), no longer the questions' words.
+
+## §255 No "new question" tag on the developer's side (owner, Nov 5)
+SentWork's `newQuestionTag={false}` on every developer view (the Testers list, its Past questions, Needs you and the update row); By question never had it. The
+tester's own page keeps the tag on a question that came with changed questions; the team's "See the work" is unchanged.
+
+## §256 Questions and answers told apart at a glance (owner, Nov 5)
+In QA.tsx (every question and answer box): a question is a sky-tinted box (sky tint, a sky border and a sky left accent, its text sky-pale and italic) under a
+sky label ("Question 1"); an answer keeps the normal dark box with the volt left accent, under a volt label ("Answer", "Notes"). "Added · <date>" keeps its green
+label. Sky, not indigo: this app's indigo is remapped to volt. The ResizeBox / OwnPanel behaviour is unchanged. The excerpt picker's "Your answer" was a box
+drawn by hand; it is QA's AnswerText now (at its own first height, keeping its line breaks).

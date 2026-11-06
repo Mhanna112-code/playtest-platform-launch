@@ -114,7 +114,8 @@ describe("previous sets: sent or draft (section 14)", () => {
     expect(versionsOf(sets[0], true).map((v) => v.kind)).toEqual(["sent", "draft"]);
     expect(versionsOf(sets[1], true).map((v) => v.kind)).toEqual(["sent"]);
     expect(versionsOf(sets[1], false).map((v) => v.kind)).toEqual(["draft"]);
-    expect(src("components/AnswerSets.tsx")).toContain('"Draft (not sent)"');
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PrevSetFolds id={`prev-${c.id}`} timeZone={u.timeZone} developer"); // (§223) its boxes' ids
+    // (Owner, Nov 5, §254) The earlier sets' folds are gone (PrevSetFolds, with its "Draft (not sent)"); their sent answers no thread holds are past questions.
+    expect(src("components/AnswerSets.tsx")).not.toContain('"Draft (not sent)"');
+    expect(src("app/app/tests/[id]/page.tsx")).not.toContain("<PrevSetFolds");
   });
 });

@@ -257,8 +257,11 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const kept = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `written:${j.sessionId}` } } });
     expect((kept.data as { answers: string[] }).answers).toEqual(["My Q1 draft", "", ""]);
     expect(carryOver(prev[0].items, ["Q1?", "Q2 changed?", "Q3?"])).toEqual(["My Q1 draft", "", ""]);
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("<PrevSetFolds id={`own-prev-${c.id}`} draftsOnly timeZone={u.timeZone} sets={prevSets} sentPart={!!written} attachments={writtenUploads} />"); // (§234) inside the Past questions box // (batch 35 §136) what was sent shows once, in the list
-    expect(src("components/AnswerSets.tsx")).toContain("Previous questions and answers (until {fmtDateIn(s.until, timeZone)})");
+    // (Owner, Nov 5, §254) No "Previous questions and answers" folds any more (PrevSetFolds is gone): the Past questions box shows what was sent, and an earlier
+    // set's sent answer that no thread holds as one more past question.
+    expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("PrevSetFolds");
+    expect(src("components/AnswerSets.tsx")).not.toContain("export function PrevSetFolds");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("part=\"past\" earlier={earlierSets}");
   });
 
   it("sent, then switched: the developer sees it under its own questions, labelled, at its price; (batch 35 §136) the answers to the new set are ADDED under it", async () => {

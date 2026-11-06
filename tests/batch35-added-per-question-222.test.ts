@@ -245,8 +245,9 @@ describe("§223 widened: one look for questions and answers everywhere they are 
     const { QuestionText, AnswerText } = await import("@/components/QA");
     const q = renderToStaticMarkup(h(ResizeBox, { id: "outer", label: "x" }, h(QuestionText, { id: "q1", label: "Question 1", required: true }, "What did you like?")));
     expect(q).toMatch(/data-qa-label="">Question 1<span [^>]*data-required-tag="">Required<\/span><\/p>/);
-    expect(q).toContain("!bg-white/[0.05]");
-    expect(q).toContain('class="whitespace-pre-wrap break-words text-sm font-medium italic text-slate-300 [overflow-wrap:anywhere]" data-qa-text="question">What did you like?</div>');
+    // (Owner, Nov 5, §256; was the faint "!bg-white/[0.05]" box and slate text) A sky-tinted box with a sky border and left accent, sky-pale italic text.
+    expect(q).toContain("!border-sky-300/30 !border-l-2 !border-l-sky-300/70 !bg-sky-400/[0.08]");
+    expect(q).toContain('class="whitespace-pre-wrap break-words text-sm font-medium italic text-sky-100 [overflow-wrap:anywhere]" data-qa-text="question">What did you like?</div>');
     expect(q).not.toContain("data-panel-flat"); // in OwnPanel: its own box inside the outer panel
     const a = renderToStaticMarkup(h(AnswerText, { id: "a1" }, "the boats"));
     expect(a).toContain('data-qa-label="">Answer</p>');
@@ -264,7 +265,8 @@ describe("§223 widened: one look for questions and answers everywhere they are 
     expect(set).toContain('data-no-answer="">(no answer)</p>');
     expect(set).not.toContain("data-fold-text");
     expect(src("components/AnswerSets.tsx")).not.toContain("max-h-[24rem]");
-    expect(src("app/app/tests/[id]/page.tsx")).toContain("<PrevSetFolds id={`prev-${c.id}`}");
+    // (Owner, Nov 5, §254) The earlier sets' folds are gone from the developer's Past questions.
+    expect(src("app/app/tests/[id]/page.tsx")).not.toContain("<PrevSetFolds");
     const bq = src("app/app/tests/[id]/ByQuestion.tsx");
     expect(bq).toContain("<QuestionText id={`bq-${testId}-${key}-question`}");
     expect(bq).toContain("<AnswerText id={`bq-${testId}-${key}-${a.contractId}`}");

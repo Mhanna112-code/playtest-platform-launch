@@ -3,7 +3,8 @@ import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { AttachmentList } from "@/components/AttachmentList";
 import { Fold } from "@/components/Panel";
 import { AnswerText, QuestionText } from "@/components/QA";
-import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, additionsUntil, isPastQuestion, writtenThreads, type QuestionThread } from "@/lib/additions";
+import { ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, addedCount, addedFiles, addedLabel, additionsOf, additionsUntil, earlierSent, isPastQuestion, writtenThreads, type QuestionThread } from "@/lib/additions";
+import type { SetItem } from "@/lib/answerSets";
 import { markerIds } from "@/lib/answerAttachments";
 import { fmtStampIn } from "@/lib/format";
 
@@ -36,12 +37,16 @@ export function AddedLabel({ at, timeZone }: { at: string; timeZone?: string | n
  * notes and the files sent first once it was paid (Anything else shows only when something new is in it).
  * (Owner, Nov 5, §234) `part`: "current" draws only the contract's current questions (`questions`) and Anything else (the answers panel, Needs you); "past" only
  * the questions no longer in the contract, read-only, with no Anything else and no Add (the "Past questions" box). Without it, every question (the team's view).
+ * (Owner, Nov 5, §254) `earlier` (with part "past"): the earlier sets' items; an answer sent in one that no thread holds (sent before §136, when a Send after a
+ * switch replaced the set) is drawn after the past questions as one more read-only past question (earlierSent), so nothing sent is lost without those sets' folds.
+ * (Owner, Nov 5, §255) `newQuestionTag={false}`: no "new question" tag (the developer's views); the tester's own page keeps it.
  */
-export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, newOnly, part }: {
+export function SentWork({ id = "sent", kind, answers, questions = [], notes, additions, files, timeZone, addTo, until = null, newOnly, part, earlier = [], newQuestionTag = true }: {
   id?: string; kind: string; answers: unknown; questions?: string[]; notes: string; additions: unknown; files: File[]; timeZone?: string | null;
   addTo?: (q: { key: string; question: string }) => ReactNode;
   /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new since this time (null: everything sent) */ newOnly?: { since: Date | string | null };
   /** (§234) only the current questions (and Anything else), or only the past ones */ part?: "current" | "past";
+  /** (§254) the earlier sets' items (part "past") */ earlier?: SetItem[][]; /** (§255) false: no "new question" tag (the developer) */ newQuestionTag?: boolean;
 }) {
   const upTo = until ? new Date(until).getTime() : null, after = newOnly?.since ? new Date(newOnly.since).getTime() : null;
   const isNew = (at: string | undefined) => after == null || (!!at && new Date(at).getTime() > after);
@@ -90,8 +95,9 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
         summary={<span className="flex min-w-0 flex-1 flex-wrap items-start gap-x-1">
           {/* (Owner, Nov 5, §223; was §187's title with its own Show more) The title: the question cut at 2 lines; its whole text is the first box inside. */}
           <span className="line-clamp-2 min-w-0 flex-1 basis-40 text-slate-200 [overflow-wrap:anywhere]" data-question-title="">{t.question}{t.required && <span aria-label="required"> *</span>}</span>
-          {(t.fresh || newAdds.length > 0) && <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
-            {t.fresh && <span className="badge border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}
+          {/* (Owner, Nov 5, §255) The "new question" tag only on the tester's side: the developer's views pass newQuestionTag={false}. */}
+          {((newQuestionTag && t.fresh) || newAdds.length > 0) && <span className="flex shrink-0 items-center gap-1 whitespace-nowrap">
+            {newQuestionTag && t.fresh && <span className="badge border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}
             {newAdds.length > 0 && <span className="text-emerald-300" data-added-count={newAdds.length}>{addedCount(newAdds.length)}</span>}
           </span>}
         </span>}>
@@ -114,7 +120,8 @@ export function SentWork({ id = "sent", kind, answers, questions = [], notes, ad
   const hiddenPast = part === "current" && threads.some((t) => !inPart(t) && showThread(t));
   const elseCount = others.length;
   const elseShown = part !== "past" && (!newOnly || elseCount > 0 || (after == null && (!!notes.trim() || writtenFiles.length > 0)));
-  const drawn = threads.filter((t) => inPart(t) && showThread(t));
+  // (Owner, Nov 5, §254) The Past questions box: then each answer sent in an earlier set that no thread holds, read-only (pastThreads counts the same).
+  const drawn = [...threads.filter((t) => inPart(t) && showThread(t)), ...(part === "past" ? earlierSent(threads, earlier) : [])];
   return (
     <div className="space-y-2" data-sent-work="written">
       {drawn.map((t, n) => fold(t, n + 1))}
