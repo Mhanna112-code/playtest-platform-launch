@@ -1,8 +1,9 @@
 "use client";
 import { CharacterCount } from "@/components/CharacterCount";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { MistakeList, checkFields } from "@/components/FieldChecks";
 import { CANCEL_HOURS } from "@/lib/rules";
+import { lockText } from "@/lib/sendLock";
 
 /**
  * The full app's "Cancel ▾" on a booked call (call-tools.tsx): a small drop-down with a reason box, the button and the
@@ -13,6 +14,9 @@ import { CANCEL_HOURS } from "@/lib/rules";
 export const CANCEL_REASON_LINE = "The call is less than 24 hours away: say why you're cancelling (the other side sees it).";
 export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: string; onCancel: (reason: string) => void; label?: string; rule?: string }) {
   const [reason, setReason] = useState("");
+  // (Owner, Nov 5, §261) While THIS menu's Cancel is going through (`busy` is the whole panel's), its Why is read-only; another press in the panel leaves it be.
+  const [mine, setMine] = useState(false);
+  useEffect(() => { if (!p.busy) setMine(false); }, [p.busy]);
   const root = useRef<HTMLDivElement>(null);
   return (
     <details className="w-full [&:not([open])]:w-auto" data-cancel-menu="">
@@ -28,10 +32,11 @@ export function CancelMenu(p: { needsReason: boolean; busy: boolean; other: stri
           data-match="say why you're cancelling"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
+          {...lockText(mine && p.busy)}
         />
         <CharacterCount value={reason} min={p.needsReason ? 3 : 0} max={300} required={p.needsReason} />
         </span>
-        <button className="btn-secondary px-3 py-1 text-xs" disabled={p.busy} onClick={() => checkFields(root.current) && p.onCancel(reason)}>{p.label ?? "Cancel this call"}</button>
+        <button className="btn-secondary px-3 py-1 text-xs" disabled={p.busy} onClick={() => { if (!checkFields(root.current)) return; setMine(true); p.onCancel(reason); }}>{p.label ?? "Cancel this call"}</button>
         <p className="w-full text-xs text-slate-400">
           {p.rule ?? (p.needsReason
             ? `Less than ${CANCEL_HOURS} hours ahead: say why. ${p.other} is told.`

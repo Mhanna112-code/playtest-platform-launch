@@ -12,6 +12,7 @@ import { DraftTag, useKept } from "@/lib/useKept";
 import { PROFILE_DRAFT_FIELDS, type ProfileDraftField } from "@/lib/keptText";
 import { BioBox, DEV_BIO_PLACEHOLDER, TESTER_BIO_PLACEHOLDER } from "@/components/BioBox";
 import { PRONOUN_OPTIONS } from "@/lib/format";
+import { lockText } from "@/lib/sendLock";
 
 /** `bio`: the bio of the form's own side (batch 35 §134: the developer's and the tester's are separate; the first setup's is the tester's). */
 type Init = { name: string; pronoun: string; isDeveloper: boolean; isTester: boolean; devices: string[]; categories: string[]; languages: string[]; bio: string };
@@ -74,7 +75,7 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
   };
   // (Owner, Nov 3, batch 35 §134) The side's own bio, optional, with its count (x / 2,000): the developer's is shown to testers, the tester's to developers.
   // (Batch 35 §162) The same box as sign-up's (BioBox).
-  const bioBox = (shownTo: "developers" | "testers", placeholder: string) => <BioBox shownTo={shownTo} value={v.bio} onChange={(bio) => set({ bio })} placeholder={placeholder} />;
+  const bioBox = (shownTo: "developers" | "testers", placeholder: string) => <BioBox shownTo={shownTo} value={v.bio} onChange={(bio) => set({ bio })} placeholder={placeholder} locked={busy} />;
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
@@ -102,7 +103,8 @@ export function ProfileForm({ init, first, admin = false, side = "tester", seenA
     <form className="card space-y-5" onSubmit={save}>
       <div>
         <label className="label req" htmlFor="name">Name</label>
-        <input id="name" className="input" maxLength={LIMITS.personName} data-required="" data-required-msg="Enter your name (others see it)." data-match="your name" value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ana Silva" />
+        {/* (Owner, Nov 5, §261) The name and the bio are read-only while Save profile / Continue is going through. */}
+        <input id="name" className="input" maxLength={LIMITS.personName} data-required="" data-required-msg="Enter your name (others see it)." data-match="your name" value={v.name} onChange={(e) => set({ name: e.target.value })} placeholder="Ana Silva" {...lockText(busy)} />
         <CharacterCount value={v.name} min={1} max={LIMITS.personName} required />
       </div>
       <div>

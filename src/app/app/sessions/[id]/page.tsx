@@ -762,7 +762,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             added to in its fold, a past one is in Past questions); after a switch to changed questions it also moves the part onto them. Always "Send Answers". */}
         {canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions || openQs.length > 0) && (
           <div className="space-y-2" data-answer-form={written ? "open" : "first"}>
-            {written?.setUntil && <p className="note" data-set-until-form="">What you sent is for the questions until {fmtDate(written.setUntil)}. Send your answers to these questions: they&apos;re added under what you sent.</p>}
+            {/* (Owner, Nov 5, §260) No "What you sent is for the questions until <date>. Send your answers to these questions: …" line over the form. */}
             {written && openQs.length > 0 && <p className="text-sm font-medium text-white" data-open-questions-title="">Questions you haven&apos;t answered yet</p>}
             <WrittenForm key={written ? `open:${openQs.join("|")}` : "first"} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
               initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />

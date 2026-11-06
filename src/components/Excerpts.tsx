@@ -8,6 +8,7 @@ import { api, errOf } from "@/lib/client";
 import { ChangesBox, type Change } from "@/components/ChangesBox";
 import { AnswerText, ValueText } from "@/components/QA";
 import { allKept, deletedRange, deleteFrom, excerptOf, GAP, keptChars, runsOf, squash } from "@/lib/excerptTrim";
+import { lockPick, lockText } from "@/lib/sendLock";
 
 // (Owner, Oct 29, batch 13) Excerpt requests: the tester's picker, the developer's Allow / Deny, and the tester's Remove. None of them stops once: a press goes through
 // whatever changed meanwhile, and is refused only when the request (or excerpt) no longer exists, or (a request, an Allow) when the test now has an NDA.
@@ -90,7 +91,7 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
           <fieldset id={`excerpt-pick-${submissionId}`} className="space-y-1" data-field-group="" data-match="pick one of your answers">
             {choices.map((c) => (
               <label key={c.index} className="flex items-start gap-2">
-                <input type="radio" name={`excerpt-${submissionId}`} checked={index === c.index} onChange={() => pick(c.index)} />
+                <input type="radio" name={`excerpt-${submissionId}`} checked={index === c.index} onChange={() => pick(c.index)} {...lockPick(busy)} />
                 <span className="min-w-0 break-words">{c.question}</span>
               </label>
             ))}
@@ -105,13 +106,15 @@ export function ExcerptPicker({ submissionId, choices, defaultOpen = false }: { 
               </div>
             </AnswerText>
           </div>
+          {/* (Owner, Nov 5, §261) While Ask the developer is going through, the excerpt is read-only, and the answer picks and Use original answer are disabled
+              (each would change the excerpt on its way). */}
           {/* (§196) Its own limiter (data-typing-limit): it never takes more than the answer, so the paste note "Cut to the N-character limit." never shows here. */}
           <label className="label req" htmlFor={`excerpt-text-${submissionId}`}>The excerpt (delete what you don&apos;t want)</label>
           <textarea id={`excerpt-text-${submissionId}`} ref={box} className="input block min-w-0 max-w-full resize-y overflow-y-auto" style={{ height: TRIM_BOX_SHUT }}
             data-typing-limit="" autoComplete="off" autoCorrect="off" autoCapitalize="off" spellCheck={false} data-excerpt-box="" data-match="an excerpt is|trim the excerpt"
-            value={shown} onChange={change} onDrop={(e) => e.preventDefault()} />
+            value={shown} onChange={change} onDrop={(e) => e.preventDefault()} {...lockText(busy)} />
           <div className="flex flex-wrap items-center gap-2">
-            <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" disabled={!cut} data-excerpt-restore="" onClick={() => setKept(allKept(original))}>Use original answer</button>
+            <button type="button" className="btn-ghost !px-2 !py-0.5 text-xs" disabled={!cut} {...lockPick(busy)} data-excerpt-restore="" onClick={() => setKept(allKept(original))}>Use original answer</button>
           </div>
           {/* (§196) How it will read, when that isn't just the box's text: " … " where a part of the middle was left out. */}
           {excerpt.text !== squash(shown) && (

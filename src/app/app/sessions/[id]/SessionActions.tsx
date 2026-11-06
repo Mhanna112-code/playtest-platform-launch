@@ -7,7 +7,7 @@ import { DISPUTE_PRESS, PRESS_VERBS, SEND_ANSWERS, refusalLine } from "@/lib/pre
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
@@ -28,6 +28,7 @@ import { attachmentTag, hasMarkerFor, removeAttachmentMarker, tagMarker, type An
 import { AnswerWithAttachments } from "@/components/AnswerSets";
 import { fileSize } from "@/lib/format";
 import { useFinished } from "@/lib/usePress";
+import { SendingScope, lockPick, lockText } from "@/lib/sendLock";
 import { PressDone } from "@/components/PressDone";
 import { OwnPanel, ResizeBox } from "@/components/Panel";
 
@@ -56,7 +57,7 @@ function PausedSend({ sessionId, press, label = press, canSend, now }: { session
 }
 
 /** (Owner, Oct 29, batch 11) Bold, Italic and Code block for a written answer (stored as Markdown; the developer sees it formatted). */
-function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[] }) {
+function FormatBar({ target, onChange, sessionId, onAttach, known, locked = false }: { target: React.RefObject<HTMLTextAreaElement | null>; onChange: (v: string) => void; sessionId: string; onAttach: (item: AnswerAttachment) => void; /** the uploads this form knows (a tag from an older server is made unique among them) */ known: AnswerAttachment[]; /** (§261) the form's Send is going through */ locked?: boolean }) {
   const [err, setErr] = useState("");
   const pending = useRef("");
   const recordingAt = useRef<number | null>(null);
@@ -73,10 +74,11 @@ function FormatBar({ target, onChange, sessionId, onAttach, known }: { target: R
   };
   return (
     <div className="flex flex-wrap items-center gap-1" role="toolbar" aria-label="Formatting" data-format-bar="">
-      <button type="button" className="btn-ghost px-2 py-0.5 text-xs font-bold" title="Bold" onClick={() => apply("bold")}>B</button>
-      <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")}>I</button>
-      <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")}>{"</>"}</button>
-      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file"><Paperclip className="h-3.5 w-3.5" aria-hidden="true" /><input type="file" aria-label="Attach a file" disabled={!!pending.current} className="sr-only" accept={`image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,${VIDEO_ACCEPT}`} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
+      {/* (Owner, Nov 5, §261) While the form's Send is going through, Bold, Italic, Code block and 📎 are disabled (they change the text on its way). */}
+      <button type="button" className="btn-ghost px-2 py-0.5 text-xs font-bold" title="Bold" onClick={() => apply("bold")} {...lockPick(locked)}>B</button>
+      <button type="button" className="btn-ghost px-2 py-0.5 text-xs italic" title="Italic" onClick={() => apply("italic")} {...lockPick(locked)}>I</button>
+      <button type="button" className="btn-ghost px-2 py-0.5 font-mono text-xs" title="Code block" onClick={() => apply("code")} {...lockPick(locked)}>{"</>"}</button>
+      <label className="btn-ghost cursor-pointer px-2 py-0.5 text-xs" title="Attach a file"><Paperclip className="h-3.5 w-3.5" aria-hidden="true" /><input type="file" aria-label="Attach a file" disabled={!!pending.current} {...lockPick(locked)} className="sr-only" accept={`image/png,image/jpeg,image/gif,image/webp,application/pdf,text/plain,.zip,${VIDEO_ACCEPT}`} onChange={async (e) => { const file = e.target.files?.[0]; e.target.value = ""; if (!file || pending.current) return; setErr(""); progress(file.name, 0); try { const { id, tag } = await uploadToSession(sessionId, file, file.name, "written", (pct) => progress(file.name, pct)); finish(id, file.name, file, tag); } catch (e) { failed(); setErr(errOf(e)); } }} /></label>
       {/* (Owner, Oct 30) The form's mistake list shows once, at Send: an attach problem is one line here. */}
       <Err text={err} press="Attach a file" />
       {/* (Owner, Oct 30) No ⏺ in the written answers: recordings belong to the recorded part. 📎 attaches files (videos too). */}
@@ -92,6 +94,8 @@ const isShortLine = (m: string) => /^\W?Write at least \d+ characters \(\d+ so f
 export { ANSWER_REQUIRED };
 function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRemove, rows = 3, required, min, short, total, alone = false }: { id: string; value: string; onChange: (v: string) => void; sessionId: string; /** (Owner, Nov 3, §140) the whole written part's count now (writtenLength) */ total: number; /** (Owner, Nov 4, §186) an addition's box: its own text alone is limited (additionRule) */ alone?: boolean; attachments: AnswerAttachment[]; onAttach: (item: AnswerAttachment) => void; onRemove: (id: string) => void; rows?: number; required?: boolean; /** (Batch 30 §14) an answer to a question: the counter below the minimum */ min?: boolean; /** red: Send found it too short */ short?: boolean }) {
   const ref = useRef<HTMLTextAreaElement>(null);
+  // (Owner, Nov 5, §261) Its form's Send is going through (WrittenForm's or WrittenAddForm's SendingScope): the box is read-only, its toolbar disabled.
+  const locked = useContext(SendingScope);
   const chars = answerChars(value);
   // (Owner, Nov 3) The preview stays hidden until "Preview" is pressed (on phones it took the screen); the button names the files placed in the answer.
   const [preview, setPreview] = useState(false);
@@ -104,8 +108,8 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
   const toolbar = (v: string) => onChange(limitEdit(ref.current?.value ?? value, v, rule).value);
   return (
     <div className="space-y-1">
-      <FormatBar target={ref} onChange={toolbar} sessionId={sessionId} onAttach={onAttach} known={attachments} />
-      <textarea ref={ref} id={id} rows={rows} className="input" value={value} data-typing-limit="" onChange={(e) => onChange(limitedChange(e, value, rule))} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} />
+      <FormatBar target={ref} onChange={toolbar} sessionId={sessionId} onAttach={onAttach} known={attachments} locked={locked} />
+      <textarea ref={ref} id={id} rows={rows} className="input" value={value} data-typing-limit="" onChange={(e) => onChange(limitedChange(e, value, rule))} {...(required ? { "data-required": "", "data-required-msg": ANSWER_REQUIRED } : {})} {...lockText(locked)} />
       {value.trim() && (
         <button type="button" className="btn-ghost px-2 py-0.5 text-xs" aria-expanded={preview} data-preview-toggle="" onClick={() => setPreview((p) => !p)}>
           {preview ? "Hide preview" : `Preview${files ? ` (${files} ${files === 1 ? "file" : "files"})` : ""}`}
@@ -117,7 +121,8 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
         <OwnPanel>
           <ResizeBox id={`preview-${id}`} label="Preview" defaultMax={PREVIEW_BOX_MAX}>
             <div data-answer-preview="">
-              <AnswerWithAttachments text={value} attachments={attachments} onRemove={(at) => { onChange(removeAttachmentMarker(value, at, attachments)); onRemove(at); }} />
+              {/* (§261) No × on a file while the Send is going through (it would change the text on its way). */}
+              {locked ? <AnswerWithAttachments text={value} attachments={attachments} /> : <AnswerWithAttachments text={value} attachments={attachments} onRemove={(at) => { onChange(removeAttachmentMarker(value, at, attachments)); onRemove(at); }} />}
             </div>
           </ResizeBox>
         </OwnPanel>
@@ -242,6 +247,8 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
   }
 
   return (
+    // (Owner, Nov 5, §261) Every answer box and the notes are read-only while Send Answers is going through (and until the redraw after it went through).
+    <SendingScope.Provider value={busy}>
     <form className="space-y-3" onSubmit={send}>
       {/* (Owner, Oct 30) The mistake list sits once, at the top of the written part. (Batch 16 section 10) The server's "answer every required question" goes to the first empty required box. */}
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press as the server's own lines do. (Owner, Nov 5, §235) The button always reads "Send Answers". */}
@@ -272,7 +279,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
           <p className="text-slate-400">Files not in an answer (they go with your answers when you send them):</p>
           <ul className="flex flex-wrap gap-2">
             {loose.map((a) => (
-              <li key={a.id} className="inline-flex items-center gap-1"><a className="rounded border border-white/15 px-2 py-1 text-xs" href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer">{a.filename} · {fileSize(a.size)}</a><button type="button" aria-label={`Remove ${a.filename}`} className="btn-ghost px-1" onClick={() => removeAttachment(a.id)}>×</button></li>
+              <li key={a.id} className="inline-flex items-center gap-1"><a className="rounded border border-white/15 px-2 py-1 text-xs" href={`/api/recordings/${a.id}/file`} target="_blank" rel="noreferrer">{a.filename} · {fileSize(a.size)}</a><button type="button" aria-label={`Remove ${a.filename}`} className="btn-ghost px-1" {...lockPick(busy)} onClick={() => removeAttachment(a.id)}>×</button></li>
             ))}
           </ul>
         </div>
@@ -289,6 +296,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
       <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
       {msg?.ok && <p className="ok">{msg.text}</p>}
     </form>
+    </SendingScope.Provider>
   );
 }
 
@@ -395,7 +403,9 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       </div>
     );
   }
+  // (Owner, Nov 5, §261) The addition's box is read-only while Add to my answer / Answer this question is going through.
   const boxNode = (
+    <SendingScope.Provider value={busy || fin.done}>
     <div ref={root} className="space-y-2 rounded-lg border border-white/10 p-3" data-add-box="written" data-add-for={questionKey} data-mistakes-root="">
       {!fin.done && (
         // (§182) The box folds (open at first); what's typed scrolls inside it when long.
@@ -430,6 +440,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       {/* (§222) A question's first answer is the press Answer this question. */}
       <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
     </div>
+    </SendingScope.Provider>
   );
   // (§182) Open: drawn in the panel under the question's latest part (its slot); nothing stays at the button's place below the panel.
   return slotEl ? createPortal(boxNode, slotEl) : boxNode;
@@ -488,7 +499,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       <summary className="cursor-pointer text-sm text-volt-300">Dispute the pay</summary>
       {!fin.done && <>
       <label className="label req" htmlFor={`d-${id}`}>Why should the pay be higher? (the team and the developer read it)</label>
-      <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-required="" data-required-msg="Say why you think the pay should be higher (at least a sentence)." data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." data-match="pay should be higher" value={reason} onChange={(e) => setReason(e.target.value)} />
+      <textarea id={`d-${id}`} rows={3} className="input" maxLength={2000} data-required="" data-required-msg="Say why you think the pay should be higher (at least a sentence)." data-min-chars="10" data-msg="Say why you think the pay should be higher (at least a sentence)." data-match="pay should be higher" value={reason} onChange={(e) => setReason(e.target.value)} {...lockText(busy || fin.done)} />
       <CharacterCount value={reason} min={10} max={2000} required />
       <p className="note">You can dispute this once. Our team decides; a decision can only raise the pay, {limit}.</p>
       </>}

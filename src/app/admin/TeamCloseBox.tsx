@@ -11,6 +11,7 @@ import { ChangesBox } from "@/components/ChangesBox";
 import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { adminDraftKey } from "@/lib/keptText";
+import { lockText } from "@/lib/sendLock";
 
 type Preview = { line: string; lines: string[]; pieces: { kind: string; id: string }[]; at: string };
 
@@ -52,10 +53,11 @@ export function TeamCloseBox({ id, scope }: { id: string; scope: "developer" | "
       {preview && boxShown && (
         <>
           {tag}
+          {/* (Owner, Nov 5, §261) The reason is read-only while the team's close is going through. */}
           <span className="flex w-full flex-col">
             <textarea id={`team-close-${scope}-${id}`} aria-label="Why (the testers read it)" placeholder="Why (the testers read it)" rows={2} maxLength={LIMITS.reason} className={`input w-full ${long ? "field-bad" : ""}`}
               data-required="" data-required-msg={TEAM_CLOSE_REASON} data-min-chars="5" data-msg={TEAM_CLOSE_REASON} data-match="why the team closes|keep it to" data-red-msg={long ? reasonTooLong() : undefined}
-              value={reason} onChange={(e) => setReason(e.target.value)} />
+              value={reason} onChange={(e) => setReason(e.target.value)} {...lockText(busy)} />
             <CharacterCount value={reason} min={5} max={LIMITS.reason} required data-reason-count="" />
           </span>
           <button

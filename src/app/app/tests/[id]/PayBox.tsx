@@ -19,6 +19,7 @@ import { DraftTag, useKept } from "@/lib/useKept";
 import { LIMITS } from "@/lib/limits";
 import { PressDone } from "@/components/PressDone";
 import { refusalLine } from "@/lib/pressLabels";
+import { lockText, useSending } from "@/lib/sendLock";
 
 /** What can still be paid on this piece (pieceRoom on the server). */
 export type PayRoom = { roomCents: number; aboveRoomCents: number; ceilingBinds: boolean; /** (batch 29 §38) the piece's max in all */ totalCapCents?: number };
@@ -148,7 +149,12 @@ export function PayBox(p: {
   const overCap = !!room && cents != null && cents > room.roomCents;
   const overText = !room || !overCap ? "" : room.ceilingBinds ? overCeilingLine(room.roomCents) : unlistedCall ? overCallsLine(room.roomCents) : overMaxLine(room.roomCents, total);
 
-  async function go() {
+  // (Owner, Nov 5, §261) From the press until it ends (the server's answer, the bank's check it opens, the redraw after it went through), the rate, the amount and
+  // the note are read-only: what's on its way can't change. Refused, stopped once or not confirmed by the bank, they are as before.
+  const paying = useSending();
+  const sending = paying.sending || busy || bank.open;
+  const go = () => paying.run(pay);
+  async function pay() {
     const r = more
       ? await press<{ status?: string; amountCents: number }>(`/api/tests/${more.testId}/pay-extra`, {
         contractId: more.contractId, ...(p.kind === "call" ? { callId: p.id } : { submissionId: p.id }), amount, note: reason, payKey, tickedCents: ticked ? cents : null, over200: over && over200,
@@ -203,14 +209,14 @@ export function PayBox(p: {
         {isCall && (
           <div>
             <label className="label" htmlFor={`rate-${p.id}`}>Rate ($/h)</label>
-            <input id={`rate-${p.id}`} className="input w-24" inputMode="decimal" data-money="" data-rate="" data-match="rate like|at most .200 an hour" value={rate} onChange={(e) => typeRate(e.target.value)} placeholder={listed ? "" : `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")}`} />
+            <input id={`rate-${p.id}`} className="input w-24" inputMode="decimal" data-money="" data-rate="" data-match="rate like|at most .200 an hour" value={rate} onChange={(e) => typeRate(e.target.value)} {...lockText(sending)} placeholder={listed ? "" : `up to ${money(NO_LISTING_CALL_RATE_CAP_CENTS).replace(/\.00$/, "")}`} />
             <span className="ml-1 text-xs text-slate-500">× {minutes} min</span>
           </div>
         )}
         <div>
           <label className="label req" htmlFor={`amt-${p.id}`}>Amount ($)</label>
           <input id={`amt-${p.id}`} className="input w-32" inputMode="decimal" data-money="" data-amount="" data-min="0.5" data-max="999999.99" data-zero-ok="" data-msg="Enter an amount like 7.50." data-min-msg={`The smallest card charge is ${money(MIN_CHARGE_CENTS)}: pay $0.00 or at least ${money(MIN_CHARGE_CENTS)}.`} data-max-msg={STRIPE_MAX_LINE}
-            data-match="amount like|smallest card charge|Stripe can't|more than you can pay|most you can pay at once|extra would be" data-red-msg={overText || undefined} value={amount} onChange={(e) => typeAmount(e.target.value)} placeholder="0.00" />
+            data-match="amount like|smallest card charge|Stripe can't|more than you can pay|most you can pay at once|extra would be" data-red-msg={overText || undefined} value={amount} onChange={(e) => typeAmount(e.target.value)} placeholder="0.00" {...lockText(sending)} />
         </div>
         {roomText && <span className="pb-2 text-sm text-slate-400" data-pay-room="">{roomText}</span>}
       </div>
@@ -218,7 +224,7 @@ export function PayBox(p: {
       {/* (Owner, Nov 4, §189) The note fills the box's width and never more: its old 14rem minimum ran past a Pay more box's right edge on a phone. */}
       <div className="w-full min-w-0 max-w-full" data-pay-note="">
         <label className={`label [overflow-wrap:anywhere] ${needsReason ? "req" : ""}`} htmlFor={`why-${p.id}`}>Note to {p.name}{needsReason ? "" : " (optional)"}</label>
-        <textarea id={`why-${p.id}`} className="input min-h-[2.75rem]" rows={2} maxLength={LIMITS.reason} data-match="why you're paying" data-red-msg={reasonMissing ? (cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`) : undefined} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={listed ? "What it's missing, or a thank-you" : "A thank-you, or what the pay is for"} />
+        <textarea id={`why-${p.id}`} className="input min-h-[2.75rem]" rows={2} maxLength={LIMITS.reason} data-match="why you're paying" data-red-msg={reasonMissing ? (cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`) : undefined} value={reason} onChange={(e) => setReason(e.target.value)} placeholder={listed ? "What it's missing, or a thank-you" : "A thank-you, or what the pay is for"} {...lockText(sending)} />
         <CharacterCount value={reason} min={needsReason ? 5 : 0} max={LIMITS.reason} required={needsReason} data-note-count="" />
         {reasonMissing && <p className="err-field" data-reason-needed="">{cents === 0 ? ZERO_PAY_REASON : `Say why you're paying less than the listing's ${money(p.listingCents)} (the tester reads it).`}</p>}
         {keep.restored && (reason !== "" || amount !== startAmount || rate !== startRate) && <DraftTag disabled={busy} kind="discard" onUseSaved={useSaved} /> /* (batch 35 §39) nothing saved: Discard (the amount back to its start, the note emptied, the ticks off) */}

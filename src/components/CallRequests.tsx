@@ -13,6 +13,7 @@ import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload
 import { CallRequestsPanel } from "@/components/CallRequestsPanel";
 import type { ClashTarget, Slot } from "@/lib/callClash";
 import type { CallEnd } from "@/lib/callWindow";
+import { lockText, useSending } from "@/lib/sendLock";
 
 type Req = { id: string; rows: RowJson[]; mine: boolean; who: string; contractId: string; rate: string; minutes?: number };
 
@@ -53,7 +54,9 @@ export function CallRequests(p: {
     ? [{ name: p.targets[0].name, calls: p.clash.calls, requests: p.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })), pending: p.clash.pending, booked: p.clash.booked, leftCents: p.clash.leftCents, rateCents: p.clash.rateCents }]
     : [];
   const liveElsewhere = p.clash?.elsewhere ?? [];
-  const go = async (action: string, body: Record<string, unknown>, key: string) => {
+  // (Owner, Nov 5, §261) From Request a time until it ends (and, gone through, until the redraw), the times and the length are read-only and Discard waits.
+  const requesting = useSending();
+  const go = (action: string, body: Record<string, unknown>, key: string) => requesting.run(async () => {
     setFrozen({ targets: liveTargets, elsewhere: liveElsewhere });
     const r = await press<{ message?: string }>(`${p.path}/${action}`, body, key);
     if (r) {
@@ -65,7 +68,8 @@ export function CallRequests(p: {
       await keep.clear();
       finish(action === "request-time" ? sentLine(r) : "");
     } else setFrozen(null);
-  };
+  });
+  const sendLocked = requesting.sending || (busy && at === "request");
   const all = p.targets.length > 0 && p.targets.every((t) => ticked.includes(t.contractId));
   const filled = rowsPayload(rows, p.end);
   // (Owner, Oct 28, batch 16 section 33) Clash checks while the form is filled (the same as the developer's): red under the row, blue for an exact match.
@@ -126,12 +130,12 @@ export function CallRequests(p: {
               ))}
             </fieldset>
           )}
-          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={p.leadMinutes} end={p.end} />
+          <RequestRows rows={rows} setRows={setRows} minNow={minNow} notes={clash.notes} leadMinutes={p.leadMinutes} end={p.end} locked={sendLocked} />
           {clash.limits.map((l) => <p key={l} className="err-field" tabIndex={-1} data-red-msg={l} data-clash-limit="">{l}</p>)}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
           <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">
             <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line} data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
-              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} /> min</label>
+              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} {...lockText(sendLocked)} /> min</label>
             <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
             <button className="btn-ghost" disabled={busy || !filled.length || (p.side === "developer" && ticked.length === 0)} onClick={send}>Request a time</button>
             {keep.restored && <DraftTag disabled={busy} kind="discard" onUseSaved={() => { setRows([newRow()]); setMinutes(""); }} />}

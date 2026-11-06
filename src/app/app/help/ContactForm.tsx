@@ -7,6 +7,7 @@ import { api, errOf } from "@/lib/client";
 import { checkFields } from "@/components/FieldChecks";
 import { FormMistakes } from "@/components/FormMistakes";
 import { DraftTag, useKept } from "@/lib/useKept";
+import { lockText } from "@/lib/sendLock";
 
 /** "Contact us": a topic and the message. (Batch 16 section 10) A mistake is red at its box, with the server's own line, and listed under Send. */
 export function ContactForm({ topics }: { topics: readonly string[] }) {
@@ -45,8 +46,9 @@ export function ContactForm({ topics }: { topics: readonly string[] }) {
           {topics.map((t) => <option key={t}>{t}</option>)}
         </select>
       </label>
+      {/* (Owner, Nov 5, §261) The message is read-only while Send to the team is going through. */}
       <label className="block space-y-1"><span className="label req">Your message</span>
-        <textarea id="message" required minLength={10} maxLength={LIMITS.contact.max} data-required="" data-required-msg="Write a few words about what happened (at least 10 characters)." data-min-chars="10" data-msg="Write a few words about what happened (at least 10 characters)." data-match="few words|keep it to" className="input min-h-32" value={message} onChange={(e) => setMessage(e.target.value)}
+        <textarea id="message" required minLength={10} maxLength={LIMITS.contact.max} data-required="" data-required-msg="Write a few words about what happened (at least 10 characters)." data-min-chars="10" data-msg="Write a few words about what happened (at least 10 characters)." data-match="few words|keep it to" className="input min-h-32" value={message} onChange={(e) => setMessage(e.target.value)} {...lockText(busy)}
           placeholder="What happened, and what you'd like us to do. Include amounts and dates if it's about a payment." />
         <CharacterCount value={message} min={LIMITS.contact.min} max={LIMITS.contact.max} required />
       </label>

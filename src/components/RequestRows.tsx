@@ -4,6 +4,7 @@ import { rowCalls, type RowJson } from "@/lib/callRows";
 import { clashNotes, localFmt, type ClashLine, type ClashTarget, type Slot } from "@/lib/callClash";
 import { beforeEndLine, leadLine, repeatChoices, repeatOffLine, untilEndWords, windowShut, windowShutLine, type CallEnd } from "@/lib/callWindow";
 import { useLocalMax } from "@/components/FieldChecks";
+import { lockPick, lockText } from "@/lib/sendLock";
 
 // (NEXT-UI 7) The call request's time rows, the same on both sides: each row has its own "Once / Daily / Weekly" (Once by
 // default) and, when it repeats, a calls drop-down: 2-8 and "Forever" at the bottom. Up to 3 rows; (owner, Nov 5, §208) each row is sent as its OWN request
@@ -183,7 +184,8 @@ export function countLabel(n: number, r: RowState) {
   return `${n} ${unit}s${last ? ` (to ${last.toLocaleDateString("en-US", { month: "short", day: "numeric" })})` : ""}`;
 }
 
-export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][];
+export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end, locked = false }: { rows: RowState[]; setRows: (r: RowState[]) => void; minNow: string; notes?: ClashLine[][];
+  /** (Owner, Nov 5, §261) Request a time is going through: the times are read-only, the repeat choices, Remove and + Another time disabled */ locked?: boolean;
   /** (Batch 35 §132) The server's lead (the time box's red line) and when testers' work ends (its latest time; the calls drop-down). */
   leadMinutes?: number; end?: CallEnd }) {
   const set = (i: number, patch: Partial<RowState>) => setRows(rows.map((x, j) => (j === i ? { ...x, ...patch } : x)));
@@ -194,26 +196,26 @@ export function RequestRows({ rows, setRows, minNow, notes, leadMinutes, end }: 
         const o = rowOffer(r, end);
         return (
           <div key={i} className="flex flex-wrap items-center gap-2" data-request-row="">
-            <input type="datetime-local" min={minNow} max={maxNow || undefined} data-end={end?.at} data-msg={leadLine(leadMinutes ?? 0)} data-max-msg={end ? beforeEndLine(end.text) : undefined} data-match={TIME_MATCH} data-red-msg={notes?.[i]?.find((x) => x.tone === "red")?.text || undefined} aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={r.when} onChange={(e) => set(i, { when: e.target.value })} />
-            <select aria-label={`Repeat ${i + 1}`} className="input w-auto" value={o.shown.repeat} onChange={(e) => set(i, { repeat: e.target.value as RowState["repeat"] })}>
+            <input type="datetime-local" min={minNow} max={maxNow || undefined} data-end={end?.at} data-msg={leadLine(leadMinutes ?? 0)} data-max-msg={end ? beforeEndLine(end.text) : undefined} data-match={TIME_MATCH} data-red-msg={notes?.[i]?.find((x) => x.tone === "red")?.text || undefined} aria-label={`Requested time ${i + 1}`} className="input max-w-xs" value={r.when} onChange={(e) => set(i, { when: e.target.value })} {...lockText(locked)} />
+            <select aria-label={`Repeat ${i + 1}`} className="input w-auto" {...lockPick(locked)} value={o.shown.repeat} onChange={(e) => set(i, { repeat: e.target.value as RowState["repeat"] })}>
               <option value="once">Once</option>
               <option value="daily" disabled={!o.daily}>Daily</option>
               <option value="weekly" disabled={!o.weekly}>Weekly</option>
             </select>
             {o.shown.repeat !== "once" && (
-              <select aria-label={`How many calls ${i + 1}`} className="input w-auto" data-match="repeat 2 to 8|repeat at least 2" value={o.shown.count} onChange={(e) => set(i, { count: e.target.value })}>
+              <select aria-label={`How many calls ${i + 1}`} className="input w-auto" data-match="repeat 2 to 8|repeat at least 2" {...lockPick(locked)} value={o.shown.count} onChange={(e) => set(i, { count: e.target.value })}>
                 {/* (Owner, Nov 3) Every count that fits, named by days or weeks with the last call's day; "Forever" only when nothing ends the test's work. */}
                 {o.counts.map((n) => <option key={n} value={String(n)}>{countLabel(n, o.shown)}</option>)}
                 {!end && <option value="forever">{o.last}</option>}
               </select>
             )}
-            {rows.length > 1 && <button type="button" className="btn-ghost text-xs" onClick={() => setRows(rows.filter((_, j) => j !== i))}>Remove</button>}
+            {rows.length > 1 && <button type="button" className="btn-ghost text-xs" {...lockPick(locked)} onClick={() => setRows(rows.filter((_, j) => j !== i))}>Remove</button>}
             {o.offLine && <p className="basis-full text-xs text-slate-400" data-repeat-off="">{o.offLine}</p>}
             {(notes?.[i] ?? []).map((x) => <p key={x.text} className={`basis-full text-sm ${x.tone === "red" ? "err-field" : "text-sky-200"}`} data-clash={x.tone}>{x.text}</p>)}
           </div>
         );
       })}
-      {rows.length < 3 && <button type="button" className="btn-ghost" onClick={() => setRows([...rows, newRow()])}>+ Another time</button>}
+      {rows.length < 3 && <button type="button" className="btn-ghost" {...lockPick(locked)} onClick={() => setRows([...rows, newRow()])}>+ Another time</button>}
       {/* (Owner, Nov 5, §208) Each row is its own request (was "They pick one of these."). */}
       {rows.length > 1 && <p className="note" data-separate-times="">{SEPARATE_TIMES_NOTE}</p>}
     </div>

@@ -9,6 +9,7 @@ import { api, ApiError, errOf, newPressId } from "@/lib/client";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { PersonHover } from "@/components/PersonHover";
 import type { PersonHoverInfo } from "@/lib/server/personHover";
+import { lockText } from "@/lib/sendLock";
 
 /** (Batch 35 §124) `hover`: the sender's profile hover (the other person's messages only; none for a deleted account or someone who blocked you). */
 type Msg = { id: string; mine: boolean; who: string; body: string; at: string; hover?: PersonHoverInfo | null };
@@ -98,7 +99,8 @@ export function Chat({ path, extra = {}, messages, other, otherHover, title, clo
           }}
         >
           <span className="min-w-0 flex-1">
-          <input id="chat-message" className="input" maxLength={4000} aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} />
+          {/* (Owner, Nov 5, §261) While Send is going through, the message box is read-only (its text can't change on its way). */}
+          <input id="chat-message" className="input" maxLength={4000} aria-label={`Message ${other}`} placeholder={`Message ${other}…`} data-match="type a message|keep a message" value={text} onChange={(e) => { if (e.target.value !== text) pressId.current = null; setText(e.target.value); }} {...lockText(busy)} />
           <CharacterCount value={text} min={1} max={4000} required />
           </span>
           <button className="btn" disabled={busy || !text.trim()}>Send</button>

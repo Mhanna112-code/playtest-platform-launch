@@ -10,6 +10,7 @@ import { FIELD } from "@/lib/client";
 import { usePress } from "@/lib/usePress";
 import { DraftTag, useKept } from "@/lib/useKept";
 import { PressDone } from "@/components/PressDone";
+import { lockText, useSending } from "@/lib/sendLock";
 
 /**
  * (NEWEST+5) Rate, as the full app's rating box: 1-5 and an optional note (500 max). A rating that finishes the part
@@ -26,14 +27,19 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
   // (NEXT-UI 10) The note typed and not sent is kept on the server ("Draft"; batch 35 §8: after signing in, with "Use saved").
   const keep = useKept(`rate:${p.path.replace(/[^A-Za-z0-9]+/g, "-")}${p.body?.contractId ? ":" + String(p.body.contractId) : ""}`, { comment }, comment === "", (v) => setComment(v.comment ?? ""));
   const box = useRef<HTMLDivElement>(null);
+  // (Owner, Nov 5, §261) While Rate is going through (and its draft is cleared), the note is read-only.
+  const going = useSending();
   const send = async () => {
     if (!checkFields(box.current)) return;
-    const r = await press(p.path, { ...(p.body ?? {}), stars: stars ? Number(stars) : null, comment });
-    if (r) {
-      await keep.clear();
-      finish(stars ? `Rated ${p.name} ${stars} of 5.` : `Rated ${p.name}.`);
-    }
+    await going.run(async () => {
+      const r = await press(p.path, { ...(p.body ?? {}), stars: stars ? Number(stars) : null, comment });
+      if (r) {
+        await keep.clear();
+        finish(stars ? `Rated ${p.name} ${stars} of 5.` : `Rated ${p.name}.`);
+      }
+    });
   };
+  const sending = going.sending || busy;
   return (
     <div ref={box} className="space-y-2 rounded-xl border border-amber-300/25 bg-amber-300/[0.04] p-3 text-sm text-ink-200" id={p.anchor ?? "rate"} data-mistakes-root="">
       <p className="flex items-center gap-1.5 font-medium text-white"><Star className="h-4 w-4 text-amber-300" /> Rate {p.name}</p>
@@ -43,7 +49,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
           <option value="" disabled>Choose…</option>
           <option value="5">5 - excellent</option><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1 - poor</option>
         </select>}
-        {!done && <span className="min-w-[min(100%,12rem)] flex-1"><input className="input w-full" maxLength={500} data-match="comment" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" />
+        {!done && <span className="min-w-[min(100%,12rem)] flex-1"><input className="input w-full" maxLength={500} data-match="comment" value={comment} onChange={(e) => setComment(e.target.value)} placeholder="A note" aria-label="A note" {...lockText(sending)} />
         <CharacterCount value={comment} max={500} /></span>}
         {p.working ? (
           <ConfirmButton live className="btn-secondary" disabled={busy || !!p.disabledLine} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
