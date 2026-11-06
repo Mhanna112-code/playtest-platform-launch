@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { bellKeyIn } from "@/lib/bell";
+import { bankChangedLine } from "@/lib/rules";
 import { sendSummaries } from "@/lib/server/notify";
 import { chargebackOpened, declinedPayment, disputeAmountChanged, startHold } from "@/lib/server/holds";
 import { setStripeForTests } from "@/lib/server/stripe";
@@ -10,11 +11,15 @@ import { joined, sact, settle, setup } from "./fixtures";
 // (Owner, Nov 6, §294) Every chargeback the developer gets is emailed at once (`always`, whatever the email setting), as the admins' chargeback email is: the one
 // that starts the hold, the one that turns a payment hold into a chargeback hold, a further one during a chargeback hold (before: a bell line only), and the bank
 // changing its amount. In the bell they stay where they were (the hold lines in the day's "payhold" entry). A decline during a hold keeps its wording and rule.
+// (§294, second decision) "At once" means immediately (sendEmail, the admins' path), never queued for the end-of-day email; and the bank changing a chargeback's amount
+// BEFORE the repayment now rings (payhold) and emails the developer too, in Pay what you owe's own words (bankChangedLine).
 
 beforeEach(() => { process.env.DISPUTE_WAIT_MS = "0"; });
 afterEach(() => { setStripeForTests(null); delete process.env.DISPUTE_WAIT_MS; });
 
 const lines = (userId: string) => db.notification.findMany({ where: { userId }, orderBy: { createdAt: "asc" } });
+/** The emails sent to this address so far (the outbox: tests have no email key). */
+const mails = (to: string) => db.outboxEmail.findMany({ where: { to }, orderBy: { createdAt: "asc" } });
 
 /** A developer on email Off with a tester's written answers sent. */
 async function world() {
@@ -34,10 +39,12 @@ async function world() {
 }
 
 describe("§294 chargeback emails go out at once, every one", () => {
-  it("the chargeback that starts the hold, then a second one during the chargeback hold: both emailed whatever the setting; one payhold entry in the bell", async () => {
+  it("the chargeback that starts the hold, then a second one during the chargeback hold: each emailed immediately whatever the setting; one payhold entry in the bell", async () => {
     const w = await world();
     const first = await w.paid(1000);
     expect(await chargebackOpened(first.pi)).toBe(true);
+    // Sent immediately, before any summary or end-of-day run.
+    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toEqual(["Your tests are paused after a chargeback"]);
     const second = await w.paid(800);
     expect(await chargebackOpened(second.pi)).toBe(true);
     const l = await lines(w.devId);
@@ -49,11 +56,15 @@ describe("§294 chargeback emails go out at once, every one", () => {
     // Before §294 a bell line only (mustEmail false): now it's emailed at once, and stays in the bell's payhold entry.
     expect(further[0]).toMatchObject({ mustEmail: true, groupKey: "payhold", payment: true, own: false, side: "developer" });
     expect(new Set([start!, further[0]].map((n) => bellKeyIn(n))).size).toBe(1);
-    // The email (Off: only must-send and payment lines) holds both.
+    // Each its own email, sent immediately; the bell lines are marked emailed, so the end-of-day email (Off: must-send and payment lines) never repeats them.
+    const sent = await mails(w.dev.user.email);
+    expect(sent.map((m) => m.subject)).toEqual(["Your tests are paused after a chargeback", further[0].text]);
+    expect(sent[1].text).toContain("To resume: verify a card with 3D Secure, pay what you owe, and wait for the team's approval.");
+    expect(sent[1].text).toContain("http://localhost:3400/app/payments#chargeback-steps");
+    expect(start!.summarizedAt).not.toBeNull();
+    expect(further[0].summarizedAt).not.toBeNull();
     await sendSummaries(new Date(), [w.devId]);
-    const mail = await db.outboxEmail.findFirstOrThrow({ where: { to: w.dev.user.email }, orderBy: { createdAt: "desc" } });
-    expect(mail.text).toContain("Your tests are paused after a chargeback");
-    expect(mail.text).toContain(further[0].text);
+    expect((await mails(w.dev.user.email)).filter((m) => m.text.includes("Your bank reversed") || m.text.includes("after a chargeback"))).toHaveLength(2);
     // The admins' chargeback email, unchanged: one per chargeback, at once.
     const admin = await db.outboxEmail.findMany({ where: { to: "owner@playtest.test", subject: { startsWith: "Playtest: new chargeback of " }, text: { contains: second.pi } } });
     expect(admin).toHaveLength(1);
@@ -67,6 +78,8 @@ describe("§294 chargeback emails go out at once, every one", () => {
     expect(await chargebackOpened(p.pi)).toBe(true);
     const line = (await lines(w.devId)).find((x) => /now a chargeback hold/.test(x.text));
     expect(line).toMatchObject({ mustEmail: true, groupKey: "payhold", payment: true });
+    expect(line!.summarizedAt).not.toBeNull();
+    expect((await mails(w.dev.user.email)).map((m) => m.subject)).toContain(line!.text);
   });
 
   it("a decline during a hold keeps its wording and its rule: payhold, a payment line, not a must-send email", async () => {
@@ -76,7 +89,12 @@ describe("§294 chargeback emails go out at once, every one", () => {
     expect(await declinedPayment(w.devId, row.id, 500, "Ana Silva's recording")).toBe(false);
     const l = await lines(w.devId);
     expect(l.find((x) => x.text === "Your tests are paused")).toMatchObject({ mustEmail: true, groupKey: "payhold" });
-    expect(l.find((x) => x.text.startsWith("Another payment"))).toMatchObject({ text: "Another payment was declined: $5.00 for Ana Silva's recording was added to what you owe", groupKey: "payhold", payment: true, mustEmail: false });
+    const declined = l.find((x) => x.text.startsWith("Another payment"));
+    expect(declined).toMatchObject({ text: "Another payment was declined: $5.00 for Ana Silva's recording was added to what you owe", groupKey: "payhold", payment: true, mustEmail: false, summarizedAt: null });
+    // Its email rule unchanged: no immediate email; it waits for the end-of-day payment email.
+    expect((await mails(w.dev.user.email)).some((m) => m.subject.startsWith("Another payment"))).toBe(false);
+    await sendSummaries(new Date(), [w.devId]);
+    expect((await mails(w.dev.user.email)).some((m) => m.text.includes(declined!.text))).toBe(true);
   });
 
   it("the bank changing a chargeback's amount after the repayment: lowered and raised are each emailed at once", async () => {
@@ -88,8 +106,42 @@ describe("§294 chargeback emails go out at once, every one", () => {
     expect(await disputeAmountChanged(pi, 1200, "under_review")).toBe("followed");
     const lowered = (await lines(w.devId)).find((x) => x.text.startsWith("Your bank lowered what it took back"));
     expect(lowered).toMatchObject({ mustEmail: true, payment: true });
+    expect(lowered!.summarizedAt).not.toBeNull();
     expect(await disputeAmountChanged(pi, 1600, "under_review")).toBe("followed");
     const raised = (await lines(w.devId)).find((x) => x.text.startsWith("Your bank raised what it took back"));
     expect(raised).toMatchObject({ mustEmail: true, payment: true });
+    expect(raised!.summarizedAt).not.toBeNull();
+    // Both sent immediately.
+    const subjects = (await mails(w.dev.user.email)).map((m) => m.subject);
+    expect(subjects).toContain(lowered!.text);
+    expect(subjects).toContain(raised!.text);
+  });
+
+  it("the bank changing a chargeback's amount BEFORE the repayment: a payhold bell line in Pay what you owe's words, and an immediate email", async () => {
+    const w = await world();
+    const { pi } = await w.paid(4000);
+    expect(await chargebackOpened(pi)).toBe(true);
+    const before = (await lines(w.devId)).length;
+    expect(await disputeAmountChanged(pi, 2500, "under_review")).toBe("followed");
+    const PIECE = "Ana Silva's written answers on “Harbor Run”";
+    const want = bankChangedLine(4000, PIECE, 4000, 2500);
+    expect(want).toBe(`Your bank changed the amount it took back from your $40.00 payment for ${PIECE}: $40.00 → $25.00 (now $25.00 + $15.00 fee = $40.00)`);
+    const added = (await lines(w.devId)).slice(before);
+    expect(added).toHaveLength(1);
+    expect(added[0]).toMatchObject({ text: want, link: "/app/payments#chargeback-steps", groupKey: "payhold", payment: true, mustEmail: true, side: "developer" });
+    expect(added[0].summarizedAt).not.toBeNull();
+    // In the day's payhold entry with the hold's own line.
+    const start = (await lines(w.devId)).find((x) => x.text === "Your tests are paused after a chargeback")!;
+    expect(bellKeyIn(added[0])).toBe(bellKeyIn(start));
+    const mail = (await mails(w.dev.user.email)).find((m) => m.subject === want);
+    expect(mail?.text).toContain(`${want}.`);
+    expect(mail?.text).toContain("http://localhost:3400/app/payments#chargeback-steps");
+    // Lowered again before any repayment: another line, from the last followed amount.
+    expect(await disputeAmountChanged(pi, 2000, "under_review")).toBe("followed");
+    expect((await lines(w.devId)).at(-1)!.text).toBe(bankChangedLine(4000, PIECE, 2500, 2000));
+    // The same amount again: nothing.
+    const n = (await lines(w.devId)).length;
+    expect(await disputeAmountChanged(pi, 2000, "under_review")).toBe("same");
+    expect((await lines(w.devId)).length).toBe(n);
   });
 });

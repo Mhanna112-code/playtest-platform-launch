@@ -5188,5 +5188,20 @@ the call is 24 hours or more away. Within 24 hours the field is required as befo
   own entries. No new stacks (an earlier draft of §294 with "Chargebacks" and "Payments declined" stacks was dropped by the owner).
 - Unchanged: a won chargeback's line (payhold, the end-of-day payment email); a decline during a hold, "Another payment was declined: $X for … was added to what
   you owe" (payhold, bell and the end-of-day payment email); the admins' chargeback emails.
-- Not covered (no developer line exists): the bank changing the amount BEFORE the repayment (§192 "followed" in what is owed; the team's Chargebacks box only).
 - Tests: tests/chargeback-emails-294.test.ts. Updated: batch18 (the list of emails that ignore Off: two more in holds.ts).
+
+### §294, second decision: sent immediately; the amount changing before the repayment is told too (owner, Nov 6)
+- **Immediately, not at the end of the day.** `always` alone only puts a line in the end-of-day email (whatever the setting). Every chargeback email to the
+  developer above (the one that starts the hold, a payment hold turning into a chargeback hold, a further one during a chargeback hold, lowered, raised, and the
+  new line below) is now sent at once through `sendEmail`, the path the admins' chargeback emails take. It's a new `now` option of `notify` (notify.ts): the bell
+  line is written as usual and marked already emailed (`summarizedAt`), then the email (the line, its lines, the link, "Open Playtest") is sent to that one
+  person. The summary and the end-of-day email never repeat it. A failed send waits for the email sweep as every email does.
+- **The bank changing a chargeback's amount BEFORE the repayment** (§192's "followed": what is owed changes) now tells the developer, in the words Pay what
+  you owe's stop already uses for it (`bankChangedLine`): "Your bank changed the amount it took back from your $40.00 payment for Ana Silva's written answers on
+  “Harbor Run”: $40.00 → $25.00 (now $25.00 + $15.00 fee = $40.00)". A Pay what you owe payment is named with its items (§193b). A bell line in the day's
+  `payhold` entry, linking to the chargeback steps (`/app/payments#chargeback-steps`; Pay what you owe's `#owed` outside a chargeback hold), and an immediate
+  email ("Open Payments to see what you owe."). Each change is its own line from the last followed amount; the same amount again says nothing. A change that
+  waited for a repayment in progress (§192) and is then followed in what is owed (the repayment didn't go through) is told the same way.
+- Unchanged: the bell entries; a won chargeback (end-of-day payment email); declined payments (wording and email rule); the admins' emails.
+- Tests: tests/chargeback-emails-294.test.ts (each email is in the outbox right after the event and the summary doesn't repeat it; the before-repayment change
+  rings in payhold and emails; a decline is still not sent immediately). Updated: batch18 (one more in holds.ts).

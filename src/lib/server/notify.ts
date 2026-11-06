@@ -41,7 +41,7 @@ export async function testIdOfLink(path: string) {
  * account's deletion or suspension, the site's own notices). Left out, the link's page decides (lineSide); a caller whose link is a shared page (the dashboard,
  * Payments, Settings) names it.
  */
-export type Opts = { recipientId?: string; side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string };
+export type Opts = { recipientId?: string; side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string; now?: boolean };
 
 /**
  * `reminder`: (Owner, Oct 27) names a reminder ("paused:<test>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
@@ -63,6 +63,18 @@ export async function notify(to: string, subject0: string, lines0: string[], pat
     try {
       // (Batch 30 §19) Not an account: no notification settings to link to.
       await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`, "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}${path}` }, settings: false });
+    } catch (e) {
+      console.error("[email] failed:", subject, (e as Error).message);
+    }
+    return;
+  }
+  // (Owner, Nov 6, §294) `now` (with `always`): the email is sent immediately through sendEmail, the path the admins' chargeback emails take, never queued for
+  // the summary or the end-of-day email; the bell line is written as already emailed (summarizedAt), so no later email repeats it. Used for the developer's
+  // chargeback emails.
+  if (opts.now) {
+    await client.notification.create({ data: { side: lineSide(user.id, path, opts.side), userId: user.id, text: subject, link: path, testId: opts.testId ?? (await testIdOfLink(path)), mustEmail: true, summarizedAt: new Date(), reminderKey: opts.reminder ?? null, ...flags(opts) } });
+    try {
+      await sendEmail({ to, subject, text: [...lines.filter(Boolean), "", `${appUrl()}${path}`, "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}${path}` } });
     } catch (e) {
       console.error("[email] failed:", subject, (e as Error).message);
     }
