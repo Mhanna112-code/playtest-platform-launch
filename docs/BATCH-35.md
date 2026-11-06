@@ -4646,3 +4646,7 @@ open "Worked with you on 1 test" could sit at the top with no name or heading ov
 
 ## §258 The questions changed: no "(before)" on a removed question (owner, Nov 5)
 A removed question reads "Question 1 · Removed · <its words>" (it was "Question 1 (before)"): the Removed tag already says it.
+
+## §260 No "What you sent is for the questions until …" line (owner, Nov 5)
+The tester's answer form no longer starts with "What you sent is for the questions until <date>. Send your answers to these questions: they're added under what you
+sent." (`data-set-until-form`); "Questions you haven't answered yet" and the boxes follow straight on.
