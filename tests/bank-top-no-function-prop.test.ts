@@ -16,7 +16,9 @@ describe("(Owner, Nov 5) hotfix of §230: the dashboard loads while a charge wai
   it("§245: a payment line's quoted test name is a green link", async () => {
     const { renderToStaticMarkup } = await import("react-dom/server");
     const { withTestLinks } = await import("@/components/TestLinks");
-    const html = renderToStaticMarkup(<>{withTestLinks("Ana Silva's written answers on “Harbor Run”", [{ name: "Harbor Run", href: "/app/tests/t1" }])}</>);
+    const { createElement, Fragment } = await import("react");
+    // (A .test.ts file, no JSX: vitest runs tests/**/*.test.ts only.)
+    const html = renderToStaticMarkup(createElement(Fragment, null, withTestLinks("Ana Silva's written answers on “Harbor Run”", [{ name: "Harbor Run", href: "/app/tests/t1" }])));
     expect(html).toContain('class="text-volt-300 underline decoration-dotted hover:text-volt-200" data-test-link=""');
   });
 });
