@@ -3,7 +3,7 @@ import { withLineLinks } from "@/components/LineLinks";
 import { knownLinks } from "@/lib/lineLinkRegistry";
 import { useEffect, useRef } from "react";
 import { FIELD } from "@/lib/client";
-import { isNdaBlockLine } from "@/lib/ndaNotice";
+import { NDA_BLOCK_FIRST } from "@/lib/ndaNotice";
 import { ResendConfirm } from "@/components/ResendConfirm";
 import { bringInView } from "@/lib/markJump";
 import { isPerkRefusal } from "@/lib/subscription";
@@ -18,25 +18,23 @@ import { PayOwedLink } from "@/components/PayOwedLink";
 /**
  * Red for a form mistake (fix the field and press again); blue for a refusal. Brought into view when it appears.
  * (Owner, Nov 3, §156) `press`: the pressed button's label. A refusal then names it first, as every refusal does (batch 15 section 36): "Your Block didn't go
- * through: …". A red form mistake, a line that already names its press, and "Answer the new terms first: Switch or Keep." read as they are.
+ * through: …". A red form mistake, a line that already names its press, "Answer the new terms first: Switch or Keep." and (§302) "Acknowledge the NDA change
+ * first." read as they are.
  */
 export function Err({ text, press = "" }: { text: string; press?: string }) {
   const ref = useRef<HTMLParagraphElement>(null);
   useEffect(() => {
     // (Batch 27 section 1) The new-terms line stays under its button while the page goes up to the Switch / Keep box.
-    if (text && text !== ANSWER_TERMS_FIRST) bringInView(ref.current);
+    // (Owner, Nov 6, §302) So does the NDA block's line while the page goes up to the NDA notice.
+    if (text && text !== ANSWER_TERMS_FIRST && text !== NDA_BLOCK_FIRST) bringInView(ref.current);
   }, [text]);
   // (Batch 35 §60) Gone once the page redraws with a new version of itself (the situation it was about changed).
   // A red form mistake (fix the field) stays until fixed.
   const gone = useGoneOnNewVersion(text.startsWith(FIELD) ? "" : text, text);
   if (!text || gone) return null;
   if (text === ANSWER_TERMS_FIRST) return <p ref={ref} className="err" data-answer-terms="">{text}</p>;
-  // (Owner, Nov 5, §267) The NDA block's refusal: the blue notice (§213's look) with its link, which opens the NDA notice on the session page (recorded as seen).
-  if (isNdaBlockLine(text)) {
-    const at = text.lastIndexOf(": ");
-    const tail = text.slice(at + 2), link = tail.startsWith("read it") ? "read it" : "see the change";
-    return <p ref={ref} className="info" data-nda-refusal="">{withLineLinks(text.slice(0, at + 2), knownLinks(), { draw: (t) => t })}<a href="?nda=open#info-nda" data-nda-link="">{link}</a>{tail.slice(link.length)}</p>;
-  }
+  // (Owner, Nov 6, §302; replaces §267's blue notice with its link) The NDA block's line reads exactly so, like the new-terms line (the page goes up to the notice).
+  if (text === NDA_BLOCK_FIRST) return <p ref={ref} className="err" data-nda-refusal="">{text}</p>;
   const red = text.startsWith(FIELD);
   const line = red ? text : refusalLine(press, text);
   if (!red && text.startsWith("Confirm your email first.")) return <p ref={ref} className="err flex flex-wrap items-center gap-2">{line} <ResendConfirm label="Resend the link" /></p>;

@@ -609,11 +609,12 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const line = questionsUpdatedLine(displayName(dev));
     await notify(q.email, line, [`${line}.`, "Questions you haven't answered yet are on your session page; your earlier answers are in Terms history."], `/app/sessions/${q.contractId}#scope`, { about: dev.id, testId });
   }
-  // (Owner, Nov 5, §267) The NDA's own notice, apart from "updated the listing": "<developer> changed the NDA", linking to its line (opening it there counts as
-  // seen, which lifts an added or removed NDA's block).
+  // (Owner, Nov 5, §267) The NDA's own notice, apart from "updated the listing".
+  // (Owner, Nov 6, §302) "<developer> changed the NDA" whatever the kind, linking to the session page's notice, whose Acknowledge button lifts the block
+  // every NDA change now makes.
   for (const n of ndaFollowed) {
     const line = ndaChangedLine(displayName(dev));
-    await notify(n.email, line, [`${line}.`, n.kind === "changed" ? "Read it on your session page." : `Open it on your session page before you go on: until then your presses on this test wait for it (except Rate and Leave).`], ndaNoticeHref(n.contractId), { about: dev.id, testId });
+    await notify(n.email, line, [`${line}.`, "Acknowledge it on your session page: until then your presses on this test wait for it (except Rate and Leave)."], ndaNoticeHref(n.contractId), { about: dev.id, testId });
   }
   // (Owner, Nov 6, §286) Every other working tester whose top box shows "Nora Lane edited the listing" gets it in the bell too, linking to "Your agreed scope" (each
   // changed line marked there). A tester told of this Save's questions above already has its line (never two for one Save); the NDA keeps its own notice.

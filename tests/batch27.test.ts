@@ -166,8 +166,9 @@ describe("batch 27 section 1: an open new-terms offer blocks Send and calls unti
     expect(top).toContain("router.refresh();"); // an old page loads the offer first
     expect(top).toContain("data-[marked]:ring-2 data-[marked]:ring-sky-300");
     // The line stays under its button: no scroll back down to it.
-    expect(src("components/Err.tsx")).toContain("if (text && text !== ANSWER_TERMS_FIRST) bringInView(ref.current);");
-    expect(src("components/ChangesBox.tsx")).toContain("if (changes || (error && error !== ANSWER_TERMS_FIRST)) bringInView(ref.current);");
+    // (Owner, Nov 6, §302) The NDA block's line the same way.
+    expect(src("components/Err.tsx")).toContain("if (text && text !== ANSWER_TERMS_FIRST && text !== NDA_BLOCK_FIRST) bringInView(ref.current);");
+    expect(src("components/ChangesBox.tsx")).toContain("if (changes || (error && error !== ANSWER_TERMS_FIRST && error !== NDA_BLOCK_FIRST)) bringInView(ref.current);");
     // The offer comes before the form's own checks.
     expect(src("app/app/sessions/[id]/SessionActions.tsx")).toContain("const missing0 = terms ? null : answersMissing(questions, answers);");
     expect(src("components/CallRequests.tsx")).toContain("((p.side === \"tester\" && offerShown()) || checkFields(form.current))");

@@ -9,6 +9,7 @@ import { PART_ENDED_TERMS, closeOffersOfEnded, decideTerms, ndaBlockFirst } from
 import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
+import { NDA_FREE } from "@/lib/ndaNotice";
 import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
 import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, RATE_INACTIVE, PAUSE_DEFAULTS, PAUSED_SEND, WORK_OVER_ACTIONS, testerPaused, testerRefusal, workOver, workOverLine, workOverPress } from "@/lib/rules";
 import { loadedOf, stopBox, testerStopSince } from "@/lib/server/stopMoment";
@@ -17,8 +18,8 @@ import { testerGate } from "@/lib/server/testerGate";
 import { addWritten, leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
-/** (Owner, Nov 5, §267 / §268) The presses the NDA block never stops: Rate and Leave, opening the notice or the terms pill, and an upload already under way. */
-const NDA_FREE = new Set(["rate", "leave", "nda-seen", "terms-pill", "dismiss-removed", "recording-alive", "recording-abandon", "recording-done"]);
+/** (Owner, Nov 5, §267 / §268) The presses the NDA block never stops: Rate and Leave, the notice's Acknowledge (§302), the terms pill, and an upload already under way. */
+const NDA_FREE_SET = new Set(NDA_FREE);
 // (Owner, Oct 27) No press on a session needs a confirmed email any more (only Post a test, Join, Apply and accepting an invite do).
 const NEEDS_CONFIRMED = new Set<string>();
 import { maybePromptRating, testerRate } from "@/lib/server/ratings";
@@ -137,8 +138,9 @@ export async function POST(req: Request, { params }: Ctx) {
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action, body);
     await pausedRefusal(u.id, id, action);
-    // (Owner, Nov 5, §267) An added or removed NDA whose notice wasn't opened blocks every press here but Rate and Leave (§268), opening the notice and the pill.
-    if (!NDA_FREE.has(action)) await ndaBlockFirst(id);
+    // (Owner, Nov 5, §267; Nov 6, §302: every NDA change) An NDA change not yet acknowledged blocks every press here but Rate and Leave (§268), the
+    // Acknowledge button and the pill.
+    if (!NDA_FREE_SET.has(action)) await ndaBlockFirst(id);
     // (Batch 17 section 12; batch 29 section 11) A press on a page opened before the test stopped, closed, paused or this tester's work ended: it stops once with that
     // as the change (the second press goes ahead).
     await stateMoment(id, action, body);
@@ -155,11 +157,12 @@ export async function POST(req: Request, { params }: Ctx) {
 async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {
   {
     switch (action) {
-      // (Owner, Nov 5, §267) The NDA notice opened (its link, or the bell's): seen from now, which lifts an added or removed NDA's block.
+      // (Owner, Nov 6, §302; was §267's link opening) The NDA notice's Acknowledge button: acknowledged from now, which lifts the block at once. (Opening the
+      // notice's link, the bell's or the top box's is navigation only.)
       case "nda-seen": {
         const c = await db.contract.findUnique({ where: { id }, select: { testerId: true, ndaText: true, ndaAcceptedAt: true } });
         if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
-        // An added NDA opened through its notice counts as read and accepted ("Accepted <date>" on its line, the developer's "NDA accepted" badge).
+        // An added NDA acknowledged counts as read and accepted ("Accepted <date>" on its line, the developer's "NDA accepted" badge).
         const now = new Date();
         await db.contract.update({ where: { id }, data: { ndaNoticeSeenAt: now, ...(c.ndaText && !c.ndaAcceptedAt ? { ndaAcceptedAt: now } : {}) } });
         return ok({ seen: true });

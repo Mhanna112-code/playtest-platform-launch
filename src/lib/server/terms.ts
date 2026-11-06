@@ -11,7 +11,7 @@ import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/a
 import { carriedAnswers } from "@/lib/additions";
 import { qText, sameQuestionWords } from "@/lib/questions";
 import { closeOffersOfEnded } from "./offerClose";
-import { ndaBlockLine, ndaBlocked, ndaChangeOf, ndaNoticeHref } from "@/lib/ndaNotice";
+import { NDA_BLOCK_CODE, NDA_BLOCK_FIRST, ndaBlocked, ndaChangeOf } from "@/lib/ndaNotice";
 import { testerRow } from "@/lib/lineAnchors";
 export { closeOffersOfEnded };
 
@@ -57,17 +57,18 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
 export const PART_ENDED_TERMS = "Your part on this test has ended, so these terms no longer apply.";
 
 /**
- * (Owner, Nov 5, §267) The NDA block: an added or removed NDA the tester hasn't opened the notice of refuses every press of theirs on the test (Rate and Leave
- * never come here, §268), with one line whose link opens the notice ("Nora Lane added an NDA to this test: read it before you go on").
+ * (Owner, Nov 5, §267) The NDA block: an NDA change the tester hasn't acknowledged refuses every press of theirs on the test (Rate and Leave never come here, §268).
+ * (Owner, Nov 6, §302) Every change blocks (added, removed or changed), refused like an open contract change: one line, "Acknowledge the NDA change first.", and
+ * the page goes up to the NDA notice and marks it (`sessionId`: a Join call away from the session page links there).
  */
-export function ndaBlockCheck(c: { id: string; ndaChangedAt: Date | null; ndaChangeKind: string; ndaNoticeSeenAt: Date | null }, dev: string) {
-  if (ndaBlocked(c)) throw new HttpError(409, NDA_BLOCK_CODE, ndaBlockLine(dev, c.ndaChangeKind), { ndaLink: ndaNoticeHref(c.id) });
+export function ndaBlockCheck(c: { id: string; ndaChangedAt: Date | null; ndaChangeKind: string; ndaNoticeSeenAt: Date | null }) {
+  if (ndaBlocked(c)) throw new HttpError(409, NDA_BLOCK_CODE, NDA_BLOCK_FIRST, { sessionId: c.id });
 }
-export const NDA_BLOCK_CODE = "nda_block";
+export { NDA_BLOCK_CODE };
 /** (§267) The block for a press by contract id (the session route's presses). */
 export async function ndaBlockFirst(contractId: string) {
-  const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
-  if (c) ndaBlockCheck(c, displayName(c.test.developer));
+  const c = await db.contract.findUnique({ where: { id: contractId }, select: { id: true, ndaChangedAt: true, ndaChangeKind: true, ndaNoticeSeenAt: true } });
+  if (c) ndaBlockCheck(c);
 }
 /**
  * (Owner, Nov 5, §267) A Save changed the NDA: every working contract takes the listing's at once (no Switch / Keep), with the change's kind and time for its
@@ -119,8 +120,8 @@ export const openOffer = (contractId: string) => db.termsOffer.findFirst({ where
 export async function answerTermsFirst(contractId: string) {
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || testerRefusal(c, c.test, displayName(c.test.developer), fmtDate, new Date())) return;
-  // (Owner, Nov 5, §267) An added or removed NDA whose notice the tester hasn't opened blocks the press first (calls too, which come through here).
-  ndaBlockCheck(c, displayName(c.test.developer));
+  // (Owner, Nov 5, §267; §302: every NDA change) An NDA change the tester hasn't acknowledged blocks the press first (calls too, which come through here).
+  ndaBlockCheck(c);
   const offer = await openOffer(contractId);
   // (Batch 29 section 20) `sessionId`: a Join call refused away from the session page (the dashboard's Upcoming calls) links to the Switch / Keep box there.
   if (offer) throw new HttpError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST, { offerId: offer.id, sessionId: contractId });

@@ -1,5 +1,6 @@
 // (Owner, Nov 6, §284) Every top-box line about something with a place on the page opens it (jumps and marks, as other row links do), ignored (greyed)
 // lines too. The places are the rows' own ids, the same on the server (which sets each line's `link`) and the client (which jumps to it). No JSX here.
+import { NDA_NOTICE } from "./ndaNotice";
 
 /** (§284) The tester's Requests section on the session page (the Live session's "Requests": both of her Call requests panels, or "No call requests waiting."). */
 export const TESTER_REQUESTS_BOX = "requests";
@@ -9,6 +10,8 @@ export const REQUEST_BOXES = [TESTER_REQUESTS_BOX, "call-requests", "your-reques
 export const TERMS_OFFER_BOX = "terms-offer";
 /** (§284; §267) The NDA line in the tester's contract card. */
 export const NDA_INFO = "info-nda";
+/** (Owner, Nov 6, §302) The NDA notice with its Acknowledge button on the session page (the NDA line once it's acknowledged). */
+export const NDA_NOTICE_BOX = NDA_NOTICE;
 
 /** (§284) A call request's row (both sides' Call requests boxes). */
 export const requestRow = (id: string) => `req-${id}`;
@@ -25,9 +28,9 @@ export const devPartRow = (p: { submissionId?: string | null; callId?: string | 
 
 /**
  * (§284) Where a line's link lands, first found wins: a request's row while it is still shown, otherwise the Call requests box; the new-terms box once the offer
- * is decided: the contract card.
+ * is decided: the contract card; (§302) the NDA notice once acknowledged: the NDA line.
  */
-export const lineFallbacks = (id: string): string[] => (id.startsWith("req-") ? [id, ...REQUEST_BOXES] : id === TERMS_OFFER_BOX ? [id, "scope"] : [id]);
+export const lineFallbacks = (id: string): string[] => (id.startsWith("req-") ? [id, ...REQUEST_BOXES] : id === TERMS_OFFER_BOX ? [id, "scope"] : id === NDA_NOTICE_BOX ? [id, NDA_INFO] : [id]);
 
 /**
  * (§284) A person's own action in another tab ("You withdrew a call request for … in another tab"): the place it touched, from what the log kept (`k`: "req:<id>",

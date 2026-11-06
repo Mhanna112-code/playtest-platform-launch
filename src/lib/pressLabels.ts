@@ -1,6 +1,7 @@
 // (Owner, Oct 30, batch 15 section 36) Every stop-once box and every refusal names the press first: "Your Pay didn't go through." / "Your Save didn't go through: …".
 // The button's own label for each press, by its API path (the server's failed-press lines use the same table).
 import { ANSWER_TERMS_FIRST } from "./answerTerms";
+import { NDA_ACK_BUTTON, NDA_BLOCK_FIRST } from "./ndaNotice";
 import { CANCEL_CHECK, CONFIRM_WITH_BANK } from "./rules";
 import { CONFIRM_ALL } from "./confirmAllText";
 import { CANCELLED_NOTHING_CHARGED } from "./bankNotice";
@@ -21,6 +22,8 @@ export const PRESS_VERBS: Record<string, string> = {
   "written-add": "Add", "dismiss-removed": "Dismiss",
   // (Owner, Nov 3, §156) Presses that named nothing ("press"): a recording's Remove, the developer's broken-key Dismiss (its count is in pressLabelOf), and the
   // tester's key report by its button's own words (as the stopped line's "your “This key doesn't work” didn't go through").
+  // (Owner, Nov 6, §302) The NDA notice's button.
+  "nda-seen": NDA_ACK_BUTTON,
   "recording-remove": "Remove", "keys-dismiss": "Dismiss selected", "key-broken": "“This key doesn't work”",
 };
 
@@ -154,9 +157,9 @@ export const pressVerb = (label: string) => label.split(" on ")[0];
 
 /** A refusal that doesn't already name the press: "Your Pay didn't go through: <reason>" (the reason as the server wrote it). */
 export function refusalLine(label: string, message: string) {
-  // (Batch 27 section 1) "Answer the new terms first: Switch or Keep." reads exactly so under the pressed button.
+  // (Batch 27 section 1) "Answer the new terms first: Switch or Keep." reads exactly so under the pressed button; (§302) so does "Acknowledge the NDA change first.".
   // (§156) A line that already names its press anywhere ("Nora Lane stopped the test on Nov 3, so your Send didn't go through. …") isn't named twice.
-  if (!label || label === "press" || /\b[Yy]our .*didn't go through/.test(message) || message === ANSWER_TERMS_FIRST) return message;
+  if (!label || label === "press" || /\b[Yy]our .*didn't go through/.test(message) || message === ANSWER_TERMS_FIRST || message === NDA_BLOCK_FIRST) return message;
   // (Owner, Nov 5, §217; recording R4a) A check already cancelled underneath it (the team's pause, a new card, a chargeback won) reads as a cancel, whichever press
   // reached it (Cancel this check, Complete in its window, Confirm with your bank): "Cancelled: nothing was charged.", never "Your Confirm with your bank didn't go
   // through: …".

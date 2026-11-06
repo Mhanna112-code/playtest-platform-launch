@@ -5316,3 +5316,23 @@ recording, each call in Had / Cancelled) now reads, top to bottom:
 - Tests: tests/pay-panels-301.test.ts. Updated: questions-dropdown-282 (the Testers list's payments above the content; the call's payFold; four pay panels in
   the source), nov5-batch2 (§225's PartPayments line), batch35-tester-folds (no calls line in the summary), batch17-bank-check and needs-kind-folds-199 (the
   link up on the Pay more drop-down's summary), written-answers-283 (no empty pay panel after the content).
+
+## §302 Every NDA change blocks like new terms; one notice with an Acknowledge button (owner, Nov 6; replaces §267's notice, banner and "added or removed only")
+The owner edited the NDA text twice (kind "changed") and the testers could still do everything: only "added" and "removed" blocked. Now:
+- **Every NDA save blocks** that tester's presses on the test (`BLOCKING_KINDS`: added, removed and changed), except Rate and Leave (§268) and the page's own
+  sends (`NDA_FREE`, lib/ndaNotice.ts, shared by the session route and the page). Testers who join afterwards accept at join and are never blocked, as before.
+- **Refused like an open contract change.** What the page does for "Answer the new terms first: Switch or Keep." (batch 27 section 1): a press on a page showing
+  the offer doesn't go out (client.ts `blockedByTerms`) and the server's refusal (code `answer_terms`) does the same; either way the line sits under the pressed
+  button exactly as it is (no "Your … didn't go through", not pulled into view, no refused-press redraw), the press skips its own form checks (`offerShown`), and
+  the page event makes TesterTop jump to `#terms-offer` and mark it (ring for 4 s), loading the page first when it lacks the box. The NDA block now does the same:
+  one line, "Acknowledge the NDA change first." (code `nda_block`, `sessionId` in the refusal), `blockedByNda` on a page whose notice blocks, the event
+  `nda-block`, and NdaNotice jumps to `#nda-notice` and marks it (or refreshes first). A Join call away from the session page links "Acknowledge it on the session
+  page →" (like the terms one). §267's blue refusal with its "read it" link is gone.
+- **One notice, no banner**: "<developer> changed the NDA. Click here to acknowledge you've seen the change." (the owner's one wording for added, removed and
+  changed); the line links to the NDA in The listing information (`#info-nda`, navigation only; the developer's name stays its own green link, §270), and ONE
+  button next to it, "Acknowledge" (action `nda-seen`, now a named press), records `ndaNoticeSeenAt` (an added NDA: `ndaAcceptedAt` too) and lifts the block at
+  once. Opening a link alone (the notice's, the bell's, the top box's, an old `?nda=open` one) no longer records anything.
+- **Bell and top box**: "<developer> changed the NDA" in every case, linking to the notice (`/app/sessions/<id>#nda-notice`; once acknowledged the link lands on
+  the NDA line, `lineFallbacks`). The developer's side is unchanged (no "not acknowledged" indicator).
+- Tests: tests/nda-acknowledge-302.test.ts. Updated: nda-listing-267 (the notice, the refusal, changed blocks), batch27 (Err / ChangesBox leave the NDA line
+  in place too), press-names (`nda-seen` is the Acknowledge press).

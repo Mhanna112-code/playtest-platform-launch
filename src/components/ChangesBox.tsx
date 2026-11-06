@@ -15,6 +15,7 @@ import { ContractLink } from "@/components/ContractLink";
 import { lastPressLabel } from "@/lib/client";
 import { pressVerb, refusalLine } from "@/lib/pressLabels";
 import { ANSWER_TERMS_FIRST } from "@/lib/answerTerms";
+import { NDA_BLOCK_FIRST } from "@/lib/ndaNotice";
 import { fmtTimeIn } from "@/lib/format";
 import { savedZone } from "@/components/TimeZoneSync";
 import { seeItClick, useSeeItTarget } from "@/components/ListingInfo";
@@ -54,7 +55,8 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
   useEffect(() => {
     if (changes) markShownInBox(changes); // seen: the top box lists them quietly, without its scroll
     // (Batch 27 section 1) The new-terms line stays under its button while the page goes up to the Switch / Keep box.
-    if (changes || (error && error !== ANSWER_TERMS_FIRST)) bringInView(ref.current);
+    // (§302) So does the NDA block's line while the page goes up to the NDA notice.
+    if (changes || (error && error !== ANSWER_TERMS_FIRST && error !== NDA_BLOCK_FIRST)) bringInView(ref.current);
   }, [changes, error]);
   // (Batch 35 §60) A stop box or refusal under a button goes once the page redraws with a new version of itself; the same stop or refusal again shows again.
   const gone = useGoneOnNewVersion(changes ?? error ?? null, changes ? "" : error ?? "");
@@ -99,7 +101,7 @@ export function ChangesBox({ changes, error, tail = "Press again to go ahead.", 
       {error && (error.startsWith("Confirm your email first.") ? <p className="flex flex-wrap items-center gap-2">{refusalLine(named, error)} <ResendConfirm label="Resend the link" /></p> : isPerkRefusal(error) ? <p className="flex flex-wrap items-center gap-2" data-perk-refusal="">{refusalLine(named, error)} <SubscribeLink /></p> : link ? (
         // The refusal names something on this page (the other side's waiting request): the text links to it.
         <p><a href={`#${link}`} onClick={(e) => { e.preventDefault(); jumpTo(link); }}>{refusalLine(named, error)}</a></p>
-      ) : <p data-refusal="" {...(error === ANSWER_TERMS_FIRST ? { "data-answer-terms": "" } : {})}>{linked(refusalLine(named, error))}</p>)}
+      ) : <p data-refusal="" {...(error === ANSWER_TERMS_FIRST ? { "data-answer-terms": "" } : error === NDA_BLOCK_FIRST ? { "data-nda-refusal": "" } : {})}>{linked(refusalLine(named, error))}</p>)}
     </div>
   );
 }

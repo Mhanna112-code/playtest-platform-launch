@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { Err } from "@/components/Err";
 import { OpenTermsNotice, openTermsLine } from "@/components/OpenTerms";
-import { ndaBlockLine, ndaChangedLine, ndaNoticeHref } from "@/lib/ndaNotice";
+import { NDA_BLOCK_FIRST, ndaChangedLine, ndaNoticeHref } from "@/lib/ndaNotice";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 import { makeUser } from "./helpers";
 
@@ -15,6 +15,8 @@ import { makeUser } from "./helpers";
 // own notice "<developer> changed the NDA" (bell, the page's top), its link to the NDA line in "The listing information". An added or removed NDA blocks every
 // press but Rate and Leave until the notice is opened; a changed text only notifies. A tester who joins afterwards accepts it at join and is never blocked.
 // (§268) The contract box's "New terms" pill while an offer is open (until pressed); Rate / Leave pop-ups' open-terms notice (information only).
+// (Owner, Nov 6, §302) Updated: every NDA change blocks (changed too), refused with "Acknowledge the NDA change first."; one notice with an Acknowledge button
+// (no banner), "<dev> changed the NDA. Click here to acknowledge you've seen the change." for every kind; the bell's line "<dev> changed the NDA", to the notice. More in nda-acknowledge-302.
 
 const auth = vi.hoisted(() => ({ user: null as User | null }));
 vi.mock("@/lib/server/page-auth", () => ({ requireOpenPage: async () => auth.user, requirePageUser: async () => auth.user, getPageUser: async () => auth.user, adminAway() {}, leaveIfClosed() {} }));
@@ -48,7 +50,7 @@ async function joinedNda(testId: string, name: string) {
 const press = (sessionId: string, cookie: string, action: string, body: Record<string, unknown> = {}) => sact(sessionId, action, cookie, { seenAt: seen(), ...body });
 
 describe("§267 a Save that changes the NDA", () => {
-  it("makes no offer, copies it into the contract and sends its own notice; adding blocks every press but Rate and Leave until the notice is opened", async () => {
+  it("makes no offer, copies it into the contract and sends its own notice; adding blocks every press but Rate and Leave until acknowledged", async () => {
     const { dev, testId } = await setup();
     const j = await joined(testId);
     expect((await press(j.sessionId, j.tester.cookie, "written", { answers: ["the boats", "level two gate"], confirmed: true })).status).toBe(200);
@@ -56,47 +58,48 @@ describe("§267 a Save that changes the NDA", () => {
     expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(0);
     const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     expect(c).toMatchObject({ ndaText: NDA, ndaChangeKind: "added", ndaNoticeSeenAt: null });
-    // The bell: its own line (not "updated the listing"), linking to the NDA line.
+    // The bell: its own line (not "updated the listing"), "changed the NDA" even for an added one (§302), linking to the session page's notice.
     const bell = await db.notification.findMany({ where: { userId: j.tester.user.id, text: { contains: "NDA" } } });
     expect(bell.map((b) => b.text)).toEqual([ndaChangedLine("Nora Lane")]);
+    expect(bell[0].text).toBe("Nora Lane changed the NDA");
     expect(bell[0].link).toBe(ndaNoticeHref(j.sessionId));
-    // Every press is refused with the one line and its link: Send, Add to this answer, messages, call requests, a dispute's press.
-    const line = ndaBlockLine("Nora Lane", "added");
-    expect(line).toBe("Nora Lane added an NDA to this test: read it before you go on");
+    expect(bell[0].link).toBe(`/app/sessions/${j.sessionId}#nda-notice`);
+    // Every press is refused with the one line (§302): Add to this answer, messages, call requests, recordings.
+    const line = NDA_BLOCK_FIRST;
+    expect(line).toBe("Acknowledge the NDA change first.");
     for (const [action, body] of [["written-add", { text: "more", question: "else" }], ["message", { body: "hi" }], ["request-time", {}], ["recording-send", {}]] as const) {
       const r = await press(j.sessionId, j.tester.cookie, action, body);
       expect(r.body.error?.code, `${action}: ${JSON.stringify(r.body)}`).toBe("nda_block");
       expect(r.body.error?.message).toBe(line);
     }
-    // The page: the banner with its link; the NDA line in "The listing information" (not in "Your contract"), with its box.
+    // The page: the one notice with its button (§302); the NDA line in "The listing information" (not in "Your contract"), with its box.
     const page = await sessionPage(j.sessionId, j.tester.user.id);
     // (§270) The developer's name is a green link to their profile.
-    expect(page).toMatch(/data-nda-block="added"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> added an NDA to this test: <a href="#info-nda" data-nda-link="">read it<\/a> before you go on<\/p>/);
+    expect(page).toMatch(/data-nda-block="added"><div[^>]*><p class="min-w-0"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> <a href="#info-nda" data-nda-link="">changed the NDA. Click here to acknowledge you've seen the change.<\/a><\/p><button[^>]*data-nda-ack="">Acknowledge<\/button>/);
     const info = page.slice(page.indexOf('data-scope-info=""'), page.indexOf('data-terms-history=""'));
     expect(info).toMatch(/<li id="info-nda" data-nda=""[^>]*data-info-line="nda"/);
     expect(info).toContain(NDA);
     const contract = page.slice(page.indexOf('data-scope-contract=""'), page.indexOf('data-scope-info=""'));
     expect(contract).not.toContain("data-nda");
-    // Opening the notice lifts the block (and counts as reading it).
+    // The Acknowledge button lifts the block (and counts as reading it).
     expect((await press(j.sessionId, j.tester.cookie, "nda-seen")).status).toBe(200);
     expect((await press(j.sessionId, j.tester.cookie, "written-add", { text: "more on it", question: "else", confirmed: true })).status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } })).ndaAcceptedAt).not.toBeNull();
-    expect(await sessionPage(j.sessionId, j.tester.user.id)).not.toContain("data-nda-block");
+    expect(await sessionPage(j.sessionId, j.tester.user.id)).not.toContain("data-nda-notice");
   });
 
-  it("removing the NDA blocks too (its own words); changing its text only notifies", async () => {
+  it("removing the NDA blocks too, and (§302) so does changing its text; each notice in its own words", async () => {
     const { dev, testId } = await setup({ ndaText: NDA });
     const j = await joinedNda(testId, "Ana Silva");
     await edit(testId, dev.cookie, { ndaText: "Keep it very secret." });
     let r = await press(j.sessionId, j.tester.cookie, "request-time", {});
-    expect(r.body.error?.code).not.toBe("nda_block");
+    expect(r.body.error?.code).toBe("nda_block");
     let page = await sessionPage(j.sessionId, j.tester.user.id);
-    expect(page).toMatch(/data-nda-notice="changed"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> <a href="#info-nda" data-nda-link="">changed the NDA<\/a><\/p>/); // (§270)
-    expect(page).not.toContain("data-nda-block");
+    expect(page).toMatch(/data-nda-notice="changed" data-session="[^"]+" data-nda-block="changed"><div[^>]*><p class="min-w-0"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> <a href="#info-nda" data-nda-link="">changed the NDA. Click here to acknowledge you've seen the change.<\/a><\/p>/); // (§270)
     await edit(testId, dev.cookie, { ndaText: "" });
     r = await press(j.sessionId, j.tester.cookie, "request-time", {});
     expect(r.body.error?.code).toBe("nda_block");
-    expect(r.body.error?.message).toBe("Nora Lane removed the NDA from this test: see the change before you go on");
+    expect(r.body.error?.message).toBe(NDA_BLOCK_FIRST);
     page = await sessionPage(j.sessionId, j.tester.user.id);
     expect(page).toContain('data-nda-block="removed"');
     expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(0);
@@ -113,10 +116,9 @@ describe("§267 a Save that changes the NDA", () => {
     expect((await press(first.sessionId, first.tester.cookie, "request-time", {})).body.error?.code).toBe("nda_block");
   });
 
-  it("the refusal box draws the line as the blue notice with its link to the NDA notice", () => {
-    const html = renderToStaticMarkup(h(Err, { text: ndaBlockLine("Nora Lane", "added") }));
-    expect(html).toContain('class="info" data-nda-refusal=""');
-    expect(html).toContain('<a href="?nda=open#info-nda" data-nda-link="">read it</a> before you go on');
+  it("(§302) the refusal box draws the line as it is, like the new-terms line (no blue notice, no link)", () => {
+    const html = renderToStaticMarkup(h(Err, { text: NDA_BLOCK_FIRST, press: "Request a time" }));
+    expect(html).toBe('<p class="err" data-nda-refusal="">Acknowledge the NDA change first.</p>');
   });
 });
 

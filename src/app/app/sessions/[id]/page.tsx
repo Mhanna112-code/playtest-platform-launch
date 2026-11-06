@@ -395,7 +395,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
       {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} devPronoun={c.test.developer.pronoun} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
-      {/* (Owner, Nov 5, §267) The NDA's own notice (and, for an added or removed NDA, the block's banner) until it's opened. */}
+      {/* (Owner, Nov 5, §267; Nov 6, §302) The NDA's one notice with its Acknowledge button until it's acknowledged; while the tester works, every NDA change
+          blocks their presses until then (no separate banner). */}
       <NdaNotice sessionId={c.id} dev={dev} devHref={devHref} kind={c.ndaChangeKind} open={ndaNoticeOpen(c)} block={ndaBlocked(c) && c.status === "working"} />
       <ListingSeeIt box="scope" />
       {/* (Owner, Nov 5, §265) An offer never carries questions (they follow the listing): no "The questions changed" block and no Switch wording about them. */}
@@ -521,7 +522,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         <p className="text-xs text-slate-400">Always the current listing: it follows <NameLink text={dev} href={devHref} />&apos;s changes as they&apos;re made.</p>
         <ul className="mt-1 space-y-2.5 text-sm" data-scope-info="">
           {info.filter((l) => !(CONTRACT_INFO as readonly string[]).includes(l.key)).filter((l) => l.key !== "productName" || l.now !== "(none)" || l.before != null).filter((l) => l.key !== "mature" || c.test.mature || l.before != null).map(infoItem)}
-          {/* (Owner, Nov 5, §267; was in "Your contract") The NDA, in its box: the notice's link ("changed the NDA") and the block's land here (`#info-nda`,
+          {/* (Owner, Nov 5, §267; was in "Your contract") The NDA, in its box: the notice's line (§302: navigation only) lands here (`#info-nda`,
               `data-info-line="nda"`, marked like the top box's See it). "Updated <time>" when it changed since you joined; "Accepted <date>" when you accepted it. */}
           <li id="info-nda" data-nda="" className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-info-line="nda" {...(c.ndaChangedAt ? { "data-updated-at": c.ndaChangedAt.toISOString() } : {})}>
             <FieldLabel tag={c.ndaChangedAt && c.ndaChangedAt > c.joinedAt ? <span className="badge border-sky-300/40 text-[11px] text-sky-200" data-nda-updated="">Updated {fmtDateTimeIn(c.ndaChangedAt, u.timeZone)}</span> : null}>NDA</FieldLabel>

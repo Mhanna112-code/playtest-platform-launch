@@ -3,6 +3,7 @@ import { pressLabelOf } from "./pressLabels";
 import { keepRefusal } from "./keptRefusal";
 import { publishTesterAlertsOff, setTesterAlertsOff } from "./testerAlerts";
 import { ANSWER_TERMS_CODE, ANSWER_TERMS_EVENT, ANSWER_TERMS_FIRST, termsBlockedPath } from "./answerTerms";
+import { NDA_BLOCK_CODE, NDA_BLOCK_EVENT, NDA_BLOCK_FIRST, NDA_NOTICE, ndaBlockedPath } from "./ndaNotice";
 import { rememberReply } from "./lineLinkRegistry";
 
 /** (Batch 15 section 36) The label of the last press that was stopped or refused: the box under it names it ("Your Pay didn't go through."). */
@@ -67,14 +68,30 @@ export const newPageLoad = () => {
  * tester answers. True when `path` is such a press and it was stopped here.
  */
 export function blockedByTerms(path: string) {
-  if (!termsBlockedPath(path) || !offerShown()) return false;
+  if (!termsBlockedPath(path) || !termsBoxShown()) return false;
   LAST_PRESS = pressLabelOf(path);
   window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));
   return true;
 }
 
-/** (Batch 27 section 1) Does this page show an open new-terms offer (the Switch / Keep box)? A blocked press then skips its own form checks: the offer comes first. */
-export const offerShown = () => typeof document !== "undefined" && !!document.getElementById("terms-offer");
+/** (Batch 27 section 1) Does this page show an open new-terms offer (the Switch / Keep box)? A blocked press then skips its own form checks: the offer comes first.
+ * (Owner, Nov 6, §302) ... or the NDA notice while it blocks: an NDA change comes first the same way. */
+export const offerShown = () => termsBoxShown() || !!ndaBlockShown();
+const termsBoxShown = () => typeof document !== "undefined" && !!document.getElementById("terms-offer");
+
+/** (Owner, Nov 6, §302) The NDA notice while it blocks this page's presses (its session id), if the page shows it. */
+const ndaBlockShown = () => (typeof document === "undefined" ? null : document.querySelector<HTMLElement>(`#${NDA_NOTICE}[data-nda-block]`)?.dataset.session ?? null);
+/**
+ * (Owner, Nov 6, §302) While the page shows the NDA notice blocking (an NDA change not yet acknowledged), its presses don't go out, as with an open offer: the page
+ * goes up to the notice (marked) and the press gets the line "Acknowledge the NDA change first." under its button. True when `path` was stopped here.
+ */
+export function blockedByNda(path: string) {
+  const session = ndaBlockShown();
+  if (!session || !ndaBlockedPath(path, session)) return false;
+  LAST_PRESS = pressLabelOf(path);
+  window.dispatchEvent(new Event(NDA_BLOCK_EVENT));
+  return true;
+}
 
 /** (Batch 28 §9) Sent when the server refuses a press because the state changed: the page redraws at once (AutoRefresh). */
 export const PRESS_REFUSED_EVENT = "press-refused";
@@ -90,6 +107,8 @@ export async function api<T = unknown>(path: string, body?: unknown, method?: st
   }
 }
 async function callApi<T = unknown>(path: string, body?: unknown, method?: string): Promise<T> {
+  // (§302) The NDA block first, as the server checks it first.
+  if (body !== undefined && blockedByNda(path)) throw new ApiError(409, NDA_BLOCK_CODE, NDA_BLOCK_FIRST);
   if (body !== undefined && blockedByTerms(path)) throw new ApiError(409, ANSWER_TERMS_CODE, ANSWER_TERMS_FIRST);
   // Every press sends the later of the page's render time and what the live top notice has shown (NEWEST+3).
   // (Owner) New terms (reason A) are measured from the page itself: `pageSeenAt` is when the page was rendered, whatever the top box showed.
@@ -146,6 +165,8 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
     LAST_PRESS = typeof e?.press === "string" ? e.press : pressLabelOf(path, body);
     // (Batch 27 section 1) The server refused for an open offer (an old page that hasn't shown it too): up to the Switch / Keep box (it loads if the page lacks it).
     if (e?.code === ANSWER_TERMS_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(ANSWER_TERMS_EVENT));
+    // (Owner, Nov 6, §302) The server refused for an NDA change not yet acknowledged (an old page too): up to the NDA notice (it loads if the page lacks it).
+    if (e?.code === NDA_BLOCK_CODE && typeof window !== "undefined") window.dispatchEvent(new Event(NDA_BLOCK_EVENT));
     // (Batch 17 section 13) A tester's stop box says whether their Alerts is Off (the box then drops "Turn off alerts").
     if (e?.code === "stop_once" && typeof e.alertsOff === "boolean") setTesterAlertsOff(e.alertsOff);
     // (Batch 20 section 8) ... and the Alerts button and the other boxes on the page follow what the server says.
@@ -154,7 +175,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
     // redraws at once, as its poll would (AutoRefresh; typed text kept), so the dead buttons go and the new state shows.
     // (Owner, Oct 29, batch 29 §36) If the redraw takes the pressed button away, its refusal line stays where the button was (KeptRefusal, root layout) until the
     // next press or about 10 seconds: "Your Join call didn't go through: this call isn't available."
-    if (res.status === 409 && e?.code !== "stop_once" && e?.code !== ANSWER_TERMS_CODE && body !== undefined && typeof window !== "undefined") {
+    if (res.status === 409 && e?.code !== "stop_once" && e?.code !== ANSWER_TERMS_CODE && e?.code !== NDA_BLOCK_CODE && body !== undefined && typeof window !== "undefined") {
       if (typeof e?.message === "string") keepRefusal(LAST_PRESS, e.message);
       window.dispatchEvent(new Event(PRESS_REFUSED_EVENT));
     }

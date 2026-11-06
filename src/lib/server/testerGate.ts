@@ -4,13 +4,13 @@ import { TESTER_CHOICE_REASONS, partWhen, stopOnce, type TestEventLike } from "@
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
 import { KEY_BOX_ID, keyFixedLine, keyGivenToYouLine } from "@/lib/keys";
-import { NDA_INFO, TERMS_OFFER_BOX, TESTER_REQUESTS_BOX, callRow, ownLink, requestRow, testerPartRow } from "@/lib/lineAnchors";
+import { TERMS_OFFER_BOX, TESTER_REQUESTS_BOX, callRow, ownLink, requestRow, testerPartRow } from "@/lib/lineAnchors";
 import { KEY_GIVEN } from "./accessKeys";
 import { DROP_KINDS, isDropReason } from "@/lib/requestDrop";
 import { notListed, shownIdsOf, wasListed } from "./shownLines";
 import { LISTING_SAVED, parseSaved } from "@/lib/listingPanel";
 import { questionChangeTexts } from "@/lib/questionHistory";
-import { ndaChangedLine } from "@/lib/ndaNotice";
+import { NDA_NOTICE, ndaChangedLine } from "@/lib/ndaNotice";
 import { loadedOf, testerPauseMoments } from "./stopMoment";
 import { unanswered, answersIt, asLines, listingSaveLines, ownChanges, type Answers, seenOf, tabOf, testerPaymentChanges, withRenamed } from "./live";
 
@@ -113,8 +113,9 @@ export async function testerChanges(testerId: string, contractId: string, testId
   if (fixed) out.push({ kind: "keyfixed", text: `${keyFixedLine(dev)} (${fixed.value})`, createdAt: fixed.fixedAt!, link: KEY_BOX_ID });
   // (Batch 30 §17) The developer's Save gave this tester a key (the test had none when they joined): "<dev> gave you an access key for “<test>”" (the key is in its box).
   for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: seenAt } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, c.test.title), createdAt: e.createdAt });
-  // (Owner, Nov 5, §267) The NDA changed (its own notice): an ordinary line (Alerts on, not yet shown), apart from the block an added or removed one makes.
-  if (c.ndaChangedAt && c.ndaChangedAt > seenAt) out.push({ kind: "nda", text: ndaChangedLine(dev), createdAt: c.ndaChangedAt, link: NDA_INFO });
+  // (Owner, Nov 5, §267) The NDA changed (its own notice): an ordinary line (Alerts on, not yet shown), apart from the block it makes.
+  // (Owner, Nov 6, §302) "<developer> changed the NDA" whatever the kind, linking to the notice (its Acknowledge button).
+  if (c.ndaChangedAt && c.ndaChangedAt > seenAt) out.push({ kind: "nda", text: ndaChangedLine(dev), createdAt: c.ndaChangedAt, link: NDA_NOTICE });
   // (F) the listing's info (title, description, devices, languages) changed: (batch 30 §10) one line per save.
   out.push(...(await listingSaveLines(testId, seenAt, testerId, "session")));
   out.push(...(await testerPaymentChanges(testerId, contractId, seenAt)));

@@ -1,39 +1,69 @@
 "use client";
 import { withLineLinks } from "@/components/LineLinks";
-import { useEffect } from "react";
+import { Err } from "@/components/Err";
+import { useEffect, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
-import { api } from "@/lib/client";
+import { api, errOf } from "@/lib/client";
 import { jumpTo } from "@/lib/markJump";
-import { NDA_CHANGED, ndaBlockParts } from "@/lib/ndaNotice";
-
-/** (§267) Open the notice: record it as seen, bring the NDA line (`#info-nda` in "The listing information") into view and mark it, then redraw (the block lifts). */
-export async function openNdaNotice(sessionId: string, router?: { refresh(): void }) {
-  await api(`/api/sessions/${sessionId}/nda-seen`, {}).catch(() => null);
-  jumpTo("info-nda");
-  router?.refresh();
-}
+import { NDA_INFO } from "@/lib/lineAnchors";
+import { NDA_ACK_BUTTON, NDA_ACK_TAIL, NDA_BLOCK_EVENT, NDA_CHANGED, NDA_NOTICE } from "@/lib/ndaNotice";
 
 /**
- * (Owner, Nov 5, batch 35 §267) The NDA's own notice at the top of the tester's session page while it hasn't been opened: "<developer> changed the NDA", its
- * "changed the NDA" a link to the NDA line. While an added or removed NDA blocks their presses, the banner reads "<developer> added an NDA to this test: read it
- * before you go on" ("removed the NDA from this test: see the change before you go on"), with the link. Opening it (here, from the bell's link, which arrives
- * with `?nda=open`, or from a refusal's link) records it as seen.
+ * (Owner, Nov 5, batch 35 §267; Nov 6, §302) The NDA's one notice at the top of the tester's session page until it's acknowledged: "<developer> changed the NDA.
+ * Click here to acknowledge you've seen the change." (the same words whether it was added, removed or changed; `kind` is kept on data-*), the line a link to the NDA in "The listing information" (`#info-nda`: it comes
+ * into view, marked; navigation only), with ONE button, "Acknowledge", which records it (an added NDA counts as accepted) and lifts the block at once. No separate
+ * banner. While it blocks (`block`: every NDA change, the tester still working), a refused press brings the page up to it, marked, as an open offer brings it up
+ * to Switch / Keep (a page that doesn't show it yet loads it first).
  */
 export function NdaNotice({ sessionId, dev, devHref, kind, open, block }: { sessionId: string; dev: string; /** (Owner, Nov 5, §270) the developer's profile: their name is a green link (none: a deleted account) */ devHref?: string | null; kind: string; open: boolean; block: boolean }) {
   const router = useRouter();
   const path = usePathname();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
+  // (§302) An older link that still carries `?nda=open` (§267's bells): navigation only now, to the notice (the NDA line once acknowledged).
   useEffect(() => {
-    // The bell's link (and a refusal's): the page opened with ?nda=open.
     if (typeof window === "undefined" || new URLSearchParams(window.location.search).get("nda") !== "open") return;
-    window.history.replaceState(null, "", `${path}#info-nda`);
-    void openNdaNotice(sessionId, router);
-  }, [sessionId, path, router]);
+    window.history.replaceState(null, "", `${path}#${NDA_NOTICE}`);
+    setTimeout(() => jumpTo(document.getElementById(NDA_NOTICE) ? NDA_NOTICE : NDA_INFO), 30);
+  }, [path]);
+  // (§302) A press refused for the NDA (here, or by the server): up to the notice, marked, every time.
+  const pending = useRef(false);
+  useEffect(() => {
+    const on = () => {
+      if (document.getElementById(NDA_NOTICE)) {
+        setTimeout(() => jumpTo(NDA_NOTICE), 30);
+        return;
+      }
+      pending.current = true;
+      router.refresh();
+    };
+    window.addEventListener(NDA_BLOCK_EVENT, on);
+    return () => window.removeEventListener(NDA_BLOCK_EVENT, on);
+  }, [router]);
+  useEffect(() => {
+    if (!open || !pending.current) return;
+    pending.current = false;
+    setTimeout(() => jumpTo(NDA_NOTICE), 30);
+  }, [open]);
   if (!open) return null;
   const who = devHref ? [{ text: dev, href: devHref, kind: "person" as const }] : [];
-  const link = (text: string) => <a href="#info-nda" data-nda-link="" onClick={(e) => { e.preventDefault(); void openNdaNotice(sessionId, router); }}>{text}</a>;
-  if (block) {
-    const p = ndaBlockParts(dev, kind);
-    return <p className="info" data-nda-block={kind}>{withLineLinks(p.before, who, { draw: (t) => t })}{link(p.link)}{p.after}</p>;
-  }
-  return <p className="info" data-nda-notice={kind}>{withLineLinks(dev, who, { draw: (t) => t })} {link(NDA_CHANGED)}</p>;
+  const what = `${NDA_CHANGED}. ${NDA_ACK_TAIL}`; // "changed the NDA. Click here to acknowledge you've seen the change."
+  // The line links to the NDA (the developer's name stays their own green link, §270: a link can't hold another).
+  const toNda = (text: string) => <a href={`#${NDA_INFO}`} data-nda-link="" onClick={(e) => { e.preventDefault(); jumpTo(NDA_INFO); }}>{text}</a>;
+  const acknowledge = () => {
+    setBusy(true);
+    setErr("");
+    api(`/api/sessions/${sessionId}/nda-seen`, {})
+      .then(() => router.refresh())
+      .catch((e) => { setErr(errOf(e)); setBusy(false); });
+  };
+  return (
+    <div id={NDA_NOTICE} className="info scroll-mt-24 space-y-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" data-nda-notice={kind} data-session={sessionId} {...(block ? { "data-nda-block": kind } : {})}>
+      <div className="flex flex-wrap items-center gap-2">
+        <p className="min-w-0">{devHref ? <>{withLineLinks(dev, who, { draw: (t) => t })} {toNda(what)}</> : toNda(`${dev} ${what}`)}</p>
+        <button type="button" className="btn-secondary !px-2 !py-1 text-xs" disabled={busy} onClick={acknowledge} data-nda-ack="">{NDA_ACK_BUTTON}</button>
+      </div>
+      <Err text={err} press={NDA_ACK_BUTTON} />
+    </div>
+  );
 }
