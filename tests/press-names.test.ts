@@ -63,6 +63,8 @@ const NOT_PRESSES: Record<string, string> = {
   "/api/tests/x/invite-search": "the invite panel's lists and name search (a read)",
   "/api/tests/x/invite-restore": "(§173) the invite panel's kept ticks after a reload: who is still invitable (a read)",
   "/api/sessions/x/recording-abandon": "sent by the page after an upload failed, to clear its row (the upload's own refusal is named)",
+  "/api/sessions/x/nda-seen": "(§267) opening the NDA notice (a link; never refused)",
+  "/api/sessions/x/terms-pill": "(§268) the contract box's New terms pill pressed (a link to the offer; never refused)",
   "/api/sessions/x/recording-alive": "sent by the page every 20 s while an upload goes up (§212); never shown, never refused to the tester",
   "/api/account/timezone": "sent by the page when the browser's time zone changes",
   "/api/notifications/read": "sent by the page when the bell's lines are shown",

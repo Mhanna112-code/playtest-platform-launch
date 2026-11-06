@@ -1,6 +1,6 @@
 "use client";
 import { CharacterCount } from "@/components/CharacterCount";
-import { useRef, useState } from "react";
+import { useRef, useState, type ReactNode } from "react";
 import { Star } from "lucide-react";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ConfirmButton } from "@/components/ConfirmButton";
@@ -20,7 +20,7 @@ import { lockText, useSending } from "@/lib/sendLock";
  * short grey line under it; the page's poll updates both as things are decided. `anchor`: the box's id (a developer's page has one per tester: "rate-<contract>").
  * (Batch 35 §40, §41) Rated: the page redraws in place; until it has, the stars and the note are hidden and the button stays greyed with "Rated <name> N of 5.".
  */
-export function RateBox(p: { path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string }) {
+export function RateBox(p: { path: string; seenAt: string; name: string; body?: Record<string, unknown>; headline: string; lines: string[]; working: boolean; disabledLine?: string; anchor?: string; /** (Owner, Nov 5, §268) in the pop-up: the open-terms notice (information only) */ notice?: ReactNode }) {
   const [stars, setStars] = useState("");
   const [comment, setComment] = useState("");
   const { press, changes, error, busy, done, doneLine, finish } = usePress(p.seenAt, undefined, { onFresh: () => { setStars(""); setComment(""); } });
@@ -53,7 +53,7 @@ export function RateBox(p: { path: string; seenAt: string; name: string; body?: 
         <CharacterCount value={comment} max={500} /></span>}
         {p.working ? (
           <ConfirmButton live className="btn-secondary" disabled={busy || !!p.disabledLine} title="Rate and finish?" confirmLabel="Rate and finish" onConfirm={send}
-            body={<>{[p.headline, ...p.lines].map((l) => <p key={l}>{l}</p>)}</>}>
+            body={<>{[p.headline, ...p.lines].map((l) => <p key={l}>{l}</p>)}{p.notice}</>}>
             Rate and finish
           </ConfirmButton>
         ) : (

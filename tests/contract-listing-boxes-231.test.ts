@@ -57,9 +57,9 @@ describe("§231 the shared box for contract and listing texts", () => {
     expect(src("components/ListingInfo.tsx")).toContain('<ValueText id={`${id}-before`} label="Before">{before}</ValueText>');
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain("<ValueText id={`history-${ch.id}-${r.name}-before`}");
-    expect(page).toContain('<NdaBox id={`history-${o.id}-nda-before`} label="Before"');
+    expect(page).not.toContain("history-${o.id}-nda-before"); // (Owner, Nov 5, §266) no "NDA then and now" in Terms history
     expect(page).not.toContain("max-h-32 overflow-y-auto");
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox id={`offer-${offer.id}-nda-offered`} label="Offered"');
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).not.toContain("<NdaBox"); // (Owner, Nov 5, §267) the offer carries no NDA any more
   });
 });
 
@@ -103,11 +103,13 @@ describe("§231 the tester's \"Your agreed scope\"", () => {
   });
 });
 
-describe("(Owner, Nov 5) §233 the questions changed list scrolls as one panel", () => {
-  it("the question blocks sit in one draggable panel", async () => {
+// (Owner, Nov 5, §265; replaces §233) No "The questions changed" list in the offer: each change of the questions is a Terms history entry, its lists in
+// QuestionTexts' own draggable panel.
+describe("(Owner, Nov 5) §233 replaced by §265: the questions changed list is gone from the offer", () => {
+  it("TesterTop has no questions panel; the history entry uses QuestionTexts", async () => {
     const fs = await import("node:fs"); const path = await import("node:path");
     const s = fs.readFileSync(path.resolve(__dirname, "../src/app/app/sessions/[id]/TesterTop.tsx"), "utf8");
-    expect(s).toContain('<ResizeBox id={`offer-${offer.id}-questions`} label="The questions changed"');
-    expect(s.indexOf("<ResizeBox id={`offer-${offer.id}-questions`}")).toBeLessThan(s.indexOf('data-question-changes=""'));
+    expect(s).not.toContain("The questions changed");
+    expect(fs.readFileSync(path.resolve(__dirname, "../src/components/QuestionsHistory.tsx"), "utf8")).toContain("<QuestionTexts id={`${id}-then`}");
   });
 });

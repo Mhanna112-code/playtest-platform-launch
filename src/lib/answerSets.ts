@@ -8,10 +8,11 @@ export type SetItem = { question: string; required: boolean; answer: string };
 /** A previous set: the questions and answers as they were until a switch to changed questions. */
 /** (Owner, Oct 30, batch 15 section 14) One version kept in a previous set: what was sent ("Sent <date>"), or the draft typed after it ("Draft (not sent)"). */
 export type PrevVersion = { kind: "sent" | "draft"; at?: string; items: SetItem[] };
-export type PrevSet = { until: string; items: SetItem[]; versions?: PrevVersion[] };
+export type PrevSet = { until: string; items: SetItem[]; versions?: PrevVersion[]; /** (Owner, Nov 5, §263) the questions it changed to (stored form) */ to?: string[] };
 
-/** At most 3 previous sets (questions have 3 changes). */
-export const MAX_PREV_SETS = 3;
+/** At most 3 previous sets (questions have 3 changes). (Owner, Nov 5, §263) Each is a Terms history entry now ("Questions changed"), so a few more are kept
+ * (a contract can see more changes than one field's 3 when it joined before others were counted). */
+export const MAX_PREV_SETS = 8;
 
 /** The contract's questions (stored with the "not required" marker) as empty set items. */
 export const itemsFor = (questions: string[], answers: string[] = []): SetItem[] =>
@@ -37,14 +38,15 @@ export function itemsOf(stored: unknown, questions: string[] = []): SetItem[] {
 export function prevSetsOf(stored: unknown): PrevSet[] {
   if (!Array.isArray(stored)) return [];
   return stored.flatMap((x) => {
-    const o = (x ?? {}) as { until?: unknown; items?: unknown; versions?: unknown };
+    const o = (x ?? {}) as { until?: unknown; items?: unknown; versions?: unknown; to?: unknown };
     const versions = Array.isArray(o.versions)
       ? o.versions.flatMap((v) => {
           const w = (v ?? {}) as { kind?: unknown; at?: unknown; items?: unknown };
           return w.kind === "sent" || w.kind === "draft" ? [{ kind: w.kind as "sent" | "draft", ...(typeof w.at === "string" ? { at: w.at } : {}), items: itemsOf(w.items) }] : [];
         })
       : undefined;
-    return typeof o.until === "string" ? [{ until: o.until, items: itemsOf(o.items), ...(versions?.length ? { versions } : {}) }] : [];
+    const to = Array.isArray(o.to) ? o.to.filter((q): q is string => typeof q === "string") : null;
+    return typeof o.until === "string" ? [{ until: o.until, items: itemsOf(o.items), ...(versions?.length ? { versions } : {}), ...(to ? { to } : {}) }] : [];
   });
 }
 

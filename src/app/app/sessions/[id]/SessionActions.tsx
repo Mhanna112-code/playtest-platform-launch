@@ -7,7 +7,7 @@ import { DISPUTE_PRESS, PRESS_VERBS, SEND_ANSWERS, refusalLine } from "@/lib/pre
 import { Err } from "@/components/Err";
 import { FormMistakes } from "@/components/FormMistakes";
 import { checkFields } from "@/components/FieldChecks";
-import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { api, ApiError, errOf, FIELD, offerShown } from "@/lib/client";
 import { stopBox, useStopBox } from "@/lib/topStop";
@@ -446,7 +446,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
   return slotEl ? createPortal(boxNode, slotEl) : boxNode;
 }
 
-export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; seenAt: string; title: string }) {
+export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: string; seenAt: string; title: string; /** (Owner, Nov 5, §268) the open-terms notice (information only) */ notice?: ReactNode }) {
   const [err, setErr] = useState("");
   const [box, setBox] = useStopBox();
   const [confirmed, setConfirmed] = useState(false);
@@ -465,11 +465,14 @@ export function LeaveButton({ sessionId, seenAt, title }: { sessionId: string; s
     <div className="space-y-2">
       <ConfirmButton live disabled={fin.done} className="btn-secondary px-3 py-1.5 text-sm text-rose-200" title={`Are you sure you want to leave “${title}”?`} confirmLabel="Leave this test" onConfirm={leave}
         body={(
+          <>
           <ul className="list-disc space-y-1 pl-5">
             <li>What you already sent is still reviewed and paid as usual.</li>
             <li>The parts you haven&apos;t sent close with no pay. Calls ahead are cancelled.</li>
             <li>You can join again later while the test is open: your session comes back.</li>
           </ul>
+          {notice}
+          </>
         )}>
         Leave this test
       </ConfirmButton>

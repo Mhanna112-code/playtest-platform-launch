@@ -583,7 +583,7 @@ export function termsLine(t: Pick<Listing, "writtenCents" | "recordingCents" | "
  */
 export const STOP_ONCE_KINDS = ["joined", "left", "sent", "booked", "confirmed", "cancelled", "offered", "removed"] as const;
 export const CALL_KINDS = ["booked", "confirmed", "cancelled", "offered", "removed"] as const;
-export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the test page's Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save that line is about (its record's time): See it marks that Save's fields only */ saveAt?: Date; /** (Batch 35 §34) the panel lines (PanelKey) the listing changes this line covers changed: See it marks them all */ keys?: string[]; /** (Batch 35 §34) a consequence of a listing Save (a re-sent invite): Edit's stop treats it with that Save */ save?: boolean; /** (Batch 35 §68) the piece (submission or call id) a payment line is about: that piece's Dispute stops for it even with Alerts Off */ piece?: string; /** (Batch 35 §78) the developer's own payment (an owed one they paid): a live-box line that never stops their press */ quiet?: boolean; /** (Batch 35 §79) the item (call request, terms offer, invite id) this line is about: a press that answers that item never stops for it */ item?: string; /** (Owner, Nov 3, §160) this line stops the press whatever the Alerts: its box offers no way to turn it off */ forced?: boolean; /** (Owner, Nov 4, §193) a charge about a tester (their Charge, an automatic call charge, the team's dispute-decision charge; never the developer's own payments): it stops every press about that tester once, like a dispute */ charge?: boolean; /** (Owner, Nov 5, §250) the test event this line is (its row id): its identity once a stop box listed it */ eventId?: string; /** (Owner, Nov 5, §250) a line no box listing ever marks seen: it stops each press it applies to (Rate / Leave's open-terms line, §232) */ everyPress?: boolean };
+export type TestEventLike = { kind: string; text: string; createdAt: Date; version?: number | null; /** (Batch 20 section 4) one line per thing in a stop box */ key?: string; /** (Batch 30 §10) the line says its own time ("… edited the listing at 6:55 PM: …") */ timed?: boolean; /** (Batch 30 §12) the join page's NDA changed: its tick clears */ nda?: boolean; /** (Batch 34 §14) the developer's listing change: See it jumps to the test page's Listing panel */ listing?: boolean; /** (Batch 35 §3) the listing Save that line is about (its record's time): See it marks that Save's fields only */ saveAt?: Date; /** (Batch 35 §34) the panel lines (PanelKey) the listing changes this line covers changed: See it marks them all */ keys?: string[]; /** (Batch 35 §34) a consequence of a listing Save (a re-sent invite): Edit's stop treats it with that Save */ save?: boolean; /** (Batch 35 §68) the piece (submission or call id) a payment line is about: that piece's Dispute stops for it even with Alerts Off */ piece?: string; /** (Batch 35 §78) the developer's own payment (an owed one they paid): a live-box line that never stops their press */ quiet?: boolean; /** (Batch 35 §79) the item (call request, terms offer, invite id) this line is about: a press that answers that item never stops for it */ item?: string; /** (Owner, Nov 3, §160) this line stops the press whatever the Alerts: its box offers no way to turn it off */ forced?: boolean; /** (Owner, Nov 4, §193) a charge about a tester (their Charge, an automatic call charge, the team's dispute-decision charge; never the developer's own payments): it stops every press about that tester once, like a dispute */ charge?: boolean; /** (Owner, Nov 5, §250) the test event this line is (its row id): its identity once a stop box listed it */ eventId?: string };
 
 /** Events since the page's "seen" marker that stop a press once, oldest first. */
 export function stopOnceChanges(events: TestEventLike[], seenAt: Date, kinds: readonly string[] = STOP_ONCE_KINDS) {
@@ -1303,8 +1303,8 @@ export const SENT_ANSWERS_LOCKED = "Your answers were already sent, so they can'
 export const SENT_RECORDING_LOCKED = "Recordings you sent can't be removed. You can add more.";
 export const NOTHING_TO_ADD = "Write something or attach a file to add.";
 export const NO_RECORDING_TO_ADD = "Upload or record a recording to add first.";
-/** (Batch 35 §136) Adding to written answers that were sent for questions since changed: the new questions are answered instead (their answers are added). */
-export const ANSWER_NEW_QUESTIONS = "Your questions changed: send your answers to the new questions, and they're added under what you sent.";
+/** (Owner, Nov 5, §265; replaces §136's ANSWER_NEW_QUESTIONS refusal) The bell line when a Save changed a working tester's questions, in the listing's words. */
+export const questionsUpdatedLine = (dev: string) => `${dev} updated the listing: questions`;
 
 /** (Owner, Oct 28, batch 20 section 16) An admin account never gets a developer or tester side. */
 export const ADMIN_ONLY_LINE = "An admin account is only for the admin console. To post or test, use a separate account.";
@@ -1623,7 +1623,7 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
     else out.push(`live call ${whole(a.liveRateCents)}/h → ${whole(b.liveRateCents)}/h`);
   }
   if (a.deadlineDays !== b.deadlineDays) out.push(`${a.deadlineDays} → ${b.deadlineDays} days`);
-  if (JSON.stringify(a.questions) !== JSON.stringify(b.questions)) out.push("questions changed");
+  // (Owner, Nov 5, §265) No "questions changed": the questions follow the listing (a Save writes them into every working contract), never a Switch / Keep term.
   // (5) A changed NDA is always a new offer the tester accepts, never applied silently.
   if ((a.ndaText ?? "") !== (b.ndaText ?? "")) out.push(!(a.ndaText ?? "") ? "added an NDA" : !(b.ndaText ?? "") ? "removed the NDA" : "NDA changed");
   // (NEWEST+10) The Required label is part of the terms.
@@ -1632,6 +1632,15 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
   req(a.recordingRequired, b.recordingRequired, "the recording", b.recordingCents != null);
   req(a.liveRequired, b.liveRequired, "the live call", b.liveRateCents != null);
   return out.join(", ");
+}
+
+/**
+ * (Owner, Nov 5, batch 35 §266) An offer's diff as Terms history lists it: only the fields limited to 3 changes (parts and prices, with their Required ticks;
+ * questions, for offers made before §265). The NDA and the deadline are left out; null when nothing limited is left (the offer gets no entry).
+ */
+export function limitedTermsDiff(diff: string): string | null {
+  const parts = diff.split(", ").filter((p) => p && !/NDA/.test(p) && !/^\d+ → \d+ days$/.test(p));
+  return parts.length ? parts.join(", ") : null;
 }
 
 /** Switching never moves the tester's deadline earlier; it moves later if the new days give more time. */
@@ -1882,12 +1891,7 @@ export function checkExtraPay(amountCents: number | null, tickedCents: number | 
   return payTicks(amountCents, tickedCents, over200);
 }
 
-/**
- * (Owner, Oct 28, batch 18 section 8) The tester's Switch / Keep box when the questions changed. Answers already sent keep the price they were sent at (`sent`, the
- * written part; nothing sent yet: only the first sentence; a part that wasn't listed: no price).
- */
-export const switchQuestionsLine = (sent: { agreedCents: number | null } | null | undefined) =>
-  `Switching means answering the new questions: your answers to them are added under what you sent.${!sent ? "" : sent.agreedCents != null ? ` Answers you already sent stay payable at ${money(sent.agreedCents)}.` : " Answers you already sent stay payable."}`;
+// (Owner, Nov 5, §265) switchQuestionsLine (batch 18 §8, "Switching means answering the new questions…") is gone: no offer carries questions any more.
 
 // ---------- (Batch 18 section 9, replaced by batch 21 section 2) Calls in progress ----------
 // A pause (any cause), a block, a suspension of either side, a leave, End early or a Stop ends a call in progress at that moment, on the server (both rooms hang up;

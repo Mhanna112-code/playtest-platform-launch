@@ -32,14 +32,12 @@ describe("long questions and steps (sections 3 and 17)", () => {
     expect((await sact(sessionId, "written", tester.cookie, { answers: qs.map((_, i) => `answer ${i}`) })).status).toBe(200);
     const sub = await db.submission.findFirstOrThrow({ where: { contractId: sessionId } });
     expect(itemsOf(sub.answers).map((x) => x.question.length)).toEqual(Array(20).fill(20_000));
-    // Switched: the developer changes Q2; the tester switches; the earlier set is kept in full.
+    // The developer changes Q2; (Owner, Nov 5, §265; was an offer and Switch) the tester's contract follows at once; the earlier set is kept in full.
     const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
     const next = [...qs];
     next[1] = "Q2 changed " + "y".repeat(19_000);
     const e = await act(testId, "edit", dev.cookie, { version: t.version, seenAt: seen(), confirmed: true, fields: { questions: next } });
-    expect(e.body).toMatchObject({ offered: 1 });
-    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId, status: "open" } });
-    expect((await sact(sessionId, "terms", tester.cookie, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true })).status).toBe(200);
+    expect(e.body).toMatchObject({ offered: 0 });
     const after = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(prevSetsOf(after.prevSets)[0].items.map((x) => x.question.length)).toEqual(Array(20).fill(20_000));
     // The sent set still answers its own (old) questions, in full.

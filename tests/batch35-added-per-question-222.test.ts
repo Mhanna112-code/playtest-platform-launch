@@ -233,7 +233,7 @@ describe("§223 Your written answers: each question and its answer in draggable 
 
   it("the developer's views draw the same component (Needs you, the update row, the tester rows, the team's See the work)", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page.match(/<SentWork /g)).toHaveLength(4); // (§234) and the Past questions box
+    expect(page.match(/<SentWork /g)).toHaveLength(3); // (Owner, Nov 5, §263) no Past questions box any more
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
     const dev = draw("row-s1");
     expect(dev).toContain(`data-panel="row-s1-q-${K1}-answer"`);
@@ -276,8 +276,9 @@ describe("§223 widened: one look for questions and answers everywhere they are 
     // A phone (375 px): the tester's name sits above the answer there, beside it from sm up (no fixed 8rem column squeezing the box).
     expect(bq).toContain('className="flex flex-col gap-1.5 py-2.5 text-sm sm:flex-row sm:gap-3"');
     const top = src("app/app/sessions/[id]/TesterTop.tsx");
-    expect(top).toContain("<QuestionText id={`offer-${offer.id}-${key}-before`}"); // (§242) only changed questions, each a drop-down
-    expect(top).toContain("<AnswerText id={`offer-${offer.id}-${key}-answer`}");
+    // (Owner, Nov 5, §265) No questions block in the offer; Terms history's questions entries use the same boxes (QuestionTexts, SentAnswer / AnswerText).
+    expect(top).not.toContain("<QuestionText");
+    expect(src("components/QuestionsHistory.tsx")).toContain("<AnswerText id={`${id}-then-${i}-answer`} empty />");
     expect(src("app/admin/DisputeWork.tsx")).toContain("<SentWork ");
   });
 });

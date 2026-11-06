@@ -200,23 +200,24 @@ describe("batch 35 §29: labels apart from values wherever listing or contract f
     const scope = s.slice(s.indexOf('<details className="card scroll-mt-24" id="scope"'), s.indexOf("{/* (Design doc 9) The terms history"));
     expect(scope).toContain("<FieldLabel>{x.name}</FieldLabel>");
     expect(scope).toContain("<QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />"); // (§231)
-    expect(scope).toContain("<FieldLabel>NDA</FieldLabel>");
+    expect(scope).toContain(">NDA</FieldLabel>"); // (§267) in the listing information now, with its Updated tag
     expect(scope).toContain("<FieldLabel>Due</FieldLabel><FieldValue>{fmtDate(c.dueAt)}</FieldValue>");
-    expect(scope).toContain('<FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>');
-    expect(scope).toContain('<ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>'); // (§231)
+    // (Owner, Nov 5, §264) A listing line is drawn by one helper (infoItem), in "Your contract" (four lines) and in the listing information.
+    const item = s.slice(s.indexOf("const infoItem = "), s.indexOf("const CONTRACT_INFO = "));
+    expect(scope.match(/\.map\(infoItem\)/g)).toHaveLength(2);
+    expect(item).toContain('<FieldLabel tag={l.before != null ? <UpdatedTag id={`scope-info-${c.id}-${l.key}`} when={l.updatedAt ? fmtDateTimeIn(l.updatedAt, u.timeZone) : ""} before={l.before} now={l.now} /> : null}>{l.label}</FieldLabel>');
+    expect(item).toContain('<ValueText id={`scope-info-${c.id}-description`} label="What to do">{c.test.description}</ValueText>'); // (§231)
     // No "Label: value" run together any more.
     expect(scope).not.toMatch(/\{l\.label\}:|\{x\.name\}:|>Questions: <|NDA: none|NDA: accepted|<li>Due \{/);
   });
 
   it("the new-terms offer (Switch / Keep) and the terms history's questions then and now", () => {
-    const top = src("app/app/sessions/[id]/TesterTop.tsx");
-    // (§221) Labels still apart from values: one block per question, each part under its own label.
-    expect(top).toContain("<FieldLabel>Before</FieldLabel>"); expect(top).toContain("<FieldLabel>After</FieldLabel>"); // a side only one has ("(new)" / "(removed)"); (§223, §231) the others in the QA boxes, labelled
-    // (Owner, Nov 5, §259) no visible label over a question; the questions changed' "Before" / "After" still show theirs (showLabel).
-    expect(top).toContain('label="Before" showLabel required={x.before.required}');
-    expect(top).not.toMatch(/>Before: <QuestionList|>After: <QuestionList/);
+    // (Merge, §259 vs §265) The §259 showLabel and §221 Before / After labels went with the offer's questions block §265 removed.
+    // (Owner, Nov 5, §265) The offer has no questions block any more (questions follow the listing); a questions change is its own Terms history entry, its
+    // Then and Now under their labels.
+    expect(src("components/QuestionsHistory.tsx")).toContain("<FieldLabel>Then</FieldLabel>");
+    expect(src("components/QuestionsHistory.tsx")).toContain("<FieldLabel>Now</FieldLabel>");
     const s = src("app/app/sessions/[id]/page.tsx");
-    expect(s).toContain("fromQuestions: ((c.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) })),");
     expect(s).toContain("<FieldLabel>Offered</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-offered`}"); // (§231)
     expect(s).not.toMatch(/>Then: <QuestionList|>Offered: <QuestionList/);
   });

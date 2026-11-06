@@ -246,9 +246,9 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const s = await setup({ questions: ["Q1?", "Q2?", "Q3?"] });
     const j = await joined(s.testId);
     await setKept(j.tester.user.id, `written:${j.sessionId}`, { answers: ["My Q1 draft", "", ""], notes: "" });
+    // (Owner, Nov 5, §265; was an offer and Switch) The tester's contract follows the Save at once.
     expect((await edit(s.testId, s.dev.cookie, { questions: ["Q1?", "Q2 changed?", "Q3?"] })).status).toBe(200);
-    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: j.sessionId, status: "open" } });
-    await decideTerms({ id: j.tester.user.id }, j.sessionId, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true });
+    expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(0);
     const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     const prev = prevSetsOf(c.prevSets);
     expect(prev).toHaveLength(1);
@@ -257,11 +257,11 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const kept = await db.keptForm.findUniqueOrThrow({ where: { userId_key: { userId: j.tester.user.id, key: `written:${j.sessionId}` } } });
     expect((kept.data as { answers: string[] }).answers).toEqual(["My Q1 draft", "", ""]);
     expect(carryOver(prev[0].items, ["Q1?", "Q2 changed?", "Q3?"])).toEqual(["My Q1 draft", "", ""]);
-    // (Owner, Nov 5, §254) No "Previous questions and answers" folds any more (PrevSetFolds is gone): the Past questions box shows what was sent, and an earlier
-    // set's sent answer that no thread holds as one more past question.
+    // (Owner, Nov 5, §254) No "Previous questions and answers" folds any more (PrevSetFolds is gone); (§263, final) each earlier set is a Terms history entry
+    // "Questions changed" (Then, with what the tester had, → Now).
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("PrevSetFolds");
     expect(src("components/AnswerSets.tsx")).not.toContain("export function PrevSetFolds");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("part=\"past\" earlier={earlierSets}");
+    expect(src("app/app/sessions/[id]/page.tsx")).toContain("questionChanges(c.prevSets, writtenQuestions(c), written ?? null, { drafts: true })");
   });
 
   it("sent, then switched: the developer sees it under its own questions, labelled, at its price; (batch 35 §136) the answers to the new set are ADDED under it", async () => {
@@ -273,7 +273,9 @@ describe("batch 13 section 8: whole sets of questions and answers", () => {
     const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: j.sessionId, status: "open" } });
     await decideTerms({ id: j.tester.user.id }, j.sessionId, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true });
     let sub = await db.submission.findFirstOrThrow({ where: { contractId: j.sessionId, kind: "written" } });
-    expect(sub.setUntil).not.toBeNull();
+    // (Owner, Nov 5, §265) No "Sent for the questions until" mark any more: the questions followed the Save (the offer was for the price only).
+    expect(sub.setUntil).toBeNull();
+    expect(offer.diff).not.toContain("question");
     expect(sub.agreedCents).toBe(1000);
     expect(itemsOf(sub.answers).map((x) => x.question)).toEqual(["Q1?", "Q2?"]);
     expect(src("app/app/tests/[id]/page.tsx")).toContain("Sent for the questions until {fmtDate(x.s!.setUntil)}");
@@ -309,10 +311,12 @@ describe("batch 13 section 9: long text", () => {
     expect(f).toContain('<LineList box="questions" text={f.questions} max={LIMITS.question}');
     expect(f).toContain("maxLength={LIMITS.nda}");
     expect(src("components/NdaBox.tsx")).toContain("<ValueText id={id}"); // (§231) the shared box for contract and listing texts, 12rem at first
-    for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx", "app/app/sessions/[id]/TesterTop.tsx"]) expect(src(p)).toContain("<NdaBox");
+    // (Owner, Nov 5, §267) The offer box no longer shows an NDA (it follows the listing): the join page and the session page keep the box.
+    for (const p of ["app/app/find/[id]/JoinBox.tsx", "app/app/sessions/[id]/page.tsx"]) expect(src(p)).toContain("<NdaBox");
     expect(f).not.toContain("<NdaBox"); // (batch 16 section 8) no "How testers see it" preview on Post / Edit
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox id={`offer-${offer.id}-nda-before`} label="Before"');
-    // (Owner, Nov 5, §259) no visible label over a question; the questions changed' "Before" / "After" still show theirs (showLabel).
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('label="Before" showLabel required={x.before.required}'); // (batch 15 section 3; batch 35 §29 numbered)
+    // (Merge, §259 vs §265) The §259 showLabel on the offer's Before / After went with the block §265 removed.
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).not.toContain("<NdaBox");
+    // (Owner, Nov 5, §265) No questions block in the offer any more: each change of the questions is a Terms history entry (QuestionTexts there).
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).not.toContain("x.before");
   });
 });

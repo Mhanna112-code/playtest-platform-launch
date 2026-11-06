@@ -4694,3 +4694,102 @@ line. A refused press's line still goes to the top of the box at once (§207); t
 The trim box stays delete-only (§196), with one exception: typing, at the caret, the very next character of the answer that was left out there restores it (and
 the next, in order). Any other typing, pasting or dropping is still refused, so the excerpt is always the answer's own words (the server's check is unchanged).
 The hint reads "… you can only leave words out (deleted something by accident? Type it back where it was)." `insertedRange` / `restoreAt` in lib/excerptTrim.ts.
+
+## §263 Old questions live in Terms history (owner, Nov 5; final; replaces §234's Past questions box, §254's earlier-set answers in it, and the earlier §263 drafts)
+The bug: bb added to question "3" after the developer's last payment; the developer changed "3" and bb switched. The addition vanished from Needs you (it never
+showed a past question) and from the Testers list's Past questions box (drawn as paid), so an unpaid answer was invisible to the developer.
+- One rule, by the question's words: a question is current for a tester when it is in their contract's questions now (`currentQuestionsFor` in lib/additions.ts,
+  the one place that says it; lib/server/tests.ts `writtenQuestions` is it), otherwise it is old (`isPastQuestion`).
+- The answer lists show the current questions only, on both sides: the tester's "Your written answers" and the form; the developer's Testers list (as paid,
+  §226) and By question (`answersByQuestion(…, current)`: an old question's additions stay out of Anything else too). PastQuestions.tsx, `pastCount`,
+  `pastThreads`, `earlierSent` and SentWork's `part` / `earlier` are gone.
+- Terms history has an entry for every change of the questions: "Questions changed <date/time>", then a "Then and now" drop-down: Then is the questions as they
+  were, each its own drop-down (QA.tsx QuestionTexts: "Questions (N)" in a draggable scroll panel, the question box and the answer boxes resizable), with what
+  this tester had for it at that moment: the sent answer and each addition up to the change; otherwise the unsent draft, "Draft (not sent)"; otherwise
+  "(no answer)". Now is the questions after it. Built by `questionChanges` (lib/questionHistory.ts) from the contract's earlier sets (`Contract.prevSets`), which
+  a change already writes: the questions then, the "sent" version and the "draft" version (the draft snapshot). A change now always keeps its set (it was kept
+  only when something was answered) and records `to` (the questions after). At most 8 sets are kept (was 3). No migration.
+- Attachments: answers are drawn with SentWork's renderer (`SentAnswer`: file markers inline from the part's uploads by id), so a file still opens from the
+  entry after its question changed (the files are kept while an earlier set names them, recordings.ts). On the tester's side the files also include their
+  uploaded, unsent ones (a draft's).
+- The developer: the same entries under each tester's written answers in the Testers list ("Terms history" drop-down), built without drafts: never a draft's
+  text or files.
+- Needs you: a new, unpaid answer or addition to a question that has since changed still shows (after the current ones, read-only), with a small "Old" tag
+  beside the question, the developer's only "old" marker. Pay / Pay more covers it as before (the paid cut and the update row are times, never questions); once
+  paid it is only in Terms history.
+- A question changed back to earlier words is simply current again: answered, its thread is back in the list with its answer and additions, and Add to this
+  answer works (after the Send that moves the part onto the current questions, §235); never answered, it is a box in the form, and a draft snapshotted for it at
+  an earlier change is put back into the kept draft (terms.ts, on the change). `carriedAnswers` reads each question's last sent answer by its words over
+  everything sent (a thread's `latest`), so a question that comes back is never asked again. The history entries stay as they were.
+- The switch's offer entry in Terms history drops its own "Questions then and now" when the change has its "Questions changed" entry (the same moment).
+
+## §264 "Your agreed scope": four listing lines under "Your contract" (owner, Nov 5)
+What to do (the description), the Build link, Languages and Devices moved from "The listing information" into "Your contract", below Due, in that order. They keep
+their live behaviour (the current listing value, "Updated <time>" with before → now, the shared ValueText boxes for long text) and their `data-info-line`, so the
+top box's See it still opens #scope and marks them (it looks inside the whole box). One helper draws a listing line in both places (`infoItem` on the session
+page). The sentence under them reads "Agreed <date>. Your contract stays as it is: if <dev> changes these terms later, you choose Switch or Keep. What to do, the
+build link, languages and devices are the exception: they follow <dev>'s changes, marked Updated." The other listing lines (title, product, Mature) stay below.
+The developer's own Listing panel is one list and is unchanged.
+
+## §265 Questions follow the listing; old means not in the listing (owner, Nov 5; replaces the questions part of Switch / Keep: batch 13's previous sets on a switch, batch 18 §8's switching wording, §221 / §233 / §242 / §258's questions-changed block)
+- `Contract.questions` stays "this tester's questions" (read through `currentQuestionsFor`, §263), but a Save that changes the questions now writes the listing's
+  questions into every working contract of the test, in the Save's own transaction (`followQuestions` in lib/server/terms.ts, called from the Save in
+  lib/server/tests.ts). That is the one place that keeps them in step, so "old" (not in the contract) means "not in the listing" for the tester and the developer
+  alike. A contract that already differs from the listing (an offer kept before §265) is brought in line on the next Save that changes the questions. No
+  migration rewrites data.
+- Each change keeps the earlier set (§263's Terms history entry, with `to` and the "sent" / "draft" versions: the draft snapshot) and fixes the kept draft: boxes
+  typed for questions still asked stay, a returning question's snapshotted draft comes back. A Required tick alone is written into the contract with no entry.
+  No "Sent for the questions until" mark any more (a part marked before §265 keeps its note and its Send).
+- No offer carries questions: they're not in `termsDiff` or the Save's terms, so a Save that changes only the questions makes no Switch / Keep offer; an
+  offer for other terms (prices, parts, NDA, deadline) is made as before, its `questions` the contract's own. Switch never writes `Contract.questions` (an older
+  open offer can't put stale questions back). TesterTop's questions-changed block, `switchQuestionsLine` and `ANSWER_NEW_QUESTIONS` are gone; the
+  per-field limit of 3 question changes is unchanged.
+- The tester is told as for listing information: the questions in "Your contract" carry "Updated <time>" (before → now, the latest change since joining) and
+  `data-info-line="questions"` (the top box's See it marks them); the top box's line names "questions" (they're in INFO_FIELDS now); and a bell line in the
+  listing's words, "<developer> updated the listing: questions", linking to #scope.
+- Adding to an answered current question works straight away, by its words, whatever set it was sent in (`addRefusal` / `addWritten` read the contract's
+  questions and `carriedAnswers`, not the latest set sent); an old question is refused (QUESTION_GONE). Needs you's "Old" tag (§263) is the only old marker.
+- Required: a new required question is a box under "Questions you haven't answered yet" and required at the tester's next Send only (`answersMissing` checks the
+  form's own questions). It never touches what was sent: Pay, Pay more, Charge and reviews never check questions.
+- Price: answers sent to a question that is now old stay payable at the part's agreed price, `Submission.agreedCents` (set at the first Send; while unpaid each
+  later Send re-prices it to the contract's written price; after a Pay it stays). (The "sent at $X" beside an old-question tag was dropped with §263's final
+  form, which removed the tag from the answer lists.)
+
+## §266 Terms history shows only the limited fields (owner, Nov 5)
+Terms history keeps only changes to the fields limited to 3 changes (CRITICAL_FIELDS in lib/limits.ts: what to do, questions, languages, devices, build link,
+parts and prices), on the tester's session page and on the developer's per-tester history (§263, which only ever holds questions entries).
+- Kept: the joined line ("<date>: you joined on …", its "and accepted the NDA" tail too: it isn't an NDA change line); "Test stopped" with its reason; §263's
+  "Questions changed" entries; the listing-information entries limited to what to do, the build link, devices and languages (`limitedHistoryRows`); offers,
+  each listing only its limited changes (`limitedTermsDiff`: parts, prices and Required ticks; "questions changed" on an offer made before §265); the payment
+  lines (not a field change, left as they were).
+- Left out: title and product name (the "Renamed" contract notes), categories, Mature and its reason, Open until, spots, the deadline, and the NDA (the offers'
+  "NDA then and now" and any NDA part of an offer's diff). An offer that changed only fields left out (e.g. only the NDA) gets no entry.
+
+## §267 The NDA is a listing change with its own notice; adding or removing one blocks until seen (owner, Nov 5)
+- Like the questions (§265): a Save that adds, removes or changes the NDA copies it into every working contract in the Save's transaction (`followNda` in
+  lib/server/terms.ts), recording the change's kind and time on the contract (`ndaChangeKind`, `ndaChangedAt`). The NDA is no longer a term: a Save that
+  changes only it makes no Switch / Keep offer (an offer carries the contract's own NDA), and Switch never writes the NDA (or its acceptance) back, so an older
+  open offer can't either. The offer box's NDA Before / Offered is gone. Terms history already leaves NDA lines out (§266).
+- Its own notice, apart from "updated the listing": the bell line "<developer> changed the NDA" (emailed as bell lines are), linking to
+  `/app/sessions/<id>?nda=open#info-nda`; at the top of the session page "<developer> changed the NDA" with "changed the NDA" as the link (NdaNotice); and an
+  ordinary stop-once line for presses whose page hadn't shown it (testerChanges, kind "nda": Alerts on only). The link (here, the bell's, a refusal's) records
+  `Contract.ndaNoticeSeenAt` (action "nda-seen"), brings the NDA line into view and marks it. An added NDA opened this way counts as read: "Accepted <date>" on
+  its line and the developer's "NDA accepted" badge.
+- The NDA line moved from "Your contract" into "The listing information" (`id="info-nda"`, `data-info-line="nda"`, with "Updated <time>" when it changed since
+  joining, the text in its NdaBox, or "None").
+- The block (`ndaBlocked`, lib/ndaNotice.ts): an ADDED or REMOVED NDA whose notice wasn't opened refuses every press of the tester's on that test (the session
+  route's presses: Send Answers, Add to this answer, recordings, calls and requests, Charge / Let it go, disputes, Switch / Keep, messages; and calls through
+  `answerTermsFirst`) with one line in the blue notice (§213's look) whose link opens the notice: "<developer> added an NDA to this test: read it before you go
+  on" / "<developer> removed the NDA from this test: see the change before you go on". The page shows the same line as a banner at the top. Rate and Leave are
+  never blocked (§268), nor an upload already under way. Opening the notice lifts it. A changed text only notifies (the owner's rule; adding "changed" to
+  `BLOCKING_KINDS` would extend it). A tester who joins after the change accepts the NDA at join as before and is never blocked (their contract records no change).
+- The developer's side is unchanged apart from no offer being made for an NDA change. Migration 20261120090000_nda_notice_terms_pill (hand-written, columns only).
+
+## §268 Rate and Leave follow the ordinary stop-once rule; the contract box's "New terms" pill (owner, Nov 5; replaces §232)
+- §232's special stop for Rate and Leave (`openOfferMoment`, `everyPress`: "…, or rating / leaving closes them unanswered", even when shown) is gone. Rate and
+  Leave follow the ordinary testerGate rule for new terms and an NDA change (`ordinaryTerms`): they stop once only with Alerts on, and only when the change came
+  before what the page (or its live pill) showed; with Alerts Off an offer never stops them. The NDA block (§267) never applies to them.
+- Their pop-ups show a small blue notice while new terms are open, information only: "<developer> offered new terms you haven't answered: rating (leaving)
+  closes them unanswered." with "See the new terms" (to the offer box). No notice without an open offer.
+- While an offer is open, "Your agreed scope" carries a "New terms" pill (the look of the other update pills) that stays across reloads until pressed; pressing
+  it records it on the offer (`TermsOffer.pillPressedAt`) and brings the new terms into view. A newer offer brings it back. It's separate from the live pill.

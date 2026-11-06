@@ -116,8 +116,8 @@ describe("the developer's view: a fold per question", () => {
 
   it("every place the developer reads a written part passes its fold ids and zone; By question puts an addition under its question", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    // (Owner, Nov 5, §234) Each with its part: the current questions (the past ones in the Testers list's Past questions box).
-    for (const id of ["needs-${x.s!.id}", "update-${x.id}", "row-${r.sub.id}"]) expect(page).toMatch(new RegExp(`<SentWork id=\\{\`${id.replace(/[$!{}.]/g, (m) => `\\${m}`)}\`\\} part=\\{[^}]+\\} timeZone=\\{u\\.timeZone\\}`));
+    // (Owner, Nov 5, §263, final; was §234's part) The current questions (Needs you also a new answer to an old one, tagged Old).
+    for (const id of ["needs-${x.s!.id}", "update-${x.id}", "row-${r.sub.id}"]) expect(page).toMatch(new RegExp(`<SentWork id=\\{\`${id.replace(/[$!{}.]/g, (m) => `\\${m}`)}\`\\}(?: earlier=\\{[^}]+\\})? timeZone=\\{u\\.timeZone\\}`));
     expect(src("app/admin/DisputeWork.tsx")).toContain("timeZone={work.timeZone}");
     expect(src("lib/server/adminLists.ts")).toContain("timeZone: dateZone(), subId: s.id");
     const b = answersByQuestion({ answers: [item(Q1, "a"), item(Q2, "b")], notes: "n", additions: [{ at: at1, text: "more on Q2", files: [], questionKey: questionKey(Q2) }, { at: at2, text: "general", files: [] }] }, [], (at) => fmtStampIn(at, "UTC"));

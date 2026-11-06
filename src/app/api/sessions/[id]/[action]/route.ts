@@ -5,7 +5,7 @@ import { sendMessage } from "@/lib/server/messages";
 import { abandonUpload, finishRecording, sendRecording, removeRecording, startRecording, uploadAlive } from "@/lib/server/recordings";
 import { chooseOutcome } from "@/lib/server/holds";
 import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
-import { PART_ENDED_TERMS, closeOffersOfEnded, decideTerms } from "@/lib/server/terms";
+import { PART_ENDED_TERMS, closeOffersOfEnded, decideTerms, ndaBlockFirst } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
 import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
@@ -17,6 +17,8 @@ import { testerGate } from "@/lib/server/testerGate";
 import { addWritten, leaveTest, sendWritten } from "@/lib/server/tests";
 import { requireActive, requireConfirmed } from "@/lib/server/users";
 
+/** (Owner, Nov 5, §267 / §268) The presses the NDA block never stops: Rate and Leave, opening the notice or the terms pill, and an upload already under way. */
+const NDA_FREE = new Set(["rate", "leave", "nda-seen", "terms-pill", "dismiss-removed", "recording-alive", "recording-abandon", "recording-done"]);
 // (Owner, Oct 27) No press on a session needs a confirmed email any more (only Post a test, Join, Apply and accepting an invite do).
 const NEEDS_CONFIRMED = new Set<string>();
 import { maybePromptRating, testerRate } from "@/lib/server/ratings";
@@ -133,6 +135,8 @@ export async function POST(req: Request, { params }: Ctx) {
     if (NEEDS_CONFIRMED.has(action)) requireConfirmed(u);
     await finalRefusal(u.id, id, action, body);
     await pausedRefusal(u.id, id, action);
+    // (Owner, Nov 5, §267) An added or removed NDA whose notice wasn't opened blocks every press here but Rate and Leave (§268), opening the notice and the pill.
+    if (!NDA_FREE.has(action)) await ndaBlockFirst(id);
     // (Batch 17 section 12; batch 29 section 11) A press on a page opened before the test stopped, closed, paused or this tester's work ended: it stops once with that
     // as the change (the second press goes ahead).
     await stateMoment(id, action, body);
@@ -149,6 +153,22 @@ export async function POST(req: Request, { params }: Ctx) {
 async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, action: string, body: Record<string, unknown>) {
   {
     switch (action) {
+      // (Owner, Nov 5, §267) The NDA notice opened (its link, or the bell's): seen from now, which lifts an added or removed NDA's block.
+      case "nda-seen": {
+        const c = await db.contract.findUnique({ where: { id }, select: { testerId: true, ndaText: true, ndaAcceptedAt: true } });
+        if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+        // An added NDA opened through its notice counts as read and accepted ("Accepted <date>" on its line, the developer's "NDA accepted" badge).
+        const now = new Date();
+        await db.contract.update({ where: { id }, data: { ndaNoticeSeenAt: now, ...(c.ndaText && !c.ndaAcceptedAt ? { ndaAcceptedAt: now } : {}) } });
+        return ok({ seen: true });
+      }
+      // (Owner, Nov 5, §268) The contract box's "New terms" pill pressed: it stays gone for this offer (a newer offer brings it back).
+      case "terms-pill": {
+        const c = await db.contract.findUnique({ where: { id }, select: { testerId: true } });
+        if (!c || c.testerId !== u.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+        await db.termsOffer.updateMany({ where: { contractId: id, status: "open", pillPressedAt: null }, data: { pillPressedAt: new Date() } });
+        return ok({ pressed: true });
+      }
       case "leave":
         return ok(await leaveTest(u, id, body));
       case "dismiss-removed": {

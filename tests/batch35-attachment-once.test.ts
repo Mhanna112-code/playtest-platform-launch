@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from "vitest";
 import { AttachmentList } from "@/components/AttachmentList";
 import { AnswerWithAttachments, SetView } from "@/components/AnswerSets";
 import { SentWork } from "@/components/SentWork";
+import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
 import { DisputeWork } from "@/app/admin/DisputeWork";
 import { attachmentMarker, markerIds } from "@/lib/answerAttachments";
 
@@ -63,25 +64,25 @@ describe("§115: a file placed inline is not listed again", () => {
     const list = html.slice(html.indexOf('<ul'));
     expect(list).not.toContain(href(image.id)); expect(list).toContain(href(file.id));
   });
-  // (Owner, Nov 5, §254; was PrevSetFolds' "Sent" version) An earlier set's sent answer no thread holds is a past question in the Past questions box, its file inline.
+  // (Owner, Nov 5, §254; was PrevSetFolds' "Sent" version) (§263, final) An earlier set's sent answer is in its Terms history entry, its file inline (SentAnswer).
   it("previous sent sets keep their file inline and a current set does not hide an unplaced file", () => {
-    const now = [{ question: "What now?", answer: "The new answer", required: true }];
-    const html = render(h(React.Fragment, null, h(SentWork, { id: "past", part: "past", kind: "written", answers: now, questions: ["What now?"], notes: "", additions: [], files: uploads.map((f) => ({ ...f, uploadedAt: new Date() })), earlier: [items] }), h(AttachmentList, { items: uploads, inlineText: ["The new answer"] })));
-    expect(html).toContain('data-question-title="">What happened?');
+    const change = { at: "2026-11-05T10:00:00.000Z", then: [{ question: "What happened?", required: true, sent: { answer: items[0].answer, adds: [] }, draft: null }], now: [{ question: "What now?", required: true }] };
+    const html = render(h(React.Fragment, null, h(QuestionsChangedEntry, { id: "past", change, files: uploads.map((f) => ({ ...f, uploadedAt: new Date() })) }), h(AttachmentList, { items: uploads, inlineText: ["The new answer"] })));
+    expect(html).toContain("What happened?");
     expect(html).toContain(`<img src="${href(image.id)}"`);
-    expect(html.slice(html.indexOf('<ul'))).toContain(href(image.id));
+    expect(html.slice(html.lastIndexOf('<ul'))).toContain(href(image.id));
   });
   it("the developer's unpaid and paid views, and the tester's sent view, pass their actual rendered answers to the list", async () => {
     const f = await setup(), j = await joined(f.testId);
     const sub = await db.submission.create({ data: { contractId: j.sessionId, kind: "written", agreedCents: 1000, answers: items, notes: "", payBy: new Date(Date.now() + 7 * 86400000) } });
+    // (Owner, Nov 5, §263) The answers lists show the tester's current questions only: the contract asks "What happened?".
+    await db.contract.update({ where: { id: j.sessionId }, data: { questions: ["[required] What happened?"] } });
     for (const upload of uploads) await db.recording.create({ data: { ...upload, contractId: j.sessionId, submissionId: sub.id, storageKey: randomUUID(), part: "written", uploadedAt: new Date() } });
     auth.user = await db.user.findUniqueOrThrow({ where: { id: f.dev.user.id } });
     const { default: TestPage } = await import("@/app/app/tests/[id]/page");
     const unpaid = render(await TestPage({ params: Promise.resolve({ id: f.testId }), searchParams: Promise.resolve({}) }));
-    // (Owner, Nov 5, §234) "What happened?" isn't one of the contract's questions: a past question, shown once, in the Testers list's Past questions box (never
-    // in Needs you), and never listed again.
-    expect(unpaid.split('<details id="by-question"')[0].match(/<img [^>]*alt="screen.png"/g)).toHaveLength(1);
-    expect(unpaid).toContain("data-past-questions=");
+    // Unpaid: in Needs you and in the Testers list, its image inline in each, and never listed again.
+    expect(unpaid.split('<details id="by-question"')[0].match(/<img [^>]*alt="screen.png"/g)).toHaveLength(2);
     expect(unpaid).toContain(href(file.id));
     await db.review.create({ data: { contractId: j.sessionId, submissionId: sub.id, amountCents: 1000, agreedCents: 1000, payKey: randomUUID() } });
     await db.payment.create({ data: { kind: "review", contractId: j.sessionId, submissionId: sub.id, developerId: f.dev.user.id, testerId: j.tester.user.id, amountCents: 1000, feeCents: 200, testerCents: 800, status: "charged" } });

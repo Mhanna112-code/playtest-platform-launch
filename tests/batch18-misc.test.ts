@@ -9,7 +9,6 @@ import { bellKey } from "@/lib/bell";
 import { seatsOverflow } from "@/app/app/tests/[id]/TestersJoined";
 import { json, req } from "./helpers";
 import * as M from "@/lib/callMeasure";
-import { switchQuestionsLine } from "@/lib/rules";
 import * as X from "@/lib/server/excerpts";
 import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 
@@ -139,11 +138,10 @@ describe("batch 18 section 7: excerpts always name the test; a pending one can b
   });
 });
 
-describe("batch 18 section 8: switching to changed questions", () => {
-  it("the Switch / Keep box says the new questions need answers and what was sent stays payable at its price", () => {
-    expect(switchQuestionsLine({ agreedCents: 1000 })).toBe("Switching means answering the new questions: your answers to them are added under what you sent. Answers you already sent stay payable at $10.00.");
-    expect(switchQuestionsLine(null)).toBe("Switching means answering the new questions: your answers to them are added under what you sent.");
-    expect(src("app/app/sessions/[id]/page.tsx")).toContain("switchNote: switchQuestionsLine(written),");
-    expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain("{offer.switchNote && <p className=\"mt-1\" data-switch-questions=\"\">{offer.switchNote}</p>}");
+// (Owner, Nov 5, §265; replaces batch 18 section 8) No offer carries questions any more (they follow the listing), so no Switch wording about them.
+describe("batch 18 section 8 (replaced by §265): no Switch wording about questions", () => {
+  it("the offer box has no questions note", () => {
+    expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("switchQuestionsLine");
+    expect(src("app/app/sessions/[id]/TesterTop.tsx")).not.toContain("data-switch-questions");
   });
 });

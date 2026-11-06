@@ -42,8 +42,8 @@ describe("each tester folds by their name", () => {
     expect(end).toBeGreaterThan(fold);
     expect(r.slice(fold, fold + 1400)).toContain("<NameLink fit text={name} href={personHref} /></h3>"); // the name heads the toggle (§166: the green profile link; §199: fitted)
     const inside = r.slice(fold, end), summary = r.slice(end);
-    // (Owner, Nov 5, §254) No "<PrevSetFolds" in the Past questions box any more: SentWork part="past" with the earlier sets' answers.
-    for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', 'part="past" earlier={earlier}']) expect(inside).toContain(s);
+    // (Owner, Nov 5, §254) No "<PrevSetFolds" any more; (§263, final) the tester's Terms history for the questions sits under the written answers.
+    for (const s of ['data-parts-sent=""', "<SentWork ", 'data-calls-fold={c.id}', "data-dev-terms-history={c.id}"]) expect(inside).toContain(s);
     expect(inside).not.toContain("<PrevSetFolds");
     // (Owner, Nov 4, §195) No "Paid in all:" in the summary: the paid so far is on the right of the name row (the fold's heading); the calls line stays.
     for (const s of ['data-tester-calls=""', "rated you:", "rateBoxOf(c)", "/app/chat/${c.id}"]) expect(summary).toContain(s);

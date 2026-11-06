@@ -5,10 +5,6 @@ import { useRouter } from "next/navigation";
 import { jumpTo } from "@/lib/markJump";
 import { ANSWER_TERMS_EVENT } from "@/lib/answerTerms";
 import { ChangesBox } from "@/components/ChangesBox";
-import { NdaBox } from "@/components/NdaBox";
-import { AnswerText, QuestionText } from "@/components/QA";
-import { FieldLabel } from "@/components/FieldLines";
-import { ResizeBox } from "@/components/Panel";
 import { api, errOf } from "@/lib/client";
 import { pressLabelOf } from "@/lib/pressLabels";
 import { stopBox, useStopBox, type StopBox } from "@/lib/topStop";
@@ -16,15 +12,13 @@ import { useFinished } from "@/lib/usePress";
 import { reloadKeepingPlace } from "@/lib/keepPlace";
 import { PressDone } from "@/components/PressDone";
 
-/** (Batch 35 §29) An offered question as the lists show it: its text, and whether it's required (a small tag). */
-type OfferQuestion = { text: string; required?: boolean };
 
 /**
  * New terms offered (Switch / Keep). Its stop-once box and refusals show directly under these buttons.
  * (Batch 35 §40, §41) Switch / Keep change the terms every part of the page is built on, so the page loads again, keeping its place (a "#…" in the address is
  * dropped first); until then both buttons stay greyed with the result line.
  */
-export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string; ndaText?: string; fromNdaText?: string; questions?: OfferQuestion[]; fromQuestions?: OfferQuestion[]; answers?: string[]; switchNote?: string } | null; devName: string }) {
+export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: string; seenAt: string; offer: { id: string; diff: string } | null; devName: string }) {
   const [box, setBox] = useStopBox();
   const [offerId, setOfferId] = useState(offer?.id ?? "");
   // (Owner, Oct 28, batch 16 section 38A) The offer can arrive while the page is open (a refresh brings it): Switch / Keep always send the offer shown now.
@@ -91,54 +85,9 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
         {devName} updated the listing: {offer.diff}.
       </p>
       <p className="text-xs">Switching applies to work you send from now on; work you&apos;ve already sent keeps its price. Your deadline never moves earlier.</p>
-      {offer.ndaText != null && offer.ndaText !== (offer.fromNdaText ?? "") && (
-        <details className="text-sm" open>
-          <summary className="cursor-pointer font-medium">{offer.ndaText ? "The NDA" : "The NDA is removed"}{offer.fromNdaText ? " (changed)" : ""}: switching means you accept it</summary>
-          {/* (Batch 13 section 9) "Before" and "Offered" as two scroll boxes, never in full. (§231) The shared box for contract texts, like the questions below. */}
-          <div className="mt-1 space-y-2">
-            {offer.fromNdaText && <NdaBox id={`offer-${offer.id}-nda-before`} label="Before" text={offer.fromNdaText} />}
-            {offer.ndaText && <NdaBox id={`offer-${offer.id}-nda-offered`} label="Offered" text={offer.ndaText} />}
-          </div>
-        </details>
-      )}
-      {offer.questions && offer.fromQuestions && JSON.stringify(offer.questions) !== JSON.stringify(offer.fromQuestions) && (
-        <details className="text-sm" open>
-          <summary className="cursor-pointer font-medium">The questions changed: before and after</summary>
-          {/* (Owner, Nov 5, §221; was two numbered lists, Before then After, and the answers run together) One block per question number: its Before, its After and
-              your answer so far, each in its own box that scrolls and drags taller (ResizeBox). A question only one side has says "(new)" or "(removed)". */}
-          {/* (Owner, Nov 5, §233) The whole list of question blocks in its own draggable scroll panel: many questions never stretch the box (each part keeps its own box). */}
-          <div className="mt-2"><ResizeBox id={`offer-${offer.id}-questions`} label="The questions changed" defaultMax="min(26rem, 55vh)" tallest={0.8}>
-          {/* (Owner, Nov 5, §242) Only the questions that actually changed, matched by their words (a removal never makes the ones after it look changed): an
-              edited question (its Before and After), a new one, a removed one (after Switch it moves to Past questions). Unchanged questions aren't listed. Each is
-              its own drop-down, closed: "Question N · Changed / New / Removed" and the start of its words. */}
-          <ol className="space-y-2" data-question-changes="">
-            {questionChanges(offer.fromQuestions, offer.questions).map((x) => {
-              const answer = x.from != null ? offer.answers?.[x.from] ?? "" : "";
-              const key = `${x.from ?? "n"}-${x.to ?? "r"}`;
-              const head = (x.after ?? x.before)!.text;
-              return (
-                <li key={key} data-question-change={x.kind}>
-                  <details className="rounded-lg border border-white/10 p-2">
-                    <summary className="flex cursor-pointer flex-wrap items-baseline gap-x-2 font-medium" data-question-change-summary="">
-                      {/* (Owner, Nov 5, §258) A removed question is numbered as it was, with no "(before)": its Removed tag says it. */}
-                      <span>{`Question ${(x.to ?? x.from!) + 1}`}</span>
-                      <span className="badge text-xs">{x.kind === "changed" ? "Changed" : x.kind === "new" ? "New" : "Removed"}</span>
-                      <span className="min-w-0 flex-1 truncate font-normal text-slate-300">{head}</span>
-                    </summary>
-                    <div className="mt-2 space-y-2">
-                      {x.before ? <QuestionText id={`offer-${offer.id}-${key}-before`} label="Before" showLabel required={x.before.required}>{x.before.text}</QuestionText> : <><FieldLabel>Before</FieldLabel><p className="text-xs text-sky-200/70">(new)</p></>}
-                      {x.after ? <QuestionText id={`offer-${offer.id}-${key}-after`} label="After" showLabel required={x.after.required}>{x.after.text}</QuestionText> : <><FieldLabel>After</FieldLabel><p className="text-xs text-sky-200/70">(removed: after Switch it moves to Past questions)</p></>}
-                      {x.before && <AnswerText id={`offer-${offer.id}-${key}-answer`} label="Your answer so far" name={`Your answer so far`} empty={!answer} emptyText="(no answer yet)">{answer}</AnswerText>}
-                    </div>
-                  </details>
-                </li>
-              );
-            })}
-          </ol>
-          </ResizeBox></div>
-          {offer.switchNote && <p className="mt-1" data-switch-questions="">{offer.switchNote}</p>}
-        </details>
-      )}
+      {/* (Owner, Nov 5, §267; replaces batch 13 §9's NDA Before / Offered here) An offer never carries the NDA: it follows the listing, with its own notice. */}
+      {/* (Owner, Nov 5, §265; replaces §221 / §233 / §242's questions-changed block, before and after) An offer never carries questions: they follow the
+          listing (each change is a "Questions changed" entry in Terms history). */}
       <div className="flex flex-wrap gap-2">
         <button className="btn" disabled={fin.done} onClick={() => decide("switch")}>Switch to the new terms</button>
         <button className="btn-ghost" disabled={fin.done} onClick={() => decide("keep")}>Keep my current terms</button>
@@ -150,24 +99,4 @@ export function TesterTop({ sessionId, seenAt, offer, devName }: { sessionId: st
   );
 }
 
-/**
- * (Owner, Nov 5, §242) The questions that changed between the tester's set and the offered one, matched by their words: a question in both (same words and Required)
- * is unchanged and left out; an offered question at the place of a removed one is "changed" (its Before and After); other offered ones are "new"; other old ones
- * "removed". `from` / `to`: the question's place in the old / offered set.
- */
-export function questionChanges(before: OfferQuestion[], after: OfferQuestion[]) {
-  const same = (a: OfferQuestion, b: OfferQuestion) => a.text === b.text && !!a.required === !!b.required;
-  const keptB = new Set<number>(), keptA = new Set<number>();
-  after.forEach((a, j) => { const i = before.findIndex((b, k) => !keptB.has(k) && same(b, a)); if (i >= 0) { keptB.add(i); keptA.add(j); } });
-  const out: { kind: "changed" | "new" | "removed"; from: number | null; to: number | null; before?: OfferQuestion; after?: OfferQuestion }[] = [];
-  const usedB = new Set(keptB);
-  after.forEach((a, j) => {
-    if (keptA.has(j)) return;
-    const atPlace = j < before.length && !usedB.has(j) ? j : -1;
-    if (atPlace >= 0) { usedB.add(atPlace); out.push({ kind: "changed", from: atPlace, to: j, before: before[atPlace], after: a }); }
-    else out.push({ kind: "new", from: null, to: j, after: a });
-  });
-  before.forEach((b, i) => { if (!usedB.has(i)) out.push({ kind: "removed", from: i, to: null, before: b }); });
-  return out.sort((x, y) => (x.to ?? x.from! + 0.5) - (y.to ?? y.from! + 0.5));
-}
 

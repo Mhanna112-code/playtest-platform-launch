@@ -30,17 +30,20 @@ async function edit(x: Awaited<ReturnType<typeof ready>>, fields: Record<string,
 afterEach(() => { vi.restoreAllMocks(); vi.unstubAllGlobals(); });
 
 describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
-  it("new terms stop once, even with Alerts Off, and the second press rates without another stop box", async () => {
+  // (Owner, Nov 5, §268; was "even with Alerts Off") New terms follow the ordinary rule for Rate: Alerts on and not yet shown.
+  it("new terms stop once (Alerts on) and the second press rates without another stop box; with Alerts Off they never stop Rate", async () => {
     const x = await ready(); const loaded = seen(); await settle();
-    await db.user.update({ where: { id: x.tester.user.id }, data: { testerAlertsOff: true } });
     await edit(x, { writtenCents: "12.00" });
     const first = await rate(x, loaded);
     expect(first.body.error?.code).toBe("stop_once");
     expect(texts(first)).toContain("Nora Lane offered you the new terms: Switch or Keep below");
-    expect(first.body.error.alertsOff).toBe(true);
     expect(await db.rating.count({ where: { contractId: x.sessionId } })).toBe(0);
     expect((await rate(x, loaded, { confirmed: true, boxAt: first.body.error.now })).status).toBe(200);
     expect(await db.rating.count({ where: { contractId: x.sessionId, side: "tester" } })).toBe(1);
+    const y = await ready(); const loadedY = seen(); await settle();
+    await db.user.update({ where: { id: y.tester.user.id }, data: { testerAlertsOff: true } });
+    await edit(y, { writtenCents: "12.00" });
+    expect((await rate(y, loadedY)).status).toBe(200);
   });
 
   it.each([false, true])("listing edits follow Alerts Off = %s", async (off) => {
@@ -99,13 +102,7 @@ describe("batch 35 §93: tester Rate uses every shared tester stop", () => {
     }
     await settle();
     const r = await rate(x, loaded, { seenAt: seen(), boxSeenAt: loaded });
-    // (Owner, Nov 5, §232) An OPEN terms offer stops Rate once even when shown (rating would close it unanswered); the second press rates.
-    if (kind === "terms") {
-      expect(r.body.error?.code, JSON.stringify(r.body)).toBe("stop_once");
-      expect(texts(r)).toEqual(["Nora Lane offered you new terms: Switch or Keep in the box above, or rating closes them unanswered"]);
-      expect((await rate(x, loaded, { confirmed: true, boxAt: r.body.error.now })).status).toBe(200);
-      return;
-    }
+    // (Owner, Nov 5, §268; replaces §232) An open offer already shown never stops Rate: it goes through like the rest.
     expect(r.status, JSON.stringify(r.body)).toBe(200);
   });
 
