@@ -114,13 +114,14 @@ type OverCall = { status: string; cancelledBy: string | null; cancelledAt: Date 
  * One call that's over, in the tester row's and the tester's Live session's "Had (N)" / "Cancelled (N)" (§209): "Took place · 29 min · paid $14.50", "Cancelled by Ana · 3:05 PM" (the reason
  * shown under it), "Nobody joined", "Missed: the site was down" and so on.
  */
-export function callOverBadge(x: OverCall, who: { developer: string; tester: string }, side: "developer" | "tester", fmtTime: (d: Date) => string, paidCents: number, minutes: number | null) {
+export function callOverBadge(x: OverCall, who: { developer: string; tester: string }, side: "developer" | "tester", fmtTime: (d: Date) => string, paidCents: number, minutes: number | null, /** (§300) the cancel time: time today, date and time otherwise */ fmtWhen?: (d: Date) => string) {
   type Tone = "grey" | "amber" | "green" | "rose";
   if (x.status === "cancelled") {
     const note = x.cancelNote.trim();
     if (x.cancelledBy === "developer" || x.cancelledBy === "tester") {
       const by = x.cancelledBy === side ? "you" : who[x.cancelledBy];
-      return { label: `Cancelled by ${by}${x.cancelledAt ? ` · ${fmtTime(x.cancelledAt)}` : ""}`, tone: "grey" as Tone, reason: note || undefined };
+      // (Owner, Nov 6, §300) The time alone today; on any other day the date too ("Cancelled by fbbb · Fri, Nov 6, 8:48 AM"), via the caller's `fmtWhen`.
+      return { label: `Cancelled by ${by}${x.cancelledAt ? ` · ${(fmtWhen ?? fmtTime)(x.cancelledAt)}` : ""}`, tone: "grey" as Tone, reason: note || undefined };
     }
     if (/^Nobody joined/.test(note)) return { label: "Nobody joined", tone: "grey" as Tone };
     if (/^It couldn't connect/.test(note)) return { label: "Couldn't connect", tone: "grey" as Tone }; // (batch 21 section 4)

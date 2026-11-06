@@ -2,6 +2,7 @@ import { withLineLinks } from "@/components/LineLinks";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
+import { dayIn } from "@/lib/rules";
 import { hasPerks } from "@/lib/server/subscription";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
@@ -94,6 +95,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
 
   const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
   const fmtTime = (d: Date | string) => fmtTimeIn(d, u.timeZone);
+  // (Owner, Nov 6, §300) Today: the time; another day: the date and time (a cancelled call's "Cancelled by … · …").
+  const fmtWhen = (d: Date) => (dayIn(d, u.timeZone) === dayIn(new Date(), u.timeZone) ? fmtTime(d) : fmtDateTime(d));
   const fmtDate = (d: Date | string) => fmtDateIn(d, u.timeZone);
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
   if (otherSide) return otherSide;
@@ -825,7 +828,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                   const bankIn = (xs: typeof overCalls) => xs.some((x) => bankRows.some((b) => b.pieceId === x.id)) || undefined;
                   const overRow = (x: (typeof overCalls)[number]) => {
                     const m = callMinutesOf(x);
-                    const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m);
+                    const badge = callOverBadge(x, { developer: displayName(u), tester: name }, "developer", fmtTime, partPaid(x.id), m, fmtWhen);
                     const inNeeds = tookPlace(x) && !x.review && !restricted && testerPayable(c.tester) && !payShut(x.id);
                     return (
                       <li key={x.id} id={inNeeds ? `callrow-${x.id}` : `call-${x.id}`} className={`space-y-1 rounded-lg border border-white/5 p-2 ${"scroll-mt-24 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300"}`} data-over-call={x.id}>

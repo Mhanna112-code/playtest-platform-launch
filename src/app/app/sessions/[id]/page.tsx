@@ -1,6 +1,7 @@
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
+import { dayIn } from "@/lib/rules";
 import { notFound, redirect } from "next/navigation";
 import { PAYOUT_SETUP_HINT } from "@/lib/payout";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
@@ -91,6 +92,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
 
   const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, u.timeZone);
   const fmtTime = (d: Date | string) => fmtTimeIn(d, u.timeZone);
+  // (Owner, Nov 6, §300) Today: the time; another day: the date and time (a cancelled call's "Cancelled by … · …").
+  const fmtWhen = (d: Date) => (dayIn(d, u.timeZone) === dayIn(new Date(), u.timeZone) ? fmtTime(d) : fmtDateTime(d));
   const fmtDate = (d: Date | string) => fmtDateIn(d, u.timeZone);
   adminAway(u, "/app/sessions"); // (batch 20 section 16) admin only
   const otherSide = await otherSideNotice(u); // (batch 34 §5) a page of the other side: only the switch notice
@@ -654,7 +657,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             if (!had.length && !cancelled.length) return null;
             const pastRow = (x: (typeof overCalls)[number]) => {
               const m = callMinutesOf(x);
-              const badge = callOverBadge(x, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, m);
+              const badge = callOverBadge(x, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, m, fmtWhen);
               const reviewShown = !!x.review && !owedCalls.has(x.id) && !pendingBase.has(x.id);
               return (
                 <li key={x.id} id={`call-${x.id}`} data-over-call={x.id} className="scroll-mt-24 space-y-1 rounded-lg border border-white/5 p-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
@@ -677,7 +680,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             };
             const cancelledRow = (x: (typeof overCalls)[number]) => {
               const shown = x.status !== "cancelled" ? { ...x, status: "cancelled", cancelledBy: "system", cancelNote: "not available" } : x;
-              const badge = callOverBadge(shown, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, callMinutesOf(x));
+              const badge = callOverBadge(shown, { developer: dev, tester: displayName(u) }, "tester", fmtTime, partPaid.get(x.id) ?? 0, callMinutesOf(x), fmtWhen);
               return (
                 <li key={x.id} id={`call-${x.id}`} data-over-call={x.id} className="scroll-mt-24 space-y-1 rounded-lg border border-white/5 p-2 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300">
                   <div className="flex flex-wrap items-center gap-2">

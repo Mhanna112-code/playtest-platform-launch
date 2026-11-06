@@ -5289,3 +5289,7 @@ From the email catalog (playtest-lite-evidence/email-catalog-nov6), four of its 
   no account).
 - Tests: tests/email-catalog-fixes-299.test.ts. Updated: batch18 (the always list: one more in restrictions.ts, one more in pauseClosure.ts), bell-admin (the
   lift and the moved date are `always` in "Payments and holds", no longer own lines).
+
+## §300 A cancelled call's time names its day (owner, Nov 6)
+"Cancelled (N)"'s badge read "Cancelled by fbbb · 8:48 AM" whatever the day. It now shows the time alone when the cancel was today, and the date and time on any other
+day ("Cancelled by fbbb · Fri, Nov 6, 8:48 AM"), in the viewer's timezone (`fmtWhen` on the test page and the session page).
