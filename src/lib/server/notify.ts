@@ -170,9 +170,11 @@ export async function notificationScopeFor(userId: string) {
  * days it covers, from its real start (the last summary, or its oldest line) to now, "Your Playtest updates for Nov 1 – Nov 7"; a Monthly one the month,
  * "Your Playtest updates for October", when it covers exactly one calendar month (from the 1st to that month's last day, or to the next month's 1st when the
  * daily job sends it that morning), else its days as Weekly's. Days of different years carry the year ("Dec 28, 2026 – Jan 4, 2027").
+ * (Owner, Nov 6, §297) `afterLast`: `since` is when the last summary went, so the range starts the day AFTER it, in the account's zone (last sent Oct 31: "Nov 1 –
+ * Nov 7", not "Oct 31 – Nov 7"; last sent Sep 30: "October" when it covers that month). With no earlier summary it starts at the oldest line's day, as before.
  */
 export const SUMMARY_HEADING = "Your Playtest updates for";
-export function summaryHeading(period: "daily" | "weekly" | "monthly", since: Date, now: Date, timeZone?: string | null) {
+export function summaryHeading(period: "daily" | "weekly" | "monthly", since: Date, now: Date, timeZone?: string | null, afterLast = false) {
   const timeZone0 = safeZone(timeZone);
   const fmt = (d: Date, o: Intl.DateTimeFormatOptions) => d.toLocaleDateString("en-US", { ...o, timeZone: timeZone0 });
   if (period === "daily") return `${SUMMARY_HEADING} ${fmt(now, { weekday: "short", month: "short", day: "numeric" })}`;
@@ -180,16 +182,24 @@ export function summaryHeading(period: "daily" | "weekly" | "monthly", since: Da
     const p = Object.fromEntries(new Intl.DateTimeFormat("en-US", { timeZone: timeZone0, year: "numeric", month: "numeric", day: "numeric" }).formatToParts(d).map((x) => [x.type, x.value]));
     return { y: Number(p.year), m: Number(p.month), d: Number(p.day) };
   };
-  const a = ymd(since), b = ymd(now);
+  const b = ymd(now);
+  const a = ((d) => {
+    if (!afterLast) return d;
+    const next = new Date(Date.UTC(d.y, d.m - 1, d.d + 1)); // (§297) the calendar day after the last summary's
+    return { y: next.getUTCFullYear(), m: next.getUTCMonth() + 1, d: next.getUTCDate() };
+  })(ymd(since));
+  // The first day (a calendar date, formatted in UTC so it reads as that day).
+  const start = new Date(Date.UTC(a.y, a.m - 1, a.d, 12));
   if (period === "monthly" && a.d === 1) {
     const last = new Date(Date.UTC(a.y, a.m, 0)).getUTCDate(); // that month's last day
     const toLast = b.y === a.y && b.m === a.m && b.d === last;
     const toNextFirst = b.d === 1 && (a.m === 12 ? b.y === a.y + 1 && b.m === 1 : b.y === a.y && b.m === a.m + 1);
-    if (toLast || toNextFirst) return `${SUMMARY_HEADING} ${fmt(since, { month: "long" })}`;
+    if (toLast || toNextFirst) return `${SUMMARY_HEADING} ${start.toLocaleDateString("en-US", { month: "long", timeZone: "UTC" })}`;
   }
-  const withYear = a.y !== b.y;
-  const day = (d: Date) => fmt(d, withYear ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" });
-  return a.y === b.y && a.m === b.m && a.d === b.d ? `${SUMMARY_HEADING} ${day(now)}` : `${SUMMARY_HEADING} ${day(since)} – ${day(now)}`;
+  // One day (or, (§297) a window starting after today: a second summary the same day) reads as today alone.
+  if (a.y * 10000 + a.m * 100 + a.d >= b.y * 10000 + b.m * 100 + b.d) return `${SUMMARY_HEADING} ${fmt(now, { month: "short", day: "numeric" })}`;
+  const o: Intl.DateTimeFormatOptions = a.y !== b.y ? { month: "short", day: "numeric", year: "numeric" } : { month: "short", day: "numeric" };
+  return `${SUMMARY_HEADING} ${start.toLocaleDateString("en-US", { ...o, timeZone: "UTC" })} – ${fmt(now, o)}`;
 }
 
 export async function sendSummaries(now = new Date(), only?: string[]) {
@@ -213,9 +223,9 @@ export async function sendSummaries(now = new Date(), only?: string[]) {
     try {
       const subject = due ? `Your Playtest summary: ${items.length} update${items.length === 1 ? "" : "s"}` : off && items.some((n) => !n.payment) ? `Your Playtest account updates: ${items.length}` : `Your Playtest payment updates: ${items.length}`;
       // (Owner, Nov 6, §295) The body opens with its heading, above the sections or the lines: a due Weekly / Monthly summary names its period (from the last
-      // summary, or its oldest line, to now), a Daily one and every end-of-day email the day.
+      // summary, or its oldest line, to now), a Daily one and every end-of-day email the day. (Owner, Nov 6, §297) From the day after the last summary.
       const period = due && (u.emailPref === "weekly" || u.emailPref === "monthly") ? u.emailPref : "daily";
-      const heading = summaryHeading(period, u.lastSummaryAt ?? all[0].createdAt, now, u.timeZone);
+      const heading = summaryHeading(period, u.lastSummaryAt ?? all[0].createdAt, now, u.timeZone, !!u.lastSummaryAt);
       await sendEmail({ to: u.email, subject, text: [heading, "", ...sidedEmailLines(items, line, hasBoth(u)), "", "Playtest"].join("\n"), button: { label: "Open Playtest", url: `${appUrl()}/app/notifications` }, heading });
       await db.notification.updateMany({ where: { id: { in: [...items.map((n) => n.id), ...dropped] } }, data: { summarizedAt: now } });
       if (due) await db.user.update({ where: { id: u.id }, data: { lastSummaryAt: now } });

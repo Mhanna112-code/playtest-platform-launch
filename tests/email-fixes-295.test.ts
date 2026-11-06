@@ -160,11 +160,11 @@ describe("§295 point 4: summary emails open with a heading that follows their p
     const html = m.html || htmlOf({ to: m.to, subject: m.subject, text: m.text, heading: want });
     expect(html).toContain(`font-weight:700;color:#141829;">${want}</p>`);
     expect(html.indexOf(want)).toBeLessThan(html.indexOf("Your account"));
-    // Weekly: the period from the last summary.
+    // Weekly: the period from the last summary (since §297, the day after it).
     await db.user.update({ where: { id: w.anaId }, data: { emailPref: "weekly", lastSummaryAt: new Date(now.getTime() - 7 * DAY) } });
     await db.notification.create({ data: { userId: w.anaId, side: null, text: "Another account line", link: "/app" } });
     await sendSummaries(now, [w.anaId]);
-    expect((await mails(w.tester.user.email)).at(-1)!.text.split("\n")[0]).toBe(summaryHeading("weekly", new Date(now.getTime() - 7 * DAY), now, "America/New_York"));
+    expect((await mails(w.tester.user.email)).at(-1)!.text.split("\n")[0]).toBe(summaryHeading("weekly", new Date(now.getTime() - 7 * DAY), now, "America/New_York", true)); // (§297) from the day after it
     // Email Off: the end-of-day email (a must-send line) has the day's heading.
     const off = await makeUser({ dev: true, name: "Omar Reyes" });
     await db.user.update({ where: { id: off.user.id }, data: { emailPref: "off", timeZone: "UTC" } });

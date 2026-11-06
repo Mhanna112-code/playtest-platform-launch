@@ -5232,3 +5232,25 @@ From the Nov 6 recording of every email and bell (playtest-lite-evidence/emails-
   …") and after it ("Your bank lowered / raised what it took back …"). Still immediate: the chargeback that starts the hold, and a further chargeback during a
   hold (including a payment hold turning into a chargeback hold).
 - Tests: tests/email-fixes-295.test.ts. Updated: chargeback-emails-294 (the amount changes are end-of-day).
+
+## §296 Ratings in the Invite testers panel show from 5; below that a tester is unrated and treated alike (owner, Nov 6)
+Narrowed by the owner the same day: only the developer's Invite testers panel.
+- **In the panel** (People you've worked with, Suggested, Find testers, the Invited rows, the Invite anyway box and a press's redraw of the rows), a tester with
+  fewer than 5 revealed tester-side ratings (side "developer": a developer rated them) reads exactly as one with none: "No ratings yet", no stars, no average,
+  no count, and no "rating went from …" line about them. No new text. One constant, `RATINGS_SHOWN_FROM` (ratings.ts); `inviteRatingSummary` is
+  `ratingSummary(id, "tester")` as the panel shows it; `testerRowInfo(…, { invitePanel: true })` for the panel's rows.
+- **Ranking** (rankedTesters, Suggested and Find testers): RATED now means at least 5 such ratings. Unrated testers are treated alike: their score never orders
+  them among themselves. Order: meets, rated first, (rated only) score, accepted parts (experience), matches (fit). The score's formula (the platform average)
+  is unchanged.
+- **Unchanged**: profile tiles, hovers, Find tests' "by <dev> · ★", the join page, the dashboard Rating tile, the application rows in Needs you (and their
+  stop lines): ratings from the first one, as before; a person's own ratings on their own page; the team's view; the rating rules (blind until both rate, 14
+  days). The developer's own rating of a tester ("you rated", People you've worked with's order) is theirs and stays.
+- Tests: tests/ratings-from-five-296.test.ts. Updated: invite-rank-276 (the rated tester has 5 ratings), codex5-needs-stops (Invite and Cancel invite compare
+  the panel's rows; the rating moves use 5 or more ratings).
+
+## §297 The summary heading's range starts the day after the last summary (owner, Nov 6)
+- The heading's range (§295) starts the calendar day AFTER the last summary was sent, in the account's time zone: last sent Oct 31, the weekly email reads "Your
+  Playtest updates for Nov 1 – Nov 7" (was "Oct 31 – Nov 7"); monthly, last sent Sep 30, "… for October" when the window is that month (to Oct 31, or to Nov 1
+  when the daily job sends it that morning). Daily keeps "for Fri, Nov 6". With no earlier summary it starts at the oldest line's day, as before
+  (`summaryHeading(…, afterLast)`, notify.ts).
+- Tests: tests/summary-heading-297.test.ts. Updated: email-fixes-295 (the sent weekly heading starts the day after its last summary).
