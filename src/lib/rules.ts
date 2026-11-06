@@ -1634,6 +1634,15 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
   return out.join(", ");
 }
 
+/**
+ * (Owner, Nov 5, batch 35 §266) An offer's diff as Terms history lists it: only the fields limited to 3 changes (parts and prices, with their Required ticks;
+ * questions, for offers made before §265). The NDA and the deadline are left out; null when nothing limited is left (the offer gets no entry).
+ */
+export function limitedTermsDiff(diff: string): string | null {
+  const parts = diff.split(", ").filter((p) => p && !/NDA/.test(p) && !/^\d+ → \d+ days$/.test(p));
+  return parts.length ? parts.join(", ") : null;
+}
+
 /** Switching never moves the tester's deadline earlier; it moves later if the new days give more time. */
 export const newDueAt = (dueAt: Date, joinedAt: Date, days: number) => new Date(Math.max(dueAt.getTime(), joinedAt.getTime() + days * 86_400_000));
 

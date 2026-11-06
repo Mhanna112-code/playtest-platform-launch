@@ -55,7 +55,7 @@ describe("§231 the shared box for contract and listing texts", () => {
     expect(src("components/ListingInfo.tsx")).toContain('<ValueText id={`${id}-before`} label="Before">{before}</ValueText>');
     const page = src("app/app/sessions/[id]/page.tsx");
     expect(page).toContain("<ValueText id={`history-${ch.id}-${r.name}-before`}");
-    expect(page).toContain('<NdaBox id={`history-${o.id}-nda-before`} label="Before"');
+    expect(page).not.toContain("history-${o.id}-nda-before"); // (Owner, Nov 5, §266) no "NDA then and now" in Terms history
     expect(page).not.toContain("max-h-32 overflow-y-auto");
     expect(src("app/app/sessions/[id]/TesterTop.tsx")).toContain('<NdaBox id={`offer-${offer.id}-nda-offered`} label="Offered"');
   });

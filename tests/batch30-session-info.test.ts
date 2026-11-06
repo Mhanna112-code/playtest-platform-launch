@@ -61,7 +61,7 @@ describe("batch 30 §15: the listing information lines", () => {
     expect(lines.find((l) => l.key === "mature")).toMatchObject({ now: "Yes: Blood", before: "No" });
     expect(historyRows({ fields: ["title"], before: { title: "A" }, after: { title: "B" }, createdAt: new Date() })).toBeNull();
     expect(historyRows({ fields: ["title", "categories"], before: { title: "A", categories: ["Game"] }, after: { title: "B", categories: ["Game", "Education"] }, createdAt: new Date() }))
-      .toEqual([{ name: "categories", before: "Game", after: "Game, Education" }]);
+      .toEqual([{ key: "categories", name: "categories", before: "Game", after: "Game, Education" }]); // (§266) with its key (Terms history keeps only the limited ones)
   });
 
   it("the Updated tag shows its time, and before → now once tapped (closed at first)", () => {

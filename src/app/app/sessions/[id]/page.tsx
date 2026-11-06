@@ -1,4 +1,3 @@
-import { renderTimes } from "@/lib/tz";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
@@ -9,12 +8,12 @@ import { LIMITED_VIEW_LINE, WORK_OVER_PRESSES, stillWorksLine, workOver, NOT_LIS
 import { CheckCircle2, CircleDot, Clapperboard, ExternalLink, FileSignature, Languages, MessagesSquare, Monitor, Users, XCircle } from "lucide-react";
 import { db } from "@/lib/db";
 import { displayName, fmtDateIn, fmtDateTimeIn, fmtStampIn, money, stopTimeIn } from "@/lib/server/dateFormat";
-import { LISTING_VALUES, historyRows, infoLines, parseValues } from "@/lib/listingInfo";
+import { LISTING_VALUES, infoLines, limitedHistoryRows, parseValues } from "@/lib/listingInfo";
 import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
-import { IN_PROGRESS_TESTER, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -510,8 +509,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <ul className="space-y-1.5 text-slate-300" data-terms-history-list="">
             <li>{fmtDate(c.joinedAt)}: you joined on {termsLine(c, true)}{c.ndaAcceptedAt ? ` and accepted the NDA` : ""}.</li>
             {[
-              ...offers.map((o) => ({ at: o.createdAt, key: o.id, node: (<li key={o.id}>
-                {histLine(`${fmtDate(o.createdAt)}: ${dev} offered new terms (${o.diff}) · ${o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}`)}
+              // (Owner, Nov 5, §266) Terms history keeps only changes to the fields limited to 3 changes: an offer lists only those in its diff (parts and prices;
+              // questions for an offer made before §265), and one that changed none of them (only the NDA or the deadline) gets no entry.
+              ...offers.flatMap((o) => { const diff = limitedTermsDiff(o.diff); return diff ? [{ at: o.createdAt, key: o.id, node: (<li key={o.id}>
+                {histLine(`${fmtDate(o.createdAt)}: ${dev} offered new terms (${diff}) · ${o.status === "switched" ? `you switched${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "kept" ? `you kept your terms${o.decidedAt ? ` on ${fmtDate(o.decidedAt)}` : ""}` : o.status === "closed" || (o.status === "open" && c.status !== "working") ? "closed when your part ended" : o.status === "open" ? "waiting for your answer" : "replaced by a newer offer"}`)}
                 {/* (Owner, Nov 5, §263) A switch that wrote its own "Questions changed" entry (the earlier set kept at the same moment) shows its questions there. */}
                 {Array.isArray(o.fromQuestions) && JSON.stringify(o.fromQuestions) !== JSON.stringify(o.questions) && !(o.decidedAt && questionsHistory.some((q) => new Date(q.at).getTime() === o.decidedAt!.getTime())) && (
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Questions then and now</summary>
@@ -521,17 +522,14 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                     <div className="mt-1"><FieldLabel>Then</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-then`} items={(o.fromQuestions as string[]).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div>
                     <div className="mt-1"><FieldLabel>Offered</FieldLabel><FieldValue><QuestionTexts id={`history-${o.id}-offered`} items={((o.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></FieldValue></div></details>
                 )}
-                {o.fromNdaText !== o.ndaText && (
-                  <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">NDA then and now</summary>
-                    <div className="mt-1 space-y-2"><NdaBox id={`history-${o.id}-nda-before`} label="Before" text={o.fromNdaText} /><NdaBox id={`history-${o.id}-nda-offered`} label="Offered" text={o.ndaText} /></div></details>
-                )}
-              </li>) })),
-              ...contractNotes.map((n) => ({ at: n.createdAt, key: n.id, node: n.kind === STOP_NOTE_KIND
-                ? <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} /></li> // (Batch 17 §15) the reason in its scroll box
-                : <li key={n.id} data-history-line="">{histLine(`${fmtDateTime(n.createdAt)}: ${renderTimes(n.text, u.timeZone)}`)}</li> })),
+                {/* (§266) No "NDA then and now": the NDA isn't a limited field. */}
+              </li>) }] : []; }),
+              // (Owner, Nov 5, §266) "Test stopped" with its reason stays; the "Renamed" lines (title, product name) are left out.
+              ...contractNotes.filter((n) => n.kind === STOP_NOTE_KIND).map((n) => ({ at: n.createdAt, key: n.id, node: <li key={n.id} data-history-line="">{`${fmtDateTime(n.createdAt)}: Test stopped`}<ReasonQuote text={stopReasonOf(n.text)} /></li> })), // (Batch 17 §15) the reason in its scroll box
               // (Batch 30 §15) Older versions of the listing information: each save's changes, before → after (renames have their own "Renamed" line).
+              // (Owner, Nov 5, §266) Only the limited fields: what to do, the build link, devices and languages (no title, product, categories, Mature).
               ...infoChanges.flatMap((ch) => {
-                const rows = historyRows(ch);
+                const rows = limitedHistoryRows(ch);
                 return rows ? [{ at: ch.createdAt, key: ch.id, node: (<li key={ch.id} data-history-line="" data-history-info="">
                   {histLine(`${fmtDateTimeIn(ch.createdAt, u.timeZone)}: ${dev} updated the listing information (${rows.map((r) => r.name).join(", ")})`)}
                   <details className="ml-3 text-xs text-slate-400"><summary className="cursor-pointer">Before and after</summary>

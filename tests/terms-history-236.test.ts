@@ -47,21 +47,23 @@ describe("§236 cutNamesIn", () => {
 });
 
 describe("§236 the tester's Terms history on the session page", () => {
-  it("in its own draggable panel; a long developer name and a long quoted test name in a contract note are cut with their … and the arrow", async () => {
+  // (Owner, Nov 5, §266) "Renamed" notes left Terms history (the title isn't a limited field): an offer's line carries the long name now.
+  it("in its own draggable panel; a long developer name in an offer's line is cut with its … and the arrow", async () => {
     const { dev, testId } = await setup();
     const j = await joined(testId);
     await db.user.update({ where: { id: dev.user.id }, data: { name: DEV } });
-    await db.contractNote.create({ data: { contractId: j.sessionId, kind: "renamed", text: `${DEV} renamed “${TEST}” to “Harbor Run”` } });
+    await db.termsOffer.create({ data: { contractId: j.sessionId, testId, listingVersion: 2, deadlineDays: 7, questions: [], diff: "written $10 → $12", status: "kept", decidedAt: new Date() } });
     auth.user = await db.user.findUniqueOrThrow({ where: { id: j.tester.user.id } });
     const { default: SessionPage } = await import("@/app/app/sessions/[id]/page");
     const page = unescape(renderToStaticMarkup(await SessionPage({ params: Promise.resolve({ id: j.sessionId }) })));
     const history = page.slice(page.indexOf('data-terms-history=""'));
     expect(history).toContain(`data-panel="terms-history-${j.sessionId}"`);
     expect(history).toContain('data-terms-history-list=""');
-    const at = history.indexOf("renamed");
+    const at = history.indexOf("offered new terms");
     const note = history.slice(history.lastIndexOf("<li", at), history.indexOf("</li>", at));
     expect(note).toContain('data-whole-toggle=""');
-    expect(note.match(/data-name-toggle=""/g)).toHaveLength(2);
-    expect(note.replace(/ title="[^"]*"/g, "")).not.toContain(TEST); // (§244) only the hover holds the whole line
+    expect(note.match(/data-name-toggle=""/g)).toHaveLength(1);
+    expect(note.replace(/ title="[^"]*"/g, "")).not.toContain(DEV); // (§244) only the hover holds the whole line
+    void TEST;
   });
 });

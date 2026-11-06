@@ -93,11 +93,21 @@ export function infoLines(now: InfoValues, changes: InfoChange[], joined: { titl
 const NAMES: Record<string, string> = { title: "title", productName: "product name", description: "description", buildUrl: "build link", devices: "devices", languages: "languages", categories: "categories", mature: "Mature (18+)", matureWhy: "Mature (18+)" };
 
 /** One Terms history entry's fields (renames have their own "Renamed" line there): before → after per field, or null when only the names changed. */
-export function historyRows(c: InfoChange): { name: string; before: string; after: string }[] | null {
+export function historyRows(c: InfoChange): { key: InfoLineKey | "categories"; name: string; before: string; after: string }[] | null {
   const fs = c.fields.filter((f) => f !== "title" && f !== "productName");
   if (!fs.length) return null;
   const val = (o: unknown) => ({ title: "", productName: "", description: "", buildUrl: "", devices: [], languages: [], categories: [], mature: false, matureWhy: "", ...(o && typeof o === "object" ? Object.fromEntries(Object.entries(o as Record<string, unknown>).filter(([, x]) => x != null)) : {}) }) as InfoValues;
   const b = val(c.before), a = val(c.after);
   const keys = [...new Set(fs.map((f) => (f === "matureWhy" ? "mature" : f)))] as (InfoLineKey | "categories")[];
-  return keys.map((k) => ({ name: NAMES[k], before: infoText(k, b), after: infoText(k, a) }));
+  return keys.map((k) => ({ key: k, name: NAMES[k], before: infoText(k, b), after: infoText(k, a) }));
 }
+
+/**
+ * (Owner, Nov 5, batch 35 §266) Terms history keeps only changes to the fields limited to 3 changes (CRITICAL_FIELDS in lib/limits.ts): of the listing
+ * information, what to do, the build link, devices and languages. Title, product name, categories and Mature (with its reason) are left out.
+ */
+export const LIMITED_INFO_KEYS: readonly string[] = ["description", "buildUrl", "devices", "languages"];
+export const limitedHistoryRows = (c: InfoChange) => {
+  const rows = (historyRows(c) ?? []).filter((r) => LIMITED_INFO_KEYS.includes(r.key));
+  return rows.length ? rows : null;
+};

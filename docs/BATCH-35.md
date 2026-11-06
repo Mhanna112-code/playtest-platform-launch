@@ -4711,3 +4711,13 @@ The developer's own Listing panel is one list and is unchanged.
 - Price: answers sent to a question that is now old stay payable at the part's agreed price, `Submission.agreedCents` (set at the first Send; while unpaid each
   later Send re-prices it to the contract's written price; after a Pay it stays). (The "sent at $X" beside an old-question tag was dropped with §263's final
   form, which removed the tag from the answer lists.)
+
+## §266 Terms history shows only the limited fields (owner, Nov 5)
+Terms history keeps only changes to the fields limited to 3 changes (CRITICAL_FIELDS in lib/limits.ts: what to do, questions, languages, devices, build link,
+parts and prices), on the tester's session page and on the developer's per-tester history (§263, which only ever holds questions entries).
+- Kept: the joined line ("<date>: you joined on …", its "and accepted the NDA" tail too: it isn't an NDA change line); "Test stopped" with its reason; §263's
+  "Questions changed" entries; the listing-information entries limited to what to do, the build link, devices and languages (`limitedHistoryRows`); offers,
+  each listing only its limited changes (`limitedTermsDiff`: parts, prices and Required ticks; "questions changed" on an offer made before §265); the payment
+  lines (not a field change, left as they were).
+- Left out: title and product name (the "Renamed" contract notes), categories, Mature and its reason, Open until, spots, the deadline, and the NDA (the offers'
+  "NDA then and now" and any NDA part of an offer's diff). An offer that changed only fields left out (e.g. only the NDA) gets no entry.
