@@ -97,9 +97,10 @@ export async function testV(viewerId: string, testId: string, sessionId = "") {
   // (Batch 14 section 6) The Access keys notice: keys added or deleted in Edit, or given at a join, refresh the page.
   const keyRows = sessionId ? [] : await db.accessKey.groupBy({ by: ["status"], where: { testId }, _count: { _all: true } });
   const keysV = keyRows.map((k) => `${k.status}:${k._count._all}`).sort().join(",");
-  // (Batch 34 §12, owner's finding) The session's own key (given by the developer's Save, replaced, reported, fixed): the tester's page redraws at once and the key box shows.
-  const myKeys = sessionId ? await db.accessKey.findMany({ where: { contractId: sessionId }, orderBy: { id: "asc" }, select: { id: true, status: true, fixedAt: true } }) : [];
-  const myKeyV = myKeys.map((k) => `${k.id}:${k.status}:${k.fixedAt?.getTime() ?? 0}`).join(",");
+  // (Batch 34 §12, owner's finding) The session's own key (given by the developer's Save, held, given back): the tester's page redraws at once and the key box shows.
+  // (Owner, Nov 6, §304) No "reported" / "fixed" states any more, so no fixedAt.
+  const myKeys = sessionId ? await db.accessKey.findMany({ where: { contractId: sessionId }, orderBy: { id: "asc" }, select: { id: true, status: true } }) : [];
+  const myKeyV = myKeys.map((k) => `${k.id}:${k.status}`).join(",");
   const bankActions = await db.payment.findMany({ where: { contractId: { in: ids }, status: "needs_action" }, orderBy: { id: "asc" }, select: { id: true, actionBy: true } });
   const bankActionsV = bankActions.map((p) => `${p.id}:${p.actionBy && p.actionBy.getTime() > Date.now() ? "waiting" : "expired"}`).join(",");
   const elsewhere = await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(Date.now() - 6 * 3_600_000) }, contract: sessionId ? { testerId: viewerId, id: { not: sessionId } } : { test: { developerId: viewerId, id: { not: testId } } } }, orderBy: { id: "asc" }, select: { id: true, startsAt: true, minutes: true, contract: { select: { tester: { select: { name: true, email: true } }, test: { select: { developer: { select: { name: true, email: true } } } } } } } });

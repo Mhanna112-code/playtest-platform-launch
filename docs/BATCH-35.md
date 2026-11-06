@@ -5336,3 +5336,22 @@ The owner edited the NDA text twice (kind "changed") and the testers could still
   the NDA line, `lineFallbacks`). The developer's side is unchanged (no "not acknowledged" indicator).
 - Tests: tests/nda-acknowledge-302.test.ts. Updated: nda-listing-267 (the notice, the refusal, changed blocks), batch27 (Err / ChangesBox leave the NDA line
   in place too), press-names (`nda-seen` is the Acknowledge press).
+
+## §304 "This key doesn't work" is gone; testers tell the developer in chat (owner, Nov 6)
+A tester whose key doesn't work says so in chat; the developer deletes a free key in Edit and sends it in a message (the Access keys notice's existing hint).
+- **Tester:** the key box keeps the key, Copy and "The developer gave you a new access key." Gone: the "This key doesn't work" button, "Marked as not
+  working …", the crossed-out key, "The developer marked your key as working …", the button's refusal and stop box. The join page's "The access key I had
+  before works again" tick is gone too (`keyStillWorks`): a returning tester gets their held key back like any other.
+- **Developer:** KeysWarning ("<tester>'s key doesn't work", Works now, Dismiss) is deleted; nothing is crossed out in the notice's Given list or Edit's In use;
+  a key typed back is always "reused (<name>)" (never "reported as broken"); FREE_KEYS_RULE drops its "you'll see if one was reported as broken".
+- **Server:** the `key-broken` and `keys-dismiss` actions (404 now), `reportKeyBroken`, `dismissBrokenKeys`, `heldBrokenKey`, the "key" event (DEV_QUIET_KINDS,
+  DEV_EXEMPT_KINDS, TESTER_ROW_KINDS), both bells (§286), the tester's `keyfixed` line (CONTRACT_KINDS / ALERTS_OFF_KINDS, the gate's kinds, ChangesBox's
+  testerCanTurnOff), the press names (`key-broken`, "Dismiss selected" / "Dismiss N"), WORK_OVER_ACTIONS' `key-broken`, `fixedAt` in the session fingerprint,
+  and keys.ts's keyReportedLine / keyFixedLine / keyToldNote. BLUE-NOTICES drops their rows.
+- **Alerts Off hint:** "Stops a press only for: new terms, and what you did in another tab." (QuickIgnore's line likewise.)
+- **Database unchanged:** the "broken" status and brokenAt / brokenDismissedAt / fixedAt / reusedBroken stay, unused. A key stored as "broken" is an ordinary
+  key in use everywhere (lists, the tester's page, "in use" refusals, a rejoin).
+- **Lost:** the automatic replacement had already gone in batch 14 §6 (`replaced` was always false); what goes now is the developer's record of which key a
+  tester reported, "Works now", and the rejoin swap (a returning tester whose key was reported got a new free key unless they ticked that it works again).
+- Tests: tests/no-key-report-304.test.ts. Updated: batch15-keys (section 45 removed; reuse and in-use kept), batch14, post-edit, bell-parity-286,
+  batch35-pronouns, batch16-oct28, batch16-tester-stopped, press-names, key-copy, end-early-gone-278, nda-acknowledge-302, batch30-session-info, batch34-fixes.

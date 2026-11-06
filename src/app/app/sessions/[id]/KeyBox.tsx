@@ -1,46 +1,28 @@
 "use client";
 import { useState } from "react";
 import { KeyRound } from "lucide-react";
-import { ChangesBox } from "@/components/ChangesBox";
-import { pressLabelOf, refusalLine } from "@/lib/pressLabels";
-import { usePress } from "@/lib/usePress";
 import { MARKABLE } from "@/lib/markJump";
 import { copyText } from "@/components/Cut";
-import { pronouns } from "@/lib/format";
 
-/** (§156) The report button's own words, as its refusals and stop box name it. */
-const KEY_PRESS = pressLabelOf("/api/sessions/x/key-broken");
-
-/** (Design doc 8) The tester's access key, with "This key doesn't work" (the developer is told; a free extra replaces it). */
-export function KeyBox({ sessionId, seenAt, value, broken, fresh, canReport = true, fixed = false, devPronoun = "" }: { sessionId: string; seenAt: string; value: string; broken: boolean; fresh?: boolean; canReport?: boolean; fixed?: boolean; /** (batch 35 §162) "She can send you another key" */ devPronoun?: string }) {
-  const { press, error, busy, changes, finish } = usePress(seenAt); // (batch 35 §40) a key replaced meanwhile: the page redraws in place
-  const [said, setSaid] = useState(false);
+/**
+ * (Design doc 8) The tester's access key, with Copy. (Owner, Nov 6, §304) No "This key doesn't work": a tester whose key fails tells the developer in chat, and
+ * the developer sends a free key in a message. A key once reported (status "broken", before §304) shows like any other.
+ */
+export function KeyBox({ value, fresh }: { value: string; fresh?: boolean }) {
   const [copied, setCopied] = useState<"" | "yes" | "no">("");
   return (
     // (Batch 34 §12) The "gave you an access key" line's See it jumps here (KEY_BOX_ID, marked for a moment).
     <div className={`space-y-1.5 text-sm ${MARKABLE}`} id="access-key">
       <p className="flex flex-wrap items-center gap-2 text-white">
         <KeyRound className="h-4 w-4 text-amber-300" /> <strong>Your access key:</strong>
-        <code className={`break-all rounded bg-white/[0.06] px-2 py-0.5 font-mono ${broken || said ? "text-slate-500 line-through" : "text-amber-100"}`}>{value}</code>
+        <code className="break-all rounded bg-white/[0.06] px-2 py-0.5 font-mono text-amber-100">{value}</code>
         {/* (Owner, Nov 3) Copy the key in one press; "Copied" for a moment (or how to copy it by hand when the browser refuses). */}
-        {!(broken || said) && (
-          <button type="button" className="btn-ghost px-3 py-1 text-xs" data-key-copy="" onClick={async () => { const ok = await copyText(value); setCopied(ok ? "yes" : "no"); setTimeout(() => setCopied(""), 2500); }}>
-            {copied === "yes" ? "Copied" : "Copy"}
-          </button>
-        )}
+        <button type="button" className="btn-ghost px-3 py-1 text-xs" data-key-copy="" onClick={async () => { const ok = await copyText(value); setCopied(ok ? "yes" : "no"); setTimeout(() => setCopied(""), 2500); }}>
+          {copied === "yes" ? "Copied" : "Copy"}
+        </button>
         {copied === "no" && <span className="text-xs text-slate-400" role="status">Couldn&apos;t copy: select the key and copy it.</span>}
-        {broken || said ? (
-          // (Owner, Oct 30, batch 15 sections 44 and 45) A report can't be undone by the tester; the developer can mark the key as working again.
-          <span className="text-slate-400" data-key-state="broken">Marked as not working. The developer was told. {pronouns(devPronoun).Subj} can send you another key in a message.</span>
-        ) : !canReport ? null : (
-          <button className="btn-ghost px-3 py-1 text-xs" disabled={busy} onClick={() => void press<{ replaced?: boolean }>(`/api/sessions/${sessionId}/key-broken`, {}, "key").then((r) => { if (!r) return; if (r.replaced) finish(); else setSaid(true); })}>This key doesn&apos;t work</button>
-        )}
       </p>
-      {fresh && !broken && <p className="info" role="status">The developer gave you a new access key.</p>}
-      {fixed && !broken && !said && <p className="info" role="status" data-key-state="fixed">The developer marked your key as working. If it still fails, you can report it again.</p>}
-      {/* (§156) Both name the press by its button: "Your “This key doesn't work” didn't go through: …". */}
-      {changes == null && error && <p className="info" role="status" data-refusal="">{refusalLine(KEY_PRESS, error)}</p>}
-      <ChangesBox side="tester" changes={changes} press={KEY_PRESS} />
+      {fresh && <p className="info" role="status">The developer gave you a new access key.</p>}
     </div>
   );
 }

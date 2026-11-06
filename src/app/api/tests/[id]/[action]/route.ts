@@ -120,8 +120,6 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         return ok(await nextRound(u, id));
       case "cancel-call":
         return ok(await devCancelCall(u, id, body));
-      case "keys-dismiss":
-        return ok(await (await import("@/lib/server/accessKeys")).dismissBrokenKeys(u, id, body));
       case "cancel-set":
         return ok(await cancelCallSet(u, String(body.contractId ?? ""), body));
       case "no-show":

@@ -27,12 +27,11 @@ import { lockText } from "@/lib/sendLock";
  * Join or Apply to join. Stops once (box under the button) if anything about the listing changed since the page loaded;
  * the second press goes ahead on the current listing. No offers or counter-offers here.
  */
-export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; brokenKey?: boolean; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; dueIfNow: string; /** (Batch 32 §1) their payout setup isn't done: payments wait for it */ payoutHint?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms */ termsAgain?: boolean }) {
+export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; testId: string; seenAt: string; mode: string; invited: boolean; inviteId?: string | null; application: { status: string; changed: boolean; kind?: string } | null; missing: Gaps; needs: { devices: string[]; languages: string[] }; devName: string; spotsLeft: number; dueIfNow: string; /** (Batch 32 §1) their payout setup isn't done: payments wait for it */ payoutHint?: boolean; /** (Batch 20 section 21) the account hasn't agreed to the current Terms */ termsAgain?: boolean }) {
   const router = useRouter();
-  // (Design doc 7.3) The NDA is accepted before joining or applying; a returning tester says whether the key they had works again.
+  // (Design doc 7.3) The NDA is accepted before joining or applying. (Owner, Nov 6, §304) No "does your old key work again?" tick: a returning tester gets their key back.
   const [nda, setNda] = useState(false);
   const [ndaErr, setNdaErr] = useState("");
-  const [keyWorks, setKeyWorks] = useState(false);
   const [note, setNote] = useState("");
   // (Batch 35 §10) The note sent with Apply (and Ask to rejoin) is kept as a draft; nothing is saved before the press, so after a sign-in its button reads "Discard".
   // A press that goes through (Apply, Ask to rejoin, or Join) clears it; a stopped or refused press keeps it.
@@ -112,7 +111,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     const action = rejoining ? "rejoin-ask" : applying ? "apply" : "join";
     setErrPress(pressLabelOf(`/api/tests/${p.testId}/${action}`));
     try {
-      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
+      const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, note, seenAt, confirmed, boxAt, anyway: true, gapsShown: shown, inviteId, agreeTerms });
       await keep.clear(); // (batch 35 §10) the press went through: the note's draft goes
       // (Batch 26 section 13) Join anyway opens the session page (the pop-up stays meanwhile); Apply anyway and Ask to rejoin anyway stay here: the pop-up closes and the
       // done line shows.
@@ -164,7 +163,7 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
     setErr("");
     setErrPress(pressLabelOf(`/api/tests/${p.testId}/${action}`));
     try {
-        const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, keyStillWorks: keyWorks, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
+        const r = await api<{ sessionId?: string; applied?: boolean }>(`/api/tests/${p.testId}/${action}`, { ndaAccepted: nda, note, seenAt, confirmed, boxAt, anyway, inviteId, agreeTerms });
       if (action !== "withdraw-application") await keep.clear(); // (batch 35 §10) Apply / Ask to rejoin / Join went through: the note's draft goes
       if (r.sessionId) { reloading = true; window.location.href = `/app/sessions/${r.sessionId}`; }
       // (Batch 35 §40) This page keeps its load time (`seenAt`), so it loads again, keeping its place (a stale "#…" dropped first); the button stays busy until then.
@@ -233,11 +232,6 @@ export function JoinBox(p: { rejoin?: boolean; timeBack?: string; nda?: string; 
           </label>
           {ndaErr && <p className="err-field" role="alert">{ndaErr}</p>}
         </div>
-      )}
-      {p.brokenKey && (
-        <label className="flex items-center gap-2 text-sm text-white">
-          <input type="checkbox" checked={keyWorks} onChange={(e) => setKeyWorks(e.target.checked)} /> The access key I had before works again (otherwise you get a new one)
-        </label>
       )}
       {(applying || rejoining) && (
         <div>

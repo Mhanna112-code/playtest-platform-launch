@@ -5,16 +5,15 @@ import { KEY_RULE, limitedChange } from "@/lib/typingLimit";
 import { FREE_KEYS_RULE, parseKeys, repeatedKeys, reusedKeyLine } from "@/lib/keys";
 
 export type KeysData = {
-  free: { id: string; value: string; reused?: { from: string; broken: boolean } }[];
+  free: { id: string; value: string; reused?: { from: string } }[];
   /** Working testers' keys; keys of testers who left or finished come last, greyed ("(left)" / "(finished)"): those can be typed back into Free. */
-  inUse: { id: string; value: string; broken: boolean; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; contractId: string; gone?: "left" | "finished" }[];
+  inUse: { id: string; value: string; tester: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; contractId: string; gone?: "left" | "finished" }[];
   open: number;
   /** The working testers now (the open spots follow them live). */
   testersIn?: number;
   /** (Batch 30 §17) Working testers without a key: each gets a free key at Save. */
   keyless?: number;
   uses: boolean;
-  broken?: { id: string; value: string; tester: string }[];
 };
 
 /** (Batch 15 sections 19 and 44) What the Free box's lines mean against the keys loaded: the red mistakes and the warning-only lines. */
@@ -31,14 +30,14 @@ export function freeBoxCheck(text: string, loaded: string[], data: KeysData | nu
     const k = inUse.find((x) => x.value === v);
     if (!k) continue;
     if (!k.gone) errors.push(`${v} is in use by ${k.tester}, so it can't be added.`);
-    else warnings.push(reusedKeyLine(v, k.tester, k.broken));
+    else warnings.push(reusedKeyLine(v, k.tester));
   }
   // (Batch 16 section 20) A deleted line whose key a joining tester was given meanwhile is no mistake: the page shows the blue warning and drops the deletion.
   return { lines, added, removed, errors, warnings };
 }
 
 /**
- * (Owner, Oct 30, batch 15 section 19) Edit's access keys: "In use" (read only; a key reported as not working is crossed out; keys of testers who left or finished are
+ * (Owner, Oct 30, batch 15 section 19) Edit's access keys: "In use" (read only; (Owner, Nov 6, §304) never crossed out: keys are no longer reported; keys of testers who left or finished are
  * greyed with "(left)" / "(finished)") and ONE plain text box with all the current free keys, one per line: delete a line to remove a key, type a line to add one. Save
  * works out the change against the keys this page loaded, so another tab's work is never undone.
  */
@@ -56,9 +55,9 @@ export function KeyBoxes({ data, typed, onType, onBlur, openSpots, line, warning
           {inUse.length === 0 ? <p className="text-xs text-slate-500">No tester has a key yet.</p> : (
             <ul className="max-h-40 space-y-1 overflow-y-auto text-sm">
               {inUse.map((k) => (
-                <li key={k.id} className={`flex flex-wrap items-center justify-between gap-2 ${k.gone ? "text-slate-500" : k.broken ? "text-slate-500 line-through" : "text-slate-200"}`} data-key-gone={k.gone} title={k.broken ? `${k.tester} reported this key as not working` : undefined}>
-                  <span className={`font-mono ${k.broken ? "line-through" : ""}`}>{k.value}</span>
-                  <span className="text-xs no-underline"><NameLink text={k.tester} href={k.testerHref} />{k.gone ? ` (${k.gone})` : ""}{k.broken ? " · not working" : ""}</span>
+                <li key={k.id} className={`flex flex-wrap items-center justify-between gap-2 ${k.gone ? "text-slate-500" : "text-slate-200"}`} data-key-gone={k.gone}>
+                  <span className="font-mono">{k.value}</span>
+                  <span className="text-xs no-underline"><NameLink text={k.tester} href={k.testerHref} />{k.gone ? ` (${k.gone})` : ""}</span>
                 </li>
               ))}
             </ul>

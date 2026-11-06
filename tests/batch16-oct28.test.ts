@@ -129,16 +129,16 @@ describe("the tester's Alerts line (section 4)", () => {
   it("one grey line for the state shown; every tester stop kind in the code is in the On list", () => {
     const toggle = src("components/TesterAlertsToggle.tsx");
     expect(toggle).toContain('export const ALERTS_ON_LINE = "Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, and what you did in another tab.";');
-    expect(toggle).toContain('export const ALERTS_OFF_LINE = "Stops a press only for: new terms, your key marked as working, and what you did in another tab.";');
+    expect(toggle).toContain('export const ALERTS_OFF_LINE = "Stops a press only for: new terms, and what you did in another tab.";'); // (Owner, Nov 6, §304) no key part
     expect(toggle).toContain("max-w-xs");
     expect(toggle).toContain("text-right max-sm:items-start max-sm:text-left");
     // The kinds the tester gate stops for, and the words in the line that cover them.
     const gate = src("lib/server/testerGate.ts");
     const kinds = JSON.parse(gate.match(/const KINDS = (\[[^\]]*\]);/)![1]) as string[];
-    const words: Record<string, string> = { terms: "new terms", keyfixed: "your key", keygiven: "your key", paid: "pay", rejected: "pay", cancelled: "calls", booked: "calls", requested: "calls", payment: "delayed pay", nda: "listing changes" /* (§267) */, admin: "your dispute", dispute: "your dispute", info: "listing changes", own: "other tabs" };
-    expect(gate).toContain('[...KINDS, "renamed", "keyfixed", "keygiven"]'); // renames never stop (withRenamed); (batch 30 §17) a key given by the developer's Save
-    for (const k of [...kinds, "keyfixed", "keygiven"]) expect(words[k], k).toBeDefined();
-    expect(gate).toContain('export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);'); // what Off still stops for
+    const words: Record<string, string> = { terms: "new terms", keygiven: "your key", paid: "pay", rejected: "pay", cancelled: "calls", booked: "calls", requested: "calls", payment: "delayed pay", nda: "listing changes" /* (§267) */, admin: "your dispute", dispute: "your dispute", info: "listing changes", own: "other tabs" };
+    expect(gate).toContain('[...KINDS, "renamed", "keygiven"]'); // renames never stop (withRenamed); (batch 30 §17) a key given by the developer's Save
+    for (const k of [...kinds, "keygiven"]) expect(words[k], k).toBeDefined();
+    expect(gate).toContain('export const CONTRACT_KINDS = new Set(["terms"]);'); // what Off still stops for ((§304) no "keyfixed")
   });
 });
 

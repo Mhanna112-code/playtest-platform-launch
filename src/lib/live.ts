@@ -43,7 +43,7 @@ export const boxSeenAt = () => boxSeenUpTo;
 
 /**
  * The seen marker a press sends: the page's render time, or later if the top notice has shown more. (Batch 30 §12 and the Oct 29 addition) A redraw of the page (a
- * refresh after a press, its poll, "You now meet this test's needs", a key marked working, new terms, a refused press) gives the page a newer render time but shows no
+ * refresh after a press, its poll, "You now meet this test's needs", new terms, a refused press) gives the page a newer render time but shows no
  * change lines: on a page that notes its first load (PageLoaded), the marker starts from that load and moves on only with what the top box actually showed.
  */
 export function seenNow(pageSeenAt: string) {

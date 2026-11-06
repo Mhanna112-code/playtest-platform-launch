@@ -184,7 +184,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const offer = await openOffer(c.id);
   const key = c.status === "working" ? await keyOf(c.id) : null;
   // A key the developer gave after one was reported: shown as new on the session page.
-  const freshKey = key && key.status === "inuse" && (await db.accessKey.count({ where: { contractId: c.id, status: "retired" } })) > 0;
+  const freshKey = key && /* (Owner, Nov 6, §304) a key once reported shows as normal */ (await db.accessKey.count({ where: { contractId: c.id, status: "retired" } })) > 0;
   // (Design doc 9) Terms history: what they joined on, every offer and what they chose (previous questions, answers and NDAs stay here).
   const offers = await db.termsOffer.findMany({ where: { contractId: c.id }, orderBy: { createdAt: "asc" } });
   // (Owner, Oct 30, batch 15 sections 24 and 43) Their own deal history, in order: renames, previous question sets and payments too (never other testers' choices).
@@ -393,7 +393,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {!meOff && (!over || stillWorks.charge || stillWorks.dispute || stillWorks.rate) && <TesterAlertsToggle off={u.testerAlertsOff} />}
       </div>
       {pausedBanner && <p className="info" data-paused="">{pausedBanner}</p>}
-      {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} devPronoun={c.test.developer.pronoun} />}
+      {key && <KeyBox value={key.value} fresh={!!freshKey} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
       {/* (Owner, Nov 5, §267; Nov 6, §302) The NDA's one notice with its Acknowledge button until it's acknowledged; while the tester works, every NDA change
           blocks their presses until then (no separate banner). */}

@@ -23,7 +23,7 @@ describe("the stopped line and the press names (section 24)", () => {
     expect(R.stillWorksLine(stopped, "Nora Lane", fmt, {})).toBe("Nora Lane stopped the test on Nov 3. Work you sent is still reviewed.");
     expect(R.stillWorksLine({ ...stopped, endKind: "closed" }, "Nora Lane", fmt, { chat: true }, "Send")).toBe("This test ended on Nov 3, so your Send didn't go through. You can still chat. Work you sent is still reviewed.");
     expect(R.workOverLine({ ...stopped, endKind: "early" }, "Nora Lane", fmt, "Cancel call")).toBe("Nora Lane ended your session early on Nov 3, so your Cancel call didn't go through. Work you sent is still reviewed.");
-    expect(R.workOverLine(stopped, "Nora Lane", fmt, R.workOverPress("key-broken"))).toBe("Nora Lane stopped the test on Nov 3, so your “This key doesn't work” didn't go through. Work you sent is still reviewed.");
+    expect(R.workOverPress("key-broken")).toBe(""); // (Owner, Nov 6, §304) "This key doesn't work" is gone
     expect(["terms", "written", "recording-send", "answer-request", "cancel-set"].map((a) => R.workOverPress(a, a === "terms" ? { choice: "keep" } : a === "answer-request" ? { action: "withdraw" } : {}))).toEqual(["Keep", "Send", "Send", "Withdraw", "Cancel call"]);
     // A block, a rating or a leave aren't "the work is over" here (a block keeps its neutral line).
     expect(R.workOver({ status: "ended", endKind: "blocked", endedAt: at })).toBe(false);
@@ -74,7 +74,6 @@ describe("after a stop: what's gone is refused and names the press; what still w
       const r = await sact(sessionId, action, tester.cookie, { seenAt: opened, ...body });
       expect(r.body.error, action).toMatchObject({ code: "call_cancelled", message: "This call was cancelled when the test stopped." });
     }
-    await refused("key-broken", {}, "“This key doesn't work”");
     // Final: pressing again never goes ahead.
     await refused("written", { answers: ["a", "b"], confirmed: true }, "Send");
   });
@@ -127,7 +126,7 @@ describe("after a stop: what's gone is refused and names the press; what still w
 describe("the session page after the work is over (source)", () => {
   it("the key box, Leave, the offer, Send and the call tools are gone; the top line names a refused press; the page goes to its top", () => {
     const page = src("app/app/sessions/[id]/page.tsx");
-    expect(page).toContain('const key = c.status === "working" ? await keyOf(c.id) : null;'); // no key box, so no "This key doesn't work"
+    expect(page).toContain('const key = c.status === "working" ? await keyOf(c.id) : null;'); // no key box
     expect(page).toContain('{c.status === "working" && !meOff && ('); // Leave
     expect(page).toContain("offer={offer && !refusal ?");
     expect(page).toContain("canSend={!refusal && canSendAgain(recording) && !meOff && draftsShown}"); // (batch 30 §2) a paid recording can be sent again

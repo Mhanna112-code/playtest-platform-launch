@@ -183,7 +183,7 @@ export async function ownChanges(userId: string, testId: string, since: Date, ta
  * through the action log, so the tab that did them never stops for them.
  */
 export async function devChanges(devId: string, testId: string, since: Date, tab: string, tx: Tx | typeof db = db, opts: { all?: boolean; press?: Press } = {}): Promise<TestEventLike[]> {
-  // (Batch 14) The live box (`all`) also lists the quiet kinds: a tester's Switch (stacked per day) and a key reported as not working. They never stop a press.
+  // (Batch 14) The live box (`all`) also lists the quiet kinds: a tester's Switch (stacked per day), a rating… ((Owner, Nov 6, §304) no key report any more). They never stop a press.
   const found = stackSwitches(await tx.testEvent.findMany({ where: { testId, createdAt: { gt: since }, kind: { in: [...DEV_STOP_KINDS, "renamed", ...(opts.all ? DEV_QUIET_KINDS : [])] } }, orderBy: { createdAt: "asc" }, take: 100 }));
   // (Owner, Nov 6, §284) The live box: each line opens what it is about; an older event that stored no place gets it now (liveLinks.ts).
   const events = opts.all ? await withEventLinks(testId, found, tx) : found;

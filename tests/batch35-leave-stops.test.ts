@@ -111,10 +111,10 @@ describe("batch 35 §61: what the tester did in another tab always stops once (A
 
   it("the Alerts lines say other tabs always stop; the live box never greys them; the developer's menu doesn't offer them", () => {
     expect(ALERTS_ON_LINE).toBe("Stops a press once for: new terms, your key, pay, calls, delayed pay, your dispute, listing changes, and what you did in another tab.");
-    expect(ALERTS_OFF_LINE).toBe("Stops a press only for: new terms, your key marked as working, and what you did in another tab.");
+    expect(ALERTS_OFF_LINE).toBe("Stops a press only for: new terms, and what you did in another tab."); // (Owner, Nov 6, §304) no key part
     expect(src("lib/server/testerGate.ts")).toContain('export const ALERTS_OFF_KINDS = new Set([...CONTRACT_KINDS, "own"]);');
     expect(src("app/api/live/route.ts")).toContain("!ALERTS_OFF_KINDS.has(shown[i].kind)");
-    expect(src("components/QuickIgnore.tsx")).toContain("New terms from the developer, a key marked as working and what you did in another tab still stop.");
+    expect(src("components/QuickIgnore.tsx")).toContain("New terms from the developer and what you did in another tab still stop.");
     expect(src("lib/alerts.ts")).not.toMatch(/key: "(own|tabs)"/);
   });
 });

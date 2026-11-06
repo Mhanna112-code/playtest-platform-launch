@@ -184,7 +184,7 @@ describe("§302 the page's side of the refusal (as for an open offer)", () => {
   };
 
   it("the blocked paths: every session press but Rate, Leave, Acknowledge and the page's own sends; Join call", () => {
-    for (const a of ["written", "written-add", "recording-send", "request-time", "answer-request", "cancel-call", "choose", "dispute", "message", "key-broken", "terms"]) expect(ndaBlockedPath(`/api/sessions/s1/${a}`), a).toBe(true);
+    for (const a of ["written", "written-add", "recording-send", "request-time", "answer-request", "cancel-call", "choose", "dispute", "message", "terms"]) expect(ndaBlockedPath(`/api/sessions/s1/${a}`), a).toBe(true);
     for (const a of ["rate", "leave", "nda-seen", "terms-pill", "recording-alive", "recording-done", "recording-abandon", "dismiss-removed"]) expect(ndaBlockedPath(`/api/sessions/s1/${a}`), a).toBe(false);
     expect(ndaBlockedPath("/api/calls/c1/join")).toBe(true);
     expect(ndaBlockedPath("/api/sessions/s2/request-time", "s1")).toBe(false); // another session's

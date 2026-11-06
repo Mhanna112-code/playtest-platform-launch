@@ -640,7 +640,8 @@ export const DEV_STOP_KINDS = [
 // is refused once ("Ana Silva withdrew this request."). The developer's own withdrawals ("You withdrew …") come only through the action log, as before.
 // (§185) "req_closed": a request with a tester closed because the tester got a call at that time ("Ana Silva's request for … closed: she is no longer free at that
 // time"): quiet too, with a bell (stacked per test and day).
-export const DEV_QUIET_KINDS = ["terms", "key", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed"] as const;
+// (Owner, Nov 6, §304) No "key" (a tester's "This key doesn't work"): the report is gone; testers say so in chat.
+export const DEV_QUIET_KINDS = ["terms", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed"] as const;
 /** "Ana switched to the new terms"; several in a day stack: "3 testers switched to the new terms". */
 export const switchedLine = (n: number, name = "") => (n === 1 ? `${name} switched to the new terms` : `${n} testers switched to the new terms`);
 
@@ -661,7 +662,6 @@ export const DEV_EXEMPT_KINDS: Record<string, string> = {
   next_round: "(Owner, Nov 3, batch 35 §168) the developer's own Next round: it never changes this round, so it never stops a press (not from another tab either)",
   invited: "the developer's own invites (reason E from another tab)",
   rated: "(batch 20 section 24) a tester whose part had ended rated you: one quiet line in the live box (DEV_QUIET_KINDS) with your own window, never a stop (a working tester who rates leaves: \"left\")",
-  key: "(batch 14 section 6) an access key reported as not working: one quiet line in the live box (DEV_QUIET_KINDS), never a stop, no bell",
   terms: "(batch 14 section 4) a tester switched to the new terms: one quiet line in the live box (DEV_QUIET_KINDS), stacked per day; work already sent keeps its price, so nothing a press could change",
   paused: "a payment hold: every paused button refuses for good, and the page shows the hold",
   resumed: "the hold lifted because the developer paid (their own action, reason E)",
@@ -767,9 +767,9 @@ function overHalf(c: StopCtx, devName: string, fmt: (d: Date) => string) {
   return c.endKind === "stopped" ? `${devName} stopped the test on ${d}` : c.endKind === "closed" ? `This test ended on ${d}` : `${devName} ended your session early on ${d}`;
 }
 /** The presses that go once the work is over (hidden on the page, refused on the server); WORK_OVER_PRESSES are the names the refusal gives them. */
-export const WORK_OVER_ACTIONS = ["terms", "written", "written-add", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set", "key-broken"] as const;
-export const WORK_OVER_PRESSES = ["Switch", "Keep", "Send", "Add", "upload", "Remove", "Request a time", "Accept", "Decline", "Withdraw", "Cancel call", "“This key doesn't work”"] as const;
-/** The press's name in the refusal: "Send", "Switch", "Request a time", "Cancel call", "“This key doesn't work”"… ("" for a press that isn't one of them). */
+export const WORK_OVER_ACTIONS = ["terms", "written", "written-add", "recording-start", "recording-done", "recording-send", "recording-remove", "request-time", "answer-request", "cancel-call", "cancel-set"] as const; // (Owner, Nov 6, §304) no "key-broken"
+export const WORK_OVER_PRESSES = ["Switch", "Keep", "Send", "Add", "upload", "Remove", "Request a time", "Accept", "Decline", "Withdraw", "Cancel call"] as const;
+/** The press's name in the refusal: "Send", "Switch", "Request a time", "Cancel call"… ("" for a press that isn't one of them). */
 export function workOverPress(action: string, body: Record<string, unknown> = {}): string {
   switch (action) {
     case "terms": return body.choice === "keep" ? "Keep" : "Switch";
@@ -782,7 +782,6 @@ export function workOverPress(action: string, body: Record<string, unknown> = {}
     case "request-time": return "Request a time";
     case "answer-request": return body.action === "decline" ? "Decline" : body.action === "withdraw" ? "Withdraw" : "Accept";
     case "cancel-call": case "cancel-set": return "Cancel call";
-    case "key-broken": return "“This key doesn't work”";
   }
   return "";
 }

@@ -1090,8 +1090,8 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
     await stampCounting(testId, tx); // (batch 35 §66) the 3-change count starts with the first join
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
-    // (Design doc 5) Each joining tester gets an access key (the key they had, if it still works, else the oldest free one).
-    await assignKeyAtJoin(tx, testId, contract.id, body.keyStillWorks === true);
+    // (Design doc 5) Each joining tester gets an access key (the key they had, else the oldest free one). (Owner, Nov 6, §304) No "still works?" answer.
+    await assignKeyAtJoin(tx, testId, contract.id);
     await recordEvent(tx, testId, options.quietJoinEvent === true ? "auto_joined" : "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id, "", testerRow(contract.id)); // (Owner, Nov 6, §284) the place the line opens: their row in Testers
     await tx.invite.updateMany({ where: { testId, testerId: tester.id, status: "sent" }, data: { status: "joined" } });
     // (Correction 4) The last spot taken: every other pending application and open invite closes, in this transaction.

@@ -128,14 +128,12 @@ describe("Access keys (design doc 5)", () => {
     expect(await keyOf(b.sessionId)).toBe("K2");
   });
 
-  it("a reported key is crossed out in In use and is NOT replaced: (batch 14) there is no Assign a free key", async () => {
+  it("a key is never replaced on its own: (batch 14) there is no Assign a free key, and (Owner, Nov 6, §304) no key report", async () => {
     const { dev, testId } = await withKeys(["K1", "K2", "K3"], 2);
     const a = await joined(testId, "Ana Silva");
-    const r = await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
-    expect(r.status).toBe(200);
-    expect(r.body.replaced).toBe(false);
-    expect((await db.accessKey.findFirstOrThrow({ where: { value: "K1", testId } })).status).toBe("broken");
-    // Still broken: nothing hands out a free key by itself, and the developer has no Assign button.
+    expect((await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() })).status).toBe(404);
+    expect((await db.accessKey.findFirstOrThrow({ where: { value: "K1", testId } })).status).toBe("inuse");
+    // Nothing hands out a free key by itself, and the developer has no Assign button.
     expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);
     expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBeGreaterThanOrEqual(400);
     expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);

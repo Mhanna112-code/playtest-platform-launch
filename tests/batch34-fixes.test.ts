@@ -216,8 +216,8 @@ describe("batch 34 §12: a key the developer's Save gives a working tester shows
     const after = await testV(ana.tester.user.id, testId, ana.sessionId);
     expect(after).not.toBe(before);
     expect(after.split("|").pop()).toContain(`${key.id}:inuse`);
-    // Reported as not working: the fingerprint follows the key's state too.
-    await db.accessKey.update({ where: { id: key.id }, data: { status: "broken" } });
+    // The fingerprint follows the key's state too ((Owner, Nov 6, §304) no "broken" state any more: a held key).
+    await db.accessKey.update({ where: { id: key.id }, data: { status: "held" } });
     expect(await testV(ana.tester.user.id, testId, ana.sessionId)).not.toBe(after);
     // The tester's top-box line carries its kind, so it gets "See it" (jumping to the key box).
     const lines = asLines(await testerChanges(ana.tester.user.id, ana.sessionId, testId, since, ""));

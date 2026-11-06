@@ -152,7 +152,7 @@ async function callApi<T = unknown>(path: string, body?: unknown, method?: strin
       if (testId) window.location.href = `/app/tests/${testId}?failed=${encodeURIComponent(data.error.failed)}`;
     }
     // (Owner, Oct 28, batch 16 section 24) The test stopped, closed or the tester's work was ended while this page was open: a press of what's gone (Send,
-    // Switch / Keep, a call action, an upload, "This key doesn't work") reloads the session page at its TOP, where the stopped line names the press.
+    // Switch / Keep, a call action, an upload) reloads the session page at its TOP, where the stopped line names the press.
     if (data?.error?.code === "work_over" && typeof window !== "undefined" && typeof data.error.failed === "string") {
       const m = /\/api\/sessions\/([^/]+)\//.exec(path);
       if (m) window.location.href = `/app/sessions/${m[1]}?failed=${encodeURIComponent(data.error.failed)}`;

@@ -90,7 +90,7 @@ describe("batch 14 section 3: applicants and invited testers are told, stacked",
 describe("batch 14 section 4: a quieter Switch / Keep", () => {
   it("Keep tells the developer nothing; Switch is one quiet live-box line (stacked per day) and never stops a press", async () => {
     expect(R.DEV_STOP_KINDS).not.toContain("terms");
-    expect(R.DEV_QUIET_KINDS).toEqual(["terms", "key", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed"]); // (§184 req_dropped; §185 a tester's withdrawal) (batch 20 section 24) a rating by a tester whose part had ended; (batch 30 §2) an update at the cap
+    expect(R.DEV_QUIET_KINDS).toEqual(["terms", "rated", "sentpaid", "req_dropped", "withdrew_req", "req_closed"]); // (§184 req_dropped; §185 a tester's withdrawal) (batch 20 section 24) a rating by a tester whose part had ended; (batch 30 §2) an update at the cap
     const { dev, testId } = await setup();
     const a = await joined(testId, "Ana Silva");
     const b = await joined(testId, "Ben Ward", "he");
@@ -122,7 +122,7 @@ describe("batch 14 section 5: written answers up to 20,000 characters (owner, No
 });
 
 describe("batch 14 section 6: access keys, no Assign a free key", () => {
-  it("Assign is gone; a report is one quiet live-box line (no bell, no stop) and nothing replaces the key; the read-only notice lists free and given keys", async () => {
+  it("Assign is gone; (§304) no key report either; the read-only notice lists free and given keys", async () => {
     const dev = await makeUser({ dev: true, name: "Nora Lane", pronoun: "she" });
     const r = await json(await testsPOST(req("/api/tests", { cookie: dev.cookie, body: listingBody({ spots: 2, accessKeys: "K1\nK2\nK3" }) })));
     const testId = r.body.id as string;
@@ -133,19 +133,20 @@ describe("batch 14 section 6: access keys, no Assign a free key", () => {
     expect(after).not.toBe(before);
     const since = new Date();
     await settle();
-    expect((await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() })).status).toBe(200);
-    expect((await db.accessKey.findFirstOrThrow({ where: { testId, value: "K1" } })).status).toBe("broken");
+    // (Owner, Nov 6, §304) "This key doesn't work" is gone: the press is no route, and nothing replaces a key or tells the developer.
+    expect((await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() })).status).toBe(404);
+    expect((await db.accessKey.findFirstOrThrow({ where: { testId, value: "K1" } })).status).toBe("inuse");
     expect(await db.accessKey.count({ where: { testId, status: "free" } })).toBe(2);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "access key" } } })).toBe(0);
-    expect((await devChanges(dev.user.id, testId, since, "", db, { all: true })).map((e) => e.text)).toContain("Ana Silva reported her key doesn't work");
-    expect((await devChanges(dev.user.id, testId, since, "")).some((e) => e.kind === "key")).toBe(false);
+    expect((await devChanges(dev.user.id, testId, since, "", db, { all: true })).some((e) => e.kind === "key")).toBe(false);
     expect((await act(testId, "assign-key", dev.cookie, { contractId: a.sessionId, seenAt: seen(), confirmed: true })).status).toBeGreaterThanOrEqual(400);
     const notice = src("app/app/tests/[id]/KeysNotice.tsx");
-    for (const s of ["Access keys", "Free (not given to anyone yet)", "Given", "line-through", "max-h-[5.5rem]", "sm:grid-cols-2", "edit#keys", 'target="_blank"', "each new tester gets one."]) expect(notice).toContain(s);
+    for (const s of ["Access keys", "Free (not given to anyone yet)", "Given", "max-h-[5.5rem]", "sm:grid-cols-2", "edit#keys", 'target="_blank"', "each new tester gets one."]) expect(notice).toContain(s);
     expect(notice).not.toContain("<button");
+    expect(notice).not.toContain("line-through"); // (§304) nothing crossed out
     expect(src("lib/keys.ts")).toContain("If a tester's key doesn't work, delete a free key ");
     expect(fs.readFileSync(path.resolve(__dirname, "../src/lib/server/accessKeys.ts"), "utf8")).not.toContain("assignFreeKey");
-    // Broken and held keys still can't be added again.
+    // A key in use still can't be added again.
     expect((await edit(testId, dev.cookie, {}, { keysAdd: ["K1"] })).status).toBe(400);
   });
 });

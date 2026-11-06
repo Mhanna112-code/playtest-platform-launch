@@ -14,7 +14,7 @@ type Tx = Prisma.TransactionClient;
  * - the team's decision on a dispute: the part it decided;
  * - an application ("applied to join", "asks to rejoin"): its Needs you Applications row.
  */
-export const TESTER_ROW_KINDS = new Set(["joined", "auto_joined", "left", "rated", "key", "terms", "chargeback"]);
+export const TESTER_ROW_KINDS = new Set(["joined", "auto_joined", "left", "rated", "terms", "chargeback"]);
 const REQUEST_KINDS = new Set(["requested", "withdrew_req", "declined_req", "req_dropped", "req_closed"]);
 const NEAR_MS = 60_000;
 type Ev = { kind: string; text: string; createdAt: Date; contractId: string | null; link: string };

@@ -82,7 +82,7 @@ export async function GET(req: Request) {
     const shown = changes.filter((c) => c.createdAt <= now);
     const seenTo = new Date(Math.max(margin.getTime(), ...shown.map((c) => c.createdAt.getTime())));
     const lines = asLines(shown, ignored);
-    // (Owner, batch 14 section 4; batch 20 section 25) The developer's quiet lines (a tester's Switch, a key reported, a rating by a tester whose part had ended) are
+    // (Owner, batch 14 section 4; batch 20 section 25) The developer's quiet lines (a tester's Switch, a rating by a tester whose part had ended) are
     // live-box lines only: marked, so an open stop box under a button never takes them in (it lists only what stops a press).
     if (kind === "test") lines.forEach((l, i) => { if ((DEV_QUIET_KINDS as readonly string[]).includes(shown[i].kind)) Object.assign(l, { quiet: true }); });
     // (Owner, Nov 4, §184) The tester's own requests dropped by a booking: a quiet live-box line too.

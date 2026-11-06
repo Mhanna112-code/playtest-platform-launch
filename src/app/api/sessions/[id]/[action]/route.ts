@@ -7,7 +7,6 @@ import { chooseOutcome } from "@/lib/server/holds";
 import { answerRequest, cancelCallSet, requestTime } from "@/lib/server/requests";
 import { PART_ENDED_TERMS, closeOffersOfEnded, decideTerms, ndaBlockFirst } from "@/lib/server/terms";
 import { openDispute } from "@/lib/server/payments";
-import { reportKeyBroken } from "@/lib/server/accessKeys";
 import { db } from "@/lib/db";
 import { NDA_FREE } from "@/lib/ndaNotice";
 import { displayName, fmtDate, stopTimeIn } from "@/lib/format";
@@ -29,7 +28,7 @@ type Ctx = { params: Promise<{ id: string; action: string }> };
 
 /**
  * (Owner, Oct 26) When the test was stopped or the tester's work was ended while the page is open, every later press is a FINAL
- * refusal (not a stop-once): Send, any call action, Switch / Keep, Request, uploads, "This key doesn't work". (Charge / Let it go, Dispute, Rate,
+ * refusal (not a stop-once): Send, any call action, Switch / Keep, Request, uploads ((Owner, Nov 6, §304) "This key doesn't work" is gone). (Charge / Let it go, Dispute, Rate,
  * Report a problem, chat and excerpts keep their own rules.) (Owner, Oct 28, batch 16 section 24) After a stop, a closure or an early end the refusal
  * names the press ("Nora Lane stopped the test on Nov 3, so your Send didn't go through. Work you sent is still reviewed.") with the code
  * "work_over": the page moves to its top, where the stopped line says the same. A leave, a rating or a block keep their own (neutral) line.
@@ -185,8 +184,6 @@ async function run(u: Awaited<ReturnType<typeof requireActive>>, id: string, act
         await db.contract.update({ where: { id }, data: { removedDismissedAt: new Date() } });
         return ok({ dismissed: true });
       }
-      case "key-broken":
-        return ok(await reportKeyBroken(u, id));
       case "rate":
         return ok(await testerRate(u, id, body));
       case "recording-start":

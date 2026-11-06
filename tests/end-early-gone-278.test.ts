@@ -118,7 +118,7 @@ describe("§278 a tick whose row left the list is never sent hidden", () => {
     expect(liveTicks(["mhann"], [])).toEqual([]);
   });
 
-  it("End early, Request a time and the broken-key Dismiss send only ticks still in their lists", () => {
+  it("End early and Request a time send only ticks still in their lists ((Owner, Nov 6, §304) the broken-key Dismiss is gone)", () => {
     const src = (p: string) => readFileSync(join(process.cwd(), p), "utf8");
     const top = src("src/app/app/tests/[id]/TopPanel.tsx");
     expect(top).toContain("useDropGoneTicks(p.working.map((w) => w.contractId), setPicked)");
@@ -127,7 +127,6 @@ describe("§278 a tick whose row left the list is never sent hidden", () => {
     const calls = src("src/app/app/tests/[id]/DevCallPanel.tsx");
     expect(calls).toContain("useDropGoneTicks(testers.map((t) => t.contractId), setTicked)");
     expect(calls).toContain("contractIds: tickedIds");
-    expect(src("src/app/app/tests/[id]/KeysWarning.tsx")).toContain("keyIds: chosen");
   });
 });
 

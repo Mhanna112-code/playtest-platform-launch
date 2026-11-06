@@ -78,7 +78,7 @@ describe("§156 guard: every press names itself", () => {
   const all = presses();
 
   it("finds the presses (the parse works)", () => {
-    for (const p of ["/api/tests/x/edit", "/api/tests/x/keys-dismiss", "/api/sessions/x/recording-remove", "/api/admin/pause-test", "/api/blocks", "/api/payments/confirm", "/api/profile", "/api/recordings/x/upload"]) expect(all).toContain(p);
+    for (const p of ["/api/tests/x/edit", "/api/sessions/x/recording-remove", "/api/admin/pause-test", "/api/blocks", "/api/payments/confirm", "/api/profile", "/api/recordings/x/upload"]) expect(all).toContain(p);
     expect(all.length).toBeGreaterThan(90);
   });
 
@@ -103,9 +103,6 @@ describe("§156: the presses that named nothing now name their button", () => {
   it("route by route, with the body where one route serves several buttons", () => {
     const cases: [string, unknown, string][] = [
       ["/api/sessions/s1/recording-remove", { recordingId: "r" }, "Remove"],
-      ["/api/tests/t1/keys-dismiss", { keyIds: ["k"] }, "Dismiss selected"],
-      ["/api/tests/t1/keys-dismiss", { keyIds: ["k", "l"] }, "Dismiss 2"],
-      ["/api/sessions/s1/key-broken", {}, "“This key doesn't work”"],
       ["/api/sessions/s1/terms", { choice: "switch" }, "Switch to the new terms"],
       ["/api/sessions/s1/terms", { choice: "keep" }, "Keep my current terms"],
       ["/api/sessions/s1/choose", { choice: "letgo" }, "Let it go"],
@@ -180,7 +177,6 @@ describe("§156: the presses that named nothing now name their button", () => {
     expect(src("components/BlockButton.tsx")).toContain('<Err text={err} press="Block" />');
     expect(src("components/BlockButton.tsx")).toContain('<Err text={err} press="Unblock" />');
     expect(src("app/app/sessions/[id]/RecordingUpload.tsx")).toContain('<Err text={err} press="Remove" />');
-    expect(src("app/app/tests/[id]/KeysWarning.tsx")).toContain("refusalLine(errPress, err)");
     expect(src("components/BankWaiting.tsx")).toContain("refusalLine(CONFIRM_WITH_BANK, err)");
     expect(src("components/Excerpts.tsx")).not.toContain('press="Allow / Deny"');
     expect(src("app/admin/AdminButton.tsx")).toContain("refusalLine(label, msg.text)");

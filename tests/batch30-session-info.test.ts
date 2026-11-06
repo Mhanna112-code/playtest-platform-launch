@@ -129,6 +129,6 @@ describe("batch 30 §15: an Edit save and the tester's session", () => {
     // (Batch 35 §3) ... and the save the line is about.
     expect(src("components/ListingInfo.tsx")).toContain("new CustomEvent(SEE_IT_EVENT, { detail: { at: at ? new Date(at).toISOString() : undefined, saveAt: saveAt ? new Date(saveAt).toISOString() : undefined, ...(keys?.length ? { keys } : {}) } })");
     // Access keys aren't part of either: the key box is unchanged.
-    expect(p).toContain("<KeyBox canReport={!meOff}");
+    expect(p).toContain("<KeyBox value={key.value} fresh={!!freshKey} />"); // (Owner, Nov 6, §304) no report button, so no canReport
   });
 });

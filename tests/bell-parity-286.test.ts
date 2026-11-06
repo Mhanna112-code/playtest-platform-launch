@@ -179,23 +179,8 @@ describe("§286 the other new tester bells", () => {
     expect(hers[0]).toMatchObject({ link: `/app/sessions/${a.sessionId}#part-written`, groupKey: "disputeside" });
   });
 
-  it("her key marked as working (never the key itself); the developer's bell when she reports it (§286, replacing batch 14 §6's \"no bell\")", async () => {
-    const f = await setup({ spots: 3, accessKeys: "K1\nK2\nK3" });
-    const a = await joined(f.testId);
-    await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
-    const his = await bells(f.dev.user.id, "key doesn't work");
-    expect(his.map((n) => n.text)).toEqual(["Ana Silva reported her key doesn't work"]);
-    expect(his[0].link).toBe(`/app/tests/${f.testId}#tester-${a.sessionId}`);
-    const k = await db.accessKey.findFirstOrThrow({ where: { contractId: a.sessionId } });
-    expect((await act(f.testId, "keys-dismiss", f.dev.cookie, { keyIds: [k.id], worksNow: [k.id] })).status).toBe(200);
-    const hers = await bells(a.tester.user.id, "marked your key");
-    expect(hers.map((n) => n.text)).toEqual(["Nora Lane marked your key as working"]);
-    expect(hers[0].link).toBe(`/app/sessions/${a.sessionId}#access-key`);
-    // Dismissed without "Works now": nothing for her.
-    await sact(a.sessionId, "key-broken", a.tester.cookie, { seenAt: seen() });
-    expect((await act(f.testId, "keys-dismiss", f.dev.cookie, { keyIds: [k.id], worksNow: [] })).status).toBe(200);
-    expect(await bells(a.tester.user.id, "marked your key")).toHaveLength(1);
-  });
+  // (Owner, Nov 6, §304) "Ana Silva reported her key doesn't work" and "Nora Lane marked your key as working" are gone with the key report
+  // (tests/no-key-report-304.test.ts).
 
   it("the listing edited: \"Nora Lane edited the listing\" to each working tester; a questions-only Save keeps its own one bell (never two)", async () => {
     const f = await setup();

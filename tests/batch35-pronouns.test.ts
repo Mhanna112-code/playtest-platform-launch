@@ -13,7 +13,6 @@ import SignupPage from "@/app/signup/page";
 import { BioBox } from "@/components/BioBox";
 import { blockedTestsLine } from "@/components/ProfileUnavailable";
 import { pronouns, PRONOUN_OPTIONS } from "@/lib/format";
-import { keyReportedLine, keyToldNote } from "@/lib/keys";
 import { LIMITS } from "@/lib/limits";
 import { callClosedLineOf, deletedNoPayoutsLine, finishedAndRatedLine, inviteTesterRefusal, joinCallRefusal, ratedYouLiveLine, ratePendingLine } from "@/lib/rules";
 import { testerPaymentStatus } from "@/lib/testerPaymentStatus";
@@ -29,7 +28,7 @@ import { devRateLabel, requestGoneLine } from "@/lib/server/requests";
 import { FINISHED_PART_REASON } from "@/lib/server/testerGate";
 import { AGE_LINE } from "@/lib/termsOfUse";
 import { json, makeUser, req, uniq } from "./helpers";
-import { joined, sact, seen, setup } from "./fixtures";
+import { joined, setup } from "./fixtures";
 
 // Batch 35 §162 (owner, Nov 3): the pronoun and the chosen side's bio at sign-up (developer or tester; "both" is gone), on the email form and on Google's step,
 // shown on the profile afterwards; and every line about a person in that person's recorded pronoun (she/her/her, he/him/his, they/them/their), verbs agreeing.
@@ -175,7 +174,6 @@ describe("batch 35 §162: lines about a person use their recorded pronoun (she /
     expect(ratedYouLiveLine("Sam", null, "")).toBe("Sam rated you. You can rate them once everything they sent is settled.");
     expect(finishedAndRatedLine("Ana", "she")).toBe("Ana finished her part (rated you)");
     expect(finishedAndRatedLine("Ben", "he")).toBe("Ben finished his part (rated you)");
-    expect(keyReportedLine("Sam", "they")).toBe("Sam reported their key doesn't work");
     // Verb agreement where the pronoun is the subject.
     expect(ratePendingLine("Ana", "she")).toBe("You can rate Ana once she's rated you and everything she sent is settled.");
     expect(ratePendingLine("Sam")).toBe("You can rate Sam once they've rated you and everything they sent is settled.");
@@ -186,8 +184,7 @@ describe("batch 35 §162: lines about a person use their recorded pronoun (she /
     const call = { status: "booked", startsAt: new Date(Date.now() + 3_600_000), minutes: 30, noShow: false, paused: false, testStatus: "open", contractStatus: "left", blocked: false };
     expect(joinCallRefusal({ ...call, side: "developer", testerPronoun: "he" }, new Date(), String)).toBe("He left the test.");
     expect(joinCallRefusal({ ...call, side: "tester", testerPronoun: "he" }, new Date(), String)).toBe("You left this test.");
-    expect(keyToldNote(false, "she")).toBe("Thanks. The developer was told. She can send you another key in a message.");
-    expect(keyToldNote(true, "")).toBe("The developer was already told. They can send you another key in a message.");
+    // (Owner, Nov 6, §304) The key report's lines ("… reported his key doesn't work", "She can send you another key") are gone with the report.
   });
 
   it("Needs you, invite and request rows", () => {
@@ -214,10 +211,9 @@ describe("batch 35 §162: lines about a person use their recorded pronoun (she /
     expect(testerPaymentStatus({ developerDeleted: "Nora Lane", developerPronoun: "she" }).text).toBe("Can't be paid: Nora Lane deleted her account");
   });
 
-  it("in the app: a key report's live line and the tester's note use each person's pronoun; a pronoun change redraws the open test and session pages", async () => {
+  it("in the app: a pronoun change redraws the open test and session pages", async () => {
     const { dev, testId } = await setup({ spots: 3, accessKeys: "K1\nK2\nK3" }); // the developer is "she" (fixtures)
     const ben = await joined(testId, "Ben Ward", "he");
-    const sam = await joined(testId, "Sam Kerr", "");
     const v1 = await testV(dev.user.id, testId), s1 = await testV(ben.tester.user.id, testId, ben.sessionId);
     await db.user.update({ where: { id: ben.tester.user.id }, data: { pronoun: "they" } });
     expect(await testV(dev.user.id, testId)).not.toBe(v1);
@@ -225,13 +221,7 @@ describe("batch 35 §162: lines about a person use their recorded pronoun (she /
     expect(await testV(ben.tester.user.id, testId, ben.sessionId)).not.toBe(s1);
     await db.user.update({ where: { id: ben.tester.user.id }, data: { pronoun: "he" } });
     await db.user.update({ where: { id: dev.user.id }, data: { pronoun: "she" } });
-    // The developer's live line when a key is reported, and the tester's note about the developer.
-    const r = await sact(ben.sessionId, "key-broken", ben.tester.cookie, { seenAt: seen() });
-    expect(r.status).toBe(200);
-    expect(r.body.note).toBe("Thanks. The developer was told. She can send you another key in a message.");
-    expect(await db.testEvent.count({ where: { testId, text: "Ben Ward reported his key doesn't work" } })).toBe(1);
-    expect((await sact(sam.sessionId, "key-broken", sam.tester.cookie, { seenAt: seen() })).status).toBe(200);
-    expect(await db.testEvent.count({ where: { testId, text: "Sam Kerr reported their key doesn't work" } })).toBe(1);
+    // (Owner, Nov 6, §304) No key report any more, so no "reported his key doesn't work" line to check here.
     // The profile Save keeps a pronoun changed later (the account's, both sides).
     const nora = await makeUser({ dev: true, name: "Nora Lane", pronoun: "she" });
     expect((await json(await profilePOST(req("/api/profile", { cookie: nora.cookie, body: { name: "Nora Lane", pronoun: "he", isDeveloper: true, isTester: false, side: "developer", bio: "" } })))).status).toBe(200);

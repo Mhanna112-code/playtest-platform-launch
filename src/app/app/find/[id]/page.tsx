@@ -28,7 +28,6 @@ import { gapsOf } from "@/lib/gaps";
 import { developerStats } from "@/lib/server/profileStats";
 import { sideLink } from "@/lib/sides";
 import { canAskToRejoin, leftText, testTitleOf } from "@/lib/rules";
-import { heldBrokenKey } from "@/lib/server/accessKeys";
 import { profileTestRefusal } from "@/lib/server/profileOpenTests";
 import { needsTermsAgain } from "@/lib/termsOfUse";
 import { inviteOnlyHidden, noteJoinPageVisit } from "@/lib/server/testVisits";
@@ -292,7 +291,6 @@ export default async function ListingPage({ params, searchParams }: { params: Pr
             rejoin={canRejoin}
             timeBack={mine && mine.endedAt ? leftText(mine.dueAt.getTime() - mine.endedAt.getTime()) : undefined}
             nda={t.ndaText}
-            brokenKey={!!(await heldBrokenKey(t.id, u.id))}
             testId={t.id}
             seenAt={seenAt}
             mode={t.joinMode}

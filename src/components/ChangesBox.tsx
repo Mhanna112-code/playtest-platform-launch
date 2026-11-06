@@ -26,7 +26,7 @@ export type Change = { text: string; /** (Owner, Nov 5, §270) the people and te
 /** (Owner, Nov 3, §160) The Alerts types the developer's box offers to turn off: only from lines that could be switched off (not `forced`, not already ignored, not terms). */
 export const optionalAlerts = (changes: Change[]) => [...new Set(changes.filter((c) => !c.forced && !c.ignored && c.kind !== "terms").map((c) => c.alert).filter((x): x is string => !!x))];
 /** (Owner, Nov 3, §160) The tester's box offers "Turn off alerts" only when a line in it is one the tester's Alerts could have switched off. */
-export const testerCanTurnOff = (changes: Change[]) => changes.some((c) => !c.forced && c.kind !== "terms" && c.kind !== "keyfixed" && c.kind !== "stop");
+export const testerCanTurnOff = (changes: Change[]) => changes.some((c) => !c.forced && c.kind !== "terms" && c.kind !== "stop"); // (Owner, Nov 6, §304) no "keyfixed" kind any more
 
 /** (§270) A stop line or refusal drawn as it reads, its names and tests green links. */
 const plain = (t: string) => t;

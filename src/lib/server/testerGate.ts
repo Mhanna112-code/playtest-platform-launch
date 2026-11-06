@@ -3,7 +3,7 @@ import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateForm
 import { TESTER_CHOICE_REASONS, partWhen, stopOnce, type TestEventLike } from "@/lib/rules";
 import { rowsOf } from "@/lib/callRows";
 import { HttpError } from "./http";
-import { KEY_BOX_ID, keyFixedLine, keyGivenToYouLine } from "@/lib/keys";
+import { keyGivenToYouLine } from "@/lib/keys";
 import { TERMS_OFFER_BOX, TESTER_REQUESTS_BOX, callRow, ownLink, requestRow, testerPartRow } from "@/lib/lineAnchors";
 import { KEY_GIVEN } from "./accessKeys";
 import { DROP_KINDS, isDropReason } from "@/lib/requestDrop";
@@ -108,9 +108,7 @@ export async function testerChanges(testerId: string, contractId: string, testId
     // (Owner, Nov 4, §185) Both quiet now: the developer's side of it ("Nora Lane's request for … closed: she is no longer free") comes with a bell instead.
     out.push({ kind: DROP_KINDS.devQuiet, text: e.text, createdAt: e.createdAt, link: e.link || TESTER_REQUESTS_BOX });
   for (const call of calls.filter((x) => !(x.cancelledBy === "system" && byTheEnd(c, x.cancelledAt)))) out.push({ kind: "cancelled", text: `Your call with ${dev} on ${fmtDateTime(call.startsAt)} was cancelled`, createdAt: call.cancelledAt!, link: callRow(call.id) });
-  // (Owner, Oct 30, batch 15 section 45) The developer marked this tester's key as working: a change to their contract (it stops even with Alerts Off; no bell).
-  const fixed = await db.accessKey.findFirst({ where: { contractId, fixedAt: { gt: seenAt }, status: "inuse" } });
-  if (fixed) out.push({ kind: "keyfixed", text: `${keyFixedLine(dev)} (${fixed.value})`, createdAt: fixed.fixedAt!, link: KEY_BOX_ID });
+  // (Owner, Nov 6, §304) No "<dev> marked your key as working" line any more: there is no key report to answer.
   // (Batch 30 §17) The developer's Save gave this tester a key (the test had none when they joined): "<dev> gave you an access key for “<test>”" (the key is in its box).
   for (const e of await db.testEvent.findMany({ where: { testId, kind: KEY_GIVEN, contractId, createdAt: { gt: seenAt } } })) out.push({ kind: "keygiven", text: keyGivenToYouLine(dev, c.test.title), createdAt: e.createdAt });
   // (Owner, Nov 5, §267) The NDA changed (its own notice): an ordinary line (Alerts on, not yet shown), apart from the block it makes.
@@ -148,8 +146,9 @@ export const devSideLine = (dev: string, pronoun: string | null | undefined, cal
 /** (Batch 20 section 12) "Nora Lane paid you $5.00 more for your written answers". */
 export const payMoreLine = (dev: string, cents: number, part: string) => `${dev} paid you ${money(cents)} more for your ${part}`;
 
-/** (Batch 15 sections 26 and 45) Changes to the tester's own contract: they stop a press even with Alerts Off. */
-export const CONTRACT_KINDS = new Set(["terms", "keyfixed"]);
+/** (Batch 15 sections 26 and 45) Changes to the tester's own contract: they stop a press even with Alerts Off. (Owner, Nov 6, §304) No keyfixed kind: a key is never
+ * marked as working any more. */
+export const CONTRACT_KINDS = new Set(["terms"]);
 /** (Owner, Oct 31, batch 35 §61) What stops a tester's press even with Alerts Off: changes to their contract and what they did themselves in another tab ("own",
  * like the developer's own other-tab actions, batch 29 §12). Never an Alerts-ignorable kind. */
 export const ALERTS_OFF_KINDS = new Set([...CONTRACT_KINDS, "own"]);
@@ -223,8 +222,8 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   const all = withRenamed(opts.keep ? raw.filter((e) => e.kind === "renamed" || opts.keep!(e)) : raw, body);
   const changes = all.filter((e) => (e.kind === "terms" ? !opts.skipTerms && e.createdAt > termsFrom : true));
   const terms = changes.filter((e) => e.kind === "terms");
-  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keyfixed", "keygiven"]);
-  // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer, their key marked working), and (batch 35 §61)
+  const r = stopOnce(changes.filter((e) => e.kind !== "terms"), callsFrom, false, [...KINDS, "renamed", "keygiven"]);
+  // (Owner, Oct 30, batch 15 section 26) Alerts Off: only changes to the tester's own contract stop (a new terms offer; (§304) no key line any more), and (batch 35 §61)
   // what they did themselves in another tab. (Owner, Oct 31, batch 35 §68) `piece` (the Dispute press): a payment on that piece since the page loaded (Pay, Pay more,
   // a dispute decision, a Charge) changes what's disputed, so it stops once even with Alerts Off, like new terms.
   const off = (await db.user.findUnique({ where: { id: testerId }, select: { testerAlertsOff: true } }))?.testerAlertsOff;
@@ -243,7 +242,7 @@ export async function testerGate(testerId: string, contractId: string, testId: s
   // (Owner, Nov 5, §250) Nor a line a stop box on this page already LISTED (any button's box: `shownIds`), forced lines and stop / pause moments included.
   const list = [...withRenamed(notListed((await unanswered(testerId, testId, [...termsShown, ...rest, ...(opts.moments ?? []).filter((e) => e.createdAt > seenAt), ...pauses])).filter((e) => !answersIt(e, opts.answers)), body), body), ...stale].sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
   // (Batch 17 section 13) `alertsOff`: the box drops "Turn off alerts" and "You can turn these stops off below" when Alerts is already Off.
-  // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, a key marked working, their own other-tab
+  // (Owner, Nov 3, §160) Each line says whether the tester's Alerts could have switched it off (`forced`): new terms, their own other-tab
   // actions, a stop or pause, and the piece rules (Dispute's payment on that piece; Charge / Let it go's payment on that part and any team decision) always stop.
   // (§171 A2) And the team's decision on her dispute, or the developer's side added to it, on every press.
   const forced = (e: TestEventLike) => (ALERTS_OFF_KINDS.has(e.kind) && !(opts.ordinaryTerms && e.kind === "terms")) || e.kind === "stop" || disputeChange(e) || (!!piece && e.piece === piece) || (!!opts.owedPiece && owedChange(e, opts.owedPiece));

@@ -20,11 +20,11 @@ export const PRESS_VERBS: Record<string, string> = {
   "cancel-set": "Cancel calls", "pay-extra": "Pay more", open: "Accept testers again", review: "Pay", "post-draft": "Post the test", "delete-draft": "Delete", "withdraw-application": "Withdraw",
   // (Owner, Nov 3, races) Adding to sent answers is "Add" (its refusal named no press: "Nora Lane stopped the test on Nov 3…" alone); the removed-from card's Dismiss.
   "written-add": "Add", "dismiss-removed": "Dismiss",
-  // (Owner, Nov 3, §156) Presses that named nothing ("press"): a recording's Remove, the developer's broken-key Dismiss (its count is in pressLabelOf), and the
-  // tester's key report by its button's own words (as the stopped line's "your “This key doesn't work” didn't go through").
+  // (Owner, Nov 3, §156) Presses that named nothing ("press"): a recording's Remove. ((Owner, Nov 6, §304) The broken-key Dismiss and "This key doesn't work"
+  // are gone.)
   // (Owner, Nov 6, §302) The NDA notice's button.
   "nda-seen": NDA_ACK_BUTTON,
-  "recording-remove": "Remove", "keys-dismiss": "Dismiss selected", "key-broken": "“This key doesn't work”",
+  "recording-remove": "Remove",
 };
 
 /**
@@ -143,10 +143,9 @@ export function pressLabelOf(path: string, body?: unknown): string {
   // (Owner, Nov 5, §226) Needs you's Pay for what's new on a paid part goes by Pay more's route and says so (`press: "Pay"`); the Testers list's is Pay more.
   if (p[1] === "tests" && p[3] === "pay-extra" && b.press === "Pay") return "Pay";
   if (p[1] === "sessions" && p[3] === "dismiss-removed" && b.all === true) return "Dismiss all";
-  // (§156) Switch / Keep and Charge / Let it go name the button pressed; the broken-key Dismiss its count ("Dismiss 2").
+  // (§156) Switch / Keep and Charge / Let it go name the button pressed.
   if (p[1] === "sessions" && p[3] === "terms" && (b.choice === "keep" || b.choice === "switch")) return b.choice === "keep" ? "Keep my current terms" : "Switch to the new terms";
   if (p[1] === "sessions" && p[3] === "choose" && b.choice === "letgo") return "Let it go";
-  if (p[1] === "tests" && p[3] === "keys-dismiss" && Array.isArray(b.keyIds) && b.keyIds.length > 1) return `Dismiss ${b.keyIds.length}`;
   if ((p[1] === "tests" || p[1] === "sessions") && p[3]) return PRESS_VERBS[p[3]] ?? "press";
   if (p[1] === "tests" && !p[2]) return "Post the test";
   return otherPress(p, b) ?? "press";

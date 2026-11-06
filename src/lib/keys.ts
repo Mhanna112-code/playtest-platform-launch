@@ -1,5 +1,4 @@
 // (Design doc 4 and 5) Access keys: one per line; each joining tester gets one. Pure helpers shared by the form and the server.
-import { pronouns } from "./format";
 
 export const KEY_MAX_LENGTH = 200;
 /** The refusal of a longer key (the server; the red line under it in the list). */
@@ -64,7 +63,7 @@ export function givenDeletedLine(given: { name: string; value: string }[]) {
 
 /**
  * Why a typed key can't be added ("" when it can). `status` is the state of the same key already on this test, if any. (Owner, Oct 30, batch 15 sections 19 and 44)
- * Refused only when it's in use by a CURRENT working tester (broken or not) or already free; a key of a tester who left or finished can come back (with a warning).
+ * Refused only when it's in use by a CURRENT working tester or already free; a key of a tester who left or finished can come back (with a warning).
  */
 export function keyRefusal(value: string, status: string | null, who: { working?: boolean; name?: string } = {}) {
   if (!status) return "";
@@ -72,17 +71,13 @@ export function keyRefusal(value: string, status: string | null, who: { working?
   if ((status === "inuse" || status === "broken") && who.working) return `${value} is in use by ${who.name || "a tester"}, so it can't be added.`;
   return "";
 }
-/** (Batch 15 section 44) The warning-only line under the Free box for a key typed back in (never a mistake, never blocks Save). */
-export const reusedKeyLine = (value: string, name: string, broken: boolean) => (broken ? `${value}: reported as broken by ${name}.` : `${value}: reused, previously given to ${name}.`);
+/** (Batch 15 section 44) The warning-only line under the Free box for a key typed back in (never a mistake, never blocks Save). (Owner, Nov 6, §304) Never
+ * "reported as broken" any more: no key is reported. */
+export const reusedKeyLine = (value: string, name: string) => `${value}: reused, previously given to ${name}.`;
 /** The hint under the boxes. */
-export const FREE_KEYS_RULE = "Keys in use can't be added. Keys from testers who left or finished can be typed in again; you'll see if one was reported as broken.";
+export const FREE_KEYS_RULE = "Keys in use can't be added. Keys from testers who left or finished can be typed in again.";
 
-/** (Owner, Oct 29, batch 14 section 6) The developer's quiet live-box line when a tester reports their key (not a stop-once kind, no bell). */
-/** (Batch 15 section 45) "Nora Lane marked your key as working" (the tester's top box adds the key; (Owner, Nov 6, §286) the bell never shows a key, as batch 30 §17). */
-export const keyFixedLine = (dev: string) => `${dev} marked your key as working`;
-export const keyReportedLine = (name: string, /** (batch 35 §162) the tester's */ pronoun?: string | null) => `${name} reported ${pronouns(pronoun).poss} key doesn't work`;
-/** (Batch 35 §162) The tester's note after "This key doesn't work", in the developer's pronoun ("She can send you another key in a message."). */
-export const keyToldNote = (already: boolean, devPronoun?: string | null) => `${already ? "The developer was already told." : "Thanks. The developer was told."} ${pronouns(devPronoun).Subj} can send you another key in a message.`;
+/** (Owner, Nov 6, §304) No "This key doesn't work": a tester whose key fails tells the developer in chat, and the developer sends one by message (this hint). */
 /** The Free keys notice's hint (its "in Edit" opens Edit's access keys section in a new tab). */
 export const FREE_KEYS_HINT = ["If a tester's key doesn't work, delete a free key ", "in Edit", " and send it to them in a message."] as const;
 export const openSpotsKeyLine = (open: number) => `${open} open spot${open === 1 ? "" : "s"}: each new tester gets one.`;
