@@ -1082,6 +1082,12 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     // (Owner, Nov 6, §283) Coming back: on the listing's questions; if theirs still differ (an ended contract no Save reached), the change is a Terms history
     // entry first (followQuestions), so the old answered questions stay readable there.
     if (old) await followQuestions(tx, old, asListing(t).questions, new Date());
+    // (Owner, Nov 6, §313c) Work sent before she left keeps the deadline it was sent under (the one in effect when she left): its review date, Charge and closing
+    // date don't move with the rejoined stint's new deadline. Stamped once (a piece already stamped by an earlier rejoin keeps its own).
+    if (old) {
+      await tx.submission.updateMany({ where: { contractId: old.id, stintDueAt: null }, data: { stintDueAt: old.dueAt } });
+      await tx.call.updateMany({ where: { contractId: old.id, stintDueAt: null }, data: { stintDueAt: old.dueAt } });
+    }
     // (Owner, Nov 6, §312e) Rejoining accepts the listing as it is now, NDA included: the earlier stint's NDA change (and its unacknowledged notice, which blocked
     // every press and showed "… changed the NDA … Acknowledge" on the fresh page) does not carry over.
     const contract = old
@@ -1248,7 +1254,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
           // (Batch 13 §8) While unpaid, the piece is priced at the current contract's written price; it no longer reads "Sent for the questions until".
           additions: [...additionsOf(existing.additions), { at: now.toISOString(), items, notes: notes !== existing.notes ? notes : "", files: files.map((f) => f.id) }] as unknown as Prisma.InputJsonValue,
           setUntil: null, late, updatedAt: now,
-          ...(paid ? { paidUpdateAt: now } : { agreedCents: c.writtenCents, payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+          ...(paid ? { paidUpdateAt: now } : { agreedCents: c.writtenCents, payBy: payByFrom(now), stintDueAt: null /* (§313c) sent again now: this stint's deadline */, ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
         } })
       : await tx.submission.create({ data: { contractId, kind: "written", agreedCents: c.writtenCents, answers: items as unknown as Prisma.InputJsonValue, notes, late, updatedAt: now, payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) } });
     // (Batch 11) Files and recordings attached to the written part go with it.
@@ -1419,7 +1425,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     const sub = await tx.submission.update({ where: { id: existing.id }, data: {
       additions: [...made, { at: now.toISOString(), text, files: fresh.map((f) => f.id), questionKey: key, ...(first ? { first: true } : {}) }] as unknown as Prisma.InputJsonValue,
       late, updatedAt: now,
-      ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
+      ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), stintDueAt: null /* (§313c) sent again now: this stint's deadline */, ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
     } });
     await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
     const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : qText(qs[at]);

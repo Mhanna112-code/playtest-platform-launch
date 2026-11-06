@@ -1478,13 +1478,16 @@ export const choiceLine = (devName: string, kind: string, cents: number, by?: st
  * was sent (payBy, which outages and pauses move on) and (2) the tester's own deadline (the contract's dueAt) has passed: the later of the two. Returns when it opens (null while
  * that is not known yet).
  */
-export function chargeOpensAt(s: { payBy: Date | null }, test: { openUntil: Date | null; status: string }, contract: { status: string; dueAt: Date }, now = new Date()): Date | null {
+export function chargeOpensAt(s: { payBy: Date | null; stintDueAt?: Date | null }, test: { openUntil: Date | null; status: string }, contract: { status: string; dueAt: Date }, now = new Date()): Date | null {
   void test;
   void now;
   if (!s.payBy) return null;
   // (Owner, Oct 30, batch 15 section 18, DEFAULT) The review date is the later of THIS tester's own deadline and sent + 7 days (Open until was only the shared deadline).
-  return reviewDateOf(s.payBy, contract.dueAt);
+  // (Owner, Nov 6, §313c) Work sent before a rejoin counts to the deadline it was sent under (pieceDueAt), never the rejoined stint's.
+  return reviewDateOf(s.payBy, pieceDueAt(s, contract));
 }
+/** (Owner, Nov 6, §313c) The tester's deadline a piece counts to: the one it was sent under when that was an earlier stint (stamped at the rejoin), else the contract's. */
+export const pieceDueAt = (piece: { stintDueAt?: Date | null }, contract: { dueAt: Date }) => piece.stintDueAt ?? contract.dueAt;
 /**
  * (Owner, Oct 29, batch 26 section 6, DEFAULT) A sent, listed piece waiting for the developer tells the tester when Charge opens: "If Nora Lane hasn't paid by Nov 5, you
  * can charge or let it go then." (the review date: it moves with pauses like the date itself).

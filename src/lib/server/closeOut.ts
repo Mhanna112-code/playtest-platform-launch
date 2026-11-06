@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { CLOSE_OUT_DAYS, RATED_NO_DISPUTE, closeOutBase, disputeClosedLine, reviewDateOf } from "@/lib/rules";
+import { CLOSE_OUT_DAYS, RATED_NO_DISPUTE, closeOutBase, disputeClosedLine, pieceDueAt, reviewDateOf } from "@/lib/rules";
 import { fmtDate } from "@/lib/server/dateFormat";
 import { callMinutesOf } from "@/lib/callMeasure";
 
@@ -138,8 +138,8 @@ export async function payMoreClosesAt(testId: string, now = new Date()) {
       contracts: {
         select: {
           status: true, dueAt: true, endedAt: true,
-          submissions: { select: { payBy: true } },
-          calls: { where: { status: "booked" }, select: { payBy: true, actualMinutes: true, measuredMinutes: true, measuredAt: true } },
+          submissions: { select: { payBy: true, stintDueAt: true } },
+          calls: { where: { status: "booked" }, select: { payBy: true, stintDueAt: true, actualMinutes: true, measuredMinutes: true, measuredAt: true } },
         },
       },
     },
@@ -147,7 +147,7 @@ export async function payMoreClosesAt(testId: string, now = new Date()) {
   if (!t) return null;
   const base = closeOutBase(t, t.contracts, now);
   if (!base) return null;
-  const opens = t.contracts.flatMap((c) => [...c.submissions, ...c.calls.filter((x) => callMinutesOf(x) != null)].flatMap((x) => (x.payBy ? [reviewDateOf(x.payBy, c.dueAt).getTime()] : [])));
+  const opens = t.contracts.flatMap((c) => [...c.submissions, ...c.calls.filter((x) => callMinutesOf(x) != null)].flatMap((x) => (x.payBy ? [reviewDateOf(x.payBy, pieceDueAt(x, c)).getTime()] : [])));
   const spans = await testSpans(t, new Date(Math.min(base.getTime(), ...opens)), now);
   const ends = [base.getTime(), ...opens].map((from) => windowEnd(new Date(from), spans, now, CLOSE_OUT_DAYS).end.getTime());
   return new Date(Math.max(...ends));
@@ -161,9 +161,9 @@ export async function payMoreClosesAt(testId: string, now = new Date()) {
  */
 export async function pieceCloseOut(where: { submissionId?: string | null; callId?: string | null }, side: "tester" | "developer", now = new Date()) {
   const piece = where.submissionId
-    ? await db.submission.findUnique({ where: { id: where.submissionId }, select: { payBy: true, contractId: true } })
+    ? await db.submission.findUnique({ where: { id: where.submissionId }, select: { payBy: true, contractId: true, stintDueAt: true } })
     : where.callId
-      ? await db.call.findUnique({ where: { id: where.callId }, select: { payBy: true, contractId: true } })
+      ? await db.call.findUnique({ where: { id: where.callId }, select: { payBy: true, contractId: true, stintDueAt: true } })
       : null;
   if (!piece) return null;
   const c = await db.contract.findUnique({ where: { id: piece.contractId }, select: { testId: true, dueAt: true, tester: { select: { id: true, testerSuspendedAt: true } } } });
@@ -172,7 +172,7 @@ export async function pieceCloseOut(where: { submissionId?: string | null; callI
   if (!t) return null;
   const base = closeOutBase(t, t.contracts, now);
   if (!base) return null;
-  const opens = piece.payBy ? reviewDateOf(piece.payBy, c.dueAt) : null;
+  const opens = piece.payBy ? reviewDateOf(piece.payBy, pieceDueAt(piece, c)) : null; // (§313c) an earlier stint's work keeps its deadline
   let spans = await testSpans(t, new Date(Math.min(base.getTime(), opens?.getTime() ?? Infinity)), now);
   if (side === "tester") {
     const tEvents = await db.accountEvent.findMany({ where: { userId: c.tester.id, kind: { in: ["suspended", "reinstated"] } }, select: { kind: true, side: true, createdAt: true } });

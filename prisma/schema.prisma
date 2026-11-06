@@ -368,6 +368,9 @@ model Contract {
 model Submission {
   id         String   @id @default(cuid())
   contractId String
+  /// (Owner, Nov 6, §313c) The tester's deadline for this piece when it was sent in an EARLIER stint (stamped when they rejoin: the deadline in effect when they
+  /// left). Its review date, Charge and closing date keep counting to it; null = the contract's current deadline (work of the current stint).
+  stintDueAt DateTime?
   contract   Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
   kind       String
   /// Written: (owner, Oct 29, batch 13) the whole set it answers: [{ question, required, answer }] (older rows were a list of answers)
@@ -573,6 +576,9 @@ model CallSlot {
 
 model Call {
   id          String    @id @default(cuid())
+  /// (Owner, Nov 6, §313c) The tester's deadline for this piece when it was sent in an EARLIER stint (stamped when they rejoin: the deadline in effect when they
+  /// left). Its review date, Charge and closing date keep counting to it; null = the contract's current deadline (work of the current stint).
+  stintDueAt DateTime?
   slotId      String
   slot        CallSlot  @relation(fields: [slotId], references: [id], onDelete: Cascade)
   contractId  String

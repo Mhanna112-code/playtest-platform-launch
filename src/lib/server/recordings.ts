@@ -199,7 +199,7 @@ export async function sendRecording(tester: U, contractId: string, body: Record<
     const now = new Date();
     // (Batch 30 §3) Added to a late piece, it stays late; sent or added after the deadline, it's late (Charge, if it had opened, no longer applies).
     const lateNow = !!existing?.late || isLate(c.dueAt, now);
-    const data = { late: lateNow, updatedAt: now, ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(lateNow ? { choiceOfferedAt: null, choiceBy: null } : {}) }) };
+    const data = { late: lateNow, updatedAt: now, ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), stintDueAt: null /* (§313c) sent again now: this stint's deadline */, ...(lateNow ? { choiceOfferedAt: null, choiceBy: null } : {}) }) };
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data: { ...data, additions: [...additionsOf(existing.additions), { at: now.toISOString(), files: fresh.map((r) => r.id) }] as unknown as Prisma.InputJsonValue } })
       // (Owner, Nov 5, §239) A recording takes no notes: a `notes` in the body is ignored and nothing is stored (the written part keeps its own).
