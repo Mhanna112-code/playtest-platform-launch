@@ -13,10 +13,13 @@ const MIN = 60_000;
 const at = (base: Date, min: number) => new Date(base.getTime() + min * MIN);
 const span = (base: Date, from: number, to: number) => ({ startAt: at(base, from), endAt: at(base, to) });
 
-/** Another booked call on the same contract that reserves `cents` of the $1,000 (at $200/h when `rateCents` is null). */
+/**
+ * Another call on the same contract that uses `cents` of the $1,000 (at $200/h when `rateCents` is null). (Owner, Nov 6, §280) It took place before this one (measured,
+ * not paid yet): a call booked AFTER the one in progress no longer counts toward its end, since booking isn't checked against the $1,000 any more.
+ */
 async function reserve(contractId: string, slotId: string, rateCents: number | null, cents: number) {
   const minutes = Math.round((cents * 60) / (rateCents ?? M.UNLISTED_CALL_RATE_CENTS));
-  await db.call.create({ data: { slotId, contractId, startsAt: new Date(Date.now() + 9 * 86_400_000), minutes, rateCents } });
+  await db.call.create({ data: { slotId, contractId, startsAt: new Date(Date.now() - 9 * 86_400_000), minutes, rateCents, measuredMinutes: minutes, measuredAt: new Date() } });
 }
 
 describe("batch 18 section 3: the call's own cap at the $1,000 (pure)", () => {

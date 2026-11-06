@@ -19,21 +19,12 @@ import { afterEndToBookLine, beforeEndLine, leadLine, tooSoonToBookLine, windowS
 
 /** (Batch 27 section 1) The tester's call presses: an open new-terms offer blocks them (answerTermsFirst), so new terms are no longer a stop-once for them. */
 const CALL_PRESS = { skipTerms: true } as const;
-import { callsLeftCents, ceilingRefusal, checkCeiling } from "./callMoney";
-import { CALL_MIN_MINUTES } from "@/lib/rules";
-import { bookableMinutes, lengthCapLine } from "@/lib/callMeasure";
 import { CALL_ACTS } from "./live";
 import { MAX_CALLS, MAX_SENT_PER_DAY, callLimitLine, callRoomLine, clashNotes, localFmt, sentRoomLine } from "@/lib/callClash";
 import { dayIn } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
 import { dateZone } from "./dateZone";
 import { DROP_BOTH, DROP_DEV_BUSY, DROP_TESTER_BUSY, dropLine, dropReasonFor, isDropReason } from "@/lib/requestDrop";
-
-/**
- * (Batch 15 section 34) The calls a request books if accepted: the most of any one row (an older "choose one" row books 1; a set books all of its calls, up to the
- * end). (§208) For a press's rows (each its own request): the most any one of them books, each checked as it would be accepted.
- */
-const callsIfAccepted = (rows: CallRow[], end: Date | null) => Math.max(1, ...rows.map((r) => occurrences(r, end).length));
 
 /**
  * (Owner, Nov 2, batch 35 §132) What a page with a call request form passes down besides its lead: when testers' work on the test ends, in the reader's words (the
@@ -499,18 +490,9 @@ async function ownCallClash(side: Side, who: { id: string; timeZone?: string | n
 /** "You already requested this time with Ben Okafor." */
 export const alreadyRequestedLine = (names: string[]) => `You already requested this time with ${andList(names)}.`;
 
-/**
- * (Batch 18 section 6) A length longer than what's left of the $1,000 allows for these testers' calls (the smallest applies, named): "At most 95 minutes: the $1,000 for
- * calls with Ana on this test." Under 10 minutes left, the existing "can't be booked" line takes over.
- */
-async function lengthOverCap(minutes: number, targets: { contractId: string; rateCents: number | null; name: string }[]) {
-  let best: { max: number; name: string } | null = null;
-  for (const t of targets) {
-    const max = bookableMinutes(t.rateCents, await callsLeftCents(t.contractId));
-    if (!best || max < best.max) best = { max, name: t.name };
-  }
-  return best && best.max >= CALL_MIN_MINUTES && minutes > best.max ? lengthCapLine(best.max, best.name) : "";
-}
+// (Owner, Nov 6, §280) No Length cap from the $1,000 any more (lengthOverCap, "At most 95 minutes: the $1,000 for calls with Ana on this test.", is gone): any
+// length from 10 to 180 minutes can be requested, offered or accepted; the call room ends a call when its pay reaches what's left.
+
 
 /** (§208) Who a press can't go to for the limits, and why: grouped into one line per kind and room ("You can send 1 more request to Ana Silva and Ben Carter today."). */
 type Limited = { name: string; room: Room };
@@ -542,9 +524,6 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     await refusals(x.c, "developer");
     all.push(x);
   }
-  // (Batch 18 section 6) The Length is at most what's left of the $1,000 for each ticked tester's calls (red at the box).
-  const overCap = await lengthOverCap(reqMinutes, all.map((x) => ({ contractId: x.c.id, rateCents: bookRate(x.c.test, x.c), name: displayName(x.c.tester) })));
-  if (overCap) throw new HttpError(400, "bad_minutes", overCap);
   // (Batch 16 section 21) A time of this press already requested with them (e.g. in another tab meanwhile): already done, said plainly after the gate.
   const starts = kind.rows.map((r) => r.startsAt);
   const sameAgain = async (contractId: string) => !!(await db.callRequest.findFirst({ where: { contractId, fromSide: "developer", status: "pending", startsAt: { in: starts } } }));
@@ -599,11 +578,10 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   for (const { c } of all) if (await sameAgain(c.id)) again.push(displayName(c.tester));
   if (again.length) throw new HttpError(409, "already", alreadyRequestedLine(again));
   const p = await plan(new Set());
-  // Auto-matches: a row exactly a tester's waiting request books it (checked as the Accept would be: clashes with anyone's calls, the $1,000).
+  // Auto-matches: a row exactly a tester's waiting request books it (checked as the Accept would be: clashes with anyone's calls; §280: never the $1,000).
   for (const m of p.match.values()) {
     const clash = await acceptClash(m.x.c, "developer", [m.hit], m.match.minutes);
     if (clash.length) throw new HttpError(409, "clash", clash[0]);
-    await checkCeiling(m.x.c.id, bookRate(m.x.c.test, m.x.c), m.match.minutes, 1, displayName(m.x.c.tester));
   }
   // (Batch 16 section 33) Your other calls, and (§208) two times of this press overlapping each other: refused at the row.
   {
@@ -612,7 +590,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
   }
   const sendRows = kind.each.filter((_, i) => !p.match.has(i));
   const matchIds = [...p.match.values()].map((m) => m.match.id);
-  // Clashes and the $1,000, per tester; (§185) the limits from the plan.
+  // Clashes per tester (Owner, Nov 6, §280: no longer the $1,000); (§185) the limits from the plan.
   const blocked: string[] = [], limited: Limited[] = [], ok: Ctx[] = [];
   for (const x of all) {
     const lim = p.refused.get(x.c.id);
@@ -622,10 +600,8 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     }
     if (sendRows.length) {
       const clash = await sendClash(x.c.id, sendRows.flatMap((k) => requestTimes(k, end)), reqMinutes, displayName(x.c.tester), matchIds, all.length === 1 ? { side: "developer", otherPoss: pronouns(x.c.tester.pronoun).poss } : undefined, end);
-      // (Batch 15 section 34) Over the $1,000 for this tester's calls: refused for them (named with what's left). Each request on its own, as it would be accepted.
-      const ceiling = clash ? "" : await ceilingRefusal(x.c.id, bookRate(x.c.test, x.c), reqMinutes, callsIfAccepted(sendRows.flatMap((k) => k.rows), end), displayName(x.c.tester));
-      if (clash || ceiling) {
-        blocked.push(clash || ceiling);
+      if (clash) {
+        blocked.push(clash);
         continue;
       }
     }
@@ -689,9 +665,6 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   // auto-matches the developer's own request at that time books it, which adds nothing to the total). The form's own mistakes (the length, red at its box) come
   // first, now before the gate as on the developer's side. (§208) Each row is a request: the press is refused as a whole, saying how many more can go.
   const minutes = readMinutes(body);
-  // (Batch 18 section 6) The Length is at most what's left of the $1,000 for their calls (red at the box).
-  const overCap = await lengthOverCap(minutes, [{ contractId, rateCents: bookRate(c.test, c), name: devName }]);
-  if (overCap) throw new HttpError(400, "bad_minutes", overCap);
   const limitNow = async (matches: number) => roomLine(devName, { sent: await sentToday(contractId, "tester", x.me.timeZone), taken: await callsTaken(contractId) }, n, n - matches);
   {
     const line = await limitNow((await autoMatches(contractId, "developer", kind.rows, minutes)).size);
@@ -703,7 +676,6 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   for (const m of match.values()) {
     const clash = await acceptClash(c, "tester", [m.hit], m.match.minutes);
     if (clash.length) throw new HttpError(409, "clash", clash[0]);
-    await checkCeiling(contractId, bookRate(c.test, c), m.match.minutes, 1, devName);
   }
   const own = await ownCallClash("tester", user, [contractId], kind.rows, minutes, end); // (batch 16 section 33; §208: two rows overlapping each other too)
   if (own) throw new HttpError(409, "clash", own);
@@ -716,7 +688,6 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     const line = await limitNow(match.size); // (§185) changed since the first check
     if (line) throw new HttpError(409, "limit", line);
   }
-  if (sendRows.length) await checkCeiling(contractId, bookRate(c.test, c), minutes, callsIfAccepted(sendRows.flatMap((k) => k.rows), end), devName);
   const callIds: string[] = [];
   let bookedLine = "";
   for (const m of match.values()) {
@@ -833,11 +804,7 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
       }
       // (Owner, Nov 4, §185) Claimed, this request no longer counts as waiting: booking it makes one more booked time, so the others must leave room for it.
       if ((await callsTaken(contractId)) >= MAX_CALLS) throw new HttpError(409, "limit", callLimitLine(displayName(other)));
-      // (Batch 18 section 6) A request longer than what's left of the $1,000 allows: "At most 95 minutes: ...".
-      const overCap = await lengthOverCap(r.minutes, [{ contractId, rateCents: rate, name: side === "developer" ? displayName(c.tester) : displayName(c.test.developer) }]);
-      if (overCap) throw new HttpError(409, "calls_ceiling", overCap);
-      // (Batch 15 section 34) A pending request over the $1,000 for calls can't be accepted.
-      await checkCeiling(contractId, rate, r.minutes, times.length, side === "developer" ? displayName(c.tester) : displayName(c.test.developer));
+      // (Owner, Nov 6, §280) Never refused for the $1,000 for this tester's calls (a set past it too): the call room ends a call when its pay reaches what's left.
       // A repeating pick is one CallSet (it counts as 1 of the 3 booked times); Forever keeps the next 4 ahead.
       const set = row.repeat === "once" ? null : await db.callSet.create({ data: { testId: c.testId, contractId, repeat: row.repeat, count: row.count, minutes: r.minutes, rateCents: rate, nextAt: new Date(row.startsAt.getTime() + times.length * stepMs(row.repeat)) } });
       for (const t of times) {
@@ -955,16 +922,8 @@ export async function topUpForeverSets(now = new Date()) {
       if (end && at.getTime() > end.getTime()) break; // (batch 35 §132) the next call would be after the end: it waits there
       nextAt = new Date(at.getTime() + stepMs(set.repeat));
       if (at.getTime() <= now.getTime()) continue; // (an old occurrence: never booked back in time)
+      // (Owner, Nov 6, §280) A Forever set's next call is never skipped for the $1,000 for this tester's calls (only a clash skips it).
       const clash = await acceptClash(c, "developer", [at], set.minutes);
-      // (Batch 15 section 34) Over the $1,000 for this tester's calls: skipped, both told.
-      const ceiling = clash.length ? "" : await ceilingRefusal(c.id, set.rateCents, set.minutes, 1, displayName(c.tester));
-      if (ceiling) {
-        skipped++;
-        const line = `The ${unitOf(set.repeat)} call on ${T(at)} was skipped: calls on this test can come to at most $1,000.`;
-        await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#calls`);
-        await notify(c.tester.email, line, [line], `/app/sessions/${c.id}`);
-        continue;
-      }
       if (clash.length) {
         skipped++;
         const line = `The ${unitOf(set.repeat)} call on ${T(at)} was skipped: ${displayName(c.tester)} or ${displayName(c.test.developer)} already has a call at that time.`;

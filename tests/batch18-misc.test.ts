@@ -68,51 +68,48 @@ async function reserve(contractId: string, slotId: string, rateCents: number, ce
 const startAt = (h: number) => { const d = new Date(Date.now() + h * 3_600_000); d.setSeconds(0, 0); return d.toISOString(); };
 const once = (h: number) => [{ startsAt: startAt(h), repeat: "once", count: 1 }];
 
-describe("batch 18 section 6: the Length is capped by what's left of the $1,000", () => {
-  it("the cap, its hint and its line; the smallest of the ticked testers applies, named", () => {
-    expect(M.bookableMinutes(15_000, 23_750)).toBe(95);
-    expect(M.bookableMinutes(null, 100_000)).toBe(180);
-    expect(M.lengthCap([{ name: "Ana", leftCents: 23_750, rateCents: 15_000 }])).toEqual({ max: 95, hint: "10–95 min (the $1,000 for calls with Ana)", line: "At most 95 minutes: the $1,000 for calls with Ana on this test." });
-    expect(M.lengthCap([{ name: "Ana", leftCents: 23_750, rateCents: 15_000 }, { name: "Ben", leftCents: 10_000, rateCents: null }])?.line).toBe("At most 30 minutes: the $1,000 for calls with Ben on this test.");
-    expect(M.lengthCap([{ name: "Ana", leftCents: 100_000, rateCents: 3000 }])).toBeNull();
-    // Under 10 minutes left: nothing can be booked (the existing line).
-    expect(M.lengthCap([{ name: "Ana", leftCents: 400, rateCents: 3000 }])?.line).toBe("Calls with Ana on this test can come to at most $1,000; $4.00 is left, so this call can't be booked.");
+// (Owner, Nov 6, §280) Batch 18 section 6's Length cap is gone: booking is never checked against the $1,000. The two tests below now assert the opposite.
+describe("batch 18 section 6, reversed by §280: the Length is never capped by what's left of the $1,000", () => {
+  it("no cap, hint or line any more: the forms' Length box is 10–180 minutes", () => {
+    // (§280) bookableMinutes, lengthCap, lengthCapHint, lengthCapLine and callsCeilingLine are gone.
+    for (const k of ["bookableMinutes", "lengthCap", "lengthCapHint", "lengthCapLine", "callsCeilingLine"]) expect(k in M).toBe(false);
     for (const f of ["app/app/tests/[id]/DevCallPanel.tsx", "components/CallRequests.tsx"]) {
       const s = src(f);
-      expect(s).toContain("data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line}");
-      expect(s).toContain("{lenCap ? lenCap.hint : \"10–180\"}");
+      expect(s).toContain('data-max="180" data-whole=""');
+      expect(s).toContain('data-length-hint="">10–180</span>');
+      expect(s).not.toContain("lenCap");
+      expect(s).not.toContain("At most \\d+ minutes");
     }
-    expect(src("app/app/tests/[id]/DevCallPanel.tsx")).toContain("const lenCap = lengthCap(tickedTesters);");
   });
 
-  it("refused on the server: Request a time (both sides, the smallest ticked tester named) and Accept", async () => {
+  it("(§280) never refused on the server: Request a time (both sides) and Accept go through past what's left", async () => {
     const s = await setup({ liveRateCents: "150.00" });
     const ana = await joined(s.testId, "Ana Silva");
     const ben = await joined(s.testId, "Ben Okafor", "he");
     const c1 = await bookCall(s.testId, s.dev.cookie, ana.sessionId, ana.tester.cookie, 30); // 30 min at $150/h: $75
-    await reserve(ana.sessionId, c1.slotId, 15_000, 100_000 - 7_500 - 23_750); // $237.50 left for Ana: 95 minutes
+    await reserve(ana.sessionId, c1.slotId, 15_000, 100_000 - 7_500 - 23_750); // $237.50 left for Ana: 95 minutes at the rate
     const c2 = await bookCall(s.testId, s.dev.cookie, ben.sessionId, ben.tester.cookie, 32);
-    const benOther = await reserve(ben.sessionId, c2.slotId, 15_000, 100_000 - 7_500 - 50_000); // $500 left for Ben: 200 minutes (180 applies)
-    const dev = (minutes: number) => act(s.testId, "request-time", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [ana.sessionId, ben.sessionId], rows: once(96), minutes });
-    const over = await dev(120);
-    expect(over.status).toBe(400);
-    expect(over.body.error.message).toBe("At most 95 minutes: the $1,000 for calls with Ana Silva on this test.");
-    const fits = await dev(95);
-    expect(fits.body.error?.message ?? "").toBe("");
-    expect(fits.status).toBe(200);
-    // The tester's own request names the developer.
-    const t = await sact(ana.sessionId, "request-time", ana.tester.cookie, { seenAt: seen(), confirmed: true, rows: once(120), minutes: 100 });
-    expect(t.status).toBe(400);
-    expect(t.body.error.message).toBe("At most 95 minutes: the $1,000 for calls with Nora Lane on this test.");
-    // Ben asks for 150 minutes (fits); more is booked with him meanwhile: Accept is refused with the cap.
-    // (Owner, Nov 4, §185) 2 booked + the developer's request = 3 with Ben: the developer withdraws it first, so Ben has room to ask.
+    const benOther = await reserve(ben.sessionId, c2.slotId, 15_000, 100_000 - 7_500 - 50_000); // $500 left for Ben
+    // 120 minutes ($300) is more than Ana has left: it still goes to both (was "At most 95 minutes: the $1,000 for calls with Ana Silva on this test.").
+    const dev = await act(s.testId, "request-time", s.dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [ana.sessionId, ben.sessionId], rows: once(96), minutes: 120 });
+    expect(dev.body.error?.message ?? "").toBe("");
+    expect(dev.status).toBe(200);
+    // The tester's own request, past what's left, goes too (§185: the developer withdraws theirs first, so Ana has room to ask).
+    const toAna = await db.callRequest.findFirstOrThrow({ where: { contractId: ana.sessionId, fromSide: "developer", status: "pending" } });
+    expect((await act(s.testId, "answer-request", s.dev.cookie, { contractId: ana.sessionId, requestId: toAna.id, action: "withdraw", seenAt: seen(), confirmed: true })).status).toBe(200);
+    const t = await sact(ana.sessionId, "request-time", ana.tester.cookie, { seenAt: seen(), confirmed: true, rows: once(120), minutes: 180 });
+    expect(t.body.error?.message ?? "").toBe("");
+    expect(t.status).toBe(200);
+    // Ben asks for 150 minutes; more is booked with him meanwhile ($250 left: 100 minutes at the rate): Accept still books it (was "At most 100 minutes: ...").
     const toBen = await db.callRequest.findFirstOrThrow({ where: { contractId: ben.sessionId, fromSide: "developer", status: "pending" } });
     expect((await act(s.testId, "answer-request", s.dev.cookie, { contractId: ben.sessionId, requestId: toBen.id, action: "withdraw", seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await sact(ben.sessionId, "request-time", ben.tester.cookie, { seenAt: seen(), confirmed: true, rows: once(150), minutes: 150 })).status).toBe(200);
-    await db.call.update({ where: { id: benOther.id }, data: { minutes: benOther.minutes + 100 } }); // $250 more reserved: $250 left, 100 minutes
+    await db.call.update({ where: { id: benOther.id }, data: { minutes: benOther.minutes + 100 } });
     const q = await db.callRequest.findFirstOrThrow({ where: { contractId: ben.sessionId, fromSide: "tester", status: "pending" } });
     const acc = await act(s.testId, "answer-request", s.dev.cookie, { contractId: ben.sessionId, requestId: q.id, action: "accept", seenAt: seen(), confirmed: true });
-    expect(acc.body.error.message).toBe("At most 100 minutes: the $1,000 for calls with Ben Okafor on this test.");
+    expect(acc.body.error?.message ?? "").toBe("");
+    expect(acc.status).toBe(200);
+    expect(await db.call.count({ where: { contractId: ben.sessionId, status: "booked", minutes: 150 } })).toBe(1);
   });
 });
 

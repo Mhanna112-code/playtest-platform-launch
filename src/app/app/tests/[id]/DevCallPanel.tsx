@@ -1,7 +1,6 @@
 "use client";
 import { Cut, NameLink } from "@/components/Cut";
 import { useEffect, useRef, useState } from "react";
-import { lengthCap } from "@/lib/callMeasure";
 import { useRouter } from "next/navigation";
 import { checkFields, useLocalMin } from "@/components/FieldChecks";
 import { ChangesBox } from "@/components/ChangesBox";
@@ -30,8 +29,8 @@ export type DevCall = { id: string; when: string; minutes: number; rate: string;
 export type DevSet = { id: string; label: string; minutes: number; rate: string; needsReason: boolean; calls: DevCall[] };
 export type DevReq = { id: string; rows: RowJson[]; mine: boolean; rate: string; minutes?: number };
 export type DevTester = { contractId: string; name: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string;
-  /** (Batch 16 section 33) For the clash checks: waiting requests with them (both sides), what's left of the $1,000 and the rate a call books at. */
-  pending?: number; leftCents?: number | null; rateCents?: number | null };
+  /** (Batch 16 section 33) For the clash checks: waiting requests with them (both sides). (Owner, Nov 6, §280) No longer what's left of the $1,000. */
+  pending?: number };
 /** (Batch 16 section 33) The developer's other calls (any tester, any test): "You have a call with Ana Silva then (1:30–2:00 PM)." */
 export type OtherCall = { contractId: string; name: string; start: string; minutes: number };
 
@@ -95,11 +94,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   const filled = rowsPayload(rows, end);
   // (Owner, Oct 28, batch 16 section 33) Clash checks as the form is filled, for every ticked tester (and every call of a Daily / Weekly set): red lines under the
   // row (listed under the button; the press waits until fixed), a blue line for an exact match with their waiting request, and the limits in today's wording.
-  const tickedTesters = testers.filter((t) => ticked.includes(t.contractId));
-  // (Batch 18 section 6) The Length is at most what's left of the $1,000 for the ticked testers' calls at their rate (the smallest applies, named).
-  const lenCap = lengthCap(tickedTesters);
+  // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $1,000 for the ticked testers' calls (no "At most N minutes", no cap in the hint).
   const clash = alignedClash(rows, minutes, "developer", checked.filter((t) => ticked.includes(t.contractId)).map((t) => ({
-    name: t.name, pending: t.pending, booked: t.booked, leftCents: t.leftCents, rateCents: t.rateCents,
+    name: t.name, pending: t.pending, booked: t.booked,
     calls: t.calls.map((c) => ({ id: c.id, start: c.when, minutes: c.minutes })),
     requests: t.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })),
   })), (frozen?.elsewhere ?? elsewhere).filter((c) => !ticked.includes(c.contractId)).map((c) => ({ start: c.start, minutes: c.minutes, name: c.name })), end);
@@ -166,9 +163,9 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
           {already.length > 0 && <ul className="space-y-0.5 text-xs text-amber-200" data-already="">{already.map((l) => <li key={l}>{l}</li>)}</ul>}
           {/* (Batch 19 section 5) The Length label and "min" stay on one line (never squeezed), and a red line at the box goes under the whole row. */}
           <div className="flex flex-wrap items-end gap-2" data-note-after="" data-length-row="">
-            <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max={lenCap ? lenCap.max : 180} data-max-msg={lenCap?.line} data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
-              data-match="length in minutes|live call lasts|^At most \d+ minutes" value={minutes} onChange={(e) => setMinutes(e.target.value)} {...lockText(sendLocked)} /> min</label>
-            <span className="pb-2 text-xs text-slate-500" data-length-hint="">{lenCap ? lenCap.hint : "10–180"}</span>
+            <label className="inline-flex shrink-0 items-center gap-1 whitespace-nowrap text-sm">Length <input className="input w-20" inputMode="numeric" placeholder="60" aria-label="Length in minutes" data-min="10" data-max="180" data-whole="" data-msg="A live call lasts from 10 to 180 minutes." data-required="" data-required-msg="Enter the call's length in minutes."
+              data-match="length in minutes|live call lasts" value={minutes} onChange={(e) => setMinutes(e.target.value)} {...lockText(sendLocked)} /> min</label>
+            <span className="pb-2 text-xs text-slate-500" data-length-hint="">10–180</span>
             <button
               className="btn"
               disabled={busy || !filled.length || ticked.length === 0}

@@ -138,7 +138,7 @@ describe("paying a measured call (sections 30, 31, 40)", () => {
 });
 
 describe("the $1,000 ceiling for all of a tester's calls (section 34)", () => {
-  it("booked calls count at their reference; a request over it is refused with what's left; the warning shows under an hour; pay is capped by it", async () => {
+  it("booked calls count at their reference; (§280) a request over it still goes through; the warning shows under an hour; pay is capped by it", async () => {
     const { dev, testId } = await setup({ liveRateCents: "150.00" });
     const { tester, sessionId } = await joined(testId);
     await withCard(dev.user.id);
@@ -154,15 +154,18 @@ describe("the $1,000 ceiling for all of a tester's calls (section 34)", () => {
     expect(M.callsLeftWarning(10_000, 15_000, "tester", "Ana Silva")).toBe("$100.00 left of the $1,000 for your calls on this test.");
     expect(M.callsLeftWarning(15_000, 15_000, "developer", "Ana Silva")).toBe("");
     expect(M.callsLeftWarning(19_000, null, "developer", "Ana Silva")).toMatch(/^\$190\.00 left/); // unlisted: under $200
-    // A third call (60 min at $150/h = $150) would go over: refused on both sides.
+    // A third call (60 min at $150/h = $150) would go over. (Owner, Nov 6, §280) No longer refused on either side (was "At most 40 minutes: the $1,000 for calls
+    // with Ana Silva on this test."): booking is never checked against the $1,000; the call room ends a call at what's left.
     const startsAt = new Date(Date.now() + 96 * 3_600_000); startsAt.setSeconds(0, 0);
     const r = await act(testId, "request-time", dev.cookie, { seenAt: seen(), confirmed: true, contractIds: [sessionId], startsAt: startsAt.toISOString(), minutes: 60 });
-    // (Batch 18 section 6) One call: the Length is at most what's left at the rate ($100 at $150/h is 40 minutes), red at the box.
-    expect(r.body.error.message).toBe("At most 40 minutes: the $1,000 for calls with Ana Silva on this test.");
+    expect(r.body.error?.message ?? "").toBe("");
+    expect(r.status).toBe(200);
+    // (§185) 2 booked + that request = 3: the developer withdraws it, so the tester has room to ask (at the same time, so it isn't a match: a new request).
+    const mine = await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, fromSide: "developer", status: "pending" } });
+    expect((await act(testId, "answer-request", dev.cookie, { contractId: sessionId, requestId: mine.id, action: "withdraw", seenAt: seen(), confirmed: true })).status).toBe(200);
     const t = await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: startsAt.toISOString(), minutes: 60 });
-    expect(t.body.error.message).toBe("At most 40 minutes: the $1,000 for calls with Nora Lane on this test.");
-    // 40 minutes ($100) still fits.
-    expect((await sact(sessionId, "request-time", tester.cookie, { seenAt: seen(), confirmed: true, startsAt: startsAt.toISOString(), minutes: 40 })).status).toBe(200);
+    expect(t.body.error?.message ?? "").toBe("");
+    expect(t.status).toBe(200);
     // The first call took place (60 minutes measured at $150/h = $150). Another 180-minute call is booked meanwhile ($450 more reserved): only $100 is left for this one.
     const [first, second] = await db.call.findMany({ where: { contractId: sessionId }, orderBy: { startsAt: "asc" } });
     await tookPlace(first.id, 60);

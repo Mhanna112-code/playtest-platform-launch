@@ -724,8 +724,6 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   pending: pendingReqs.length,
                   // (Owner, Nov 4, §185) As the server counts it: a running Forever set is one booked time even with none of its calls ahead.
                   booked: new Set([...liveCalls.filter((x) => x.startsAt > now).map((x) => x.setId ?? x.id), ...callSets.filter((s) => s.status === "active" && s.count === 0).map((s) => s.id)]).size,
-                  leftCents: await callsLeftCents(c.id),
-                  rateCents: listedCall ? c.liveRateCents : null,
                 }}
               />
             </section>
