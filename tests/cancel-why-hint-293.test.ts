@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createElement } from "react";
+import React, { createElement } from "react";
+(globalThis as unknown as { React: typeof React }).React = React;
 import { renderToStaticMarkup } from "react-dom/server";
 import { CancelMenu } from "@/components/CancelMenu";
 
