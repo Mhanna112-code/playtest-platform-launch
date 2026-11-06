@@ -50,14 +50,15 @@ describe("post and edit", () => {
 });
 
 describe("join and contract snapshots", () => {
-  it("the contract is a snapshot: edits never change it", async () => {
+  // (Owner, Nov 5, §265) Except the questions: they follow the listing (a Save writes them into every working contract).
+  it("the contract is a snapshot: edits never change its terms (the questions follow the listing)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     await act(testId, "edit", dev.cookie, { version: v, fields: { writtenCents: "50.00", questions: ["New?"], deadlineDays: 1 } });
     const c = await db.contract.findUniqueOrThrow({ where: { id: sessionId } });
     expect(c).toMatchObject({ writtenCents: 1000, liveRateCents: 3000, liveMinutes: null, deadlineDays: 7, testerId: tester.user.id });
-    expect(c.questions).toEqual(["What did you like?", "Where did you get stuck?"]);
+    expect(c.questions).toEqual(["New?"]);
   });
 
   it("a changed listing stops the join once with the new terms; the second press joins on them", async () => {

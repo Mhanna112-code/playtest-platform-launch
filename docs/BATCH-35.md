@@ -4687,3 +4687,27 @@ top box's See it still opens #scope and marks them (it looks inside the whole bo
 page). The sentence under them reads "Agreed <date>. Your contract stays as it is: if <dev> changes these terms later, you choose Switch or Keep. What to do, the
 build link, languages and devices are the exception: they follow <dev>'s changes, marked Updated." The other listing lines (title, product, Mature) stay below.
 The developer's own Listing panel is one list and is unchanged.
+
+## §265 Questions follow the listing; old means not in the listing (owner, Nov 5; replaces the questions part of Switch / Keep: batch 13's previous sets on a switch, batch 18 §8's switching wording, §221 / §233 / §242 / §258's questions-changed block)
+- `Contract.questions` stays "this tester's questions" (read through `currentQuestionsFor`, §263), but a Save that changes the questions now writes the listing's
+  questions into every working contract of the test, in the Save's own transaction (`followQuestions` in lib/server/terms.ts, called from the Save in
+  lib/server/tests.ts). That is the one place that keeps them in step, so "old" (not in the contract) means "not in the listing" for the tester and the developer
+  alike. A contract that already differs from the listing (an offer kept before §265) is brought in line on the next Save that changes the questions. No
+  migration rewrites data.
+- Each change keeps the earlier set (§263's Terms history entry, with `to` and the "sent" / "draft" versions: the draft snapshot) and fixes the kept draft: boxes
+  typed for questions still asked stay, a returning question's snapshotted draft comes back. A Required tick alone is written into the contract with no entry.
+  No "Sent for the questions until" mark any more (a part marked before §265 keeps its note and its Send).
+- No offer carries questions: they're not in `termsDiff` or the Save's terms, so a Save that changes only the questions makes no Switch / Keep offer; an
+  offer for other terms (prices, parts, NDA, deadline) is made as before, its `questions` the contract's own. Switch never writes `Contract.questions` (an older
+  open offer can't put stale questions back). TesterTop's questions-changed block, `switchQuestionsLine` and `ANSWER_NEW_QUESTIONS` are gone; the
+  per-field limit of 3 question changes is unchanged.
+- The tester is told as for listing information: the questions in "Your contract" carry "Updated <time>" (before → now, the latest change since joining) and
+  `data-info-line="questions"` (the top box's See it marks them); the top box's line names "questions" (they're in INFO_FIELDS now); and a bell line in the
+  listing's words, "<developer> updated the listing: questions", linking to #scope.
+- Adding to an answered current question works straight away, by its words, whatever set it was sent in (`addRefusal` / `addWritten` read the contract's
+  questions and `carriedAnswers`, not the latest set sent); an old question is refused (QUESTION_GONE). Needs you's "Old" tag (§263) is the only old marker.
+- Required: a new required question is a box under "Questions you haven't answered yet" and required at the tester's next Send only (`answersMissing` checks the
+  form's own questions). It never touches what was sent: Pay, Pay more, Charge and reviews never check questions.
+- Price: answers sent to a question that is now old stay payable at the part's agreed price, `Submission.agreedCents` (set at the first Send; while unpaid each
+  later Send re-prices it to the contract's written price; after a Pay it stays). (The "sent at $X" beside an old-question tag was dropped with §263's final
+  form, which removed the tag from the answer lists.)

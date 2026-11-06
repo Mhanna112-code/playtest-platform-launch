@@ -26,13 +26,13 @@ import {
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
-import { answerTermsFirst, offerNewTerms, testerSendGate } from "./terms";
+import { answerTermsFirst, followQuestions, offerNewTerms, testerSendGate } from "./terms";
 import { openOfferMoment, testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
 import { markerIds, withoutAttachmentMarkers } from "@/lib/answerAttachments";
-import { callCancelledLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, ANSWER_NEW_QUESTIONS, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
+import { callCancelledLine, questionsUpdatedLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 
 type Tx = Prisma.TransactionClient;
@@ -377,6 +377,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let switchedToInvite = false;
   let changeId: string | null = null;
   let keysGiven: Awaited<ReturnType<typeof giveKeysToWorking>> = [];
+  // (Owner, Nov 5, §265) The working testers whose questions this Save changed (each is told in the bell).
+  let questionsFollowed: { contractId: string; email: string }[] = [];
   const result = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, testId);
     if (t.status === "stopped") throw new HttpError(409, "stopped", "This test was stopped.");
@@ -475,7 +477,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     }
     const terms = changedTerms(current, next);
     const what = [...fields.map((f) => FIELD_NAMES[f]), ...(keysChanged ? ["access keys"] : [])].join(", ");
-    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "questions", "ndaText"].includes(f));
+    // (Owner, Nov 5, §265) The questions are no longer a term: they follow the listing (below), so a Save that changes only them makes no Switch / Keep offer.
+    termsChanged = terms.some((f) => ["writtenCents", "recordingCents", "liveRateCents", "liveMinutes", "writtenRequired", "recordingRequired", "liveRequired", "deadlineDays", "ndaText"].includes(f));
     // (NEWEST+12) Testers are alerted to EVERY change except the number of spots and Open until: those two never make an "edited" line / bump the listing version.
     const listingFields = fields.filter((f) => f !== "spots" && f !== "openUntil");
     switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
@@ -486,6 +489,14 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     }, null, tab);
     if (keysChanged) {
       await applyKeyChange(tx, testId, plan.toAdd, plan.removable, plan.toReuse);
+    }
+    // (Owner, Nov 5, §265) Questions follow the listing: a Save that changed them writes them into every working tester's contract in this transaction (the one
+    // place that keeps them in step, so "old" means the same on both sides), each change kept as a Terms history entry with that moment's answers and draft
+    // (followQuestions). A contract whose questions already differ from the listing (an offer kept before §265) is brought in line here too.
+    if (fields.includes("questions")) {
+      const now = new Date();
+      for (const c of await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, questions: true, prevSets: true, tester: { select: { email: true } } } }))
+        if (await followQuestions(tx, c, next.questions, now)) questionsFollowed.push({ contractId: c.id, email: c.tester.email });
     }
     // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
     keysGiven = await giveKeysToWorking(tx, testId);
@@ -563,6 +574,12 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   // (Batch 15 section 43) The Save's effects on others, on its Contract changes entry.
   const effects = [closedApps.length ? `${closedApps.length} application${closedApps.length === 1 ? "" : "s"} closed` : "", resent.length ? `${resent.length} invite${resent.length === 1 ? "" : "s"} re-sent` : ""].filter(Boolean).join(" · ");
   if (changeId && effects) await db.testChange.update({ where: { id: changeId }, data: { effects } });
+  // (Owner, Nov 5, §265) Each tester whose questions changed: a bell line in the listing's words ("Nora Lane updated the listing: questions"), linking to their
+  // contract box, where the questions carry "Updated <time>" (the top box's line comes from the Save's "listing_save" record).
+  for (const q of questionsFollowed) {
+    const line = questionsUpdatedLine(displayName(dev));
+    await notify(q.email, line, [`${line}.`, "Questions you haven't answered yet are on your session page; your earlier answers are in Terms history."], `/app/sessions/${q.contractId}#scope`, { about: dev.id, testId });
+  }
   // (Batch 30 §17) Each tester given a key: a line in their session page's top box and a bell line (the key itself only on their page, never in the bell or email).
   for (const g of keysGiven) {
     await logEvent(testId, KEY_GIVEN, keyGivenEventLine(displayName(dev), g.name), g.contractId);
@@ -1137,19 +1154,26 @@ function sendRefusal(existing: SentPart | null, qs: string[], answers: string[],
   return null;
 }
 
+/** (Owner, Nov 5, §265) A current question with no answer yet (nothing sent for it by its words, nothing added): its first answer is free (§222). */
+const unansweredNow = (sub: { answers: unknown; additions?: unknown }, qs: string[], key: string) => {
+  const i = questionKeys(itemsFor(qs)).indexOf(key);
+  return key !== ANYTHING_ELSE_KEY && i >= 0 && carriedAnswers(sub, qs)[i] == null;
+};
+
 /** What refuses an Add to this answer whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock). */
 function addRefusal(existing: SentPart | null, c: { questions: unknown }, key: string, text: string) {
   if (!existing) return new HttpError(409, "not_sent", "Send your answers first.");
   const locked = resendRefusal(existing.review, "written");
   if (locked) return new HttpError(409, "paid", locked);
   const qs = writtenQuestions(c);
-  const latest = latestItems(existing, qs);
-  if (existing.setUntil || !sameQuestions(latest, itemsFor(qs))) return new HttpError(409, "new_questions", ANSWER_NEW_QUESTIONS);
+  // (Owner, Nov 5, §265; replaces §136's "send your answers to the new questions first", ANSWER_NEW_QUESTIONS) The questions follow the listing, so an answered
+  // current question is added to straight away, by its words, whatever set it was sent in; an old one (not in the contract now) is refused (QUESTION_GONE).
+  const keys = questionKeys(itemsFor(qs));
   // (Owner, Nov 4, §188) Anything else is always there (the fixed last spot of every written part), under the same rules as a question.
-  if (key !== ANYTHING_ELSE_KEY && questionKeys(latest).indexOf(key) < 0) return new HttpError(409, "question_gone", QUESTION_GONE);
+  if (key !== ANYTHING_ELSE_KEY && keys.indexOf(key) < 0) return new HttpError(409, "question_gone", QUESTION_GONE);
   // (Owner, Nov 5, §222; replaces §167's 10 per part) This question's 5 (Anything else's own 5). A question with no answer yet: its first answer (Answer this
   // question) is free and never refused for it.
-  if (!noAnswerYet(latest, questionKeys(latest), existing.additions, key) && addsCounted(existing.additions, key) >= ADDITIONS_MAX) return new HttpError(409, "add_full", additionsFull(key));
+  if (!unansweredNow(existing, qs, key) && addsCounted(existing.additions, key) >= ADDITIONS_MAX) return new HttpError(409, "add_full", additionsFull(key));
   // (Owner, Nov 4, §186; replaces batch 14's one limit over the answers, the notes and everything added) An addition has the same limit as the answers sent
   // first: at most 20,000 characters of its own, whatever the others hold. Checked before the stop-once, so a too-long addition is refused on the first press.
   const long = checkAdditionLength(text);
@@ -1205,11 +1229,12 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
     // (§222) The question's 5 (and every other refusal) counted again under the lock.
     const refused = addRefusal(existing, c, key, text);
     if (refused || !existing) throw refused ?? new HttpError(409, "not_sent", "Send your answers first.");
-    const latest = latestItems(existing, writtenQuestions(c));
-    const at = questionKeys(latest).indexOf(key);
+    // (Owner, Nov 5, §265) The contract's questions now (they follow the listing), not the set last sent.
+    const qs = writtenQuestions(c);
+    const at = questionKeys(itemsFor(qs)).indexOf(key);
     const made = additionsOf(existing.additions);
     // (§222) The first answer to a question that had none: stored with `first`, so it isn't one of the question's 5.
-    const first = noAnswerYet(latest, questionKeys(latest), existing.additions, key);
+    const first = unansweredNow(existing, qs, key);
     const now = new Date();
     // (Owner, Nov 3, races) A Pay in flight (reserved, its review not recorded yet) reads as unpaid here; recordReviewDraft marks this addition as one after the
     // payment once that Pay is recorded.
@@ -1222,7 +1247,7 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
       ...(paid ? { paidUpdateAt: now } : { payBy: payByFrom(now), ...(late ? { choiceOfferedAt: null, choiceBy: null } : {}) }),
     } });
     await tx.recording.updateMany({ where: { id: { in: fresh.map((f) => f.id) } }, data: { submissionId: sub.id } });
-    const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : latest[at].question;
+    const question = key === ANYTHING_ELSE_KEY ? ANYTHING_ELSE_TITLE : qText(qs[at]);
     const afterPaid = await tellSent(tx, { testId: c.testId, contractId: c.id, subId: sub.id, name, poss, part: "written answers", added: true, paid, question });
     return { sub, afterPaid, question };
   });

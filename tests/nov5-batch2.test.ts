@@ -95,17 +95,12 @@ describe("(Owner, Nov 5) §217 on the kept refusal too (recording R4a re-take)",
   });
 });
 
-describe("(Owner, Nov 5) §221 the questions changed: one block per question", () => {
-  it("each question number shows its Before, After and your answer so far, each in its own draggable scroll box", () => {
+// (Owner, Nov 5, §265; replaces §221 / §242's block) The offer has no "The questions changed" block: questions follow the listing (Terms history keeps each change).
+describe("(Owner, Nov 5) §221 replaced by §265: no questions block in the offer", () => {
+  it("TesterTop draws no question changes", () => {
     const s = read("src/app/app/sessions/[id]/TesterTop.tsx");
-    // (§242) Only changed questions, each its own drop-down with Before, After and your answer so far.
-    expect(s).toContain('label="Before" required={x.before.required}');
-    expect(s).toContain('label="After" required={x.after.required}');
-    expect(s).toContain('label="Your answer so far"');
-    // (Owner, Nov 5, §223) In the one look for questions and answers (components/QA.tsx: ResizeBox in OwnPanel).
-    expect(s).toContain('<QuestionText id={`offer-${offer.id}-${key}-before`} label="Before" required={x.before.required}>');
-    expect(s).toContain('<AnswerText id={`offer-${offer.id}-${key}-answer`}');
-    expect(s).not.toContain("Your answers so far:");
+    expect(s).not.toContain("data-question-changes");
+    expect(s).not.toContain('label="Your answer so far"');
   });
 });
 

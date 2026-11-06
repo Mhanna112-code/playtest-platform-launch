@@ -1303,8 +1303,8 @@ export const SENT_ANSWERS_LOCKED = "Your answers were already sent, so they can'
 export const SENT_RECORDING_LOCKED = "Recordings you sent can't be removed. You can add more.";
 export const NOTHING_TO_ADD = "Write something or attach a file to add.";
 export const NO_RECORDING_TO_ADD = "Upload or record a recording to add first.";
-/** (Batch 35 §136) Adding to written answers that were sent for questions since changed: the new questions are answered instead (their answers are added). */
-export const ANSWER_NEW_QUESTIONS = "Your questions changed: send your answers to the new questions, and they're added under what you sent.";
+/** (Owner, Nov 5, §265; replaces §136's ANSWER_NEW_QUESTIONS refusal) The bell line when a Save changed a working tester's questions, in the listing's words. */
+export const questionsUpdatedLine = (dev: string) => `${dev} updated the listing: questions`;
 
 /** (Owner, Oct 28, batch 20 section 16) An admin account never gets a developer or tester side. */
 export const ADMIN_ONLY_LINE = "An admin account is only for the admin console. To post or test, use a separate account.";
@@ -1623,7 +1623,7 @@ export function termsDiff(a: ContractTerms, b: ContractTerms) {
     else out.push(`live call ${whole(a.liveRateCents)}/h → ${whole(b.liveRateCents)}/h`);
   }
   if (a.deadlineDays !== b.deadlineDays) out.push(`${a.deadlineDays} → ${b.deadlineDays} days`);
-  if (JSON.stringify(a.questions) !== JSON.stringify(b.questions)) out.push("questions changed");
+  // (Owner, Nov 5, §265) No "questions changed": the questions follow the listing (a Save writes them into every working contract), never a Switch / Keep term.
   // (5) A changed NDA is always a new offer the tester accepts, never applied silently.
   if ((a.ndaText ?? "") !== (b.ndaText ?? "")) out.push(!(a.ndaText ?? "") ? "added an NDA" : !(b.ndaText ?? "") ? "removed the NDA" : "NDA changed");
   // (NEWEST+10) The Required label is part of the terms.
@@ -1882,12 +1882,7 @@ export function checkExtraPay(amountCents: number | null, tickedCents: number | 
   return payTicks(amountCents, tickedCents, over200);
 }
 
-/**
- * (Owner, Oct 28, batch 18 section 8) The tester's Switch / Keep box when the questions changed. Answers already sent keep the price they were sent at (`sent`, the
- * written part; nothing sent yet: only the first sentence; a part that wasn't listed: no price).
- */
-export const switchQuestionsLine = (sent: { agreedCents: number | null } | null | undefined) =>
-  `Switching means answering the new questions: your answers to them are added under what you sent.${!sent ? "" : sent.agreedCents != null ? ` Answers you already sent stay payable at ${money(sent.agreedCents)}.` : " Answers you already sent stay payable."}`;
+// (Owner, Nov 5, §265) switchQuestionsLine (batch 18 §8, "Switching means answering the new questions…") is gone: no offer carries questions any more.
 
 // ---------- (Batch 18 section 9, replaced by batch 21 section 2) Calls in progress ----------
 // A pause (any cause), a block, a suspension of either side, a leave, End early or a Stop ends a call in progress at that moment, on the server (both rooms hang up;

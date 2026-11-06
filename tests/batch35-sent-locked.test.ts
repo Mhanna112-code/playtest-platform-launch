@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { SentWork } from "@/components/SentWork";
 import { ADDED_LABEL, additionsOf, latestItems, pieceTime, questionKey } from "@/lib/additions";
-import { ANSWER_NEW_QUESTIONS, NOTHING_TO_ADD, NO_RECORDING_TO_ADD, SENT_ANSWERS_LOCKED, SENT_RECORDING_LOCKED, workOverPress } from "@/lib/rules";
+import { NOTHING_TO_ADD, NO_RECORDING_TO_ADD, SENT_ANSWERS_LOCKED, SENT_RECORDING_LOCKED, workOverPress } from "@/lib/rules";
 import { ALL_RECORDINGS_SENT } from "@/lib/server/recordings";
 import { testV } from "@/lib/server/pulseV";
 import { act, addTo, joined, sact, seen, settle, setup } from "./fixtures";
@@ -113,11 +113,12 @@ describe("written answers: locked once sent, only added to", () => {
     // The developer's offer changed a question and the tester switched.
     await db.contract.update({ where: { id: j.sessionId }, data: { questions: ["What did you like?", "What would you change?"] } });
     await db.submission.update({ where: { contractId_kind: { contractId: j.sessionId, kind: "written" } }, data: { setUntil: new Date() } });
-    expect((await add(j.sessionId, j.tester.cookie, "more")).body.error.message).toBe(ANSWER_NEW_QUESTIONS);
+    // (Owner, Nov 5, §265; was ANSWER_NEW_QUESTIONS) An answered current question is added to straight away, whatever set it was sent in.
+    expect((await add(j.sessionId, j.tester.cookie, "more")).status).toBe(200);
     expect((await send(j.sessionId, j.tester.cookie, ["liked", "the map"])).status).toBe(200);
     const sub = await written(j.sessionId);
     expect((sub.answers as { answer: string }[]).map((x) => x.answer)).toEqual(["liked", "stuck"]);
-    expect(additionsOf(sub.additions)[0].items?.map((x) => x.answer)).toEqual(["liked", "the map"]);
+    expect(additionsOf(sub.additions)[1].items?.map((x) => x.answer)).toEqual(["liked", "the map"]);
     expect(latestItems(sub).map((x) => x.question)).toEqual(["What did you like?", "What would you change?"]);
     expect(sub.prevSets).toEqual([]);
     expect(sub.setUntil).toBeNull();

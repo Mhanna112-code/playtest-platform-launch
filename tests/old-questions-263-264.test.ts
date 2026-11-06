@@ -9,7 +9,6 @@ import { OLD_TAG, carriedAnswers, currentQuestionsFor, questionKeys } from "@/li
 import { attachmentMarker } from "@/lib/answerAttachments";
 import { questionChanges } from "@/lib/questionHistory";
 import { setKept } from "@/lib/server/kept";
-import { decideTerms, offerNewTerms } from "@/lib/server/terms";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { act, joined, sact, seen, settle, setup } from "./fixtures";
 import { json, req } from "./helpers";
@@ -46,12 +45,16 @@ const testPage = async (testId: string, userId: string) => {
   const { default: TestPage } = await import("@/app/app/tests/[id]/page");
   return unescape(renderToStaticMarkup(await TestPage({ params: Promise.resolve({ id: testId }), searchParams: Promise.resolve({}) })));
 };
-/** The developer changes the questions and the tester's contract follows (a new-terms offer, Switch). */
-async function changeTo(testId: string, sessionId: string, testerId: string, questions: string[]) {
-  await db.test.update({ where: { id: testId }, data: { questions } });
-  expect(await offerNewTerms(testId)).toBe(1);
-  const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: sessionId, status: "open" } });
-  expect(await decideTerms({ id: testerId }, sessionId, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true })).toEqual({ switched: true });
+/**
+ * The developer saves changed questions; (Owner, Nov 5, §265) every working tester's contract follows at once (no offer). The flips here change the questions
+ * more often than the listing's 3 changes allow, so each Save starts from a fresh count for the questions (test setup only).
+ */
+async function changeTo(testId: string, devCookie: string, questions: string[]) {
+  const t = await db.test.findUniqueOrThrow({ where: { id: testId } });
+  await db.test.update({ where: { id: testId }, data: { criticalCounts: { ...(t.criticalCounts as Record<string, unknown>), questions: 0 } } });
+  const r = await act(testId, "edit", devCookie, { version: t.version, fields: { questions }, seenAt: seen(), confirmed: true });
+  expect(r.status, JSON.stringify(r.body)).toBe(200);
+  expect(await db.termsOffer.count({ where: { testId, status: "open" } })).toBe(0);
   await settle();
 }
 // One question's fold in a list (from its <details> to the next question's).
@@ -124,7 +127,7 @@ describe("§263 Terms history entries, both sides", () => {
     await db.submission.update({ where: { id: sub.id }, data: { additions: [{ at: new Date().toISOString(), text: `and the second gate ${attachmentMarker(sentFile.id, sentFile.filename)}`, files: [sentFile.id], questionKey: key(Q2) }] } });
     await setKept(j.tester.user.id, `written:${j.sessionId}`, { answers: [`a bigger map ${attachmentMarker(draftFile.id, draftFile.filename)}`], questions: [Q3], notes: "" });
     await settle();
-    await changeTo(testId, j.sessionId, j.tester.user.id, [Q1, Q4]);
+    await changeTo(testId, dev.cookie, [Q1, Q4]);
 
     const mine = await sessionPage(j.sessionId, j.tester.user.id);
     expect(tList(mine)).not.toContain(Q2);
@@ -165,7 +168,7 @@ describe("§263 a question flips old → current → old → current, on both si
     const sub = await written(j.sessionId);
 
     // 1. Q2 → Q3, Q4: Q2 leaves the lists for Terms history; Q3 and Q4 are boxes in the form. A draft is typed for Q4 and not sent.
-    await changeTo(testId, j.sessionId, tid, [Q1, Q3, Q4]);
+    await changeTo(testId, dev.cookie, [Q1, Q3, Q4]);
     let mine = await sessionPage(j.sessionId, tid);
     expect(tList(mine)).not.toContain(Q2);
     expect(thenQ(entries(mine)[0], Q2)).toContain("and the second gate");
@@ -180,7 +183,7 @@ describe("§263 a question flips old → current → old → current, on both si
     await settle();
 
     // 2. Back to Q1, Q2: Q2 is current again with its answer and its addition; Q3 and Q4 are in the new entry (Q4's draft with it).
-    await changeTo(testId, j.sessionId, tid, [Q1, Q2]);
+    await changeTo(testId, dev.cookie, [Q1, Q2]);
     mine = await sessionPage(j.sessionId, tid);
     expect(foldOf(tList(mine), Q2)).toContain("level two gate");
     expect(foldOf(tList(mine), Q2)).toContain("and the second gate");
@@ -192,9 +195,7 @@ describe("§263 a question flips old → current → old → current, on both si
     theirs = await testPage(testId, dev.user.id);
     expect(foldOf(dList(theirs, sub.id), Q2)).toContain("and the second gate");
     expect(dList(theirs, sub.id)).not.toContain(Q3);
-    // The Send that moves the part onto these questions keeps Q2's answer as it was; then Add to this answer works on Q2 again.
-    expect((await send(j.sessionId, j.tester.cookie, { answers: [], for: [] })).status).toBe(200);
-    await settle();
+    // (§265) Add to this answer works on Q2 again straight away (no Send to "move onto" the questions).
     expect((await add(j.sessionId, j.tester.cookie, Q2, "and the third gate")).status).toBe(200);
     mine = await sessionPage(j.sessionId, tid);
     expect(foldOf(tList(mine), Q2)).toContain("and the third gate");
@@ -202,7 +203,7 @@ describe("§263 a question flips old → current → old → current, on both si
     expect(foldOf(tList(mine), Q2)).toContain('data-add-more="written"');
 
     // 3. Q2 → Q4 again: Q2 to Terms history with every addition; Q4 (never sent) is a box in the form again, its snapshotted draft back in the kept draft.
-    await changeTo(testId, j.sessionId, tid, [Q1, Q4]);
+    await changeTo(testId, dev.cookie, [Q1, Q4]);
     mine = await sessionPage(j.sessionId, tid);
     expect(tList(mine)).not.toContain(Q2);
     expect(thenQ(entries(mine)[2], Q2)).toContain("and the third gate");
@@ -218,14 +219,12 @@ describe("§263 a question flips old → current → old → current, on both si
     expect(dList(theirs, sub.id)).not.toContain(Q2);
 
     // 4. Back to Q1, Q2, Q3: both current again with everything; the history entries stay as they were.
-    await changeTo(testId, j.sessionId, tid, [Q1, Q2, Q3]);
+    await changeTo(testId, dev.cookie, [Q1, Q2, Q3]);
     mine = await sessionPage(j.sessionId, tid);
     for (const [q, x] of [[Q2, "level two gate"], [Q2, "and the third gate"], [Q3, "the map colours"]]) expect(foldOf(tList(mine), q)).toContain(x);
     expect(tList(mine)).not.toContain(Q4);
     expect(entries(mine)).toHaveLength(4);
     expect(thenQ(entries(mine)[1], Q4)).toContain("a laptop, I think"); // as it was at that change
-    expect((await send(j.sessionId, j.tester.cookie, { answers: [], for: [] })).status).toBe(200);
-    await settle();
     expect((await add(j.sessionId, j.tester.cookie, Q3, "and the fonts")).status).toBe(200);
     theirs = await testPage(testId, dev.user.id);
     for (const [q, x] of [[Q2, "and the third gate"], [Q3, "and the fonts"]]) expect(foldOf(dList(theirs, sub.id), q)).toContain(x);
@@ -247,7 +246,7 @@ describe("§263 Needs you: an unpaid answer to a question changed since is shown
     await settle();
     expect((await add(j.sessionId, j.tester.cookie, Q2, "the gate again, after you paid")).status).toBe(200);
     await settle();
-    await changeTo(testId, j.sessionId, j.tester.user.id, [Q1, Q3]);
+    await changeTo(testId, dev.cookie, [Q1, Q3]);
     let html = await testPage(testId, dev.user.id);
     const upd = updateRow(html, sub.id);
     expect(foldOf(upd, Q2)).toContain("the gate again, after you paid");
@@ -273,7 +272,7 @@ describe("§263 Needs you: an unpaid answer to a question changed since is shown
     const j = await joined(testId);
     expect((await send(j.sessionId, j.tester.cookie, { answers: ["the boats", "level two gate"] })).status).toBe(200);
     const sub = await written(j.sessionId);
-    await changeTo(testId, j.sessionId, j.tester.user.id, [Q1, Q3]);
+    await changeTo(testId, dev.cookie, [Q1, Q3]);
     let html = await testPage(testId, dev.user.id);
     const needs = html.slice(html.indexOf(`data-panel="needs-${sub.id}"`), html.indexOf(`id="part-${sub.id}"`));
     expect(foldOf(needs, Q2)).toContain("level two gate");

@@ -467,9 +467,9 @@ describe("batch 26 section 15: previous sets show each question as a label above
     await sact(j.sessionId, "written", j.tester.cookie, { answers: ["one", "two"] });
     const v = (await db.test.findUniqueOrThrow({ where: { id: testId } })).version;
     expect((await act(testId, "edit", dev.cookie, { version: v, fields: { questions: [REQUIRED + "Q1?", "Q2?"] }, seenAt: seen(), confirmed: true })).status).toBe(200);
-    const offer = await db.termsOffer.findFirstOrThrow({ where: { contractId: j.sessionId, status: "open" } });
-    expect(offer.diff).toContain("questions changed"); // ticking Required is part of the terms
-    await decideTerms({ id: j.tester.user.id }, j.sessionId, { offerId: offer.id, choice: "switch", seenAt: seen(), confirmed: true });
+    // (Owner, Nov 5, §265; was an offer "questions changed" and Switch) The questions follow the listing: the contract takes the Required tick at once, with no
+    // offer and no earlier set (the words didn't change).
+    expect(await db.termsOffer.count({ where: { contractId: j.sessionId } })).toBe(0);
     const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
     expect(c.questions).toEqual([REQUIRED + "Q1?", "Q2?"]);
     expect(c.prevSets).toEqual([]);

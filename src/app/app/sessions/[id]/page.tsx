@@ -14,7 +14,7 @@ import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
-import { IN_PROGRESS_TESTER, switchQuestionsLine, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -35,7 +35,7 @@ import { BIG_PANEL_TALLEST, LIST_PANEL, PAST_CALLS_SHOWN, PanelWhen, PayLinesBox
 import { Fold, OwnPanel, ResizeBox } from "@/components/Panel";
 import { DisputeForm, LeaveButton, WrittenAddForm, WrittenForm } from "./SessionActions";
 import { SentWork } from "@/components/SentWork";
-import { ANYTHING_ELSE_KEY, additionsOf, addsCounted, carriedAnswers, latestItems, noAnswerYet, questionKeys } from "@/lib/additions";
+import { ANYTHING_ELSE_KEY, additionsOf, addsCounted, carriedAnswers, latestItems, questionKeys } from "@/lib/additions";
 import { RecordingUpload } from "./RecordingUpload";
 import { TesterCallPanel } from "./TesterCallPanel";
 import { LivePanel } from "@/components/LivePanel";
@@ -65,7 +65,7 @@ import { NameLine } from "@/components/WholeLine";
 import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
 import { questionChanges } from "@/lib/questionHistory";
 import { cutNamesIn } from "@/lib/cutNames";
-import { carryOver, itemsFor, sameQuestions } from "@/lib/answerSets";
+import { carryOver, itemsFor } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -131,9 +131,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // answers, and the previous sets kept when the tester switched to changed questions.
   // (Batch 35 §136) The latest set sent (answers to changed questions are added under the first ones); the form after a switch carries its answers over.
   const sentItems = written ? latestItems(written, writtenQuestions(c)) : [];
-  const newQuestions = !!written && (!!written.setUntil || !sameQuestions(sentItems, itemsFor(writtenQuestions(c))));
-  // (§167) Adding, per question of the current set: its keys, and how many of the part's 10 additions were made.
-  const currentKeys = questionKeys(sentItems);
+  // (Owner, Nov 5, §265) The questions follow the listing: no Send is needed to "move onto" changed questions any more. Only a part marked "Sent for the questions
+  // until" before §265 still asks for that Send (its form shows).
+  const newQuestions = !!written?.setUntil;
+  // (§167) Adding, per current question (the contract's now, by its words): its keys.
+  const currentKeys = questionKeys(itemsFor(writtenQuestions(c)));
+  const carriedNow = written ? carriedAnswers(written, writtenQuestions(c)) : [];
   // (Owner, Nov 5, §236) A Terms history line: its names (the developer's, yours, the test's titles, any long quoted name) cut at 20, each "…" opening its name in
   // place and the arrow the whole line (WholeLine, §220); the developer's whole name links to their profile.
   const histLine = (text: string) => {
@@ -146,12 +149,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const questionsHistory = questionChanges(c.prevSets, writtenQuestions(c), written ?? null, { drafts: true });
   const historyFiles = c.recordings.filter((r) => r.part === "written" && r.uploadedAt);
   // (Owner, Nov 5, §235) The current questions with no answer yet (none answered after the first send: all of them); the form below the answers holds only these.
-  const openQs = written ? writtenQuestions(c).filter((_, i) => carriedAnswers(written, writtenQuestions(c))[i] == null) : writtenQuestions(c);
+  const openQs = written ? writtenQuestions(c).filter((_, i) => carriedNow[i] == null) : writtenQuestions(c);
   // (§235; replaces §182's rows below the panel) "Add to this answer" sits in each answered question's fold, right under its answer and additions (and Anything
   // else's), with its own 5, "N of 5 additions left" and its full note. A question with no answer yet is answered in the form below instead.
   const addUnder = (key: string, question: string) => {
     if (!written || (key !== ANYTHING_ELSE_KEY && !currentKeys.includes(key))) return null;
-    if (key !== ANYTHING_ELSE_KEY && noAnswerYet(sentItems, currentKeys, written.additions, key)) return <p className="note" data-answer-below="">Answer it in the form below.</p>;
+    if (key !== ANYTHING_ELSE_KEY && carriedNow[currentKeys.indexOf(key)] == null) return <p className="note" data-answer-below="">Answer it in the form below.</p>;
     return <WrittenAddForm key={key} sessionId={c.id} seenAt={seenAt} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} questionKey={key} question={question} made={addsCounted(written.additions, key)}
       known={c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />;
   };
@@ -371,12 +374,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
       {key && <KeyBox canReport={!meOff} sessionId={c.id} seenAt={seenAt} value={key.value} broken={key.status === "broken"} fresh={!!freshKey} fixed={!!key.fixedAt} devPronoun={c.test.developer.pronoun} />}
       <LiveTop scope={`session:${c.id}`} seenAt={seenAt} seeIt="#scope" />
       <ListingSeeIt box="scope" />
-      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? {
-        id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText, questions: ((offer.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) })), fromQuestions: ((c.questions as string[]) ?? []).map((q) => ({ text: qText(q), required: qRequired(q) })),
-        answers: sentItems.map((x) => x.answer),
-        // (Batch 18 section 8) Switching means answering the new questions; answers already sent stay payable at their price.
-        switchNote: switchQuestionsLine(written),
-      } : null} />
+      {/* (Owner, Nov 5, §265) An offer never carries questions (they follow the listing): no "The questions changed" block and no Switch wording about them. */}
+      <TesterTop sessionId={c.id} seenAt={seenAt} devName={dev} offer={offer && !refusal ? { id: offer.id, diff: offer.diff, ndaText: offer.ndaText, fromNdaText: c.ndaText } : null} />
       {limited && <p className="info" data-limited-view="">{LIMITED_VIEW_LINE}</p>}
       {refusal && !limited && <div className="info space-y-1" id="stopped-line" data-stopped-line="" {...(failedPress ? { "data-work-over-failed": failedPress } : {})}><p>{over ? stillWorksLine({ ...c, teamTime: c.endedAt ? stopTimeIn(c.endedAt, u.timeZone, now) : undefined }, dev, fmtDate, stillWorks, failedPress) : refusal}</p>{c.status === "left" && c.endKind !== "rated" && <p data-rejoin-link="">{/* (Owner, Oct 30) The way back after leaving: the test's page asks the developer. */}<a href={`/app/find/${c.testId}`}>Ask to rejoin on the test&apos;s page →</a></p>}
         {/* (Batch 15 sections 20 and 22) The developer's End early reason, in italics, scrolling when long (never in the bell line). */}
@@ -474,7 +473,14 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           ))}
           {/* (Owner, Nov 5, §231; was batch 20's one scroll box for all the questions) The contract's questions, each in its own question box ("Question N",
               "Required" a tag), the same look as the answers' (components/QA.tsx). */}
-          {writtenQuestions(c).length > 0 && <li data-scope-questions=""><QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} /></li>}
+          {/* (Owner, Nov 5, §265) The questions follow the listing: changed since you joined, they carry "Updated <time>" (before → now) like the listing lines,
+              and `data-info-line="questions"` lets the top box's See it mark them. */}
+          {writtenQuestions(c).length > 0 && ((ch) => (
+            <li data-scope-questions="" data-info-line="questions" className="scroll-mt-24 rounded-lg px-1 transition-shadow data-[marked]:ring-2 data-[marked]:ring-sky-300" {...(ch ? { "data-updated-at": new Date(ch.at).toISOString() } : {})}>
+              {ch && <FieldLabel tag={<UpdatedTag id={`scope-info-${c.id}-questions`} when={fmtDateTimeIn(new Date(ch.at), u.timeZone)} before={ch.then.map((q, i) => `${i + 1}. ${q.question}`).join("\n")} now={ch.now.map((q, i) => `${i + 1}. ${q.question}`).join("\n")} />}>Questions</FieldLabel>}
+              <QuestionTexts id={`scope-q-${c.id}`} items={writtenQuestions(c).map((q) => ({ text: qText(q), required: qRequired(q) }))} />
+            </li>
+          ))(questionsHistory.filter((q) => new Date(q.at) > c.joinedAt).at(-1))}
           {c.ndaText && c.ndaAcceptedAt ? (
             <li data-nda="">
               <FieldLabel>NDA</FieldLabel>
@@ -763,7 +769,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
         {!written && (refusal || meOff || !draftsShown) && <p className="note">Nothing sent.</p>}
         {/* Not sent yet: the form for the current questions. (Owner, Nov 5, §235; replaces the "update" form that refilled every question, and §222's Answer this
             question rows) Once sent: one form below the answers with a box for each current question that has no answer yet, and only those (an answered one is
-            added to in its fold, an old one is read-only in the list, §263); after a switch to changed questions it also moves the part onto them. Always "Send Answers". */}
+            added to in its fold, an old one is in Terms history, §263); a part marked "Sent for the questions until" before §265 is moved onto the current ones by it. Always "Send Answers". */}
         {canSendAgain(written) && !refusal && !meOff && draftsShown && (!written || newQuestions || openQs.length > 0) && (
           <div className="space-y-2" data-answer-form={written ? "open" : "first"}>
             {written?.setUntil && <p className="note" data-set-until-form="">What you sent is for the questions until {fmtDate(written.setUntil)}. Send your answers to these questions: they&apos;re added under what you sent.</p>}

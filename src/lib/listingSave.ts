@@ -17,8 +17,9 @@ export const FIELD_NAMES: Record<keyof Listing, string> = {
   liveMinutes: "call length", deadlineDays: "deadline", questions: "questions",
 };
 
-/** (F) The listing info a working tester sees change live (the title too, as a rename): never their contract's terms, which come as Switch / Keep. */
-export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode", "productName", "mature", "matureWhy"];
+/** (F) The listing info a working tester sees change live (the title too, as a rename): never their contract's terms, which come as Switch / Keep.
+ * (Owner, Nov 5, §265) The questions too: they follow the listing (a Save writes them into every working contract), so the tester's top box names them. */
+export const INFO_FIELDS: (keyof Listing)[] = ["description", "devices", "languages", "buildUrl", "categories", "joinMode", "productName", "mature", "matureWhy", "questions"];
 
 export type ListingSave = { by: string; fields: string[]; title: string; nda: boolean };
 

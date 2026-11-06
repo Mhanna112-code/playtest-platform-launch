@@ -8,7 +8,7 @@ import { notify } from "./notify";
 import { testerGate } from "./testerGate";
 import { logEvent } from "./live";
 import { carryOver, itemsFor, prevSetsOf, pushPrev, restoreDraft } from "@/lib/answerSets";
-import { latestItems } from "@/lib/additions";
+import { carriedAnswers } from "@/lib/additions";
 import { qText } from "@/lib/questions";
 import { closeOffersOfEnded } from "./offerClose";
 export { closeOffersOfEnded };
@@ -29,8 +29,9 @@ export async function offerNewTerms(testId: string, changeId: string | null = nu
   const working = await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } });
   let offered = 0;
   for (const c of working) {
-    // (5) Shortening the deadline applies to new testers only and is ignored here: an existing tester is only ever offered more time.
-    const newTerms = { ...termsOf(t), deadlineDays: Math.max(c.deadlineDays, t.deadlineDays) };
+    // (5) Shortening the deadline applies to new testers only and is ignored here: an existing tester is only ever offered more time. (Owner, Nov 5, §265) The
+    // questions are not a term any more: the offer carries the contract's own (the Save already wrote the listing's into it), so they're never in its diff.
+    const newTerms = { ...termsOf(t), deadlineDays: Math.max(c.deadlineDays, t.deadlineDays), questions: (c.questions as string[]) ?? [] };
     const diff = termsDiff(termsOf(c), newTerms);
     // Repeated saves replace a waiting offer with the newest one.
     await db.termsOffer.updateMany({ where: { contractId: c.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
@@ -122,13 +123,15 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
   body.offerId = target.id;
   const now = new Date();
   if (body.choice === "switch") {
-    const sets = await questionSetsOnSwitch(c, (target.questions as string[]) ?? [], now);
+    // (Owner, Nov 5, §265) Switch never writes the questions: they follow the listing on every Save (followQuestions), so an older offer can never put stale
+    // questions back into the contract.
+    const { questions: _offered, ...terms } = termsOf(target);
+    void _offered;
     await db.$transaction([
-      ...sets,
       db.contract.update({
         where: { id: contractId },
         // Switching to terms with an NDA means accepting it now.
-        data: { ...termsOf(target), questions: target.questions as Prisma.InputJsonValue, listingVersion: target.listingVersion, // (Batch 15 section 18) With an Open until, each tester's deadline is their join + the tester days (an Edit moving Open until already moved it): switching never moves it.
+        data: { ...terms, listingVersion: target.listingVersion, // (Batch 15 section 18) With an Open until, each tester's deadline is their join + the tester days (an Edit moving Open until already moved it): switching never moves it.
         dueAt: c.test.openUntil ? c.dueAt : newDueAt(c.dueAt, c.joinedAt, target.deadlineDays), termsSwitchedAt: now, ndaAcceptedAt: target.ndaText ? (target.ndaText === c.ndaText ? c.ndaAcceptedAt ?? now : now) : null },
       }),
       db.termsOffer.update({ where: { id: target.id }, data: { status: "switched", decidedAt: now } }),
@@ -144,43 +147,53 @@ export async function decideTerms(tester: { id: string }, contractId: string, bo
 
 /**
  * (Owner, Oct 29, batch 13 section 8) Switching to terms whose questions changed (even one of them): the whole earlier set (every question with the answer it had, the
- * draft's if one is kept, else what was sent) becomes a previous set "until <date>" (at most 3). The form then shows the current questions: an answer to a question
- * whose text is unchanged is carried over (draft text too); changed or new questions start empty. A sent, unpaid set for the old questions is marked "Sent for the
- * questions until <date>" for the developer, and keeps its price.
+ * draft's if one is kept, else what was sent) becomes a previous set "until <date>". The form then shows the current questions: an answer to a question whose text is
+ * unchanged is carried over (draft text too); changed or new questions start empty.
+ * (Owner, Nov 5, §265; replaces the Switch above for questions) Questions follow the listing: a Save that changes them calls this for every working contract, in
+ * the Save's own transaction (`tx`), and writes the new questions into the contract (`Contract.questions`, still "this tester's questions"). Every change is a
+ * Terms history entry (§263): the earlier set is always kept, with `to` (the questions after) and its "sent" / "draft" versions (the draft snapshot). A question
+ * that comes back with no answer gets the draft snapshotted for it at an earlier change back into the kept draft. No "Sent for the questions until" mark any more
+ * (an answered question can be added to straight away). Returns whether the contract's questions changed (by their words).
  */
-async function questionSetsOnSwitch(c: { id: string; testerId: string; questions: unknown; prevSets: unknown }, next: string[], now: Date) {
+export async function followQuestions(tx: Prisma.TransactionClient, c: { id: string; testerId: string; questions: unknown; prevSets: unknown }, next: string[], now: Date) {
   const old = (c.questions as string[]) ?? [];
-  // (Batch 26 sections 14 and 15) Compared by the questions' words only: a Required tick added or removed (or the old "[not required] " marker going) never moves the
-  // current set into "Previous questions and answers".
-  if (JSON.stringify(old.map(qText)) === JSON.stringify(next.map(qText))) return [];
-  const sub = await db.submission.findUnique({ where: { contractId_kind: { contractId: c.id, kind: "written" } }, include: { review: true } });
-  const kept = await db.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
+  // (Batch 26 sections 14 and 15) Compared by the questions' words only: a Required tick added or removed (or the old "[not required] " marker going) is written
+  // into the contract but makes no earlier set.
+  if (JSON.stringify(old.map(qText)) === JSON.stringify(next.map(qText))) {
+    if (JSON.stringify(old) !== JSON.stringify(next)) await tx.contract.update({ where: { id: c.id }, data: { questions: next as Prisma.InputJsonValue } });
+    return false;
+  }
+  const sub = await tx.submission.findUnique({ where: { contractId_kind: { contractId: c.id, kind: "written" } }, include: { review: true } });
+  const kept = await tx.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
   const draft = (kept?.data ?? null) as { answers?: unknown; notes?: unknown; questions?: unknown } | null;
-  // (Batch 35 §136) The latest set sent (the answers to changed questions are added under the first ones).
-  const sent = sub ? latestItems(sub, old) : [];
+  // (Batch 35 §136) The latest answers sent, by the question's words (§263: over everything sent, so a question that came back keeps its answer).
   const oldQs = old.length ? old : ["Your feedback"];
-  const byText = new Map(sent.map((x) => [x.question, x.answer]));
+  const sentNow = sub ? carriedAnswers(sub, oldQs).map((a) => a ?? "") : oldQs.map(() => "");
   // (Batch 35 §120) A per-field draft lists only the questions typed since: the others count as what was sent.
-  const fromDraft = Array.isArray(draft?.answers) ? restoreDraft(oldQs, oldQs.map((q) => byText.get(qText(q)) ?? ""), draft!) : null;
-  const items = itemsFor(oldQs, fromDraft ?? oldQs.map((q) => byText.get(qText(q)) ?? ""));
+  const fromDraft = Array.isArray(draft?.answers) ? restoreDraft(oldQs, sentNow, draft!) : null;
+  const items = itemsFor(oldQs, fromDraft ?? sentNow);
   // (Owner, Oct 30, batch 15 section 14) The set keeps what was SENT ("Sent <date>") and, when the tester edited it afterwards without sending, the draft ("Draft (not
   // sent)"). The developer only ever sees sent versions (theirs come from the submission).
-  const sentItems = sub ? itemsFor(oldQs, oldQs.map((q) => byText.get(qText(q)) ?? "")) : null;
+  const sentItems = sub ? itemsFor(oldQs, sentNow) : null;
   const draftItems = fromDraft ? itemsFor(oldQs, fromDraft) : null;
   const draftDiffers = !!draftItems && (!sentItems || JSON.stringify(draftItems.map((x) => x.answer)) !== JSON.stringify(sentItems.map((x) => x.answer))) && draftItems.some((x) => x.answer.trim());
   const versions = [...(sentItems ? [{ kind: "sent" as const, at: (sub!.updatedAt ?? sub!.sentAt).toISOString(), items: sentItems }] : []), ...(draftDiffers ? [{ kind: "draft" as const, ...(kept?.updatedAt ? { at: kept.updatedAt.toISOString() } : {}), items: draftItems! }] : [])];
-  const ops: Prisma.PrismaPromise<unknown>[] = [];
-  // (Owner, Nov 5, §263) Every change of the questions is a Terms history entry ("Questions changed", Then → Now), so the earlier set is always kept now (it was
-  // kept only when something was answered or sent), with the questions it changed to (`to`). Its "draft" version is the snapshot of the unsent draft then.
-  ops.push(db.contract.update({ where: { id: c.id }, data: { prevSets: pushPrev(prevSetsOf(c.prevSets), { until: now.toISOString(), items, ...(versions.length ? { versions } : {}), to: next }) as unknown as Prisma.InputJsonValue } }));
   const nextQs = next.length ? next : ["Your feedback"];
   // (§263) A question that comes back with no answer gets its box back with the draft snapshotted for it at an earlier change (newest first), if any.
   const snapshots = prevSetsOf(c.prevSets).flatMap((p) => (p.versions ?? []).filter((v) => v.kind === "draft").map((v) => v.items));
-  const carried = carryOver(items, nextQs).map((a, i) => a || (snapshots.map((set) => set.find((x) => qText(x.question) === qText(nextQs[i]))?.answer ?? "").find((x) => x.trim()) ?? ""));
-  const notes = typeof draft?.notes === "string" ? draft.notes : sub?.notes ?? "";
-  if (!sub?.review || carried.some((a, i) => a && !carryOver(items, nextQs)[i])) ops.push(db.keptForm.upsert({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } }, update: { data: { answers: carried, notes, questions: nextQs } }, create: { userId: c.testerId, key: `written:${c.id}`, data: { answers: carried, notes, questions: nextQs } } }));
-  if (sub && !sub.review && !sub.setUntil) ops.push(db.submission.update({ where: { id: sub.id }, data: { setUntil: now } }));
-  return ops;
+  const fromNow = carryOver(itemsFor(oldQs, fromDraft ?? oldQs.map(() => "")), nextQs);
+  const carried = fromNow.map((a, i) => a || (snapshots.map((set) => set.find((x) => qText(x.question) === qText(nextQs[i]))?.answer ?? "").find((x) => x.trim()) ?? ""));
+  await tx.contract.update({ where: { id: c.id }, data: {
+    questions: next as Prisma.InputJsonValue,
+    prevSets: pushPrev(prevSetsOf(c.prevSets), { until: now.toISOString(), items, ...(versions.length ? { versions } : {}), to: next }) as unknown as Prisma.InputJsonValue,
+  } });
+  // The kept draft: the boxes typed for questions still asked stay (by their words), a returning question's snapshot comes back; nothing sent is put in it.
+  if (fromDraft || carried.some((a) => a)) {
+    const notes = typeof draft?.notes === "string" ? draft.notes : "";
+    const data = { answers: carried, ...(typeof draft?.notes === "string" ? { notes } : {}), questions: nextQs };
+    await tx.keptForm.upsert({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } }, update: { data }, create: { userId: c.testerId, key: `written:${c.id}`, data } });
+  }
+  return true;
 }
 
 /** Developer's tester row: "On their original terms · offered new terms Oct 22" / "Switched to the Oct 22 terms". (Batch 35 §162) In the tester's pronoun ("On her original terms"). */
