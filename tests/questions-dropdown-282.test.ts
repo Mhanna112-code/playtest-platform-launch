@@ -54,7 +54,7 @@ describe("§282 SentWork's Questions (N) drop-down", () => {
   const answers = [item(Q1, "the boats"), item(Q2, "level two gate")];
   const additions = [{ at: new Date(Date.now() - 10_000).toISOString(), text: "and the third gate", files: [], questionKey: keyOf(Q2) }];
   const draw = (open: boolean) =>
-    unescape(renderToStaticMarkup(h(SentWork, { id: "p", kind: "written", answers, questions: [Q1, Q2], notes: "a note", additions, files: [], newQuestionTag: false, questionsFold: { open } })));
+    unescape(renderToStaticMarkup(h(SentWork, { id: "p", kind: "written", answers, questions: [Q1, Q2], notes: "a note", additions, files: [], questionsFold: { open } })));
 
   it("every question's fold (and Anything else, the list's last) is inside the one drop-down, its list in the draggable panel; N counts the questions", () => {
     const html = draw(true);
@@ -83,12 +83,12 @@ describe("§282 SentWork's Questions (N) drop-down", () => {
   });
 
   it("Needs you (newOnly): an old question's new answer stays inside, tagged Old, and N counts it; nothing new: no drop-down, the note", () => {
-    const html = unescape(renderToStaticMarkup(h(SentWork, { id: "n", kind: "written", answers, questions: [Q1, Q3], notes: "", additions: [], files: [], newOnly: { since: null }, newQuestionTag: false, questionsFold: { open: true } })));
+    const html = unescape(renderToStaticMarkup(h(SentWork, { id: "n", kind: "written", answers, questions: [Q1, Q3], notes: "", additions: [], files: [], newOnly: { since: null }, questionsFold: { open: true } })));
     expect(html).toContain("Questions (2)");
     const list = html.slice(html.indexOf('data-panel="n-questions-list"'));
     expect(list).toContain(`data-old-question="">${OLD_TAG}</span>`);
     expect(list).toContain("level two gate");
-    const none = renderToStaticMarkup(h(SentWork, { id: "n", kind: "written", answers, questions: [Q1, Q2], notes: "", additions: [], files: [], newOnly: { since: new Date() }, newQuestionTag: false, questionsFold: { open: true } }));
+    const none = renderToStaticMarkup(h(SentWork, { id: "n", kind: "written", answers, questions: [Q1, Q2], notes: "", additions: [], files: [], newOnly: { since: new Date() }, questionsFold: { open: true } }));
     expect(none).not.toContain("data-questions-toggle");
     expect(none).toContain("Nothing new since you paid.");
   });
@@ -177,9 +177,9 @@ describe("§282 on the developer's test page", () => {
 
   it("the sources: Needs you's part and update rows open, the Testers list closed, the team's See the work open; the tester's own page unchanged", () => {
     const page = src("app/app/tests/[id]/page.tsx");
-    expect(page).toContain("newOnly={{ since: paidCut(x.s!) }} newQuestionTag={false} questionsFold={{ open: true }} />");
-    expect(page).toContain("newOnly={{ since: paidCut(x) }} newQuestionTag={false} questionsFold={{ open: true }} />");
-    expect(page).toContain("until={paidCut(r.sub)} newQuestionTag={false} questionsFold={{ open: false }} />");
+    expect(page).toContain("newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true }} />");
+    expect(page).toContain("newOnly={{ since: paidCut(x) }} questionsFold={{ open: true }} />");
+    expect(page).toContain("until={paidCut(r.sub)} questionsFold={{ open: false }} />");
     expect(src("app/admin/DisputeWork.tsx")).toContain("questionsFold={{ open: true }}");
     expect(src("app/app/sessions/[id]/page.tsx")).not.toContain("questionsFold");
     // Calls follow the same two panels: Needs you's call (its details, then the Pay drop-down) and the Testers list's call rows (details, then payments and Pay more).

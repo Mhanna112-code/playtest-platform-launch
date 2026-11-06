@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { nameMatches } from "@/lib/nameSearch";
+import { clearTesterFilter, FILTER_EVENT } from "./TesterFilter";
 
 /**
  * (Owner, Nov 5, §274) "Search testers": a name box at the top of Needs you (filters the people) and right below the Testers list's avatars (filters the tester
@@ -51,9 +52,25 @@ export function useTesterSearch() {
   return typed;
 }
 
+/**
+ * (Owner, Nov 6, §283) The search box and the circles clear each other: typing a name clears the circle chosen; choosing a circle clears what's typed.
+ * (Needs you has no circles: its own box filters only its people.)
+ */
+export function searchTyped(v: string) {
+  setTyped(v);
+  if (v.trim()) clearTesterFilter();
+}
+export const onCircleChosen = (chosen: string) => { if (chosen && typedNow) setTyped(""); };
+
 /** The Testers list's search box, right below the avatars. Gone (and its name cleared) when only one tester is left. */
 export function TesterListSearch() {
   const typed = useTesterSearch();
   useEffect(() => () => setTyped(""), []);
-  return <div data-tester-list-search=""><SearchTestersBox value={typed} onChange={setTyped} where="testers" /></div>;
+  // (§283) A circle chosen clears the box.
+  useEffect(() => {
+    const on = (e: Event) => onCircleChosen(String((e as CustomEvent).detail ?? ""));
+    window.addEventListener(FILTER_EVENT, on);
+    return () => window.removeEventListener(FILTER_EVENT, on);
+  }, []);
+  return <div data-tester-list-search=""><SearchTestersBox value={typed} onChange={searchTyped} where="testers" /></div>;
 }

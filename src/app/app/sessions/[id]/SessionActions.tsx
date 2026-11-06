@@ -18,7 +18,7 @@ import { ANSWER_MIN_CHARS, ANSWER_ONE, ANSWER_REQUIRED, ANSWER_SHORT, answerChar
 import { ChangesBox } from "@/components/ChangesBox";
 import { LongText, QUESTION_LINES } from "@/components/LongText";
 import { NOTHING_CHANGED_LINE, NOTHING_TO_ADD } from "@/lib/rules";
-import { ADDITIONS_MAX, ANSWER_PRESS, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, additionsFull, additionsLeftLine } from "@/lib/additions";
+import { ADDITIONS_MAX, ANSWER_PRESS, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, NEW_QUESTION_TAG, additionsFull, additionsLeftLine } from "@/lib/additions";
 import { QuestionBox } from "@/components/QuestionBox";
 import { WRITTEN_MAX_CHARS, additionTooLongLine, writtenLength } from "@/lib/rules";
 import { wrapSelection } from "@/lib/markdown";
@@ -137,9 +137,10 @@ function AnswerBox({ id, value, onChange, sessionId, attachments, onAttach, onRe
  * Written answers: one box per question in the tester's contract. Can be updated until it's paid. `canSend` false (batch 10: the test is paused): the boxes stay and what is
  * typed is kept as a draft, but Send is hidden until the test resumes.
  */
-export function WrittenForm({ sessionId, questions, initial, initialNotes, update, seenAt, canSend = true, sentSame = false, newFiles = false, lines = [], initialAttachments = [], only = false, needOne: oneNeeded = true }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean; initialAttachments?: AnswerAttachment[]; /** (Batch 20 section 26) what was sent is for these same questions (so the form starts from exactly it) */ sentSame?: boolean; /** an attachment added since the last send */ newFiles?: boolean;
+export function WrittenForm({ sessionId, questions, newQs = [], initial, initialNotes, update, seenAt, canSend = true, sentSame = false, newFiles = false, lines = [], initialAttachments = [], only = false, needOne: oneNeeded = true }: { /** (Batch 30 §2, §3) grey lines above Send */ lines?: string[]; sessionId: string; questions: string[]; initial: string[]; initialNotes: string; update: boolean; seenAt: string; canSend?: boolean; initialAttachments?: AnswerAttachment[]; /** (Batch 20 section 26) what was sent is for these same questions (so the form starts from exactly it) */ sentSame?: boolean; /** an attachment added since the last send */ newFiles?: boolean;
   /** (Owner, Nov 5, §235) after a send: `questions` are only the current ones with no answer yet (sent with `for`); no notes box (Anything else has its Add) */ only?: boolean;
-  /** (§235) at least one answer is needed (not after a switch to changed questions: that Send moves the part onto them) */ needOne?: boolean }) {
+  /** (§235) at least one answer is needed (not after a switch to changed questions: that Send moves the part onto them) */ needOne?: boolean;
+  /** (Owner, Nov 6, §283) the questions (their words) that came after the tester's sends: "new question" beside them */ newQs?: string[] }) {
   // (Owner) When the box was made: the next press goes ahead only if nothing new happened since.
   const [boxAt, setBoxAt] = useState("");
   const confirmed = !!boxAt;
@@ -286,7 +287,7 @@ export function WrittenForm({ sessionId, questions, initial, initialNotes, updat
         <div key={qText(q)} data-question="">
           {/* (Batch 15 section 3) A long question sits in a scroll box about 6 lines tall. (Owner, Nov 4, §182) Now the shared fold: its first 2 lines, then Show more. */}
           {/* (Batch 26 sections 11 and 14) The "*" only on a question the developer ticked Required, right after the question's words (not at the far right). */}
-          <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}</label>
+          <label className="label flex items-start gap-0.5" htmlFor={`a${i}`} data-question-label=""><LongText inline text={qText(q)} lines={QUESTION_LINES} label={`Question ${i + 1}`} />{qRequired(q) && <span className="req shrink-0" data-required-star="" aria-label="required" />}{newQs.includes(qText(q)) && <span className="badge ml-1 shrink-0 whitespace-nowrap border-sky-300/40 text-sky-200" data-new-question="">{NEW_QUESTION_TAG}</span>}</label>
           <AnswerBox id={`a${i}`} sessionId={sessionId} attachments={attachments} onAttach={addAttachment} onRemove={removeAttachment} required={qRequired(q)} min short={missingAt === i && !!msg && !msg.ok && isShortLine(msg.text)} total={length} value={answers[i]} onChange={(v) => setAnswers((all) => questions.map((_, j) => (j === i ? v : all[j] ?? "")))} />
           {boxDraft(i)}
         </div>

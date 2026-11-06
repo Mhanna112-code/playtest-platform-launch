@@ -67,7 +67,7 @@ import { ndaBlocked, ndaNoticeOpen } from "@/lib/ndaNotice";
 import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
 import { questionChanges } from "@/lib/questionHistory";
 import { cutNamesIn } from "@/lib/cutNames";
-import { carryOver, itemsFor } from "@/lib/answerSets";
+import { carryOver, itemsFor, itemsOf } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -99,6 +99,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const head = await db.contract.findUnique({ where: { id }, select: { testId: true, testerId: true } });
   if (head?.testerId === u.id) await (await import("@/lib/server/confirm")).expireActions(new Date(), { contractId: id });
   if (head?.testerId === u.id) await (await import("@/lib/server/workWindow")).finishWorkIfDue(head.testId);
+  // (Owner, Nov 6, §283) A left or ended contract that no Save reached is brought onto the listing's questions (its Terms history keeps the old ones).
+  if (head?.testerId === u.id) { const lt = await db.test.findUnique({ where: { id: head.testId }, select: { questions: true } }); if (lt) await (await import("@/lib/server/terms")).syncEndedQuestions(head.testId, lt.questions); }
   const pageV = head && head.testerId === u.id ? await testV(u.id, head.testId, id) : "";
   const c = await db.contract.findUnique({
     where: { id },
@@ -152,6 +154,10 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   const historyFiles = c.recordings.filter((r) => r.part === "written" && r.uploadedAt);
   // (Owner, Nov 5, §235) The current questions with no answer yet (none answered after the first send: all of them); the form below the answers holds only these.
   const openQs = written ? writtenQuestions(c).filter((_, i) => carriedNow[i] == null) : writtenQuestions(c);
+  // (Owner, Nov 6, §283; the tag moved here from the answers list, §255) Of those, the ones that came after the tester's sends (never among a send's questions,
+  // by their words): "new question" beside the question's words in the form. Once answered the question leaves the form, and the tag with it.
+  const sentQs = new Set(written ? [...itemsOf(written.answers, []), ...additionsOf(written.additions).flatMap((a) => a.items ?? [])].map((x) => qText(x.question)) : []);
+  const newQs = written ? openQs.filter((q) => !sentQs.has(qText(q))).map(qText) : [];
   // (§235; replaces §182's rows below the panel) "Add to this answer" sits in each answered question's fold, right under its answer and additions (and Anything
   // else's), with its own 5, "N of 5 additions left" and its full note. A question with no answer yet is answered in the form below instead.
   const addUnder = (key: string, question: string) => {
@@ -782,7 +788,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           <div className="space-y-2" data-answer-form={written ? "open" : "first"}>
             {/* (Owner, Nov 5, §260) No "What you sent is for the questions until <date>. Send your answers to these questions: …" line over the form. */}
             {written && openQs.length > 0 && <p className="text-sm font-medium text-white" data-open-questions-title="">Questions you haven&apos;t answered yet</p>}
-            <WrittenForm key={written ? "open" : "first" /* (Owner, Nov 5, §269) one form: other questions switch it in place (typed text kept by words) */} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
+            <WrittenForm key={written ? "open" : "first" /* (Owner, Nov 5, §269) one form: other questions switch it in place (typed text kept by words) */} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} newQs={newQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
               initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </div>
         )}

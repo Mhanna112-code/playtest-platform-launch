@@ -4967,3 +4967,24 @@ with ×.
   when empty. A written part has no outer panel around the Questions drop-down any more (its own panel is the one that scrolls); a recording's panel is as
   before (flat inside Needs you's person panel, §187). The Testers list's Terms history stays in the content panel, under the Questions drop-down.
 - Tests: tests/questions-dropdown-282.test.ts; batch10, batch35-sent-panels, old-questions-263-264 and written-form-234-235 follow the new markup.
+
+## §283 Written answers: only answered current questions everywhere, the new-question tag in the form, every contract follows the questions, and more (owner, Nov 6)
+- The "new question" tag (NEW_QUESTION_TAG) moved: never in an answers list (SentWork's `newQuestionTag` prop is gone, the developer never saw it, §255);
+  it sits in the tester's form ("Questions you haven't answered yet") beside the words of an unanswered question that came after their sends (not among any
+  send's questions, by its words: WrittenForm's `newQs`). Once answered it leaves the form, and the tag with it.
+- Every answers list (the tester's "Your written answers", Needs you, the update rows, the Testers list, the team's See the work) lists only answered questions:
+  a non-blank answer, or at least one addition, as drawn. An unanswered current question is only its box in the tester's form.
+- Questions follow the listing into EVERY contract on the test on a Save (left and ended too, not only working), with the same Terms history entry
+  (followQuestions); only the working testers are told in the bell. The NDA text follows into the non-working contracts too, with no notice (followNda).
+  Existing data: a non-working contract no Save reached is brought onto the listing's questions when the developer's test page or the tester's session page is
+  read (`syncEndedQuestions` in lib/server/terms.ts: followQuestions, its Terms history entry dated then; nothing deleted; an in-line contract costs one
+  comparison). A tester who rejoins gets the same entry first, then the listing's questions (the rejoin snapshot). Old answers come back into the lists only
+  if their question becomes current again.
+- The Testers list's avatars and "Search testers" clear each other: choosing a circle clears the box, typing a name clears the circle (TesterListSearch's
+  `searchTyped` / `onCircleChosen`, TesterFilter's `clearTesterFilter`). Needs you has no circles, so its own box is unchanged.
+- Anything else counts a changed-questions send ("N added", its "Added · <date>" entry) only when it brought notes or loose files: files no answer of that send
+  places with its marker (SetExtra's new `answers`). A file placed in an answer shows there only; the owner's case (a 9-answer send, notes "", one video placed
+  in an answer) no longer draws "· 1 added" and an empty dated entry. Every SentWork surface.
+- The Testers list: each tester's Terms history drop-down (§263) moved from under the written answers to the very bottom of the tester's drop-down, below all
+  their part panels (written answers, recording, calls and their Pay panels).
+- Tests: tests/written-answers-283.test.ts; qa-look-254-256 (the tag), batch35-added-per-question, old-questions-263-264 and questions-dropdown-282 follow.

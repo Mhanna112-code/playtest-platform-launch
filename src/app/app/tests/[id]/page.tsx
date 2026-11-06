@@ -100,6 +100,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   await (await import("@/lib/server/calls")).sweepNobodyJoined();
   await (await import("@/lib/server/confirm")).expireActions(new Date(), { developerId: u.id });
   await (await import("@/lib/server/recovery")).checkStuck({ testId: id }); // (batch 15 section 9) payments stuck "in progress"
+  // (Owner, Nov 6, §283) A left or ended tester's contract that no Save reached is brought onto the listing's questions (its Terms history keeps the old ones).
+  { const lt = await db.test.findUnique({ where: { id }, select: { questions: true } }); if (lt) await (await import("@/lib/server/terms")).syncEndedQuestions(id, lt.questions); }
   const { failed } = await searchParams; // (Owner, Nov 5, §275 revised) the Save's note is on Edit now: no saved/offered/closed/resent/skipped here
   const seenAt = new Date().toISOString();
   // (Batch 30 §8) The poll's fingerprint as of BEFORE the page reads what it shows: AutoRefresh starts from it, so a change right after this render is caught.
@@ -505,7 +507,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Nov 5, §226) Only what is new: never paid, every answered question (not the unanswered ones). (Owner, Nov 5, §255) No "new question" tag.
                     (Owner, Nov 5, §263) A new, unpaid answer or addition to a question that has since changed shows too, after the current ones, with a small
                     "Old" tag beside the question, so it can be paid; once paid it is only in Terms history. */}
-                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} newQuestionTag={false} questionsFold={{ open: true }} />
+                <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true }} />
               </>)}
               <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
               <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
@@ -549,7 +551,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
           {/* (Owner, Nov 5, §226) Only what came after the last payment: the questions answered or added to since, with just the new parts. */}
           {/* (Owner, Nov 5, §263; replaces §234's "never a past question in Needs you") An old question's new answer or addition shows, tagged "Old".
               (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} newQuestionTag={false} questionsFold={{ open: true }} />
+          <SentWork id={`update-${x.id}`} timeZone={u.timeZone} kind={x.kind} answers={x.answers} questions={writtenQuestions(c)} notes={x.notes} additions={x.additions} files={x.recordings} newOnly={{ since: paidCut(x) }} questionsFold={{ open: true }} />
         </>)}
         {/* (Owner, Nov 5, §226) In Needs you the press for what's new on a paid part is "Pay" (Pay more's route, checks and stops; the Testers list keeps Pay more). */}
         <HoldFold openOn={[`update-${x.id}`]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `update-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
@@ -702,6 +704,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
             const cancelledN = c.calls.filter((x) => x.status === "cancelled").length;
             // (Batch 15 section 42) Every call that's over, newest first (oldest last).
             const overCalls = c.calls.filter(callIsOver).sort((a, b) => b.startsAt.getTime() - a.startsAt.getTime());
+            const writtenSub = c.submissions.find((s) => s.kind === "written"); // (§283) its Terms history, at the bottom
             const partRows = [
               { name: "Written answers", on: c.writtenCents != null, required: c.writtenRequired, sub: c.submissions.find((s) => s.kind === "written"), cents: c.writtenCents },
               { name: "Recording", on: c.recordingCents != null, required: c.recordingRequired, sub: c.submissions.find((s) => s.kind === "recording"), cents: c.recordingCents },
@@ -751,18 +754,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                           {/* (Owner, Nov 5, §263, final; replaces §234's Past questions box under it and §254's earlier-set answers there) As paid (§226), the
                               tester's current questions only: an old question is in the Terms history below. A question that comes back is current again by itself.
                               (Owner, Nov 5, §255) No "new question" tag on the developer's side. */}
-                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} newQuestionTag={false} questionsFold={{ open: false }} />
+                          <SentWork id={`row-${r.sub.id}`} timeZone={u.timeZone} kind={r.sub.kind} answers={r.sub.answers} questions={writtenQuestions(c)} notes={r.sub.notes} additions={r.sub.additions} files={r.sub.recordings} until={paidCut(r.sub)} questionsFold={{ open: false }} />
                         </>)}
-                        {/* (Owner, Nov 5, §263) The tester's Terms history for the questions, as on their session page: each change, Then (with what they SENT for
-                            each question, never a draft) → Now, the files drawn from this part's uploads. */}
-                        {r.sub.kind === "written" && ((hist) => hist.length > 0 && (
-                          <details className="mt-2 space-y-2 text-sm" data-terms-history="" data-dev-terms-history={c.id}>
-                            <summary className="fold-chevron cursor-pointer font-medium text-white">Terms history</summary>
-                            <OwnPanel><ResizeBox id={`dev-terms-history-${c.id}`} label="Terms history">
-                              <ul className="space-y-1.5 text-slate-300">{hist.map((q) => <QuestionsChangedEntry key={q.at} id={`dev-history-q-${c.id}-${new Date(q.at).getTime()}`} change={q} files={r.sub!.recordings} timeZone={u.timeZone} />)}</ul>
-                            </ResizeBox></OwnPanel>
-                          </details>
-                        ))(questionChanges(c.prevSets, writtenQuestions(c), r.sub, { drafts: false }))}
                       </div>}
                       {/* (Owner, Nov 6, §282) Right under the content, its own panel for paying: the part's payments (§225), then Pay more and its box (or
                           the lines that stand for it: closed unpaid, at its cap, closed for $0, the bank). Hidden when nothing is in it. */}
@@ -901,6 +894,18 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {/* (Owner, Nov 3, §166) No "On <name>'s profile: “…”" lines here any more: the excerpts stay on the tester's profile (and the requests in Needs you). */}
                 {/* (Batch 11, DEFAULT) A tester who deleted their account with no payout account: their unreviewed work left Needs you. */}
                 {!testerPayable(c.tester) && (c.submissions.some((x) => !x.review) || c.calls.some((x) => tookPlace(x) && !x.review)) && <p className="note" data-deleted-no-payouts="">{deletedNoPayoutsLine(displayName({ ...c.tester, deletedAt: null }), c.tester.pronoun)}</p>}
+                {/* (Owner, Nov 6, §283; was under the written answers, in their content panel) The Terms history sits at the very bottom of the tester's
+                    drop-down, below all their part panels (written answers, recording, calls and their Pay panels). */}
+                {/* (Owner, Nov 5, §263) The tester's Terms history for the questions, as on their session page: each change, Then (with what they SENT for
+                    each question, never a draft) → Now, the files drawn from this part's uploads. */}
+                {writtenSub && ((hist) => hist.length > 0 && (
+                  <details className="mt-2 space-y-2 text-sm" data-terms-history="" data-dev-terms-history={c.id}>
+                    <summary className="fold-chevron cursor-pointer font-medium text-white">Terms history</summary>
+                    <OwnPanel><ResizeBox id={`dev-terms-history-${c.id}`} label="Terms history">
+                      <ul className="space-y-1.5 text-slate-300">{hist.map((q) => <QuestionsChangedEntry key={q.at} id={`dev-history-q-${c.id}-${new Date(q.at).getTime()}`} change={q} files={writtenSub.recordings} timeZone={u.timeZone} />)}</ul>
+                    </ResizeBox></OwnPanel>
+                  </details>
+                ))(questionChanges(c.prevSets, writtenQuestions(c), writtenSub, { drafts: false }))}
                 </Fold>
                 <div className="space-y-1" data-tester-summary="">
                   <div className="flex flex-wrap items-center gap-2">

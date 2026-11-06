@@ -222,13 +222,15 @@ describe("§223 Your written answers: each question and its answer in draggable 
     expect(s).not.toContain("QuestionTitle");
   });
 
-  it("an unanswered question answered later shows its answer, not \"(no answer)\"; one still unanswered keeps the grey line", () => {
+  it("an unanswered question answered later shows its answer, not \"(no answer)\"; (§283) one still unanswered isn't listed", () => {
     const page = draw("own-s1");
     const q2 = page.slice(page.indexOf(`data-question-body="${K2}"`), page.indexOf(`data-question-body="${ANYTHING_ELSE_KEY}"`));
     expect(q2).not.toContain("(no answer)");
     expect(q2).toContain("second answer");
     const blank = renderToStaticMarkup(h(SentWork, { kind: "written", answers: [item(Q1, "")], notes: "", additions: [], files: [] }));
-    expect(blank).toContain('data-no-answer="">(no answer)</p>');
+    // (Owner, Nov 6, §283; was its grey "(no answer)" line) An unanswered question isn't listed at all: only Anything else.
+    expect(blank).not.toContain("(no answer)");
+    expect(blank).not.toContain(`data-question-body="${questionKeys([{ question: Q1 }])[0]}"`);
   });
 
   it("the developer's views draw the same component (Needs you, the update row, the tester rows, the team's See the work)", () => {

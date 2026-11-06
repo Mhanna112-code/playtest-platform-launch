@@ -107,7 +107,7 @@ describe("§263 lib", () => {
     const list = renderToStaticMarkup(h(SentWork, props));
     expect(list).not.toContain(Q2);
     expect(list).not.toContain("data-old-question");
-    const needs = renderToStaticMarkup(h(SentWork, { ...props, newOnly: { since: null }, newQuestionTag: false }));
+    const needs = renderToStaticMarkup(h(SentWork, { ...props, newOnly: { since: null } }));
     expect(needs.indexOf(Q3)).toBeLessThan(needs.indexOf(Q2));
     expect(foldOf(needs, Q2)).toContain(OLD);
     expect(foldOf(needs, Q2)).not.toContain("data-add-more");

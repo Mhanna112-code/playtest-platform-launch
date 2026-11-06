@@ -517,14 +517,18 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     // (Owner, Nov 5, §265) Questions follow the listing: a Save that changed them writes them into every working tester's contract in this transaction (the one
     // place that keeps them in step, so "old" means the same on both sides), each change kept as a Terms history entry with that moment's answers and draft
     // (followQuestions). A contract whose questions already differ from the listing (an offer kept before §265) is brought in line here too.
+    // (Owner, Nov 6, §283; was working contracts only) EVERY contract on the test follows, working or not (left, ended): the same Terms history entry, so an
+    // ended tester's old answered questions live in Terms history like everyone else's and the Testers list shows the listing's questions. Only the working
+    // testers are told (the bell); one who comes back is on the listing's questions already.
     if (fields.includes("questions")) {
       const now = new Date();
-      for (const c of await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, questions: true, prevSets: true, tester: { select: { email: true } } } }))
-        if (await followQuestions(tx, c, next.questions, now)) questionsFollowed.push({ contractId: c.id, email: c.tester.email });
+      for (const c of await tx.contract.findMany({ where: { testId }, select: { id: true, testerId: true, questions: true, prevSets: true, status: true, tester: { select: { email: true } } } }))
+        if (await followQuestions(tx, c, next.questions, now) && c.status === "working") questionsFollowed.push({ contractId: c.id, email: c.tester.email });
     }
     // (§269) Reordered only (the Save changed other fields): the listing took the new order above; every working contract with the same questions takes it too.
     if (reordered) await saveQuestionOrder(tx, testId, next.questions);
     // (Owner, Nov 5, §267) The NDA follows the listing the same way: copied into every working contract, with the change's kind for its notice (and block).
+    // (Owner, Nov 6, §283) And into every other contract on the test (left, ended), with no notice (followNda).
     if (fields.includes("ndaText")) ndaFollowed = await followNda(tx, testId, current.ndaText ?? "", next.ndaText ?? "", new Date());
     // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
     keysGiven = await giveKeysToWorking(tx, testId);
@@ -1053,6 +1057,9 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
     if (t.ndaText && body.ndaAccepted !== true && !ndaAt) throw new HttpError(400, "nda", "Accept the NDA to join.");
     // (Batch 15 section 18) The tester's deadline: the day they join + the test's tester days (counted in the developer's time zone, like Open until).
     const snap = contractSnapshot({ ...asListing(t), listingVersion: t.listingVersion, testerDays: t.testerDays, tz: dev.timeZone }, new Date(), body.keepPrivate === true, ndaAt ?? new Date());
+    // (Owner, Nov 6, §283) Coming back: on the listing's questions; if theirs still differ (an ended contract no Save reached), the change is a Terms history
+    // entry first (followQuestions), so the old answered questions stay readable there.
+    if (old) await followQuestions(tx, old, asListing(t).questions, new Date());
     const contract = old
       ? await tx.contract.update({ where: { id: old.id }, data: { ...snap, dueAt: rejoinDue(old.dueAt, old.endedAt, new Date(), dev.timeZone), status: "working", endKind: "", endedAt: null, endReason: "", termsSwitchedAt: null } })
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
