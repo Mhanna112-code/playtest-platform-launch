@@ -71,11 +71,12 @@ describe("§302 every NDA change blocks like new terms", () => {
     // The bell: "Nora Lane changed the NDA" whatever the kind, linking to the session page's notice.
     const bell = await db.notification.findMany({ where: { userId: x.tester.user.id, text: { contains: "NDA" } } });
     expect(bell.map((b) => [b.text, b.link])).toEqual([["Nora Lane changed the NDA", `/app/sessions/${x.sessionId}#nda-notice`]]);
-    // The page: the notice, blocking, with its button.
+    // The page: the notice, blocking; (§314) its line is the press, no button.
     const page = await sessionPage(x.sessionId, x.tester.user.id);
     expect(page).toContain(`id="nda-notice"`);
     expect(page).toContain(`data-nda-block="${kind}"`);
-    expect(page).toContain('data-nda-ack="">Acknowledge</button>');
+    expect(page).toContain('<a href="#info-nda" role="button" data-nda-ack="">');
+    expect(page).not.toContain(">Acknowledge</button>");
   });
 
   it("the words: the line, the bell / top box line and the refusal", () => {
@@ -89,32 +90,32 @@ describe("§302 every NDA change blocks like new terms", () => {
     expect(lineFallbacks("nda-notice")).toEqual(["nda-notice", "info-nda"]);
   });
 
-  it("the notice: one line linking to the NDA, one Acknowledge button, no banner; marked when the page goes up to it", () => {
+  // (Owner, Nov 6, §314) No button, no separate link: the one line acknowledges, leaves the page and goes to the NDA.
+  it("the notice: ONE clickable line that acknowledges and goes to the NDA, no button, no banner; marked when the page goes up to it", () => {
     for (const kind of KINDS) {
-      const html = unescape(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", devHref: null, kind, open: true, block: true })));
-      // One wording for every kind (the owner's, Nov 6).
-      expect(html).toContain(`<a href="#info-nda" data-nda-link="">${ndaNoticeLine("fbbb")}</a>`);
-      expect(html.match(/<button/g)).toHaveLength(1);
-      expect(html).toContain('data-nda-ack="">Acknowledge</button>');
+      const html = unescape(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", kind, open: true, block: true })));
+      // One wording for every kind (the owner's, Nov 6), the whole line one press.
+      expect(html).toContain(`<p class="min-w-0"><a href="#info-nda" role="button" data-nda-ack="">${ndaNoticeLine("fbbb")}</a></p>`);
+      expect(html.match(/<a /g)).toHaveLength(1);
+      expect(html).not.toContain("<button");
       expect(html).toMatch(/^<div id="nda-notice" class="info scroll-mt-24 [^"]*data-\[marked\]:ring-2 data-\[marked\]:ring-sky-300" data-nda-notice="[a-z]+" data-session="s1" data-nda-block="[a-z]+">/);
     }
-    // With the developer's profile: their name is its own green link, the rest of the line the NDA link.
-    const named = unescape(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", devHref: "/app/developers/d1", kind: "changed", open: true, block: true })));
-    expect(named).toContain('data-line-link="person">fbbb</a> <a href="#info-nda" data-nda-link="">changed the NDA. Click here to acknowledge you\'ve seen the change.</a>');
     expect(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", kind: "changed", open: false, block: false }))).toBe("");
-    // Not blocking (the tester no longer works on the test): the notice and button, without the block mark.
+    // Not blocking (the tester no longer works on the test): the notice, without the block mark.
     expect(renderToStaticMarkup(h(NdaNotice, { sessionId: "s1", dev: "fbbb", kind: "changed", open: true, block: false }))).not.toContain("data-nda-block");
     // The source: the press goes up to the notice and marks it, as TesterTop does for Switch / Keep; an older page loads it first.
     const src = readFileSync(path.resolve(__dirname, "../src/components/NdaNotice.tsx"), "utf8");
     expect(src).toContain("window.addEventListener(NDA_BLOCK_EVENT, on);");
     expect(src).toContain("setTimeout(() => jumpTo(NDA_NOTICE), 30);");
     expect(src).toContain("router.refresh();");
-    // The button is the only thing that records it (no banner, and the link only navigates).
+    // The line is the only thing that records it (no banner, no button); a double press sends once; after it, the line goes and the page goes to the NDA.
     expect(src.match(/nda-seen/g)).toHaveLength(1);
+    expect(src).toContain("if (sending.current) return;");
+    expect(src).toContain("setTimeout(() => jumpTo(NDA_INFO), 60);");
     expect(readFileSync(path.resolve(__dirname, "../src/app/app/sessions/[id]/page.tsx"), "utf8").match(/<NdaNotice /g)).toHaveLength(1);
   });
 
-  it.each(KINDS)("%s: the Acknowledge button lifts the block at once (an added NDA counts as accepted)", async (kind) => {
+  it.each(KINDS)("%s: pressing the notice (§314: its line) lifts the block at once (an added NDA counts as accepted)", async (kind) => {
     const x = await changed(kind);
     const before = await db.contract.findUniqueOrThrow({ where: { id: x.sessionId } });
     expect((await press(x.sessionId, x.tester.cookie, "nda-seen")).status).toBe(200);

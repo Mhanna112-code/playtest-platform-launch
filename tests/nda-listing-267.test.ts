@@ -72,16 +72,16 @@ describe("§267 a Save that changes the NDA", () => {
       expect(r.body.error?.code, `${action}: ${JSON.stringify(r.body)}`).toBe("nda_block");
       expect(r.body.error?.message).toBe(line);
     }
-    // The page: the one notice with its button (§302); the NDA line in "The listing information" (not in "Your contract"), with its box.
+    // The page: the one notice, its line the press (§302, §314: no button); the NDA line in "The listing information" (not in "Your contract"), with its box.
     const page = await sessionPage(j.sessionId, j.tester.user.id);
     // (§270) The developer's name is a green link to their profile.
-    expect(page).toMatch(/data-nda-block="added"><div[^>]*><p class="min-w-0"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> <a href="#info-nda" data-nda-link="">changed the NDA. Click here to acknowledge you've seen the change.<\/a><\/p><button[^>]*data-nda-ack="">Acknowledge<\/button>/);
+    expect(page).toMatch(/data-nda-block="added"><p class="min-w-0"><a href="#info-nda" role="button" data-nda-ack="">Nora Lane changed the NDA. Click here to acknowledge you've seen the change.<\/a><\/p>/); // (§314) one clickable line
     const info = page.slice(page.indexOf('data-scope-info=""'), page.indexOf('data-terms-history=""'));
     expect(info).toMatch(/<li id="info-nda" data-nda=""[^>]*data-info-line="nda"/);
     expect(info).toContain(NDA);
     const contract = page.slice(page.indexOf('data-scope-contract=""'), page.indexOf('data-scope-info=""'));
     expect(contract).not.toContain("data-nda");
-    // The Acknowledge button lifts the block (and counts as reading it).
+    // Pressing the notice (§314: its line, no button) lifts the block (and counts as reading it).
     expect((await press(j.sessionId, j.tester.cookie, "nda-seen")).status).toBe(200);
     expect((await press(j.sessionId, j.tester.cookie, "written-add", { text: "more on it", question: "else", confirmed: true })).status).toBe(200);
     expect((await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } })).ndaAcceptedAt).not.toBeNull();
@@ -95,7 +95,7 @@ describe("§267 a Save that changes the NDA", () => {
     let r = await press(j.sessionId, j.tester.cookie, "request-time", {});
     expect(r.body.error?.code).toBe("nda_block");
     let page = await sessionPage(j.sessionId, j.tester.user.id);
-    expect(page).toMatch(/data-nda-notice="changed" data-session="[^"]+" data-nda-block="changed"><div[^>]*><p class="min-w-0"><a href="\/app\/developers\/[^"]+" class="text-volt-300 hover:underline" data-line-link="person">Nora Lane<\/a> <a href="#info-nda" data-nda-link="">changed the NDA. Click here to acknowledge you've seen the change.<\/a><\/p>/); // (§270)
+    expect(page).toMatch(/data-nda-notice="changed" data-session="[^"]+" data-nda-block="changed"><p class="min-w-0"><a href="#info-nda" role="button" data-nda-ack="">Nora Lane changed the NDA. Click here to acknowledge you've seen the change.<\/a><\/p>/); // (§314) one clickable line
     await edit(testId, dev.cookie, { ndaText: "" });
     r = await press(j.sessionId, j.tester.cookie, "request-time", {});
     expect(r.body.error?.code).toBe("nda_block");

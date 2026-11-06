@@ -53,7 +53,7 @@ describe("§184: a booking drops the other waiting requests that overlap it", ()
     expect(benDrop[0].text).toMatch(new RegExp(`^Nora Lane's request for ${T_} closed: she is no longer free at that time$`));
     expect(benDrop[0].quiet).toBe(true); // (Owner, Nov 4, §185) quiet now, with a bell
     const benBell = await db.notification.findMany({ where: { userId: ben.tester.user.id, groupKey: "callrequests", text: { contains: " closed: " } } }); // (§286) the day's stack across tests
-    expect(benBell.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane's request for .+ closed: she is no longer free at that time$/)]);
+    expect(benBell.map((n) => n.text)).toEqual([expect.stringMatching(/^Nora Lane's request on “Harbor Run” for .+ closed: she is no longer free at that time$/)]); // (§312a) the bell names the test
     expect(await db.notification.count({ where: { userId: dev.user.id, groupKey: "callrequests", text: { contains: " closed: " } } })).toBe(0); // the developer has the call: no bell
     expect(benLines.map((l) => l.text).join(" | ")).not.toContain("Ana");
     // The developer (her booking was Ana's Accept): her own dropped request, a quiet line.
