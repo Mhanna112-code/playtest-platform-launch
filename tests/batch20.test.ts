@@ -712,7 +712,7 @@ describe("batch 20 section 15: Dispute disabled when nothing more can be awarded
     expect(page).toContain('<button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>');
     expect(page).toContain("const room = await disputeRoom(");
     // The same bounds as the admin's decision (disputeBounds), so the two never disagree; a call's include what's left of the $1,000.
-    expect(src("lib/server/payments.ts")).toContain("const bounds = existing || byTesterChoice(review.reason) ? null : await disputeBounds(");
+    expect(src("lib/server/payments.ts")).toContain("const bounds = existing || closed || byTesterChoice(review.reason) ? null : await disputeBounds("); // (§288) not for a closed part
     expect(src("lib/server/payments.ts")).toContain("const room = await pieceRoom(piece);");
   });
 });

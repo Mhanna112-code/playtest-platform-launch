@@ -115,10 +115,10 @@ describe("batch 10 item 1: every reviewed part can be disputed", () => {
     await settle();
     expect((await sact(ch.sessionId, "choose", ch.tester.cookie, { submissionId: ch.sub.id, choice: "charge", amount: "6.00", tickedCents: 600, seenAt: seen(), confirmed: true })).status).toBe(200);
     expect((await dispute(ch.sessionId, ch.tester.cookie, { kind: "submission", id: ch.sub.id })).body.error.message).toBe(R.TESTER_CHOSE_LINE);
-    // The Pay box says the tester can dispute, listed or not.
+    // The Pay box says the tester can dispute, listed or not (Owner, Nov 6, §288: until they rate; then nothing about disputing).
     const box = src("app/app/tests/[id]/PayBox.tsx");
     expect(src("lib/rules.ts")).toContain("can dispute the amount once"); // (batch 15 section 30) payUnderLine, listed or not
-    expect(box).toContain("payUnderLine(p.name, listed)");
+    expect(box).toContain("payUnderLine(p.name, listed, p.disputable !== false)");
     expect(box).not.toContain("It can't be rejected or disputed.");
   });
 });
@@ -195,7 +195,7 @@ describe("batch 10 item 3: long written answers scroll on the developer's side",
     // (Batch 35 §136) One list: the answers under their questions, the notes, then what was added.
     // (Owner, Nov 5, §263) No `part` any more: the current questions (and a new answer to an old one, tagged Old).
     expect(page.slice(at)).toContain("<SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions}"); // (§167) fold ids and zone
-    expect(page.indexOf('<PayBox owes={owesNow} key={x.s!.id} kind="submission"')).toBeGreaterThan(at);
+    expect(page.indexOf('<PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={x.s!.id} kind="submission"')).toBeGreaterThan(at);
   });
 });
 

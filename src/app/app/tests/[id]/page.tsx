@@ -288,6 +288,8 @@ export default async function TestPage({ params, searchParams }: { params: Promi
     const name = displayName(c.tester);
     return <RateBox key={`rate-${c.id}`} anchor={`rate-${c.id}`} path={`/api/tests/${t.id}/rate`} body={{ contractId: c.id }} seenAt={seenAt} name={name} working={false} disabledLine={st.kind === "disabled" ? st.line : ""} headline={`Your rating of ${name} is final. Both ratings show once you rate.`} lines={[]} />;
   };
+  // (Owner, Nov 6, §288) Testers who rated this test: their disputes are closed, so nothing on this page says they can dispute.
+  const ratedTesters = new Set((await db.rating.findMany({ where: { testId: t.id, side: "tester" }, select: { contractId: true } })).map((r) => r.contractId));
   const rateInfo = new Map(
     await Promise.all(
       t.contracts.map(async (c) => [c.id, { ...(await contractRatings(c.id, now)), state: rateStates.get(c.id)! }] as const),
@@ -510,7 +512,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 <SentWork id={`needs-${x.s!.id}`} timeZone={u.timeZone} kind={x.s!.kind} answers={x.s!.answers} questions={writtenQuestions(x.c)} notes={x.s!.notes} additions={x.s!.additions} files={x.s!.recordings} newOnly={{ since: paidCut(x.s!) }} questionsFold={{ open: true }} />
               </>)}
               <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
-              <PayBox owes={owesNow} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
+              <PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={x.s!.id} kind="submission" id={x.s!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.s!.id)?.box} confirming={confirmingPay(x.s!.id)}
                 /* (Batch 30 §3) Late work never opens Charge: no "<tester> can charge" line. */
                 note={x.s!.agreedCents != null && !x.s!.late && chargeOpensAt(x.s!, t, x.c, now) && !x.s!.choiceOfferedAt ? choiceNoteLine(pieceDay(chargeOpensAt(x.s!, t, x.c, now)!, u.timeZone), displayName(x.c.tester), chargeAmount(x.s!.agreedCents, partPaid(x.s!.id)), pronouns(x.c.tester.pronoun).poss) : undefined}
                 listingCents={x.s!.agreedCents} listingText={`${money(x.s!.agreedCents)} for ${x.s!.kind === "written" ? "written answers" : "a recording"}`} />
@@ -525,7 +527,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                 {x.x!.actualMinutes != null && x.x!.lengthNote && <ReasonQuote text={x.x!.lengthNote} />}
               </div>
               <HoldFold openOn={[anchor]} className={PART_PANEL} summaryClassName="text-sm font-medium text-white" data={{ "data-fold": `needs-pay-${x.id}`, "data-part-panel": "pay" }} summary="Pay">
-              <PayBox owes={owesNow} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
+              <PayBox owes={owesNow} disputable={!ratedTesters.has(x.c.id)} key={`${x.x!.actualMinutes ?? 0}`} kind="call" id={x.x!.id} name={displayName(x.c.tester)} seenAt={seenAt} room={rooms.get(x.x!.id)?.box} confirming={confirmingPay(x.x!.id)}
                 /* (Owner, Oct 29, batch 28 §21) A listed call is charged automatically 7 days after it if it is not paid. */
                 note={x.x!.rateCents != null && x.x!.payBy && x.x!.payBy > now ? autoChargeLine(pieceDay(x.x!.payBy, u.timeZone), Math.min(callReference(x.x!.rateCents, callMinutesOf(x.x!)!).cents ?? 0, callsLeft.get(x.c.id) ?? Infinity), callMinutesOf(x.x!)!, x.x!.rateCents) : undefined}
                 minutes={callMinutesOf(x.x!)!} rateCents={x.x!.rateCents} warning={callsWarn.get(x.c.id)}

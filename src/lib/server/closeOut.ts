@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { CLOSE_OUT_DAYS, closeOutBase, reviewDateOf } from "@/lib/rules";
+import { CLOSE_OUT_DAYS, RATED_NO_DISPUTE, closeOutBase, disputeClosedLine, reviewDateOf } from "@/lib/rules";
+import { fmtDate } from "@/lib/server/dateFormat";
 import { callMinutesOf } from "@/lib/callMeasure";
 
 /**
@@ -184,3 +185,33 @@ export async function pieceCloseOut(where: { submissionId?: string | null; callI
 
 /** Has this test (or this piece) closed out? */
 export const closedOut = (at: Date | null, now = new Date()) => !!at && at.getTime() <= now.getTime();
+
+/**
+ * (Owner, Nov 6, §288) Whether the tester can no longer open a dispute on these pieces of one contract, with the line saying why: they rated the test (rating ends
+ * their part: every piece, a payment made after the rating included) or the piece's own closing date passed (pieceCloseOut, the tester's side: the date its Charge
+ * and Let it go end, and the developer's Pay). A piece missing from the map is open. A dispute already open is not touched (it stays until the team decides it).
+ */
+export async function disputesClosed(contractId: string, pieces: { submissionId?: string | null; callId?: string | null }[], now = new Date()) {
+  const out = new Map<string, string>();
+  const keys = pieces.filter((p) => p.submissionId || p.callId);
+  if (!keys.length) return out;
+  const rated = await db.rating.findUnique({ where: { contractId_side: { contractId, side: "tester" } }, select: { id: true } });
+  for (const k of keys) {
+    const id = (k.submissionId ?? k.callId)!;
+    if (rated) { out.set(id, RATED_NO_DISPUTE); continue; }
+    const at = await pieceCloseOut(k, "tester", now);
+    if (closedOut(at, now)) out.set(id, disputeClosedLine(fmtDate(at!)));
+  }
+  return out;
+}
+
+/** (Owner, Nov 6, §288) One piece of this contract: the line when its disputes are closed, or null (also null for a piece that isn't this contract's). */
+export async function disputeClosedFor(contractId: string, where: { submissionId?: string | null; callId?: string | null }, now = new Date()) {
+  const piece = where.submissionId
+    ? await db.submission.findUnique({ where: { id: where.submissionId }, select: { contractId: true } })
+    : where.callId
+      ? await db.call.findUnique({ where: { id: where.callId }, select: { contractId: true } })
+      : null;
+  if (!piece || piece.contractId !== contractId) return null;
+  return (await disputesClosed(contractId, [where], now)).get((where.submissionId ?? where.callId)!) ?? null;
+}

@@ -58,8 +58,11 @@ export function PayBox(p: {
   /** (Owner, Nov 5, §226) Needs you's box for what's new on a paid part: Pay more's route, checks and stops, named "Pay" (its button, its refusals and stops; the
    * request says so with `press: "Pay"`, so the server's failed-press line names Pay too). The Testers list keeps "Pay more". */
   moreLabel?: "Pay";
+  /** (Owner, Nov 6, §288) false once the tester rated the test (their disputes are closed): the line under Pay says nothing about disputing. */
+  disputable?: boolean;
 }) {
   const listed = p.listingCents != null;
+  const underLine = payUnderLine(p.name, listed, p.disputable !== false);
   const more = p.more;
   // (§226) The press's name: Pay or Pay more (a Needs you Pay more is "Pay").
   const pressName = !more || p.moreLabel === "Pay" ? "Pay" : "Pay more";
@@ -252,7 +255,7 @@ export function PayBox(p: {
       <FormMistakes text={at === "pay" && error.startsWith(FIELD) ? error : ""} press={pressName} />
       {/* (§156) The bank's check ended without the payment: named like any refusal ("Your Pay didn't go through: Your bank didn't confirm …"). */}
       {bankErr && <p className="info" data-bank-not-confirmed="">{refusalLine(pressName, bankErr)}</p>}
-      {!done && !more && <p className="note" data-pay-under="">{payUnderLine(p.name, listed)}</p>}
+      {!done && !more && underLine && <p className="note" data-pay-under="">{underLine}</p>}
       {!done && more && p.update && <p className="note" data-update-under="">Any amount up to the cap, or $0 to close this row (a note is optional).</p>}
       {!done && p.note && <p className="note">{p.note}</p>}
       {error === PAY_WAITS && <PayOwedLink className="text-sm underline" />}

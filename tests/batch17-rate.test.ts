@@ -11,7 +11,7 @@ import { closePausedTest } from "@/lib/server/pauseClosure";
 import { decideDispute } from "@/lib/server/payments";
 import { startHold } from "@/lib/server/holds";
 import { fmtDate } from "@/lib/format";
-import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, LIMITED_VIEW_LINE, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, reviewDateOf } from "@/lib/rules";
+import { CALL_CANCELLED_BY_STOP, LIMITED_CHOICE_REFUSAL, LIMITED_VIEW_LINE, RATED_NO_DISPUTE, RATE_CHARGE_FIRST, RATE_INACTIVE, RATE_MY_DISPUTE, reviewDateOf } from "@/lib/rules";
 
 // (Owner, Oct 28) Batch 17 sections 1, 2, 10, 12, 14, 16, 17 and the rating half of 19.
 
@@ -89,8 +89,10 @@ describe("section 16: the developer rates only after the tester rated and everyt
     expect(s.kind).toBe("open");
     expect(Math.round((s.endsAt!.getTime() - s.opensAt!.getTime()) / DAY)).toBe(14);
     expect(await db.notification.count({ where: { userId: x.dev.user.id, text: "Ana Silva finished Harbor Run. You can rate her for 14 days." } })).toBe(1);
-    // A dispute opened after the tester rated: disabled with its line, refused with it.
-    await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: x.sub.id, reason: "More please", confirmed: true });
+    // (Owner, Nov 6, §288) The tester rated, so a dispute on the payment made after it is refused ("You rated this test, so its disputes are closed.").
+    expect((await sact(x.sessionId, "dispute", x.tester.cookie, { kind: "submission", id: x.sub.id, reason: "More please", confirmed: true })).body.error.message).toBe(RATED_NO_DISPUTE);
+    // A dispute still open (one left from before §288): the developer's Rate is disabled with its line, refused with it.
+    await db.dispute.create({ data: { submissionId: x.sub.id, contractId: x.sessionId, testerId: x.tester.user.id, reason: "More please" } });
     expect((await devRateStates([x.sessionId])).get(x.sessionId)).toMatchObject({ kind: "disabled", line: "Rating opens once the team decides Ana Silva's dispute." });
     expect((await act(x.testId, "rate", x.dev.cookie, { contractId: x.sessionId, stars: 5 })).body.error.message).toBe("Rating opens once the team decides Ana Silva's dispute.");
     const pageAt = seen();
