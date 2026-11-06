@@ -67,7 +67,7 @@ import { ndaBlocked, ndaNoticeOpen } from "@/lib/ndaNotice";
 import { QuestionsChangedEntry } from "@/components/QuestionsHistory";
 import { questionChanges } from "@/lib/questionHistory";
 import { cutNamesIn } from "@/lib/cutNames";
-import { carryOver, itemsFor, itemsOf } from "@/lib/answerSets";
+import { carryOver, itemsFor, itemsOf, snapshotOnlyFiles } from "@/lib/answerSets";
 import { ExcerptPicker } from "@/components/Excerpts";
 import { excerptChoices } from "@/lib/server/excerpts";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -158,6 +158,12 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // by their words): "new question" beside the question's words in the form. Once answered the question leaves the form, and the tag with it.
   const sentQs = new Set(written ? [...itemsOf(written.answers, []), ...additionsOf(written.additions).flatMap((a) => a.items ?? [])].map((x) => qText(x.question)) : []);
   const newQs = written ? openQs.filter((q) => !sentQs.has(qText(q))).map(qText) : [];
+  // (Owner, Nov 6, §283) The form's files: unsent uploads only (one already sent is never listed or sent again), and not one that went with a draft into Terms
+  // history with its question (§263 / §269); it comes back with that draft if the question becomes current again (then it is in the kept draft).
+  const keptDraft = await db.keptForm.findUnique({ where: { userId_key: { userId: c.testerId, key: `written:${c.id}` } } });
+  const unsentFiles = c.recordings.filter((r) => r.part === "written" && r.uploadedAt && !r.submissionId);
+  const snappedFiles = snapshotOnlyFiles(c.prevSets, unsentFiles, [JSON.stringify(keptDraft?.data ?? null)]);
+  const formFiles = unsentFiles.filter((r) => !snappedFiles.has(r.id));
   // (§235; replaces §182's rows below the panel) "Add to this answer" sits in each answered question's fold, right under its answer and additions (and Anything
   // else's), with its own 5, "N of 5 additions left" and its full note. A question with no answer yet is answered in the form below instead.
   const addUnder = (key: string, question: string) => {
@@ -789,7 +795,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
             {/* (Owner, Nov 5, §260) No "What you sent is for the questions until <date>. Send your answers to these questions: …" line over the form. */}
             {written && openQs.length > 0 && <p className="text-sm font-medium text-white" data-open-questions-title="">Questions you haven&apos;t answered yet</p>}
             <WrittenForm key={written ? "open" : "first" /* (Owner, Nov 5, §269) one form: other questions switch it in place (typed text kept by words) */} only={!!written} needOne={!written || !newQuestions} canSend={!rulesPaused} lines={sendLines(written, c.writtenCents)} seenAt={seenAt} sessionId={c.id} questions={openQs} newQs={newQs} initial={written ? openQs.map(() => "") : carryOver(sentItems, writtenQuestions(c))} initialNotes={written?.notes ?? ""} update={false}
-              initialAttachments={c.recordings.filter((r) => r.part === "written" && r.uploadedAt).map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
+              initialAttachments={formFiles.map((r) => ({ id: r.id, filename: r.filename, size: r.sizeBytes, contentType: r.contentType }))} />
           </div>
         )}
         {/* (Owner, Nov 5, §254; replaces batch 13 §8 / §234's earlier sets shown here before anything was sent) No earlier sets' folds: nothing sent, nothing

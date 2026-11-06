@@ -8,7 +8,7 @@ import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText, sameQuestio
 import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
 import { patchKept, setKept } from "./kept";
 import { questionChangeTexts } from "@/lib/questionHistory";
-import { itemsFor, prevSetsOf, sameQuestions } from "@/lib/answerSets";
+import { itemsFor, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
 import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys, noAnswerYet } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
@@ -1208,7 +1208,10 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     const items = itemsFor(qs, answers);
     // (Batch 30 §3) Added to a late piece, it stays late; added after the deadline, the piece is late (and Charge, if it had opened, no longer applies).
     const late = !!existing?.late || isLate(c.dueAt, now);
-    const files = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true } });
+    // (Owner, Nov 6, §283) Only unsent uploads (never one already sent), and not one that went with a draft into Terms history (snapshotOnlyFiles).
+    const unsentFiles = await tx.recording.findMany({ where: { contractId, part: "written", uploadedAt: { not: null }, submissionId: null }, select: { id: true, filename: true } });
+    const snapped = snapshotOnlyFiles(c.prevSets, unsentFiles, [...answers, notes]);
+    const files = unsentFiles.filter((f) => !snapped.has(f.id));
     const sub = existing
       ? await tx.submission.update({ where: { id: existing.id }, data: {
           // (Batch 13 §8) While unpaid, the piece is priced at the current contract's written price; it no longer reads "Sent for the questions until".

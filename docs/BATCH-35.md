@@ -4987,4 +4987,9 @@ with ×.
   in an answer) no longer draws "· 1 added" and an empty dated entry. Every SentWork surface.
 - The Testers list: each tester's Terms history drop-down (§263) moved from under the written answers to the very bottom of the tester's drop-down, below all
   their part panels (written answers, recording, calls and their Pay panels).
-- Tests: tests/written-answers-283.test.ts; qa-look-254-256 (the tag), batch35-added-per-question, old-questions-263-264 and questions-dropdown-282 follow.
+- The tester's written form never lists ("Files not in an answer …") or sends a file already sent (submissionId set): its files are the unsent uploads only. An
+  unsent file placed in a draft answer to a question that changed went with that draft into the Terms history snapshot (§263 / §269): not listed as loose,
+  not taken by the next Send; it comes back with the draft if the question becomes current again (`snapshotOnlyFiles` in lib/answerSets.ts, used by the
+  session page and the written Send). The owner's case: bb's video, sent in an answer whose question changed, no longer shows under the form.
+- Tests: tests/written-answers-283.test.ts; qa-look-254-256 (the tag), batch35-added-per-question(-222), paid-cut-226-227, written-form-234-235,
+  old-questions-263-264 and questions-dropdown-282 follow.

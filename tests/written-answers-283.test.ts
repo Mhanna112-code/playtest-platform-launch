@@ -6,7 +6,7 @@ import type { User } from "@prisma/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
 import { SentWork } from "@/components/SentWork";
-import { prevSetsOf } from "@/lib/answerSets";
+import { prevSetsOf, snapshotOnlyFiles } from "@/lib/answerSets";
 import { attachmentMarker } from "@/lib/answerAttachments";
 import { questionKeys } from "@/lib/additions";
 import { syncEndedQuestions } from "@/lib/server/terms";
@@ -248,5 +248,43 @@ describe("§283 6: the Testers list's Terms history at the bottom of the tester'
     expect(hist).toBeGreaterThan(fold.indexOf('data-parts-sent=""'));
     if (fold.includes("data-calls-fold=")) expect(hist).toBeGreaterThan(fold.indexOf("data-calls-fold="));
     expect(fold.slice(fold.indexOf('data-part-panel="content"'), fold.indexOf('data-part-panel="pay"'))).not.toContain("data-dev-terms-history");
+  });
+});
+
+describe("§283 7: the written form never lists or sends a file already sent, or one that went into Terms history with its draft", () => {
+  const upload = (contractId: string, filename: string) =>
+    db.recording.create({ data: { contractId, storageKey: `k/${filename}`, filename, sizeBytes: 85_100_000, contentType: "video/mp4", part: "written", uploadedAt: new Date() } });
+
+  it("the owner's case: a video sent in Q2's answer, then Q2 changed: the form shows no \"Files not in an answer\"", async () => {
+    const { dev, testId } = await setup({ questions: [Q1, Q2] });
+    const j = await joined(testId);
+    const f = await upload(j.sessionId, "WIN_20261012_13_43_03_Pro.mp4");
+    expect((await send(j.sessionId, j.tester.cookie, { answers: ["the boats", `the gate ${attachmentMarker(f.id, f.filename)}`] })).status).toBe(200);
+    expect((await db.recording.findUniqueOrThrow({ where: { id: f.id } })).submissionId).not.toBeNull();
+    expect((await edit(testId, dev.cookie, { questions: [Q1, Q3] })).status).toBe(200);
+    const page = await sessionPage(j.sessionId, j.tester.user.id);
+    expect(page).toContain('data-answer-form="open"');
+    expect(page).not.toContain("data-loose-files");
+    expect(page.slice(page.indexOf('data-answer-form="open"'))).not.toContain(f.filename);
+  });
+
+  it("an unsent file in a draft answer to a question that changed goes into Terms history with the draft: not loose in the form, not taken by the next Send", async () => {
+    const { dev, testId } = await setup({ questions: [Q1, Q2] });
+    const j = await joined(testId);
+    expect((await send(j.sessionId, j.tester.cookie, { answers: ["the boats", ""] })).status).toBe(200);
+    const f = await upload(j.sessionId, "draft-clip.mp4");
+    const marker = attachmentMarker(f.id, f.filename);
+    await db.keptForm.create({ data: { userId: j.tester.user.id, key: `written:${j.sessionId}`, data: { answers: ["the boats", `typed, not sent ${marker}`], notes: "", questions: [Q1, Q2] } } });
+    expect((await edit(testId, dev.cookie, { questions: [Q1, Q3] })).status).toBe(200);
+    const c = await db.contract.findUniqueOrThrow({ where: { id: j.sessionId } });
+    expect(JSON.stringify(prevSetsOf(c.prevSets).at(-1)!.versions)).toContain(marker); // the draft, with its file, is the Terms history snapshot
+    const page = await sessionPage(j.sessionId, j.tester.user.id);
+    expect(page).not.toContain("data-loose-files");
+    expect((await send(j.sessionId, j.tester.cookie, { answers: ["the map"] })).status).toBe(200);
+    expect((await db.recording.findUniqueOrThrow({ where: { id: f.id } })).submissionId).toBeNull();
+    // Back in the form (its question current again, the draft in the kept draft) or placed in what is sent: not left out.
+    const uploads = [{ id: f.id, filename: f.filename }];
+    expect([...snapshotOnlyFiles(c.prevSets, uploads, [])]).toEqual([f.id]);
+    expect([...snapshotOnlyFiles(c.prevSets, uploads, [JSON.stringify({ answers: ["", `typed, not sent ${marker}`] })])]).toEqual([]);
   });
 });
