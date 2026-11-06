@@ -9,7 +9,7 @@ import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
 import { patchKept, setKept } from "./kept";
 import { questionChangeTexts } from "@/lib/questionHistory";
 import { itemsFor, prevSetsOf, sameQuestions, snapshotOnlyFiles } from "@/lib/answerSets";
-import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, youAddedLine, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys, noAnswerYet } from "@/lib/additions";
+import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, youAddedLine, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -36,7 +36,7 @@ import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
 import { markerIds, withoutAttachmentMarkers } from "@/lib/answerAttachments";
-import { callCancelledLine, questionsUpdatedLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
+import { forgetDeadlineMarks, callCancelledLine, questionsUpdatedLine, STOP_NOTE_KIND, stopEventText, stopNoteText, PAY_RULES_TICK_MISSING, payRulesTicked, PART_PRICE_MISSING, SENT_ANSWERS_LOCKED, NOTHING_TO_ADD, WHY_MIN_CHARS, WHY_TOO_SHORT, MAX_SPOTS, TEST_CLOSED_NO_EDIT } from "@/lib/rules";
 import { closeOffersOfEnded } from "./offerClose";
 import { testerRow } from "@/lib/lineAnchors";
 
@@ -502,7 +502,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     const listingFields = fields.filter((f) => f !== "spots" && f !== "openUntil");
     switchedToAnyone = fields.includes("joinMode") && next.joinMode === "anyone";
     await recordEvent(tx, testId, listingFields.length ? "edited" : "edited_spots", `The listing was edited: ${listingFields.length ? listingFields.map((f) => FIELD_NAMES[f]).join(", ") : what}`, true, {
-      ...listingData(next), ...(fields.includes("openUntil") ? { notified3d: false, notified1d: false } : {}), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
+      ...listingData(next), ...(listingFields.length ? { listingVersion: { increment: 1 } } : {}),
       // (5; owner, Oct 28 afternoon) A save that changed limited fields after the first tester joined uses one change of EACH of them.
       ...(critical.length && everJoined ? { criticalCounts: storedCounts(countsAfter(counts, critical), since) } : {}),
     }, null, tab);
@@ -1090,6 +1090,13 @@ export async function joinTest(tester: U, testId: string, body: Record<string, u
       : await tx.contract.create({ data: { testId, testerId: tester.id, ...snap } });
     await stampCounting(testId, tx); // (batch 35 §66) the 3-change count starts with the first join
     if (old) await tx.termsOffer.updateMany({ where: { contractId: old.id, status: "open" }, data: { status: "superseded", decidedAt: new Date() } });
+    // (Owner, Nov 6, §311g) A rejoin is a fresh deadline: the earlier stint's deadline marks go, so the new deadline's latest passed mark is sent once (a "1d" sent
+    // before she left no longer swallows the new one when she rejoins with under a day left).
+    if (old) {
+      const marks = (await tx.test.findUniqueOrThrow({ where: { id: testId }, select: { notifiedMarks: true } })).notifiedMarks;
+      const kept = forgetDeadlineMarks(marks, old.id);
+      if (kept.length !== marks.length) await tx.test.update({ where: { id: testId }, data: { notifiedMarks: kept } });
+    }
     // (Design doc 5) Each joining tester gets an access key (the key they had, else the oldest free one). (Owner, Nov 6, §304) No "still works?" answer.
     await assignKeyAtJoin(tx, testId, contract.id);
     await recordEvent(tx, testId, options.quietJoinEvent === true ? "auto_joined" : "joined", old ? `${displayName(tester)} joined again` : `${displayName(tester)} joined`, true, {}, contract.id, "", testerRow(contract.id)); // (Owner, Nov 6, §284) the place the line opens: their row in Testers

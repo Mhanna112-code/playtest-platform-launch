@@ -1214,7 +1214,6 @@ export const reservedAddedLine = (reservedCents: number, addedCents: number) => 
 };
 /** (Batch 28 §8) The admin's chargeback row: "$23.00 reserved · $5.00 added since (charged after the hold lifts)". */
 export const adminReservedLine = (reservedCents: number, addedCents: number) => `${money(reservedCents)} reserved${addedCents > 0 ? ` · ${money(addedCents)} added since (charged after the hold lifts)` : ""}`;
-export const STILL_SUSPENDED_LINE = "Your payment went through. Your tests stay paused while your account is suspended.";
 /** (Owner, Oct 27) What a tester reads while the developer owes a declined payment: Dispute and Charge wait (never "failed"). */
 export const OWED_FOR_TESTERS = "Payment from this developer is delayed right now. You can try again once it's sorted.";
 
@@ -1502,6 +1501,14 @@ export const CHARGED_BY_TESTER = `Charged by the tester after ${REVIEW_DAYS} day
  */
 export const AUTO_CHARGED_CALL = `Charged automatically ${REVIEW_DAYS} days after the call.`;
 export const AUTO_NOTHING_CALL = "Closed with nothing to pay.";
+/**
+ * (Owner, Nov 6, §311e) An UNLISTED call not paid by its pay date (7 days after it, moved by pauses and outages) closes with $0, as a listed call with nothing to
+ * charge does: its review's reason. Final: no Pay, no Pay more. Its reminders (3 days and 1 day before) end with UNLISTED_CALL_TAIL.
+ */
+export const UNLISTED_CALL_CLOSED = "Closed with nothing paid (it wasn't listed).";
+export const UNLISTED_CALL_TAIL = " (it isn't listed: pay any amount, or it closes with nothing paid)";
+/** The refusal of a Pay or Pay more on it. */
+export const unlistedCallClosedLine = (call: string) => `${call} closed with nothing paid: it wasn't listed and wasn't paid within ${REVIEW_DAYS} days.`;
 /** An older page's Charge or Let it go on a listed call. */
 export const AUTO_CHARGE_NO_CHOICE = "This call is charged automatically, so there's nothing to choose.";
 /** The developer's line in a listed call's Pay box: "If you don't pay by Nov 5, it's charged automatically: $25.00 (30 min × $50.00/h)." */
@@ -1571,12 +1578,51 @@ export function reviewMarksFor(sentAt: Date, reviewDate: Date): ReviewMark[] {
   const away = reviewDate.getTime() - sentAt.getTime();
   return REVIEW_MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && reviewDate.getTime() - m.ms >= sentAt.getTime() + DAY_MS).map((m) => ({ ...m, at: new Date(reviewDate.getTime() - m.ms) }));
 }
-/** The reminder due now (the latest mark passed and not sent yet; an earlier missed one is never sent late), or null; nothing on or after the review date. */
-export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, sent: string[]): ReviewMark | null {
-  if (now.getTime() >= reviewDate.getTime()) return null;
-  const passed = reviewMarksFor(sentAt, reviewDate).filter((m) => m.at.getTime() <= now.getTime());
+/**
+ * (Owner, Nov 6, §311g) One countdown's mark due now, with its sent marks KEYED BY THE DATE they count to (`key` = "<prefix><date ms>:"), so a date that moves (an
+ * extension, a pause, an outage, a rejoin) re-arms its marks. The rule ownDeadlineMarkDue set (batch 16, §295): the latest mark passed is sent and every earlier one
+ * recorded with it (a missed mark is never sent late); when the date moved (`mine` holds marks only for earlier dates), what's already behind the new date is
+ * recorded, and its latest passed mark is sent only when it was never sent for an earlier date (so a move never repeats a line). `mine`: this countdown's records
+ * (keyed, plus any bare legacy mark); "seen" marks a date the job has looked at.
+ */
+export function datedMarkDue<M extends { mark: string; at: Date }>(key: string, mine: string[], marks: M[], date: Date, now: Date): { send: M | null; record: string[] } {
+  const here = mine.filter((x) => x.startsWith(key)).map((x) => x.slice(key.length));
+  const firstLook = here.length ? [] : [`${key}seen`];
+  if (now.getTime() >= date.getTime()) return { send: null, record: [] };
+  const passed = marks.filter((m) => m.at.getTime() <= now.getTime());
+  const behind = passed.filter((m) => !here.includes(m.mark)).map((m) => `${key}${m.mark}`);
   const last = passed[passed.length - 1];
-  return last && !sent.includes(last.mark) ? last : null;
+  if (!here.length && mine.length) {
+    const sentBefore = new Set(mine.map((x) => x.slice(x.lastIndexOf(":") + 1)));
+    return { send: last && !sentBefore.has(last.mark) ? last : null, record: [...firstLook, ...behind] };
+  }
+  if (!last || here.includes(last.mark)) return { send: null, record: firstLook };
+  return { send: last, record: [...firstLook, ...behind] };
+}
+/** (§311g) The key prefix of a piece's review marks for one review date (a call's: its pay date), kept in its devMarks beside the Closing soon "co:" marks. */
+export const reviewMarkKey = (reviewDate: Date) => `r:${reviewDate.getTime()}:`;
+/**
+ * The review reminder due now and what to record in the piece's devMarks (the latest mark passed and not sent yet; an earlier missed one is never sent late);
+ * nothing on or after the review date. (Owner, Nov 6, §311g) Keyed by the review date (datedMarkDue): an extended deadline, a pause or an outage re-arms the marks
+ * still ahead. A bare mark ("1w", from before §311g) counts as sent for an earlier date. The Closing soon "co:" marks are not this countdown's.
+ */
+export function reviewMarkDue(sentAt: Date, reviewDate: Date, now: Date, recorded: string[]): { send: ReviewMark | null; record: string[] } {
+  const mine = recorded.filter((x) => x.startsWith("r:") || REVIEW_MARKS.some((m) => m.mark === x));
+  return datedMarkDue(reviewMarkKey(reviewDate), mine, reviewMarksFor(sentAt, reviewDate), reviewDate, now);
+}
+/** (§311g) The key prefix of Open until's heads-up marks for one Open until, kept in Test.notifiedMarks (beside the testers' "due:" marks). */
+export const openUntilMarkKey = (openUntil: Date) => `open:${openUntil.getTime()}:`;
+/**
+ * (Owner, Nov 6, §311g) Open until's heads-up due now (1 month, only when Open until was more than a month after the test was made; 1 week, 3 days, 1 day) and what
+ * to record, keyed by the Open until it counts to (datedMarkDue): moving Open until (Edit, a pause, an outage) re-arms the marks still ahead. Bare marks ("1w",
+ * from before §311g) count as sent for an earlier Open until.
+ */
+export function openUntilMarkDue(t: { openUntil: Date | null; createdAt: Date }, recorded: string[], now: Date) {
+  if (!t.openUntil) return { send: null, record: [] as string[] };
+  const date = t.openUntil;
+  const marks = MARKS.filter((m) => m.mark !== "1m" || date.getTime() - t.createdAt.getTime() > m.ms).map((m) => ({ ...m, at: new Date(date.getTime() - m.ms) }));
+  const mine = recorded.filter((x) => x.startsWith("open:") || MARKS.some((m) => m.mark === x));
+  return datedMarkDue(openUntilMarkKey(date), mine, marks, date, now);
 }
 
 /**
@@ -1592,7 +1638,7 @@ export function deadlineMarksFor(joinedAt: Date, dueAt: Date) {
   return MARKS.filter((m) => (m.mark !== "1m" || away > m.ms) && (m.mark === LAST_MARK || dueAt.getTime() - m.ms >= joinedAt.getTime() + DAY_MS)).map((m) => ({ ...m, at: new Date(dueAt.getTime() - m.ms) }));
 }
 const LAST_MARK = MARKS[MARKS.length - 1].mark;
-/** The key prefix of one contract's sent deadline marks for one deadline, kept in Test.notifiedMarks (Open until's own marks there are bare: "1w"). */
+/** The key prefix of one contract's sent deadline marks for one deadline, kept in Test.notifiedMarks (Open until's own marks there are "open:<ms>:<mark>" since §311g). */
 export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contractId}:${dueAt.getTime()}:`;
 /**
  * (Batch 16 section 1) The tester's deadline reminder due now, and what to record. Sent marks are kept per contract AND per deadline (`due:<contract>:<deadline ms>:<mark>`),
@@ -1601,24 +1647,15 @@ export const deadlineMarkKey = (contractId: string, dueAt: Date) => `due:${contr
  * sent and every earlier one is recorded with it, so a missed mark is never sent late. `seen` marks a deadline the daily job has looked at.
  */
 export function ownDeadlineMarkDue(c: { id: string; joinedAt: Date; dueAt: Date }, recorded: string[], now: Date): { send: (typeof MARKS)[number] | null; record: string[] } {
-  const key = deadlineMarkKey(c.id, c.dueAt);
-  const mine = recorded.filter((x) => x.startsWith(`due:${c.id}:`));
-  const here = mine.filter((x) => x.startsWith(key)).map((x) => x.slice(key.length));
-  const firstLook = here.length ? [] : [`${key}seen`];
-  if (now.getTime() >= c.dueAt.getTime()) return { send: null, record: [] };
-  const passed = deadlineMarksFor(c.joinedAt, c.dueAt).filter((m) => m.at.getTime() <= now.getTime());
-  const behind = passed.filter((m) => !here.includes(m.mark)).map((m) => `${key}${m.mark}`);
-  const last = passed[passed.length - 1];
   // The deadline moved: what's already behind the new one is recorded, never sent. (Owner, Nov 6, §295) Except the latest mark passed when it was never sent for
   // an earlier deadline of hers: a mark that came due between the move and this run (a pause moves a deadline to the end of a later day, and the daily job runs once
-  // a day) was swallowed, and a tester 20 hours from her deadline got no reminder.
-  if (!here.length && mine.length) {
-    const sentBefore = new Set(mine.map((x) => x.slice(x.lastIndexOf(":") + 1)));
-    return { send: last && !sentBefore.has(last.mark) ? MARKS.find((m) => m.mark === last.mark)! : null, record: [...firstLook, ...behind] };
-  }
-  if (!last || here.includes(last.mark)) return { send: null, record: firstLook };
-  return { send: MARKS.find((m) => m.mark === last.mark)!, record: [...firstLook, ...behind] };
+  // a day) was swallowed, and a tester 20 hours from her deadline got no reminder. (§311g) The same rule as every dated countdown (datedMarkDue). A rejoin starts
+  // a fresh deadline: the rejoin drops her earlier stint's marks (forgetDeadlineMarks), so its latest passed mark is sent once.
+  const due = datedMarkDue(deadlineMarkKey(c.id, c.dueAt), recorded.filter((x) => x.startsWith(`due:${c.id}:`)), deadlineMarksFor(c.joinedAt, c.dueAt), c.dueAt, now);
+  return { send: due.send ? MARKS.find((m) => m.mark === due.send!.mark)! : null, record: due.record };
 }
+/** (§311g) A contract's recorded deadline marks dropped (a rejoin: a fresh deadline whose reminders start over). */
+export const forgetDeadlineMarks = (recorded: string[], contractId: string) => recorded.filter((x) => !x.startsWith(`due:${contractId}:`));
 
 export const ADMIN_DIGEST_DAYS = 3;
 export const INVITE_REMIND_DAYS = 1; // (Owner, Oct 26) invite reminders are daily

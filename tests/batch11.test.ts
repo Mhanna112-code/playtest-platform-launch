@@ -294,7 +294,7 @@ describe("batch 11 item 4 (batch 35 §145, §148): what is owed during a hold is
     const u = await db.user.findUniqueOrThrow({ where: { id: dev.user.id } });
     expect(u.holdStartedAt).toBeNull();
     expect(u.devSuspendedAt).not.toBeNull();
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your payment went through." } } })).toBe(0); // (§311h) no extra line while suspended
   });
 });
 

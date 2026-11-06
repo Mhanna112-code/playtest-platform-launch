@@ -54,6 +54,8 @@ export const GROUP_TITLES: Record<string, string> = {
   devpaid: "Paid",
   // (Owner, Nov 5, §215) Direct messages (not about a test), one entry a day: "Direct messages · 3 today".
   dms: "Direct messages",
+  // (Owner, Nov 6, §311f) "The site was down from … Deadlines and payment dates moved … later." lines, one entry a day: "Site down · 2".
+  outages: "Site down",
 };
 /** (§215) The group of every direct-message bell line. */
 export const DMS_GROUP = "dms";
@@ -72,6 +74,8 @@ export const APPLICATIONS_GROUP = "applications";
 export const APP_WITHDRAWN_GROUP = "appwithdrawn";
 /** (Owner, Nov 6, §295) The tester's pause lines ("“X” is paused", "“X” is running again"), one entry a day across tests, in the bell and the email alike. */
 export const PAUSES_GROUP = "paused";
+/** (Owner, Nov 6, §311f) The outage lines ("The site was down from …"), one entry a day, in the bell and the email alike: "Site down · N". */
+export const OUTAGES_GROUP = "outages";
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
 // (Owner, Nov 6, §290) No "today" in these titles: the bell page adds the day itself ("today" / "on Nov 5"); it read "· 2 today today".
@@ -97,6 +101,8 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   booked: (_n, lines) => `Booked calls · ${lines}`,
   // (Owner, Nov 5, §201) "Paid · 3 payments" (counting lines: each receipt line is one payment; a Confirm all line is one payment on the card).
   devpaid: (_n, lines) => `Paid · ${lines} payment${lines === 1 ? "" : "s"}`,
+  // (Owner, Nov 6, §311f) "Site down · 2" (counting lines: each is one outage).
+  outages: (_n, lines) => `Site down · ${lines}`,
 };
 /** (§185) A group key may name its test after a colon ("reqclosed:<testId>": one stack per test and day); its titles are the part before it. */
 export const groupBase = (key: string) => key.split(":")[0];

@@ -2,7 +2,7 @@ import { withLineLinks } from "@/components/LineLinks";
 import { NameLink } from "@/components/Cut";
 import { withDateZone } from "@/lib/server/dateZone";
 import { fmtTimeIn } from "@/lib/format";
-import { dayIn } from "@/lib/rules";
+import { UNLISTED_CALL_CLOSED, dayIn } from "@/lib/rules";
 import { hasPerks } from "@/lib/server/subscription";
 import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
@@ -870,7 +870,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                           inNeeds && <a key="needs" href={`#call-${x.id}`} className="block text-xs">Pay it in Needs you ↑</a>,
                           tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p key="shut" className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>,
                           x.review?.teamClosedById && <LabeledReason key="team" className="text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${x.id}`} text={x.review.reason} />, // (Owner, Nov 6, §281)
-                          x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
+                          // (Owner, Nov 6, §311e) An unlisted call closed with $0 at its pay date is final: it says so, and has no Pay more.
+                          x.review?.reason === UNLISTED_CALL_CLOSED && <p key="unlisted" className="text-sm text-slate-300" data-unlisted-closed="">{UNLISTED_CALL_CLOSED}</p>,
+                          x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                             <div key="box" className="space-y-1" data-call-pay-more="">
                             <PayBox more={{ testId: t.id, contractId: c.id }} awayInNeeds owes={owesNow} kind="call" id={x.id} name={name} seenAt={seenAt} bankWaits={waitsOf(x.id)} bankWaitsId={waitsIdOf(x.id)} bankWaitsKind={waitsKindOf(x.id)} note={payMore.line || undefined}
                               room={rooms.get(x.id)?.box} minutes={m ?? x.minutes} rateCents={x.rateCents} warning={callsWarn.get(c.id)}
@@ -878,7 +880,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                               listingText={callReference(x.rateCents, m ?? x.minutes, c.liveRateCents).text.replace(/^(Listing|Agreed): /, "")} />
                             </div>
                           ),
-                          x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
+                          x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && x.review.reason !== UNLISTED_CALL_CLOSED && payMore.open && rooms.has(x.id) && (rooms.get(x.id)?.room ?? 0) <= 0 && (
                             <p key="most" className="text-sm text-slate-400" data-paid-most="">{paidMostLine(rooms.get(x.id)!.paid)}</p>
                           ),
                         ].filter(Boolean), x.id)}

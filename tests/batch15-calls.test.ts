@@ -8,9 +8,7 @@ import { joinCall } from "@/lib/server/blocks";
 import { runDaily } from "@/lib/server/holds";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { rateBlocker } from "@/lib/server/ratings";
-import { act, bookCall, joined, listingBody, sact, seen, settle, setup } from "./fixtures";
-import { json, req } from "./helpers";
-import { POST as testsPOST } from "@/app/api/tests/route";
+import { act, bookCall, joined, sact, seen, settle, setup } from "./fixtures";
 import { DAY, pay, payMore, withCard } from "./b15";
 
 // Batch 15 sections 15, 30, 31, 34 and 40: the app measures each call; the developer can only lower it; one $1,000 ceiling for a tester's calls; no Reject.
@@ -191,7 +189,7 @@ describe("the $1,000 ceiling for all of a tester's calls (section 34)", () => {
   });
 });
 
-describe("Charge for a listed call, the weekly line for unlisted ones, rating (sections 15, 40)", () => {
+describe("Charge for a listed call, the reminders for unlisted ones (§311e), rating (sections 15, 40)", () => {
   it("a listed call left unpaid 7 days after it is charged automatically at the measured length × rate (batch 28 §21: no Charge)", async () => {
     const { dev, testId } = await setup();
     const { tester, sessionId } = await joined(testId);
@@ -211,23 +209,27 @@ describe("Charge for a listed call, the weekly line for unlisted ones, rating (s
     expect(await rateBlocker(sessionId, "tester")).toBe("");
   });
 
-  it("unlisted calls: one weekly 'Pay your calls' line stacked across tests, until paid", async () => {
+  // (Owner, Nov 6, §311e) Unlisted calls: the listed calls' 3-day and 1-day marks before their pay date, with the unlisted tail (was a weekly "Pay your calls" line);
+  // unpaid at the date, it closes with nothing paid (final).
+  it("unlisted calls: 'pay <tester>'s call … within 3 days / by tomorrow (it isn't listed: …)', each once; at the date it closes with $0", async () => {
     const a = await setup({ liveRateCents: null });
     const ja = await joined(a.testId);
-    const b = { testId: (await json(await testsPOST(req("/api/tests", { cookie: a.dev.cookie, body: listingBody({ liveRateCents: null, title: "Second" }) })))).body.id as string };
-    const jb = await joined(b.testId, "Ben Okafor");
     const ca = await bookCall(a.testId, a.dev.cookie, ja.sessionId, ja.tester.cookie);
-    const cb = await bookCall(b.testId, a.dev.cookie, jb.sessionId, jb.tester.cookie, 60);
     await tookPlace(ca.id, 30);
-    await tookPlace(cb.id, 30);
-    const due = new Date(Date.now() + 8 * DAY);
-    await runDaily(due);
-    const lines = await db.notification.findMany({ where: { userId: a.dev.user.id, reminderKey: `paycalls:${a.dev.user.id}` } });
-    expect(lines.map((l) => l.text)).toEqual(["Pay your calls: 2 calls to pay on 2 tests."]);
-    await runDaily(new Date(due.getTime() + 2 * DAY)); // not again within the week
-    expect(await db.notification.count({ where: { userId: a.dev.user.id, reminderKey: `paycalls:${a.dev.user.id}` } })).toBe(1);
-    await runDaily(new Date(due.getTime() + 7 * DAY));
-    expect(await db.notification.count({ where: { userId: a.dev.user.id, reminderKey: `paycalls:${a.dev.user.id}` } })).toBe(2);
+    const payBy = (await db.call.findUniqueOrThrow({ where: { id: ca.id } })).payBy!;
+    const mine = async () => (await db.notification.findMany({ where: { userId: a.dev.user.id, reminderKey: `unreviewed:${ca.id}` }, orderBy: { createdAt: "asc" } })).map((l) => l.text);
+    await runDaily(new Date(payBy.getTime() - 2.5 * DAY));
+    await runDaily(new Date(payBy.getTime() - 2.4 * DAY)); // the same mark: not again
+    expect(await mine()).toEqual([expect.stringMatching(/^“Harbor Run”: pay .+'s call on .+ within 3 days \(it isn't listed: pay any amount, or it closes with nothing paid\)\.$/)]);
+    await runDaily(new Date(payBy.getTime() - 12 * 3_600_000));
+    await runDaily(new Date(payBy.getTime() + 2 * DAY));
+    await runDaily(new Date(payBy.getTime() + 9 * DAY));
+    const all = await mine();
+    expect(all).toHaveLength(2);
+    expect(all[1]).toMatch(/ by tomorrow \(it isn't listed: pay any amount, or it closes with nothing paid\)\.$/);
+    expect(await db.review.findUniqueOrThrow({ where: { callId: ca.id } })).toMatchObject({ amountCents: 0, auto: true, reason: R.UNLISTED_CALL_CLOSED });
+    expect(await db.notification.count({ where: { userId: a.dev.user.id, text: { endsWith: "closed with nothing paid (it wasn't listed)" } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: a.dev.user.id, text: { startsWith: "Pay your calls" } } })).toBe(0);
     expect((await db.call.findUniqueOrThrow({ where: { id: ca.id } })).choiceOfferedAt).toBeNull(); // never Charge
   });
 });

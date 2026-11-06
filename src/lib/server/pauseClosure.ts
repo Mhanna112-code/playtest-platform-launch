@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { T } from "@/lib/tz";
-import { displayName, fmtDate } from "@/lib/format";
+import { displayName } from "@/lib/format";
 import { PAUSE_CLOSE_DAYS, pauseClosedReason, pauseClosesAt } from "@/lib/pause";
 import { HttpError } from "./http";
 import { bell, notify } from "./notify";
@@ -129,7 +129,7 @@ function liftsWhen(causes: ReturnType<typeof pauseClosesAt> extends infer R ? (R
 }
 
 /**
- * (Owner, Nov 6, §310b) "closes on <date> unless <what lifts it>": the daily reminder's own words, also in the team pause's line ("The team paused “…”: it closes on
+ * (Owner, Nov 6, §310b) "closes on <date> unless <what lifts it>": the paused line's own words (bellPausedTests), also in the team pause's line ("The team paused “…”: it closes on
  * … unless the team lifts the pause"), so the two read the same. Null when the test isn't paused.
  */
 export function closesUnless(dev: Parameters<typeof pauseClosesAt>[0], test: Parameters<typeof pauseClosesAt>[1]) {
@@ -146,40 +146,21 @@ function reminderLink(causes: string[], testId: string) {
 }
 
 /**
- * (Owner, Oct 27) The developer's DAILY reminder while a test is paused: "<test> is paused and closes on <date> unless your account is cleared" (for a hold: "...unless you pay
- * what you owe"). It stacks with the same line for their other tests, once a day, and replaces the old "paused" and "day before it closes" lines for the developer.
- * `bellPausedTests` sends the first one when a pause starts; the daily job sends the rest. (Owner, Nov 6, §310b) Not when the TEAM pauses a test: its own line
- * names the closing date, and the reminder starts with the next day's daily job.
+ * (Owner, Oct 27) The developer's line when a hold or a suspension pauses their tests: "<test> is paused and closes on <date> unless your account is cleared"
+ * (for a hold: "...unless you pay what you owe"). It stacks with the same line for their other tests ("Paused tests"). (Owner, Nov 6, §311a) Sent ONCE per
+ * pause, never again daily (there is no daily paused reminder any more): a second cause starting during the same pause doesn't repeat it. (§310b) The team's
+ * pause of one test doesn't send it: its own line names the closing date.
  */
-export async function bellPausedTests(devId: string, now = new Date(), onlyDue = true) {
+export async function bellPausedTests(devId: string) {
   const dev = await db.user.findUnique({ where: { id: devId } });
   if (!dev) return 0;
-  const since = new Date(now.getTime() - 20 * 3_600_000);
   let n = 0;
   for (const t of await db.test.findMany({ where: { developerId: devId, status: { in: ["open", "closed"] } } })) {
     const info = pauseClosesAt(dev, t);
     if (!info) continue;
-    if (onlyDue && (await db.notification.count({ where: { userId: devId, reminderKey: `paused:${t.id}`, createdAt: { gt: since } } }))) continue;
+    // Once per pause: this pause (its one clock, `since`) already had its line.
+    if (await db.notification.count({ where: { userId: devId, reminderKey: `paused:${t.id}`, createdAt: { gte: info.since } } })) continue;
     await bell(devId, `${t.title} is paused and ${closesUnless(dev, t)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
-    n++;
-  }
-  return n;
-}
-
-/** The daily job: every paused test's reminder, once a day (one query for the paused tests, one for who already has today's). */
-export async function pausedReminders(now = new Date()) {
-  const since = new Date(now.getTime() - 20 * 3_600_000);
-  const tests = await db.test.findMany({
-    where: { status: { in: ["open", "closed"] }, developer: { deletedAt: null }, OR: [{ adminPausedAt: { not: null } }, { developer: { OR: [{ holdStartedAt: { not: null } }, { devSuspendedAt: { not: null } }] } }] },
-    include: { developer: true },
-    take: 5000,
-  });
-  const had = new Set((await db.notification.findMany({ where: { reminderKey: { in: tests.map((t) => `paused:${t.id}`) }, createdAt: { gt: since } }, select: { reminderKey: true } })).map((n) => n.reminderKey));
-  let n = 0;
-  for (const t of tests) {
-    const info = pauseClosesAt(t.developer, t);
-    if (!info || had.has(`paused:${t.id}`)) continue;
-    await bell(t.developerId, `${t.title} is paused and ${closesUnless(t.developer, t)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
     n++;
   }
   return n;

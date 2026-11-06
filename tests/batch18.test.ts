@@ -18,7 +18,7 @@ const roomOf = async (submissionId: string) => pieceRoom((await pieceOf({ submis
 import { REPORTED_LABEL } from "@/lib/server/reports";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
-import { act, bookCall, joined, listingBody, sact, seen, settle, setup, atHours } from "./fixtures";
+import { act, joined, listingBody, sact, seen, settle, setup, atHours } from "./fixtures";
 
 const DAY = 86_400_000;
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } })).then((r) => r.json());
@@ -490,7 +490,7 @@ describe("the final list of emails that ignore Off, and each notification emaile
     }
     const names = [...hits].sort();
     // (Owner, Oct 27) holds.ts: the hold starting (payment, chargeback), a payment hold turning into a chargeback hold, and "running again". The owed reminder is gone.
-    // (Batch 10) holds.ts also: "Your payment went through. Your tests stay paused while your account is suspended." in place of "running again".
+    // (Batch 10) holds.ts also had "Your payment went through. Your tests stay paused while your account is suspended."; gone since §311h (no line).
     // (Batch 11) confirm.ts: "Your bank wants you to confirm a $X payment. Confirm it in Payments by <date>." (sent even with email Off).
     // (Batch 17 §19) holds.ts also: the reminders 3 days and 1 day before close-out, to the tester ("Charge or let go of your work on …") and the developer ("Pay …'s work on …").
     // (§113) chargeback.ts also reports a new hold caused by a declined waiting charge.
@@ -505,6 +505,8 @@ describe("the final list of emails that ignore Off, and each notification emaile
     // restrictions.ts two more (running again after a reinstatement, after the team's pause lifted).
     // (Owner, Nov 6, §299) The team lifting its pause reaches the developer like the pause: restrictions.ts one more; the team moving a paused test's closing
     // date later: pauseClosure.ts one more.
-    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
+    // (Owner, Nov 6, §311d) holds.ts three more: the developer's review reminders (a part's, a listed or unlisted call's, "… wasn't reviewed by …"). (§311h) One
+    // fewer: the line while a suspension continues is gone.
+    expect(names).toEqual(["chargeback.ts", "chargeback.ts", "chargeback.ts", "confirm.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "holds.ts", "pauseClosure.ts", "pauseClosure.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts", "restrictions.ts"].sort());
   });
 });

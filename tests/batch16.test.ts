@@ -2,18 +2,15 @@ import fs from "node:fs";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { afterEach, describe, expect, it } from "vitest";
-import type Stripe from "stripe";
 import { db } from "@/lib/db";
 import { POST as chatOpenPOST } from "@/app/api/chat/open/route";
-import { POST as adminPOST } from "@/app/api/admin/[action]/route";
 import { GET as moreGET } from "@/app/api/admin/more/route";
 import { GET as cronGET } from "@/app/api/cron/daily/route";
 import { POST as reviewPOST } from "@/app/api/review/route";
 import { POST as notifyPOST } from "@/app/api/account/notify/route";
-import { EXTRA_PAY_MAX_CENTS, EXTRA_PAY_TICK_CENTS, STRIPE_MAX_CENTS, checkExtraPay } from "@/lib/rules";
 import { adminPage, PAGE } from "@/lib/server/adminLists";
 import { chargebackOpened, startHold } from "@/lib/server/holds";
-import { bell, notify, sendSummaries } from "@/lib/server/notify";
+import { notify, sendSummaries } from "@/lib/server/notify";
 import { payoutProblem, suspendAccount, suspendedAccountsReminder } from "@/lib/server/restrictions";
 import { setStripeForTests } from "@/lib/server/stripe";
 import { json, makeUser, req } from "./helpers";
@@ -21,7 +18,6 @@ import { act, joined, sact, seen, settle, setup } from "./fixtures";
 
 const DAY = 86_400_000;
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } })).then((r) => r.json());
-const aact = (cookie: string, action: string, body: Record<string, unknown>) => adminPOST(req(`/api/admin/${action}`, { cookie, body }), { params: Promise.resolve({ action }) }).then(json);
 const pay = (cookie: string, body: Record<string, unknown>) => reviewPOST(req("/api/review", { cookie, body: { payKey: randomUUID(), seenAt: seen(), confirmed: true, ...body } })).then(json);
 const admin = async () => {
   const a = await makeUser({ email: `admin-${randomUUID()}@playtest.test` });
@@ -67,23 +63,24 @@ describe("A) Chat with <name> on the hover card and the profile", () => {
 });
 
 describe("B) reminders", () => {
-  it("developer on a hold: a daily paused reminder per test, stacked across tests (\"<test> is paused and closes on <date> unless you pay what you owe\")", async () => {
+  // (Owner, Nov 6, §311a) No daily paused reminder any more: the line is sent once, when the hold starts.
+  it("developer on a hold: one paused line per test when it starts, stacked across tests (\"<test> is paused and closes on <date> unless you pay what you owe\"), never daily", async () => {
     const { dev, testId } = await setup();
     const second = await setup();
     await db.test.update({ where: { id: second.testId }, data: { developerId: dev.user.id } });
-    await db.user.update({ where: { id: dev.user.id }, data: { holdStartedAt: new Date(Date.now() - 2 * DAY), holdReason: "unpaid" } });
+    await startHold(dev.user.id, "unpaid");
     await cron();
-    await cron(); // the same day: not again
+    await cron();
     const mine = (await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text));
     expect(mine.length).toBe(2); // one per test
     expect(mine[0].text).toMatch(/^Harbor Run is paused and closes on [A-Z][a-z]{2} \d+ unless you pay what you owe$/);
     expect(mine[0]).toMatchObject({ link: "/app/payments#owed", own: false, groupKey: "pausedreminder" });
     expect(mine.every((l) => l.reminderKey?.startsWith("paused:"))).toBe(true);
     expect(testId).toBeTruthy();
-    // The next day: one more for each (the same line stacks across tests).
+    // The next day: nothing more (no daily reminder).
     await db.notification.updateMany({ where: { userId: dev.user.id, groupKey: "pausedreminder" }, data: { createdAt: new Date(Date.now() - 25 * 3_600_000) } });
     await cron();
-    expect((await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text)).length).toBe(4);
+    expect((await lines(dev.user.id)).filter((l) => / is paused and closes on /.test(l.text)).length).toBe(2);
   });
 
   it("applications and rejoin asks waiting: a line a day, stacked with that test's lines; it waits while the test is paused", async () => {

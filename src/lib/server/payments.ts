@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { displayName, fmtDate, fmtDateTime, fmtTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
-import { testPaused, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, decisionWhat, decideDoneLine, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
+import { testPaused, UNLISTED_CALL_CLOSED, unlistedCallClosedLine, LET_GO_BY_TESTER, payClosedLine, chargedByTester, byTesterChoice, callReference, checkDevSide, canDispute, ALREADY_DISPUTED, DEV_SIDE_ALREADY, checkDisputeDecision, decisionWhat, decideDoneLine, disputeLimitText, testerPayable, PAYABLE_TESTER, deletedNoPayoutsLine, delayedPayLine, declinedHoldLine, checkPay, checkExtraPay, pieceCapCents, overMaxLine, paidMostLine, pieceMaxCents, NO_LISTING_CALL_RATE_CAP_CENTS, overCallsLine, PAY_WAITS, testerShare, decideTickLine, pieceName, disputeDecisionName, decidePayChangedLine, disputeRangeLine } from "@/lib/rules";
 import { HttpError, readText } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { adminUsers, bell, notify } from "./notify";
@@ -15,7 +15,7 @@ import { isUniqueClash } from "./passwords";
 import { ownChange, presserOf, youAlready, type Presser } from "./adminRace";
 import { PAYMENTS_PROBLEM, cardRefusal, charge, type NeedsAction } from "./stripe";
 import { describedOnce, stripeDescription } from "./paymentRows";
-import { devGate, devGateIfSeen, devOwes, recordEvent } from "./tests";
+import { devGate, devOwes, recordEvent } from "./tests";
 import { logEvent } from "./live";
 import { callAt, partOnTest, partWords } from "./partWords";
 import { T } from "@/lib/tz";
@@ -124,6 +124,7 @@ export async function review(dev: U & Parameters<typeof cardRefusal>[0] & { hold
       if (chargedByTester(already.reason)) throw new HttpError(409, "reviewed", `${name} already charged ${money(already.amountCents)} for ${pronouns(c.tester.pronoun).poss} ${piece.reference}.`);
       if (already.reason === LET_GO_BY_TESTER) throw new HttpError(409, "reviewed", `${name} let ${pronouns(c.tester.pronoun).poss} ${piece.reference} go: nothing was charged.`);
       if (already.teamClosedById) throw new HttpError(409, "reviewed", TEAM_CLOSED_NO_PAY); // (batch 30 §5)
+      if (already.reason === UNLISTED_CALL_CLOSED) throw new HttpError(409, "reviewed", unlistedCallClosedLine(`${name}'s call`)); // (Owner, Nov 6, §311e) final
       const owedNow = !already.rejected && (await tx.payment.findFirst({ where: { ...piece.where, status: "failed", owedUntil: { not: null }, settledAt: null } }));
       if (owedNow) throw new HttpError(409, "owed", `This ${money(already.amountCents)} is owed: pay it with “Pay what you owe” in Payments.`);
       throw new HttpError(409, "reviewed", already.rejected ? `You already rejected ${name}'s ${piece.reference}.` : `You already paid ${money(already.amountCents)} for ${name}'s ${piece.reference}.`);
@@ -705,6 +706,8 @@ export async function payExtra(dev: U & Parameters<typeof cardRefusal>[0], testI
   if (!paidReview || paidReview.rejected) throw new HttpError(409, "not_paid", "Pay this part first: Pay more is for a part you've already paid.");
   // (Batch 30 §5) A piece the team closed at $0 is final.
   if (paidReview.teamClosedById) throw new HttpError(409, "team_closed", TEAM_CLOSED_NO_PAY);
+  // (Owner, Nov 6, §311e) An unlisted call closed with $0 at its pay date is final too.
+  if (paidReview.reason === UNLISTED_CALL_CLOSED) throw new HttpError(409, "closed", unlistedCallClosedLine(`${displayName(c.tester)}'s call`));
   // (Batch 17 §19, replacing batch 16 section 22) Pay more closes together with the last Pay / Charge on the test (payMoreClosesAt).
   {
     const at = await payMoreClosesAt(testId);

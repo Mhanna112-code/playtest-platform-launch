@@ -46,7 +46,7 @@ export async function testIdOfLink(path: string) {
 export type Opts = { recipientId?: string; side?: Side | null; always?: boolean; about?: string; own?: boolean; testId?: string; group?: string; payment?: boolean; reminder?: string; now?: boolean };
 
 /**
- * `reminder`: (Owner, Oct 27) names a reminder ("paused:<test>"): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
+ * `reminder`: (Owner, Oct 27) names a reminder ("invite:<id>"; "paused:<test>", sent once per pause since §311a): reminders also go in the summary email, each line once; a Weekly or Monthly email shows only the newest copy of each.
  * `group`: lines with the same group stack together on one day even across tests (see lib/bell.ts). `payment`: payment-related (failures, holds, retries, paid,
  * rejected, delayed, payouts, chargebacks): it is its own line unless it has a group, and it also goes out in the end-of-day payment email.
  */

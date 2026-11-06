@@ -200,20 +200,21 @@ describe("batch 10 item 3: long written answers scroll on the developer's side",
 });
 
 describe("batch 10 item 4: paying what is owed while a suspension continues", () => {
-  it("the payment line instead of 'running again' (sent even with email Off); 'running again' only when nothing pauses the tests", async () => {
+  // (Owner, Nov 6, §311h) No extra line while the suspension continues (was "Your payment went through. Your tests stay paused while your account is suspended.").
+  it("no line instead of 'running again' while suspended; 'running again' only when nothing pauses the tests", async () => {
     const { dev } = await setup();
     await startHold(dev.user.id, "unpaid");
     await db.user.update({ where: { id: dev.user.id }, data: { devSuspendedAt: new Date(), testerSuspendedAt: new Date(), emailPref: "off" } });
     expect(await liftHoldIfClear(dev.user.id)).toBe(true);
-    expect(R.STILL_SUSPENDED_LINE).toBe("Your payment went through. Your tests stay paused while your account is suspended.");
-    expect(await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toMatchObject({ mustEmail: true });
+    expect("STILL_SUSPENDED_LINE" in R).toBe(false);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "Your tests stay paused while your account is suspended" } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your tests are running again" } })).toBe(0);
     // Without a suspension: "Your tests are running again".
     const other = await setup();
     await startHold(other.dev.user.id, "unpaid");
     expect(await liftHoldIfClear(other.dev.user.id)).toBe(true);
     expect(await db.notification.count({ where: { userId: other.dev.user.id, text: "Your tests are running again" } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: other.dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: other.dev.user.id, text: { startsWith: "Your payment went through." } } })).toBe(0);
   });
 
   it("a chargeback hold cleared while suspended sends the same line", async () => {
@@ -224,7 +225,7 @@ describe("batch 10 item 4: paying what is owed while a suspension continues", ()
     expect((await approveChargebackHold(dev.user.id)).lifted).toBe(true);
     // (Batch 24) The team's Approve sends the developer one notice, which says the tests stay paused.
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "The team approved lifting your hold. Your tests stay paused while your account is suspended." } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: R.STILL_SUSPENDED_LINE } })).toBe(0);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your payment went through." } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: "Your tests are running again" } })).toBe(0);
   });
 });

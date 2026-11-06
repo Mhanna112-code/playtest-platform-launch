@@ -505,7 +505,7 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     expect(await db.payment.findFirstOrThrow({ where: { callId: c.call.id } })).toMatchObject({ status: "deferred", amountCents: 1500 });
   });
 
-  it("0 measured minutes: closed with nothing to pay; an unlisted call is untouched", async () => {
+  it("0 measured minutes: closed with nothing to pay; an unlisted call closes with nothing paid, never charged (§311e)", async () => {
     const R = await import("@/lib/rules");
     const st = strictStripe();
     const z = await heldCall({}, 0);
@@ -513,7 +513,8 @@ describe("batch 28 §21: a listed call not paid 7 days after it is charged autom
     expect(await db.review.findUniqueOrThrow({ where: { callId: z.call.id } })).toMatchObject({ amountCents: 0, reason: R.AUTO_NOTHING_CALL });
     const u = await heldCall({ liveRateCents: null });
     await run();
-    expect(await db.review.count({ where: { callId: u.call.id } })).toBe(0);
+    // (Owner, Nov 6, §311e; was "untouched") Unpaid at its pay date, an unlisted call closes with $0, like a listed one with nothing to charge.
+    expect(await db.review.findUniqueOrThrow({ where: { callId: u.call.id } })).toMatchObject({ amountCents: 0, auto: true, reason: R.UNLISTED_CALL_CLOSED });
     expect(st.of("pi.create")).toHaveLength(0);
   });
 

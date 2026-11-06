@@ -43,7 +43,9 @@ describe("review reminders (section 2)", () => {
         const at = new Date(t0.getTime() + d * DAY + 60_000);
         await runDaily(at);
         const s = await db.submission.findUniqueOrThrow({ where: { id: sub.id } });
-        if (s.devMarks.length > got.length) got.push(`${s.devMarks[s.devMarks.length - 1]}@day${d}`);
+        // (§311g) Marks are keyed by the review date ("r:<ms>:2w"); "seen" only marks the job's first look.
+        const marks = s.devMarks.filter((x) => x.startsWith("r:") && !x.endsWith(":seen"));
+        if (marks.length > got.length) got.push(`${marks[marks.length - 1].split(":").pop()}@day${d}`);
       }
       expect(got).toEqual(["2w@day6", "1w@day13", "3d@day17", "1d@day19"]);
       expect(await db.notification.count({ where: { userId: dev.user.id, reminderKey: `unreviewed:${sub.id}` } })).toBeGreaterThanOrEqual(4);

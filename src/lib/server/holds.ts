@@ -4,7 +4,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
+  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, UNLISTED_CALL_CLOSED, UNLISTED_CALL_TAIL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, openUntilMarkDue, ownDeadlineMarkDue, reviewMarkDue, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
@@ -213,7 +213,7 @@ export async function shiftAfterPause(tx: Prisma.TransactionClient, t: { id: str
   const tz = (await tx.test.findUnique({ where: { id: t.id }, select: { developer: { select: { timeZone: true } } } }))?.developer.timeZone;
   if (t.openUntil && t.openUntil > start && t.status !== "stopped" && !t.workEndedAt) {
     const openUntil = nearestDayEnd(later(t.openUntil), tz);
-    await tx.test.update({ where: { id: t.id }, data: { openUntil, notified3d: false, notified1d: false } });
+    await tx.test.update({ where: { id: t.id }, data: { openUntil } }); // (§311g) its heads-ups are keyed by the date: nothing to reset
   }
   // (Owner, Nov 2) Only deadlines that hadn't passed when the pause started (like moving Open until later): one already passed keeps it.
   // (Owner, Nov 3, batch 35 §154) The moved deadline is rounded UP to the end of its day (11:59 PM in the zone it was counted in), never an odd time like 7:22 AM.
@@ -437,11 +437,12 @@ export async function liftHoldIfClear(devId: string, opts: { /** (batch 24) the 
   await chargeDeferred(devId);
   // A waiting charge may have declined and started a NEW hold: do not announce running tests then.
   if ((await db.user.findUniqueOrThrow({ where: { id: devId }, select: { holdStartedAt: true } })).holdStartedAt) return true;
-  // (Owner, Oct 29, batch 10) "Your tests are running again" only when nothing pauses them any more: with an admin suspension still on, the payment line instead (both ignore Off).
+  // (Owner, Oct 29, batch 10) "Your tests are running again" only when nothing pauses them any more (it ignores Off). (Owner, Nov 6, §311h) With an admin
+  // suspension still on, nothing more (was "Your payment went through. Your tests stay paused while your account is suspended."): the receipt says the payment
+  // went through, and the suspension's own line says the tests are paused.
   if (opts.quietDev) {
     // (Batch 24, a batch 23 leftover) The team's Approve tells the developer in its own single notice.
-  } else if (dev.devSuspendedAt) await notify(dev.email, STILL_SUSPENDED_LINE, [STILL_SUSPENDED_LINE], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
-  else await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
+  } else if (!dev.devSuspendedAt) await notify(dev.email, "Your tests are running again", ["Everything you owed is paid: your tests are running again, and every deadline moved on by the pause."], "/app", { side: "developer", always: true, payment: true, group: "payhold" });
   const testers = await db.contract.findMany({ where: { status: "working", testId: { in: running } }, include: { tester: true } });
   for (const c of testers) await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { group: "paused", always: true });
   return true;
@@ -1182,13 +1183,13 @@ async function followAmount(reversalId: string, cents: number, status: string, e
       const recorded = sent.every((x) => x.status !== "refunded");
       // (Owner, Nov 6, §295; §294 had sent it immediately) A chargeback's amount changing goes in the end-of-day email, whatever the email setting (`always`); in the
       // bell it's unchanged.
-      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", always: true, payment: true });
+      await notify(dev.email, line, [line, ...(recorded ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", always: true, payment: true, group: "payhold" }); // (Owner, Nov 6, §311c) in "Payments and holds", end of day
     }
     return "followed" as const;
   }
   await note(`${head}: followed after repayment: charged ${money(r.cents)} more.`);
   const line = bankRaisedLine(p.amountCents, piece, r.cents, one);
-  await notify(dev.email, line, [line], "/app/payments", { side: "developer", always: true, payment: true }); // (Owner, Nov 6, §295) the end-of-day email, as when lowered
+  await notify(dev.email, line, [line], "/app/payments", { side: "developer", always: true, payment: true, group: "payhold" }); // (Owner, Nov 6, §295) the end-of-day email, as when lowered; (§311c) in "Payments and holds"
   // Charged now like any charge made while away (during a hold, a suspension or the team's pause of its test it waits, as they do).
   await chargeDeferred(p.developerId);
   return "followed" as const;
@@ -1291,7 +1292,7 @@ export async function runSweep(now = new Date(), co = closeOutMemo(now)) {
   return { choices };
 }
 
-/** The daily job: auto-pay after the review window, closing tests paused for 7 days, the paused reminders, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
+/** The daily job: auto-pay after the review window, closing tests paused for 7 days, Open until heads-ups and each tester's own deadline reminders. (No retries and no owed window any more: a declined payment is a hold at once.) */
 export async function runDaily(now = new Date()) {
   // (Batch 19 section 4) Under the timers lock, so a 5-minute sweep never runs at the same moment (it waits for one that is running).
   return (await withTimersLock(() => runDailyLocked(now), { waitMs: 60_000 })) ?? runDailyLocked(now);
@@ -1321,18 +1322,20 @@ async function runDailyLocked(now: Date) {
   // 3a. (Owner, Nov 6, §306) The team's admin email is no longer sent here: its lines are the "For the team" section of each admin's ONE end-of-day email
   // (sendSummaries, last in this job; see adminDaily.ts), following each admin's own email setting (Off: none).
   // 3c. (Owner, Oct 26) Paused tests close after 7 days, whatever the cause (the admin can extend a test's date or close it sooner).
+  // (Owner, Nov 6, §311a) No daily "<test> is paused and closes on …" reminder any more: the line is sent once, when the pause starts (bellPausedTests).
   const pc = await import("./pauseClosure");
-  await pc.pausedReminders(now); // (Owner, Oct 27) the developer's daily "<test> is paused and closes on <date> unless ..." (replaces the paused / day-before lines)
   out.closed = await pc.closePausedTests(now);
   // 4. Open until heads-ups for the developer: 1 month (when it was more than a month away), 1 week, 3 days and 1 day before.
   const closing = await db.test.findMany({ where: { status: { in: ["open", "closed"] }, openUntil: { gt: now }, ...PAUSE_FREE } });
   for (const t of closing) {
-    const m = countdownDue(t.openUntil, now, t.notifiedMarks, t.createdAt);
-    if (!m) continue;
+    // (Owner, Nov 6, §311g) Keyed by the Open until they count to: moving it (Edit, a pause, an outage) re-arms the heads-ups still ahead (they were bare marks
+    // that never cleared, so an extended Open until got none).
+    const due = openUntilMarkDue(t, t.notifiedMarks, now);
+    if (due.record.length) await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: due.record } } });
+    if (!due.send) continue;
     // Bell lines, also in the developer's Daily / Weekly / Monthly summary like every bell line (Off: the bell only). (Batch 15 sections 11 and 18) The reader's
     // own zone; Open until is the last day to join.
     await bell(t.developerId, joinClosingLine(t.title, t.openUntil!, (d) => T(d, "date")), `/app/tests/${t.id}`, undefined, { reminder: `headsup:${t.id}` });
-    await db.test.update({ where: { id: t.id }, data: { notifiedMarks: { push: m.mark }, ...(m.mark === "1d" ? { notified1d: true, notified3d: true } : m.mark === "3d" ? { notified3d: true } : {}) } });
     out.headsUps++;
   }
   // 4b. (Owner, Oct 28, batch 16 section 1) Each working tester's own reminders, counted to THEIR deadline: 1 month, 1 week, 3 days and 1 day before (only the marks
@@ -1353,8 +1356,8 @@ async function runDailyLocked(now: Date) {
   }
   // 5, 5b. The developer's review reminders (batch 19 section 4: also every 5 minutes, runSweep).
   await reviewReminders(now, co);
-  // 5c. (Batch 15 sections 15 and 40) Calls that aren't listed: never charged; ONE weekly "Pay your calls" line per developer, stacked across tests, until each is paid ($0 counts).
-  await payYourCalls(now, co);
+  // 5c. (Owner, Nov 6, §311e) Calls that aren't listed: never charged; their reminders are the listed calls' 3-day and 1-day marks (5b; the weekly "Pay your calls"
+  // line is gone).
   // (Batch 15 section 18) Open until passed: pending applications and open invites close.
   await (await import("./tests")).closeJoiningAfterOpenUntil(now);
   // 7. (Owner, Oct 26) Invites: a bell reminder DAILY until the tester joins, says "No thanks", or the invite expires (all of a day's stack into one line across tests).
@@ -1449,7 +1452,7 @@ async function openCharges(now: Date, co: CloseOuts) {
     const gone = !!c.tester.deletedAt;
     if (!payShut && (gone || chargeShut) && (!s.devRemindedAt || now.getTime() - s.devRemindedAt.getTime() >= 23 * 3_600_000)) {
       const line = unreviewedLine(c.title, displayName(c.tester), s.kind === "recording" ? "recording" : "written answers", chargeOpensAt(s, c.test, c, now)!, null, c.tester.pronoun);
-      await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
+      await bell(c.test.developerId, line, `/app/tests/${c.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true }); // (§311d) end-of-day email even with Off
       await db.submission.update({ where: { id: s.id }, data: { devRemindedAt: now } });
     }
     if (gone || chargeShut) continue; // the tester can't sign in: Charge and Let it go never open (or, batch 17 §19, they closed)
@@ -1474,35 +1477,44 @@ async function openCharges(now: Date, co: CloseOuts) {
  * 5. (Owner, Oct 30, batch 15 section 2) The developer's review reminders, the SAME for listed and unlisted parts, counting to the review date (the later of the
  * tester's deadline and sent + 7 days): 1 month (if it was more than a month away), 3, 2 and 1 weeks, 3 days, 1 day. After it, a listed part opens Charge (openCharges);
  * an unlisted part's reminders just stop (its Needs you row stays until it's paid, $0 included). 5b. Listed calls the same.
+ * (Owner, Nov 6, §311d) Every one goes in the end-of-day email whatever the email setting (`always`; Off was the bell only), as the testers' deadline reminders do;
+ * in a Weekly or Monthly summary only the newest copy of each (its `reminder`).
  */
 async function reviewReminders(now: Date, co: CloseOuts) {
   const upcoming = await db.submission.findMany({ where: { review: null, choiceOfferedAt: null, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, orderBy: { payBy: "asc" }, take: 2000 });
   for (const s of upcoming) {
     const reviewDate = chargeOpensAt(s, s.contract.test, s.contract, now);
-    const m = reviewDate ? reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks) : null;
-    if (!m || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
+    // (Owner, Nov 6, §311g) The marks are keyed by the review date: an extended deadline, a pause or an outage re-arms the ones still ahead (never a repeat).
+    const due = reviewDate ? reviewMarkDue(s.updatedAt, reviewDate, now, s.devMarks) : null;
+    if (!due || (!due.send && !due.record.length) || (await co.payClosed({ submissionId: s.id }))) continue; // (batch 17 §19) Pay closed: no reminders
+    const m = due.send;
+    // The mark is recorded with every earlier one, so a missed mark is never sent late.
+    if (due.record.length) await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: due.record } } });
+    if (!m) continue;
     const name = displayName(s.contract.tester);
     const part = s.kind === "recording" ? "recording" : "written answers";
     const when = m.label === "tomorrow" ? "by tomorrow" : m.label.replace("in ", "within ");
     // (Batch 30 §3) Late listed work counts down the same way, but the tester can't charge for it.
     const after = s.agreedCents == null ? " (it isn't listed: any amount, $0 included)" : s.late ? LATE_REMINDER_TAIL : s.contract.tester.deletedAt ? "" : ` (after that ${name} can charge or let it go)`;
-    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${part} ${when}${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}` });
-    // The mark is recorded with every earlier one, so a missed mark is never sent late.
-    const earlier = reviewMarksFor(s.updatedAt, reviewDate!).filter((x) => x.at.getTime() <= m.at.getTime()).map((x) => x.mark).filter((x) => !s.devMarks.includes(x));
-    await db.submission.update({ where: { id: s.id }, data: { devMarks: { push: earlier } } });
+    await bell(s.contract.test.developerId, `“${s.contract.title}”: review ${name}'s ${part} ${when}${after}.`, `/app/tests/${s.contract.testId}#piece-${s.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${s.id}`, always: true });
   }
   // 5b. (Owner, Oct 29, batch 28 §21) Listed calls: "pay it within 3 days / by tomorrow" before the automatic charge (7 days after the call, moved by pauses and outages).
-  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
+  // (Owner, Nov 6, §311e) Unlisted calls the same, counted to their pay date (7 days after the call), ending "(it isn't listed: pay any amount, or it closes with
+  // nothing paid)" (was a weekly "Pay your calls" line after the date): at that date an unpaid one closes with $0 (autoChargeCalls).
+  const upcomingCalls = await db.call.findMany({ where: { review: null, status: "booked", payBy: { not: null }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 2000 });
   for (const x of upcomingCalls) {
+    if (x.rateCents == null && (await co.payClosed({ callId: x.id }))) continue; // an unlisted call whose Pay closed: no reminders
     const chargeAt = x.payBy!;
     const sent = x.measuredAt ?? x.startsAt;
-    const m = callMinutesOf(x) ? reviewMarkDue(sent, chargeAt, now, x.devMarks) : null;
+    const due = callMinutesOf(x) ? reviewMarkDue(sent, chargeAt, now, x.devMarks) : null; // (§311g) keyed by the pay date
+    if (!due) continue;
+    if (due.record.length) await db.call.update({ where: { id: x.id }, data: { devMarks: { push: due.record } } });
+    const m = due.send;
     if (!m) continue;
-    const earlier = reviewMarksFor(sent, chargeAt).filter((y) => y.at.getTime() <= m.at.getTime()).map((y) => y.mark).filter((y) => !x.devMarks.includes(y));
-    await db.call.update({ where: { id: x.id }, data: { devMarks: { push: earlier } } });
     if (m.label !== "tomorrow" && m.label !== "in 3 days") continue; // only the 3-day and 1-day marks
     const when = m.label === "tomorrow" ? "by tomorrow" : "within 3 days";
-    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${displayName(x.contract.tester)}'s call on ${T(x.startsAt)} ${when}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}` });
+    const tail = x.rateCents == null ? UNLISTED_CALL_TAIL : "";
+    await bell(x.contract.test.developerId, `“${x.contract.title}”: pay ${displayName(x.contract.tester)}'s call on ${T(x.startsAt)} ${when}${tail}.`, `/app/tests/${x.contract.testId}#call-${x.id}`, undefined, { group: "unreviewed", reminder: `unreviewed:${x.id}`, always: true });
   }
 }
 
@@ -1719,20 +1731,31 @@ export const autoPaidTesterLine = (dev: string, cents: number, at: Date) => `${d
  * Declined: a payment hold. During a hold: added to what's owed. During a suspension or (owner, Nov 4, §172) the team's pause of its test: charged, waiting for the lift.
  * Nothing to charge (no measured time, or the $1,000 used): closed with $0.
  * Listed calls whose Charge had already opened switch to this. Returns how many were charged.
+ * (Owner, Nov 6, §311e) An UNLISTED call not paid by the same date closes with $0 the same way ("<name>'s call on <date> closed with nothing paid (it wasn't
+ * listed)"): final, no Pay or Pay more after it (UNLISTED_CALL_CLOSED).
  */
 export async function autoChargeCalls(now: Date) {
   let n = 0;
   // (Batch 29 §37) A developer who deleted their account is charged too, on the card they saved (as a tester's Charge was before batch 28 §21); with no saved card
   // the call stays unpaid ("<dev> deleted their account, so this can't be paid.").
   // (Owner, Nov 4, §172) A test the team paused no longer skips this: it runs as under a developer suspension (charged, then waiting for the lift).
-  const due = await db.call.findMany({ where: { review: null, status: "booked", rateCents: { not: null }, payBy: { lt: now }, contract: { tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
+  const due = await db.call.findMany({ where: { review: null, status: "booked", payBy: { lt: now }, contract: { tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: { include: { developer: true } } } } }, take: 1000 });
   for (const x of due) {
     const minutes = callMinutesOf(x);
-    if (minutes == null || x.rateCents == null) continue;
+    if (minutes == null) continue;
     const c = x.contract, dev = c.test.developer, name = displayName(c.tester);
     // (Owner, Nov 4, §177) Each line names the call it charged, with its date and time in the developer's zone: "Ana Silva's call on Tue, Oct 27, 8:00 AM was
     // charged automatically: $15.00" (a tester can have many calls on a test).
     const call = `${name}'s call on ${callAtFor(x.startsAt, dev)}`;
+    if (x.rateCents == null) {
+      // (§311e) Unlisted: closed with $0 (a press waiting for the bank on it is left to finish), like a listed call with nothing to charge.
+      if (await (await import("./confirm")).pieceLocked({ callId: x.id })) continue;
+      const closed = await db.review.create({ data: { callId: x.id, contractId: c.id, amountCents: 0, agreedCents: null, reason: UNLISTED_CALL_CLOSED, payKey: serverKey("autocall", x.id), auto: true } }).catch(() => null);
+      if (!closed) continue; // paid meanwhile
+      await db.$transaction((tx) => recordEvent(tx, c.testId, "paid", `${call} closed with nothing paid`, false, {}, c.id, "", `call-${x.id}`));
+      await bell(dev.id, `${call} closed with nothing paid (it wasn't listed)`, `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", testId: c.testId });
+      continue;
+    }
     const gone = !!dev.deletedAt;
     if (gone && !dev.stripePaymentMethodId) continue;
     // A charge waiting for the bank on this call (the developer's own press) is left to finish.
@@ -1749,9 +1772,6 @@ export async function autoChargeCalls(now: Date) {
       await bell(dev.id, `${call} closed with nothing to pay`, `/app/tests/${c.testId}#call-${x.id}`, undefined, { side: "developer", testId: c.testId });
       continue;
     }
-    // (§131) The developer's payment lines name the tester, the part and the test (pieceName).
-    const piece = pieceName({ tester: name, part: "live call", test: c.title });
-    const what = `${piece} (${T(x.startsAt)}, charged automatically after ${REVIEW_DAYS} days)`; // (§178) the call's date and time
     // (Batch 29 §37) The tester's call reads "may be delayed" (never "failed" or "hold") while the money waits: the same line as for a declined charge.
     // (Owner, Nov 4, §177) Which call: "Payment for your call on “Harbor Run” (Tue, Oct 27, 2:00 PM EST) may be delayed".
     const tellDelayed = () => notify(c.tester.email, `Payment for your call on “${c.title}” (${T(x.startsAt)}) may be delayed`, ["Payment for your call may be delayed."], `/app/sessions/${c.id}#call-${x.id}`, { side: "tester", payment: true, group: "tdelayed" });
@@ -1810,22 +1830,6 @@ export async function autoChargeCalls(now: Date) {
     n++;
   }
   return n;
-}
-
-/** (Batch 15 sections 15 and 40) The weekly "Pay your calls" line: one per developer, stacked across tests ("3 calls to pay on 2 tests"), until each is paid. */
-async function payYourCalls(now: Date, co: CloseOuts) {
-  const calls = await db.call.findMany({ where: { review: null, status: "booked", rateCents: null, payBy: { lt: now }, contract: { test: PAUSE_FREE, tester: PAYABLE_TESTER } }, include: { contract: { include: { tester: true, test: true } } }, take: 5000 });
-  const byDev = new Map<string, typeof calls>();
-  for (const x of calls) if (callMinutesOf(x) != null && !(await co.payClosed({ callId: x.id }))) byDev.set(x.contract.test.developerId, [...(byDev.get(x.contract.test.developerId) ?? []), x]);
-  for (const [devId, list] of byDev) {
-    const key = `paycalls:${devId}`;
-    // Weekly: the calls in the last line carry when it was sent.
-    if (list.some((x) => x.remindedAt && now.getTime() - x.remindedAt.getTime() < 7 * 86_400_000 - 3_600_000)) continue;
-    await db.call.updateMany({ where: { id: { in: list.map((x) => x.id) } }, data: { remindedAt: now } });
-    const tests = [...new Set(list.map((x) => x.contract.testId))];
-    const line = list.length === 1 ? `Pay your calls: your call with ${displayName(list[0].contract.tester)} on “${list[0].contract.title}” isn't paid yet (any amount, $0 included).` : `Pay your calls: ${list.length} calls to pay on ${tests.length === 1 ? `“${list[0].contract.title}”` : `${tests.length} tests`}.`;
-    await bell(devId, line, tests.length === 1 ? `/app/tests/${tests[0]}#needs-you` : "/app#needs-review", undefined, { side: "developer", reminder: key });
-  }
 }
 
 /** The tester's choice on a contract part (or, batch 15 section 15, a listed call) unreviewed for the review window: "charge" (the listing minus what is paid) or "letgo". */

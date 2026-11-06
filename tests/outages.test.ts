@@ -73,6 +73,7 @@ describe("outages", () => {
     expect(line).toMatch(/^The site was down from .+ to .+\. Deadlines and payment dates moved 2 h 30 min later\.$/);
     expect(await db.notification.count({ where: { userId: tester.user.id, text: line } })).toBe(1);
     expect(await db.notification.count({ where: { userId: dev.user.id, text: line } })).toBe(1);
+    expect((await db.notification.findFirstOrThrow({ where: { userId: dev.user.id, text: line } })).groupKey).toBe("outages"); // (§311f) one entry a day
     expect(line).not.toMatch(/hold|pause/i);
     // The top box on affected pages.
     const { outageLines } = await import("@/lib/server/outages");

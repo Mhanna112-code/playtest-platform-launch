@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { PAYOUT_LINE, payoutWaitLine } from "@/lib/payout";
-import { displayName, fmtDateTime, fmtTime, money, pronouns } from "@/lib/server/dateFormat";
+import { displayName, fmtDateTime, money, pronouns } from "@/lib/server/dateFormat";
 import { callCancelledLine } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify } from "./notify";
@@ -434,8 +434,8 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   for (const p of await db.payment.findMany({ where: { developerId: t.developerId, contractId: { in: contractIds }, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
     await release(p.id).catch((e) => console.error("[team pause] cancel open Pay check:", (e as Error).message));
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  // (Owner, Nov 6, §310b) The developer's line names the closing date in the daily reminder's words ("The team paused “…”: it closes on <date> unless the team lifts
-  // the pause"), and that reminder ("… is paused and closes on …") is NOT also sent now: it starts with the next day's daily job.
+  // (Owner, Nov 6, §310b) The developer's line names the closing date in the paused line's words ("The team paused “…”: it closes on <date> unless the team lifts
+  // the pause"); that line ("… is paused and closes on …", bellPausedTests) is NOT also sent (§311a: and never daily).
   const closes = (await import("./pauseClosure")).closesUnless(dev, await db.test.findUniqueOrThrow({ where: { id: testId } }));
   const pausedLine = `The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`;
   // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.
@@ -486,11 +486,11 @@ export async function unpauseTest(testId: string, adminId: string | null = null,
     for (const c of await db.contract.findMany({ where: { testId, status: "working" }, include: { tester: true } }))
       await notify(c.tester.email, `“${c.title}” is running again`, [`“${c.title}” is running again. Your deadline moved on by the pause.`], `/app/sessions/${c.id}`, { about: dev.id, group: "paused", always: true });
   }
-  // (Owner, Nov 6, §299) The lift reaches the developer like the pause: `always` (with email Off too, in the end-of-day email), in the same "Payments and holds"
-  // stack. Running again only when nothing else pauses the test: while the developer's own hold or suspension still pauses it, the lift says what still does
+  // (Owner, Nov 6, §299) The lift reaches the developer like the pause: `always` (with email Off too, in the end-of-day email). (Owner, Nov 6, §311b) In the
+  // "The team decided" stack (admindecision; was "Payments and holds" with the pause). Running again only when nothing else pauses the test: while the developer's own hold or suspension still pauses it, the lift says what still does
   // (and the hold's or reinstatement's own line says running again when that lifts: never two for one moment).
   const still = devNow.holdStartedAt ? "you pay what you owe" : devNow.devSuspendedAt ? "your account is cleared" : "";
-  await notify(dev.email, `The team lifted the pause on “${t.title}”`, [still ? `The team lifted the pause on “${t.title}”: it stays paused until ${still}.` : `The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { always: true, group: "payhold" });
+  await notify(dev.email, `The team lifted the pause on “${t.title}”`, [still ? `The team lifted the pause on “${t.title}”: it stays paused until ${still}.` : `The team lifted the pause on “${t.title}”: it is running again.`], `/app/tests/${testId}`, { always: true, group: "admindecision" });
   return { ok: true };
 }
 

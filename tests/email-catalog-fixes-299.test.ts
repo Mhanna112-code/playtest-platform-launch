@@ -3,7 +3,6 @@ import fs from "node:fs";
 import path from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { db } from "@/lib/db";
-import { STILL_SUSPENDED_LINE } from "@/lib/rules";
 import { POST as testsPOST } from "@/app/api/tests/route";
 import { POST as helpPOST } from "@/app/api/help/route";
 import { TOPICS } from "@/lib/helpTopics";
@@ -117,7 +116,7 @@ describe("§299 point 2: the 15-minute call reminder goes out at once", () => {
 });
 
 describe("§299 point 3: the team's lift reaches the developer like its pause", () => {
-  it("the lift and a closing date moved later are `always`, in the pause's Payments and holds stack; with email Off they reach the end-of-day email", async () => {
+  it("the lift and a closing date moved later are `always` (the date in the pause's Payments and holds stack, the lift in The team decided, §311b); with email Off they reach the end-of-day email", async () => {
     const w = await world();
     await db.user.update({ where: { id: w.devId }, data: { emailPref: "off" } });
     const a = await admin();
@@ -125,8 +124,10 @@ describe("§299 point 3: the team's lift reaches the developer like its pause", 
     await extendPauseClosure(w.testId, 3, new Date(), a.id);
     await unpauseTest(w.testId, a.id);
     const dl = await lines(w.devId);
-    for (const re of [/^The team paused/, /will close later$/, /^The team lifted the pause on “Harbor Run”$/])
+    for (const re of [/^The team paused/, /will close later$/])
       expect(dl.find((l) => re.test(l.text)), String(re)).toMatchObject({ own: false, groupKey: "payhold", mustEmail: true });
+    // (Owner, Nov 6, §311b) The lift is a "The team decided" line (admindecision), still `always`.
+    expect(dl.find((l) => l.text === "The team lifted the pause on “Harbor Run”")).toMatchObject({ own: false, groupKey: "admindecision", mustEmail: true });
     await sendSummaries(new Date(), [w.devId]);
     const m = (await mails(w.dev.user.email)).map((x) => x.text).join("\n");
     expect(m).toContain("The team lifted the pause on “Harbor Run”");
@@ -169,7 +170,7 @@ describe("§299 point 3: the team's lift reaches the developer like its pause", 
     expect(t.pausedSince).not.toBeNull(); // the hold still pauses it
     expect((await texts(w.anaId)).filter((x) => x.endsWith("is running again"))).toHaveLength(0);
     let dev = await lines(w.devId);
-    expect(dev.find((l) => l.text === "The team lifted the pause on “Harbor Run”")).toMatchObject({ mustEmail: true, groupKey: "payhold" });
+    expect(dev.find((l) => l.text === "The team lifted the pause on “Harbor Run”")).toMatchObject({ mustEmail: true, groupKey: "admindecision" }); // (§311b)
     expect(dev.filter((l) => l.text === RUNNING)).toHaveLength(0);
     expect(await liftHoldIfClear(w.devId)).toBe(true);
     expect((await db.test.findUniqueOrThrow({ where: { id: w.testId } })).pausedSince).toBeNull();
@@ -178,14 +179,14 @@ describe("§299 point 3: the team's lift reaches the developer like its pause", 
     expect((await texts(w.anaId)).filter((x) => x === "“Harbor Run” is running again")).toHaveLength(1);
   });
 
-  it("a hold lifting during a suspension: STILL_SUSPENDED_LINE, no running again; the tests stay paused", async () => {
+  it("a hold lifting during a suspension: no extra line (§311h), no running again; the tests stay paused", async () => {
     const w = await world();
     const a = await admin();
     await suspendAccount(a.id, w.devId, "Checking", "developer");
     await startHold(w.devId, "unpaid");
     expect(await liftHoldIfClear(w.devId)).toBe(true);
     const dev = await texts(w.devId);
-    expect(dev.filter((t) => t === STILL_SUSPENDED_LINE)).toHaveLength(1);
+    expect(dev.filter((t) => t.startsWith("Your payment went through."))).toHaveLength(0);
     expect(dev.filter((t) => t === RUNNING)).toHaveLength(0);
     expect((await db.test.findUniqueOrThrow({ where: { id: w.testId } })).pausedSince).not.toBeNull();
     expect((await texts(w.anaId)).filter((x) => x.endsWith("is running again"))).toHaveLength(0);

@@ -1,9 +1,10 @@
 import { timingSafeEqual } from "node:crypto";
 import { db } from "@/lib/db";
-import { displayName, fmtDateTime } from "@/lib/format";
+import { displayName } from "@/lib/format";
 import { linesFor, notify } from "./notify";
 import { T, fmtIn, renderTimes } from "@/lib/tz";
 import { movedDue, nearestDayEnd } from "@/lib/rules";
+import { OUTAGES_GROUP } from "@/lib/bell";
 
 // (Owner, Oct 22, NEWEST+6; batch 15 section 10) Outages come from the uptime service's own alerts (POST /api/health/alert?key=...): a "down" is stored and the
 // matching "up" records the outage when it lasted 15 minutes or more. It is recorded once (unique start) and then every timer that was running moves later by its
@@ -343,7 +344,8 @@ async function applyOutage(o: { startAt: Date; endAt: Date; ms: number }, opts: 
   const devs = await db.test.findMany({ where: { status: "open" }, select: { developerId: true }, distinct: ["developerId"] });
   const ids = [...new Set([...testers.map((x) => x.testerId), ...devs.map((x) => x.developerId)])];
   const each = await linesFor(ids, line);
-  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: each.get(userId)!, link: "/app" })) });
+  // (Owner, Nov 6, §311f) One entry a day in the bell and the email: "Site down · 2" (OUTAGES_GROUP).
+  await db.notification.createMany({ data: ids.map((userId) => ({ userId, text: each.get(userId)!, link: "/app", groupKey: OUTAGES_GROUP })) });
 }
 
 /** The top-box lines: outages recorded since the page loaded. */
