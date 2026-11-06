@@ -231,7 +231,7 @@ describe("batch 35 §43: admin reasons in the quoted box", () => {
 
   it("long unbroken words wrap; every admin reason uses the quoted box; Contact us in its draggable box (§237)", () => {
     const st = src("components/ScrollText.tsx");
-    expect(st.match(/\[overflow-wrap:anywhere\]/g)?.length).toBe(1);
+    expect(st.match(/\[overflow-wrap:anywhere\]/g)?.length).toBe(2); // the quote, and (Owner, Nov 6, §281) LabeledReason's label line
     expect(src("app/admin/DisputeDecision.tsx")).toContain(":<ReasonQuote text={side.text} className=\"mt-0.5\" /></div>");
     const list = src("app/admin/PagedList.tsx");
     expect(list).toContain("<ReasonQuote text={r.note} className=\"text-slate-300\" />");

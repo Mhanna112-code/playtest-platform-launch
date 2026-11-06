@@ -7,12 +7,12 @@ import { CALL_MIN_AHEAD_MINUTES } from "@/lib/callLead";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { displayName, fmtDateIn, fmtDateTimeIn, fmtStampIn, money, pronouns } from "@/lib/server/dateFormat";
-import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, termsLine, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_DEV, WAITING_TO_CONNECT, callInProgress, chargeOpensAt, callJoinable, bookedLateLabel, isBookedLate, callReference, cancelNeedsReason, chargeAmount, choiceNoteLine, closesInLine, termsLine, PAID_ZERO_LABEL } from "@/lib/rules";
 import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, MEASURING_LINE } from "@/lib/callMeasure";
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { callsLeftWarning } from "@/lib/callMeasure";
 
-import { ReasonQuote } from "@/components/ScrollText";
+import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { requireOpenPage } from "@/lib/server/page-auth";
 import { PageLoaded } from "@/components/PageLoaded";
 import { devRestricted } from "@/lib/restricted";
@@ -79,7 +79,7 @@ import { qStored } from "@/lib/questions";
 import { pendingForDeveloper } from "@/lib/server/excerpts";
 import { ExcerptQuestion, ExcerptQuote, ExcerptReplaces } from "@/components/ExcerptList"; // (batch 16 section 37) the question above each excerpt request
 import { ExcerptDecision } from "@/components/Excerpts";
-import { UPDATED_AT_CAP, pieceDay, teamClosedLine, updateWaiting } from "@/lib/moneyLines";
+import { TEAM_CLOSED_LABEL, UPDATED_AT_CAP, pieceDay, updateWaiting } from "@/lib/moneyLines";
 
 import { testV } from "@/lib/server/pulseV";
 import { otherSideNotice } from "@/components/OtherSideNotice";
@@ -770,9 +770,10 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                       )}
                       {/* (Batch 30 §2) An update the tester sent at the cap: nothing more can be paid, so it isn't in Needs you. */}
                       {r.sub?.paidUpdateAt && r.sub.review && !r.sub.review.rejected && !r.sub.review.teamClosedById && rooms.has(r.sub.id) && (rooms.get(r.sub.id)?.room ?? 0) <= 0 && <span className="badge" data-updated-at-cap="">{UPDATED_AT_CAP}</span>}
-                      {/* (Batch 30 §5) The team closed it for $0, with its reason. */}
-                      {r.sub?.review?.teamClosedById ? <span className="w-full text-sm text-slate-300" data-team-closed="">{teamClosedLine(r.sub.review.reason)}</span>
-                        : r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <span className="w-full text-sm text-slate-300" data-paid-zero="">{paidZeroLine(r.sub.review.reason)}</span>}
+                      {/* (Batch 30 §5) The team closed it for $0, with its reason. (Owner, Nov 6, §281) The reason (the team's, or your note when paying $0) in the
+                          draggable reason box under its line ("Paid $0 · <when>"), never inline. */}
+                      {r.sub?.review?.teamClosedById ? <LabeledReason className="w-full text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${r.sub.id}`} text={r.sub.review.reason} />
+                        : r.sub?.review && r.sub.review.amountCents === 0 && !r.sub.review.rejected && r.sub.review.reason && <LabeledReason className="w-full text-sm text-slate-300" data={{ "data-paid-zero": "" }} line={`${PAID_ZERO_LABEL} · ${fmtDateTime(r.sub.review.createdAt)}`} label={PAID_ZERO_LABEL} id={`review-note-${r.sub.id}`} text={r.sub.review.reason} />}
                       {/* (Batch 17 §11) A charge on this part made while you were away, waiting for your bank. */}
                       {bankAt(r.sub.id)}
                       </Fold>
@@ -829,7 +830,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
                         {inNeeds && <a href={`#call-${x.id}`} className="text-xs">Pay it in Needs you ↑</a>}
                         {tookPlace(x) && !x.review && payShut(x.id) && testerPayable(c.tester) && <p className="text-xs text-slate-300" data-closed-not-paid="">{closedNotPaidLine(shutOn(x.id))}</p>}
                         {bankAt(x.id)}
-                        {x.review?.teamClosedById && <p className="text-sm text-slate-300" data-team-closed="">{teamClosedLine(x.review.reason)}</p>}
+                        {x.review?.teamClosedById && <LabeledReason className="text-sm text-slate-300" data={{ "data-team-closed": "" }} line={TEAM_CLOSED_LABEL} id={`review-note-${x.id}`} text={x.review.reason} />}{/* (Owner, Nov 6, §281) */}
                         {x.review && !x.review.rejected && !restricted && !x.review.teamClosedById && payMore.open && (rooms.get(x.id)?.room ?? 0) > 0 && (
                           <div className="space-y-1" data-call-pay-more="">
                           <p className="text-sm font-medium text-white">Pay more</p>

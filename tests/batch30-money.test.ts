@@ -359,7 +359,7 @@ describe("batch 30 §5: the team closes a developer's open reviews at $0", () =>
     expect(box).toContain(`"Close all open reviews for $0"`);
     expect(box).toContain(`"Close this test's open reviews for $0"`);
     const session = src("app/app/sessions/[id]/page.tsx");
-    expect(session).toContain("{teamClosedLine(review.reason)}");
+    expect(session).toContain("line={`${TEAM_CLOSED_LABEL} (${fmtDateTime(review.createdAt)})`} label={TEAM_CLOSED_LABEL} id={`review-note-${id}`} text={review.reason}"); // (Owner, Nov 6, §281) the reason in its box
     expect(session).toContain("{TEAM_CLOSED_NO_DISPUTE}");
     expect(M.teamClosedLine("Spam testers.")).toBe("The team closed this for $0: “Spam testers.”");
   });

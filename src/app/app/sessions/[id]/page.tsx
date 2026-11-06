@@ -13,7 +13,7 @@ import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
-import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, paidZeroLine } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, PAID_ZERO_LABEL } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -23,7 +23,7 @@ import { testerAutoChargeLine } from "@/lib/rules";
 import { chargeClosesLine, closeOutSoon } from "@/lib/rules";
 import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
 
-import { ReasonQuote } from "@/components/ScrollText";
+import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
 import { adminAway, requirePageUser } from "@/lib/server/page-auth";
 import { sessionRefusal, writtenQuestions } from "@/lib/server/tests";
@@ -52,7 +52,7 @@ import { FieldLabel, FieldValue } from "@/components/FieldLines";
 import { RateBox } from "@/components/RateBox";
 import { contractRatings, rateWarning, ratingSummary, testerRateState } from "@/lib/server/ratings";
 import { openOffer } from "@/lib/server/terms";
-import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lateSentLine, teamClosedLine, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
+import { TEAM_CLOSED_NO_DISPUTE, pieceDay, canSendAgain, lateBeforeSendLine, lateSentLine, TEAM_CLOSED_LABEL, DEV_SIDE_LABEL, teamDecidedLabel, updateAboveSendLine, updateClosedZeroLine } from "@/lib/moneyLines";
 import { keyOf } from "@/lib/server/accessKeys";
 import { KeyBox } from "./KeyBox";
 import { PageLoaded } from "@/components/PageLoaded";
@@ -824,32 +824,37 @@ function TesterReview({ timeZone, sessionId, kind, id, review, dispute, off = fa
   return (
     <div className="space-y-2 rounded-lg bg-white/[0.03] p-3 text-sm">
       <PayLinesBox id={id} count={1 + extras.length + (update ? 1 : 0)}>
+      {/* (Owner, Nov 6, §281) Every typed note here (the developer's when paying, at Pay and each Pay more or a $0 update; a rejection's or the team's reason; the
+          team's decision note; the developer's side) is in the draggable reason box under its line (LabeledReason), never inline: a long unbroken note no longer
+          fills the card. */}
       {review.rejected ? (
         // (Batch 15 section 30) Old rejections stay, and read "Rejected".
-        <p><b>Rejected</b> ({fmtDateTime(review.createdAt)}): “{review.reason}”</p>
+        <LabeledReason line={<><b>Rejected</b> ({fmtDateTime(review.createdAt)})</>} label="Rejected" id={`review-note-${id}`} text={review.reason} />
       ) : review.teamClosedById ? (
         // (Batch 30 §5) The team closed it for $0, with the team's reason.
-        <p data-team-closed="">{teamClosedLine(review.reason)} ({fmtDateTime(review.createdAt)})</p>
+        <LabeledReason data={{ "data-team-closed": "" }} line={`${TEAM_CLOSED_LABEL} (${fmtDateTime(review.createdAt)})`} label={TEAM_CLOSED_LABEL} id={`review-note-${id}`} text={review.reason} />
       ) : review.amountCents === 0 && review.reason && !byTesterChoice(review.reason) ? (
-        <p data-paid-zero="">{paidZeroLine(review.reason)} ({fmtDateTime(review.createdAt)})</p>
+        <LabeledReason data={{ "data-paid-zero": "" }} line={`${PAID_ZERO_LABEL} · ${fmtDateTime(review.createdAt)}`} label={PAID_ZERO_LABEL} id={`review-note-${id}`} text={review.reason} />
       ) : review.amountCents === 0 ? (
         <p data-paid-zero="">{dev} paid $0 for this ({fmtDateTime(review.createdAt)})</p>
       ) : (
-        <p>
+        <LabeledReason data={{ "data-paid-line": "" }} label="Paid" id={`review-note-${id}`} text={byTesterChoice(review.reason) ? "" : review.reason} line={<>
           <b>Paid {money(review.amountCents)}</b>{review.rateCents != null && <> ({money(review.rateCents)}/h)</>}: you get {money(testerShare(review.amountCents))} ({fmtDateTime(review.createdAt)})
-          {review.reason && <> · “{review.reason}”</>}
-        </p>
+          {/* Charge / Let it go: the app's own words, not a typed note. */}
+          {byTesterChoice(review.reason) && <> · “{review.reason}”</>}
+        </>} />
       )}
       {/* (Batch 30 §2) The developer closed an update at $0 (with their note, if any). */}
-      {update && <p data-update-closed="">{updateClosedZeroLine(dev)} ({fmtDateTime(update.at)}){update.note && <> · “{update.note}”</>}</p>}
-      {extras.map((x, i) => <p key={i} data-extra-line="">Extra {money(x.amountCents)}: you get {money(testerShare(x.amountCents))} ({fmtDateTime(x.createdAt)}){x.note && <> · “{x.note}”</>}</p>)}
+      {update && <LabeledReason data={{ "data-update-closed": "" }} line={`${updateClosedZeroLine(dev)} (${fmtDateTime(update.at)})`} label="Paid $0 more" id={`update-note-${id}`} text={update.note} />}
+      {extras.map((x, i) => <LabeledReason key={i} data={{ "data-extra-line": "" }} line={`Extra ${money(x.amountCents)}: you get ${money(testerShare(x.amountCents))} (${fmtDateTime(x.createdAt)})`} label={`Extra ${money(x.amountCents)}`} id={`extra-note-${id}-${i}`} text={x.note} />)}
       </PayLinesBox>
-      {dispute && <p>{dispute.status === "open" ? "You disputed this: waiting for the team." : `The team decided: ${money(dispute.decidedCents)} in all${dispute.decisionNote ? ` · “${dispute.decisionNote}”` : "."}`}</p>}
+      {dispute && (dispute.status === "open" ? <p>You disputed this: waiting for the team.</p>
+        : <LabeledReason data={{ "data-team-decided": "" }} line={`${teamDecidedLabel(money(dispute.decidedCents))}${dispute.decisionNote.trim() ? "" : "."}`} label="The team's decision" id={`decision-note-${id}`} text={dispute.decisionNote} />)}
       {/* (Owner, Oct 29, batch 28 §14) Whether this part can still be paid more (grey; not a stop). */}
       {more && !review.rejected && !review.teamClosedById && (
         <p className="note" data-pay-more-state="">{more.allCents <= more.paidCents ? testerPaidMostLine(more.paidCents) : more.closedOn ? payClosedLine(more.closedOn, true) : testerPayMoreLine(dev, more.paidCents, more.allCents)}</p>
       )}
-      {dispute?.devSide && <p>The developer&apos;s side: “{dispute.devSide}”</p>}
+      {dispute?.devSide && <LabeledReason data={{ "data-dev-side": "" }} line={DEV_SIDE_LABEL} id={`dev-side-${id}`} text={dispute.devSide} />}
       {may && !off && <DisputeForm sessionId={sessionId} kind={kind} id={id} seenAt={new Date().toISOString()} limit={disputeLimitText(room ?? 0)} />}
       {/* (Batch 30 §5) Final: no dispute on a team closure. */}
       {review.teamClosedById && !dispute && !off && (

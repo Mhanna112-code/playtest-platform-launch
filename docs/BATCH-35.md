@@ -4936,3 +4936,18 @@ with ×.
   they're shown.
 - Unchanged: a tester who left, was ended or rated (today's rules: rejoin, "You left this test", out of Find after rating); an admin's Find.
 - Tests: tests/find-joined-279.test.ts; batch17-find's source check follows the card's new href.
+
+## §281 Payment and dispute notes in the draggable reason box everywhere (owner, Nov 6)
+- The short typed notes around a payment or a dispute are never inline: each sits in the shared draggable reason box (ReasonQuote, §237: its own scroll, drags
+  taller, OwnPanel when nested) under its line, which is the box's label line (`LabeledReason` in components/ScrollText.tsx). Short notes go in the same box (it
+  starts small, the ReasonQuote default); no note, just the line. Long words wrap anywhere, in the line too.
+- The tester's session page (each part's and call's payment card, `TesterReview`): "Paid $0 · <when>" (PAID_ZERO_LABEL) with the developer's note; "Paid $X …"
+  with the note at Pay; each "Extra $X: you get …" (Pay more) and a $0 update's "… paid $0 more for what you added." with their notes; "Rejected (<when>)";
+  "The team closed this for $0 (<when>)" (TEAM_CLOSED_LABEL); "The team decided: $X in all" (teamDecidedLabel; a full stop only with no note) with the
+  team's note; "The developer's side" (DEV_SIDE_LABEL). Charge / Let it go have no typed note (their review reason is the app's own words): unchanged.
+- The developer's test page, Testers list: a part's "Paid $0 · <when>" and the team's $0 close-out (parts and calls) in the box under the line. Already boxed
+  and unchanged: Needs you's dispute rows (the tester's reason), the dashboard's dispute box, the team's dispute rows (the tester's reason, the developer's note
+  when paying, the developer's side, the decision note), the admin person and test boxes (dispute reasons, close-out and hold notes). The payment lists show no
+  typed notes; Needs you's update rows have none.
+- paidZeroLine / teamClosedLine keep their text (built from the labels). Tests: tests/notes-in-boxes-281.test.ts; batch9, batch30-money, batch30-money-fixes and
+  batch35-admin-tabs follow the new markup.
