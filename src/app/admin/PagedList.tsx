@@ -15,6 +15,8 @@ import type { ChargebackVM, DisputeVM, Kind, LiftVM, MineVM, Page, PausedVM, Rep
 import { AdminButton } from "./AdminButton";
 import { DisputeDecision } from "./DisputeDecision";
 import { AdminRich } from "./AdminRich";
+import { OwnPanel, ResizeBox } from "@/components/Panel";
+import type { Rich } from "@/lib/rich";
 import { MineLine } from "./MineLine";
 import { ChangesBox } from "@/components/ChangesBox";
 import { ADMIN_STOP_HEADING, useAdminStop } from "@/lib/adminStop";
@@ -122,6 +124,11 @@ function ReportWho({ name, labelled, href, email }: { name?: string; labelled: s
   );
 }
 
+/** (Owner, Nov 5, §277) A chat message's words with the people's names it holds as green links (the words as written: no email cut, no quoted box). */
+function LinkedWords({ parts }: { parts: Rich }) {
+  return <>{parts.map((s, i) => (typeof s === "string" ? <span key={i}>{s}</span> : "q" in s ? <span key={i}>{s.q}</span> : <a key={i} href={s.href} data-chat-name="">{s.t}</a>))}</>;
+}
+
 function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
   switch (kind) {
     case "disputes":
@@ -136,13 +143,19 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
           {/* (Batch 35 §43) Each reason in the small quoted box: a <div>, the boxes are blocks. */}
           <div data-dispute-said="">{d.saidParts ? <AdminRich parts={d.saidParts} /> : d.said}</div>
           <DisputeWork work={d.work ?? null} />
-          {/* (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last, in a scroll box: the only place the team reads a chat. */}
+          {/* (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last, in a scroll box: the only place the team reads a chat. (Owner, Nov 5,
+              §277) In the shared draggable, resizable scroll panel (ResizeBox in OwnPanel, as QuestionTexts); each sender's name, and the people's names in a
+              message, are green links to their place for the team. */}
           <details className="rounded-lg border border-white/10 p-2" data-dispute-chat={d.id}>
             <summary className="fold-chevron cursor-pointer font-medium text-white">Their chat on this test <span className="font-normal text-slate-400">({(d.chat ?? []).length})</span></summary>
             {(d.chat ?? []).length === 0 ? <p className="note mt-2">No messages.</p> : (
-              <ul className="mt-2 max-h-72 space-y-1 overflow-y-auto pr-1">
-                {(d.chat ?? []).map((m) => <li key={m.id} className="whitespace-pre-wrap break-words"><b><Cut text={m.who} /></b> <span className="text-xs text-slate-500">{m.at}</span>: {m.text}</li>)}
-              </ul>
+              <div className="mt-2" data-dispute-chat-panel="">
+                <OwnPanel><ResizeBox id={`dispute-chat-${d.id}`} label="Their chat on this test" defaultMax="min(18rem, 50vh)">
+                  <ul className="space-y-1 pr-1">
+                    {(d.chat ?? []).map((m) => <li key={m.id} className="whitespace-pre-wrap break-words" data-chat-line=""><b>{m.whoHref ? <a href={m.whoHref} data-chat-who=""><Cut text={m.who} /></a> : <Cut text={m.who} />}</b> <span className="text-xs text-slate-500">{m.at}</span>: {m.parts ? <LinkedWords parts={m.parts} /> : m.text}</li>)}
+                  </ul>
+                </ResizeBox></OwnPanel>
+              </div>
             )}
           </details>
           {/* (§149) The range line is drawn by the decision box, so a stop can move it up to what's paid. */}
@@ -252,7 +265,20 @@ function Row({ kind, row }: { kind: Kind; row: AnyRow }) {
       return (
         <div className="space-y-1 border-t border-white/[0.06] py-2 text-sm first:border-t-0" data-chargeback-hold={c.id}>
           <p>{c.who ? <AdminRich parts={c.who} /> : <Cut text={c.email} kind="email" />} · on hold since {c.since}</p>
-          {(c.chargebackParts ?? c.chargebacks).map((x, i) => <p key={i} className="text-slate-400">{typeof x === "string" ? x : <AdminRich parts={x} />}</p>)}
+          {/* (Owner, Nov 5, §277) The developer's open chargebacks, newest first, in ONE drop-down under the hold row: "Chargebacks (N)", each line in the shared
+              draggable, resizable scroll panel (ResizeBox in OwnPanel, as QuestionTexts), every person and test it names a green link. */}
+          {(c.chargebackParts ?? c.chargebacks).length > 0 && (
+            <details className="rounded-lg border border-white/10 p-2" data-chargeback-list={c.id}>
+              <summary className="fold-chevron cursor-pointer font-medium text-white">Chargebacks ({(c.chargebackParts ?? c.chargebacks).length})</summary>
+              <div className="mt-2">
+                <OwnPanel><ResizeBox id={`chargebacks-${c.id}`} label="Chargebacks" defaultMax="min(12rem, 40vh)">
+                  <ul className="space-y-1">
+                    {(c.chargebackParts ?? c.chargebacks).map((x, i) => <li key={i} className="text-slate-400" data-chargeback-line="">{typeof x === "string" ? x : <AdminRich parts={x} />}</li>)}
+                  </ul>
+                </ResizeBox></OwnPanel>
+              </div>
+            </details>
+          )}
           {c.reviewFirst ? (
             /* (Owner, Nov 3) From the 2nd chargeback the team reviews the account BEFORE the developer can pay: Approve allows paying (Pay what you owe then charges
                everything as one payment and lifts the hold; no second approval). */

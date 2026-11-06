@@ -4926,3 +4926,28 @@ with ×.
 - Edit's "← Back to the test" link stays. The test page no longer shows a note or reads those params (only `failed` stays); spotclosed/spots, read nowhere, are
   no longer sent. Post a test still opens the new test page, which never showed this note.
 - Tests: tests/saved-note-275.test.ts rewritten for the Edit placement.
+
+## §277 Admin bells and console lines: green links on every person and test; chargebacks newest first in one drop-down; the dispute chat in a panel (owner, Nov 5)
+1. Every person and test named in the team's bell lines and the admin console's lines is a green link to their place for the team: a person opens their profile
+   with its admin box (`profileHref`: `/app/developers/<id>` for a developer, else `/app/testers/<id>`, as the console's names already did); a test opens its
+   page with the test's admin box (`testHref`: `/app/find/<id>`). These are the console's existing targets (the console has no per-user or per-test row of its
+   own outside the Accounts lists and `?user=`), so a name in a bell and the same name in a row open the same place. A deleted account stays plain.
+- Bells (notifications page): an admin's team lines (their link opens `/admin…`) take their links from the line's own data, not the reader's tests
+  (lib/server/adminLinks.ts `adminBellLinks`): the bell's test, and the row it opens: a dispute's test (its names, its developer and testers; the disputing
+  tester first), the developer of a hold lift, the reporter and the reported person of a report, the developers on a chargeback hold and their tests. Worked
+  out when the bell is read (never stored), so lines written before §277 link too, a name an older cut ended with "…" by its visible start (§270's `linksIn`).
+  The admin's other lines keep §270's pool. A line naming no one (the suspended reminder, the email and storage alerts) gets none.
+- Console: `linkRich` matches the plain words of a row's line against a pool built from the row's own data (`adminPool`) and turns the names into links beside
+  the ones the line already had (Stripe ids and typed reasons untouched): the Chargeback holds lines (the testers and tests of the developer's tests: "Chargeback
+  open: $12.50 for Ana Silva's live call on “Harbor Run: first 3” (…)"), Your actions (what a decision did), a person's boxes (Chargebacks, Holds and
+  suspensions, payments, …) and a test's boxes (Timeline, Contract changes, Payments). The paused-tests list's rows now carry the test and developer links.
+  Dispute rows, reports, suspensions, lifts and the hold row's developer already linked every name and the test. All are the console's `a` green.
+2. Chargeback holds: each developer's open chargebacks are newest first (`chargebackHolds`: by `chargebackAt`, then the payment's time); the holds stay oldest hold
+   first. (§277 revised) They sit in ONE drop-down under the hold row, "Chargebacks (N)", each "Chargeback open: …" line (with its links) in the shared draggable,
+   resizable scroll panel (ResizeBox in OwnPanel, as QA's QuestionTexts).
+3. (§277 revised) Dropped: the daily "N suspended account sides to review" reminder stays exactly as it was.
+4. (§277 revised) Dispute rows: "Their chat on this test (N)" keeps its drop-down; its messages sit in the same shared panel (ResizeBox in OwnPanel, about 18rem at
+   first, replacing the fixed max-h-72 box). Each sender's name opens their place for the team (`whoHref`), and the dispute's tester and developer named in a
+   message's words are green links (`parts`).
+- Tests: tests/admin-links-277.test.ts. batch33's person-box Chargebacks line now lists the tester and test links before its Stripe ids; name-test-links-270's
+  notifications-page check follows `team.get(n.id) ?? lineLinks(…)`.

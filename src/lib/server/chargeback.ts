@@ -577,13 +577,16 @@ export async function declineChargebackReserve(devId: string, note = "", adminId
 /** "The team didn't approve lifting your hold: the $23.00 reserved on your card was released, and nothing was taken." */
 export const notApprovedLine = (cents: number) => `The team didn't approve lifting your hold: the ${money(cents)} reserved on your card was released, and nothing was taken.`;
 
-/** The admin's list: every developer on a chargeback hold with the step status. */
+/**
+ * The admin's list: every developer on a chargeback hold with the step status. The holds stay oldest hold first; (Owner, Nov 5, §277) each developer's open
+ * chargebacks are newest first (by when the bank opened it; the payment's own time, then its id, breaks a tie).
+ */
 export async function chargebackHolds() {
   const devs = await db.user.findMany({ where: { holdStartedAt: { not: null }, holdReason: "chargeback" }, orderBy: { holdStartedAt: "asc" } });
   const out = [];
   for (const d of devs) {
     const steps = (await chargebackSteps(d.id))!;
-    const cbs = await db.payment.findMany({ where: { developerId: d.id, chargeback: "open" } });
+    const cbs = await db.payment.findMany({ where: { developerId: d.id, chargeback: "open" }, orderBy: [{ chargebackAt: { sort: "desc", nulls: "last" } }, { createdAt: "desc" }, { id: "desc" }] });
     out.push({ dev: d, steps, chargebacks: cbs });
   }
   return out;

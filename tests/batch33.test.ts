@@ -106,7 +106,8 @@ describe("batch 33 §1: every person, test and payment the team reads is a link"
     expect(hrefsOf(ds[0].parts!)).toEqual([testPage(w.testId), tester(testerId)]);
     expect(ds[0].href).toBeUndefined();
     const cbs = await rowsOf<TextVM>("u-chargebacks", a.user.id, devId);
-    expect(hrefsOf(cbs[0].parts!)).toEqual([`https://dashboard.stripe.com/payments/${pi}`, `https://dashboard.stripe.com/connect/transfers/${tr}`]);
+    // (Owner, Nov 5, §277) The tester and the test the line's words name ("… for Ana Silva's written answers on “Harbor Run”") are links too, before the Stripe ids.
+    expect(hrefsOf(cbs[0].parts!)).toEqual([tester(testerId), testPage(w.testId), `https://dashboard.stripe.com/payments/${pi}`, `https://dashboard.stripe.com/connect/transfers/${tr}`]);
     const tests = await rowsOf<TextVM>("u-tests", a.user.id, testerId);
     expect(tests[0].text).toContain(`Joined “Harbor Run” by Nora Lane (${w.dev.user.email})`);
     expect(hrefsOf(tests[0].parts!)).toEqual([testPage(w.testId), dev(devId)]);

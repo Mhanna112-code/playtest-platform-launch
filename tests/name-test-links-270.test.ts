@@ -108,7 +108,8 @@ describe("§270 a bell line in pieces", () => {
   it("the notifications page sends each line its links (the reader's pool, its own test's people first)", () => {
     const page = src("app/app/notifications/page.tsx");
     expect(page).toContain("const pool = await linkPool(u.id, items.map((n) => n.testId));");
-    expect(page).toContain("links: lineLinks(pool, n.text, n.testId)");
+    // (Owner, Nov 5, §277) An admin's team lines take adminBellLinks' links first; every other line §270's.
+    expect(page).toContain("links: team.get(n.id) ?? lineLinks(pool, n.text, n.testId)");
   });
 });
 

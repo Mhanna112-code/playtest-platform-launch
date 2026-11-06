@@ -33,6 +33,7 @@ import type { Prisma } from "@prisma/client";
 import { accountStates, type AccountState } from "./accountState";
 import { textFilters } from "@/lib/nameSearch";
 import { plainOf, quoted, type Rich } from "@/lib/rich";
+import type { LineLink } from "@/lib/lineLinks";
 
 /** (Owner, Oct 31, batch 35 §43) A $0 close-out's note ("2 open reviews closed for $0 on “T”: <reason>"): the line before the reason, and the reason (for the quoted box). */
 const splitCloseNote = (note: string): [string, string] => {
@@ -44,7 +45,7 @@ const splitTrailingQuote = (text: string): [string, string] => {
   const m = /^([\s\S]*?): “([\s\S]*)”$/.exec(text);
   return m ? [m[1], m[2]] : [text, ""];
 };
-import { linkNames, person, personName, profileHref, stripeIds, testHref, testLink, whoById } from "./adminLinks";
+import { adminPersonLink, adminPool, linkNames, linkRich, richOf, person, personName, profileHref, stripeIds, testHref, testLink, whoById } from "./adminLinks";
 
 // (Owner, Oct 26) The admin dashboard's lists, 25 rows at a time (keyset by date: newest first; the lists ordered by closure date go soonest first). Rows are
 // plain, already-formatted view models so the same loaders serve the page and /api/admin/more. (Batch 17 §7) Each list is a scroll box that loads the next 25
@@ -56,7 +57,9 @@ export type Page<T> = { rows: T[]; next: string | null; total: number };
 export type DisputeVM = {
   work?: DisputedWork | null; type?: "dispute"; id: string; at: string; head: string; money: string; said: string; open: boolean; decided: string; /** (batch 35 §43) the decision's note, in the quoted box */ decisionNote?: string; min: number; max: number; devSide?: string; devSideAt?: string | null; dev?: string;
   /** (Batch 28 §15) "$20.00 paid · can raise up to $20.00 more" */ range?: string;
-  /** (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last: the only place an admin can read a chat. */ chat?: { id: string; who: string; at: string; text: string }[];
+  /** (Owner, Oct 29, batch 28 §15) Their chat on this test, read-only, newest last: the only place an admin can read a chat. (Owner, Nov 5, §277) The sender's
+   * place for the team (`whoHref`, none for a deleted account) and, when the message names one of the two people, its words with those names as links. */
+  chat?: { id: string; who: string; at: string; text: string; whoHref?: string; parts?: Rich }[];
   /** (Batch 33 §2) The test and the part, above the rest: "“Harbor Run” · Ana Silva's written answers · paid $10.00" (the test and the name are links). */ top?: Rich;
   /** (Batch 33 §1) "Ana Silva (ana@…) vs Nora Lane (nora@…)": the names open their profiles. */ people?: Rich;
   /** (Batch 33 §2) "Ana Silva's reason: “…” · Nora Lane's note when paying: “…”" (the names are links). */ saidParts?: Rich;
@@ -176,6 +179,7 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
   const chat = c ? await db.message.findMany({ where: { testId: c.testId, testerId: c.testerId }, orderBy: { createdAt: "asc" }, include: { sender: true }, take: 500 }) : [];
   // (Owner, Oct 30, batch 33 §1 and §2) The test and the part above the rest, the people with their emails, and who wrote what: every name and the test are links.
   const tester = c?.tester ?? null, devU = c?.test.developer ?? null;
+  const chatPeople = [adminPersonLink(tester), adminPersonLink(devU)];
   const piece = call ? `live call (${fmtDateTime(call.startsAt)})` : sub?.kind === "recording" ? "recording" : "written answers";
   const top: Rich = [testLink(c ? { id: c.testId, title: c.title } : null), " · ", personName(tester), `'s ${piece} · ${r?.rejected ? "rejected" : `paid ${money(paidForPiece)}`}`];
   const people: Rich = [...person(tester, !!c && flagged.has(c.testerId)), " vs ", ...person(devU, !!c && flagged.has(c.test.developerId))];
@@ -191,7 +195,11 @@ export async function disputeRow(d: Awaited<ReturnType<typeof db.dispute.findMan
     saidParts,
     money: `${base} · Paid for this piece ${money(paidForPiece)}${r?.rejected ? " (rejected)" : ""}`,
     range,
-    chat: chat.map((m) => ({ id: m.id, who: displayName(m.sender), at: fmtDateTime(m.createdAt), text: m.body })),
+    chat: chat.map((m) => {
+      // (Owner, Nov 5, §277) The sender, and the people a message names (the tester and the developer), are green links to their place for the team.
+      const parts = richOf(m.body, chatPeople);
+      return { id: m.id, who: displayName(m.sender), at: fmtDateTime(m.createdAt), text: m.body, ...(m.sender.deletedAt ? {} : { whoHref: profileHref(m.sender) }), ...(parts.some((x) => typeof x !== "string") ? { parts } : {}) };
+    }),
     work: await disputedWork(d),
     // (Batch 15 section 27) The developer's side shows on its own line ("added <time>"), live.
     said: plainOf(saidParts),
@@ -262,6 +270,9 @@ async function mine(adminId: string, cursor: string | null): Promise<Page<MineVM
     all.push({ id: `dispute-${d.id}`, testId: c.testId, href: `/admin?dispute=${d.id}#dispute-${d.id}`, date: d.decidedAt!, at: d.decidedAt!.toISOString(), title: c.title, dev: displayName(c.tester), why, when: fmtDateTime(d.decidedAt!), parts: [testLink({ id: c.testId, title: c.title }), " · ", ...person(c.tester), ` · ${why} · ${fmtDateTime(d.decidedAt!)}`] });
   }
   all.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
+  // (Owner, Nov 5, §277) A name or test in the line's words (what a decision did: "raised Ana Silva's pay …") is a green link too: its test's names and people.
+  const pool = await adminPool({ testIds: all.map((r) => r.testId) });
+  for (const r of all) if (r.parts && r.testId) r.parts = linkRich(r.parts, pool.byTest.get(r.testId) ?? []);
   return slice(all, (r) => r.date, cursor);
 }
 
@@ -524,6 +535,8 @@ async function paused(cursor: string | null): Promise<Page<PausedVM & { date: Da
     date: info.at,
     at: info.at.toISOString(),
     text: `“${t.title}” · ${dev} (${t.developer.email}) · ${info.causes.map((c) => CAUSES[c]).join(" + ")} since ${fmtDateTime(info.since)}`,
+    // (Owner, Nov 5, §277) The test and its developer as green links.
+    parts: [testLink(t), " · ", ...person(t.developer), ` · ${info.causes.map((c) => CAUSES[c]).join(" + ")} since ${fmtDateTime(info.since)}`] as Rich,
     closure: `${pauseCountdownLine(info.at, info.causes)} (${fmtDateTime(info.at)})`,
     extended: info.extended,
   }));
@@ -533,6 +546,8 @@ async function paused(cursor: string | null): Promise<Page<PausedVM & { date: Da
 async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & { date: Date }>> {
   const all = await Promise.all((await chargebackHolds()).map(async ({ dev, steps, chargebacks: cbs }) => {
     const which = await Promise.all(cbs.map(cbWhich)); // (§193b) each chargeback names its payment's part (or a one payment's items)
+    // (Owner, Nov 5, §277) Every person and test a chargeback line names is a green link (the testers and tests of this developer's tests).
+    const pool = (await adminPool({ devIds: [dev.id], userIds: [dev.id] })).all;
     return {
     id: dev.id,
     date: dev.holdStartedAt!,
@@ -543,7 +558,7 @@ async function chargebacks(cursor: string | null): Promise<Page<ChargebackVM & {
     since: fmtDateTime(dev.holdStartedAt!),
     // (§133) What the bank reversed: "Chargeback open: $96.00 of a $444.67 payment" when it was part of the payment.
     chargebacks: cbs.map((p, i) => `Chargeback open: ${cbAmount(p)}${which[i]} · ${p.stripePaymentIntentId}`),
-    chargebackParts: cbs.map((p, i): Rich => [`Chargeback open: ${cbAmount(p)}${which[i]}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })]),
+    chargebackParts: cbs.map((p, i): Rich => linkRich([`Chargeback open: ${cbAmount(p)}${which[i]}`, ...stripeIds({ stripePaymentIntentId: p.stripePaymentIntentId, stripeChargeId: p.stripeChargeId })], pool)),
     cardVerified: steps.cardVerified,
     owedPaid: steps.owedPaid,
     reviewFirst: steps.reviewFirst,
@@ -648,6 +663,12 @@ const mk = (src: string, id: string, date: Date, body: string | Rich, href?: str
   return { id: `${src}-${id}`, date, at: date.toISOString(), text: `${head}${rich ? plainOf(rich) : body}`, ...(rich ? { parts: [head, ...rich] } : {}), ...(href ? { href } : {}) };
 };
 const sortDesc = (rows: Row[]) => rows.sort((a, b) => b.date.getTime() - a.date.getTime() || (a.id < b.id ? 1 : -1));
+/**
+ * (Owner, Nov 5, §277) Every person and test a box line names is a green link, also in its words ("Chargeback $12.50 for Ana Silva's live call on “Harbor Run” …",
+ * a timeline line naming the test): a line that was plain text gets its pieces.
+ */
+const linkRows = (rows: Row[], pool: LineLink[]): Row[] =>
+  pool.length ? rows.map((r) => { const parts = linkRich(r.parts ?? [r.text], pool); return parts.some((x) => typeof x !== "string") ? { ...r, parts } : r; }) : rows;
 
 /** The totals line at the top of a person's boxes: spent / paid out, and how many reports, disputes, chargebacks, holds and suspensions. */
 export async function userTotals(userId: string) {
@@ -764,7 +785,7 @@ async function userBox(kind: Kind, userId: string, cursor: string | null): Promi
     for (const s of subs) rows.push(mk("part", s.id, s.sentAt, [testLink({ id: s.contract.testId, title: s.contract.title }), " by ", ...person(s.contract.test.developer), `: ${s.kind === "recording" ? "recording" : "written answers"} · ${s.review ? (s.review.rejected ? "rejected" : `paid ${money(s.review.amountCents)}`) : "waiting for review"}`]));
   }
   sortDesc(rows);
-  return slice(rows, (r) => r.date, cursor);
+  return slice(linkRows(rows, (await adminPool({ devIds: [userId], testerIds: [userId], userIds: [userId] })).all), (r) => r.date, cursor);
 }
 
 // ---------- A test's admin boxes (owner, Oct 27) ----------
@@ -876,5 +897,5 @@ async function testBox(kind: Kind, testId: string, cursor: string | null): Promi
     for (const p of await db.payment.findMany({ where: { contractId: { in: ids } } })) rows.push(mk("payment", p.id, p.createdAt, [`${p.kind} ${money(p.amountCents)} to `, ...ofP(p.contractId), ` · ${p.status}${p.chargeback === "open" ? ` · chargeback open${reversedPart(p) ? ` (${money(reversedOf(p))} reversed)` : ""}` : ""}`, ...stripeIds(p)]));
   }
   sortDesc(rows);
-  return slice(rows, (r) => r.date, cursor);
+  return slice(linkRows(rows, (await adminPool({ testIds: [testId] })).byTest.get(testId) ?? []), (r) => r.date, cursor);
 }

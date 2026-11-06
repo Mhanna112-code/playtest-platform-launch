@@ -13,6 +13,8 @@ import { AlertSettings } from "./AlertSettings";
 import { BellList, type BellEntry } from "./BellList";
 import { GROUP_COUNT_TITLES, bellKeyIn, dayKey, groupBase, groupTitle } from "@/lib/bell";
 import { lineLinks, linkPool } from "@/lib/server/lineLinks";
+import { adminBellLinks } from "@/lib/server/adminLinks";
+import type { LineLink } from "@/lib/lineLinks";
 
 export const metadata = { title: "Notifications · Playtest" };
 export const dynamic = "force-dynamic";
@@ -33,6 +35,9 @@ export default async function Notifications() {
   const titles = new Map((await db.test.findMany({ where: { id: { in: [...new Set(items.map((n) => n.testId).filter((x): x is string => !!x))] } }, select: { id: true, title: true } })).map((t) => [t.id, t.title]));
   // (Owner, Nov 5, §270) Every person and test a line names is its own green link: the reader's link pool, matched against each line (its own test's people first).
   const pool = await linkPool(u.id, items.map((n) => n.testId));
+  // (Owner, Nov 5, §277) An admin's team lines (they open the admin console) take their links from the line's own data instead: the bell's test, the row it opens
+  // and the people involved, each opening their place for the team (a profile with its admin box, a test's page with its admin box).
+  const team = isAdmin(u) ? await adminBellLinks(items) : new Map<string, LineLink[]>();
   const testHrefOf = (testId: string | null) => (testId ? pool.byTest.get(testId)?.find((l) => l.kind === "test" && l.text === titles.get(testId))?.href : undefined);
   const groups = new Map<string, typeof items>();
   for (const n of items) {
@@ -50,7 +55,7 @@ export default async function Notifications() {
     test: !g[0].groupKey && !!g[0].testId,
     ...(!g[0].groupKey && testHrefOf(g[0].testId) ? { testHref: testHrefOf(g[0].testId) } : {}),
     day: dayKey(g[0].createdAt, u.timeZone) === todayKey ? "today" : `on ${fmtDate(g[0].createdAt)}`,
-    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone), ...(n.testId && titles.get(n.testId) ? { test: titles.get(n.testId) } : {}), links: lineLinks(pool, n.text, n.testId) })),
+    lines: g.map((n) => ({ id: n.id, text: n.text, href: n.link ? hrefFor(n.link) : "", read: !!n.readAt, ago: timeAgo(n.createdAt, u.timeZone), ...(n.testId && titles.get(n.testId) ? { test: titles.get(n.testId) } : {}), links: team.get(n.id) ?? lineLinks(pool, n.text, n.testId) })),
   }));
   return (
     <div className="mx-auto max-w-2xl space-y-6">
