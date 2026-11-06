@@ -43,8 +43,13 @@ export const GROUP_TITLES: Record<string, string> = {
   adminlifts: "Hold lifts waiting",
   // (Owner, Nov 4, §185) Per test and day ("reqclosed:<testId>", "appwithdrawn:<testId>"): call requests the other side withdrew or that a booking closed; a
   // tester withdrawing her application. (§286) New call-request lines go in "callrequests" instead; "reqclosed" stays for the lines already written.
+  // (Owner, Nov 6, §308) New withdrawals go in plain "appwithdrawn", one entry a day ACROSS tests ("Applications withdrawn · 2"); "appwithdrawn:<testId>" stays
+  // only for the lines already written.
   reqclosed: "Call requests closed",
   appwithdrawn: "Applications withdrawn",
+  // (§308) The developer's "<tester> applied to join" and "<tester> asks to rejoin", one entry a day across tests: "Applications · 3". (The tester's own
+  // application and invite lines stay in "apps".)
+  applications: "Applications",
   // (Owner, Nov 5, §201) The developer's payments that went through (every receipt line), one entry a day across tests.
   devpaid: "Paid",
   // (Owner, Nov 5, §215) Direct messages (not about a test), one entry a day: "Direct messages · 3 today".
@@ -58,6 +63,13 @@ export const PAID_GROUP = "devpaid";
 export const CALL_REQUESTS_GROUP = "callrequests";
 /** (§286) Every booked-call bell line ("Booked: …"), both sides, one entry a day across tests. */
 export const BOOKED_GROUP = "booked";
+/**
+ * (Owner, Nov 6, §308) The developer's application lines ("<tester> applied to join", "<tester> asks to rejoin"), one entry a day across tests: "Applications · N".
+ * The rest of their join-related lines (joined, joined again, left, said no thanks to your invite) are plain per-test lines, in the test's own stack.
+ */
+export const APPLICATIONS_GROUP = "applications";
+/** (§308) The developer's "<tester> withdrew her application" lines, one entry a day across tests: "Applications withdrawn · N". */
+export const APP_WITHDRAWN_GROUP = "appwithdrawn";
 /** (Owner, Nov 6, §295) The tester's pause lines ("“X” is paused", "“X” is running again"), one entry a day across tests, in the bell and the email alike. */
 export const PAUSES_GROUP = "paused";
 
@@ -74,7 +86,9 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   adminlifts: (_n, lines) => `Hold lifts waiting · ${lines}`,
   // (Owner, Nov 4, §185) "Call requests · 3 closed today", "Applications · 2 withdrawn today" (one stack per test and day).
   reqclosed: (_n, lines) => `Call requests · ${lines} closed`,
-  appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn`,
+  // (Owner, Nov 6, §308) "Applications withdrawn · 2" and "Applications · 3" (counting lines, across tests).
+  appwithdrawn: (_n, lines) => `Applications withdrawn · ${lines}`,
+  applications: (_n, lines) => `Applications · ${lines}`,
   dms: (_n, lines) => `Direct messages · ${lines}`,
   // (Owner, Nov 6, §295) "Pauses · 2" (counting lines: each is a pause or a test running again).
   paused: (_n, lines) => `Pauses · ${lines}`,

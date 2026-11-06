@@ -85,7 +85,7 @@ async function removeTester(u: { id: string; name: string; email: string; pronou
       return list;
     });
     await tellCancelled(cancelled, "ended");
-    await notify(c.test.developer.email, `${who} left “${c.title}”`, [`${who} left your test “${c.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id });
+    await notify(c.test.developer.email, `${who} left “${c.title}”`, [`${who} left your test “${c.title}”. Work ${pronouns(u.pronoun).subj} already sent still waits for your review.`], `/app/tests/${c.testId}#tester-${c.id}`, { about: u.id, testId: c.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
     await spotOpened(c.testId);
   }
   await db.application.updateMany({ where: { testerId: u.id, status: "pending" }, data: { status: "withdrawn", decidedAt: new Date() } });

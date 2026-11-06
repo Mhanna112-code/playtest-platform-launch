@@ -50,7 +50,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     await logEvent(inv.testId, "invite", `${displayName(u)} said no thanks to your invite`);
     // (Owner, Nov 6, §286) The developer's top box line rings their bell too, in the same words, linking to their Invite testers panel.
     const t = await db.test.findUnique({ where: { id: inv.testId }, select: { developerId: true } });
-    if (t) await bell(t.developerId, `${displayName(u)} said no thanks to your invite`, `/app/tests/${inv.testId}#invite`, undefined, { side: "developer", testId: inv.testId });
+    if (t) await bell(t.developerId, `${displayName(u)} said no thanks to your invite`, `/app/tests/${inv.testId}#invite`, undefined, { side: "developer", testId: inv.testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
     return ok({ ok: true, ...(typeof body.__note === "string" ? { note: body.__note } : {}) });
   });
 }

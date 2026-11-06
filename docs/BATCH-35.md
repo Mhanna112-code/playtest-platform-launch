@@ -5365,3 +5365,13 @@ working".
 ## §305 A local testing switch for the limits (owner, Nov 6)
 `NEXT_PUBLIC_TESTING_NO_LIMITS=1` in a LOCAL .env lifts the 3 changes per limited field after testers join, the 3 calls or waiting requests per tester and the
 3 call requests a day (src/lib/testingLimits.ts `limitOr`). Ignored on Vercel (VERCEL=1). Without it every limit is unchanged.
+
+## §308 The developer's join-related bell lines: two application stacks and the test's own stack (owner, Nov 6)
+- "<tester> applied to join" and "<tester> asks to rejoin": one entry a day across tests, "Applications · N" (bell.ts APPLICATIONS_GROUP, "applications"; the
+  tester's own application and invite lines stay in "apps").
+- "<tester> withdrew her application": one entry a day across tests, "Applications withdrawn · N" (APP_WITHDRAWN_GROUP, "appwithdrawn", no longer §185's
+  per-test "appwithdrawn:<test>"; lines already written keep their per-test key and read the same title).
+- "joined" / "joined again", "left" (Leave, and a suspension or deletion ending the part) and "said no thanks to your invite": plain per-test lines, the test's
+  own "Harbor Run · N updates" (§298 bellStacks). They already were; each sender now names its test (`testId`) with a §308 comment.
+- Wording, links and Alerts are unchanged; the tester's "You're in: X" stays in "Joined". The email stacks the same way (§298).
+- Tests: tests/join-lines-per-test-308.test.ts; call-limit-request-boxes-185 follows the across-test "Applications withdrawn · N".

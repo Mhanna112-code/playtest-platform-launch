@@ -384,12 +384,14 @@ describe("§185 the other side's withdrawal and a request a booking closed: a be
     expect(bellKeyIn(n("1", "t1"), "UTC")).toBe(bellKeyIn(n("3", "t2"), "UTC"));
     expect(groupTitle("callrequests", 2, 3)).toBe("Call requests · 3") /* (§290) the page adds the day */;
     expect(groupTitle("reqclosed:t1", 1, 3)).toBe("Call requests · 3 closed");
-    expect(groupTitle("appwithdrawn:t1", 1, 2)).toBe("Applications · 2 withdrawn");
+    // (Owner, Nov 6, §308) "Applications withdrawn · 2": new lines stack across tests ("appwithdrawn"); old per-test keys read the same.
+    expect(groupTitle("appwithdrawn", 2, 2)).toBe("Applications withdrawn · 2");
+    expect(groupTitle("appwithdrawn:t1", 1, 2)).toBe("Applications withdrawn · 2");
   });
 });
 
 describe("§185 a tester withdrawing her application: no live line, no stop; a bell to the developer", () => {
-  it("nothing in the developer's live box; a bell in the test's \"Applications · N withdrawn today\" stack; Accept from the old page is one refusal", async () => {
+  it("nothing in the developer's live box; a bell in the \"Applications withdrawn · N\" stack (§308: across tests); Accept from the old page is one refusal", async () => {
     const f = await setup({ joinMode: "apply" });
     const ana = await makeUser({ tester: true, name: "Ana Silva", pronoun: "she" });
     expect((await act(f.testId, "apply", ana.cookie, { note: "hi" })).body).toEqual({ applied: true });
@@ -401,7 +403,7 @@ describe("§185 a tester withdrawing her application: no live line, no stop; a b
     await settle();
     expect(await db.testEvent.count({ where: { testId: f.testId, text: { contains: "withdrew" } } })).toBe(0);
     expect((await live(`test:${f.testId}`, f.dev.cookie, loaded)).filter((l) => /withdrew/.test(l.text))).toEqual([]);
-    const bells = await db.notification.findMany({ where: { userId: f.dev.user.id, groupKey: `appwithdrawn:${f.testId}` } });
+    const bells = await db.notification.findMany({ where: { userId: f.dev.user.id, groupKey: "appwithdrawn", testId: f.testId } }); // (§308)
     expect(bells.map((n) => n.text)).toEqual([expect.stringMatching(/^Ana Silva withdrew her application to “.+”$/)]);
     const acc = await act(f.testId, "application", f.dev.cookie, { applicationId: app.id, action: "accept", seenAt: loaded });
     expect(acc.body.error).toMatchObject({ code: "gone", message: "Ana Silva withdrew her application." });

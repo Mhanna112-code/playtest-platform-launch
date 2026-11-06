@@ -6,6 +6,7 @@ import { PAUSED_RIGHT_NOW, closedToNewLine, canAskToRejoin, leftText, movedDue, 
 import { HttpError } from "./http";
 import { LIMITS } from "@/lib/limits";
 import { bell, notify } from "./notify";
+import { APP_WITHDRAWN_GROUP, APPLICATIONS_GROUP } from "@/lib/bell";
 import { unanswered, answersIt, asLines, listingSaveLines, logEvent, ownChanges, seenOf, tabOf, withRenamed } from "./live";
 import { asListing, devGate, gapStop, joinTest, needsGap, ownTest, PROFILE_FIRST, profileSaved } from "./tests";
 import { ratingChangedLine, testerNeedsChangedLines } from "./invites";
@@ -258,7 +259,7 @@ export async function apply(tester: U, testId: string, body: Record<string, unkn
     create: { testId, testerId: tester.id, note, listing: snap, ndaAcceptedAt },
   });
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${displayName(tester)} applied to join` } }));
-  await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`);
+  await notify(t.developer.email, `${displayName(tester)} applied to join “${t.title}”`, [`${displayName(tester)} applied to join “${t.title}”.`, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : []), "Accept or decline on the test page."], `/app/tests/${testId}#needs-you`, { testId, group: APPLICATIONS_GROUP }); // (Owner, Nov 6, §308) "Applications · N", one entry a day across tests
   return { applied: true };
 }
 
@@ -268,9 +269,10 @@ export async function withdrawApplication(tester: { id: string }, testId: string
   if (!n.count) throw new HttpError(409, "gone", await withdrawGoneLine(tester.id, testId));
   const me = await db.user.findUniqueOrThrow({ where: { id: tester.id } });
   // (Owner, Nov 4, §185) No live line and no stop for the developer any more (it was a Joins-type "applied" line): a bell instead (and its email, per their
-  // settings), stacked per test and day ("Applications · 2 withdrawn today"). Accept / Decline on it stays one refusal ("Ana Silva withdrew her application.").
+  // settings). Accept / Decline on it stays one refusal ("Ana Silva withdrew her application."). (Owner, Nov 6, §308) It stacks one entry a day ACROSS tests,
+  // "Applications withdrawn · 2" (group "appwithdrawn", no longer one stack per test).
   const t = await db.test.findUniqueOrThrow({ where: { id: testId }, select: { developerId: true, title: true } });
-  await bell(t.developerId, `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application to “${t.title}”`, `/app/tests/${testId}`, undefined, { testId, group: `appwithdrawn:${testId}` });
+  await bell(t.developerId, `${displayName(me)} withdrew ${pronouns(me.pronoun).poss} application to “${t.title}”`, `/app/tests/${testId}`, undefined, { side: "developer", testId, group: APP_WITHDRAWN_GROUP });
   return { withdrawn: true };
 }
 
@@ -470,7 +472,7 @@ export async function askToRejoin(tester: U, testId: string, body: Record<string
   const name = displayName(tester);
   await db.$transaction((tx) => tx.testEvent.create({ data: { testId, kind: "applied", link: `item-app-${application.id}`, text: `${name} asks to rejoin` } }));
   const line = rejoinAskLine(name, pronouns(tester.pronoun), old);
-  await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id });
+  await notify(t.developer.email, `${name} asks to rejoin “${t.title}”`, [line, ...(note ? [`${pronouns(tester.pronoun).Poss} note: “${note}”`] : [])], `/app/tests/${testId}#needs-you`, { about: tester.id, testId, group: APPLICATIONS_GROUP }); // (Owner, Nov 6, §308) "Applications · N", one entry a day across tests
   return { asked: true };
 }
 
@@ -509,7 +511,7 @@ export async function matchInviteAndAsk(testId: string, testerId: string, opts: 
     if (back) await notify(tester.email, `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, [`You're back in ${t.title}: your deadline is ${T(c.dueAt)}.`, `Your session is restored on the current listing: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
     else await notify(tester.email, `You're in: ${t.title}`, [`You're in: ${t.title}. Your contract: ${termsLine(c, true)}.`], `/app/sessions/${c.id}`, { group: "joined" });
   } else await notify(tester.email, back ? `You're back in ${t.title}` : `You're in: ${t.title}`, [back ? `You're back in ${t.title}: your deadline is ${T(c.dueAt)}.` : `You're in: ${t.title}.`], `/app/sessions/${c.id}`, { about: t.developerId, group: "joined" });
-  await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}#tester-${c.id}`, { about: testerId });
+  await notify(t.developer.email, `${displayName(tester)} ${back ? "rejoined" : "joined"} “${t.title}”`, [`${displayName(tester)} ${back ? "rejoined" : "joined"} (you'd invited ${pronouns(tester.pronoun).obj} and ${pronouns(tester.pronoun).subj === "they" ? "they'd" : `${pronouns(tester.pronoun).subj} had`} asked).`], `/app/tests/${testId}#tester-${c.id}`, { about: testerId, testId }); // (Owner, Nov 6, §308) a plain per-test line: the test's own "Harbor Run · N updates" stack
   return c;
 }
 
