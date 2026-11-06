@@ -319,7 +319,7 @@ export function WrittenForm({ sessionId, questions, newQs = [], initial, initial
       {/* (Owner, Oct 30, batch 32 §4) Under Send, where the press is (above the questions it could be out of view); in view when it appears. */}
       {needOne && !answers.some((a) => a.trim()) && <p ref={(el) => el?.scrollIntoView({ block: "nearest" })} className="text-sm text-rose-300" role="alert" data-answer-one="">{ANSWER_ONE}</p>}
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={sendPress} /* (Owner, Nov 6, §290) the box always names the press: "Your Send Answers didn't go through." */ />
       {msg?.ok && <p className="ok">{msg.text}</p>}
     </form>
     </SendingScope.Provider>
@@ -466,7 +466,7 @@ export function WrittenAddForm({ sessionId, seenAt, canSend = true, known = [], 
       <PausedSend sessionId={sessionId} press={`Add:${questionKey}`} label={first ? ANSWER_PRESS : "Add"} canSend={canSend} now={pausedNow} />
       {!canSend && !full && <p className="note" data-draft-kept="">What you add is kept as a draft. Adding comes back when the test resumes.</p>}
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={first ? ANSWER_PRESS : "Add"} />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Add (§146), not "Your Add to my answer didn't go through". */}
       {/* (§222) A question's first answer is the press Answer this question. */}
       <FormMistakes text={err} press={sender} named={first ? ANSWER_PRESS : PRESS_VERBS["written-add"]} />
@@ -508,7 +508,7 @@ export function LeaveButton({ sessionId, seenAt, title, notice }: { sessionId: s
         Leave this test
       </ConfirmButton>
       <PressDone line={fin.line} />
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} didntGo />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press="Leave" didntGo />
       <Err text={err ? refusalLine("Leave", err) : ""} />
     </div>
   );
@@ -569,7 +569,7 @@ export function DisputeForm({ sessionId, kind, id, seenAt, disabledNote = "", li
       <PressDone line={fin.line} />
       {!fin.done && disabledNote && <p className="note" data-owed-note="">{disabledNote}</p>}
       {keep.restored && reason !== "" && <DraftTag disabled={busy || fin.done} kind="discard" onUseSaved={() => setReason("")} />}
-      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} />
+      <ChangesBox side="tester" changes={box && !box.top ? box.changes : null} tail={box?.tail} press={DISPUTE_PRESS} />
       {/* (Owner, Nov 4, batch 35 §170) A refusal names the press Dispute (its route's label), not the button's words: "Your Dispute didn't go through: …". */}
       {meanwhile && <p className="info" data-dispute-meanwhile="">{refusalLine(DISPUTE_PRESS, meanwhile)}</p>}
       <FormMistakes text={err} press="Send the dispute" named={DISPUTE_PRESS} />

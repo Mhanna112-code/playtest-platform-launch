@@ -24,7 +24,7 @@ describe("call requests on both sides", () => {
     const first = await act(testId, "request-time", dev.cookie, { contractIds: [sessionId], startsAt: t, seenAt: seen(), confirmed: true });
     first.body.id = (await db.callRequest.findFirstOrThrow({ where: { contractId: sessionId, fromSide: "developer" } })).id;
     const second = await sact(sessionId, "request-time", tester.cookie, { startsAt: t, seenAt: seen(), confirmed: true });
-    expect(second.body.message).toMatch(/^Booked: you both picked /);
+    expect(second.body.message).toMatch(/^Booked: a call with .+: you both picked /) // (§290) names who;
     expect((await db.callRequest.findUniqueOrThrow({ where: { id: first.body.id } })).status).toBe("booked");
   });
 

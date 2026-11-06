@@ -382,9 +382,9 @@ describe("§185 the other side's withdrawal and a request a booking closed: a be
     const n = (id: string, testId: string) => ({ id, testId, own: false, groupKey: "callrequests", createdAt: at });
     expect(bellKeyIn(n("1", "t1"), "UTC")).toBe(bellKeyIn(n("2", "t1"), "UTC"));
     expect(bellKeyIn(n("1", "t1"), "UTC")).toBe(bellKeyIn(n("3", "t2"), "UTC"));
-    expect(groupTitle("callrequests", 2, 3)).toBe("Call requests · 3 today");
-    expect(groupTitle("reqclosed:t1", 1, 3)).toBe("Call requests · 3 closed today");
-    expect(groupTitle("appwithdrawn:t1", 1, 2)).toBe("Applications · 2 withdrawn today");
+    expect(groupTitle("callrequests", 2, 3)).toBe("Call requests · 3") /* (§290) the page adds the day */;
+    expect(groupTitle("reqclosed:t1", 1, 3)).toBe("Call requests · 3 closed");
+    expect(groupTitle("appwithdrawn:t1", 1, 2)).toBe("Applications · 2 withdrawn");
   });
 });
 

@@ -59,6 +59,7 @@ export const CALL_REQUESTS_GROUP = "callrequests";
 export const BOOKED_GROUP = "booked";
 
 /** (Batch 14) A stacked entry's title that says it all with its count ("3 tests you applied to changed: your applications were closed"); else GROUP_TITLES. */
+// (Owner, Nov 6, §290) No "today" in these titles: the bell page adds the day itself ("today" / "on Nov 5"); it read "· 2 today today".
 export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => string> = {
   closeout: (n) => `Closing soon: ${n} test${n === 1 ? "" : "s"}`,
   // (Batch 29 §25, §27) "New terms to answer · 2 tests", "Deadlines · 2 tests".
@@ -69,12 +70,12 @@ export const GROUP_COUNT_TITLES: Record<string, (n: number, lines: number) => st
   adminreports: (_n, lines) => `Reports · ${lines} new`,
   adminlifts: (_n, lines) => `Hold lifts waiting · ${lines}`,
   // (Owner, Nov 4, §185) "Call requests · 3 closed today", "Applications · 2 withdrawn today" (one stack per test and day).
-  reqclosed: (_n, lines) => `Call requests · ${lines} closed today`,
-  appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn today`,
-  dms: (_n, lines) => `Direct messages · ${lines} today`,
+  reqclosed: (_n, lines) => `Call requests · ${lines} closed`,
+  appwithdrawn: (_n, lines) => `Applications · ${lines} withdrawn`,
+  dms: (_n, lines) => `Direct messages · ${lines}`,
   // (Owner, Nov 6, §286) "Call requests · 3 today", "Booked calls · 2 today" (counting lines, across tests).
-  callrequests: (_n, lines) => `Call requests · ${lines} today`,
-  booked: (_n, lines) => `Booked calls · ${lines} today`,
+  callrequests: (_n, lines) => `Call requests · ${lines}`,
+  booked: (_n, lines) => `Booked calls · ${lines}`,
   // (Owner, Nov 5, §201) "Paid · 3 payments" (counting lines: each receipt line is one payment; a Confirm all line is one payment on the card).
   devpaid: (_n, lines) => `Paid · ${lines} payment${lines === 1 ? "" : "s"}`,
 };

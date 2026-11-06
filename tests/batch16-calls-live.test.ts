@@ -58,7 +58,7 @@ describe("live panels, the one Call requests panel, and the server's re-check (s
     // Live: the request arrived while the developer's page was open: the page's fingerprint changes (the panel refreshes).
     expect((await json(await pulseGET(req(`/api/pulse?test=${testId}`, { cookie: dev.cookie, method: "GET" })))).body.v).not.toBe(v1);
     const r = await act(testId, "request-time", dev.cookie, { contractIds: [sessionId], startsAt, minutes: 10, seenAt: seen(), confirmed: true });
-    expect(r.body.message).toMatch(/^Booked: you both picked /);
+    expect(r.body.message).toMatch(/^Booked: a call with .+: you both picked /) // (§290) names who;
     expect(await db.callRequest.count({ where: { contractId: sessionId, status: "pending" } })).toBe(0);
     expect(await db.call.count({ where: { contractId: sessionId, status: "booked" } })).toBe(1);
   });

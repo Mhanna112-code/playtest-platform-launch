@@ -261,7 +261,7 @@ describe("§132 no later than when testers' work on the test ends", () => {
     expect((await accept(old.id)).body).toMatchObject({ booked: true, calls: fit });
     expect(await db.call.count({ where: { contractId: j.sessionId, status: "booked", startsAt: { gt: end } } })).toBe(0);
     expect(await db.callSet.findFirstOrThrow({ where: { contractId: j.sessionId } })).toMatchObject({ count: fit });
-    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { startsWith: `Booked: ${fit} weekly calls from` } } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: s.dev.user.id, text: { startsWith: "Booked: a call with ", contains: `, ${fit} weekly calls from` } /* (§290) names who */ } })).toBe(1);
   });
 });
 

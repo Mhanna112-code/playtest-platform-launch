@@ -23,7 +23,7 @@ describe("(Owner, Nov 5) §213-§216 and the join popup", () => {
 
   it("§215: direct-message bells reach only people who share a test, and stack as one entry a day, in the email too", () => {
     expect(read("src/lib/server/directMessages.ts")).toContain("{ side: null, recipientId: a.other.id, about: userId, group: DMS_GROUP }");
-    expect(groupTitle(DMS_GROUP, 1, 3)).toBe("Direct messages · 3 today");
+    expect(groupTitle(DMS_GROUP, 1, 3)).toBe("Direct messages · 3") /* (§290) the page adds the day */;
     expect(EMAIL_STACKED).toContain(DMS_GROUP);
   });
 

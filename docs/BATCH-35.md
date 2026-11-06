@@ -5138,3 +5138,9 @@ with ×.
   scroll (§187). Each question's and answer's own box keeps its scroll, as before (QA.tsx). The Testers list and the team's "See the work" keep the
   draggable scroll panel. SentWork's `questionsFold.ownScroll: false`.
 - Tests: tests/needs-questions-289.test.ts; questions-dropdown-282 follows.
+
+## §290 Three wording fixes from the Nov 6 recordings (owner, Nov 6)
+- The bell stacks counting lines no longer say "today" themselves: the bell page adds the day ("today" / "on Nov 5"), so "Booked calls · 2 today today" reads
+  "Booked calls · 2 today" (also Call requests, Direct messages, Call requests closed, Applications withdrawn). The summary email reads "• Call requests · 4".
+- A "Booked:" bell names who the call is with: "Booked: a call with Ana Silva, Wed, Nov 11, 4:00 PM" / "Booked: a call with Omar Reyes: you both picked …".
+- The tester's stop boxes (Send Answers, Add, Leave, Dispute) always name their press: "Your Send Answers didn't go through." (it could read "Your press …").

@@ -665,7 +665,7 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
     const c = m.x.c;
     const call = await bookAt(c.id, m.hit, m.match.minutes, bookRate(c.test, c), null, true, false, { id: m.match.id });
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
-    const line = `Booked: you both picked ${T(m.hit)}`;
+    const line = `Booked: a call with ${displayName(c.test.developer)}: you both picked ${T(m.hit)}`; // (§290) names who
     await notify(c.tester.email, line, [line], `/app/sessions/${c.id}#call-${call.id}`, { about: c.test.developerId, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
     callIds.push(call.id);
     bookedLine ||= line;
@@ -741,7 +741,7 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
     // (Owner, Nov 4, §185) "matched": the tester's auto-match counts as one of her sends today (sentToday), as the developer's does.
     await db.callRequest.update({ where: { id: m.match.id }, data: { status: "booked", callId: call.id, decidedAt: new Date(), closedReason: "matched" } });
     await closeBatch(m.match.batchId, m.match.id);
-    const line = `Booked: you both picked ${T(m.hit)}`;
+    const line = `Booked: a call with ${displayName(c.tester)}: you both picked ${T(m.hit)}`; // (§290) names who
     await notify(c.test.developer.email, line, [line], `/app/tests/${c.testId}#call-${call.id}`, { about: c.testerId, group: BOOKED_GROUP }); // (§286)
     callIds.push(call.id);
     bookedLine ||= line;
@@ -864,7 +864,8 @@ export async function answerRequest(user: U, contractId: string, body: Record<st
     await db.callRequest.update({ where: { id: r.id }, data: { callId: first!.id } });
     if (side === "tester") await closeBatch(r.batchId, r.id);
     const what = row.repeat === "once" ? T(times[0]) : row.count ? `${times.length} ${unitOf(row.repeat)} calls from ${T(times[0])}` : `${unitOf(row.repeat)} calls from ${T(times[0])} (until testers' work ends)`;
-    await notify(other.email, `Booked: ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
+    // (Owner, Nov 6, §290) A "Booked:" bell names who the call is with ("Booked: a call with Ana Silva, Wed, Nov 11, 4:00 PM").
+    await notify(other.email, `Booked: a call with ${displayName(user)}, ${what}`, [`${displayName(user)} accepted the call request: ${what} (${rateLabel(rate, c.liveRateCents)}).`], side === "tester" ? `/app/tests/${c.testId}#call-${first!.id}` : `/app/sessions/${c.id}#call-${first!.id}`, { about: user.id, group: BOOKED_GROUP }); // (§286) "Booked calls · N today"
     return { booked: true, callId: first!.id, calls: times.length };
   }
   const status = action === "withdraw" ? "withdrawn" : "declined";

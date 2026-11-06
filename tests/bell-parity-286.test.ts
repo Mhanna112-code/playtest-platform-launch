@@ -67,7 +67,7 @@ describe("§286 the developer's call request rings the tester", () => {
     expect(mine).toHaveLength(3);
     expect(new Set(mine.map((n) => n.link))).toEqual(new Set(rows.map((r) => `/app/sessions/${a.sessionId}#req-${r.id}`)));
     expect(new Set(mine.map((n) => bellKeyIn(n, "UTC"))).size).toBe(1);
-    expect(groupTitle("callrequests", 1, 3)).toBe("Call requests · 3 today");
+    expect(groupTitle("callrequests", 1, 3)).toBe("Call requests · 3") /* (§290) the page adds the day */;
     // Another test's request lands in the same day's entry.
     const g = await setup({ title: "Harbor Run Two", productName: "Harbor Run Two" });
     const b = await db.contract.findUniqueOrThrow({ where: { id: (await act(g.testId, "join", a.tester.cookie, { listingVersion: 1 })).body.sessionId } });
@@ -78,7 +78,7 @@ describe("§286 the developer's call request rings the tester", () => {
     expect(new Set(all.map((n) => bellKeyIn(n, "UTC"))).size).toBe(1);
     // The email stacks them the same way.
     expect(EMAIL_STACKED).toContain("callrequests");
-    expect(emailLines(all, (n) => n.text)[0]).toBe("• Call requests · 4 today");
+    expect(emailLines(all, (n) => n.text)[0]).toBe("• Call requests · 4");
   });
 
   it("an auto-matched row is a booking, not a request: one \"Booked: …\" line in the Booked calls stack, never a request line too", async () => {
@@ -157,7 +157,7 @@ describe("§286 booked calls: their own stack, one entry a day across tests, nev
     await bookCall(f.testId, f.dev.cookie, a.sessionId, a.tester.cookie, 60);
     const two = await bells(f.dev.user.id, "Booked:");
     expect(new Set(two.map((n) => bellKeyIn(n, "UTC"))).size).toBe(1);
-    expect(groupTitle("booked", 1, 2)).toBe("Booked calls · 2 today");
+    expect(groupTitle("booked", 1, 2)).toBe("Booked calls · 2");
   });
 });
 
