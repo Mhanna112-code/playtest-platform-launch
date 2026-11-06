@@ -403,7 +403,8 @@ describe("§33 the team's pause / stop / close lines stack with the hold lines",
     expect(mine.every((l) => l.groupKey === "payhold" && l.mustEmail)).toBe(true);
     expect(keys(mine).size).toBe(1);
     // The team's note stays in the email, never in the bell.
-    expect(mine.find((l) => /^The team paused/.test(l.text))!.text).toBe("The team paused “Harbor Run”");
+    // (Owner, Nov 6, §310b) With the closing date, in the daily reminder's words.
+    expect(mine.find((l) => /^The team paused/.test(l.text))!.text).toMatch(/^The team paused “Harbor Run”: it closes on .+ unless the team lifts the pause$/);
   });
 });
 

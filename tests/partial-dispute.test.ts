@@ -239,7 +239,9 @@ describe("§133 repayment and a won chargeback", () => {
     expect((await db.payment.findUniqueOrThrow({ where: { id: p.id } })).chargeback).toBe("won");
     const texts = (await db.notification.findMany({ where: { userId: w.dev.user.id }, orderBy: { createdAt: "asc" } })).map((n) => n.text);
     // (§193b) Each names the payment the chargeback was on.
-    expect(texts).toEqual(expect.arrayContaining(["Refund: your bank's chargeback of $96.00 on your $444.67 payment for Ana Silva's written answers on “Harbor Run” was reversed", "Your bank's chargeback of $96.00 on your $444.67 payment for Ana Silva's written answers on “Harbor Run” was reversed in your favour."]));
+    // (Owner, Nov 6, §310a) ONE line says both the win and the refund.
+    expect(texts).toEqual(expect.arrayContaining(["Your bank's chargeback of $96.00 on your $444.67 payment for Ana Silva's written answers on “Harbor Run” was reversed in your favour: $111.00 refunded to your card."]));
+    expect(texts.filter((t) => t.includes("chargeback of $96.00"))).toHaveLength(1);
     expect(await db.testEvent.count({ where: { testId: w.testId, text: "Your bank's chargeback of $96.00 for Ana Silva's written answers on “Harbor Run” was reversed: $111.00 refunded to your card." } })).toBe(1);
     // What you've paid: the whole payment counts again; the refunded repayment doesn't.
     expect(paidOutTotal([await db.payment.findUniqueOrThrow({ where: { id: p.id } }), await db.payment.findUniqueOrThrow({ where: { id: repay.id } })])).toBe(44467);

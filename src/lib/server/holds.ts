@@ -4,7 +4,7 @@ import { T } from "@/lib/tz";
 import { db } from "@/lib/db";
 import { callAtFor, displayName, fmtDate, fmtDateTime, money, pronouns, toCents } from "@/lib/server/dateFormat";
 import {
-  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
+  owedReceiptWhat, pressAgainLine, bankChangedLine, reviewFirstLine, CHARGEBACKS_REVIEW_FROM, OWED_ALL_WAITING, OWED_BANK_WAITING, reservedAddedLine, AUTO_CHARGED_CALL, AUTO_NOTHING_CALL, AUTO_CHARGE_NO_CHOICE, MIN_CHARGE_CENTS, CHARGE_TICK_CENTS, chargeTickLine, chargeClosedLine, CLOSE_OUT_REMINDER_DAYS, testerPayable, HOLD_APPROVAL_AFTER, MANY_HOLDS_LABEL, autoPayFor, chargeAmount, paidMeanwhileLine, CHARGED_BY_TESTER, byTesterChoice, chargedDelayedLine, countdownDue, ownDeadlineMarkDue, reviewMarkDue, reviewMarksFor, INVITE_REMIND_DAYS, failedLine, joinClosingLine, ownDeadlineLine, LET_GO_BY_TESTER, REVIEW_DAYS, chargeIsOpen, chargeOpensAt, PAUSED_RIGHT_NOW, PAY_WAITS, pauseShiftMs, STILL_SUSPENDED_LINE, PAYABLE_TESTER, PIECE_LOCKED, ownChargeWaitingLine, chargedByTester, chargebackWonRefundLine, chargebackWonLine, CHARGEBACK_FEE_CENTS, chargebackOwedLine, chargebackReversedLine, bankLoweredLine, bankRaisedLine, raiseNote, raiseOf, raiseName, RAISE_NOTE,
 } from "@/lib/rules";
 import { HttpError } from "./http";
 import { adminUsers, bell, notify, renderFor, sendSummaries, teamEmails } from "./notify";
@@ -513,8 +513,9 @@ export async function approveHoldLift(adminId: string, devId: string, note: stri
   } else {
     const after = await db.user.findUniqueOrThrow({ where: { id: devId }, select: { devSuspendedAt: true, holdStartedAt: true } });
     const cb = await import("./chargeback");
-    // A payment charged right after the lift was declined (a new hold), or a suspension still keeps the tests paused: the same one line says so.
-    const line = (after.holdStartedAt ? `${cb.APPROVED_LINE}. A waiting payment was declined, so your tests are paused again.` : after.devSuspendedAt ? cb.approvedStillSuspendedLine(0) : cb.approvedLiftedLine(0)) + noted;
+    // A suspension still keeps the tests paused: the same one line says so. (Owner, Nov 6, §310c) A payment charged right after the lift was declined (a new hold):
+    // the same approval wording as every other approval, never claiming the tests run (was "… so your tests are paused again."); the new hold's notice tells the rest.
+    const line = (after.holdStartedAt ? cb.approvedNewHoldLine(0) : after.devSuspendedAt ? cb.approvedStillSuspendedLine(0) : cb.approvedLiftedLine(0)) + noted;
     await notify(dev.email, line, [line, ...(after.holdStartedAt || after.devSuspendedAt ? [] : ["Everything you owed is paid, and every deadline moved on by the pause."])], after.holdStartedAt ? "/app/payments#owed" : "/app", { side: "developer", always: true, payment: true, group: "admindecision" });
   }
   return { ok: true, lifted };
@@ -998,12 +999,19 @@ export async function chargebackWon(paymentIntentId: string) {
   // (Owner, Nov 4, §193b) Which payment the chargeback was on: " on your $10.00 payment for …", " on your $35.00 Pay what you owe payment on … (…)" (full names).
   const wonNamed = await reversedNaming(p, true);
   const on = ` on ${paymentWords(p.amountCents, wonNamed.piece, wonNamed.one)}`;
-  if (refunded > 0) {
-    const line = chargebackRefundLine(rev, on);
-    await notify(dev.email, line, [`${line}: ${money(refunded)} refunded.`, noStripe ? "Payments aren't set up yet, so this was recorded and nothing was refunded." : "Refunded to your saved card."], "/app/payments", { side: "developer", payment: true });
-  }
   const claimed = await db.payment.updateMany({ where: { id: p.id, chargeback: p.chargeback }, data: { chargeback: "won" } });
-  if (claimed.count !== 1) return false;
+  // (Owner, Nov 6, §310a) Won after it was repaid: ONE line says both (it was a "Refund: your bank's chargeback … was reversed" line, then the won line).
+  const tellWon = async () => {
+    if (refunded > 0) {
+      const line = chargebackWonRefundLine(rev, on, refunded, noStripe);
+      await notify(dev.email, line, [line, ...(noStripe ? ["Payments aren't set up yet, so this was recorded and nothing was refunded."] : [])], "/app/payments", { side: "developer", payment: true, group: "payhold" });
+    } else await notify(dev.email, chargebackWonLine(rev, on), [chargebackWonLine(rev, on)], "/app/payments", { side: "developer", payment: true, group: "payhold" });
+  };
+  // Another run claimed the win a moment ago: what THIS run refunded is still told (that run had nothing left to refund).
+  if (claimed.count !== 1) {
+    if (refunded > 0) await tellWon();
+    return false;
+  }
   // (§133, a gap found while building it) A repayment still waiting for the lift (made after a reservation, kind "chargeback", "deferred": e.g. a suspension still
   // on) is no longer owed: it goes, so nothing is charged for it after the lift.
   await db.payment.deleteMany({ where: { repaysId: p.id, kind: "chargeback", status: "deferred" } });
@@ -1013,7 +1021,7 @@ export async function chargebackWon(paymentIntentId: string) {
   const c = p.contractId ? await db.contract.findUnique({ where: { id: p.contractId } }) : null;
   // (Batch 11) A payments-kind stop-once line on the developer's test page and Edit (Alerts can ignore it).
   if (c) await (await import("./live")).logEvent(c.testId, "payment", chargebackReversedLine(rev, refunded || rev + CHARGEBACK_FEE_CENTS, refunded > 0, await reversalFor(p)), c.id);
-  await notify(dev.email, chargebackWonLine(rev, on), [chargebackWonLine(rev, on)], "/app/payments", { side: "developer", payment: true, group: "payhold" });
+  await tellWon();
   // No chargeback left open: the hold is a payment hold again (it lifts once nothing is owed; the 4th hold on still needs the admin's Approve).
   if (dev.holdStartedAt && dev.holdReason === "chargeback" && !(await db.payment.count({ where: { developerId: dev.id, chargeback: "open" } }))) {
     await db.user.update({ where: { id: dev.id }, data: { holdReason: "unpaid", chargebackCardVerifiedAt: null, chargebackApprovedAt: null } });

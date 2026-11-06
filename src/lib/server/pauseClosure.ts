@@ -128,6 +128,15 @@ function liftsWhen(causes: ReturnType<typeof pauseClosesAt> extends infer R ? (R
   return "the team lifts the pause";
 }
 
+/**
+ * (Owner, Nov 6, §310b) "closes on <date> unless <what lifts it>": the daily reminder's own words, also in the team pause's line ("The team paused “…”: it closes on
+ * … unless the team lifts the pause"), so the two read the same. Null when the test isn't paused.
+ */
+export function closesUnless(dev: Parameters<typeof pauseClosesAt>[0], test: Parameters<typeof pauseClosesAt>[1]) {
+  const info = pauseClosesAt(dev, test);
+  return info ? `closes on ${day(info.at)} unless ${liftsWhen(info.causes)}` : null;
+}
+
 /** Where the reminder opens: what the developer has to do (Payments for a hold, the dashboard for a suspension, the test for the team's pause). */
 function reminderLink(causes: string[], testId: string) {
   if (causes.includes("chargeback")) return "/app/payments#chargeback-steps";
@@ -139,7 +148,8 @@ function reminderLink(causes: string[], testId: string) {
 /**
  * (Owner, Oct 27) The developer's DAILY reminder while a test is paused: "<test> is paused and closes on <date> unless your account is cleared" (for a hold: "...unless you pay
  * what you owe"). It stacks with the same line for their other tests, once a day, and replaces the old "paused" and "day before it closes" lines for the developer.
- * `bellPausedTests` sends the first one when a pause starts; the daily job sends the rest.
+ * `bellPausedTests` sends the first one when a pause starts; the daily job sends the rest. (Owner, Nov 6, §310b) Not when the TEAM pauses a test: its own line
+ * names the closing date, and the reminder starts with the next day's daily job.
  */
 export async function bellPausedTests(devId: string, now = new Date(), onlyDue = true) {
   const dev = await db.user.findUnique({ where: { id: devId } });
@@ -150,7 +160,7 @@ export async function bellPausedTests(devId: string, now = new Date(), onlyDue =
     const info = pauseClosesAt(dev, t);
     if (!info) continue;
     if (onlyDue && (await db.notification.count({ where: { userId: devId, reminderKey: `paused:${t.id}`, createdAt: { gt: since } } }))) continue;
-    await bell(devId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
+    await bell(devId, `${t.title} is paused and ${closesUnless(dev, t)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
     n++;
   }
   return n;
@@ -169,7 +179,7 @@ export async function pausedReminders(now = new Date()) {
   for (const t of tests) {
     const info = pauseClosesAt(t.developer, t);
     if (!info || had.has(`paused:${t.id}`)) continue;
-    await bell(t.developerId, `${t.title} is paused and closes on ${day(info.at)} unless ${liftsWhen(info.causes)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
+    await bell(t.developerId, `${t.title} is paused and ${closesUnless(t.developer, t)}`, reminderLink(info.causes, t.id), undefined, { side: "developer", group: "pausedreminder", reminder: `paused:${t.id}`, testId: t.id });
     n++;
   }
   return n;

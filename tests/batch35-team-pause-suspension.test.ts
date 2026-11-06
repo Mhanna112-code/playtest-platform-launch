@@ -112,7 +112,7 @@ describe("§172: the developer's presses on a test the team paused are a suspend
     const open = await db.payment.create({ data: { kind: "review", submissionId: x.sub.id, contractId: x.sessionId, developerId: x.dev.user.id, testerId: x.tester.user.id, amountCents: 1000, feeCents: 0, testerCents: 0, status: "needs_action", actionPi: "pi_" + randomUUID(), actionBy: new Date(Date.now() + 15 * 60_000) } });
     await pauseTest(await admin(), x.testId, "Checking");
     expect((await db.payment.findUniqueOrThrow({ where: { id: open.id } })).status).toBe("cancelled");
-    const mail = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: "The team paused “Harbor Run”" } });
+    const mail = await db.notification.findFirstOrThrow({ where: { userId: x.dev.user.id, text: { startsWith: "The team paused “Harbor Run”: it closes on " } } }); // (§310b)
     void mail;
     expect(TEAM_PAUSED_EMAIL_LINE).toContain("add your side of a dispute");
   });

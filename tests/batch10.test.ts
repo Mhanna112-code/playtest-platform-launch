@@ -358,7 +358,9 @@ describe("batch 10 item 6: a chargeback the platform wins", () => {
     await webhook("charge.dispute.closed", { payment_intent: p.stripePaymentIntentId, status: "won" });
     expect(refunds).toEqual([repay.stripePaymentIntentId]);
     expect(await db.payment.findUniqueOrThrow({ where: { id: repay.id } })).toMatchObject({ status: "refunded" });
-    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Refund: your bank's chargeback of $10.00 on your $10.00 payment for ", endsWith: " was reversed" } } } /* (§193b) which payment */)).toBe(1);
+    // (Owner, Nov 6, §310a) ONE line says both the win and the refund (was a "Refund: …" line and the won line).
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { startsWith: "Your bank's chargeback of $10.00 on your $10.00 payment for ", endsWith: " was reversed in your favour: $25.00 refunded to your card." } } } /* (§193b) which payment */)).toBe(1);
+    expect(await db.notification.count({ where: { userId: dev.user.id, text: { contains: "chargeback of $10.00" } } })).toBe(1);
     // The hold lifted on the Approve; the refund doesn't bring it back.
     expect((await db.user.findUniqueOrThrow({ where: { id: dev.user.id } })).holdStartedAt).toBeNull();
     expect(src("components/PaymentLists.tsx")).toContain("refunded (your bank's chargeback was reversed)"); // (§190) Payments' paid list, shared with the admin box

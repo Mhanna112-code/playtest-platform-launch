@@ -88,7 +88,7 @@ describe("reasons and notes (section 20)", () => {
     expect((await aact(a.cookie, "stop-test", { id: two.testId, note: `Broken ${MARK}` })).status).toBe(200);
     expect(await db.notification.count({ where: { text: { contains: MARK } } })).toBe(0);
     expect(await db.notification.count({ where: { userId: two.dev.user.id, text: `The team stopped “Harbor Run”` } })).toBe(1);
-    expect(await db.notification.count({ where: { userId: two.dev.user.id, text: `The team paused “Harbor Run”` } })).toBe(1);
+    expect(await db.notification.count({ where: { userId: two.dev.user.id, text: { startsWith: `The team paused “Harbor Run”: it closes on ` } } })).toBe(1); // (§310b) with the closing date
   });
 });
 

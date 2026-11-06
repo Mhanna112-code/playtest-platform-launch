@@ -434,13 +434,16 @@ export async function pauseTest(adminId: string, testId: string, note: string, s
   for (const p of await db.payment.findMany({ where: { developerId: t.developerId, contractId: { in: contractIds }, status: "needs_action", kind: { in: ["review", "call", "extra"] } }, select: { id: true } }))
     await release(p.id).catch((e) => console.error("[team pause] cancel open Pay check:", (e as Error).message));
   const dev = await db.user.findUniqueOrThrow({ where: { id: t.developerId } });
-  await (await import("./pauseClosure")).bellPausedTests(dev.id);
+  // (Owner, Nov 6, §310b) The developer's line names the closing date in the daily reminder's words ("The team paused “…”: it closes on <date> unless the team lifts
+  // the pause"), and that reminder ("… is paused and closes on …") is NOT also sent now: it starts with the next day's daily job.
+  const closes = (await import("./pauseClosure")).closesUnless(dev, await db.test.findUniqueOrThrow({ where: { id: testId } }));
+  const pausedLine = `The team paused “${t.title}”${closes ? `: it ${closes}` : ""}`;
   // (Owner, Nov 6, §295) Its testers read "“<test>” is paused" (never why), unless the developer's own hold or suspension was pausing it already.
   if (!dev.holdStartedAt && !dev.devSuspendedAt) await tellTestersPaused([testId]);
   // (Batch 15 section 20) Never the note in the bell line: it says what happened; the note is on the test page. (Owner, Nov 6, §299) The longer text below is
   // emailed only to an address with no account: an account's email lists the bell line.
   // (Owner, Nov 4, §172) The email lists exactly what a developer suspension still allows, for this test.
-  await notify(dev.email, `The team paused “${t.title}”`, [`The team paused “${t.title}”${note ? `: ${note}` : "."} ${TEAM_PAUSED_EMAIL_LINE}${callsCancelled ? ` ${teamPauseCallsLine(callsCancelled)}` : ""}`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
+  await notify(dev.email, pausedLine, [`The team paused “${t.title}”${note ? `: ${note}` : "."} ${TEAM_PAUSED_EMAIL_LINE}${callsCancelled ? ` ${teamPauseCallsLine(callsCancelled)}` : ""}`, "Contact us in Settings if you think this is a mistake."], `/app/tests/${testId}`, { always: true, group: "payhold" }); // (batch 29 §33) in the day's "Payments and holds" entry with the hold lines
   return { ok: true };
 }
 

@@ -1034,7 +1034,12 @@ export const deletedNoPayoutsLine = (name: string, pronoun?: string | null) => `
 /** (Owner, Oct 29, batch 10) The platform won a chargeback: the developer's bell and email, and (when they had already paid it back) the receipt line for the refund. */
 /** (Owner, Nov 4, §193b) `on`: which payment (" on your $10.00 payment for …", " on your $35.00 Pay what you owe payment on … (…)": paymentWords). */
 export const chargebackWonLine = (cents: number, on = "") => `Your bank's chargeback of ${money(cents)}${on} was reversed in your favour.`;
-export const chargebackRefundLine = (cents: number, on = "") => `Refund: your bank's chargeback of ${money(cents)}${on} was reversed`;
+/**
+ * (Owner, Nov 6, §310a) Won after the developer had already repaid it: ONE line (was a "Refund: …" line and the won line): "Your bank's chargeback of $10.00 on … was
+ * reversed in your favour: $25.00 refunded to your card." `recorded`: payments aren't set up, so nothing reached a card (": $25.00 recorded as refunded.").
+ */
+export const chargebackWonRefundLine = (cents: number, on: string, refundedCents: number, recorded = false) =>
+  `Your bank's chargeback of ${money(cents)}${on} was reversed in your favour: ${money(refundedCents)} ${recorded ? "recorded as refunded" : "refunded to your card"}.`;
 /** (Owner, Oct 29, batch 11) Each chargeback adds this fee to what the developer owes, on top of the reversed amount. */
 export const CHARGEBACK_FEE_CENTS = 1500;
 const wholeMoney = (cents: number) => money(cents).replace(/\.00$/, "");

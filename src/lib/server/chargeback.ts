@@ -521,7 +521,9 @@ export async function approveChargebackHold(devId: string, adminId: string | nul
   const afterLift = await db.user.findUniqueOrThrow({ where: { id: devId }, select: { devSuspendedAt: true, holdStartedAt: true } });
   const still = lifted && !!afterLift.devSuspendedAt;
   if (lifted && afterLift.holdStartedAt) {
-    const line = `The team approved lifting your hold${taken ? `: the ${money(taken)} reserved on your card was taken` : ""}. A waiting payment was declined, so your tests are paused again.`;
+    // (Owner, Nov 6, §310c) The same approval wording as every other approval, never claiming the tests run (was "… A waiting payment was declined, so your
+    // tests are paused again."): the new hold's own "Your tests are paused" notice tells the rest.
+    const line = approvedNewHoldLine(taken);
     await notify(dev.email, line, [line], "/app/payments#owed", { side: "developer", always: true, payment: true, group: "admindecision" });
   } else if (lifted) {
     // Lifted while an admin suspension is still on: the same one notice says the tests stay paused (ignores Off, like "running again").
@@ -552,6 +554,8 @@ export const APPROVED_LINE = "The team approved lifting your hold";
 /** "The team approved lifting your hold: the $8.00 reserved on your card was taken, and your tests are running again." */
 export const approvedLiftedLine = (cents: number) => `${APPROVED_LINE}: ${cents ? `the ${money(cents)} reserved on your card was taken, and ` : ""}your tests are running again.`;
 /** Lifted while suspended: "The team approved lifting your hold: the $8.00 reserved on your card was taken. Your tests stay paused while your account is suspended." */
+/** (Owner, Nov 6, §310c) Lifted, then a new hold started at once (a waiting payment declined): only what the team did; the new hold's notice says the tests are paused. */
+export const approvedNewHoldLine = (cents: number) => `${APPROVED_LINE}${cents ? `: the ${money(cents)} reserved on your card was taken` : ""}.`;
 export const approvedStillSuspendedLine = (cents: number) => `${APPROVED_LINE}${cents ? `: the ${money(cents)} reserved on your card was taken` : ""}. Your tests stay paused while your account is suspended.`;
 
 /** (Batch 23 section 6) The team doesn't approve (yet): every reservation is cancelled (nothing taken) and the hold stays. */

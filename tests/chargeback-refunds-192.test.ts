@@ -282,7 +282,7 @@ describe("§192 several changes, then won or lost", () => {
     const ones = await db.payment.findMany({ where: { developerId: w.devId, kind: "owed", chargebackAt: { not: null } } });
     expect(paid.totalCents).toBe(paidOutTotal(paid.list, ones));
     // The bell names the whole refund once.
-    expect(await bells(w.devId)).toContain(`Refund: your bank's chargeback of $10.00 on your $20.00 payment for ${PIECE} was reversed`); // (§193b) which payment
+    expect(await bells(w.devId)).toContain(`Your bank's chargeback of $10.00 on your $20.00 payment for ${PIECE} was reversed in your favour: $25.00 refunded to your card.`); // (§193b) which payment; (§310a) one line
     // A later change after the win isn't followed.
     expect(await disputeAmountChanged(p.stripePaymentIntentId!, 500, "won")).toBe("logged");
     expect(st.refunds).toHaveLength(4);

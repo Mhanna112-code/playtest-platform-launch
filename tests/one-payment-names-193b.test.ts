@@ -38,7 +38,7 @@ describe("§193b the line helpers name a one payment and its items", () => {
     expect(R.reversedWords({ amountCents: 3500 }, "your", ONE)).toBe(`your $35.00 ${ONE}`);
     const on = ` on ${R.paymentWords(3500, null, ONE)}`;
     expect(R.chargebackWonLine(3500, on)).toBe(`Your bank's chargeback of $35.00 on your $35.00 ${ONE} was reversed in your favour.`);
-    expect(R.chargebackRefundLine(3500, on)).toBe(`Refund: your bank's chargeback of $35.00 on your $35.00 ${ONE} was reversed`);
+    expect(R.chargebackWonRefundLine(3500, on, 5000)).toBe(`Your bank's chargeback of $35.00 on your $35.00 ${ONE} was reversed in your favour: $50.00 refunded to your card.`); // (§310a)
     // No one payment: the same words as before.
     expect(R.bankChangedLine(4000, PIECE, 1200, 2000)).toBe(`Your bank changed the amount it took back from your $40.00 payment for ${PIECE}: $12.00 → $20.00 (now $20.00 + $15.00 fee = $35.00)`);
   });
