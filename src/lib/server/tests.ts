@@ -4,9 +4,12 @@ import { replaceLine, takesTheirs } from "@/lib/editMerge";
 import { FIELD_NAMES, INFO_FIELDS, saveText } from "@/lib/listingSave";
 import { CALL_ACTS, PAY_ACTS, unanswered, answersIt, devChanges, devForced, logEvent, seenOf, tabOf, withRenamed, type Press } from "./live";
 import { notListed, sidOf } from "./shownLines";
-import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText } from "@/lib/questions";
-import { itemsFor, sameQuestions } from "@/lib/answerSets";
-import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKeys, noAnswerYet } from "@/lib/additions";
+import { ANSWER_ONE, NOT_REQUIRED, answerMin, answersMissing, qText, sameQuestionSet, sameQuestionWords } from "@/lib/questions";
+import { answerUnit, NOTES_UNIT } from "@/lib/draftUnits";
+import { patchKept, setKept } from "./kept";
+import { questionChangeTexts } from "@/lib/questionHistory";
+import { itemsFor, prevSetsOf, sameQuestions } from "@/lib/answerSets";
+import { ADDITIONS_MAX, ADD_UNDER_QUESTION, ANYTHING_ELSE_KEY, ANYTHING_ELSE_TITLE, QUESTION_GONE, addedToWhat, additionsFull, additionsOf, addsCounted, carriedAnswers, currentQuestionsFor, latestItems, questionKey, questionKeys, noAnswerYet } from "@/lib/additions";
 import { countersOf, countingSince, countsAfter, countsOf, criticalLine, lockedFields, storedCounts, type CriticalCounts } from "@/lib/limits";
 import { alertOf } from "@/lib/alerts";
 import { KEY_GIVEN, applyKeyChange, assignKeyAtJoin, checkTypedKeys, giveKeysToWorking, planKeyChange } from "./accessKeys";
@@ -21,14 +24,14 @@ import { T, safeZone, renderTimes } from "@/lib/tz";
 import { LISTING_INFO_FIELDS, LISTING_VALUES, valuesText } from "@/lib/listingInfo";
 import { LISTING_SAVED, savedText } from "@/lib/listingPanel";
 import {
-  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
+  andList, testClosedToNewLine, daysBetween, dueAfterDays, movedDue, endOfDayIn, openUntilDay, testerDaysOf, testPaused, testerPaused, PAUSED_SEND, checkWrittenLength, checkAdditionLength, PAUSED_RIGHT_NOW, openUntilShortened, changedTerms, sameListingValue, checkListing, checkOpenUntilChange, contractSnapshot, editCheck, isLate, joinCheck, payByFrom, PAY_WAITS, testerRefusal, LISTING_FIELDS, mergeEdit, termsLine, type Listing, type TestEventLike,
 } from "@/lib/rules";
 import { gapsOf, gapsUnseen, missingNeedText, noGaps, readGaps } from "@/lib/gaps";
 import { HttpError, readText } from "./http";
 import { notify } from "./notify";
 import { answerTermsFirst, followNda, followQuestions, offerNewTerms, testerSendGate } from "./terms";
 import { ndaChangedLine, ndaNoticeHref } from "@/lib/ndaNotice";
-import { testerGate } from "./testerGate";
+import { questionChangeLines, testerGate } from "./testerGate";
 import { blockPartners } from "./blocks";
 import { notifyPaidUpdate, paidUpdateRoom, resendRefusal } from "./paidUpdates";
 import { addedWhat, updatedAfterPaidLive, updatedAtCapLive } from "@/lib/moneyLines";
@@ -379,7 +382,7 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
   let changeId: string | null = null;
   let keysGiven: Awaited<ReturnType<typeof giveKeysToWorking>> = [];
   // (Owner, Nov 5, §265) The working testers whose questions this Save changed (each is told in the bell).
-  let questionsFollowed: { contractId: string; email: string }[] = [];
+  const questionsFollowed: { contractId: string; email: string }[] = [];
   // (Owner, Nov 5, §267) The working testers whose NDA this Save changed (each gets its own notice in the bell).
   let ndaFollowed: Awaited<ReturnType<typeof followNda>> = [];
   const result = await db.$transaction(async (tx) => {
@@ -417,7 +420,10 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (current.openUntil && next.openUntil && openUntilDay(current.openUntil, dev.timeZone) === openUntilDay(next.openUntil, dev.timeZone)) next.openUntil = current.openUntil;
     if (next.liveRateCents == null) next.liveMinutes = null;
     const testersIn = await tx.contract.count({ where: working(testId) });
-    const fields = LISTING_FIELDS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(next[k]));
+    // (Owner, Nov 5, §269) Order doesn't matter: questions holding the same words and Required ticks in another order are not a questions change (no count, no
+    // "Updated" mark, top-box line or bell, no Terms history set, no stop-once reason). The new order is simply saved (`reordered`, below).
+    const fields = LISTING_FIELDS.filter((k) => !sameListingValue(k, current[k], next[k]));
+    const reordered = !fields.includes("questions") && JSON.stringify(current.questions) !== JSON.stringify(next.questions);
     // (Design doc 4/5) The Post rules, then the critical-change limit and the access keys: every red mistake is found FIRST
     // (a stop-once reason never hides one), and nothing saves while any remains.
     const errs = checkListing(next, testersIn, new Date(), { changed: new Set(fields), openedAt: t.createdAt, edit: true, confirmedHigh: confirmedHighOf(body), saved: { writtenCents: t.writtenCents, recordingCents: t.recordingCents }, savedSpots: t.spots, tz: tzOf(body, dev) });
@@ -476,6 +482,11 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
     if (errs.length) throw new HttpError(400, "bad_listing", errs[0], { errors: errs, critical: lockedNow.length ? lockedNow : undefined, criticalCounts: counts });
     if (!fields.length && !keysChanged) {
       keysGiven = await giveKeysToWorking(tx, testId); // (Batch 30 §17)
+      // (§269) A Save that only reorders the questions: the order is saved and shown, nothing else happens.
+      if (reordered) {
+        await saveQuestionOrder(tx, testId, next.questions);
+        return tx.test.update({ where: { id: testId }, data: { questions: next.questions as Prisma.InputJsonValue } });
+      }
       return t;
     }
     const terms = changedTerms(current, next);
@@ -502,6 +513,8 @@ export async function editTest(dev: U, testId: string, body: Record<string, unkn
       for (const c of await tx.contract.findMany({ where: working(testId), select: { id: true, testerId: true, questions: true, prevSets: true, tester: { select: { email: true } } } }))
         if (await followQuestions(tx, c, next.questions, now)) questionsFollowed.push({ contractId: c.id, email: c.tester.email });
     }
+    // (§269) Reordered only (the Save changed other fields): the listing took the new order above; every working contract with the same questions takes it too.
+    if (reordered) await saveQuestionOrder(tx, testId, next.questions);
     // (Owner, Nov 5, §267) The NDA follows the listing the same way: copied into every working contract, with the change's kind for its notice (and block).
     if (fields.includes("ndaText")) ndaFollowed = await followNda(tx, testId, current.ndaText ?? "", next.ndaText ?? "", new Date());
     // (Owner, Oct 29, batch 30 §17) Keys added to a test whose working testers have none: each still WORKING tester gets one of the free keys, in order of joining.
@@ -647,7 +660,17 @@ const OTHER_TAB_EDIT = /^You (saved|changed) the listing in another tab/; // (ba
 const NOT_COMPARED = new Set<keyof Listing>(["deadlineDays", "liveMinutes"]);
 /** Two values of one field are the same (Open until by its day: a pause shift moves it by the minute). */
 const sameValue = (k: keyof Listing, a: unknown, b: unknown, tz?: string | null) =>
-  k === "openUntil" ? (a ? openUntilDay(String(a), tz) : null) === (b ? openUntilDay(String(b), tz) : null) : JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+  k === "openUntil" ? (a ? openUntilDay(String(a), tz) : null) === (b ? openUntilDay(String(b), tz) : null) : sameListingValue(k, a ?? null, b ?? null); // (§269) questions as a set
+/**
+ * (Owner, Nov 5, §269) A Save that reordered the questions without changing them: every working contract holding the same questions (words and Required ticks)
+ * takes the new order, so the tester's question numbers follow it. No Terms history set, no notice: answers stay with their questions by their words.
+ */
+async function saveQuestionOrder(tx: Tx, testId: string, next: string[]) {
+  for (const c of await tx.contract.findMany({ where: working(testId), select: { id: true, questions: true } })) {
+    const qs = Array.isArray(c.questions) ? (c.questions as string[]) : [];
+    if (sameQuestionSet(qs, next) && JSON.stringify(qs) !== JSON.stringify(next)) await tx.contract.update({ where: { id: c.id }, data: { questions: next as Prisma.InputJsonValue } });
+  }
+}
 /**
  * (Owner, Oct 28, batch 16 sections 17 and 18) What another tab or device saved that THIS tab doesn't have: the fields it loaded (`base`) that differ from
  * what's saved now and where what it holds (`has`, typed or not) differs too. Keys are always news (the owner's exception): every free key added and
@@ -1099,14 +1122,34 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const typed = new Map((forQs ?? []).map((q, i) => [qText(q), sentAnswers[i] ?? ""]));
   // (Batch 20 section 28) One answer per question of the contract, by position (a missing one is blank). (Batch 26 section 14) At least one question answered, plus
   // every Required one (the notes box alone doesn't count). The refusal names which question (`missing`), so the page marks it red there.
-  const answers = carried ? qs.map((q, i) => carried[i] ?? typed.get(qText(q)) ?? "") : qs.map((_, i) => sentAnswers[i] ?? "");
+  // (Owner, Nov 5, §269) A page that says its questions (`for`, every page since §269) is read by the questions' words, never by place: order doesn't matter.
+  const answers = carried ? qs.map((q, i) => carried[i] ?? typed.get(qText(q)) ?? "") : forQs ? qs.map((q) => typed.get(qText(q)) ?? "") : qs.map((_, i) => sentAnswers[i] ?? "");
+  // (§269) A page whose form holds questions the contract no longer has (or lacks one it has now) never sends: the press stops once, whatever the Alerts, a
+  // confirmed press or what the live pill showed, listing what changed in the questions; what was typed is kept (a current question's text in the draft, a
+  // removed question's in the draft snapshot of its Terms history entry), and the page takes the new questions in place. The next press sends normally.
+  if (forQs) {
+    const formQs = carried ? qs.filter((_, i) => carried[i] == null) : qs;
+    const nowWords = new Set(qs.map(qText)), asked = new Set(forQs.map(qText));
+    const gone = forQs.some((q) => !nowWords.has(qText(q))), lacks = formQs.some((q) => !asked.has(qText(q)));
+    const dev = displayName(c0.test.developer);
+    const lines = gone || lacks ? await questionChangeLines(c0.testId, seenOf(body.pageSeenAt) ?? seenOf(body.seenAt), dev) : [];
+    // A question it holds is gone: always. One it lacks: when a change since the page loaded added it (an older page's own form is refused as before).
+    if (gone || (lacks && lines.length)) {
+      await keepStaleTyped(tester.id, c0, forQs, sentAnswers, formQs, !before && typeof body.notes === "string" ? body.notes : "");
+      // No record since the page (it loaded without a time): what its form differs by (never an answered question it still shows).
+      const formWords = new Set(formQs.map(qText));
+      const stale = lines.length ? lines : questionChangeTexts(dev, forQs.filter((q) => !nowWords.has(qText(q)) || formWords.has(qText(q))), formQs).map((text) => ({ kind: "info", text, createdAt: new Date(), listing: true, keys: ["questions"] }));
+      await testerSendGate(contractId, body, before?.id, { stale });
+    }
+  }
   // (Batch 30 §14) Each answer given is at least 50 characters (answerMin): "Each answer needs at least 50 characters." with which question (and how long it is).
   // (§235) The form's own questions only are checked (an answer sent before stays as it is), and `missing` is their place in the form; after a switch to changed
   // questions the Send needs no new answer (it moves the part to the current questions).
   const fresh = carried ? qs.flatMap((q, i) => (carried[i] == null ? [i] : [])) : null;
   const switched = !!before && (!!before.setUntil || !sameQuestions(latestItems(before, qs), itemsFor(qs)));
   const missing0 = fresh ? answersMissing(fresh.map((i) => qs[i]), fresh.map((i) => answers[i]), answerMin()) : answersMissing(qs, answers, answerMin());
-  const missing = fresh && missing0 ? (missing0.message === ANSWER_ONE && switched ? null : { ...missing0, at: Math.max(0, (forQs ?? []).findIndex((q) => qText(q) === qText(qs[fresh[missing0.at] ?? 0]))) }) : missing0;
+  const missing = fresh && missing0 ? (missing0.message === ANSWER_ONE && switched ? null : { ...missing0, at: Math.max(0, (forQs ?? []).findIndex((q) => qText(q) === qText(qs[fresh[missing0.at] ?? 0]))) })
+    : forQs && missing0 ? { ...missing0, at: Math.max(0, forQs.findIndex((q) => qText(q) === qText(qs[missing0.at] ?? ""))) } /* (§269) its place in the page's form */ : missing0;
   if (missing) throw new HttpError(400, "bad_answers", missing.message, { missing: missing.at, ...(missing.chars != null ? { chars: missing.chars } : {}) });
   const notes = typeof body.notes === "string" ? body.notes.trim() : "";
   // (Owner, Oct 29, batch 11) At most 10,000 characters for the whole written part (all its answers and notes together).
@@ -1119,7 +1162,7 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
   const sent = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
   const sentRefusal = sendRefusal(sent, qs, answers, !!fresh?.some((i) => answers[i].trim()));
   if (sentRefusal) throw sentRefusal;
-  await testerSendGate(contractId, body, sent?.id);
+  await testerSendGate(contractId, body, sent?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, updated, afterPaid } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
@@ -1127,6 +1170,9 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
     await (await import("./workWindow")).assertWorkOpen(tx, t.id);
     const refusal = sessionRefusal(c, t, displayName(c0.test.developer));
     if (refusal) throw new HttpError(409, "closed", refusal);
+    // (§269) The questions changed between the checks and this lock: nothing is sent (refused before anything is written; the page keeps what it typed and
+    // redraws, and its next press meets the stop above).
+    if (!sameQuestionWords(writtenQuestions(c), qs)) throw new HttpError(409, "questions_changed", QUESTIONS_CHANGED_MEANWHILE);
     const now = new Date();
     const existing = await tx.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
     const refused = sendRefusal(existing, qs, answers, !!fresh?.some((i) => answers[i].trim()));
@@ -1154,6 +1200,49 @@ export async function sendWritten(tester: U, contractId: string, body: Record<st
 }
 
 type SentPart = Prisma.SubmissionGetPayload<{ include: { review: true } }>;
+
+/** (§269) A question's key without a repeat's "-2" (questionKeys numbers a repeated question). */
+const questionKeyOf = (key: string) => key.replace(/-\d+$/, "");
+
+/** (Owner, Nov 5, §269) The questions changed while a Send was on its way (after its checks, before its lock): nothing was sent. */
+export const QUESTIONS_CHANGED_MEANWHILE = "Your questions changed just now: nothing was sent. Check your answers and press Send Answers again.";
+
+/**
+ * (Owner, Nov 5, §269) A stale page's Send never loses what was typed. A current question's text goes into the written draft (by its words, so the boxes have it
+ * after the redraw); a removed question's text goes into the draft snapshot ("Draft (not sent)") of the Terms history entry that removed it, so it shows there
+ * and comes back into the form if the question comes back (§263). `notes`: the first form's notes box (kept in the draft too).
+ */
+async function keepStaleTyped(testerId: string, c0: { id: string; testId: string }, forQs: string[], typed: string[], formQs: string[], notes: string) {
+  const units: Record<string, string> = {};
+  await db.$transaction(async (tx) => {
+    await lockTest(tx, c0.testId);
+    const c = await tx.contract.findUniqueOrThrow({ where: { id: c0.id }, select: { questions: true, prevSets: true } });
+    const now = new Set(writtenQuestions(c).map(qText));
+    const removed: { q: string; text: string }[] = [];
+    forQs.forEach((q, i) => {
+      const text = typed[i] ?? "";
+      if (!text.trim()) return;
+      if (now.has(qText(q))) units[answerUnit(q)] = text;
+      else removed.push({ q: qText(q), text });
+    });
+    if (!removed.length) return;
+    // The newest entry that asked the question and changed it away holds its snapshot.
+    const sets = prevSetsOf(c.prevSets);
+    const newest = [...sets].sort((a, b) => new Date(b.until).getTime() - new Date(a.until).getTime());
+    let changed = false;
+    for (const r of removed) {
+      const p = newest.find((x) => x.items.some((it) => qText(it.question) === r.q) && !(x.to ?? []).some((t) => qText(t) === r.q));
+      if (!p) continue;
+      const draft = p.versions?.find((v) => v.kind === "draft");
+      if (draft) draft.items = draft.items.map((it) => (qText(it.question) === r.q ? { ...it, answer: r.text } : it));
+      else p.versions = [...(p.versions ?? []), { kind: "draft", at: new Date().toISOString(), items: p.items.map((it) => (qText(it.question) === r.q ? { ...it, answer: r.text } : it)) }];
+      changed = true;
+    }
+    if (changed) await tx.contract.update({ where: { id: c0.id }, data: { prevSets: sets as unknown as Prisma.InputJsonValue } });
+  });
+  if (notes.trim()) units[NOTES_UNIT] = notes;
+  if (Object.keys(units).length) await patchKept(testerId, `written:${c0.id}`, units, { questions: formQs });
+}
 
 /** What refuses a Send of written answers whatever changed meanwhile ((Owner, Nov 4, §183) checked before the stop-once and again under the lock). */
 function sendRefusal(existing: SentPart | null, qs: string[], answers: string[], answersNew = false) {
@@ -1229,8 +1318,20 @@ export async function addWritten(tester: U, contractId: string, body: Record<str
   // Alerts, and a stop whose second press could only be refused is a single refusal instead (owner's standing rule).
   const before = await db.submission.findUnique({ where: { contractId_kind: { contractId, kind: "written" } }, include: { review: true } });
   const beforeRefusal = addRefusal(before, c0, key, text);
+  // (Owner, Nov 5, §269) Its question was removed by a change this page hasn't shown (made after it loaded): the press stops once, listing what changed in the
+  // questions (whatever the Alerts), the typed text stays kept under the question (it comes back if the question does), and the page redraws without it. Once a
+  // box listed those lines (or the change came before the page), the plain refusal (QUESTION_GONE).
+  if (beforeRefusal?.code === "question_gone") {
+    const pageAt = seenOf(body.pageSeenAt) ?? seenOf(body.seenAt);
+    const removedSince = pageAt && prevSetsOf(c0.prevSets).some((p) => new Date(p.until) > pageAt && p.items.some((it) => questionKeyOf(key) === questionKey(it.question)) && !(p.to ?? []).some((t) => questionKey(t) === questionKeyOf(key)));
+    const stale = removedSince ? notListed(await questionChangeLines(c0.testId, pageAt, displayName(c0.test.developer)), body) : [];
+    if (stale.length) {
+      if (text) await setKept(tester.id, `add:${contractId}:${key}`, { text });
+      await testerSendGate(contractId, body, before?.id, { stale });
+    }
+  }
   if (beforeRefusal) throw beforeRefusal;
-  await testerSendGate(contractId, body, before?.id);
+  await testerSendGate(contractId, body, before?.id, { stale: [] });
   const name = displayName(tester), poss = pronouns(tester.pronoun).poss;
   const { sub, afterPaid, question } = await db.$transaction(async (tx) => {
     const t = await lockTest(tx, c0.testId);
