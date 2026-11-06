@@ -235,6 +235,9 @@ export default async function TestPage({ params, searchParams }: { params: Promi
   const whole = (c: number | null) => money(c).replace(/\.00$/, "");
   // One booked call as the Live session's row shows it (with Join call / Cancel). (Owner, Nov 5, §209) Only there: the tester rows list calls that are over.
   const devCallOf = (c: (typeof t.contracts)[number], x: (typeof t.contracts)[number]["calls"][number]): DevCall => ({ id: x.id, joinable: callJoinable(x, now), report: x.noShowBy ? { byMe: x.noShowBy === "developer", note: x.noShowNote } : null, when: x.startsAt.toISOString(), minutes: x.minutes, rate: rateLabel(x.rateCents, c.liveRateCents), canCancel: !cancelNeedsReason(x.startsAt, now), started: x.startsAt <= now, reported: !!x.noShowBy, late: lateOf(c, x), measuring: x.startsAt <= now ? (restricted ? (connectedCalls.has(x.id) ? IN_PROGRESS_DEV : WAITING_TO_CONNECT) : MEASURING_LINE) : undefined }); // (batch 18 section 9) a pause doesn't cut a call in progress
+  // (Owner, Nov 6, §292) Each working tester's calls booked with someone else (another developer, or another test), for the form's red line: bare time ranges,
+  // never who with. The server checks the same on the press (requests.ts recipientBusyClash).
+  const testerBusy = await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(now.getTime() - 6 * 3_600_000) }, contract: { testerId: { in: working.map((c) => c.testerId) } } }, select: { startsAt: true, minutes: true, contractId: true, contract: { select: { testerId: true } } }, orderBy: { startsAt: "asc" } });
   const devTesters: DevTester[] = working.map((c) => {
     const subOf = (kind: string) => c.submissions.find((x) => x.kind === kind);
     const part = (label: string, cents: number | null, kind: string) => {
@@ -270,6 +273,7 @@ export default async function TestPage({ params, searchParams }: { params: Promi
       contractId: c.id, name: displayName(c.tester), testerHref: c.tester.deletedAt ? null : `/app/testers/${c.testerId}`, terms, booked, warning: callsWarn.get(c.id) ?? "",
       calls: live.filter((x) => !x.setId).map(toCall),
       sets,
+      busy: testerBusy.filter((x) => x.contract.testerId === c.testerId && x.contractId !== c.id).map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes })),
       // (Batch 16 section 33) Their waiting requests and yours, as they arrive (answered in the Call requests panel).
       pending: reqs.filter((r) => r.contractId === c.id).length, // (Owner, Nov 6, §280) what's left of the $1,000 no longer goes to the form: booking isn't checked against it
       requests: reqs.filter((r) => r.contractId === c.id).map((r) => ({

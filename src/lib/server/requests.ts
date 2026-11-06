@@ -21,7 +21,7 @@ import { afterEndToBookLine, beforeEndLine, leadLine, tooSoonToBookLine, windowS
 /** (Batch 27 section 1) The tester's call presses: an open new-terms offer blocks them (answerTermsFirst), so new terms are no longer a stop-once for them. */
 const CALL_PRESS = { skipTerms: true } as const;
 import { CALL_ACTS } from "./live";
-import { MAX_CALLS, MAX_SENT_PER_DAY, callLimitLine, callRoomLine, clashNotes, localFmt, sentRoomLine } from "@/lib/callClash";
+import { MAX_CALLS, MAX_SENT_PER_DAY, callLimitLine, callRoomLine, clashNotes, localFmt, sentRoomLine, type Slot } from "@/lib/callClash";
 import { dayIn } from "@/lib/rules";
 import type { TestEventLike } from "@/lib/rules";
 import { renderTimes, safeZone } from "@/lib/tz";
@@ -516,6 +516,32 @@ async function ownCallClash(side: Side, who: { id: string; timeZone?: string | n
   return n.rows.flat().find((x) => x.tone === "red")?.text ?? "";
 }
 
+/**
+ * (Owner, Nov 6, §292) The times a person already has booked with SOMEONE ELSE (`side`: theirs; any test, `exceptContractId`'s calls left out: those are the
+ * pair's own, sendClash's): bare time ranges, never who with. The pages pass them to the request forms for the red line; the server checks them below.
+ */
+export async function busyTimes(side: Side, userId: string, exceptContractId: string): Promise<Slot[]> {
+  const since = new Date(Date.now() - 6 * 3_600_000);
+  const calls = await db.call.findMany({
+    where: { status: "booked", startsAt: { gt: since }, contractId: { not: exceptContractId }, contract: side === "developer" ? { test: { developerId: userId } } : { testerId: userId } },
+    select: { startsAt: true, minutes: true }, orderBy: { startsAt: "asc" },
+  });
+  return calls.map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes }));
+}
+
+/**
+ * (Owner, Nov 6, §292) No request at a time that overlaps a call the RECIPIENT already has booked with someone else (this test or any other), the overlap Accept
+ * uses (acceptClash). The refusal names the time, never who that call is with: "fbbb already has a call booked at Wed, Nov 11, 12:00 PM: pick another time." A
+ * daily / weekly row is refused for any of its calls, naming it ("The 3rd call (Thu, Nov 12): …"). The same line the form shows red at the row (clashNotes).
+ */
+async function recipientBusyClash(requester: { timeZone?: string | null }, side: Side, recipient: { id: string; name: string }, contractId: string, rows: CallRow[], minutes: number, end: Date | null = null) {
+  if (!rows.length) return "";
+  const busy = await busyTimes(side === "developer" ? "tester" : "developer", recipient.id, contractId);
+  if (!busy.length) return "";
+  const n = clashNotes({ rows: toJson(rows, end ? { at: end, day: "" } : null), minutes, side, targets: [{ name: recipient.name, calls: [], requests: [], busy }], elsewhere: [], fmt: localFmt(safeZone(requester.timeZone)) });
+  return n.rows.flat().find((x) => x.tone === "red")?.text ?? "";
+}
+
 /** "You already requested this time with Ben Okafor." */
 export const alreadyRequestedLine = (names: string[]) => `You already requested this time with ${andList(names)}.`;
 
@@ -641,6 +667,12 @@ export async function devRequestTime(dev: U, testId: string, body: Record<string
         blocked.push(clash);
         continue;
       }
+      // (Owner, Nov 6, §292) Never a time this tester already has booked with another developer or test (only the time is named).
+      const busy = await recipientBusyClash(x.me, "developer", { id: x.c.testerId, name: displayName(x.c.tester) }, x.c.id, sendRows.flatMap((k) => k.rows), reqMinutes, end);
+      if (busy) {
+        blocked.push(busy);
+        continue;
+      }
     }
     ok.push(x);
   }
@@ -729,6 +761,9 @@ export async function testerRequestTime(user: U, contractId: string, body: Recor
   if (sendRows.length) {
     const clash = await sendClash(contractId, sendRows.flatMap((k) => requestTimes(k, end)), minutes, devName, [...match.values()].map((m) => m.match.id), { side: "tester", otherPoss: pronouns(c.test.developer.pronoun).poss }, end);
     if (clash) throw new HttpError(409, "clash", clash);
+    // (Owner, Nov 6, §292) Never a time the developer already has booked with another tester (this test or another): the time only, never with whom.
+    const busy = await recipientBusyClash(x.me, "tester", { id: c.test.developerId, name: devName }, contractId, sendRows.flatMap((k) => k.rows), minutes, end);
+    if (busy) throw new HttpError(409, "clash", busy);
   }
   {
     const line = await limitNow(match.size); // (§185) changed since the first check

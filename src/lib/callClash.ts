@@ -16,9 +16,20 @@ export type ClashTarget = {
    * it (the call room ends a call at it instead).
    */
   pending?: number; booked?: number;
+  /**
+   * (Owner, Nov 6, §292) The times this person already has booked with SOMEONE ELSE (another tester or developer, this test or any other): bare time ranges, never
+   * who the call is with (another person's private booking). A request overlapping one is refused: "fbbb already has a call booked at Wed, Nov 11, 12:00 PM: pick
+   * another time."
+   */
+  busy?: Slot[];
 };
 export type ClashLine = { tone: "red" | "blue"; text: string };
-export type Fmt = { range: (start: Date, minutes: number) => string; times: (start: Date, minutes: number) => string; day: (d: Date) => string };
+export type Fmt = { range: (start: Date, minutes: number) => string; times: (start: Date, minutes: number) => string; day: (d: Date) => string; /** (§292) "Wed, Nov 11, 12:00 PM" */ at: (d: Date) => string };
+/**
+ * (Owner, Nov 6, §292) The refusal (and the form's red line) for a time overlapping a call the OTHER person already has booked with someone else: it names the
+ * time, never who that call is with. "fbbb already has a call booked at Wed, Nov 11, 12:00 PM: pick another time."
+ */
+export const busyLine = (name: string, at: string) => `${name} already has a call booked at ${at}: pick another time.`;
 
 /**
  * (Owner, Nov 4, §185) The limit per developer–tester pair on a test: booked times and waiting requests (both sides) together, at most 3. A daily / weekly set (and a
@@ -61,7 +72,8 @@ const ord = (n: number) => ORD[n - 1] ?? `${n}th`;
 function inSet(k: number, at: Date, text: string, f: Fmt) {
   if (k === 0) return text;
   const head = `The ${ord(k + 1)} call (${f.day(at)})`;
-  return text.startsWith("Overlaps ") ? `${head} overlaps ${text.slice("Overlaps ".length)}` : `${head}: ${text[0].toLowerCase()}${text.slice(1)}`;
+  // (§292) A line starting with a person's name keeps its capital ("The 3rd call (Thu, Nov 12): Dee Moss already has a call booked at …").
+  return text.startsWith("Overlaps ") ? `${head} overlaps ${text.slice("Overlaps ".length)}` : `${head}: ${text.startsWith("You ") ? `${text[0].toLowerCase()}${text.slice(1)}` : text}`;
 }
 
 /**
@@ -96,6 +108,9 @@ export function clashNotes(p: { rows: RowJson[]; minutes: number | null; side: "
           const hit = q.rows.flatMap(rowStarts).find((s) => overlap(at, m, s, q.minutes));
           if (hit) { red = inSet(k, at, q.mine ? `Overlaps your request to ${t.name} for ${p.fmt.range(hit, q.minutes)}.` : `Overlaps ${t.name}'s request for ${p.fmt.range(hit, q.minutes)}.`, p.fmt); return; }
         }
+        // (Owner, Nov 6, §292) A call they already have booked with someone else, any test: the time only, never with whom.
+        const busy = (t.busy ?? []).find((c) => overlap(at, m, new Date(c.start), c.minutes));
+        if (busy) red = inSet(k, at, busyLine(t.name, p.fmt.at(new Date(busy.start))), p.fmt);
       });
     }
     // The requester's other calls (another person, any test).
@@ -138,5 +153,5 @@ export function localFmt(zone?: string): Fmt {
     return ap === bp ? `${ah}–${bh} ${bp}` : `${a}–${b}`;
   };
   const day = (d: Date) => d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", ...o });
-  return { range: (s, m) => `${day(s)}, ${span(s, m)}`, times: span, day };
+  return { range: (s, m) => `${day(s)}, ${span(s, m)}`, times: span, day, at: (d) => `${day(d)}, ${time(d)}` };
 }

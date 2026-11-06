@@ -32,7 +32,9 @@ export function CallRequests(p: {
    * (Batch 16 section 33) For the clash checks: the booked calls between you, your other calls, and the limits (waiting, booked). (Owner, Nov 6, §280) No longer
    * what's left of the $1,000 or the rate: booking isn't checked against it.
    */
-  clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number };
+  clash?: { calls: Slot[]; elsewhere: (Slot & { name: string })[]; pending: number; booked: number;
+    /** (Owner, Nov 6, §292) The developer's calls booked with other testers (any test): time ranges only, never who with (their private bookings). */
+    busy?: Slot[] };
 }) {
   // (NEXT-UI 12b) What the limit box said: the next press sends it, and stops again if who is blocked / at the limit changed.
   const [limitSeen, setLimitSeen] = useState("");
@@ -56,7 +58,7 @@ export function CallRequests(p: {
   const [frozen, setFrozen] = useState<{ targets: ClashTarget[]; elsewhere: (Slot & { name: string })[] } | null>(null);
   const [made, setMade] = useState<PressMade | null>(null);
   const liveTargets: ClashTarget[] = p.clash && p.side === "tester" && p.targets[0]
-    ? [{ name: p.targets[0].name, calls: p.clash.calls, requests: p.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })), pending: p.clash.pending, booked: p.clash.booked }]
+    ? [{ name: p.targets[0].name, calls: p.clash.calls, requests: p.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })), pending: p.clash.pending, booked: p.clash.booked, busy: p.clash.busy }]
     : [];
   const liveElsewhere = p.clash?.elsewhere ?? [];
   // (Owner, Nov 5, §261) From Request a time until it ends (and, gone through, until the redraw), the times and the length are read-only and Discard waits.

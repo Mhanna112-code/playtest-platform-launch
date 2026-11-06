@@ -41,7 +41,7 @@ import { LivePanel } from "@/components/LivePanel";
 import { ChoiceBox } from "./ChoiceBox";
 import { TesterTop } from "./TesterTop";
 import { CallRequests } from "@/components/CallRequests";
-import { callEndProps, pageRows, rateLabel } from "@/lib/server/requests";
+import { busyTimes, callEndProps, pageRows, rateLabel } from "@/lib/server/requests";
 import { workEndOf } from "@/lib/server/workWindow";
 import { unreadCount } from "@/lib/server/messages";
 import { PersonHover } from "@/components/PersonHover";
@@ -732,6 +732,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   elsewhere: (await db.call.findMany({ where: { status: "booked", startsAt: { gt: new Date(now.getTime() - 6 * 3_600_000) }, contract: { testerId: u.id, id: { not: c.id } } }, include: { contract: { include: { test: { include: { developer: true } } } } } }))
                     .map((x) => ({ start: x.startsAt.toISOString(), minutes: x.minutes, name: displayName(x.contract.test.developer) })),
                   pending: pendingReqs.length,
+                  // (Owner, Nov 6, §292) The developer's calls with other testers (any test): the times only, never who with, for the red line at a row.
+                  busy: await busyTimes("developer", c.test.developerId, c.id),
                   // (Owner, Nov 4, §185) As the server counts it: a running Forever set is one booked time even with none of its calls ahead.
                   booked: new Set([...liveCalls.filter((x) => x.startsAt > now).map((x) => x.setId ?? x.id), ...callSets.filter((s) => s.status === "active" && s.count === 0).map((s) => s.id)]).size,
                 }}

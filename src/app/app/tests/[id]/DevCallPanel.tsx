@@ -16,6 +16,7 @@ import { ReportProblem } from "@/components/ReportProblem";
 import { CallPresence } from "@/components/CallPresence";
 import { CancelMenu } from "@/components/CancelMenu";
 import type { RowJson } from "@/lib/callRows";
+import type { Slot } from "@/lib/callClash";
 import { alignedClash, formClashInputs, madeBy, newRow, RequestRows, rowsPayload, sentLine, useWindowShutLine, type PressMade, type RowState } from "@/components/RequestRows";
 import { CallCheck } from "@/components/CallCheck";
 import { PressDone } from "@/components/PressDone";
@@ -32,7 +33,9 @@ export type DevSet = { id: string; label: string; minutes: number; rate: string;
 export type DevReq = { id: string; rows: RowJson[]; mine: boolean; rate: string; minutes?: number };
 export type DevTester = { contractId: string; name: string; /** (Owner, Nov 3, §166) their profile: the name is the green link */ testerHref?: string | null; terms: string; booked: number; calls: DevCall[]; sets: DevSet[]; requests: DevReq[]; warning?: string;
   /** (Batch 16 section 33) For the clash checks: waiting requests with them (both sides). (Owner, Nov 6, §280) No longer what's left of the $1,000. */
-  pending?: number };
+  pending?: number;
+  /** (Owner, Nov 6, §292) Their calls booked with someone else (any test): time ranges only, never who with; a request overlapping one is red at its row. */
+  busy?: Slot[] };
 /** (Batch 16 section 33) The developer's other calls (any tester, any test): "You have a call with Ana Silva then (1:30–2:00 PM)." */
 export type OtherCall = { contractId: string; name: string; start: string; minutes: number };
 
@@ -121,7 +124,7 @@ export function DevCallPanel({ testId, seenAt, testers, canRequest, noRequestRea
   // row (listed under the button; the press waits until fixed), a blue line for an exact match with their waiting request, and the limits in today's wording.
   // (Owner, Nov 6, §280) The Length is 10–180 minutes whatever is left of the $1,000 for the ticked testers' calls (no "At most N minutes", no cap in the hint).
   const clash = alignedClash(rows, minutes, "developer", checked.filter((t) => ticked.includes(t.contractId)).map((t) => ({
-    name: t.name, pending: t.pending, booked: t.booked,
+    name: t.name, pending: t.pending, booked: t.booked, busy: t.busy,
     calls: t.calls.map((c) => ({ id: c.id, start: c.when, minutes: c.minutes })),
     requests: t.requests.map((q) => ({ id: q.id, rows: q.rows, minutes: q.minutes ?? 0, mine: q.mine })),
   })), (frozen?.elsewhere ?? elsewhere).filter((c) => !ticked.includes(c.contractId)).map((c) => ({ start: c.start, minutes: c.minutes, name: c.name })), end);

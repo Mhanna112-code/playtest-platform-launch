@@ -5159,3 +5159,14 @@ with ×.
 - Tests: tests/booked-section-291.test.ts. Updated: calls-had-cancelled-209 (the order; the one "Booked (" is the Live session's), batch35-list-panels,
   layout-fixes-187, batch35-green-names, batch35-answering-press (the name is on the drop-down).
 
+## §292 No call request at a time the other person already has booked (owner, Nov 6)
+- Seen: Dee Moss's call with fbbb was booked for Wed, Nov 11, 12:00 PM; tester bb could still send fbbb a request for 12:03 PM, and fbbb's Accept was then refused.
+- Now a request can't be SENT for a time overlapping a call the RECIPIENT already has booked with someone else, on this test or any other (requests.ts
+  recipientBusyClash, the overlap Accept uses). Both directions: a tester to the developer (testerRequestTime), the developer to a tester (devRequestTime: with
+  several ticked, that tester is left out after the usual stop, the others go).
+- The refusal names the time, never who that call is with: "fbbb already has a call booked at Wed, Nov 11, 12:00 PM: pick another time." (callClash.ts busyLine).
+  A daily / weekly row is refused for its clashing call: "The 2nd call (Wed, Nov 11): fbbb already has a call booked at …".
+- The form shows the same line red at the row (clashNotes, a target's `busy`). The pages pass bare time ranges only (`busyTimes`: start and length, no names): the
+  tester's page the developer's calls with other testers, the developer's page each tester's calls elsewhere.
+- Requests already waiting when a call is booked are still dropped (§184 / §185).
+- Tests: tests/no-clash-requests-292.test.ts.
