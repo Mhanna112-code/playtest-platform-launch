@@ -47,7 +47,7 @@ describe("the tester rates the developer", () => {
     expect((await sact(b.sessionId, "rate", b.tester.cookie, { stars: 2 })).status).toBe(200);
   });
 
-  it("the warning lists unsent parts and the calls line; rating finishes the part like Leave; no rejoin; Charge and Dispute stay", async () => {
+  it("the warning lists unsent parts and the calls line; rating finishes the part like Leave; no rejoin; Charge stays; Dispute closes (§288)", async () => {
     const { dev, testId } = await setup({ recordingCents: "15.00" });
     const { tester, sessionId } = await joined(testId);
     await sact(sessionId, "written", tester.cookie, { answers: ["a", "b"] });
@@ -71,8 +71,8 @@ describe("the tester rates the developer", () => {
     expect((await sact(sessionId, "written", tester.cookie, { answers: ["c", "d"] })).body.error.message).toBe("You rated this test, so your part is finished.");
     // No rejoin, ever.
     expect((await act(testId, "join", tester.cookie, { listingVersion: c.listingVersion })).body.error.message).toBe("You rated this test, so you can't join it again.");
-    // Dispute stays available after rating.
-    expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", confirmed: true })).status).toBe(200);
+    // (Owner, Nov 6, §288; was "Dispute stays available after rating") Rating closes the tester's disputes on the test.
+    expect((await sact(sessionId, "dispute", tester.cookie, { kind: "submission", id: sub.id, reason: "I answered all", confirmed: true })).body.error.message).toBe("You rated this test, so its disputes are closed.");
   });
 
   it("averages count revealed ratings only; '4.5 ★ (2 ratings)'; comments without names", async () => {

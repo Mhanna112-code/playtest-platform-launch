@@ -5110,3 +5110,31 @@ with ×.
   written).
 - Tests: tests/bell-parity-286.test.ts; call-limit-request-boxes-185 and drop-overlapping-requests follow the one-a-day "Call requests" stack; batch15-keys
   expects the key-marked-working bell.
+
+## §288 A tester's disputes close (owner, Nov 6)
+
+- Before, a tester could open a dispute at any time. Now their disputes close in two cases:
+  1. When they rate the test (rating ends their part). After that, no new dispute on any of their parts on that test. That includes a payment the developer makes
+     after the rating; there's no exception. Refusal: "You rated this test, so its disputes are closed." (rules.ts RATED_NO_DISPUTE).
+  2. At the part's closing date (closeOut.ts pieceCloseOut, tester side: the same date its Charge, Let it go and Pay end). Refusal: "This part closed on
+     <date>, so it can't be disputed any more." (disputeClosedLine).
+- One place decides it: closeOut.ts disputesClosed / disputeClosedFor. canDispute takes it as `closedLine`. The order is the tester's own Charge or Let it go,
+  then an existing dispute ("You already disputed this payment"), then closed, then nothing left to award.
+- openDispute decides "closed" first: before the open-terms block and before the payment stop-once. A press from an older page gets the one refusal, never a
+  stop-once whose second press could only be refused (§159). It checks again under the lock, so a Rate in another tab closes it too.
+- Session page: on a closed part, the "Dispute the pay" form is gone. In its place is the greyed button with the line (`data-dispute-closed`). The paused
+  banner and the work-over line no longer list "dispute" for it. The Rate pop-up adds "Rating also closes your disputes on this test: …".
+- A dispute that's already open stays open: the developer can still add their side, and the team can still decide it.
+- Lines that told someone a dispute was possible say nothing about disputing once it's closed:
+  - The developer's line under Pay (payUnderLine) for a tester who rated: a listed part shows no line; an unlisted part keeps "pay any amount, $0 included".
+  - The tester's Charge refusal "… paid $6.00 for this meanwhile." drops ": you can dispute it …" (paidMeanwhileLine).
+  - The Terms of Use's "Paying for work" says when disputes close.
+- Tests: tests/dispute-closes-288.test.ts. Updated: ratings (Dispute after rating is now refused), batch17-rate (the developer's Rate disabled by a dispute still
+  open, created directly), batch17-close-out (wording), batch10 and batch20 (sources).
+
+## §289 Needs you: Questions without its own scroll (owner, Nov 6)
+
+- In Needs you (a part's row and an update row), the "Questions (N)" list (§282) is a plain drop-down with no ResizeBox, so the person's panel is the only
+  scroll (§187). Each question's and answer's own box keeps its scroll, as before (QA.tsx). The Testers list and the team's "See the work" keep the
+  draggable scroll panel. SentWork's `questionsFold.ownScroll: false`.
+- Tests: tests/needs-questions-289.test.ts; questions-dropdown-282 follows.

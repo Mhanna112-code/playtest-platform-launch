@@ -68,7 +68,9 @@ export function SentWork({ id = "sent", kind, answers, questions, notes, additio
   id?: string; kind: string; answers: unknown; questions?: string[]; notes: string; additions: unknown; files: File[]; timeZone?: string | null;
   addTo?: (q: { key: string; question: string }) => ReactNode;
   /** (§226) only what was sent up to this time */ until?: Date | string | null; /** (§226) only what is new since this time (null: everything sent) */ newOnly?: { since: Date | string | null };
-  /** (§282) a written part's questions in one "Questions (N)" drop-down; `open`: it starts open */ questionsFold?: { open: boolean };
+  /** (§282) a written part's questions in one "Questions (N)" drop-down; `open`: it starts open. (Owner, Nov 6, §289) `ownScroll: false` (Needs you): a plain
+   * drop-down with no scroll of its own, the person's panel the only scroll (§187); otherwise (the Testers list, "See the work") its draggable scroll panel. */
+  questionsFold?: { open: boolean; ownScroll?: boolean };
 }) {
   const upTo = until ? new Date(until).getTime() : null, after = newOnly?.since ? new Date(newOnly.since).getTime() : null;
   const isNew = (at: string | undefined) => after == null || (!!at && new Date(at).getTime() > after);
@@ -182,9 +184,14 @@ export function SentWork({ id = "sent", kind, answers, questions, notes, additio
         <div data-questions-fold={questionsFold.open ? "open" : "closed"}>
           <Fold id={`${id}-questions`} defaultOpen={questionsFold.open} jumpOpen={questionsFold.open} summaryClassName="!text-sm font-medium !text-slate-200"
             summary={<span data-questions-toggle="" data-questions-count={drawn.length}>Questions ({drawn.length})</span>}>
-            <OwnPanel><ResizeBox id={`${id}-questions-list`} label="Questions" defaultMax={QUESTIONS_LIST_MAX} tallest={QUESTIONS_LIST_TALLEST}>
-              <div className="space-y-2" data-questions-list="">{list}</div>
-            </ResizeBox></OwnPanel>
+            {/* (Owner, Nov 6, §289) In Needs you the list has no scroll of its own (no ResizeBox): the person's panel is the only scroll (§187's rule wins). */}
+            {questionsFold.ownScroll === false ? (
+              <div className="space-y-2" data-questions-list="" data-questions-plain={`${id}-questions-list`}>{list}</div>
+            ) : (
+              <OwnPanel><ResizeBox id={`${id}-questions-list`} label="Questions" defaultMax={QUESTIONS_LIST_MAX} tallest={QUESTIONS_LIST_TALLEST}>
+                <div className="space-y-2" data-questions-list="">{list}</div>
+              </ResizeBox></OwnPanel>
+            )}
           </Fold>
         </div>
       ) : list}

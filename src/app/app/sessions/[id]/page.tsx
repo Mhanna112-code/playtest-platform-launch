@@ -13,7 +13,7 @@ import { ListingSeeIt, UpdatedTag } from "@/components/ListingInfo";
 import { CategoryBadges } from "@/components/Category";
 import { PartBadges } from "@/components/Ui";
 import { TesterPaymentTag } from "@/components/TesterPaymentTag";
-import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, PAID_ZERO_LABEL } from "@/lib/rules";
+import { IN_PROGRESS_TESTER, limitedTermsDiff, callJoinable, bookedLateLabel, isBookedLate, chargeAmount, choiceLine, cancelNeedsReason, canDispute, NOTHING_TO_DISPUTE, RATE_CLOSES_DISPUTES, closesInLine, isLate, pausedForTesters, callListed, termsLine, testPaused, testerShare, leftText, PAID_ZERO_LABEL } from "@/lib/rules";
 import { disputeRoom, paidAndCap } from "@/lib/server/payments";
 import { payMoreClosesAt } from "@/lib/server/closeOut";
 import { payClosedLine, testerPaidMostLine, testerPayMoreLine } from "@/lib/rules";
@@ -21,7 +21,7 @@ import { callIsOver, callLengthLine, callMinutesOf, callOverBadge, callsLeftWarn
 import { callsLeftCents } from "@/lib/server/callMoney";
 import { testerAutoChargeLine } from "@/lib/rules";
 import { chargeClosesLine, closeOutSoon } from "@/lib/rules";
-import { closedOut, pieceCloseOut } from "@/lib/server/closeOut";
+import { closedOut, disputesClosed, pieceCloseOut } from "@/lib/server/closeOut";
 
 import { LabeledReason, ReasonQuote } from "@/components/ScrollText";
 import { TesterAlertsToggle } from "@/components/TesterAlertsToggle";
@@ -316,7 +316,11 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   // (Batch 30 §3) Never for late work (also a piece that went late before this rule).
   const choiceOpen = (sub: typeof written) => !!(sub && !sub.review && !sub.late && sub.choiceOfferedAt && sub.choiceBy && canChoose && !chargeShut(sub.id) && chargeAmount(sub.agreedCents, partPaid.get(sub.id) ?? 0) > 0);
   // (Batch 20 section 15) What a team decision could still add to each reviewed piece without a dispute (the admin form's max): at 0, Dispute is disabled with its line.
-  const room = await disputeRoom([...[written, recording].filter((x) => x?.review && !x.dispute).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.dispute).map((x) => ({ callId: x.id }))]);
+  const undisputed: { submissionId?: string; callId?: string }[] = [...[written, recording].filter((x) => x?.review && !x.dispute).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.dispute).map((x) => ({ callId: x.id }))];
+  // (Owner, Nov 6, §288) The tester's disputes close when they rate the test and at each part's closing date: Dispute is disabled there with the line saying why
+  // (a dispute already open stays as it is). Nothing left to award isn't looked up for a closed part.
+  const shutLines = await disputesClosed(c.id, undisputed, now);
+  const room = await disputeRoom(undisputed.filter((k) => !shutLines.has(k.submissionId ?? k.callId!)));
   // (Batch 28 §14) Each paid piece: what it was paid and what Pay more can still bring it to in all; and when Pay more closed (close-out).
   const caps = await paidAndCap([...[written, recording].filter((x) => x?.review && !x.review.rejected).map((x) => ({ submissionId: x!.id })), ...c.calls.filter((x) => x.review && !x.review.rejected).map((x) => ({ callId: x.id }))]);
   const payMoreAt = await payMoreClosesAt(c.testId, now);
@@ -334,7 +338,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
   }
   const paymentDelayed = (id: string) => (!confirmingBase.has(id) && notYetPaid.has(id)) || delayedSubs.has(id) || chargedOwed.has(id) || disputeOwed.has(id) || owedCalls.has(id);
   const moreOf = (id: string) => (caps.has(id) ? { ...caps.get(id)!, paidCents: Math.max(0, caps.get(id)!.paidCents - (notYetPaid.get(id) ?? 0)), closedOn: payMoreShut } : null);
-  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string; teamClosedById?: string | null } | null | undefined, d: unknown, id = "") => !!r && !r.teamClosedById && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null).ok;
+  const disputable = (r: { amountCents: number; agreedCents: number | null; reason: string; teamClosedById?: string | null } | null | undefined, d: unknown, id = "") => !!r && !r.teamClosedById && canAct && canDispute(r.amountCents, r.agreedCents, !!d, byTesterChoice(r.reason), room.get(id) ?? null, shutLines.get(id) ?? null).ok;
   // (Batch 30 §2) A part can be sent again after it's paid (not an old rejection or the team's $0 closure).
   const unpaidPart = canSendAgain(written) || canSendAgain(recording);
   // (Batch 30 §2, §3) The grey line above a part's Send: a paid part's update (what it can still be paid), or the deadline passed (no Charge for late work).
@@ -454,7 +458,8 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
           name={dev}
           working={rateWarn.working}
           headline={rateWarn.working ? `Rating ends your part in ${title}. You won't be able to send more work, book calls or join this test again.` : `Once you rate, you won't be able to join ${title} again.`}
-          lines={rateWarn.lines}
+          // (Owner, Nov 6, §288) Rating closes the tester's disputes on the test: said before they rate.
+          lines={[...rateWarn.lines, RATE_CLOSES_DISPUTES]}
           // (Owner, Nov 5, §268) New terms still open: a notice in the pop-up (information only; Rate goes through).
           notice={offer && !refusal ? <OpenTermsNotice dev={dev} press="rate" /> : undefined}
         />
@@ -606,7 +611,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
               )}
               {/* (Batch 17 §19) Its last 7 days before close-out. */}
               {chargeSoon(sub?.id) && choiceOpen(sub) && <p className="note" data-charge-closes="">{chargeSoon(sub?.id)}</p>}
-              {sub?.review && !chargedOwed.has(sub.id) && !delayedSubs.has(sub.id) && !pendingBase.has(sub.id) && <TesterReview timeZone={u.timeZone} update={sub.paidUpdateZeroAt ? { at: sub.paidUpdateZeroAt, note: sub.paidUpdateNote } : null} dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} more={moreOf(sub.id)} />}
+              {sub?.review && !chargedOwed.has(sub.id) && !delayedSubs.has(sub.id) && !pendingBase.has(sub.id) && <TesterReview timeZone={u.timeZone} update={sub.paidUpdateZeroAt ? { at: sub.paidUpdateZeroAt, note: sub.paidUpdateNote } : null} dev={dev} extras={extraRows.filter((p) => p.submissionId === sub.id)} off={meOff && !limited} sessionId={c.id} kind="submission" id={sub.id} review={sub.review} dispute={sub.dispute} room={room.get(sub.id) ?? null} closed={shutLines.get(sub.id) ?? null} more={moreOf(sub.id)} />}
 
             </li>
           ))}
@@ -676,7 +681,7 @@ export default async function SessionPage({ params, searchParams }: { params: Pr
                   {!x.review && <>{x.rateCents != null && x.payBy && x.payBy > now && (!devGone || !!c.test.developer.stripePaymentMethodId) && <p className="text-xs text-slate-400" data-auto-charge="">{testerAutoChargeLine(dev, pieceDay(x.payBy, u.timeZone))}</p>}</>}
                   {badge.reason && !reviewShown && <ReasonQuote text={badge.reason} />}
                   {x.actualMinutes != null && x.lengthNote && <ReasonQuote text={x.lengthNote} />}
-                  {reviewShown && <TesterReview timeZone={u.timeZone} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} more={moreOf(x.id)} />}
+                  {reviewShown && <TesterReview timeZone={u.timeZone} dev={dev} extras={extraRows.filter((p) => p.callId === x.id)} off={meOff && !limited} sessionId={c.id} kind="call" id={x.id} review={x.review!} dispute={x.dispute} room={room.get(x.id) ?? null} closed={shutLines.get(x.id) ?? null} more={moreOf(x.id)} />}
                 </li>
               );
             };
@@ -825,11 +830,13 @@ type Rev = { amountCents: number; agreedCents: number | null; rejected: boolean;
 type Disp = { status: string; decidedCents: number | null; decisionNote: string; devSide: string } | null;
 
 /** What the developer did with a piece, as the tester reads it (they see what they get; never holds or chargebacks). */
-function TesterReview({ timeZone, sessionId, kind, id, review, dispute, off = false, dev = "The developer", extras = [], room = null, more = null, update = null }: { timeZone?: string | null; /** (Batch 30 §2) an update closed at $0 */ update?: { at: Date; note: string } | null; /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
+function TesterReview({ timeZone, sessionId, kind, id, review, dispute, off = false, dev = "The developer", extras = [], room = null, more = null, update = null, closed = null }: { timeZone?: string | null; /** (Owner, Nov 6, §288) this part's disputes are closed: why */ closed?: string | null; /** (Batch 30 §2) an update closed at $0 */ update?: { at: Date; note: string } | null; /** (Batch 28 §14) what this piece was paid, what Pay more can bring it to in all, and when Pay more closed */ more?: { paidCents: number; allCents: number; closedOn: string | null } | null; /** (Batch 20 section 15) what a decision could still add */ room?: number | null; dev?: string; /** (Batch 9) extra pays on this piece, with their notes */ extras?: { amountCents: number; note: string; createdAt: Date }[]; off?: boolean; sessionId: string; kind: "submission" | "call"; id: string; review: Rev; dispute: Disp }) {
   const fmtDateTime = (d: Date | string) => fmtDateTimeIn(d, timeZone);
   // (Batch 10) Every part the developer reviewed can be disputed once, listed or not (not the tester's own Charge or Let it go).
-  const check = canDispute(review.amountCents, review.agreedCents, !!dispute, byTesterChoice(review.reason), room);
+  const check = canDispute(review.amountCents, review.agreedCents, !!dispute, byTesterChoice(review.reason), room, closed);
   const may = check.ok && !review.teamClosedById;
+  // (Owner, Nov 6, §288) Closed (the tester rated, or the part's closing date passed): the button stays, greyed, with the line saying why; no form.
+  const shut = !check.ok && !!closed && check.message === closed && !review.teamClosedById;
   // (Batch 20 section 15) Nothing left to award: the button stays, greyed, with the line (the page's poll brings a Pay more).
   const full = !check.ok && check.message === NOTHING_TO_DISPUTE;
   // (Owner, Oct 29, batch 30 §16) More than 4 payment lines: a box about 4 lines tall (PayLinesBox); the lines under them stay outside it. (Owner, Nov 3, §152) The
@@ -874,6 +881,12 @@ function TesterReview({ timeZone, sessionId, kind, id, review, dispute, off = fa
         <div className="space-y-1" data-dispute-team-closed="">
           <button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>
           <p className="note">{TEAM_CLOSED_NO_DISPUTE}</p>
+        </div>
+      )}
+      {shut && !off && (
+        <div className="space-y-1" data-dispute-closed="">
+          <button type="button" className="btn-ghost text-sm" disabled>Dispute the pay</button>
+          <p className="note">{closed}</p>
         </div>
       )}
       {full && !off && (

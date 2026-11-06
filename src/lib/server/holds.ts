@@ -20,7 +20,7 @@ import { PAUSE_CLOSE_DAYS } from "@/lib/pause";
 import { callMinutesOf } from "@/lib/callMeasure";
 import { callReference, disputeDecisionName, disputedCentsOf, movedDue, nearestDayEnd, partOf, pausedUntil, pieceName, reversedOf, reversedPart, reversedWords, paymentWords, OWED_OVER_TICK, PAY_TICK_CENTS } from "@/lib/rules";
 import { callsLeftCents } from "./callMoney";
-import { closedOut, pieceCloseOut } from "./closeOut";
+import { closedOut, disputeClosedFor, pieceCloseOut } from "./closeOut";
 import { withTimersLock } from "./timers";
 import { pieceWords } from "@/lib/bankTop";
 import { describedOnce, stripeDescription } from "./paymentRows";
@@ -1916,7 +1916,10 @@ async function devPaidRefusal(tx: Prisma.TransactionClient | typeof db, where: {
   const more = await sum(["extra"]);
   const pay = review ? review.amountCents : await sum(["review", "call"]);
   if (!review && pay + more <= 0) return null;
-  return new HttpError(409, "done", paidMeanwhileLine(devName, pay, more));
+  // (Owner, Nov 6, §288) The tester rated, or the part closed: their disputes are closed, so the line says nothing about disputing.
+  const owner = "submissionId" in where ? await db.submission.findUnique({ where: { id: where.submissionId }, select: { contractId: true } }) : await db.call.findUnique({ where: { id: where.callId }, select: { contractId: true } });
+  const shut = owner ? await disputeClosedFor(owner.contractId, where) : null;
+  return new HttpError(409, "done", paidMeanwhileLine(devName, pay, more, !shut));
 }
 
 /**

@@ -108,7 +108,9 @@ export const ZERO_PAY_REASON = "Say why you're paying $0 (the tester reads it)."
 export const PAID_ZERO_LABEL = "Paid $0";
 export const paidZeroLine = (reason: string) => `${PAID_ZERO_LABEL}: “${reason}”`;
 /** (Batch 15 section 30) The line under every Pay button. */
-export const payUnderLine = (name: string, listed: boolean) => (listed ? `${name} can dispute the amount once.` : `This part isn't listed: pay any amount, $0 included. ${name} can dispute the amount once.`);
+/** (Owner, Nov 6, §288) `disputable` false (the tester rated, so their disputes are closed): nothing about disputing ("" for a listed part). */
+export const payUnderLine = (name: string, listed: boolean, disputable = true) =>
+  [listed ? "" : "This part isn't listed: pay any amount, $0 included.", disputable ? `${name} can dispute the amount once.` : ""].filter(Boolean).join(" ");
 
 /** (Batch 9) The ticks on every Pay and Extra pay: the amount's own tick above $0, and the over-$200 tick above $200. */
 export function payTicks(amountCents: number, tickedCents: number | null, over200: boolean): Check {
@@ -132,14 +134,25 @@ export function listingAmount(c: { writtenCents: number | null; recordingCents: 
  */
 /** A second Dispute on the same part (another tab, or both at the same moment: batch 35 §157). */
 export const ALREADY_DISPUTED = "You already disputed this payment. A part can be disputed once.";
-export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean, testerChose = false, /** (Batch 20 section 15) what a decision could still add (disputeBounds' max minus min) */ roomCents: number | null = null): Check {
+export function canDispute(paidCents: number, listingCents: number | null, alreadyDisputed: boolean, testerChose = false, /** (Batch 20 section 15) what a decision could still add (disputeBounds' max minus min) */ roomCents: number | null = null, /** (Owner, Nov 6, §288) the tester's disputes on this part are closed: the line saying why (RATED_NO_DISPUTE / disputeClosedLine) */ closedLine: string | null = null): Check {
   void paidCents;
   void listingCents;
   if (testerChose) return no(TESTER_CHOSE_LINE);
   if (alreadyDisputed) return no(ALREADY_DISPUTED);
+  // (Owner, Nov 6, §288) Closed before anything about the amount: a closed part is refused whatever is left to award.
+  if (closedLine) return no(closedLine);
   if (roomCents != null && roomCents <= 0) return no(NOTHING_TO_DISPUTE);
   return yes;
 }
+/**
+ * (Owner, Nov 6, §288) A tester's disputes close when they rate the test (rating ends their part): no new dispute on any of their parts on it, a payment the
+ * developer makes after the rating included (no exception). A dispute already open stays open until the team decides it.
+ */
+export const RATED_NO_DISPUTE = "You rated this test, so its disputes are closed.";
+/** (Owner, Nov 6, §288) After the part's closing date (pieceCloseOut, the date its Charge, Let it go and Pay end): "This part closed on Nov 20, 2026, so it can't be disputed any more." */
+export const disputeClosedLine = (date: string) => `This part closed on ${date}, so it can't be disputed any more.`;
+/** (Owner, Nov 6, §288) The Rate pop-up says it before the tester rates. */
+export const RATE_CLOSES_DISPUTES = "Rating also closes your disputes on this test: you won't be able to dispute any payment on it, one made after you rate included.";
 /**
  * (Owner, Oct 28, batch 20 section 15; batch 28 §15) Already paid the most this piece can be paid (its cap, the admin form's own max): the Dispute button is disabled
  * with this line.
@@ -1608,8 +1621,9 @@ export const chargeAmount = (listingCents: number | null, paidCents: number) => 
  * (Owner, Nov 3, batch 35 §163) Charge or Let it go pressed on an older page (or at the same moment) after the developer paid: ONE final refusal, never a stop-once.
  * "Nora Lane paid $6.00 for this meanwhile: you can dispute it if you think it should be more." (with a Pay more after it: "paid $6.00 and $2.00 more").
  */
-export const paidMeanwhileLine = (dev: string, payCents: number, moreCents = 0) =>
-  `${dev} paid ${moreCents && !payCents ? `${money(moreCents)} more` : `${money(payCents)}${moreCents ? ` and ${money(moreCents)} more` : ""}`} for this meanwhile: you can dispute it if you think it should be more.`;
+/** (Owner, Nov 6, §288) `disputable` false (the tester rated, or the part closed): the line stops after what was paid ("Nora Lane paid $6.00 for this meanwhile."). */
+export const paidMeanwhileLine = (dev: string, payCents: number, moreCents = 0, disputable = true) =>
+  `${dev} paid ${moreCents && !payCents ? `${money(moreCents)} more` : `${money(payCents)}${moreCents ? ` and ${money(moreCents)} more` : ""}`} for this meanwhile${disputable ? ": you can dispute it if you think it should be more." : "."}`;
 
 // ---------- New terms offered to working testers (owner) ----------
 

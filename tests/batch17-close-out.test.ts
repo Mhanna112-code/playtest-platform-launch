@@ -14,7 +14,8 @@ import { DAY, pay, payMore, sentWork } from "./b15";
 
 // Batch 17 §19 (final), the money half: Pay more ends on the test's close-out date (14 days after the last tester's deadline, moved by pauses and outages); each piece's
 // Pay, Charge and Let it go end on its own date (the close-out, or 14 days after its Charge opened if later; the tester's side adds the time their tester side was
-// suspended). Disputes are unchanged. Reminders 3 days and 1 day before a piece closes, once each.
+// suspended). Disputes are unchanged. Reminders 3 days and 1 day before a piece closes, once each. (Owner, Nov 6, §288) New disputes close at the piece's date too;
+// one already open stays open (dispute-closes-288.test.ts).
 const src = (f: string) => readFileSync(path.resolve(__dirname, "../src", f), "utf8");
 const cron = () => cronGET(new Request("http://localhost:3400/api/cron/daily", { headers: { authorization: "Bearer cron-test" } })).then((r) => r.json());
 const ago = (days: number) => new Date(Date.now() - days * DAY);
@@ -210,7 +211,7 @@ describe("until close-out the developer can still Pay a piece after its Charge o
   });
 });
 
-describe("disputes are unchanged after close-out", () => {
+describe("a dispute open at close-out stays open (§288)", () => {
   it("a dispute filed before close-out is decided after it, and a raise still charges the developer", async () => {
     const w = await sentWork();
     expect((await pay(w.dev.cookie, { kind: "submission", id: w.sub.id, amount: "5.00", tickedCents: 500, reason: "Partly useful" })).status).toBe(200);

@@ -25,7 +25,7 @@ import { clientPressKey, serverKey } from "./pressKeys";
 import { amountFromRate, callMinutesOf, overCeilingLine, rateFromAmount } from "@/lib/callMeasure";
 import { callsLeftCents } from "./callMoney";
 import { ownOtherTabAction, payPressOf, seenOf, tabOf } from "./live";
-import { closedOut, payMoreClosesAt, pieceCloseOut } from "./closeOut";
+import { closedOut, disputeClosedFor, payMoreClosesAt, pieceCloseOut } from "./closeOut";
 import { TEAM_CLOSED_NO_DISPUTE, TEAM_CLOSED_NO_PAY, paidLine, updateWaiting } from "@/lib/moneyLines";
 import { PAID_GROUP } from "@/lib/bell";
 import { teamPausedWaits } from "@/lib/restricted";
@@ -323,16 +323,23 @@ export async function finishReviewPay(paymentId: string, result: { status: strin
   return { reviewId: rev.id, amountCents: rev.amountCents, status: result.status, rejected: false, paidSoFarCents: await paidSoFar(c.id) };
 }
 
-/** Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). */
+/**
+ * Tester: dispute once, on any part the developer reviewed (batch 10: listed or not, any amount, $0 included, or a Reject). (Owner, Nov 6, §288) Until the tester
+ * rates the test or the part's closing date passes: RATED_NO_DISPUTE / disputeClosedLine after that.
+ */
 export async function openDispute(tester: U, contractId: string, body: Record<string, unknown>) {
   const kind = String(body.kind ?? ""), id = String(body.id ?? "");
   const reason = readText(body.reason, LIMITS.disputeText, "bad_reason");
   if (reason.length < 10) throw new HttpError(400, "bad_reason", "Say why you think the pay should be higher (at least a sentence).");
   const c = await db.contract.findUnique({ where: { id: contractId }, include: { test: { include: { developer: true } } } });
   if (!c || c.testerId !== tester.id) throw new HttpError(404, "not_found", "That session doesn't exist or isn't yours.");
+  const where = kind === "call" ? { callId: id } : { submissionId: id };
+  // (Owner, Nov 6, §288) The tester rated the test, or the part's closing date passed: closed, decided before anything else (never after a terms block or a
+  // stop-once that could only end in this refusal, §159). A part already disputed keeps its own line ("You already disputed this payment").
+  const shut = await disputeClosedFor(contractId, where);
+  if (shut && !(await db.dispute.findFirst({ where }))) throw new HttpError(409, "no_dispute", shut);
   // (Owner, Oct 29, batch 32 §7) An open new-terms offer blocks Dispute until the tester answers it (Switch or Keep).
   await (await import("./terms")).answerTermsFirst(contractId);
-  const where = kind === "call" ? { callId: id } : { submissionId: id };
   // (Owner, Oct 28 afternoon) Disputes work while the test is paused (and while the developer owes a declined payment): a decision for the tester during a hold is added to what is owed.
   const review = await db.review.findFirst({ where: { ...where, contractId } });
   // (Batch 30 §5, owner Oct 29) The team's $0 closure is final: no dispute.
@@ -342,8 +349,10 @@ export async function openDispute(tester: U, contractId: string, body: Record<st
   // (Batch 20 section 15) Nothing a decision could add (the admin form's max, from disputeBounds): refused with the page's line (an older page).
   const disputable = async () => {
     const existing = await db.dispute.findFirst({ where });
-    const bounds = existing || byTesterChoice(review.reason) ? null : await disputeBounds({ submissionId: kind === "call" ? null : id, callId: kind === "call" ? id : null });
-    const ok = canDispute(review.amountCents, review.agreedCents, !!existing, byTesterChoice(review.reason), bounds ? bounds.max - bounds.min : null);
+    // (Owner, Nov 6, §288) Checked again each time (a Rate in another tab meanwhile closes it too).
+    const closed = await disputeClosedFor(contractId, where);
+    const bounds = existing || closed || byTesterChoice(review.reason) ? null : await disputeBounds({ submissionId: kind === "call" ? null : id, callId: kind === "call" ? id : null });
+    const ok = canDispute(review.amountCents, review.agreedCents, !!existing, byTesterChoice(review.reason), bounds ? bounds.max - bounds.min : null, closed);
     if (!ok.ok) {
       // A payment on this part since the page loaded (a Pay more) left nothing to dispute: ONE refusal naming it, in the blue box.
       const since = seenOf(body.seenAt);

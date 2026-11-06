@@ -74,8 +74,9 @@ export const PAYMENT_RULES: { heading: string; text: string; example: string }[]
     example: "Opened Nov 6 with Open until Nov 20: 14 days per tester, so a tester who joins Nov 19 is due Dec 3.",
   },
   {
+    // (Owner, Nov 6, §288) Disputes close when the tester rates and at the piece's closing date (edited in place: nothing has launched).
     heading: "Paying for work",
-    text: "The developer pays any amount from $0 up for each piece of work; there is no reject. Paying less than the listing, or $0, needs a reason the tester reads. A payment above $0 is charged to the developer's card at once. The tester can dispute a payment on each piece once; our team reads the work and both sides, and its decision is final and can only raise the pay up to the piece's cap, less what that piece was already paid. To decide a dispute, our team can read the chat between the tester and the developer.",
+    text: "The developer pays any amount from $0 up for each piece of work; there is no reject. Paying less than the listing, or $0, needs a reason the tester reads. A payment above $0 is charged to the developer's card at once. The tester can dispute a payment on each piece once; our team reads the work and both sides, and its decision is final and can only raise the pay up to the piece's cap, less what that piece was already paid. To decide a dispute, our team can read the chat between the tester and the developer. A tester's disputes close when they rate the test (a payment made after that included) and at each piece's closing date; a dispute already open stays open until our team decides it.",
     example: "A $20 recording paid $12 with the reason “Only half the levels were covered”: the tester reads it and can dispute it once.",
   },
   {
